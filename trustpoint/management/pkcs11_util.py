@@ -19,8 +19,9 @@ from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.hazmat.primitives.serialization import Encoding, KeySerializationEncryption, PrivateFormat
 from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, lib
 from pkcs11.exceptions import NoSuchKey, PKCS11Error  # type: ignore[import-untyped]
-from trustpoint.logger import LoggerMixin
 from trustpoint_core.oid import NamedCurve
+
+from trustpoint.logger import LoggerMixin
 
 
 class Pkcs11Utilities(LoggerMixin):
@@ -919,7 +920,7 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
         raise NotImplementedError(msg)
 
     def private_bytes(
-        self, encoding: Encoding, format: PrivateFormat, encryption_algorithm: KeySerializationEncryption
+        self, encoding: Encoding, key_format: PrivateFormat, encryption_algorithm: KeySerializationEncryption
     ) -> bytes:
         """Not implemented for PKCS#11 private keys.
 
@@ -1165,6 +1166,114 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         self._public_key = pub_numbers.public_key()
         return self._public_key
 
+    def _get_curve_params(self, curve: ec.EllipticCurve) -> bytes:
+        """Get the OID parameters for a given EC curve.
+
+        Args:
+            curve: The elliptic curve object
+
+        Returns:
+            bytes: The curve OID parameters
+
+        Raises:
+            ValueError: If the curve is not supported
+        """
+        if isinstance(curve, ec.SECP256R1):
+            return b'\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07'  # secp256r1 OID
+        if isinstance(curve, ec.SECP384R1):
+            return b'\x06\x05\x2b\x81\x04\x00\x22'  # secp384r1 OID
+        if isinstance(curve, ec.SECP521R1):
+            return b'\x06\x05\x2b\x81\x04\x00\x23'  # secp521r1 OID
+
+        msg = f'Unsupported curve: {curve.name}'
+        raise ValueError(msg)
+
+    def _create_ec_key_templates(
+        self,
+        private_numbers: ec.EllipticCurvePrivateNumbers,
+        public_numbers: ec.EllipticCurvePublicNumbers,
+        curve_params: bytes,
+    ) -> tuple[dict[Attribute, Any], dict[Attribute, Any]]:
+        """Create PKCS#11 templates for EC private and public keys.
+
+        Args:
+            private_numbers: The EC private key numbers
+            public_numbers: The EC public key numbers
+            curve_params: The curve OID parameters
+
+        Returns:
+            tuple: (private_template, public_template)
+        """
+        def int_to_bytes(value: int, byte_length: int) -> bytes:
+            """Convert integer to bytes in big-endian format with specified length."""
+            return value.to_bytes(byte_length, byteorder='big')
+
+        curve = private_numbers.public_numbers.curve
+        key_size = curve.key_size
+        coord_size = (key_size + 7) // 8
+        private_value_size = coord_size
+
+        # Encode public key point as uncompressed format (0x04 + x + y)
+        public_point = (
+            b'\x04' + int_to_bytes(public_numbers.x, coord_size) + int_to_bytes(public_numbers.y, coord_size)
+        )
+
+        private_template = {
+            Attribute.CLASS: ObjectClass.PRIVATE_KEY,
+            Attribute.KEY_TYPE: KeyType.EC,
+            Attribute.LABEL: self._key_label,
+            Attribute.ID: self._key_label.encode(),
+            Attribute.TOKEN: True,
+            Attribute.PRIVATE: True,
+            Attribute.SENSITIVE: True,
+            Attribute.EXTRACTABLE: False,
+            Attribute.SIGN: True,
+            Attribute.EC_PARAMS: curve_params,
+            Attribute.VALUE: int_to_bytes(private_numbers.private_value, private_value_size),
+        }
+
+        public_template = {
+            Attribute.CLASS: ObjectClass.PUBLIC_KEY,
+            Attribute.KEY_TYPE: KeyType.EC,
+            Attribute.LABEL: self._key_label,
+            Attribute.ID: self._key_label.encode(),
+            Attribute.TOKEN: True,
+            Attribute.PRIVATE: False,
+            Attribute.VERIFY: True,
+            Attribute.EC_PARAMS: curve_params,
+            Attribute.EC_POINT: public_point,
+        }
+
+        return private_template, public_template
+
+    def _create_ec_key_objects(
+        self, private_template: dict[Attribute, Any], public_template: dict[Attribute, Any]
+    ) -> None:
+        """Create EC private and public key objects in the HSM.
+
+        Args:
+            private_template: PKCS#11 template for the private key
+            public_template: PKCS#11 template for the public key
+
+        Raises:
+            ValueError: If key already exists or session not initialized
+        """
+        if self._key_exists(KeyType.EC, ObjectClass.PRIVATE_KEY):
+            msg = f"Key with label '{self._key_label}' already exists"
+            self._raise_value_error(msg)
+
+        if self._session is None:
+            self._initialize()
+        if self._session is None:
+            msg = 'PKCS#11 session is not initialized.'
+            self._raise_value_error(msg)
+
+        private_key_obj = self._session.create_object(private_template)
+        self._session.create_object(public_template)
+
+        self._key = private_key_obj
+        self._public_key = None
+
     def import_private_key_from_crypto(self, private_key: ec.EllipticCurvePrivateKey) -> bool:
         """Import an EC private key from cryptography EllipticCurvePrivateKey object into the HSM.
 
@@ -1181,74 +1290,13 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
 
             private_numbers = private_key.private_numbers()
             public_numbers = private_numbers.public_numbers
-
             curve = private_numbers.public_numbers.curve
 
-            if isinstance(curve, ec.SECP256R1):
-                curve_params = b'\x06\x08\x2a\x86\x48\xce\x3d\x03\x01\x07'  # secp256r1 OID
-            elif isinstance(curve, ec.SECP384R1):
-                curve_params = b'\x06\x05\x2b\x81\x04\x00\x22'  # secp384r1 OID
-            elif isinstance(curve, ec.SECP521R1):
-                curve_params = b'\x06\x05\x2b\x81\x04\x00\x23'  # secp521r1 OID
-            else:
-                msg = f'Unsupported curve: {curve.name}'
-                self._raise_value_error(msg)
-
-            def int_to_bytes(value: int, byte_length: int) -> bytes:
-                """Convert integer to bytes in big-endian format with specified length."""
-                return value.to_bytes(byte_length, byteorder='big')
-
-            key_size = curve.key_size
-            coord_size = (key_size + 7) // 8
-            private_value_size = coord_size
-
-            # Encode public key point as uncompressed format (0x04 + x + y)
-            public_point = (
-                b'\x04' + int_to_bytes(public_numbers.x, coord_size) + int_to_bytes(public_numbers.y, coord_size)
+            curve_params = self._get_curve_params(curve)
+            private_template, public_template = self._create_ec_key_templates(
+                private_numbers, public_numbers, curve_params
             )
-
-            private_template = {
-                Attribute.CLASS: ObjectClass.PRIVATE_KEY,
-                Attribute.KEY_TYPE: KeyType.EC,
-                Attribute.LABEL: self._key_label,
-                Attribute.ID: self._key_label.encode(),
-                Attribute.TOKEN: True,
-                Attribute.PRIVATE: True,
-                Attribute.SENSITIVE: True,
-                Attribute.EXTRACTABLE: False,
-                Attribute.SIGN: True,
-                Attribute.EC_PARAMS: curve_params,
-                Attribute.VALUE: int_to_bytes(private_numbers.private_value, private_value_size),
-            }
-
-            public_template = {
-                Attribute.CLASS: ObjectClass.PUBLIC_KEY,
-                Attribute.KEY_TYPE: KeyType.EC,
-                Attribute.LABEL: self._key_label,
-                Attribute.ID: self._key_label.encode(),
-                Attribute.TOKEN: True,
-                Attribute.PRIVATE: False,
-                Attribute.VERIFY: True,
-                Attribute.EC_PARAMS: curve_params,
-                Attribute.EC_POINT: public_point,
-            }
-
-            if self._key_exists(KeyType.EC, ObjectClass.PRIVATE_KEY):
-                msg = f"Key with label '{self._key_label}' already exists"
-                self._raise_value_error(msg)
-
-            if self._session is None:
-                self._initialize()
-            if self._session is None:
-                msg = 'PKCS#11 session is not initialized.'
-                self._raise_value_error(msg)
-
-            private_key_obj = self._session.create_object(private_template)
-
-            self._session.create_object(public_template)
-
-            self._key = private_key_obj
-            self._public_key = None
+            self._create_ec_key_objects(private_template, public_template)
 
         except Exception:
             self.logger.exception('Failed to import EC private key from cryptography object')

@@ -1,0 +1,598 @@
+"""Tests for PKI forms module."""
+
+from __future__ import annotations
+
+import io
+from datetime import UTC, datetime, timedelta
+from unittest.mock import Mock, patch
+
+import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from django.core.exceptions import ValidationError
+from django.core.files.uploadedfile import SimpleUploadedFile
+from management.models import KeyStorageConfig
+from trustpoint_core.serializer import PrivateKeyLocation
+
+from pki.forms import (
+    CertProfileConfigForm,
+    CertificateDownloadForm,
+    DevIdAddMethodSelectForm,
+    DevIdRegistrationForm,
+    IssuingCaAddFileImportPkcs12Form,
+    IssuingCaAddFileImportSeparateFilesForm,
+    IssuingCaAddMethodSelectForm,
+    IssuingCaFileTypeSelectForm,
+    OwnerCredentialFileImportForm,
+    TruststoreAddForm,
+    TruststoreDownloadForm,
+    get_private_key_location_from_config,
+)
+from pki.models import DevIdRegistration
+from pki.models.cert_profile import CertificateProfileModel
+from pki.models.domain import DomainModel
+from pki.models.truststore import TruststoreModel
+
+
+@pytest.mark.django_db
+class TestGetPrivateKeyLocationFromConfig:
+    """Test the get_private_key_location_from_config function."""
+
+    def test_returns_hsm_provided_for_softhsm(self):
+        """Test that HSM_PROVIDED is returned for SOFTHSM storage type."""
+        with patch('pki.forms.KeyStorageConfig.get_config') as mock_get_config:
+            mock_config = Mock()
+            mock_config.storage_type = KeyStorageConfig.StorageType.SOFTHSM
+            mock_get_config.return_value = mock_config
+            
+            result = get_private_key_location_from_config()
+            assert result == PrivateKeyLocation.HSM_PROVIDED
+
+    def test_returns_hsm_provided_for_physical_hsm(self):
+        """Test that HSM_PROVIDED is returned for PHYSICAL_HSM storage type."""
+        with patch('pki.forms.KeyStorageConfig.get_config') as mock_get_config:
+            mock_config = Mock()
+            mock_config.storage_type = KeyStorageConfig.StorageType.PHYSICAL_HSM
+            mock_get_config.return_value = mock_config
+            
+            result = get_private_key_location_from_config()
+            assert result == PrivateKeyLocation.HSM_PROVIDED
+
+    def test_returns_software_for_other_storage_type(self):
+        """Test that SOFTWARE is returned for other storage types."""
+        with patch('pki.forms.KeyStorageConfig.get_config') as mock_get_config:
+            mock_config = Mock()
+            # Use a storage type that is not HSM-related
+            mock_config.storage_type = 'OTHER'
+            mock_get_config.return_value = mock_config
+            
+            result = get_private_key_location_from_config()
+            assert result == PrivateKeyLocation.SOFTWARE
+
+    def test_returns_software_when_config_does_not_exist(self):
+        """Test that SOFTWARE is returned when KeyStorageConfig does not exist."""
+        with patch('pki.forms.KeyStorageConfig.get_config') as mock_get_config:
+            mock_get_config.side_effect = KeyStorageConfig.DoesNotExist()
+            
+            result = get_private_key_location_from_config()
+            assert result == PrivateKeyLocation.SOFTWARE
+
+
+@pytest.mark.django_db
+class TestDevIdAddMethodSelectForm:
+    """Test the DevIdAddMethodSelectForm."""
+
+    def test_form_valid_with_import_truststore(self):
+        """Test form is valid when import_truststore is selected."""
+        form = DevIdAddMethodSelectForm(data={'method_select': 'import_truststore'})
+        assert form.is_valid()
+        assert form.cleaned_data['method_select'] == 'import_truststore'
+
+    def test_form_valid_with_configure_pattern(self):
+        """Test form is valid when configure_pattern is selected."""
+        form = DevIdAddMethodSelectForm(data={'method_select': 'configure_pattern'})
+        assert form.is_valid()
+        assert form.cleaned_data['method_select'] == 'configure_pattern'
+
+    def test_form_invalid_with_empty_data(self):
+        """Test form is invalid when no method is selected."""
+        form = DevIdAddMethodSelectForm(data={})
+        assert not form.is_valid()
+        assert 'method_select' in form.errors
+
+    def test_form_invalid_with_invalid_choice(self):
+        """Test form is invalid with an invalid choice."""
+        form = DevIdAddMethodSelectForm(data={'method_select': 'invalid_choice'})
+        assert not form.is_valid()
+        assert 'method_select' in form.errors
+
+    def test_form_initial_value(self):
+        """Test that the initial value is configure_pattern."""
+        form = DevIdAddMethodSelectForm()
+        assert form.fields['method_select'].initial == 'configure_pattern'
+
+
+@pytest.mark.django_db
+class TestDevIdRegistrationForm:
+    """Test the DevIdRegistrationForm."""
+
+    def setup_method(self):
+        """Set up test fixtures."""
+        self.domain = DomainModel.objects.create(
+            unique_name='test-domain'
+        )
+        self.truststore = TruststoreModel.objects.create(
+            unique_name='test-truststore',
+            intended_usage=TruststoreModel.IntendedUsage.IDEVID_ISSUER
+        )
+
+    def test_form_valid_with_all_fields(self):
+        """Test form is valid with all required and optional fields."""
+        form = DevIdRegistrationForm(data={
+            'unique_name': 'test-devidreg',
+            'truststore': self.truststore.pk,
+            'domain': self.domain.pk,
+            'serial_number_pattern': r'^\d{10}$'
+        })
+        assert form.is_valid()
+
+    def test_form_valid_without_optional_unique_name(self):
+        """Test form is valid without the optional unique_name field."""
+        form = DevIdRegistrationForm(data={
+            'unique_name': '',
+            'truststore': self.truststore.pk,
+            'domain': self.domain.pk,
+            'serial_number_pattern': r'^\d{10}$'
+        })
+        assert form.is_valid()
+
+    def test_form_invalid_without_required_fields(self):
+        """Test form is invalid when required fields are missing."""
+        form = DevIdRegistrationForm(data={})
+        assert not form.is_valid()
+        assert 'truststore' in form.errors
+        assert 'domain' in form.errors
+        assert 'serial_number_pattern' in form.errors
+
+    def test_form_invalid_with_duplicate_unique_name(self):
+        """Test form is invalid with a duplicate unique_name."""
+        # Create existing registration
+        DevIdRegistration.objects.create(
+            unique_name='duplicate-name',
+            truststore=self.truststore,
+            domain=self.domain,
+            serial_number_pattern=r'^\d{10}$'
+        )
+        
+        # Try to create another with the same name
+        form = DevIdRegistrationForm(data={
+            'unique_name': 'duplicate-name',
+            'truststore': self.truststore.pk,
+            'domain': self.domain.pk,
+            'serial_number_pattern': r'^\d{8}$'
+        })
+        assert not form.is_valid()
+
+
+@pytest.mark.django_db
+class TestIssuingCaAddMethodSelectForm:
+    """Test the IssuingCaAddMethodSelectForm."""
+
+    def test_form_valid_with_local_file_import(self):
+        """Test form is valid when local_file_import is selected."""
+        form = IssuingCaAddMethodSelectForm(data={'method_select': 'local_file_import'})
+        assert form.is_valid()
+        assert form.cleaned_data['method_select'] == 'local_file_import'
+
+    def test_form_valid_with_local_request(self):
+        """Test form is valid when local_request is selected."""
+        form = IssuingCaAddMethodSelectForm(data={'method_select': 'local_request'})
+        assert form.is_valid()
+        assert form.cleaned_data['method_select'] == 'local_request'
+
+    def test_form_valid_with_remote_est(self):
+        """Test form is valid when remote_est is selected."""
+        form = IssuingCaAddMethodSelectForm(data={'method_select': 'remote_est'})
+        assert form.is_valid()
+        assert form.cleaned_data['method_select'] == 'remote_est'
+
+    def test_form_invalid_with_empty_data(self):
+        """Test form is invalid when no method is selected."""
+        form = IssuingCaAddMethodSelectForm(data={})
+        assert not form.is_valid()
+        assert 'method_select' in form.errors
+
+    def test_form_initial_value(self):
+        """Test that the initial value is local_file_import."""
+        form = IssuingCaAddMethodSelectForm()
+        assert form.fields['method_select'].initial == 'local_file_import'
+
+
+@pytest.mark.django_db
+class TestIssuingCaFileTypeSelectForm:
+    """Test the IssuingCaFileTypeSelectForm."""
+
+    def test_form_valid_with_pkcs_12(self):
+        """Test form is valid when pkcs_12 is selected."""
+        form = IssuingCaFileTypeSelectForm(data={'method_select': 'pkcs_12'})
+        assert form.is_valid()
+        assert form.cleaned_data['method_select'] == 'pkcs_12'
+
+    def test_form_valid_with_other(self):
+        """Test form is valid when other is selected."""
+        form = IssuingCaFileTypeSelectForm(data={'method_select': 'other'})
+        assert form.is_valid()
+        assert form.cleaned_data['method_select'] == 'other'
+
+    def test_form_invalid_with_empty_data(self):
+        """Test form is invalid when no file type is selected."""
+        form = IssuingCaFileTypeSelectForm(data={})
+        assert not form.is_valid()
+        assert 'method_select' in form.errors
+
+    def test_form_initial_value(self):
+        """Test that the initial value is pkcs_12."""
+        form = IssuingCaFileTypeSelectForm()
+        assert form.fields['method_select'].initial == 'pkcs_12'
+
+
+@pytest.mark.django_db
+class TestTruststoreAddForm:
+    """Test the TruststoreAddForm."""
+
+    def test_form_valid_with_single_certificate(self):
+        """Test form is valid with a single certificate file."""
+        # Create a self-signed certificate for testing
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        subject = issuer = x509.Name([
+            x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'test.example.com'),
+        ])
+        cert = x509.CertificateBuilder().subject_name(
+            subject
+        ).issuer_name(
+            issuer
+        ).public_key(
+            private_key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before_utc(
+            x509.datetime_support.aware_utc_datetime(year=2024, month=1, day=1)
+        ).not_valid_after_utc(
+            x509.datetime_support.aware_utc_datetime(year=2025, month=1, day=1)
+        ).sign(private_key, hashes.SHA256())
+        
+        cert_pem = cert.public_bytes(serialization.Encoding.PEM)
+        cert_file = SimpleUploadedFile('cert.pem', cert_pem, content_type='application/x-pem-file')
+        
+        form = TruststoreAddForm(
+            data={'unique_name': 'test-truststore'},
+            files={'certificate_file': cert_file}
+        )
+        assert form.is_valid()
+
+    def test_form_invalid_without_certificate_file(self):
+        """Test form is invalid without a certificate file."""
+        form = TruststoreAddForm(
+            data={'unique_name': 'test-truststore'},
+            files={}
+        )
+        assert not form.is_valid()
+        assert 'certificate_file' in form.errors
+
+    def test_form_invalid_without_unique_name(self):
+        """Test form is invalid without a unique_name."""
+        cert_file = SimpleUploadedFile('cert.pem', b'dummy content', content_type='application/x-pem-file')
+        form = TruststoreAddForm(
+            data={'unique_name': ''},
+            files={'certificate_file': cert_file}
+        )
+        assert not form.is_valid()
+        assert 'unique_name' in form.errors
+
+    def test_form_invalid_with_duplicate_unique_name(self):
+        """Test form is invalid with a duplicate unique_name."""
+        # Create existing truststore
+        TruststoreModel.objects.create(unique_name='duplicate-truststore')
+        
+        cert_file = SimpleUploadedFile('cert.pem', b'dummy content', content_type='application/x-pem-file')
+        form = TruststoreAddForm(
+            data={'unique_name': 'duplicate-truststore'},
+            files={'certificate_file': cert_file}
+        )
+        assert not form.is_valid()
+
+
+@pytest.mark.django_db
+class TestTruststoreDownloadForm:
+    """Test the TruststoreDownloadForm."""
+
+    def test_form_valid_with_pem_format(self):
+        """Test form is valid with PEM format."""
+        form = TruststoreDownloadForm(data={'file_format': 'pem'})
+        assert form.is_valid()
+        assert form.cleaned_data['file_format'] == 'pem'
+
+    def test_form_valid_with_der_format(self):
+        """Test form is valid with DER format."""
+        form = TruststoreDownloadForm(data={'file_format': 'der'})
+        assert form.is_valid()
+        assert form.cleaned_data['file_format'] == 'der'
+
+    def test_form_valid_with_pkcs7_format(self):
+        """Test form is valid with PKCS7 format."""
+        form = TruststoreDownloadForm(data={'file_format': 'pkcs7'})
+        assert form.is_valid()
+        assert form.cleaned_data['file_format'] == 'pkcs7'
+
+    def test_form_invalid_with_empty_data(self):
+        """Test form is invalid without a file format."""
+        form = TruststoreDownloadForm(data={})
+        assert not form.is_valid()
+        assert 'file_format' in form.errors
+
+    def test_form_initial_value(self):
+        """Test that the initial value is pem."""
+        form = TruststoreDownloadForm()
+        assert form.fields['file_format'].initial == 'pem'
+
+
+@pytest.mark.django_db
+class TestCertificateDownloadForm:
+    """Test the CertificateDownloadForm."""
+
+    def test_form_valid_with_pem_format_no_chain(self):
+        """Test form is valid with PEM format without chain."""
+        form = CertificateDownloadForm(data={
+            'file_format': 'pem',
+            'include_chain': False
+        })
+        assert form.is_valid()
+        assert form.cleaned_data['file_format'] == 'pem'
+        assert form.cleaned_data['include_chain'] is False
+
+    def test_form_valid_with_der_format_with_chain(self):
+        """Test form is valid with DER format with chain."""
+        form = CertificateDownloadForm(data={
+            'file_format': 'der',
+            'include_chain': True
+        })
+        assert form.is_valid()
+        assert form.cleaned_data['file_format'] == 'der'
+        assert form.cleaned_data['include_chain'] is True
+
+    def test_form_valid_with_pkcs7_format(self):
+        """Test form is valid with PKCS7 format."""
+        form = CertificateDownloadForm(data={
+            'file_format': 'pkcs7',
+            'include_chain': False
+        })
+        assert form.is_valid()
+        assert form.cleaned_data['file_format'] == 'pkcs7'
+
+    def test_form_valid_with_pkcs12_format_and_password(self):
+        """Test form is valid with PKCS12 format and password."""
+        form = CertificateDownloadForm(data={
+            'file_format': 'pkcs12',
+            'include_chain': True,
+            'pkcs12_password': 'test-password'
+        })
+        assert form.is_valid()
+        assert form.cleaned_data['file_format'] == 'pkcs12'
+        assert form.cleaned_data['pkcs12_password'] == 'test-password'
+
+    def test_form_invalid_without_required_fields(self):
+        """Test form is invalid without required fields."""
+        form = CertificateDownloadForm(data={})
+        assert not form.is_valid()
+        assert 'file_format' in form.errors
+
+    def test_form_initial_values(self):
+        """Test that initial values are set correctly."""
+        form = CertificateDownloadForm()
+        assert form.fields['file_format'].initial == 'pem'
+        assert form.fields['include_chain'].initial is False
+
+
+@pytest.mark.django_db
+class TestIssuingCaAddFileImportPkcs12Form:
+    """Test the IssuingCaAddFileImportPkcs12Form."""
+
+    def create_test_pkcs12(self, password: str = 'test') -> bytes:
+        """Create a test PKCS12 file."""
+        # Generate a private key
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        
+        # Create a self-signed certificate
+        subject = issuer = x509.Name([
+            x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'test-ca.example.com'),
+            x509.NameAttribute(x509.oid.NameOID.ORGANIZATION_NAME, 'Test Org'),
+        ])
+        
+        cert = x509.CertificateBuilder().subject_name(
+            subject
+        ).issuer_name(
+            issuer
+        ).public_key(
+            private_key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before_utc(
+            x509.datetime_support.aware_utc_datetime(year=2024, month=1, day=1)
+        ).not_valid_after_utc(
+            x509.datetime_support.aware_utc_datetime(year=2025, month=1, day=1)
+        ).add_extension(
+            x509.BasicConstraints(ca=True, path_length=None),
+            critical=True,
+        ).sign(private_key, hashes.SHA256())
+        
+        # Create PKCS12
+        from cryptography.hazmat.primitives.serialization import pkcs12
+        pkcs12_data = pkcs12.serialize_key_and_certificates(
+            name=b'test-ca',
+            key=private_key,
+            cert=cert,
+            cas=None,
+            encryption_algorithm=serialization.BestAvailableEncryption(password.encode())
+        )
+        
+        return pkcs12_data
+
+    def test_form_valid_with_valid_pkcs12(self):
+        """Test form is valid with a valid PKCS12 file."""
+        pkcs12_data = self.create_test_pkcs12()
+        pkcs12_file = SimpleUploadedFile('test.p12', pkcs12_data, content_type='application/x-pkcs12')
+        
+        form = IssuingCaAddFileImportPkcs12Form(
+            data={
+                'unique_name': 'test-ca',
+                'password': 'test'
+            },
+            files={'pkcs12_file': pkcs12_file}
+        )
+        assert form.is_valid()
+
+    def test_form_invalid_without_pkcs12_file(self):
+        """Test form is invalid without a PKCS12 file."""
+        form = IssuingCaAddFileImportPkcs12Form(
+            data={
+                'unique_name': 'test-ca',
+                'password': 'test'
+            },
+            files={}
+        )
+        assert not form.is_valid()
+        assert 'pkcs12_file' in form.errors
+
+    def test_form_invalid_without_unique_name(self):
+        """Test form is invalid without a unique_name."""
+        pkcs12_data = self.create_test_pkcs12()
+        pkcs12_file = SimpleUploadedFile('test.p12', pkcs12_data, content_type='application/x-pkcs12')
+        
+        form = IssuingCaAddFileImportPkcs12Form(
+            data={
+                'unique_name': '',
+                'password': 'test'
+            },
+            files={'pkcs12_file': pkcs12_file}
+        )
+        assert not form.is_valid()
+        assert 'unique_name' in form.errors
+
+    def test_form_invalid_with_wrong_password(self):
+        """Test form is invalid with wrong password for PKCS12."""
+        pkcs12_data = self.create_test_pkcs12(password='correct')
+        pkcs12_file = SimpleUploadedFile('test.p12', pkcs12_data, content_type='application/x-pkcs12')
+        
+        form = IssuingCaAddFileImportPkcs12Form(
+            data={
+                'unique_name': 'test-ca',
+                'password': 'wrong'
+            },
+            files={'pkcs12_file': pkcs12_file}
+        )
+        assert not form.is_valid()
+
+
+@pytest.mark.django_db
+class TestOwnerCredentialFileImportForm:
+    """Test the OwnerCredentialFileImportForm."""
+
+    def create_test_pkcs12(self, password: str = 'test') -> bytes:
+        """Create a test PKCS12 file."""
+        # Generate a private key
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        
+        # Create a certificate
+        subject = issuer = x509.Name([
+            x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'owner.example.com'),
+        ])
+        
+        cert = x509.CertificateBuilder().subject_name(
+            subject
+        ).issuer_name(
+            issuer
+        ).public_key(
+            private_key.public_key()
+        ).serial_number(
+            x509.random_serial_number()
+        ).not_valid_before_utc(
+            x509.datetime_support.aware_utc_datetime(year=2024, month=1, day=1)
+        ).not_valid_after_utc(
+            x509.datetime_support.aware_utc_datetime(year=2025, month=1, day=1)
+        ).sign(private_key, hashes.SHA256())
+        
+        # Create PKCS12
+        from cryptography.hazmat.primitives.serialization import pkcs12
+        pkcs12_data = pkcs12.serialize_key_and_certificates(
+            name=b'owner-cred',
+            key=private_key,
+            cert=cert,
+            cas=None,
+            encryption_algorithm=serialization.BestAvailableEncryption(password.encode())
+        )
+        
+        return pkcs12_data
+
+    def test_form_valid_with_valid_pkcs12(self):
+        """Test form is valid with a valid PKCS12 file."""
+        pkcs12_data = self.create_test_pkcs12()
+        pkcs12_file = SimpleUploadedFile('owner.p12', pkcs12_data, content_type='application/x-pkcs12')
+        
+        form = OwnerCredentialFileImportForm(
+            data={
+                'unique_name': 'test-owner-cred',
+                'password': 'test'
+            },
+            files={'pkcs12_file': pkcs12_file}
+        )
+        assert form.is_valid()
+
+    def test_form_invalid_without_pkcs12_file(self):
+        """Test form is invalid without a PKCS12 file."""
+        form = OwnerCredentialFileImportForm(
+            data={
+                'unique_name': 'test-owner-cred',
+                'password': 'test'
+            },
+            files={}
+        )
+        assert not form.is_valid()
+        assert 'pkcs12_file' in form.errors
+
+    def test_form_invalid_without_unique_name(self):
+        """Test form is invalid without a unique_name."""
+        pkcs12_data = self.create_test_pkcs12()
+        pkcs12_file = SimpleUploadedFile('owner.p12', pkcs12_data, content_type='application/x-pkcs12')
+        
+        form = OwnerCredentialFileImportForm(
+            data={
+                'unique_name': '',
+                'password': 'test'
+            },
+            files={'pkcs12_file': pkcs12_file}
+        )
+        assert not form.is_valid()
+        assert 'unique_name' in form.errors
+
+
+@pytest.mark.django_db
+class TestCertProfileConfigForm:
+    """Test the CertProfileConfigForm."""
+
+    def test_form_has_required_fields(self):
+        """Test that form has all required fields."""
+        form = CertProfileConfigForm()
+        assert 'unique_name' in form.fields
+        assert 'common_name' in form.fields
+        assert 'cert_profile_json' in form.fields
+
+    def test_form_is_model_form(self):
+        """Test that form is a ModelForm for CertificateProfileModel."""
+        form = CertProfileConfigForm()
+        assert form._meta.model == CertificateProfileModel
+
+    def test_form_unique_name_optional(self):
+        """Test that unique_name field is optional."""
+        form = CertProfileConfigForm()
+        assert form.fields['unique_name'].required is False

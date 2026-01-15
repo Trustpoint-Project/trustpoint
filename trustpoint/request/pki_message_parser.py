@@ -6,20 +6,20 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any, Never, get_args
 
-from cmp.util import NameParser
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
 from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.x509.oid import ExtensionOID
-from pki.models import DomainModel
 from pyasn1.codec.ber import decoder as ber_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import decoder as der_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import encoder as der_encoder
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
-from trustpoint.logger import LoggerMixin
 
+from cmp.util import NameParser
+from pki.models import DomainModel
 from request.request_context import RequestContext
+from trustpoint.logger import LoggerMixin
 
 
 class ParsingComponent(ABC):
@@ -53,13 +53,16 @@ class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
         try:
             body_size = len(context.raw_message.body)
 
+            # Our response format is based on the incoming CSR format for maximum compatibility
+            # For DER-encoded CSRs (optional Base64), we respond with PKCS#7 DER (CMS, RFC 7030-compliant)
+            # For PEM-encoded CSRs, we respond with the PEM-encoded certificate
             if b'CERTIFICATE REQUEST-----' in context.raw_message.body:
                 est_encoding = 'pem'
                 csr = x509.load_pem_x509_csr(context.raw_message.body)
                 self.logger.debug('EST PKI message parsing: Detected PEM format, body size: %(body_size)s bytes',
                                    extra={'body_size': body_size})
             elif re.match(rb'^[A-Za-z0-9+/=\n]+$', context.raw_message.body):
-                est_encoding = 'base64_der'
+                est_encoding = 'pkcs7' #'base64_der'
                 der_data = base64.b64decode(context.raw_message.body)
                 csr = x509.load_der_x509_csr(der_data)
                 self.logger.debug(
@@ -68,7 +71,7 @@ class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
                     extra={'body_size': body_size, 'decoded_size': len(der_data)}
                 )
             elif context.raw_message.body.startswith(b'\x30'):  # ASN.1 DER starts with 0x30
-                est_encoding = 'der'
+                est_encoding = 'pkcs7' #'der'
                 csr = x509.load_der_x509_csr(context.raw_message.body)
                 self.logger.debug('EST PKI message parsing: Detected DER format, body size: %(body_size)s bytes',
                                    extra={'body_size': body_size})
@@ -489,7 +492,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         """Helper function to raise NotImplementedError with a given message."""
         raise NotImplementedError(message)
 
-    def _parse_cert_template_extensions(self, extensions_asn1: rfc2459.Extensions) -> list[x509.Extension[Any]]:
+    def _parse_cert_template_extensions(self, extensions_asn1: rfc2459.Extensions) -> list[x509.Extension[Any]]:  # noqa: C901 - Core workflow orchestration requires multiple validation and conditional paths
         """Parse ASN.1 extensions from certTemplate into cryptography extension objects using fallback approach."""
         extensions_list = []
 
@@ -593,7 +596,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         except (ValueError, TypeError) as ip_error:
             self.logger.warning('Failed to parse IP address: %(error)s',
                                 extra={'error': str(ip_error)})
-            
+
     def _parse_basic_constraints(
         self, value: bytes, *, critical: bool
     ) -> x509.Extension[x509.BasicConstraints]:
@@ -667,7 +670,9 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             self.logger.exception('Failed to parse Extended Key Usage extension.')
             raise
 
-    def _parse_subject_key_identifier(self, value: bytes, *, critical: bool) -> x509.Extension[x509.SubjectKeyIdentifier]:
+    def _parse_subject_key_identifier(
+        self, value: bytes, *, critical: bool
+    ) -> x509.Extension[x509.SubjectKeyIdentifier]:
         """Parse Subject Key Identifier extension manually."""
         try:
             ski_asn1, _ = der_decoder.decode(value, asn1Spec=rfc2459.SubjectKeyIdentifier())

@@ -25,14 +25,15 @@ from django.utils import timezone
 from django.views.decorators.http import last_modified
 from django.views.decorators.vary import vary_on_cookie
 from django.views.i18n import JavaScriptCatalog
-from drf_yasg import openapi
-from drf_yasg.views import get_schema_view
-from pki.views.issuing_cas import CrlDownloadView
+from drf_yasg import openapi  # type: ignore[import-untyped]
+from drf_yasg.views import get_schema_view  # type: ignore[import-untyped]
 from rest_framework import permissions
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+
+from pki.views.issuing_cas import CrlDownloadView
 
 from .views import base
 
@@ -40,7 +41,10 @@ last_modified_date = timezone.now()
 
 
 if settings.DEBUG:
-    urlpatterns = [path('admin/', admin.site.urls)] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns = [
+        path('admin/', admin.site.urls),
+        *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),
+    ]
 else:
     urlpatterns = []
 
@@ -74,7 +78,7 @@ urlpatterns += [
     path('i18n/', include('django.conf.urls.i18n')),
     path(
         'jsi18n/',
-        vary_on_cookie(last_modified(lambda req, **kw: last_modified_date)(JavaScriptCatalog.as_view())),
+        vary_on_cookie(last_modified(lambda _req, **_kw: last_modified_date)(JavaScriptCatalog.as_view())),
         name='javascript-catalog',
     ),
     path('', base.IndexView.as_view()),

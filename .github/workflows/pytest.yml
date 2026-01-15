@@ -44,7 +44,7 @@ jobs:
           echo "</details>" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Test Reports even if tests fail
-        uses: actions/upload-artifact@v5  # Uploads reports for review.
+        uses: actions/upload-artifact@v6  # Uploads reports for review.
         if: always()  # Ensures this step runs even if pytest fails.
         with:
           name: pytest-reports

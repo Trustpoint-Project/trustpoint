@@ -17,7 +17,7 @@ import socket
 import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import django_stubs_ext
 import psycopg
@@ -34,11 +34,11 @@ try:
 except FileNotFoundError:
     CONTAINER_ID = 'unknown'
 
-def app_version(request) -> dict:
+def app_version(_request: Any) -> dict[str, str]:
     """Provide application version and container ID for use in templates.
 
     Args:
-        request: The HTTP request object.
+        _request: The HTTP request object (unused).
 
     Returns:
         dict: A dictionary containing the application version and container ID.
@@ -157,17 +157,12 @@ DEVELOPMENT_ENV = True
 
 
 
-# —––––––– Basic SMTP backend –––––––—
+# Basic SMTP backend
 if DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 else:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    # EMAIL_HOST = os.environ.get('EMAIL_HOST')
-    # EMAIL_PORT = os.environ.get('EMAIL_PORT')
-    # EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER')
-    # EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD')
-    # EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', True)
-    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default='no‑reply@trustpoint.ai')
+    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default='no-reply@trustpoint.ai')
 
 
 # Settings for postgreql database
@@ -194,10 +189,12 @@ if _email_host:
     EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
 
     # Sensible defaults based on port; env can override
+    _SMTP_TLS_PORT = 587
+    _SMTP_SSL_PORT = 465
     _use_tls_env = os.getenv('EMAIL_USE_TLS')
     _use_ssl_env = os.getenv('EMAIL_USE_SSL')
-    EMAIL_USE_TLS = (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (EMAIL_PORT == 587)
-    EMAIL_USE_SSL = (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (EMAIL_PORT == 465)
+    EMAIL_USE_TLS = (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (EMAIL_PORT == _SMTP_TLS_PORT)
+    EMAIL_USE_SSL = (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (EMAIL_PORT == _SMTP_SSL_PORT)
 
     EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')       # auth only if both non-empty
     EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
@@ -355,8 +352,8 @@ else:
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
-            'NAME': BASE_DIR / 'db.sqlite3',
-            'OPTIONS': {'timeout': 20},
+            'NAME': str(BASE_DIR / 'db.sqlite3'),
+            'OPTIONS': {'timeout': 20},  # type: ignore[dict-item]
         },
     }
 
@@ -365,14 +362,14 @@ else:
 if DEBUG:
     SECRET_KEY = 'DEV-ENVIRON-SECRET-KEY-lh2rw0b0z$s9e=!4see)@_8ta_up&ad&m01$i+g5z@nz5u$0wi'  # noqa: S105
 else:
-    # TODO(AlexHx8472): Use proper docker secrets handling.
+    # TODO(AlexHx8472): Use proper docker secrets handling.  # noqa: FIX002
     SECRET_KEY = Path('/etc/trustpoint/secrets/django_secret_key.env').read_text()
 
 
 class UTCFormatter(logging.Formatter):
     """Custom logging formatter to use UTC time."""
 
-    converter = time.gmtime
+    converter = staticmethod(time.gmtime)
 
 
 LOGGING = {
@@ -442,3 +439,5 @@ SWAGGER_SETTINGS = {
     },
     'USE_SESSION_AUTH': False,  # disables Django login in Swagger UI
 }
+
+SWAGGER_USE_COMPAT_RENDERERS = False

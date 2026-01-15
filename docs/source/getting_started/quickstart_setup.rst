@@ -5,7 +5,7 @@ Quickstart Setup Guide
 
 This guide provides an introduction to Trustpoint and instructions for setting up the Trustpoint using Docker and Docker Compose.
 
-Prerequisites ✅
+Prerequisites 
 ---------------
 Make sure you have the following installed:
 
@@ -13,7 +13,7 @@ Make sure you have the following installed:
 2. **Docker Compose**: Version v2.32.4 or higher.
 3. **Git**: To clone the Trustpoint repository.
 
-Getting started with the Trustpoint Wizard script 🪄
+Getting started with the Trustpoint Wizard script
 ---------------------------------------------------
 
 The ``tp_wizard.sh`` offers a convenient guided CLI for setting up a Docker container environment.
@@ -40,14 +40,14 @@ The ``tp_wizard.sh`` offers a convenient guided CLI for setting up a Docker cont
 | Use ``./tp_wizard.sh down`` to stop and remove all containers.  
 | To completely remove the Trustpoint volume and delete all stored data, you can use ``./tp_wizard.sh nuke``.  
 
-Getting started with Docker Compose 🐙
+Getting started with Docker Compose
 --------------------------------------
 
-Step-by-Step Setup (Load from Dockerhub) ⬇️
+Step-by-Step Setup (Load from Dockerhub)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 1. **Download** `docker-compose.yml <https://raw.githubusercontent.com/Trustpoint-Project/trustpoint/refs/heads/main/docker-compose.yml>`_
 
-2. **Pull and run the Trustpoint and Postgres Containers** 🚀
+2. **Pull and run the Trustpoint and Postgres Containers**
 
     You can pull the images and start Trustpoint and Postgres containers with following command:
 
@@ -61,7 +61,7 @@ Step-by-Step Setup (Load from Dockerhub) ⬇️
 
    If the specified ports are already in use on your system, modify the port mapping in the `docker-compose.yml` file accordingly.
 
-Step-by-Step Setup (Build container) 🔧
+Step-by-Step Setup (Build container) 
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 1. **Clone the Trustpoint Repository**
@@ -87,7 +87,7 @@ Step-by-Step Setup (Build container) 🔧
 
        docker compose build
 
-3. **Run the Trustpoint and Postgres Containers** 🚀
+3. **Run the Trustpoint and Postgres Containers** 
 
    Start the Trustpoint and Postgres containers using the images you just built:
 
@@ -102,11 +102,11 @@ Step-by-Step Setup (Build container) 🔧
       If the specified ports are already in use on your system, modify the port mapping in the `docker-compose.yml` file accordingly.
 
 
-Getting Started with Docker 🐳
-------------------------------
+Getting Started with Docker
+----------------------------
 
-Step-by-Step Setup (Load from Dockerhub) ⬇️
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Step-by-Step Setup (Load from Dockerhub)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 1. **Pull the Trustpoint Docker Image**
 
@@ -119,7 +119,7 @@ Step-by-Step Setup (Load from Dockerhub) ⬇️
 
    These commands pull the latest versions of the Trustpoint and Postgres images.
 
-2. **Run the Trustpoint and Postgres Containers with a Custom Name and Port Mappings** 🚀
+2. **Run the Trustpoint and Postgres Containers with a Custom Name and Port Mappings**
 
    Once the images are downloaded, you can start containers with custom names and ports mappings:
 
@@ -142,8 +142,8 @@ Step-by-Step Setup (Load from Dockerhub) ⬇️
 
       If the specified ports are already in use on your system, modify the port mapping in the command accordingly.
 
-Step-by-Step Setup (Build container) 🔧
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Step-by-Step Setup (Build container)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 1. **Clone the Trustpoint Repository**
 
@@ -169,7 +169,7 @@ Step-by-Step Setup (Build container) 🔧
    - **-f**: specifies the filepath of the `dockerfile`.`
    - **.**: Specifies the current directory as the build context.
 
-3. **Run the Trustpoint Container with a Custom Name and Port Mappings** 🚀
+3. **Run the Trustpoint Container with a Custom Name and Port Mappings** 
 
    Start the database and Trustpoint container using the images you just built, with custom names and both port mappings:
 
@@ -210,8 +210,8 @@ Once the containers are running, you can verify the setup:
 
    You’ve successfully set up Trustpoint! Your environment is now ready to securely manage digital identities for your industrial devices. You can start registering devices, issuing certificates, and building a trusted network.
 
-Change the Current Admin User Password 🔑
------------------------------------------
+Change the Current Admin User Password
+---------------------------------------
 
 To secure your Trustpoint setup, it may be important to change the default admin user password:
 
@@ -222,8 +222,8 @@ To secure your Trustpoint setup, it may be important to change the default admin
 - Enter and confirm the new password.
 - Click **Save** to update the password.
 
-Tips and Troubleshooting 🧰
----------------------------
+Tips and Troubleshooting 
+-------------------------
 
 - **View Logs**: For troubleshooting, view logs with:
 
@@ -245,8 +245,8 @@ Tips and Troubleshooting 🧰
  - **-v**: Removes the volume.
 
 
-What to Do Next ➡️
-------------------
+What to Do Next
+----------------
 
 After setting up and Trustpoint, here are some recommended next steps to explore the full capabilities of the platform:
 

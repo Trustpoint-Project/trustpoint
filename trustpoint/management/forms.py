@@ -11,10 +11,6 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
-from pki.models import CredentialModel
-from pki.util.keys import AutoGenPkiKeyAlgorithm
-from pki.util.x509 import CertificateVerifier
-from trustpoint.logger import LoggerMixin
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -25,12 +21,16 @@ from trustpoint_core.serializer import (
 from management.models import BackupOptions, KeyStorageConfig, PKCS11Token, SecurityConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
+from pki.models import CredentialModel
+from pki.util.keys import AutoGenPkiKeyAlgorithm
+from pki.util.x509 import CertificateVerifier
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import ClassVar
 
 
-class SecurityConfigForm(forms.ModelForm):
+class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
     """Security configuration model form."""
 
     FEATURE_TO_FIELDS: ClassVar[dict[type[SecurityFeature], list[str]]] = {
@@ -52,7 +52,7 @@ class SecurityConfigForm(forms.ModelForm):
 
         # Disable form fields that correspond to features not allowed
         for feature_cls in features_not_allowed:
-            field_names = self.FEATURE_TO_FIELDS.get(feature_cls, [])
+            field_names = self.FEATURE_TO_FIELDS.get(type(feature_cls), [])
             for field_name in field_names:
                 if field_name in self.fields:
                     self.fields[field_name].widget.attrs['disabled'] = 'disabled'
@@ -105,9 +105,11 @@ class SecurityConfigForm(forms.ModelForm):
     def clean_auto_gen_pki_key_algorithm(self) -> AutoGenPkiKeyAlgorithm:
         """Keep the current value of `auto_gen_pki_key_algorithm` from the instance if the field was disabled."""
         form_value = self.cleaned_data.get('auto_gen_pki_key_algorithm')
-        if form_value is None:
-            return self.instance.auto_gen_pki_key_algorithm if self.instance else AutoGenPkiKeyAlgorithm.RSA2048
-        return form_value
+        if form_value is None or form_value == '':
+            if self.instance:
+                return AutoGenPkiKeyAlgorithm(self.instance.auto_gen_pki_key_algorithm)
+            return AutoGenPkiKeyAlgorithm.RSA2048
+        return AutoGenPkiKeyAlgorithm(form_value)
 
 class BackupOptionsForm(forms.ModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""
@@ -242,7 +244,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
 
     pkcs12_file = forms.FileField(label=_('PKCS#12 File (.p12, .pfx)'), required=True)
     pkcs12_password = forms.CharField(
-        # hack, force autocomplete off in chrome with: one-time-code
+        # hack, force autocomplete off in chrome with: one-time-code  # noqa: FIX004
         widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
         label=_('[Optional] PKCS#12 password'),
         required=False,
@@ -261,6 +263,71 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         """Raises a validation error with the given message."""
         raise ValidationError(message)
 
+    def _read_pkcs12_file(self, cleaned_data: dict[str, Any]) -> tuple[bytes, Any, Any]:
+        """Read and extract data from PKCS#12 file.
+
+        Returns:
+            Tuple of (pkcs12_raw, pkcs12_password, domain_name)
+        """
+        pkcs12_file = cleaned_data.get('pkcs12_file')
+        if pkcs12_file is None:
+            self._raise_validation_error('No PKCS#12 file was uploaded.')
+
+        try:
+            pkcs12_raw = pkcs12_file.read()  # type: ignore[union-attr]
+            pkcs12_password = cleaned_data.get('pkcs12_password')
+            domain_name = cleaned_data.get('domain_name')
+        except (OSError, AttributeError) as original_exception:
+            error_message = _(
+                'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
+            )
+            raise ValidationError(error_message, code='unexpected-error') from original_exception
+        else:
+            return pkcs12_raw, pkcs12_password, domain_name
+
+    def _encode_password(self, pkcs12_password: Any) -> bytes | None:
+        """Encode PKCS#12 password if provided.
+
+        Returns:
+            Encoded password bytes or None if no password provided
+        """
+        if pkcs12_password:
+            try:
+                encoded: bytes = pkcs12_password.encode()
+            except Exception as original_exception:
+                error_message = _('The PKCS#12 password contains invalid data, that cannot be encoded in UTF-8.')
+                raise ValidationError(error_message) from original_exception
+            else:
+                return encoded
+        return None
+
+    def _parse_and_save_credential(
+        self, pkcs12_raw: bytes, pkcs12_password: bytes | None, domain_name: Any
+    ) -> None:
+        """Parse PKCS#12 data and save credential."""
+        try:
+            tls_credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
+        except Exception as exception:
+            err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
+            raise ValidationError(err_msg) from exception
+
+        try:
+            certificate = tls_credential_serializer.certificate
+            if certificate is None:
+                self._raise_validation_error('The provided PKCS#12 file does not contain a valid certificate.')
+            if not isinstance(certificate, Certificate):
+                self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
+            CertificateVerifier.verify_server_cert(certificate, domain_name)  # type: ignore[arg-type]
+            self.saved_credential = CredentialModel.save_credential_serializer(
+                credential_serializer=tls_credential_serializer,
+                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+            )
+        except ValidationError:
+            raise
+        except Exception as exception:
+            error_msg = str(exception)
+            raise ValidationError(error_msg) from exception
+
     def clean(self) -> None:
         """Cleans and validates the entire form.
 
@@ -274,54 +341,13 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             is already taken or the PKCS#12 file cannot be read or parsed.
         """
         cleaned_data = super().clean()
-        if not cleaned_data:  # only for typing, cleaned_data should always be a dict, but not entirely sure
+        if not cleaned_data:
             exc_msg = 'No data was provided.'
             raise ValidationError(exc_msg)
-        pkcs12_file = cleaned_data.get('pkcs12_file')
-        if pkcs12_file is None:
-            self._raise_validation_error('No PKCS#12 file was uploaded.')
-        try:
-            pkcs12_raw = pkcs12_file.read()
-            pkcs12_password = cleaned_data.get('pkcs12_password')
-            domain_name = cleaned_data.get('domain_name')
-        except (OSError, AttributeError) as original_exception:
-            # These exceptions are likely to occur if the file cannot be read or is missing attributes.
-            error_message = _(
-                'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
-            )
-            raise ValidationError(error_message, code='unexpected-error') from original_exception
 
-        if pkcs12_password:
-            try:
-                pkcs12_password = pkcs12_password.encode()
-            except Exception as original_exception:
-                error_message = 'The PKCS#12 password contains invalid data, that cannot be encoded in UTF-8.'
-                raise ValidationError(error_message) from original_exception
-        else:
-            pkcs12_password = None
-
-        try:
-            tls_credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
-        except Exception as exception:
-            err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
-            raise ValidationError(err_msg) from exception
-
-        try:
-            certificate = tls_credential_serializer.certificate
-            if certificate is None:
-                self._raise_validation_error('The provided PKCS#12 file does not contain a valid certificate.')
-            if not isinstance(certificate, Certificate):
-                self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
-            CertificateVerifier.verify_server_cert(certificate,  domain_name)
-            self.saved_credential = CredentialModel.save_credential_serializer(
-                credential_serializer=tls_credential_serializer,
-                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
-            )
-        except ValidationError:
-            raise
-        except Exception as exception:
-            err_msg = str(exception)
-            raise ValidationError(err_msg) from exception
+        pkcs12_raw, pkcs12_password, domain_name = self._read_pkcs12_file(cleaned_data)
+        pkcs12_password_bytes = self._encode_password(pkcs12_password)
+        self._parse_and_save_credential(pkcs12_raw, pkcs12_password_bytes, domain_name)
 
     def get_saved_credential(self) -> CredentialModel:
         """Return the saved credential."""
@@ -422,20 +448,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         return certificate_serializer
 
     def clean_tls_certificate_chain(self) -> None | CertificateCollectionSerializer:
-        """Validates and parses the uploaded TLS certificate chain file.
-
-        This method checks if the optional certificate chain file is provided.
-        If present, it validates and attempts to parse the file into a collection
-        of certificates. Raises a validation error if parsing fails or the file
-        appears corrupted.
-
-        Returns:
-            CertificateCollectionSerializer: A serializer containing the parsed
-            certificate chain if provided.
-
-        Raises:
-            ValidationError: If the certificate chain cannot be parsed.
-        """
+        """Validates and parses the uploaded TLS certificate chain file."""
         tls_certificate_chain = self.cleaned_data['tls_certificate_chain']
 
         if tls_certificate_chain:
@@ -451,7 +464,52 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         """Raises a validation error with the given message."""
         raise forms.ValidationError(message)
 
-    def clean(self) -> None:
+    def _encode_private_key_password(self, private_key_password: Any) -> bytes | None:
+        """Encode private key password if provided."""
+        if private_key_password:
+            try:
+                encoded: bytes = private_key_password.encode()
+            except Exception as original_exception:
+                error_message = 'The private key password contains invalid data that cannot be encoded in UTF-8.'
+                raise ValidationError(error_message) from original_exception
+            else:
+                return encoded
+        return None
+
+    def _parse_private_key(self, private_key_bytes: bytes, private_key_password_bytes: bytes | None) -> Any:
+        """Parse private key with optional password."""
+        try:
+            return PrivateKeySerializer.from_bytes(private_key_bytes, private_key_password_bytes)
+        except Exception as exception:
+            err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
+            raise ValidationError(err_msg) from exception
+
+    def _create_and_save_credential(
+        self,
+        private_key_serializer: Any,
+        tls_certificate_serializer: Any,
+        tls_certificate_chain_serializer: Any,
+        domain_name: str
+    ) -> None:
+        """Create credential from serializers, verify, and save."""
+        credential_serializer = CredentialSerializer.from_serializers(
+            private_key_serializer=private_key_serializer,
+            certificate_serializer=tls_certificate_serializer,
+            certificate_collection_serializer=tls_certificate_chain_serializer
+        )
+
+        certificate = credential_serializer.certificate
+        if certificate is None or not isinstance(certificate, Certificate):
+            self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
+
+        CertificateVerifier.verify_server_cert(certificate, domain_name)  # type: ignore[arg-type]
+
+        self.saved_credential = CredentialModel.save_credential_serializer(
+            credential_serializer=credential_serializer,
+            credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+        )
+
+    def clean(self) -> dict[str, Any] | None:
         """Cleans and validates the form data.
 
         This method performs additional validation on the provided data,
@@ -478,51 +536,27 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             try:
                 domain_name = str(domain_name)
             except Exception as original_exception:
-                err_msg = 'The provided domain name is invalid.'
+                err_msg = _('The provided domain name is invalid.')
                 raise ValidationError(err_msg) from original_exception
 
             if not private_key_bytes or not tls_certificate_serializer:
                 return cleaned_data
 
-            if private_key_password:
-                try:
-                    private_key_password_bytes = private_key_password.encode()
-                except Exception as original_exception:
-                    error_message = 'The private key password contains invalid data that cannot be encoded in UTF-8.'
-                    raise ValidationError(error_message) from original_exception
-            else:
-                private_key_password_bytes = None
-
-            try:
-                private_key_serializer = PrivateKeySerializer.from_bytes(
-                    private_key_bytes,
-                    private_key_password_bytes
-                )
-            except Exception as exception:
-                err_msg = _('Failed to parse the private key file. Either wrong password or file corrupted.')
-                raise ValidationError(err_msg) from exception
-
-            credential_serializer = CredentialSerializer.from_serializers(
-                private_key_serializer=private_key_serializer,
-                certificate_serializer=tls_certificate_serializer,
-                certificate_collection_serializer=tls_certificate_chain_serializer
-            )
-
-            certificate = credential_serializer.certificate
-            if certificate is None or not isinstance(certificate, Certificate):
-                self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
-
-            CertificateVerifier.verify_server_cert(certificate, domain_name)
-
-            self.saved_credential = CredentialModel.save_credential_serializer(
-                credential_serializer=credential_serializer,
-                credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+            private_key_password_bytes = self._encode_private_key_password(private_key_password)
+            private_key_serializer = self._parse_private_key(private_key_bytes, private_key_password_bytes)
+            self._create_and_save_credential(
+                private_key_serializer,
+                tls_certificate_serializer,
+                tls_certificate_chain_serializer,
+                domain_name
             )
         except ValidationError:
             raise
         except Exception as exception:
-            err_msg = str(exception)
-            raise ValidationError(err_msg) from exception
+            error_msg = str(exception)
+            raise ValidationError(error_msg) from exception
+        else:
+            return None
 
     def get_saved_credential(self) -> CredentialModel:
         """Return the saved credential."""

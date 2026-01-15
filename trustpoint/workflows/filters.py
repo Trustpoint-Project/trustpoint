@@ -6,142 +6,12 @@ from typing import TYPE_CHECKING, Any
 import django_filters
 from django import forms
 from django.utils.translation import gettext_lazy as _
-from pki.models import DomainModel
 
-from workflows.models import EnrollmentRequest, State, WorkflowDefinition, WorkflowInstance
+from pki.models import DomainModel
+from workflows.models import EnrollmentRequest, State
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
-
-STATE_FILTER_CHOICES = (
-    (State.AWAITING, 'AwaitingApproval'),
-    (State.APPROVED, 'Approved'),
-    (State.REJECTED, 'Rejected'),
-    (State.FAILED, 'Failed'),
-    (State.ABORTED, 'Aborted'),
-)
-
-
-class WorkflowFilter(django_filters.FilterSet):
-    """Filters for the waiting approvals (workflow instances) list."""
-
-    device_name = django_filters.CharFilter(
-        label=_('Device'),
-        field_name='enrollment_request__device__common_name',
-        lookup_expr='icontains',
-        widget=forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': _('Search device…')}),
-    )
-
-    domain = django_filters.ModelChoiceFilter(
-        label=_('Domain'),
-        field_name='enrollment_request__domain',
-        queryset=DomainModel.objects.all(),
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
-    )
-
-    protocol = django_filters.CharFilter(
-        label=_('Protocol'),
-        field_name='enrollment_request__protocol',
-        lookup_expr='icontains',
-        widget=forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': _('EST, CMP, …')}),
-    )
-
-    workflow = django_filters.ModelChoiceFilter(
-        label=_('Workflow'),
-        field_name='definition',
-        queryset=WorkflowDefinition.objects.all(),
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
-    )
-
-    state = django_filters.ChoiceFilter(
-        label=_('State'),
-        field_name='state',
-        choices=STATE_FILTER_CHOICES,
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
-    )
-
-    include_finalized = django_filters.BooleanFilter(
-        label=_('Include completed/aborted workflows'),
-        method='filter_include_finalized',
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-    )
-
-    # Needs a method: it toggles inclusion/exclusion based on two values on a related field
-    include_failed_rejected_parents = django_filters.BooleanFilter(
-        label=_('Show rejected/failed requests'),
-        method='filter_include_failed_rejected_parents',
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-    )
-
-    requested_from = django_filters.DateTimeFilter(
-        label=_('Requested from'),
-        field_name='created_at',
-        lookup_expr='gte',
-        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
-    )
-
-    requested_to = django_filters.DateTimeFilter(
-        label=_('Requested to'),
-        field_name='created_at',
-        lookup_expr='lte',
-        widget=forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': 'form-control form-control-sm'}),
-    )
-
-    class Meta:
-        """Configuration for WorkflowFilter."""
-        model = WorkflowInstance
-        fields: tuple[str, ...] = ()
-
-    def filter_include_failed_rejected_parents(
-        self,
-        queryset: QuerySet[WorkflowInstance],
-        _name: str,
-        value: Any,
-    ) -> QuerySet[WorkflowInstance]:
-        """Filter by enrollment request parent state.
-
-        When unchecked (value is False/None), exclude parents in {Rejected, Failed}.
-        When checked (value is True), include them.
-
-        Args:
-            queryset: Base queryset of workflow instances.
-            _name: Name of the filter (unused).
-            value: Boolean-like value from the filter widget.
-
-        Returns:
-            QuerySet[WorkflowInstance]: Filtered queryset.
-        """
-        if value:
-            return queryset
-        return queryset.exclude(
-            enrollment_request__aggregated_state__in=[State.REJECTED, State.FAILED]
-        )
-
-    def filter_include_finalized(
-        self,
-        queryset: QuerySet[WorkflowInstance],
-        _name: str,
-        value: Any,
-    ) -> QuerySet[WorkflowInstance]:
-        """Filter finalized workflow instances.
-
-        - Unchecked (value is False/None): show only non-finalized instances.
-        - Checked (value is True): include finalized as well.
-
-        Args:
-            queryset: Base queryset of workflow instances.
-            _name: Name of the filter (unused).
-            value: Boolean-like value from the filter widget.
-
-        Returns:
-            QuerySet[WorkflowInstance]: Filtered queryset.
-        """
-        if value:
-            # Include both finalized and non-finalized
-            return queryset
-        # Default: hide completed (finalized=True)
-        return queryset.filter(finalized=False)
-
 
 class EnrollmentRequestFilter(django_filters.FilterSet):
     """Filters for the enrollment request list."""
@@ -154,7 +24,7 @@ class EnrollmentRequestFilter(django_filters.FilterSet):
     )
 
     include_finalized = django_filters.BooleanFilter(
-        label=_('Include completed/aborted requests'),
+        label=_('Include finalized/aborted requests'),
         method='filter_include_finalized',
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
     )

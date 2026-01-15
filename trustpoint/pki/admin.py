@@ -3,8 +3,10 @@
 from django.contrib import admin
 from django.http import HttpRequest
 
-from .models import CertificateChainOrderModel, CertificateModel, CredentialModel, IssuingCaModel
+from .models.certificate import CertificateModel
+from .models.credential import CertificateChainOrderModel, CredentialModel
 from .models.devid_registration import DevIdRegistration
+from .models.issuing_ca import IssuingCaModel
 
 
 class DevIdRegistrationAdmin(admin.ModelAdmin[DevIdRegistration]):
@@ -14,7 +16,7 @@ class DevIdRegistrationAdmin(admin.ModelAdmin[DevIdRegistration]):
 class CertificateModelAdmin(admin.ModelAdmin[CertificateModel]):
     """Admin configuration for the CertificateModel."""
 
-    def get_readonly_fields(self, _request: HttpRequest, _obj: CertificateModel = None) -> list[str]:
+    def get_readonly_fields(self, _request: HttpRequest, _obj: CertificateModel | None = None) -> list[str]:
         """Sets all fields as read-only."""
         return [f.name for f in CertificateModel._meta.fields]  # noqa: SLF001
 

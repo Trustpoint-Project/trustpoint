@@ -1,8 +1,8 @@
 """URL configuration for the PKI application."""
 
 from django.urls import path, re_path
-from help_pages import pki_help_views
 
+from help_pages import pki_help_views
 from pki.views import cert_profiles, certificates, domains, issuing_cas, owner_credentials, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView
@@ -81,7 +81,7 @@ urlpatterns = [
     ),
     path(
         'certificates/download/issuing-ca/<int:pk>/',
-        certificates.CmpIssuingCaCertificateDownloadView.as_view(),
+        certificates.IssuingCaCertificateDownloadView.as_view(),
         name='certificate-issuing-ca-download',
     ),
     path('certificates/details/<int:pk>/', certificates.CertificateDetailView.as_view(), name='certificate-detail'),
@@ -104,6 +104,11 @@ urlpatterns = [
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
     path('issuing-cas/crl-gen/<int:pk>/', issuing_cas.IssuingCaCrlGenerationView.as_view(), name='issuing_cas-crl-gen'),
+    path(
+        'issuing-cas/config/<int:pk>/help/crl-download/',
+        pki_help_views.CrlDownloadHelpView.as_view(),
+        name='help_issuing_cas_crl_download',
+    ),
     path(
         'issuing-cas/issued-certificates/<int:pk>',
         IssuedCertificatesListView.as_view(),

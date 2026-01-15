@@ -22,7 +22,7 @@ class TestESTHelper(LoggerMixin):
             est_device_without_onboarding,
             rsa_private_key
     ) -> None:
-        """Test client certificate validation when the request does not contain the 'SSL_CLIENT_CERT' header."""
+        """Test client certificate validation when the request does not contain the 'HTTP_SSL_CLIENT_CERT' header."""
         device = est_device_without_onboarding['device']
 
         operation = 'simpleenroll'
@@ -88,7 +88,7 @@ class TestESTHelper(LoggerMixin):
             f'cert_requested must be of type CertificateSigningRequest, got {type(mock_context.cert_requested)}.'
         assert mock_context.domain == expected_domain, \
             f'Domain in context {mock_context.domain} does not match expected domain {expected_domain}'
-        assert mock_context.est_encoding in {'der'}
+        assert mock_context.est_encoding in {'pkcs7'}
 
         est_authenticator.authenticate(mock_context)
 
@@ -129,7 +129,7 @@ class TestESTHelper(LoggerMixin):
             path=f'/.well-known/{protocol_str}/{domain_str}/{certtemplate_str}/{operation_str}',
             data=csr.public_bytes(serialization.Encoding.DER),
             content_type='application/pkcs10',
-            SSL_CLIENT_CERT=cert_pem,
+            HTTP_SSL_CLIENT_CERT=cert_pem,
         )
 
         # Build mock context

@@ -73,7 +73,7 @@ stop_one(){ local n="$1"; exists "$n" || return 0; running "$n" && docker stop "
 tcp_check(){ local host="$1" port="$2" ts=$(( $(date +%s) + ${3:-5} )); while (( $(date +%s) < ts )); do (exec 3<>"/dev/tcp/$host/$port") >/dev/null 2>&1 && { exec 3>&- 3<&-; return 0; }; sleep 1; done; return 1; }
 port_in_use(){ tcp_check 127.0.0.1 "$1" 1; }
 
-# SFTPGo host web port resolver (avoid Apache :80)
+# SFTPGo host web port resolver (avoid NGINX :80)
 sftpgo_web_port(){
   local p; p="$(docker port sftpgo 8080/tcp 2>/dev/null | awk -F: '{print $2}')" || true
   echo "${p:-$SFTPGO_WEB_PORT}"
@@ -81,7 +81,7 @@ sftpgo_web_port(){
 
 # -------------------------- Input helpers ------------------------------------
 ask(){ local prompt="$1" def="${2:-}"; if [[ -n "$def" ]]; then read -r -p "$(bold)${prompt}$(rst) [default: ${def}] > " REPLY || true; REPLY="${REPLY:-$def}"; else read -r -p "$(bold)${prompt}$(rst) > " REPLY || true; fi; }
-ask_yes_no(){ local prompt="$1" def="${2:-y}" a; case "${def,,}" in y|yes) a="[Y/n]";; n|no) a="[y/N]";; *) a="[y/n]";; esac; read -r -p "$(bold)${prompt} ${a}$(rst) > " resp || true; resp="${resp:-$def}"; [[ "${resp,,}" =~ ^y ]]; }
+ask_yes_no(){ local prompt="$1" def="${2:-y}" a; case "${def}" in y|yes) a="[Y/n]";; n|no) a="[y/N]";; *) a="[y/n]";; esac; read -r -p "$(bold)${prompt} ${a}$(rst) > " resp || true; resp="${resp:-$def}"; [[ "${resp}" =~ ^y ]]; }
 ask_port(){ local prompt="$1" def="$2" p; while true; do ask "$prompt" "$def"; p="$REPLY"; [[ "$p" =~ ^[0-9]{1,5}$ ]] && (( p>0 && p<65536 )) && { echo "$p"; return; } ; warn "Invalid port. Enter 1..65535."; done; }
 ask_free_port(){ local prompt="$1" def="$2" p; while true; do p="$(ask_port "$prompt" "$def")"; if port_in_use "$p"; then warn "Port ${p} is already in use on this host. Pick another."; else echo "$p"; return; fi; done; }
 ask_user(){ local prompt="$1" def="$2" u; while true; do ask "$prompt" "$def"; u="$REPLY"; [[ "$u" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]] && { echo "$u"; return; } ; warn "Invalid username."; done; }
@@ -667,8 +667,8 @@ logs_selected(){
 }
 
 nuke_cmd(){
-  read -r -p "Remove ALL project containers, network, and DB volume (and ./sftpgo-data)? [y/N] " a; [[ "${a,,}" == "y" ]] || exit 0
-  read -r -p "Are you sure? This is destructive. [y/N] " b; [[ "${b,,}" == "y" ]] || exit 0
+  read -r -p "Remove ALL project containers, network, and DB volume (and ./sftpgo-data)? [y/N] " a; [[ "${a}" == "y" ]] || exit 0
+  read -r -p "Are you sure? This is destructive. [y/N] " b; [[ "${b}" == "y" ]] || exit 0
   stop_one trustpoint; stop_one postgres; stop_one mailpit; stop_one sftpgo
   docker network rm "$NET" >/dev/null 2>&1 || true
   docker volume rm "$VOL_DB" >/dev/null 2>&1 || true

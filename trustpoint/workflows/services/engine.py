@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 
-from workflows.models import EnrollmentRequest, State, WorkflowInstance
+from workflows.models import State, WorkflowInstance
 from workflows.services.context import VARS_MAX_BYTES, compact_context_blob
 from workflows.services.executors.factory import StepExecutorFactory
 
@@ -157,7 +157,8 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
             executor = StepExecutorFactory.create(step_type)
             result: ExecutorResult = executor.execute(inst, signal)
             _persist_step_context(inst, result)
-            cast('EnrollmentRequest', inst.enrollment_request).recompute_and_save()
+            if inst.enrollment_request:
+                inst.enrollment_request.recompute_and_save()
 
             if not _merge_global_vars(inst, result):
                 break

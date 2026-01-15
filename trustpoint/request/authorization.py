@@ -2,11 +2,11 @@
 from abc import ABC, abstractmethod
 from typing import Never
 
-from aoki.views import AokiServiceMixin
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
-from trustpoint.logger import LoggerMixin
 
+from aoki.views import AokiServiceMixin
 from request.request_context import RequestContext
+from trustpoint.logger import LoggerMixin
 
 
 class AuthorizationComponent(ABC):

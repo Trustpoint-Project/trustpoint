@@ -9,9 +9,6 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
-from management.models import KeyStorageConfig, PKCS11Token
-from management.pkcs11_util import Pkcs11AESKey, Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
-from pki.models import CertificateModel
 from trustpoint_core import oid
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
@@ -20,11 +17,14 @@ from trustpoint_core.serializer import (
     PrivateKeyLocation,
     PrivateKeySerializer,
 )
+
+from management.models import KeyStorageConfig, PKCS11Token
+from management.pkcs11_util import Pkcs11AESKey, Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
+from pki.models import CertificateModel
+from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
 from util.encrypted_fields import EncryptedCharField
 from util.field import UniqueNameValidator
-
-from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
@@ -41,6 +41,7 @@ __all__ = [
     'IDevIDReferenceModel',
     'OwnerCredentialModel',
     'PKCS11Key',
+    'PrimaryCredentialCertificate',
 ]
 
 
@@ -161,10 +162,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         CertificateModel, on_delete=models.PROTECT, related_name='credential_set', blank=False
     )
 
-    certificates = models.ManyToManyField(
+    certificates = models.ManyToManyField[CertificateModel, 'PrimaryCredentialCertificate'](
         CertificateModel, through='PrimaryCredentialCertificate', blank=False, related_name='credential'
     )
-    certificate_chain = models.ManyToManyField(
+    certificate_chain: models.ManyToManyField[CertificateModel, CertificateChainOrderModel] = models.ManyToManyField(
         CertificateModel, blank=True,
         through='CertificateChainOrderModel',
         through_fields=('credential', 'certificate'),
@@ -298,7 +299,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     @classmethod
     def _create_private_key_in_hsm(
             cls,
-            key_type: PrivateKey,
+            key_type: type[PrivateKey],
             token_config: PKCS11Token,
             key_label: str,
             key_size: int | None = None,
@@ -344,7 +345,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     def _validate_hsm_inputs(
         token_config: PKCS11Token,
         key_label: str,
-        key_type: PrivateKey,
+        key_type: type[PrivateKey],
         key_size: int | None,
         key_curve: ec.EllipticCurve | None,
     ) -> None:
@@ -357,7 +358,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             msg = 'No Key Label found'
             raise ValueError(msg)
 
-        if isinstance(key_type, rsa.RSAPrivateKey):
+        if key_type == rsa.RSAPrivateKey:
             if key_size is None:
                 msg = 'key_size parameter is required for RSA keys'
                 raise ValueError(msg)
@@ -369,7 +370,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 msg = 'RSA key size must be at least 1024 bits'
                 raise ValueError(msg)
 
-        elif isinstance(key_type, ec.EllipticCurvePrivateKey):
+        elif key_type == ec.EllipticCurvePrivateKey:
             if key_curve is None:
                 msg = 'curve parameter is required for EC keys'
                 raise ValueError(msg)
@@ -383,14 +384,14 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
     @staticmethod
     def _initialize_key_handler(
-        key_type: PrivateKey,
+        key_type: type[PrivateKey],
         token_config: PKCS11Token,
         key_label: str,
         key_size: int | None,
         key_curve: ec.EllipticCurve | None,
     ) -> tuple[Pkcs11RSAPrivateKey | Pkcs11ECPrivateKey, str]:
         """Initializes the PKCS#11 key handler."""
-        if isinstance(key_type, rsa.RSAPrivateKey):
+        if key_type == rsa.RSAPrivateKey:
             rsa_pkcs11_key_handler: Pkcs11RSAPrivateKey = Pkcs11RSAPrivateKey(
                 lib_path=token_config.module_path,
                 token_label=token_config.label,
@@ -403,7 +404,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             rsa_pkcs11_key_handler.generate_key(key_length=key_size)
             return rsa_pkcs11_key_handler, PKCS11Key.KeyType.RSA
 
-        if isinstance(key_type, ec.EllipticCurvePrivateKey):
+        if key_type == ec.EllipticCurvePrivateKey:
             ec_pkcs11_key_handler: Pkcs11ECPrivateKey = Pkcs11ECPrivateKey(
                 lib_path=token_config.module_path,
                 token_label=token_config.label,
@@ -501,12 +502,12 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         if hsm_key_reference is None:
             msg = 'HSM key reference is required for HSM private key locations'
             raise ValueError(msg)
+        if hsm_key_reference.key_label is None:
+            msg = 'HSM key reference key_label is required for HSM private key locations'
+            raise ValueError(msg)
         if normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.HSM_GENERATED:
             if hsm_key_reference.key_type is None:
                 msg = 'key_type must be provided for HSM_GENERATED keys'
-                raise ValueError(msg)
-            if hsm_key_reference.key_label is None:
-                msg = 'key_label must be provided for HSM_GENERATED keys'
                 raise ValueError(msg)
             return cls._create_private_key_in_hsm(
                 key_type=hsm_key_reference.key_type,
@@ -516,9 +517,6 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 token_config=token_config
             )
         if normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.HSM_PROVIDED:
-            if hsm_key_reference.key_label is None:
-                msg = 'key_label must be provided for HSM_PROVIDED keys'
-                raise ValueError(msg)
             private_key_serializer = normalized_credential_serializer.get_private_key_serializer()
             if private_key_serializer is None:
                 msg = 'Private key serializer is required for HSM_PROVIDED'
@@ -640,7 +638,6 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                     self.logger.error(exc_msg)
                     raise ValidationError(exc_msg)
         self.certificates.clear()
-        self.certificate = None
         # CertificateChainOrderModel is deleted via CASCADE
 
     def get_private_key(self) -> PrivateKey:
@@ -1011,7 +1008,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
     unique_name = models.CharField(
         verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
     )
-    credential: CredentialModel = models.OneToOneField(
+    credential: models.OneToOneField[CredentialModel] = models.OneToOneField(
         CredentialModel, related_name='dev_owner_ids', on_delete=models.PROTECT)
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)

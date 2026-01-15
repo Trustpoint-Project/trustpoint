@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
@@ -11,31 +11,35 @@ from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import FormView, TemplateView, View
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_yasg.utils import swagger_auto_schema
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, viewsets
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from pki.models import GeneralNameIpAddress
-from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, CertificateModel, CredentialModel
-from setup_wizard.forms import StartupWizardTlsCertificateForm
-from setup_wizard.tls_credential import TlsServerCredentialGenerator
-from trustpoint.logger import LoggerMixin
 
 from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.management.commands.update_tls import Command as UpdateTlsCommand
 from management.models import TlsSettings
 from management.serializer.credential import CredentialSerializer
+from pki.models import CertificateModel, CredentialModel, GeneralNameIpAddress
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
+from setup_wizard.forms import StartupWizardTlsCertificateForm
+from setup_wizard.tls_credential import TlsServerCredentialGenerator
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
-    from typing import Any, ClassVar
-
     from django.http import HttpRequest, HttpResponse
 
 
 class TlsSettingsContextMixin:
     """Mixin which adds data to the context for the TLS settings application."""
 
-    extra_context: ClassVar = {'page_category': 'management', 'page_name': 'tls'}
+    page_category: str = 'management'
+    page_name: str = 'tls'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add page_category and page_name to context."""
+        context = cast('dict[str, Any]', super().get_context_data(**kwargs))  # type: ignore[misc]
+        context['page_category'] = self.page_category
+        context['page_name'] = self.page_name
+        return context
 
 
 class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
@@ -277,7 +281,7 @@ class ActivateTlsServerView(View, LoggerMixin):
     def post(self, request: HttpRequest, *args: Any, **kwargs: dict[str, Any]) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential activation."""
         del args
-        cert_id = kwargs['pk']
+        cert_id: int = kwargs['pk']  # type: ignore[assignment]
         self.logger.info('Activating TLS certificate with ID: %s', cert_id)
         try:
             tls_certificate = CredentialModel.objects.get(
@@ -287,7 +291,7 @@ class ActivateTlsServerView(View, LoggerMixin):
             active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
             active_tls.credential = tls_certificate
             active_tls.save()
-            UpdateTlsCommand().handle()  # Apply new Apache TLS configuration
+            UpdateTlsCommand().handle()  # Apply new NGINX TLS configuration
             self.logger.info(
                 'Activated TLS credential: %s, certificate: %s',
                 tls_certificate.id, tls_certificate.certificate.id

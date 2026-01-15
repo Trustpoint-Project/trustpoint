@@ -1,0 +1,24 @@
+{
+    "type": "cert_profile",
+    "display_name": "OPC UA",
+    "subj": {
+        "allow":"*",
+        "cn": {"default":"OPC-UA"}
+    },
+    "reject_mods": false,
+    "ext": {
+        "basic_constraints": {
+            "ca": false
+        },
+        "subject_alternative_name": {
+            "uris": {
+                "required": true,
+                "default": ["urn:example_trustpoint_opcua"]
+            },
+            "critical": true
+        }
+    },
+    "validity": {
+        "days": 10
+    }
+}

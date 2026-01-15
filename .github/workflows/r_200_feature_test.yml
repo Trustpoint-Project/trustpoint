@@ -1,0 +1,131 @@
+name: R_200 - Docker Setup Wizard
+
+permissions:
+  contents: read
+
+# This workflow tests the initial setup wizard in a Docker environment
+# It verifies that a user can complete the full setup process in a fresh Docker deployment
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  docker-setup-wizard-test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        
+      # Build and start Docker containers with docker-compose
+      - name: Build and start Docker containers
+        uses: hoverkraft-tech/compose-action@v2.4.3
+        with:
+          compose-file: "./docker-compose.yml"
+          up-flags: "--build --wait"
+      
+      # Wait for services to start up (database and application initialization)
+      - name: Wait for Trustpoint to be ready
+        run: |
+          echo "Waiting for Trustpoint to be ready..."
+          echo "Initial startup delay for database initialization..."
+          sleep 30
+          
+          echo "Checking container status..."
+          docker compose ps
+          
+          echo "Waiting for HTTP response..."
+          for i in {1..40}; do
+            http_code=$(curl -k -s -o /dev/null -w "%{http_code}" https://127.0.0.1/ || echo "000")
+            
+            if [ "$http_code" = "200" ] || [ "$http_code" = "302" ]; then
+              echo "✓ Trustpoint is ready (HTTP $http_code)"
+              docker compose logs trustpoint | tail -20
+              break
+            fi
+            
+            echo "Waiting... (attempt $i/40, HTTP code: $http_code)"
+            
+            if [ $i -eq 40 ]; then
+              echo "ERROR: Trustpoint did not become ready in time"
+              echo "=== Container Status ==="
+              docker compose ps
+              echo "=== Trustpoint Logs ==="
+              docker compose logs trustpoint
+              echo "=== PostgreSQL Logs ==="
+              docker compose logs postgres
+              exit 1
+            fi
+            
+            sleep 5
+          done
+      
+      # Verify the setup wizard is accessible (smoke test)
+      - name: Verify Setup Wizard Accessibility
+        run: |
+          echo "Verifying setup wizard is accessible..."
+          http_code=$(curl -k -s -L -o /tmp/setup-wizard-page.html -w "%{http_code}" https://127.0.0.1/ || echo "000")
+          
+          if [ "$http_code" = "200" ] && grep -q -i "setup\|wizard\|crypto\|storage" /tmp/setup-wizard-page.html; then
+            echo "✓ Setup wizard is accessible"
+          else
+            echo "✗ Setup wizard not accessible"
+            exit 1
+          fi
+      
+      # Install Python and dependencies for running behave tests
+      - name: Install and setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: "pyproject.toml"
+      
+      - name: Install dependencies
+        run: uv sync --group dev
+      
+      # Run the Behave feature test against the running Docker container
+      - name: Run Setup Wizard Feature Test
+        run: |
+          # Run behave from the isolated docker_integration test directory
+          # This avoids loading Django-dependent step files from trustpoint/features/steps
+          cd ${{ github.workspace }}/tests/docker_integration
+          
+          # Run behave with both console output and HTML report in a single run
+          # The setup wizard can only be completed once, so we can't run twice
+          uv run python -m behave \
+            --no-capture \
+            --verbose \
+            --format behave_html_pretty_formatter:PrettyHTMLFormatter \
+            --outfile ${{ github.workspace }}/behave-report.html \
+            features/R_200_docker_setup_wizard.feature
+      
+      # Upload the behave HTML report
+      - name: Upload Behave Test Report
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: r_200-behave-report
+          path: behave-report.html
+      
+      # Display container logs for debugging
+      - name: Show container logs
+        if: always()
+        run: |
+          echo "=== Trustpoint Container Logs (last 100 lines) ==="
+          docker compose logs --tail=100 trustpoint
+          echo ""
+          echo "=== PostgreSQL Container Logs (last 50 lines) ==="
+          docker compose logs --tail=50 postgres
+      
+      # Cleanup: Stop and remove containers
+      - name: Cleanup containers
+        if: always()
+        run: docker compose down -v

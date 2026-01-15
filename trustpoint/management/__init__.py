@@ -1,1 +1,1 @@
-"""Init"""
+"""Initialization for management package."""

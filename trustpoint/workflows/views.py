@@ -10,36 +10,34 @@ This module provides Django class-based views for:
 from __future__ import annotations
 
 import json
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from cryptography import x509
 from cryptography.x509.extensions import ExtensionNotFound
 from cryptography.x509.oid import NameOID
-from devices.models import DeviceModel
 from django.contrib import messages
 from django.db import IntegrityError, models
 from django.db.models import Count
-from django.db.models.query import QuerySet
 from django.http import (
     HttpRequest,
     HttpResponse,
     HttpResponseRedirect,
     JsonResponse,
-    QueryDict,
 )
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.timezone import now as tz_now
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import ListView
+from trustpoint_core.oid import AlgorithmIdentifier
+
+from devices.models import DeviceModel
 from pki.models import DomainModel, IssuingCaModel
 from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_DEVICES_SUBCATEGORY, PageContextMixin
-from trustpoint_core.oid import AlgorithmIdentifier
 from util.email import MailTemplates
-
 from workflows.events import Events
-from workflows.filters import EnrollmentRequestFilter, WorkflowFilter
+from workflows.filters import EnrollmentRequestFilter
 from workflows.models import (
     EnrollmentRequest,
     State,
@@ -53,6 +51,9 @@ from workflows.services.context_catalog import build_catalog
 from workflows.services.engine import advance_instance
 from workflows.services.validators import validate_wizard_payload
 from workflows.services.wizard import transform_to_definition_schema
+
+if TYPE_CHECKING:
+    from django.db.models.query import QuerySet
 
 
 class ContextCatalogView(View):
@@ -645,70 +646,6 @@ class WorkflowDefinitionDeleteView(View):
         return redirect('workflows:definition_table')
 
 
-class PendingApprovalsView(ListView[WorkflowInstance]):
-    """Show workflow instances with a default state filter of AwaitingApproval."""
-
-    model = WorkflowInstance
-    template_name = 'workflows/pending_table.html'
-    context_object_name = 'instances'
-
-    filterset_class = WorkflowFilter
-    default_sort_param = '-created_at'  # newest first
-
-    def get_queryset(self) -> QuerySet[WorkflowInstance]:
-        """Return instances with default 'AwaitingApproval' filter applied when none given."""
-        base_qs = WorkflowInstance.objects.select_related(
-            'definition',
-            'enrollment_request',
-            'enrollment_request__device',
-            'enrollment_request__domain',
-        )
-
-        params = self.request.GET.copy()
-        if not params:
-            params = QueryDict(mutable=True)
-            params['state'] = State.AWAITING  # default
-
-        self.filterset = self.filterset_class(params, queryset=base_qs)
-        qs: QuerySet[WorkflowInstance] = self.filterset.qs
-
-        allowed_sorts = {
-            'enrollment_request__device__common_name',
-            '-enrollment_request__device__common_name',
-            'enrollment_request__domain__unique_name',
-            '-enrollment_request__domain__unique_name',
-            'enrollment_request__protocol',
-            '-enrollment_request__protocol',
-            'definition__name',
-            '-definition__name',
-            'created_at',
-            '-created_at',
-            'state',
-            '-state',
-        }
-        sort_param = self.request.GET.get('sort', self.default_sort_param)
-        if sort_param not in allowed_sorts:
-            sort_param = self.default_sort_param
-        return qs.order_by(sort_param)
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add page metadata, filter, and sorting information to the context."""
-        context = super().get_context_data(**kwargs)
-        context['page_category'] = 'workflows'
-        context['page_name'] = 'waiting_approvals'
-        context['clm_url'] = (
-            f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management'
-        )
-        sort_param = self.request.GET.get('sort', self.default_sort_param)
-        context['current_sort'] = sort_param
-        context['filter'] = getattr(self, 'filterset', None)
-
-        params = self.request.GET.copy()
-        params.pop('sort', None)
-        context['preserve_qs'] = params.urlencode()
-        return context
-
-
 class WorkflowInstanceDetailView(PageContextMixin, View):
     """Show detailed info for a pending workflow instance, including step summary."""
 
@@ -845,20 +782,26 @@ class SignalInstanceView(View):
         action = request.POST.get('action')
         if action not in {'approve', 'reject'}:
             messages.error(request, f'Invalid action: {action!r}')
-            return redirect('workflows:pending_table')
-
-        if inst.finalized:
-            messages.error(request, f'Workflow {inst.id} was already completed.')
-            return redirect('workflows:pending_table')
+            return redirect('workflows:requests')
 
         if not inst.enrollment_request:
             raise ValueError
+
+        if inst.finalized:
+            messages.error(request, f'Workflow {inst.id} was already completed.')
+
+            if not isinstance(inst.enrollment_request, EnrollmentRequest):
+                msg = f'No EnrollmentRequest for inst {inst} found'
+                raise ValueError(msg)
+
+            return redirect('workflows:request_detail', pk=inst.enrollment_request.pk)
 
         if inst.enrollment_request.aggregated_state != State.AWAITING:
             messages.error(request,
                            _(f'You can not {action} a workflow where request is already in state \
                             "{inst.enrollment_request.aggregated_state.lower()}"'))  # noqa: INT001
-            return redirect('workflows:pending_table')
+
+            return redirect('workflows:request_detail', pk=inst.enrollment_request.pk)
 
         advance_instance(inst, signal=action)
         inst.enrollment_request.recompute_and_save()
@@ -869,134 +812,7 @@ class SignalInstanceView(View):
         else:
             messages.warning(request, f'Workflow {inst.id} was rejected.')
 
-        return redirect('workflows:pending_table')
-
-
-class BulkSignalInstancesView(View):
-    """Endpoint to signal (approve/reject) multiple workflow instances via POST."""
-
-    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
-        """Handle bulk approval or rejection of workflow instances.
-
-        Args:
-            request: The Django HTTP request object.
-            *_args: Unused positional arguments.
-            **_kwargs: Unused keyword arguments.
-
-        Returns:
-            HttpResponseRedirect: Redirect back to the pending table after processing.
-        """
-        action = request.POST.get('action')
-        if action not in {'approve', 'reject'}:
-            messages.error(request, f'Invalid bulk action: {action!r}')
-            return redirect('workflows:pending_table')
-
-        selected_ids: list[str] = request.POST.getlist('row_checkbox')
-        if not selected_ids:
-            messages.warning(request, 'Please select at least one workflow instance.')
-            return redirect('workflows:pending_table')
-
-        instances_qs = WorkflowInstance.objects.filter(
-            id__in=selected_ids,
-        ).select_related('enrollment_request')
-
-        # Centralized validation of instances and enrollment states
-        early_response = self._validate_bulk_instances(action, instances_qs, request)
-        if early_response is not None:
-            return early_response
-
-        if not instances_qs.exists():
-            messages.warning(request, 'No pending workflow instances matched your selection.')
-            return redirect('workflows:pending_table')
-
-        updated_count = self._perform_bulk_signal(action, instances_qs)
-
-        if updated_count == 0:
-            messages.warning(request, 'No workflow instances were updated.')
-        elif action == 'approve':
-            messages.success(
-                request,
-                f'{updated_count} workflow instance(s) approved and advanced.',
-            )
-        else:
-            messages.warning(
-                request,
-                f'{updated_count} workflow instance(s) rejected.',
-            )
-
-        return redirect('workflows:pending_table')
-
-    def _validate_bulk_instances(
-        self,
-        action: str,
-        instances_qs: QuerySet[WorkflowInstance],
-        request: HttpRequest,
-    ) -> HttpResponseRedirect | None:
-        """Validate whether the selected instances can be bulk signalled.
-
-        Args:
-            action: Bulk action to perform, expected to be ``"approve"`` or ``"reject"``.
-            instances_qs: Queryset of selected workflow instances.
-            request: Current HTTP request, used for messaging.
-
-        Returns:
-            HttpResponseRedirect | None: A redirect response if validation fails,
-            otherwise ``None`` to indicate that processing can continue.
-        """
-        if any(s.finalized for s in instances_qs):
-            messages.error(request, 'You can not update completed workflows.')
-            return redirect('workflows:pending_table')
-
-        invalid_enrollment_qs = instances_qs.exclude(
-            enrollment_request__aggregated_state=State.AWAITING
-        ).first()
-
-        if invalid_enrollment_qs is not None:
-            # If there is no enrollment_request at all, treat as not allowed as well.
-            if invalid_enrollment_qs.enrollment_request is None:
-                state_label: str = str(_('unknown'))
-            else:
-                state_label = invalid_enrollment_qs.enrollment_request.aggregated_state.lower()
-
-            messages.error(
-                request,
-                _(
-                    'You can not approve/reject a workflow where request is already in state "%(state)s"'
-                ) % {'state': state_label},
-            )
-            return redirect('workflows:pending_table')
-
-        if action == 'approve':
-            rejected_instances = instances_qs.filter(state=State.FAILED)
-            if rejected_instances.exists():
-                messages.error(request, 'You cannot approve failed instances.')
-                return redirect('workflows:pending_table')
-
-        return None
-
-    def _perform_bulk_signal(
-        self,
-        action: str,
-        instances_qs: QuerySet[WorkflowInstance],
-    ) -> int:
-        """Advance each eligible instance and recompute its enrollment request state.
-
-        Args:
-            action: Signal to send to each instance (``"approve"`` or ``"reject"``).
-            instances_qs: Queryset of workflow instances to update.
-
-        Returns:
-            int: Number of instances successfully updated.
-        """
-        updated_count = 0
-        for inst in instances_qs:
-            advance_instance(inst, signal=action)
-            if inst.enrollment_request is not None:
-                inst.enrollment_request.recompute_and_save()
-            inst.refresh_from_db()
-            updated_count += 1
-        return updated_count
-
+        return redirect('workflows:request_detail', pk=inst.enrollment_request.pk)
 
 class EnrollmentRequestListView(ListView[EnrollmentRequest]):
     """List EnrollmentRequests (main pending requests page)."""
@@ -1015,17 +831,29 @@ class EnrollmentRequestListView(ListView[EnrollmentRequest]):
         )
 
         params = self.request.GET.copy()
-        if not params:
-            params = QueryDict(mutable=True)
+
+        # Default: only non-finalized unless user explicitly sets it
+        if 'finalized' not in params:
+            params = params.copy()
             params['finalized'] = 'False'
-        self.filterset = EnrollmentRequestFilter(params or None, queryset=base_qs)
+
+        # Default: AwaitingApproval unless user explicitly sets state
+        if 'state' not in params:
+            params = params.copy()
+            params['state'] = State.AWAITING
+
+        if params.get('state') in {State.FINALIZED, State.ABORTED}:
+            params = params.copy()
+            params['include_finalized'] = 'on'
+
+        self.filterset = EnrollmentRequestFilter(params, queryset=base_qs)
         qs: QuerySet[EnrollmentRequest] = self.filterset.qs
-
-
         return qs
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add page metadata and filter to context."""
+        if self.request.GET.get('state') in {State.FINALIZED, State.ABORTED}:
+            self.filterset.form.initial['include_finalized'] = True
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'workflows'
         context['page_name'] = 'pending_requests'
@@ -1107,5 +935,128 @@ class BulkAbortEnrollmentRequestsView(View):
             messages.warning(request, 'No enrollment requests were aborted.')
         else:
             messages.success(request, f'Aborted {aborted_count} enrollment request(s).')
+
+        return redirect('workflows:request_table')
+
+
+class SignalEnrollmentRequestView(View):
+    """Approve or reject all workflow instances belonging to a single EnrollmentRequest."""
+
+    def post(self, request: HttpRequest, er_id: UUID, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Handle approval or rejection of all workflow instances in an enrollment request.
+
+        Args:
+            request: The HTTP request containing the action.
+            er_id: The id of the enrollment request.
+
+        Returns:
+            HttpResponse redirecting back to the request table.
+        """
+        action = request.POST.get('action')
+        if action not in {'approve', 'reject'}:
+            messages.error(request, f'Invalid action: {action!r}')
+            return redirect('workflows:request_table')
+
+        er = get_object_or_404(
+            EnrollmentRequest.objects.prefetch_related('instances'),
+            pk=er_id,
+        )
+
+        if er.finalized:
+            messages.error(request, 'Request is already finalized.')
+            return redirect('workflows:request_table')
+
+        if er.aggregated_state != State.AWAITING:
+            messages.error(
+                request,
+                _('You cannot %s a request already in state: "%s"') % (
+                    action,
+                    er.aggregated_state.lower(),
+                )
+            )
+
+        insts = list(er.instances.select_related('enrollment_request'))
+
+        if action == 'approve':
+            failed = [i for i in insts if i.state == State.FAILED]
+            if failed:
+                messages.error(request, 'You cannot approve a request containing failed instances.')
+                return redirect('workflows:request_table')
+
+        for inst in insts:
+            advance_instance(inst, signal=action)
+            inst.refresh_from_db()
+
+        er.recompute_and_save()
+
+        if action == 'approve':
+            messages.success(request, f'Request {er.id} approved.')
+        else:
+            messages.warning(request, f'Request {er.id} rejected.')
+
+        return redirect('workflows:request_table')
+
+
+class BulkSignalEnrollmentRequestsView(View):
+    """Bulk approve or reject enrollment requests."""
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponseRedirect:
+        """Handle bulk approval or rejection of enrollment requests.
+
+        Args:
+            request: The HTTP request containing the list of selected enrollment requests.
+
+        Returns:
+            HttpResponse redirecting back to the request table.
+        """
+        action = request.POST.get('action')
+        if action not in {'approve', 'reject'}:
+            messages.error(request, f'Invalid bulk action: {action!r}')
+            return redirect('workflows:request_table')
+
+        selected_ids: list[str] = request.POST.getlist('row_checkbox')
+        if not selected_ids:
+            messages.warning(request, 'Please select at least one request.')
+            return redirect('workflows:request_table')
+
+        qs = (
+            EnrollmentRequest.objects.filter(id__in=selected_ids)
+            .prefetch_related('instances')
+        )
+
+        updatable: list[EnrollmentRequest] = []
+
+        for er in qs:
+            if er.finalized:
+                messages.error(request, 'Cannot update finalized requests.')
+                return redirect('workflows:request_table')
+
+            if er.aggregated_state != State.AWAITING:
+                messages.error(
+                    request,
+                    _(
+                        'You cannot %(a)a a request which is already in state "%(s)s".'
+                    ) % {'s': er.aggregated_state.lower(), 'a': action},
+                )
+                return redirect('workflows:request_table')
+
+            if action == 'approve' and any(inst.state == State.FAILED for inst in er.instances.all()):
+                messages.error(request, 'Cannot approve requests containing failed instances.')
+                return redirect('workflows:request_table')
+
+            updatable.append(er)
+
+        updated = 0
+        for er in updatable:
+            for inst in er.instances.all():
+                advance_instance(inst, signal=action)
+                inst.refresh_from_db()
+            er.recompute_and_save()
+            updated += 1
+
+        if action == 'approve':
+            messages.success(request, f'{updated} request(s) approved.')
+        else:
+            messages.warning(request, f'{updated} request(s) rejected.')
 
         return redirect('workflows:request_table')

@@ -341,14 +341,14 @@ class TestClientCertificateValidation:
         validator = ClientCertificateValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {'SSL_CLIENT_CERT': cert_pem}
-        context.raw_message.META = {'SSL_CLIENT_CERT': cert_pem}
+        context.raw_message.headers = {'HTTP_SSL_CLIENT_CERT': cert_pem}
+        context.raw_message.META = {'HTTP_SSL_CLIENT_CERT': cert_pem}
 
         validator.validate(context)
         assert context.client_certificate is not None
 
     def test_validate_missing_cert_header(self):
-        """Test that missing SSL_CLIENT_CERT header passes."""
+        """Test that missing HTTP_SSL_CLIENT_CERT header passes."""
         validator = ClientCertificateValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
@@ -362,14 +362,14 @@ class TestClientCertificateValidation:
         validator = ClientCertificateValidation()
         context = RequestContext()
         context.raw_message = MagicMock()
-        context.raw_message.headers = {'SSL_CLIENT_CERT': 'invalid cert'}
-        context.raw_message.META = {'SSL_CLIENT_CERT': 'invalid cert'}
+        context.raw_message.headers = {'HTTP_SSL_CLIENT_CERT': 'invalid cert'}
+        context.raw_message.META = {'HTTP_SSL_CLIENT_CERT': 'invalid cert'}
 
         try:
             validator.validate(context)
             assert False, 'Expected ValueError to be raised'
         except ValueError as e:
-            assert 'Invalid SSL_CLIENT_CERT header' in str(e)
+            assert 'Invalid HTTP_SSL_CLIENT_CERT header' in str(e)
 
     def test_validate_missing_raw_message(self):
         """Test ValueError when raw_message is None."""

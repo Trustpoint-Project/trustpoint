@@ -1,0 +1,119 @@
+name: ZAP Baseline Scan
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  zap-baseline:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+
+      - name: Start Trustpoint via docker-compose
+        run: |
+          docker compose -f docker-compose.yml up -d
+          # give the app time to start
+          sleep 60
+
+      - name: OWASP ZAP Baseline Scan (HTTP)
+        uses: zaproxy/action-baseline@v0.15.0
+        continue-on-error: true
+        id: zap-scan-http
+        with:
+          target: "http://localhost:80"
+          fail_action: false
+          cmd_options: "-a"
+          allow_issue_writing: false
+
+      - name: Rename HTTP Reports
+        if: always()
+        run: |
+          mv report_json.json report_http_json.json || true
+          mv report_md.md report_http_md.md || true
+          mv report_html.html report_http_html.html || true
+
+      - name: OWASP ZAP Baseline Scan (HTTPS)
+        uses: zaproxy/action-baseline@v0.15.0
+        continue-on-error: true
+        id: zap-scan-https
+        with:
+          target: "https://localhost:443"
+          fail_action: false
+          cmd_options: "-a"
+          allow_issue_writing: false
+
+      - name: Rename HTTPS Reports
+        if: always()
+        run: |
+          mv report_json.json report_https_json.json || true
+          mv report_md.md report_https_md.md || true
+          mv report_html.html report_https_html.html || true
+
+      - name: Upload ZAP Scan Reports
+        uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: zap-reports
+          path: |
+            report_http_json.json
+            report_http_md.md
+            report_http_html.html
+            report_https_json.json
+            report_https_md.md
+            report_https_html.html
+          retention-days: 30
+
+      - name: Check ZAP Scan Results
+        if: always()
+        run: |
+          TOTAL_WARN=0
+          TOTAL_FAIL=0
+          
+          # Check HTTP scan results
+          if [ -f report_http_md.md ]; then
+            HTTP_WARN=$(grep -o "WARN-NEW" report_http_md.md | wc -l || echo "0")
+            HTTP_FAIL=$(grep -o "FAIL-NEW" report_http_md.md | wc -l || echo "0")
+            echo "HTTP Scan Results:"
+            echo "  Warnings: $HTTP_WARN"
+            echo "  Failures: $HTTP_FAIL"
+            TOTAL_WARN=$((TOTAL_WARN + HTTP_WARN))
+            TOTAL_FAIL=$((TOTAL_FAIL + HTTP_FAIL))
+          fi
+          
+          # Check HTTPS scan results
+          if [ -f report_https_md.md ]; then
+            HTTPS_WARN=$(grep -o "WARN-NEW" report_https_md.md | wc -l || echo "0")
+            HTTPS_FAIL=$(grep -o "FAIL-NEW" report_https_md.md | wc -l || echo "0")
+            echo "HTTPS Scan Results:"
+            echo "  Warnings: $HTTPS_WARN"
+            echo "  Failures: $HTTPS_FAIL"
+            TOTAL_WARN=$((TOTAL_WARN + HTTPS_WARN))
+            TOTAL_FAIL=$((TOTAL_FAIL + HTTPS_FAIL))
+          fi
+          
+          echo ""
+          echo "Total Results:"
+          echo "  Warnings: $TOTAL_WARN"
+          echo "  Failures: $TOTAL_FAIL"
+          
+          if [ "$TOTAL_FAIL" -gt 0 ]; then
+            echo "::error::ZAP found $TOTAL_FAIL high/medium severity issues across HTTP and HTTPS"
+            exit 1
+          elif [ "$TOTAL_WARN" -gt 0 ]; then
+            echo "::warning::ZAP found $TOTAL_WARN warnings (low severity) across HTTP and HTTPS"
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: docker compose -f docker-compose.yml down

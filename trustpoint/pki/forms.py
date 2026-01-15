@@ -10,9 +10,7 @@ from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from management.models import KeyStorageConfig
 from pydantic import ValidationError as PydanticValidationError
-from trustpoint.logger import LoggerMixin
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -21,13 +19,15 @@ from trustpoint_core.serializer import (
     PrivateKeyReference,
     PrivateKeySerializer,
 )
-from util.field import UniqueNameValidator, get_certificate_name
 
+from management.models import KeyStorageConfig
 from pki.models import DevIdRegistration, IssuingCaModel, OwnerCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
+from trustpoint.logger import LoggerMixin
+from util.field import UniqueNameValidator, get_certificate_name
 
 
 def get_private_key_location_from_config() -> PrivateKeyLocation:
@@ -147,7 +147,7 @@ class TruststoreAddForm(forms.Form):
         required=True,
     )
 
-    trust_store_file = forms.FileField(label=_('PEM or PKCS#7 File'), required=True)
+    trust_store_file = forms.FileField(label=_('PEM, DER, or PKCS#7 File'), required=True)
 
     def clean_unique_name(self) -> str:
         """Validates the uniqueness of the truststore name.
@@ -202,9 +202,15 @@ class TruststoreAddForm(forms.Form):
 
         try:
             certificate_collection_serializer = CertificateCollectionSerializer.from_bytes(trust_store_file)
-        except Exception as exception:
-            error_message = _('Unable to process the Truststore. May be malformed / corrupted.')
-            raise ValidationError(error_message) from exception
+        except Exception:  # noqa: BLE001
+            # Try parsing as a single certificate (DER or PEM)
+            try:
+                certificate_serializer = CertificateSerializer.from_bytes(trust_store_file)
+                der_bytes = certificate_serializer.as_der()
+                certificate_collection_serializer = CertificateCollectionSerializer.from_list_of_der([der_bytes])
+            except Exception as exception:
+                error_message = _('Unable to process the Truststore. May be malformed / corrupted.')
+                raise ValidationError(error_message) from exception
 
         try:
             certs = certificate_collection_serializer.as_crypto()
@@ -461,6 +467,63 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         """
         raise ValidationError(message)
 
+    def _read_and_encode_pkcs12_file(self, cleaned_data: dict[str, Any]) -> tuple[bytes, bytes | None]:
+        """Reads the PKCS#12 file and encodes the password if provided."""
+        pkcs12_file = cleaned_data.get('pkcs12_file')
+        if pkcs12_file is None:
+            self._raise_validation_error('PKCS#12 file is required.')
+
+        try:
+            pkcs12_raw = pkcs12_file.read()
+            pkcs12_password = cleaned_data.get('pkcs12_password')
+        except (OSError, AttributeError) as original_exception:
+            error_message = _(
+                'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
+            )
+            raise ValidationError(error_message, code='unexpected-error') from original_exception
+
+        if pkcs12_password:
+            try:
+                pkcs12_password = pkcs12_password.encode()
+            except Exception as original_exception:
+                error_message = _('The PKCS#12 password contains invalid data, that cannot be encoded in UTF-8.')
+                raise ValidationError(error_message) from original_exception
+        else:
+            pkcs12_password = None
+
+        return pkcs12_raw, pkcs12_password
+
+    def _parse_and_prepare_credential(
+        self, pkcs12_raw: bytes, pkcs12_password: bytes | None, unique_name: str | None
+    ) -> CredentialSerializer:
+        """Parses the PKCS#12 file and prepares the credential serializer."""
+        try:
+            credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
+            if credential_serializer.private_key is None:
+                self._raise_validation_error('Private key is missing from credential serializer.')
+            private_key_location = get_private_key_location_from_config()
+            credential_serializer.private_key_reference = (
+                PrivateKeyReference.from_private_key(
+                    private_key=credential_serializer.private_key,
+                    key_label=unique_name,
+                    location=private_key_location
+                )
+            )
+        except Exception as exception:
+            err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
+            raise ValidationError(err_msg) from exception
+
+        return credential_serializer
+
+    def _validate_ca_certificate(self, credential_serializer: CredentialSerializer) -> x509.Certificate:
+        """Validates that the certificate is a CA certificate."""
+        cert_crypto = credential_serializer.certificate
+        if cert_crypto is None:
+            self._raise_validation_error('Certificate is missing from credential serializer.')
+        if cert_crypto.extensions.get_extension_for_class(x509.BasicConstraints).value.ca is False:
+            self._raise_validation_error('The provided certificate is not a CA certificate.')
+        return cert_crypto
+
     def clean(self) -> None:
         """Cleans and validates the entire form.
 
@@ -480,47 +543,9 @@ class IssuingCaAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             raise ValidationError(exc_msg)
         unique_name = cleaned_data.get('unique_name')
 
-        pkcs12_file = cleaned_data.get('pkcs12_file')
-        if pkcs12_file is None:
-            self._raise_validation_error('PKCS#12 file is required.')
-
-        try:
-            pkcs12_raw = pkcs12_file.read()
-            pkcs12_password = cleaned_data.get('pkcs12_password')
-        except (OSError, AttributeError) as original_exception:
-            # These exceptions are likely to occur if the file cannot be read or is missing attributes.
-            error_message = _(
-                'Unexpected error occurred while trying to get file contents. Please see logs for further details.'
-            )
-            raise ValidationError(error_message, code='unexpected-error') from original_exception
-
-        if pkcs12_password:
-            try:
-                pkcs12_password = pkcs12_password.encode()
-            except Exception as original_exception:
-                error_message = _('The PKCS#12 password contains invalid data, that cannot be encoded in UTF-8.')
-                raise ValidationError(error_message) from original_exception
-        else:
-            pkcs12_password = None
-
-        try:
-            credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
-            if credential_serializer.private_key is None:
-                self._raise_validation_error('Private key is missing from credential serializer.')
-            private_key_location = get_private_key_location_from_config()
-            credential_serializer.private_key_reference = (
-                PrivateKeyReference.from_private_key(private_key=credential_serializer.private_key,
-                                                     key_label=unique_name,
-                                                     location=private_key_location))
-        except Exception as exception:
-            err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
-            raise ValidationError(err_msg) from exception
-
-        cert_crypto = credential_serializer.certificate
-        if cert_crypto is None:
-            self._raise_validation_error('Certificate is missing from credential serializer.')
-        if cert_crypto.extensions.get_extension_for_class(x509.BasicConstraints).value.ca is False:
-            self._raise_validation_error('The provided certificate is not a CA certificate.')
+        pkcs12_raw, pkcs12_password = self._read_and_encode_pkcs12_file(cleaned_data)
+        credential_serializer = self._parse_and_prepare_credential(pkcs12_raw, pkcs12_password, unique_name)
+        cert_crypto = self._validate_ca_certificate(credential_serializer)
 
         try:
             if not unique_name:
@@ -712,6 +737,53 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         """
         raise ValidationError(message)
 
+    def _validate_credential_components(
+        self, credential_serializer: CredentialSerializer
+    ) -> tuple[x509.Certificate, Any]:
+        """Validates the private key and certificate from the credential serializer.
+
+        Args:
+            credential_serializer: The credential serializer containing the private key and certificate.
+
+        Returns:
+            A tuple containing the certificate and private key.
+
+        Raises:
+            ValidationError: If the certificate or private key is missing or they don't match.
+        """
+        pk = credential_serializer.private_key
+        cert = credential_serializer.certificate
+
+        if cert is None:
+            self._raise_validation_error('Certificate is missing from credential serializer.')
+        if pk is None:
+            self._raise_validation_error('Private key is missing from credential serializer.')
+
+        # After the None checks above, mypy needs explicit assertion that these are not None
+        assert cert is not None  # noqa: S101
+        assert pk is not None  # noqa: S101
+
+        if pk.public_key() != cert.public_key():
+            self._raise_validation_error('The provided private key does not match the Issuing CA certificate.')
+
+        return cert, pk
+
+    def _prepare_credential_serializer(
+        self, credential_serializer: CredentialSerializer, unique_name: str | None, pk: Any
+    ) -> None:
+        """Prepares the credential serializer with private key reference."""
+        if credential_serializer.private_key is None:
+            self._raise_validation_error('Private key is missing from credential serializer.')
+
+        private_key_location = get_private_key_location_from_config()
+        credential_serializer.private_key_reference = (
+            PrivateKeyReference.from_private_key(
+                private_key=pk,
+                key_label=unique_name,
+                location=private_key_location
+            )
+        )
+
     def clean(self) -> None:
         """Cleans and validates the form data.
 
@@ -727,6 +799,7 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             cleaned_data = super().clean()
             if not cleaned_data:
                 return
+
             unique_name = cleaned_data.get('unique_name')
             private_key_serializer = cleaned_data.get('private_key_file')
             ca_certificate_serializer = cleaned_data.get('ca_certificate')
@@ -743,25 +816,8 @@ class IssuingCaAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
                 certificate_collection_serializer=ca_certificate_chain_serializer,
             )
 
-            pk = credential_serializer.private_key
-            cert = credential_serializer.certificate
-            if cert is None:
-                self._raise_validation_error('Certificate is missing from credential serializer.')
-                return
-            if pk is None:
-                self._raise_validation_error('Private key is missing from credential serializer.')
-                return
-            if pk.public_key() != cert.public_key():
-                self._raise_validation_error('The provided private key does not match the Issuing CA certificate.')
-
-            if credential_serializer and credential_serializer.private_key is None:
-                self._raise_validation_error('Private key is missing from credential serializer.')
-            private_key_location = get_private_key_location_from_config()
-
-            credential_serializer.private_key_reference = (
-                PrivateKeyReference.from_private_key(private_key=pk,
-                                                     key_label=unique_name,
-                                                     location=private_key_location))
+            cert, pk = self._validate_credential_components(credential_serializer)
+            self._prepare_credential_serializer(credential_serializer, unique_name, pk)
 
             if not unique_name:
                 unique_name = get_certificate_name(cert)

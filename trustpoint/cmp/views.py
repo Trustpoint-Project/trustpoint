@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, cast
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.views.generic.base import View
+
 from est.views import LoggedHttpResponse  # TEMP
 from request.authentication import CmpAuthentication
 from request.authorization import CmpAuthorization
@@ -19,6 +20,7 @@ from request.request_context import RequestContext
 
 if TYPE_CHECKING:
     from typing import Any
+
     from django.http import HttpRequest, HttpResponse
 
 
@@ -68,7 +70,7 @@ class CmpInitializationRequestView(View):
 
         CmpMessageResponder.build_response(ctx)
 
-        return LoggedHttpResponse(content=ctx.http_response_content,
+        return LoggedHttpResponse(content=ctx.http_response_content or b'',
                                   status=ctx.http_response_status,
                                   content_type=ctx.http_response_content_type)
 
@@ -119,6 +121,6 @@ class CmpCertificationRequestView(View):
 
         CmpMessageResponder.build_response(ctx)
 
-        return LoggedHttpResponse(content=ctx.http_response_content,
+        return LoggedHttpResponse(content=ctx.http_response_content or b'',
                                   status=ctx.http_response_status,
                                   content_type=ctx.http_response_content_type)

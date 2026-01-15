@@ -2,24 +2,18 @@
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING, override
 
-from devices.models import DeviceModel, IssuedCredentialModel
-from devices.views import PublicKeyInfoMissingErrorMsg
 from django.http import Http404
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.detail import DetailView
-from management.models import TlsSettings
-from trustpoint.page_context import (
-    DEVICES_PAGE_CATEGORY,
-    DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
-    PageContextMixin,
-)
+from pydantic import ValidationError as PydanticValidationError
 
+from devices.models import DeviceModel, IssuedCredentialModel
+from devices.views import PublicKeyInfoMissingErrorMsg
 from help_pages.base import (
-    ApplicationCertificateProfile,
     HelpContext,
     HelpPageStrategy,
     build_cmp_signer_trust_store_section,
@@ -34,6 +28,14 @@ from help_pages.commands import (
     EstUsernamePasswordCommandBuilder,
 )
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
+from management.models import TlsSettings
+from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
+from trustpoint.page_context import (
+    DEVICES_PAGE_CATEGORY,
+    DEVICES_PAGE_DEVICES_SUBCATEGORY,
+    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
+    PageContextMixin,
+)
 
 if TYPE_CHECKING:
     from typing import Any
@@ -67,10 +69,14 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
         if not public_key_info:
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
+        allowed_app_profiles = list(
+            domain.get_allowed_cert_profiles().exclude(certificate_profile__unique_name='domain_credential'))
+
         return HelpContext(
             device=device,
             domain=domain,
             domain_unique_name=domain.unique_name,
+            allowed_app_profiles=allowed_app_profiles,
             public_key_info=public_key_info,
             host_base=host_base,
             host_cmp_path=f'{host_base}/.well-known/cmp/p/{domain.unique_name}',
@@ -108,16 +114,6 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
 class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding CMP shared-secret help page."""
 
-    _allowed_app_cert_profiles: list[ApplicationCertificateProfile]
-
-    def __init__(self, allowed_app_cert_profiles: list[ApplicationCertificateProfile]) -> None:
-        """Inits the object by setting the allowed app cert profiles.
-
-        Args:
-            allowed_app_cert_profiles: List of allowed application certificate profiles.
-        """
-        self._allowed_app_cert_profiles = allowed_app_cert_profiles
-
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         device = help_context.get_device_or_http_404()
@@ -148,60 +144,60 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        tls_client_cmd = CmpSharedSecretCommandBuilder.get_tls_client_profile_command(
-            host=f'{base}/tls_client/{operation}', pk=device.pk, shared_secret=cmp_shared_secret, cred_number=cred
-        )
-        tls_server_cmd = CmpSharedSecretCommandBuilder.get_tls_server_profile_command(
-            host=f'{base}/tls_server/{operation}', pk=device.pk, shared_secret=cmp_shared_secret, cred_number=cred
-        )
-        opc_client_cmd = CmpSharedSecretCommandBuilder.get_opc_ua_client_profile_command(
-            host=f'{base}/opc_ua_client/{operation}', pk=device.pk, shared_secret=cmp_shared_secret, cred_number=cred
-        )
-        opc_server_cmd = CmpSharedSecretCommandBuilder.get_opc_ua_server_profile_command(
-            host=f'{base}/opc_ua_server/{operation}', pk=device.pk, shared_secret=cmp_shared_secret, cred_number=cred
-        )
-
         def _build_section(
-            title: str, cert_profile: ApplicationCertificateProfile, cmd: str, *, hidden: bool = False
+            title: str, profile_name: str, cmd: str, *, hidden: bool = False
         ) -> HelpSection:
             return HelpSection(
                 title,
                 [
                     HelpRow(_non_lazy('OpenSSL Command'), cmd, ValueRenderType.CODE),
                 ],
-                css_id=cert_profile.profile_name,
+                css_id=profile_name,
                 hidden=hidden,
             )
 
         sections = [
             summary,
             build_keygen_section(help_context, file_name=''),
-            build_profile_select_section(app_cert_profiles=self._allowed_app_cert_profiles),
-            _build_section(
-                _non_lazy('Certificate Request for a TLS Client Certificates'),
-                ApplicationCertificateProfile.TLS_CLIENT,
-                tls_client_cmd,
-                hidden=False,
-            ),
-            _build_section(
-                _non_lazy('Certificate Request for a TLS Server Certificates'),
-                ApplicationCertificateProfile.TLS_SERVER,
-                tls_server_cmd,
-                hidden=True,
-            ),
-            _build_section(
-                _non_lazy('Certificate Request for a OPC-UA Client Certificates'),
-                ApplicationCertificateProfile.OPC_UA_CLIENT,
-                opc_client_cmd,
-                hidden=True,
-            ),
-            _build_section(
-                _non_lazy('Certificate Request for a OPC-UA Server Certificates'),
-                ApplicationCertificateProfile.OPC_UA_SERVER,
-                opc_server_cmd,
-                hidden=True,
-            ),
+            build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
         ]
+
+        for i, profile in enumerate(help_context.allowed_app_profiles):
+            name = profile.alias or profile.certificate_profile.unique_name
+            title = profile.certificate_profile.display_name or name
+
+            try:
+                cert_profile = json.loads(profile.certificate_profile.profile_json)
+                sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
+
+                cmd = CmpSharedSecretCommandBuilder.get_dynamic_cert_profile_command(
+                    sample_request=sample_request,
+                    host=f'{base}/{name}/{operation}',
+                    pk=device.pk,
+                    shared_secret=cmp_shared_secret,
+                    cred_number=cred,
+                )
+            except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
+                err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
+                err_sect = HelpSection(
+                    _non_lazy(f'Certificate Request for a {title} Certificate'),
+                    [
+                        HelpRow(_non_lazy('OpenSSL Command'), err_msg, ValueRenderType.PLAIN),
+                    ],
+                    css_id=name,
+                    hidden=(i > 0),
+                )
+                sections.append(err_sect)
+                continue
+
+            sect = _build_section(
+                _non_lazy(f'Certificate Request for a {title} Certificate'),
+                name,
+                cmd,
+                hidden=(i > 0),
+            )
+            sections.append(sect)
+
         return sections, _non_lazy('Help - Issue Application Certificates using CMP with a shared-secret (HMAC)')
 
 
@@ -209,28 +205,18 @@ class DeviceNoOnboardingCmpSharedSecretHelpView(BaseHelpView):
     """Help view for the case of no onboarding using CMP shared-secret for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = NoOnboardingCmpSharedSecretStrategy(allowed_app_cert_profiles=list(ApplicationCertificateProfile))
+    strategy = NoOnboardingCmpSharedSecretStrategy()
 
 
 class OpcUaGdsNoOnboardingCmpSharedSecretHelpView(BaseHelpView):
     """Help view for the case of no onboarding using CMP shared-secret for OPC-UA GDS abstractions."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingCmpSharedSecretStrategy(allowed_app_cert_profiles=list(ApplicationCertificateProfile))
+    strategy = NoOnboardingCmpSharedSecretStrategy()
 
 
 class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
     """Strategy for building the no-onboarding EST username and password help page."""
-
-    _allowed_app_cert_profiles: list[ApplicationCertificateProfile]
-
-    def __init__(self, allowed_app_cert_profiles: list[ApplicationCertificateProfile]) -> None:
-        """Inits the object by setting the allowed app cert profiles.
-
-        Args:
-            allowed_app_cert_profiles: List of allowed application certificate profiles.
-        """
-        self._allowed_app_cert_profiles = allowed_app_cert_profiles
 
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
@@ -242,8 +228,8 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
         operation = 'simpleenroll'
         base = help_context.host_est_path
 
-        def _get_enroll_path(cert_profile: ApplicationCertificateProfile) -> str:
-            return f'{base}/{cert_profile.profile_name}/{operation}'
+        def _get_enroll_path(cert_profile_name: str) -> str:
+            return f'{base}/{cert_profile_name}/{operation}'
 
         summary = HelpSection(
             _non_lazy('Summary'),
@@ -273,13 +259,8 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        tls_client_cmd = EstUsernamePasswordCommandBuilder.get_tls_client_profile_command(cred_number=cred)
-        tls_server_cmd = EstUsernamePasswordCommandBuilder.get_tls_server_profile_command(cred_number=cred)
-        opc_client_cmd = EstUsernamePasswordCommandBuilder.get_opc_ua_client_profile_command(cred_number=cred)
-        opc_server_cmd = EstUsernamePasswordCommandBuilder.get_opc_ua_server_profile_command(cred_number=cred)
-
         def _build_section(
-            title: str, cert_profile: ApplicationCertificateProfile, cmd: str, *, hidden: bool = False
+            title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False
         ) -> HelpSection:
             return HelpSection(
                 title,
@@ -290,13 +271,13 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
                         value=EstUsernamePasswordCommandBuilder.get_curl_enroll_command(
                             est_username=device.common_name,
                             est_password=est_password,
-                            host=_get_enroll_path(cert_profile=cert_profile),
+                            host=_get_enroll_path(cert_profile_name=cert_profile_name),
                             cred_number=cred,
                         ),
                         value_render_type=ValueRenderType.CODE,
                     ),
                 ],
-                css_id=cert_profile.profile_name,
+                css_id=cert_profile_name,
                 hidden=hidden,
             )
 
@@ -304,42 +285,52 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
             summary,
             build_tls_trust_store_section(),
             build_keygen_section(help_context, file_name=''),
-            build_profile_select_section(app_cert_profiles=self._allowed_app_cert_profiles),
-            _build_section(
-                _non_lazy('Certificate Request for a TLS Client Certificates'),
-                ApplicationCertificateProfile.TLS_CLIENT,
-                tls_client_cmd,
-                hidden=False,
-            ),
-            _build_section(
-                _non_lazy('Certificate Request for a TLS Server Certificates'),
-                ApplicationCertificateProfile.TLS_SERVER,
-                tls_server_cmd,
-                hidden=True,
-            ),
-            _build_section(
-                _non_lazy('Certificate Request for a OPC-UA Client Certificates'),
-                ApplicationCertificateProfile.OPC_UA_CLIENT,
-                opc_client_cmd,
-                hidden=True,
-            ),
-            _build_section(
-                _non_lazy('Certificate Request for a OPC-UA Server Certificates'),
-                ApplicationCertificateProfile.OPC_UA_SERVER,
-                opc_server_cmd,
-                hidden=True,
-            ),
+            build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
+        ]
+        for i, profile in enumerate(help_context.allowed_app_profiles):
+            name = profile.alias or profile.certificate_profile.unique_name
+            title = profile.certificate_profile.display_name or name
+
+            try:
+                cert_profile = json.loads(profile.certificate_profile.profile_json)
+                sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
+
+                cmd = EstUsernamePasswordCommandBuilder.get_dynamic_cert_profile_command(
+                    sample_request=sample_request,
+                    cred_number=cred,
+                )
+            except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
+                err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
+                err_sect = HelpSection(
+                    _non_lazy(f'Certificate Request for a {title} Certificate'),
+                    [
+                        HelpRow(_non_lazy('OpenSSL Command'), err_msg, ValueRenderType.PLAIN),
+                    ],
+                    css_id=name,
+                    hidden=(i > 0),
+                )
+                sections.append(err_sect)
+                continue
+
+            sect = _build_section(
+                _non_lazy(f'Certificate Request for a {title} Certificate'),
+                name,
+                cmd,
+                hidden=(i > 0),
+            )
+            sections.append(sect)
+        sections.append(
             HelpSection(
-                heading=_non_lazy('Convert the certificate from DER format to PEM format (Optional)'),
+                heading=_non_lazy('Convert the certificate from PKCS#7 to PEM format (Optional)'),
                 rows=[
                     HelpRow(
                         key=_non_lazy('OpenSSL Command'),
-                        value=EstUsernamePasswordCommandBuilder.get_conversion_der_pem_command(cred_number=cred),
+                        value=EstUsernamePasswordCommandBuilder.get_conversion_p7_pem_command(cred_number=cred),
                         value_render_type=ValueRenderType.CODE,
                     )
                 ],
-            ),
-        ]
+            )
+        )
         return sections, _non_lazy('Help - Issue Application Certificates using EST with username and password')
 
 
@@ -347,14 +338,14 @@ class DeviceNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
     """Help view for the case of no onboarding using EST username and password generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = NoOnboardingEstUsernamePasswordStrategy(allowed_app_cert_profiles=list(ApplicationCertificateProfile))
+    strategy = NoOnboardingEstUsernamePasswordStrategy()
 
 
 class OpcUaGdsNoOnboardingEstUsernamePasswordHelpView(BaseHelpView):
     """Help view for the case of no onboarding using EST username and password for OPC-UA GDS abstractions."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = NoOnboardingEstUsernamePasswordStrategy(allowed_app_cert_profiles=list(ApplicationCertificateProfile))
+    strategy = NoOnboardingEstUsernamePasswordStrategy()
 
 
 # --------------------- Onboarding - Domain Credential - Shared Secrets - Help Page Implementations --------------------
@@ -408,7 +399,7 @@ class OnboardingDomainCredentialCmpSharedSecretStrategy(HelpPageStrategy):
                 heading=_non_lazy('Certificate Request for TLS Client Certificates'),
                 rows=[openssl_cmp_ir_cmd_row],
                 hidden=False,
-                css_id=ApplicationCertificateProfile.TLS_CLIENT.profile_name,
+                css_id='domain_credential',
             ),
         ]
         return sections, _non_lazy('Help - Issue a Domain Credential using CMP with a shared-secret (HMAC)')
@@ -441,8 +432,8 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
         operation = 'simpleenroll'
         base = help_context.host_est_path
 
-        def _get_enroll_path(cert_profile: ApplicationCertificateProfile) -> str:
-            return f'{base}/{cert_profile.profile_name}/{operation}'
+        def _get_enroll_path(cert_profile_name: str) -> str:
+            return f'{base}/{cert_profile_name}/{operation}'
 
         summary = HelpSection(
             _non_lazy('Summary'),
@@ -494,15 +485,15 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
             heading=_non_lazy('Generate PKCS#10 CSR for the domain credential'),
             rows=[openssl_req_cmd_row, enroll_cmd_row],
             hidden=False,
-            css_id=ApplicationCertificateProfile.TLS_CLIENT.profile_name,
+            css_id='domain_credential',
         )
 
         der_to_pem_convertion_section = HelpSection(
-            heading=_non_lazy('Convert the certificate from DER format to PEM format (Optional)'),
+            heading=_non_lazy('Convert the certificate from PKCS#7 to PEM format (Optional)'),
             rows=[
                 HelpRow(
                     key=_non_lazy('OpenSSL Command'),
-                    value=EstUsernamePasswordCommandBuilder.get_domain_credential_conversion_der_pem_command(),
+                    value=EstUsernamePasswordCommandBuilder.get_domain_credential_conversion_p7_pem_command(),
                     value_render_type=ValueRenderType.CODE,
                 )
             ],
@@ -536,17 +527,7 @@ class OpcUaGdsOnboardingDomainCredentialEstUsernamePasswordHelpView(BaseHelpView
 
 
 class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
-    """Strategy for building the no-onboarding cmp shared-secret help page."""
-
-    _allowed_app_cert_profiles: list[ApplicationCertificateProfile]
-
-    def __init__(self, allowed_app_cert_profiles: list[ApplicationCertificateProfile]) -> None:
-        """Inits the object by setting the allowed app cert profiles.
-
-        Args:
-            allowed_app_cert_profiles: List of allowed application certificate profiles.
-        """
-        self._allowed_app_cert_profiles = allowed_app_cert_profiles
+    """Strategy for building the onboarding cmp app certificate help page."""
 
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
@@ -575,28 +556,15 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        tls_client_cmd = CmpClientCertificateCommandBuilder.get_tls_client_profile_command(
-            host=f'{base}/tls_client/{operation}', cred_number=cred
-        )
-        tls_server_cmd = CmpClientCertificateCommandBuilder.get_tls_server_profile_command(
-            host=f'{base}/tls_server/{operation}', cred_number=cred
-        )
-        opc_client_cmd = CmpClientCertificateCommandBuilder.get_opc_ua_client_profile_command(
-            host=f'{base}/opc_ua_client/{operation}', cred_number=cred
-        )
-        opc_server_cmd = CmpClientCertificateCommandBuilder.get_opc_ua_server_profile_command(
-            host=f'{base}/opc_ua_server/{operation}', cred_number=cred
-        )
-
         def _build_section(
-            title: str, cert_profile: ApplicationCertificateProfile, cmd: str, *, hidden: bool = False
+            title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False
         ) -> HelpSection:
             return HelpSection(
                 title,
                 [
                     HelpRow(_non_lazy('OpenSSL Command'), cmd, ValueRenderType.CODE),
                 ],
-                css_id=cert_profile.profile_name,
+                css_id=cert_profile_name,
                 hidden=hidden,
             )
 
@@ -604,32 +572,41 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
             summary,
             build_cmp_signer_trust_store_section(domain=help_context.domain),
             build_keygen_section(help_context, file_name=''),
-            build_profile_select_section(app_cert_profiles=self._allowed_app_cert_profiles),
-            _build_section(
-                _non_lazy('Certificate Request for a TLS Client Certificates'),
-                ApplicationCertificateProfile.TLS_CLIENT,
-                tls_client_cmd,
-                hidden=False,
-            ),
-            _build_section(
-                _non_lazy('Certificate Request for a TLS Server Certificates'),
-                ApplicationCertificateProfile.TLS_SERVER,
-                tls_server_cmd,
-                hidden=True,
-            ),
-            _build_section(
-                _non_lazy('Certificate Request for a OPC-UA Client Certificates'),
-                ApplicationCertificateProfile.OPC_UA_CLIENT,
-                opc_client_cmd,
-                hidden=True,
-            ),
-            _build_section(
-                _non_lazy('Certificate Request for a OPC-UA Server Certificates'),
-                ApplicationCertificateProfile.OPC_UA_SERVER,
-                opc_server_cmd,
-                hidden=True,
-            ),
+            build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
         ]
+        for i, profile in enumerate(help_context.allowed_app_profiles):
+            name = profile.alias or profile.certificate_profile.unique_name
+            title = profile.certificate_profile.display_name or name
+
+            try:
+                cert_profile = json.loads(profile.certificate_profile.profile_json)
+                sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
+
+                cmd = CmpClientCertificateCommandBuilder.get_dynamic_cert_profile_command(
+                    sample_request=sample_request,
+                    host=f'{base}/{name}/{operation}',
+                    cred_number=cred,
+                )
+            except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
+                err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
+                err_sect = HelpSection(
+                    _non_lazy(f'Certificate Request for a {title} Certificate'),
+                    [
+                        HelpRow(_non_lazy('OpenSSL Command'), err_msg, ValueRenderType.PLAIN),
+                    ],
+                    css_id=name,
+                    hidden=(i > 0),
+                )
+                sections.append(err_sect)
+                continue
+
+            sect = _build_section(
+                _non_lazy(f'Certificate Request for a {title} Certificate'),
+                name,
+                cmd,
+                hidden=(i > 0),
+            )
+            sections.append(sect)
         return sections, _non_lazy('Help - Issue Application Certificates using CMP with a Domain Credential')
 
 
@@ -637,32 +614,18 @@ class DeviceApplicationCertificateWithCmpDomainCredentialHelpView(BaseHelpView):
     """Help view for the case of onboarding using CMP with client cert for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = ApplicationCertificateWithCmpDomainCredentialStrategy(
-        allowed_app_cert_profiles=list(ApplicationCertificateProfile)
-    )
+    strategy = ApplicationCertificateWithCmpDomainCredentialStrategy()
 
 
 class OpcUaGdsApplicationCertificateWithCmpDomainCredentialHelpView(BaseHelpView):
     """Help view for the case of onboarding using CMP with client cert for OPC-UA GDS abstractions."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = ApplicationCertificateWithCmpDomainCredentialStrategy(
-        allowed_app_cert_profiles=list(ApplicationCertificateProfile)
-    )
+    strategy = ApplicationCertificateWithCmpDomainCredentialStrategy()
 
 
 class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
     """Strategy for building the onboarding EST username and password help page."""
-
-    _allowed_app_cert_profiles: list[ApplicationCertificateProfile]
-
-    def __init__(self, allowed_app_cert_profiles: list[ApplicationCertificateProfile]) -> None:
-        """Inits the object by setting the allowed app cert profiles.
-
-        Args:
-            allowed_app_cert_profiles: List of allowed application certificate profiles.
-        """
-        self._allowed_app_cert_profiles = allowed_app_cert_profiles
 
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
@@ -673,8 +636,8 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
         operation = 'simpleenroll'
         base = help_context.host_est_path
 
-        def _get_enroll_path(cert_profile: ApplicationCertificateProfile) -> str:
-            return f'{base}/{cert_profile.profile_name}/{operation}'
+        def _get_enroll_path(cert_profile_name: str) -> str:
+            return f'{base}/{cert_profile_name}/{operation}'
 
         summary = HelpSection(
             _non_lazy('Summary'),
@@ -694,13 +657,8 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        tls_client_cmd = EstUsernamePasswordCommandBuilder.get_tls_client_profile_command(cred_number=cred)
-        tls_server_cmd = EstUsernamePasswordCommandBuilder.get_tls_server_profile_command(cred_number=cred)
-        opc_client_cmd = EstUsernamePasswordCommandBuilder.get_opc_ua_client_profile_command(cred_number=cred)
-        opc_server_cmd = EstUsernamePasswordCommandBuilder.get_opc_ua_server_profile_command(cred_number=cred)
-
         def _build_section(
-            title: str, cert_profile: ApplicationCertificateProfile, cmd: str, *, hidden: bool = False
+            title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False
         ) -> HelpSection:
             return HelpSection(
                 title,
@@ -709,13 +667,13 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
                     HelpRow(
                         _non_lazy('Enroll certificate with curl'),
                         value=EstClientCertificateCommandBuilder.get_curl_enroll_application_credential(
-                            host=_get_enroll_path(cert_profile=cert_profile),
+                            host=_get_enroll_path(cert_profile_name=cert_profile_name),
                             cred_number=cred,
                         ),
                         value_render_type=ValueRenderType.CODE,
                     ),
                 ],
-                css_id=cert_profile.profile_name,
+                css_id=cert_profile_name,
                 hidden=hidden,
             )
 
@@ -723,58 +681,64 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
             summary,
             build_tls_trust_store_section(),
             build_keygen_section(help_context, file_name=''),
-            build_profile_select_section(app_cert_profiles=self._allowed_app_cert_profiles),
-            _build_section(
-                _non_lazy('Certificate Request for a TLS Client Certificates'),
-                ApplicationCertificateProfile.TLS_CLIENT,
-                tls_client_cmd,
-                hidden=False,
-            ),
-            _build_section(
-                _non_lazy('Certificate Request for a TLS Server Certificates'),
-                ApplicationCertificateProfile.TLS_SERVER,
-                tls_server_cmd,
-                hidden=True,
-            ),
-            _build_section(
-                _non_lazy('Certificate Request for a OPC-UA Client Certificates'),
-                ApplicationCertificateProfile.OPC_UA_CLIENT,
-                opc_client_cmd,
-                hidden=True,
-            ),
-            _build_section(
-                _non_lazy('Certificate Request for a OPC-UA Server Certificates'),
-                ApplicationCertificateProfile.OPC_UA_SERVER,
-                opc_server_cmd,
-                hidden=True,
-            ),
+            build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
+        ]
+        for i, profile in enumerate(help_context.allowed_app_profiles):
+            name = profile.alias or profile.certificate_profile.unique_name
+            title = profile.certificate_profile.display_name or name
+
+            try:
+                cert_profile = json.loads(profile.certificate_profile.profile_json)
+                sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
+
+                cmd = EstUsernamePasswordCommandBuilder.get_dynamic_cert_profile_command(
+                    sample_request=sample_request,
+                    cred_number=cred,
+                )
+            except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
+                err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
+                err_sect = HelpSection(
+                    _non_lazy(f'Certificate Request for a {title} Certificate'),
+                    [
+                        HelpRow(_non_lazy('OpenSSL Command'), err_msg, ValueRenderType.PLAIN),
+                    ],
+                    css_id=name,
+                    hidden=(i > 0),
+                )
+                sections.append(err_sect)
+                continue
+
+            sect = _build_section(
+                _non_lazy(f'Certificate Request for a {title} Certificate'),
+                name,
+                cmd,
+                hidden=(i > 0),
+            )
+            sections.append(sect)
+        sections.append(
             HelpSection(
-                heading=_non_lazy('Convert the certificate from DER format to PEM format (Optional)'),
+                heading=_non_lazy('Convert the certificate from PKCS#7 to PEM format (Optional)'),
                 rows=[
                     HelpRow(
                         key=_non_lazy('OpenSSL Command'),
-                        value=EstUsernamePasswordCommandBuilder.get_conversion_der_pem_command(cred_number=cred),
+                        value=EstUsernamePasswordCommandBuilder.get_conversion_p7_pem_command(cred_number=cred),
                         value_render_type=ValueRenderType.CODE,
                     )
                 ],
-            ),
-        ]
-        return sections, _non_lazy('HHelp - Issue Application Certificates using EST with a Domain Credential')
+            )
+        )
+        return sections, _non_lazy('Help - Issue Application Certificates using EST with a Domain Credential')
 
 
 class DeviceApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView):
     """Help view for the case of onboarding using EST with client cert for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = ApplicationCertificateWithEstDomainCredentialStrategy(
-        allowed_app_cert_profiles=list(ApplicationCertificateProfile)
-    )
+    strategy = ApplicationCertificateWithEstDomainCredentialStrategy()
 
 
 class OpcUaGdsApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView):
     """Help view for the case of onboarding using EST with client cert for OPC-UA GDS abstractions."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-    strategy = ApplicationCertificateWithEstDomainCredentialStrategy(
-        allowed_app_cert_profiles=list(ApplicationCertificateProfile)
-    )
+    strategy = ApplicationCertificateWithEstDomainCredentialStrategy()

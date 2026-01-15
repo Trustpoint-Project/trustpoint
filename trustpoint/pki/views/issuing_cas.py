@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import binascii
+from base64 import b64decode
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
@@ -14,13 +19,13 @@ from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
-from rest_framework import viewsets
-from trustpoint.logger import LoggerMixin
-from trustpoint.views.base import (
-    BulkDeleteView,
-    ContextDataMixin,
-    SortableTableMixin,
-)
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_yasg import openapi  # type: ignore[import-untyped]
+from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
+from rest_framework import filters, status, viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 
 from pki.forms import (
     IssuingCaAddFileImportPkcs12Form,
@@ -29,10 +34,17 @@ from pki.forms import (
 )
 from pki.models import CertificateModel, IssuingCaModel
 from pki.serializer.issuing_ca import IssuingCaSerializer
+from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
+from trustpoint.views.base import (
+    BulkDeleteView,
+    ContextDataMixin,
+    SortableTableMixin,
+)
 
 if TYPE_CHECKING:
     from typing import ClassVar
+
     from django.db.models import QuerySet
     from django.forms import Form
     from django.http import HttpRequest
@@ -45,7 +57,7 @@ class IssuingCaContextMixin(ContextDataMixin):
     context_page_name = 'issuing_cas'
 
 
-class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin, ListView[IssuingCaModel]):
+class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin[IssuingCaModel], ListView[IssuingCaModel]):
     """Issuing CA Table View."""
 
     model = IssuingCaModel
@@ -233,6 +245,9 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[IssuingCaMode
             messages.success(request, _('CRL for Issuing CA %s has been generated.') % issuing_ca.unique_name)
         else:
             messages.error(request, _('Failed to generate CRL for Issuing CA %s.') % issuing_ca.unique_name)
+        next_url = request.GET.get('next')
+        if next_url:
+            return redirect(next_url)
         return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
 
 
@@ -256,30 +271,198 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[IssuingCaModel]):
         if not crl_pem:
             messages.warning(request, _('No CRL available for issuing CA %s.') % issuing_ca.unique_name)
             return redirect('pki:issuing_cas')
-        response = HttpResponse(crl_pem, content_type='application/x-pem-file')
-        response['Content-Disposition'] = f'attachment; filename="{issuing_ca.unique_name}.crl"'
+        encoding = request.GET.get('encoding', '').lower()
+        if encoding == 'der':
+            pem_lines = [line.strip() for line in crl_pem.splitlines() if line and not line.startswith('-----')]
+            b64data = ''.join(pem_lines)
+            try:
+                crl_der = b64decode(b64data)
+            except (binascii.Error, ValueError) as exc:
+                messages.error(
+                    request,
+                    _(
+                        'Failed to convert CRL to DER for issuing CA %s: %s'
+                    ) % (issuing_ca.unique_name, str(exc)),
+                )
+                return redirect('pki:issuing_cas')
+
+            response = HttpResponse(crl_der, content_type='application/pkix-crl')
+            response['Content-Disposition'] = f'attachment; filename="{issuing_ca.unique_name}.crl.der"'
+        else:
+            response = HttpResponse(crl_pem, content_type='application/x-pem-file')
+            response['Content-Disposition'] = f'attachment; filename="{issuing_ca.unique_name}.crl"'
         return response
 
-class IssuingCaViewSet(viewsets.ModelViewSet):
-    """ViewSet for managing Device instances.
 
-    Supports standard CRUD operations such as list, retrieve,
-    create, update, and delete.
-    """
+class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[IssuingCaModel]):
+    """ViewSet for managing Issuing CA instances via REST API."""
 
-    queryset = IssuingCaModel.objects.all()
+    queryset = IssuingCaModel.objects.all().order_by('-created_at')
     serializer_class = IssuingCaSerializer
-    action_descriptions: ClassVar[dict[str, str]] = {
-        'list': 'Retrieve a list of all issuing cas.',
-        'retrieve': 'Retrieve a single Issuing CA by id.',
-        'create': 'Create a new Issuing CA with name, serial number, and status.',
-        'update': 'Update an existing Issuing CA.',
-        'partial_update': 'Partially update an existing Issuing CA.',
-        'destroy': 'Delete a Issuing CA.',
-    }
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    )
+    filterset_fields: ClassVar = ['unique_name', 'is_active', 'issuing_ca_type']
+    search_fields: ClassVar = ['unique_name', 'credential__certificate__common_name']
+    ordering_fields: ClassVar = ['unique_name', 'created_at', 'updated_at']
 
-    def get_view_description(self, *, html: bool = False) -> str:
-        """Return a description for the given action."""
-        if hasattr(self, 'action') and self.action in self.action_descriptions:
-            return self.action_descriptions[self.action]
-        return super().get_view_description(html)
+    # ignoring untyped decorator (drf-yasg not typed)
+    @swagger_auto_schema(
+        operation_summary='List Issuing CAs',
+        operation_description='Retrieve all Issuing CAs from the database.',
+        tags=['issuing-cas'],
+    )  # type: ignore[misc]
+    def list(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> Response:
+        """API endpoint to get all Issuing CAs."""
+        queryset = self.get_queryset()
+
+        for backend in list(self.filter_backends):
+            if hasattr(backend, 'filter_queryset'):
+                queryset = backend().filter_queryset(self.request, queryset, self)  # type: ignore[attr-defined]
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @swagger_auto_schema(
+        operation_summary='Retrieve Issuing CA',
+        operation_description='Retrieve details of a specific Issuing CA by ID.',
+        tags=['issuing-cas'],
+    )  # type: ignore[misc]
+    def retrieve(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Response:
+        """API endpoint to get a single Issuing CA by ID."""
+        return super().retrieve(request, *args, **kwargs)  # type: ignore[arg-type]
+
+    @action(
+        detail=True,
+        methods=['post'],
+        permission_classes=[IsAuthenticated],
+        url_path='generate-crl',
+    )
+    @swagger_auto_schema(
+        operation_summary='Generate CRL',
+        operation_description=(
+            'Manually generate a new Certificate Revocation List (CRL) for this Issuing CA. '
+            'No request body is required.'
+        ),
+        tags=['issuing-cas'],
+        request_body=openapi.Schema(
+            type=openapi.TYPE_OBJECT,
+            title='Empty',
+            properties={},
+        ),
+        responses={
+            200: openapi.Response(
+                description='CRL generated successfully',
+                examples={
+                    'application/json': {
+                        'message': 'CRL generated successfully for Issuing CA "MyCA".',
+                        'last_crl_issued_at': '2025-12-02T16:30:00Z',
+                    }
+                },
+            ),
+            500: 'Failed to generate CRL',
+        },
+    )  # type: ignore[misc]
+    def generate_crl(self, _request: HttpRequest, **_kwargs: Any) -> Response:
+        """Generate a new CRL for this Issuing CA."""
+        issuing_ca = self.get_object()
+
+        if issuing_ca.issue_crl():
+            return Response(
+                {
+                    'message': f'CRL generated successfully for Issuing CA "{issuing_ca.unique_name}".',
+                    'last_crl_issued_at': issuing_ca.last_crl_issued_at,
+                },
+                status=status.HTTP_200_OK,
+            )
+
+        return Response(
+            {'error': f'Failed to generate CRL for Issuing CA "{issuing_ca.unique_name}".'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+
+    @action(
+        detail=True,
+        methods=['get'],
+        permission_classes=[IsAuthenticated],
+        url_path='crl',
+    )
+    @swagger_auto_schema(
+        operation_summary='Download CRL',
+        operation_description=(
+            'Download the Certificate Revocation List (CRL) for this Issuing CA. '
+            'Requires authentication. '
+            'Supports both PEM (default) and DER formats via the format query parameter. '
+            'If no CRL is available, use the POST /api/issuing-cas/<pk>/generate-crl/ endpoint to generate one first.'
+        ),
+        tags=['issuing-cas'],
+        manual_parameters=[
+            openapi.Parameter(
+                'encoding',
+                openapi.IN_QUERY,
+                description='CRL encoding: "pem" (default) or "der"',
+                type=openapi.TYPE_STRING,
+                enum=['pem', 'der'],
+                default='pem',
+            ),
+        ],
+        responses={
+            200: 'CRL file downloaded successfully',
+            400: 'Invalid format parameter',
+            404: openapi.Response(
+                description='CRL not available for this Issuing CA',
+                examples={
+                    'application/json': {
+                        'error': 'No CRL available for Issuing CA "MyCA".',
+                        'hint': 'Generate a CRL first using POST /api/issuing-cas/1/generate-crl/',
+                    }
+                },
+            ),
+        },
+    )  # type: ignore[misc]
+    def crl(self, request: HttpRequest, **_kwargs: Any) -> HttpResponse:
+        """Download the CRL for this Issuing CA."""
+        issuing_ca = self.get_object()
+        crl_pem = issuing_ca.crl_pem
+
+        if not crl_pem:
+            return Response(
+                {
+                    'error': f'No CRL available for Issuing CA "{issuing_ca.unique_name}".',
+                    'hint': f'Generate a CRL first using POST /api/issuing-cas/{issuing_ca.pk}/generate-crl/',
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        crl_format = request.GET.get('encoding', 'pem').lower()
+
+        if crl_format not in ('pem', 'der'):
+            return Response(
+                {'error': 'Invalid format parameter. Must be "pem" or "der".'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if crl_format == 'pem':
+            response = HttpResponse(crl_pem, content_type='application/x-pem-file')
+            response['Content-Disposition'] = f'attachment; filename="{issuing_ca.unique_name}.crl"'
+        else:  # der
+            try:
+                crl_obj = x509.load_pem_x509_crl(crl_pem.encode(), default_backend())
+                crl_der = crl_obj.public_bytes(encoding=serialization.Encoding.DER)
+                response = HttpResponse(crl_der, content_type='application/pkix-crl')
+                response['Content-Disposition'] = f'attachment; filename="{issuing_ca.unique_name}.crl"'
+            except (ValueError, TypeError) as exc:
+                return Response(
+                    {'error': f'Failed to convert CRL to DER format: {exc!s}'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+
+        return response

@@ -10,22 +10,20 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.management import call_command
 from django.core.management.base import CommandError
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView, View
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_yasg.utils import swagger_auto_schema
-from rest_framework import filters, status, viewsets
+from rest_framework import filters, viewsets
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.response import Response
-from trustpoint.logger import LoggerMixin
-from trustpoint.views.base import SortableTableFromListMixin
-from util.sftp import SftpClient, SftpError
 
 from management.forms import BackupOptionsForm
 from management.models import BackupOptions
 from management.serializer.backup import BackupSerializer
+from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import SortableTableFromListMixin
+from util.sftp import SftpClient, SftpError
 
 
 def get_backup_file_data(filename: str) -> dict[str, Any]:
@@ -81,7 +79,7 @@ def create_db_backup(path: Path) -> str:
     return filename
 
 
-class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView[Any]):
+class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # type: ignore[type-arg,misc]
     """Display existing backups and handle backup-related actions.
 
     GET:

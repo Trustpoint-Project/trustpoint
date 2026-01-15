@@ -4,7 +4,6 @@
 # Usage: wizard_tls_server_credential_apply.sh [hsm|no_hsm]
 
 STATE_FILE_DIR="/etc/trustpoint/wizard/state/"
-APACHE_TLS_DIRECTORY="/etc/trustpoint/tls/"
 WIZARD_TLS_SERVER_CREDENTIAL_APPLY="/etc/trustpoint/wizard/state/WIZARD_TLS_SERVER_CREDENTIAL_APPLY"
 WIZARD_BACKUP_PASSWORD="/etc/trustpoint/wizard/state/WIZARD_BACKUP_PASSWORD"
 WIZARD_DEMO_DATA="/etc/trustpoint/wizard/state/WIZARD_DEMO_DATA"
@@ -68,10 +67,10 @@ else
     NEXT_STATE="WIZARD_DEMO_DATA"
 fi
 
-# Configure apache and TLS
-log "Configuring Apache and TLS..."
+# Configure NGINX and TLS
+log "Configuring NGINX and TLS..."
 if ! /etc/trustpoint/wizard/transition/update_tls.sh; then
-    echo "ERROR: Failed to configure Apache and TLS."
+    echo "ERROR: Failed to configure NGINX and TLS."
     exit 7
 fi
 

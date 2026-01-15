@@ -10,6 +10,7 @@ from django.db.models import Q
 from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from trustpoint_core import oid
+
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:

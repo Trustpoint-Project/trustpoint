@@ -2,12 +2,24 @@
     "type": "cert_profile",
     "display_name": "TLS Server",
     "subj": {
-        "allow":"*"
+        "allow":"*",
+        "cn": {
+            "default": "tls_server.local"
+        }
     },
     "reject_mods": false,
     "ext": {
         "basic_constraints": {
             "ca": false
+        },
+        "subject_alternative_name": {
+            "dns_names": {
+                "default": ["localhost"]
+            },
+            "ip_addresses": {
+                "default": ["127.0.0.1", "::1"]
+            },
+            "critical": true
         }
     },
     "validity": {

@@ -391,6 +391,74 @@ def test_allowed_ext_present() -> None:
     validated_request = verifier.apply_profile_to_request(request)
     assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['allowed.example.com']
 
+def test_allowed_ext_allow_any() -> None:
+    """Test that a request with any extension passes verification when allow='*'."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {'allow': '*'},
+        'reject_mods': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['any.allowed.example.com']}}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['any.allowed.example.com']
+
+def test_allowed_ext_allow_any_explicit_profile() -> None:
+    """Test that a request with a SAN extension passes verification when allow='*' and SAN specified in profile."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {
+            'allow': '*',
+            'san': {'mutable': True, 'dns_names': ['should.not.matter.example.com']}
+        },
+        'reject_mods': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'san': {'dns_names': ['any.allowed.example.com']}}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    print('Validated Request: ', validated_request)
+    assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['any.allowed.example.com']
+
+def test_sample_request_contains_ext_defaults() -> None:
+    """Test that a sample request generated from a profile includes default extension values."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {
+            'san': {'dns_names': {'default': ['default.example.com']}}
+        },
+        'reject_mods': False
+    }
+    verifier = JSONProfileVerifier(profile)
+    sample_request = verifier.get_sample_request()
+    print('Sample Request: ', sample_request)
+    assert sample_request['extensions']['subject_alternative_name']['dns_names'] == ['default.example.com']
+
+def test_sample_request_contains_ext_defaults_allow_any() -> None:
+    """Regression test that a sample req. from a profile includes default ext values when allow='*'."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {
+            'san': {
+                'dns_names': {'default': ['default.example.com']},
+                'allow': '*'
+            },
+        },
+        'reject_mods': False
+    }
+    verifier = JSONProfileVerifier(profile)
+    sample_request = verifier.get_sample_request()
+    print('Sample Request: ', sample_request)
+    assert sample_request['extensions']['subject_alternative_name']['dns_names'] == ['default.example.com']
 
 # --- General parsing and conversion tests ---
 
@@ -484,7 +552,7 @@ def test_json_to_cb_adapter() -> None:
         },
         'ext': {
             'san': {
-                'dns_names': ['www.example.com'],
+                'dns_names': {'default': ['www.example.com']}
             },
             'crl': {
                 'uris': ['http://crl.example.com/crl.pem']

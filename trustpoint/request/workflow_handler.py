@@ -1,4 +1,5 @@
 """Handles the workflow engine logic during a request."""
+
 from __future__ import annotations
 
 import hashlib
@@ -9,12 +10,14 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.x509 import CertificateSigningRequest
 from django.db import transaction
 from django.db.models import Q
+
 from trustpoint.logger import LoggerMixin
-from workflows.models import EnrollmentRequest, State, WorkflowDefinition, WorkflowInstance
+from workflows.models import DeviceRequest, EnrollmentRequest, State, WorkflowDefinition, WorkflowInstance
 from workflows.services.engine import advance_instance
 
 if TYPE_CHECKING:
     from request.request_context import RequestContext
+
 
 class AbstractWorkflowHandler(ABC, LoggerMixin):
     """Abstract base class for workflow handler."""
@@ -28,12 +31,93 @@ class WorkflowHandler(ABC, LoggerMixin):
     """Abstract base class for workflow handler."""
 
     def handle(self, context: RequestContext) -> None:
-        """Selects correct workflow handler based on event."""
+        """Execute workflow logic."""
         if not context.event:
-            msg = 'No event found for the Workflow.'
-            self.logger.error(msg)
-        elif context.event.handler == 'certificate_request':
-            CertificateRequestHandler().handle(context=context)
+            self.logger.error('No event found for the Workflow.')
+            return
+
+        h = context.event.handler
+        if h == 'certificate_request':
+            CertificateRequestHandler().handle(context)
+        elif h == 'device_action':
+            DeviceActionHandler().handle(context)
+
+
+class DeviceActionHandler(WorkflowHandler):
+    """Handles workflow triggers for device lifecycle events."""
+
+    def handle(
+        self,
+        context: RequestContext,
+        payload: dict[str, Any] | None = None,
+        **_: Any,
+    ) -> None:
+        """Handle device action events and trigger workflows accordingly."""
+        if not context.device:
+            msg = 'DeviceActionHandler requires a device.'
+            raise ValueError(msg)
+
+        if not context.operation:
+            msg = 'DeviceActionHandler requires an operation.'
+            raise ValueError(msg)
+
+        if not payload:
+            payload = {}
+
+        action = context.operation  # "created", "onboarded", "deleted"
+
+        # Domain and CA might be null
+        domain = context.domain
+        ca = domain.get_issuing_ca_or_value_error() if domain else None
+
+        # Create a new DeviceRequest
+        dr = DeviceRequest.objects.create(
+            device=context.device,
+            domain=domain,
+            ca=ca,
+            action=action,
+            aggregated_state=State.AWAITING,
+            finalized=False,
+            payload=payload,
+        )
+
+        # Find matching workflow definitions
+        definitions = [
+            wf
+            for wf in WorkflowDefinition.objects.filter(published=True)
+            if any(
+                e.get('protocol') == 'device' and e.get('operation') == action for e in wf.definition.get('events', [])
+            )
+        ]
+
+        for wf in definitions:
+            meta = wf.definition or {}
+            steps = meta.get('steps', [])
+            if not steps:
+                continue
+
+            first_step = steps[0]['id']
+
+            inst = WorkflowInstance.objects.create(
+                definition=wf,
+                device_request=dr,
+                current_step=first_step,
+                state=State.RUNNING,
+                payload={
+                    'operation': action,
+                    'protocol': 'device',
+                    'device_id': context.device.pk,
+                    'domain_id': domain.pk if domain else None,
+                    'ca_id': ca.pk if ca else None,
+                    **payload,
+                },
+            )
+
+            advance_instance(inst)
+            inst.refresh_from_db()
+
+        dr.recompute_and_save()
+        context.device_request = dr  # type: ignore[attr-defined]
 
 
 class CertificateRequestHandler(WorkflowHandler):
@@ -50,13 +134,14 @@ class CertificateRequestHandler(WorkflowHandler):
 
         return (True, '')
 
-    def handle(
+    def handle(  # noqa: C901, PLR0912, PLR0915 - Core workflow orchestration requires multiple validation and conditional paths
         self,
         context: RequestContext,
         payload: dict[str, Any] | None = None,
         **_: Any,
     ) -> None:
         """Execute workflow logic."""
+
         def _norm(v: Any) -> int | None:  # normalize IDs
             try:
                 return int(v) if v is not None else None
@@ -82,13 +167,12 @@ class CertificateRequestHandler(WorkflowHandler):
         if not isinstance(csr, CertificateSigningRequest):
             raise TypeError
 
-
         ca_id = _norm(context.domain.get_issuing_ca_or_value_error().pk)
         domain_id = _norm(context.domain.pk)
         device_id = _norm(context.device.pk)
 
         fingerprint = hashlib.sha256(csr.tbs_certrequest_bytes).hexdigest()
-        template = context.cert_profile_str  # TODO: rename to profile throughout EnrollmentRequest
+        template = context.cert_profile_str or ''  # TODO: ren. profile throughout EnrollmentRequest  # noqa: E501, FIX002, TD002
 
         # Find or create an open EnrollmentRequest
         req = (
@@ -139,7 +223,9 @@ class CertificateRequestHandler(WorkflowHandler):
                 continue
 
             events = meta.get('events', [])
-            if not any(t.get('protocol') == context.protocol and t.get('operation') == context.operation for t in events):
+            if not any(
+                t.get('protocol') == context.protocol and t.get('operation') == context.operation for t in events
+            ):
                 continue
 
             # Reuse regardless of finalized flag (to avoid duplicates forever)
