@@ -246,6 +246,11 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_truststore_method_select',
     ),
     path(
+        'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/discover-server/',
+        views.OpcUaGdsPushDiscoverServerView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_discover_server',
+    ),
+    path(
         'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/truststore-association/',
         views.OpcUaGdsPushTruststoreAssociationView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_truststore_association',
@@ -266,10 +271,10 @@ urlpatterns = [
     path(
         (
             'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/'
-            'onboarding/issue-application-credential/cmp-domain-credential/'
+            'onboarding/issue-application-credential/opc-ua-gds-push-domain-credential/'
         ),
         devices_help_views.OpcUaGdsPushApplicationCertificateHelpView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_onboarding_clm_issue_application_credential_cmp_domain_credential',
+        name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/est-domain-credential/',

@@ -801,6 +801,10 @@ class OpcUaGdsPushApplicationCertificateStrategy(HelpPageStrategy):
                 'devices:opc_ua_gds_push_update_server_certificate',
                 kwargs={'pk': device.pk}
             )
+            discover_server_url = reverse(
+                'devices:opc_ua_gds_push_discover_server',
+                kwargs={'pk': device.pk}
+            )
 
             # Use CSRF_TOKEN_PLACEHOLDER that will be replaced in template
             trustlist_html = (
@@ -821,9 +825,23 @@ class OpcUaGdsPushApplicationCertificateStrategy(HelpPageStrategy):
                 'domain CA, and updates the server certificate.</p>'
             )
 
+            discover_html = (
+                '<form method="post" action="' + discover_server_url + '" style="display: inline;">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<button type="submit" class="btn btn-info">Discover Server</button>'
+                '</form>'
+                '<p class="text-muted mt-2">Connects to the OPC UA server without authentication '
+                'to retrieve server information and certificates for initial configuration.</p>'
+            )
+
             actions = HelpSection(
                 _non_lazy('Available Actions'),
                 [
+                    HelpRow(
+                        _non_lazy('Discover Server'),
+                        discover_html,
+                        ValueRenderType.HTML,
+                    ),
                     HelpRow(
                         _non_lazy('Update Trustlist'),
                         trustlist_html,
@@ -837,10 +855,29 @@ class OpcUaGdsPushApplicationCertificateStrategy(HelpPageStrategy):
                 ],
             )
         else:
-            # Show instructions to issue domain credential first
+            # Show instructions to issue domain credential first, but allow server discovery
+            discover_server_url = reverse(
+                'devices:opc_ua_gds_push_discover_server',
+                kwargs={'pk': device.pk}
+            )
+            
+            discover_html = (
+                '<form method="post" action="' + discover_server_url + '" style="display: inline;">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<button type="submit" class="btn btn-info">Discover Server</button>'
+                '</form>'
+                '<p class="text-muted mt-2">Connects to the OPC UA server without authentication '
+                'to retrieve server information and certificates for initial configuration.</p>'
+            )
+
             actions = HelpSection(
-                _non_lazy('Required Setup'),
+                _non_lazy('Available Actions'),
                 [
+                    HelpRow(
+                        _non_lazy('Discover Server'),
+                        discover_html,
+                        ValueRenderType.HTML,
+                    ),
                     HelpRow(
                         _non_lazy('Domain Credential Required'),
                         'Before you can update the trustlist or server certificate, you must first issue '

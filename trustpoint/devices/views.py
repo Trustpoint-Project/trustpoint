@@ -7,6 +7,7 @@ import datetime
 import io
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+from cryptography import x509
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
@@ -1163,7 +1164,7 @@ class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboarding
 
         # Redirect directly to the GDS Push application certificate help page
         return redirect(
-            f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_cmp_domain_credential',
+            f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
             pk=self.object.pk
         )
 
@@ -1309,7 +1310,7 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
     page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
 
     def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
-        """Issues a domain credential for the device.
+        """Issues a domain credential for the device with OPC UA specific extensions.
 
         Args:
             device: The device to be associated with the new credential.
@@ -1320,9 +1321,41 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
         """
         if not device.domain:
             raise Http404(DeviceWithoutDomainErrorMsg)
+
         issuer = self.issuer_class(device=device, domain=device.domain)
         application_uri = cast('str', cleaned_data.get('application_uri'))
-        return issuer.issue_domain_credential(application_uri=application_uri)
+
+        # Build OPC UA specific extensions for domain credentials
+        opc_ua_extensions = [
+            # Key Usage for OPC UA domain credentials (client authentication with SignAndEncrypt)
+            (
+                x509.KeyUsage(
+                    digital_signature=True,
+                    content_commitment=False,
+                    key_encipherment=True,  # Required for OPC UA SignAndEncrypt security mode
+                    data_encipherment=True,  # Additional encryption capability
+                    key_agreement=False,
+                    key_cert_sign=False,
+                    crl_sign=False,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                True,
+            ),
+            # Extended Key Usage for client authentication
+            (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
+        ]
+
+        # Add Subject Alternative Name if application_uri is provided
+        if application_uri:
+            opc_ua_extensions.append(
+                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)]), False)
+            )
+
+        return issuer.issue_domain_credential(
+            application_uri=None,  # Already included in opc_ua_extensions
+            extra_extensions=opc_ua_extensions
+        )
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle the POST request with custom redirect to truststore association."""
@@ -1386,6 +1419,60 @@ class OpcUaGdsPushTruststoreMethodSelectView(PageContextMixin, FormView[OpcUaGds
         # Default fallback
         return HttpResponseRedirect(
             reverse('devices:opc_ua_gds_push_truststore_association', kwargs={'pk': device_pk})
+        )
+
+
+class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
+    """View for discovering OPC UA server information without authentication."""
+
+    http_method_names = ('post',)
+    model = DeviceModel
+    context_object_name = 'device'
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
+    def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle the POST request to discover server information."""
+        self.object = self.get_object()
+
+        try:
+            # Import here to avoid circular import
+            from request.gds_push import GdsPushService
+
+            # Create GDS Push service (truststore not required for discovery)
+            service = GdsPushService(
+                device=self.object,
+                domain_credential=None,  # Not needed for discovery
+                truststore=None  # Not needed for discovery
+            )
+
+            # Discover server information
+            success, message, server_info = service.discover_server_insecurely()
+
+            if success and server_info:
+                messages.success(request, f'Server discovered successfully: {message}')
+                
+                # Store server info in session for display
+                request.session['opc_ua_server_info'] = server_info
+                
+                # If server certificate is available, offer to update truststore
+                if server_info.get('server_certificate_available'):
+                    messages.info(
+                        request,
+                        'Server certificate found. You can update the truststore with this certificate.'
+                    )
+            else:
+                messages.error(request, f'Failed to discover server: {message}')
+
+        except Exception as e:
+            messages.error(request, f'Unexpected error during discovery: {e}')
+            import traceback
+            traceback.print_exc()
+
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'devices:{self.page_name}_certificate_lifecycle_management',
+                kwargs={'pk': self.object.pk}
+            )
         )
 
 
@@ -1841,7 +1928,137 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
         """
         return HttpResponseRedirect(
             reverse_lazy(
-                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_cmp_domain_credential',
+                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
+                kwargs={'pk': self.object.pk}
+            )
+        )
+
+
+class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
+    """View to discover OPC UA server information without authentication."""
+
+    http_method_names = ('post',)
+    model = DeviceModel
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle the POST request to discover server information.
+
+        Args:
+            request: The Django request object.
+            _args: Positional arguments are discarded.
+            kwargs: Keyword arguments are passed to get_object().
+
+        Returns:
+            HttpResponse redirecting back to the help page.
+        """
+        self.object = self.get_object()
+
+        try:
+            # Import here to avoid circular import
+            from request.gds_push import GdsPushError, GdsPushService
+
+            # Create GDS Push service (no domain credential needed for insecure discovery)
+            # Don't pass truststore=None to allow it to use device.onboarding_config.opc_trust_store
+            service = GdsPushService(
+                device=self.object,
+                domain_credential=None,  # Not needed for insecure discovery
+            )
+
+            # Discover server information
+            success, message, server_info = service.discover_server_insecurely()
+
+            if success and server_info:
+                messages.success(request, f'Server discovered successfully: {message}')
+                
+                # Store server info in session for display
+                request.session['opc_ua_server_info'] = server_info
+                
+                # Also try to update truststore with server certificate if available
+                if server_info.get('server_certificate_available') and server_info.get('server_certificate'):
+                    try:
+                        self._update_truststore_with_certificate(server_info['server_certificate'])
+                    except Exception as e:
+                        messages.warning(request, f'Server discovered but failed to update truststore: {e}')
+                        
+            else:
+                messages.error(request, f'Failed to discover server: {message}')
+
+        except GdsPushError as e:
+            messages.error(request, f'GDS Push error: {e}')
+        except Exception as e:
+            messages.error(request, f'Unexpected error: {e}')
+            import traceback
+            traceback.print_exc()
+
+        return self._redirect_to_help_page()
+
+    def _update_truststore_with_certificate(self, certificate_bytes: bytes) -> None:
+        """Update or create truststore with the discovered server certificate.
+
+        Args:
+            certificate_bytes: DER-encoded certificate bytes
+        """
+        try:
+            from cryptography import x509
+            from cryptography.hazmat.backends import default_backend
+            from pki.models.certificate import CertificateModel
+            from pki.models.truststore import TruststoreModel
+
+            # Load certificate
+            cert = x509.load_der_x509_certificate(certificate_bytes, default_backend())
+
+            # Get or create truststore for this device
+            truststore = self.object.onboarding_config.opc_trust_store
+            if not truststore:
+                # Create new truststore
+                truststore = TruststoreModel.objects.create(
+                    unique_name=f'opc_server_{self.object.common_name}',
+                    friendly_name=f'OPC Server Certificate for {self.object.common_name}',
+                    intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
+                )
+                self.object.onboarding_config.opc_trust_store = truststore
+                self.object.onboarding_config.save()
+
+            # Remove old server certificates from truststore
+            truststore.certificates.clear()
+
+            # Create new certificate model
+            cert_model = CertificateModel.from_cryptography(cert)
+            cert_model.save()
+
+            # Add to truststore
+            truststore.certificates.add(cert_model)
+
+            messages.info(
+                self._get_request(),
+                f'Updated truststore "{truststore.unique_name}" with discovered server certificate'
+            )
+
+        except Exception as e:
+            messages.warning(
+                self._get_request(),
+                f'Server discovered but failed to update truststore: {e}'
+            )
+
+    def _get_request(self) -> HttpRequest:
+        """Get the current request from view context.
+
+        Returns:
+            The current HttpRequest
+        """
+        return self.request  # type: ignore[return-value]
+
+    def _redirect_to_help_page(self) -> HttpResponseRedirect:
+        """Redirect back to the help page.
+
+        Returns:
+            HttpResponseRedirect to the help page.
+        """
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
                 kwargs={'pk': self.object.pk}
             )
         )
@@ -1978,7 +2195,7 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
         """
         return HttpResponseRedirect(
             reverse_lazy(
-                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_cmp_domain_credential',
+                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
                 kwargs={'pk': self.object.pk}
             )
         )

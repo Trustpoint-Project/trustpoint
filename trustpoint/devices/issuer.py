@@ -376,10 +376,12 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
                 x509.Name(
                     [
                         x509.NameAttribute(x509.NameOID.COMMON_NAME, common_name),
-                        x509.NameAttribute(x509.NameOID.PSEUDONYM, self.pseudonym),
-                        x509.NameAttribute(x509.NameOID.DOMAIN_COMPONENT, self.domain_component),
-                        x509.NameAttribute(x509.NameOID.SERIAL_NUMBER, self.serial_number),
-                        x509.NameAttribute(x509.NameOID.USER_ID, str(self.device.pk)),
+                        x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, 'Trustpoint'),
+                        x509.NameAttribute(x509.NameOID.COUNTRY_NAME, 'DE'),
+                        #x509.NameAttribute(x509.NameOID.PSEUDONYM, self.pseudonym),
+                        #x509.NameAttribute(x509.NameOID.DOMAIN_COMPONENT, self.domain_component),
+                        #x509.NameAttribute(x509.NameOID.SERIAL_NUMBER, self.serial_number),
+                        #x509.NameAttribute(x509.NameOID.USER_ID, str(self.device.pk)),
                     ]
                 )
             )
@@ -649,28 +651,44 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
 
     _pseudonym = DOMAIN_CREDENTIAL_CN
 
-    def issue_domain_credential(self, application_uri: str | None = None) -> IssuedCredentialModel:
+    def issue_domain_credential(
+        self,
+        application_uri: str | None = None,
+        extra_extensions: list[tuple[x509.ExtensionType, bool]] | None = None,
+    ) -> IssuedCredentialModel:
         """Issues a domain credential for a device.
 
         Args:
             application_uri: Optional application URI to include in the certificate.
+            extra_extensions: Optional list of additional certificate extensions to include.
+                If provided, these will override the default extensions (except BasicConstraints).
 
         Returns:
             The issued domain credential model.
         """
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
 
-        extra_extensions = [(x509.BasicConstraints(ca=False, path_length=None), True)]
-        if application_uri:
-            extra_extensions.append(
-                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)]), False)
-            )
+        if extra_extensions is None:
+            extensions = [(x509.BasicConstraints(ca=False, path_length=None), True)]
+            if application_uri:
+                extensions.append(
+                    (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)]), False)
+                )
+        else:
+            extensions = [(x509.BasicConstraints(ca=False, path_length=None), True)]
+            extensions.extend(extra_extensions)
+            if application_uri:
+                has_san = any(isinstance(ext, x509.SubjectAlternativeName) for ext, _ in extra_extensions)
+                if not has_san:
+                    extensions.append(
+                        (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)]), False)
+                    )
 
         certificate = self._build_certificate(
             common_name=self._pseudonym,
             public_key=private_key.public_key_serializer.as_crypto(),
             validity_days=365,
-            extra_extensions=extra_extensions,
+            extra_extensions=extensions,
         )
 
         cert_chain = (
@@ -697,22 +715,36 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
 
         return issued_domain_credential
 
-    def issue_domain_credential_certificate(self, public_key: PublicKey) -> IssuedCredentialModel:
+    def issue_domain_credential_certificate(
+        self,
+        public_key: PublicKey,
+        extra_extensions: list[tuple[x509.ExtensionType, bool]] | None = None,
+    ) -> IssuedCredentialModel:
         """Issues a domain credential certificate.
 
         Args:
             public_key: The public key associated with the issued certificate.
+            extra_extensions: Optional list of additional certificate extensions to include.
+                If provided, these will override the default extensions (except BasicConstraints).
 
         Returns:
             The issued domain credential certificate model.
         """
         # TODO(AlexHx8472): Check matching public_key and signature suite.  # noqa: FIX002
 
+        if extra_extensions is None:
+            # Use default extensions
+            extensions = [(x509.BasicConstraints(ca=False, path_length=None), True)]
+        else:
+            # Use provided extensions, but ensure BasicConstraints is always included
+            extensions = [(x509.BasicConstraints(ca=False, path_length=None), True)]
+            extensions.extend(extra_extensions)
+
         certificate = self._build_certificate(
             common_name=self._pseudonym,
             public_key=public_key,
             validity_days=365,
-            extra_extensions=[(x509.BasicConstraints(ca=False, path_length=None), True)],
+            extra_extensions=extensions,
         )
 
         issued_domain_credential = self._save_keyless_credential(
