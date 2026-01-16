@@ -1,3 +1,4 @@
+# workflows/urls.py
 """URL configuration for the workflows app.
 
 Defines API endpoints and UI views for managing workflows,
@@ -10,16 +11,18 @@ from workflows.views import (
     BulkAbortEnrollmentRequestsView,
     BulkSignalEnrollmentRequestsView,
     CAListView,
-    ContextCatalogView,
     DefinitionDetailView,
     DeviceListView,
+    DeviceRequestDetailView,
     DomainListView,
     EnrollmentRequestDetailView,
-    EnrollmentRequestListView,
     EventsListView,
     MailTemplateListView,
+    RuntimeContextCatalogView,
     SignalEnrollmentRequestView,
     SignalInstanceView,
+    UnifiedRequestListView,
+    WizardContextCatalogView,
     WizardPrefillView,
     WorkflowDefinitionDeleteView,
     WorkflowDefinitionExportView,
@@ -40,10 +43,11 @@ urlpatterns = [
     path('api/events/', EventsListView.as_view(), name='api_events'),
     path('api/mail-templates/', MailTemplateListView.as_view(), name='api_mail_templates'),
     path('api/wizard-prefill/', WizardPrefillView.as_view(), name='api_wizard_prefill'),
+    path('api/wizard-context-catalog/', WizardContextCatalogView.as_view(), name='wizard_context_catalog'),
 
     # load one definition for “edit” in the wizard
     path('api/definitions/<uuid:pk>/', DefinitionDetailView.as_view(), name='definition_detail'),
-    path('api/context-catalog/<uuid:instance_id>/', ContextCatalogView.as_view(), name='context_catalog'),
+    path('api/runtime-context-catalog/<uuid:instance_id>/',RuntimeContextCatalogView.as_view(),name='runtime_context_catalog'),
 
     # main UI
     path('', WorkflowDefinitionListView.as_view(), name='definition_table'),
@@ -53,18 +57,17 @@ urlpatterns = [
     path('definitions/import/', WorkflowDefinitionImportView.as_view(), name='definition_import'),
 
     # delete workflow definition
-    path(
-        'definitions/<uuid:pk>/delete/',
-        WorkflowDefinitionDeleteView.as_view(),
-        name='definition_delete'
-    ),
+    path('definitions/<uuid:pk>/delete/', WorkflowDefinitionDeleteView.as_view(), name='definition_delete'),
 
-    # approval console
+    # approval console / instances
     path('wf-detail/<uuid:instance_id>/', WorkflowInstanceDetailView.as_view(), name='instance_detail'),
     path('instances/<uuid:instance_id>/signal/', SignalInstanceView.as_view(), name='signal'),
-    path('requests/', EnrollmentRequestListView.as_view(), name='request_table'),
+
+    # requests
+    path('requests/', UnifiedRequestListView.as_view(), name='request_table'),
     path('requests/<uuid:pk>/', EnrollmentRequestDetailView.as_view(), name='request_detail'),
     path('requests/bulk-abort/', BulkAbortEnrollmentRequestsView.as_view(), name='requests_bulk_abort'),
-    path('request/<uuid:er_id>/signal/', SignalEnrollmentRequestView.as_view(),name='request_signal'),
-    path('requests/bulk/signal/', BulkSignalEnrollmentRequestsView.as_view(),name='requests_bulk_signal'),
+    path('request/<uuid:er_id>/signal/', SignalEnrollmentRequestView.as_view(), name='request_signal'),
+    path('requests/bulk/signal/', BulkSignalEnrollmentRequestsView.as_view(), name='requests_bulk_signal'),
+    path('requests/device/<uuid:pk>/', DeviceRequestDetailView.as_view(), name='device_request_detail'),
 ]

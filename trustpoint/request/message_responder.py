@@ -24,36 +24,62 @@ class EstMessageResponder(AbstractMessageResponder):
     @staticmethod
     def build_response(context: RequestContext) -> None:
         """Respond to an EST message."""
-        if not context.enrollment_request:
-            exc_msg = 'No enrollment request is set in the context.'
-            raise ValueError(exc_msg)
+        req = getattr(context, 'enrollment_request', None)
+        if req is None:
+            if context.operation in {'simpleenroll', 'simplereenroll'}:
+                return EstCertificateMessageResponder().build_response(context)
 
-        workflow_state = context.enrollment_request.aggregated_state
-        if workflow_state == State.AWAITING:
+            context.http_response_status = 500
+            context.http_response_content_type = 'text/plain'
+            context.http_response_content = 'No suitable responder found for this EST message.'
+            return EstErrorMessageResponder().build_response(context)
+
+        # Ensure we use the latest aggregated_state derived from child instances.
+        # This is safe even if the handler already recomputed.
+        req.recompute_and_save()
+        req.refresh_from_db(fields=['aggregated_state', 'finalized', 'updated_at'])
+
+        # Pending states: request exists but not yet approved.
+        if req.aggregated_state in {State.AWAITING, State.RUNNING}:
             context.http_response_status = 202
             context.http_response_content_type = 'text/plain'
             context.http_response_content = 'Enrollment request pending manual approval.'
             # TODO(Air): Implement Retry-After header  # noqa: FIX002
             return None
-        if workflow_state == State.REJECTED:
-            context.enrollment_request.finalize(State.REJECTED)
+
+        # Terminal negative outcomes.
+        if req.aggregated_state == State.REJECTED:
+            req.finalize(State.REJECTED)
             context.http_response_status = 403
             context.http_response_content_type = 'text/plain'
-            context.http_response_content = 'Enrollment request Rejected.'
+            context.http_response_content = 'Enrollment request rejected.'
             return None
-        if workflow_state == State.FAILED:
+
+        if req.aggregated_state == State.ABORTED:
+            req.finalize(State.ABORTED)
+            context.http_response_status = 409
+            context.http_response_content_type = 'text/plain'
+            context.http_response_content = 'Enrollment request aborted.'
+            return None
+
+        if req.aggregated_state == State.FAILED:
             context.http_response_status = 500
             context.http_response_content_type = 'text/plain'
-            context.http_response_content = \
-                f'Workflow failed. Check here: -> /workflows/requests/{context.enrollment_request.id}'
+            context.http_response_content = (
+                f'Workflow failed. Check here: -> /workflows/requests/{req.id}'
+            )
             return None
-        if context.enrollment_request.is_valid() and context.operation in ['simpleenroll', 'simplereenroll']:
+
+        # Approved/successful outcomes: issue only for supported operations.
+        if req.is_valid() and context.operation in {'simpleenroll', 'simplereenroll'}:
             responder = EstCertificateMessageResponder()
-            context.enrollment_request.finalize(State.FINALIZED)
+            req.finalize(State.FINALIZED)
             return responder.build_response(context)
-        exc_msg = 'No suitable responder found for this EST message.'
+
+        # Unknown state or unsupported operation while gated by workflows.
         context.http_response_status = 500
-        context.http_response_content = exc_msg
+        context.http_response_content_type = 'text/plain'
+        context.http_response_content = 'No suitable responder found for this EST message.'
         return EstErrorMessageResponder().build_response(context)
 
 

@@ -8,17 +8,11 @@ from typing import TYPE_CHECKING, Any
 from django.conf import settings
 from django.template import TemplateSyntaxError, engines
 
-from util.email import (
-    EmailPayload,
-    MailTemplates,
-    normalize_addresses,
-    send_email,
-    send_simple,
-)
+from util.email import EmailPayload, MailTemplates, normalize_addresses, send_email, send_simple
 from workflows.models import State
 from workflows.services.context import build_context
 from workflows.services.executors.factory import AbstractStepExecutor
-from workflows.services.types import ExecutorResult
+from workflows.services.types import ExecutorResult, StepContext
 
 if TYPE_CHECKING:
     from workflows.models import WorkflowInstance
@@ -58,10 +52,12 @@ class EmailExecutor(AbstractStepExecutor):
 
         parts = self._prepare_recipients_and_context(params, instance)
         if not parts.to:
-            return self._error_result('Missing recipients')
+            return self._error_result(
+                'Missing recipients',
+                email_outputs=self._stable_email_outputs(parts=parts, mode=None, template=None, subject=None),
+            )
 
         template_key = (params.get('template') or '').strip()
-
         if template_key:
             return self._send_template_email(params, template_key, parts)
 
@@ -91,24 +87,63 @@ class EmailExecutor(AbstractStepExecutor):
         )
 
     @staticmethod
-    def _error_result(message: str, *, outputs: dict[str, Any] | None = None) -> ExecutorResult:
+    def _stable_email_outputs(
+        *,
+        parts: EmailParts | None,
+        mode: str | None,
+        template: str | None,
+        subject: str | None,
+    ) -> dict[str, Any]:
+        """Return a stable outputs.email shape for ctx.steps.<n>.outputs.email.*."""
+        return {
+            'mode': mode,
+            'template': template,
+            'subject': subject,
+            'recipients': list(parts.to) if parts else [],
+            'from': (parts.from_email if parts else None),
+            'cc': list(parts.cc) if parts else [],
+            'bcc': list(parts.bcc) if parts else [],
+        }
+
+    @staticmethod
+    def _error_result(
+        message: str,
+        *,
+        email_outputs: dict[str, Any] | None = None,
+        outputs: dict[str, Any] | None = None,
+    ) -> ExecutorResult:
         """Return a standardized FAILED result for this email step.
 
         Args:
             message: Human-readable error description.
-            outputs: Optional additional output fields to include in the context.
+            email_outputs: Stable outputs.email payload.
+            outputs: Optional extra outputs to include (merged alongside email).
 
         Returns:
             ExecutorResult with FAILED state and error details.
         """
+        out: dict[str, Any] = {}
+        if outputs:
+            out.update(outputs)
+
+        out['email'] = email_outputs or {
+            'mode': None,
+            'template': None,
+            'subject': None,
+            'recipients': [],
+            'from': None,
+            'cc': [],
+            'bcc': [],
+        }
+
         return ExecutorResult(
             status=State.FAILED,
-            context={
-                'type': 'Email',
-                'status': 'failed',
-                'error': message,
-                'outputs': outputs or {},
-            },
+            context=StepContext(
+                step_type='Email',
+                step_status='failed',
+                error=message,
+                outputs=out,
+            ),
         )
 
     # ---------------------- template mode ---------------------- #
@@ -124,7 +159,12 @@ class EmailExecutor(AbstractStepExecutor):
         if not tpl:
             return self._error_result(
                 f'Unknown template {template_key!r}',
-                outputs={},
+                email_outputs=self._stable_email_outputs(
+                    parts=parts,
+                    mode='template',
+                    template=template_key,
+                    subject=None,
+                ),
             )
 
         subject_src = (params.get('subject') or 'Notification').strip()
@@ -135,12 +175,22 @@ class EmailExecutor(AbstractStepExecutor):
         except TemplateSyntaxError as exc:
             return self._error_result(
                 f'Subject template error: {exc}',
-                outputs={'mode': 'template', 'template': template_key},
+                email_outputs=self._stable_email_outputs(
+                    parts=parts,
+                    mode='template',
+                    template=template_key,
+                    subject=None,
+                ),
             )
         except Exception as exc:  # noqa: BLE001
             return self._error_result(
                 str(exc),
-                outputs={'mode': 'template', 'template': template_key},
+                email_outputs=self._stable_email_outputs(
+                    parts=parts,
+                    mode='template',
+                    template=template_key,
+                    subject=None,
+                ),
             )
 
         try:
@@ -157,31 +207,29 @@ class EmailExecutor(AbstractStepExecutor):
         except Exception as exc:  # noqa: BLE001
             return self._error_result(
                 str(exc),
-                outputs={
-                    'mode': 'template',
-                    'template': template_key,
-                    'to': list(parts.to),
-                    'cc': list(parts.cc),
-                    'bcc': list(parts.bcc),
-                },
+                email_outputs=self._stable_email_outputs(
+                    parts=parts,
+                    mode='template',
+                    template=template_key,
+                    subject=subject,
+                ),
             )
 
         return ExecutorResult(
             status=State.PASSED,
-            context={
-                'type': 'Email',
-                'status': 'Sent',
-                'error': None,
-                'outputs': {
-                    'mode': 'template',
-                    'template': template_key,
-                    'subject': subject,
-                    'to': list(parts.to),
-                    'cc': list(parts.cc),
-                    'bcc': list(parts.bcc),
-                    'email': 'Sent',
+            context=StepContext(
+                step_type='Email',
+                step_status='passed',
+                error=None,
+                outputs={
+                    'email': self._stable_email_outputs(
+                        parts=parts,
+                        mode='template',
+                        template=template_key,
+                        subject=subject,
+                    ),
                 },
-            },
+            ),
         )
 
     # ---------------------- custom/plain-text mode ---------------------- #
@@ -195,7 +243,15 @@ class EmailExecutor(AbstractStepExecutor):
         subject_src = (params.get('subject') or '').strip()
         body_src = (params.get('body') or '').strip()
         if not subject_src or not body_src:
-            return self._error_result('Missing subject/body for custom email')
+            return self._error_result(
+                'Missing subject/body for custom email',
+                email_outputs=self._stable_email_outputs(
+                    parts=parts,
+                    mode='custom',
+                    template=None,
+                    subject=None,
+                ),
+            )
 
         subj_tpl_src = f'{{% autoescape off %}}{subject_src}{{% endautoescape %}}'
         body_tpl_src = f'{{% autoescape off %}}{body_src}{{% endautoescape %}}'
@@ -206,12 +262,22 @@ class EmailExecutor(AbstractStepExecutor):
         except TemplateSyntaxError as exc:
             return self._error_result(
                 f'Template syntax error: {exc}',
-                outputs={'mode': 'custom'},
+                email_outputs=self._stable_email_outputs(
+                    parts=parts,
+                    mode='custom',
+                    template=None,
+                    subject=None,
+                ),
             )
         except Exception as exc:  # noqa: BLE001
             return self._error_result(
                 str(exc),
-                outputs={'mode': 'custom'},
+                email_outputs=self._stable_email_outputs(
+                    parts=parts,
+                    mode='custom',
+                    template=None,
+                    subject=None,
+                ),
             )
 
         try:
@@ -226,22 +292,27 @@ class EmailExecutor(AbstractStepExecutor):
         except Exception as exc:  # noqa: BLE001
             return self._error_result(
                 str(exc),
-                outputs={'mode': 'custom', 'to': list(parts.to), 'cc': list(parts.cc), 'bcc': list(parts.bcc)},
+                email_outputs=self._stable_email_outputs(
+                    parts=parts,
+                    mode='custom',
+                    template=None,
+                    subject=subject,
+                ),
             )
 
         return ExecutorResult(
             status=State.PASSED,
-            context={
-                'type': 'Email',
-                'status': 'Sent',
-                'error': None,
-                'outputs': {
-                    'mode': 'custom',
-                    'subject': subject,
-                    'to': list(parts.to),
-                    'cc': list(parts.cc),
-                    'bcc': list(parts.bcc),
-                    'email': 'Sent',
+            context=StepContext(
+                step_type='Email',
+                step_status='passed',
+                error=None,
+                outputs={
+                    'email': self._stable_email_outputs(
+                        parts=parts,
+                        mode='custom',
+                        template=None,
+                        subject=subject,
+                    ),
                 },
-            },
+            ),
         )

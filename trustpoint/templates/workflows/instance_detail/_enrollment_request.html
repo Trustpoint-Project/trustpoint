@@ -1,0 +1,24 @@
+{% load i18n %}
+
+<h5 class="mb-3">{% trans 'Enrollment request' %}</h5>
+
+<dl class="row mb-0">
+  <dt class="col-sm-3">{% trans 'Enrollment request' %}</dt>
+  <dd class="col-sm-9">
+    <a href="{% url 'workflows:request_detail' enr.id %}">{{ enr.id }}</a>
+  </dd>
+
+  <dt class="col-sm-3">{% trans 'Enrollment request state' %}</dt>
+  <dd class="col-sm-9">
+    <span class="badge {{ enr.badge_class }}">{{ enr.aggregated_state }}</span>
+  </dd>
+
+  <dt class="col-sm-3">{% trans 'Template' %}</dt>
+  <dd class="col-sm-9">
+    {% if enr.template %}
+      {{ enr.template }}
+    {% else %}
+      <span class="text-muted">&mdash;</span>
+    {% endif %}
+  </dd>
+</dl>

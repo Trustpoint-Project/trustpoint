@@ -1,0 +1,31 @@
+{% load i18n %}
+
+<h5 class="mb-3">{% trans 'CSR details' %}</h5>
+
+{% if csr_info %}
+  {% if csr_info.error %}
+    <div class="alert alert-warning">{{ csr_info.error }}</div>
+  {% else %}
+    <ul>
+      <li><strong>{% trans 'Subject' %}:</strong> {{ csr_info.subject }}</li>
+      {% if csr_info.common_name %}
+        <li><strong>{% trans 'Common Name' %}:</strong> {{ csr_info.common_name }}</li>
+      {% endif %}
+      {% if csr_info.sans %}
+        <li><strong>{% trans 'SANs' %}:</strong> {{ csr_info.sans|join:", " }}</li>
+      {% endif %}
+      <li><strong>{% trans 'Key Algorithm' %}:</strong> {{ csr_info.key_algorithm }}</li>
+      <li><strong>{% trans 'Signature Algorithm' %}:</strong> {{ csr_info.signature_algorithm }}</li>
+    </ul>
+  {% endif %}
+{% else %}
+  <p class="text-muted">{% trans 'No CSR data available.' %}</p>
+{% endif %}
+
+{% if csr_pem %}
+  <hr>
+  <h6 class="mb-2">{% trans 'CSR PEM' %}</h6>
+  <div class="border rounded p-2 bg-light">
+    <pre class="mb-0" style="white-space: pre-wrap;">{{ csr_pem }}</pre>
+  </div>
+{% endif %}

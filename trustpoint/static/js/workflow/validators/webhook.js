@@ -11,9 +11,9 @@ export function validateWebhook(step, i, errors) {
   if (!['GET','POST','PUT','PATCH','DELETE'].includes(method)) {
     errors.push(`Step #${i} (Webhook): method must be one of GET, POST, PUT, PATCH, DELETE.`);
   }
-  const resultTo = (p.result_to || '').trim();
+  const resultTo = (p.webhook_variable || '').trim();
   if (resultTo && !isDotPath(resultTo)) {
-    errors.push(`Step #${i} (Webhook): result_to must be a variable path like "serial_number" or "http.status".`);
+    errors.push(`Step #${i} (Webhook): webhook_variable must be a variable path like "serial_number" or "http.status".`);
   }
   const resultSource = (p.result_source || 'auto').trim().toLowerCase();
   if (resultSource && !['auto','json','text','status','headers'].includes(resultSource)) {

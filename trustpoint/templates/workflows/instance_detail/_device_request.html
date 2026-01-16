@@ -1,0 +1,24 @@
+{% load i18n %}
+
+<h5 class="mb-3">{% trans 'Device request' %}</h5>
+
+<dl class="row mb-0">
+  <dt class="col-sm-3">{% trans 'Device request' %}</dt>
+  <dd class="col-sm-9">
+    <a href="{% url 'workflows:device_request_detail' dr.id %}">{{ dr.id }}</a>
+  </dd>
+
+  <dt class="col-sm-3">{% trans 'Action' %}</dt>
+  <dd class="col-sm-9">
+    {% if dr.action %}
+      {{ dr.action }}
+    {% else %}
+      <span class="text-muted">&mdash;</span>
+    {% endif %}
+  </dd>
+
+  <dt class="col-sm-3">{% trans 'Request state' %}</dt>
+  <dd class="col-sm-9">
+    <span class="badge {{ dr.badge_class }}">{{ dr.aggregated_state }}</span>
+  </dd>
+</dl>

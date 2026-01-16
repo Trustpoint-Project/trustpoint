@@ -1,10 +1,28 @@
-"""Validation helpers for the workflow wizard payload (server-side)."""
+"""Validation helpers for the workflow wizard payload (server-side).
+
+Validates the wizard JSON payload (as posted by the UI) before it is transformed/persisted.
+
+Key features:
+- Validates events against workflows.events.Events
+- Validates steps against registered executors (authoritative runtime contract)
+- Validates webhook/email step params
+- Validates templated strings compile (Django templates)
+- Blocks known-invalid template tokens like `ctx.vars.*`
+- Ensures every step has an id (failsafe for UI bugs)
+- Enforces: a step may not reference future step outputs via ctx.steps.<step_key>
+  (where <step_key> is the runtime-safe key derived from step id, e.g. "step-1" -> "step_1")
+- Validates transitions refer to existing step ids (when transitions are present)
+- Enforces event-dependent allowed step types (policy)
+"""
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, cast
 
+from django.template import TemplateSyntaxError, engines
 from django.utils.translation import gettext as _
 
 from util.email import normalize_addresses
@@ -54,11 +72,7 @@ def _known_event_triples() -> set[tuple[str, str, str]]:
 
 
 def _registered_step_types() -> set[str]:
-    """Return the set of registered step type identifiers.
-
-    Returns:
-        set[str]: Step type names as registered with the executor factory.
-    """
+    """Return the set of registered step type identifiers."""
     return StepExecutorFactory.registered_types()
 
 
@@ -67,6 +81,241 @@ def _positive_int(value: Any) -> bool:
         return int(value) > 0
     except Exception:  # noqa: BLE001
         return False
+
+
+def _safe_step_key(raw_id: str) -> str:
+    """Match the runtime 'safe key' behavior used in build_context() for ctx.steps keys.
+
+    - Replace any char not [A-Za-z0-9_] with '_'
+    - Ensure first char is alpha or '_'
+    """
+    if not raw_id:
+        return 'step'
+    out_chars: list[str] = []
+    for ch in raw_id:
+        if ch.isalnum() or ch == '_':
+            out_chars.append(ch)
+        else:
+            out_chars.append('_')
+    safe = ''.join(out_chars)
+    if not (safe[0].isalpha() or safe[0] == '_'):
+        safe = f's_{safe}'
+    return safe
+
+
+# ---------------------- payload shape helpers ----------------------
+
+
+def _get_definition(payload: dict[str, Any]) -> dict[str, Any]:
+    """Return the inner "definition" dict, supporting different shapes."""
+    d = payload.get('definition')
+    if isinstance(d, dict) and isinstance(d.get('definition'), dict):
+        return cast('dict[str, Any]', d['definition'])
+    return d if isinstance(d, dict) else payload
+
+
+def _get_steps(payload: dict[str, Any]) -> list[Any]:
+    d = _get_definition(payload)
+    steps = d.get('steps')
+    if isinstance(steps, list):
+        return steps
+    steps2 = payload.get('steps')
+    return steps2 if isinstance(steps2, list) else []
+
+
+def _get_events(payload: dict[str, Any]) -> list[Any]:
+    d = _get_definition(payload)
+    events = d.get('events')
+    if isinstance(events, list):
+        return events
+    events2 = payload.get('events')
+    return events2 if isinstance(events2, list) else []
+
+
+def _get_transitions(payload: dict[str, Any]) -> list[Any]:
+    d = _get_definition(payload)
+    transitions = d.get('transitions')
+    if isinstance(transitions, list):
+        return transitions
+    transitions2 = payload.get('transitions')
+    return transitions2 if isinstance(transitions2, list) else []
+
+
+def _get_primary_event(payload: dict[str, Any]) -> tuple[str, str, str]:
+    """Return (handler, protocol_lc, operation_lc) from the first event, or ('','','')."""
+    events = _get_events(payload)
+    if not events or not isinstance(events[0], dict):
+        return '', '', ''
+    e0 = events[0]
+    handler = str(e0.get('handler') or '').strip()
+    protocol = str(e0.get('protocol') or '').strip().lower()
+    operation = str(e0.get('operation') or '').strip().lower()
+    return handler, protocol, operation
+
+
+def _step_key_order_map(payload: dict[str, Any]) -> dict[str, int]:
+    """Map runtime-safe ctx.steps keys to their 1-based execution order index."""
+    out: dict[str, int] = {}
+    for i, s in enumerate(_get_steps(payload), start=1):
+        if not isinstance(s, dict):
+            continue
+        sid = s.get('id')
+        if isinstance(sid, str) and sid.strip():
+            out[_safe_step_key(sid)] = i
+    return out
+
+
+# ---------------------- templated-string validation ----------------------
+
+_FORBIDDEN_TPL_SUBSTRINGS = (
+    'ctx.vars.*',
+    '{{ ctx.vars.* }}',
+)
+
+
+def _contains_forbidden_template_tokens(s: str) -> str | None:
+    for bad in _FORBIDDEN_TPL_SUBSTRINGS:
+        if bad in s:
+            return bad
+    return None
+
+
+def _compile_django_template(src: str) -> str | None:
+    """Compile a Django template string and return error message, else None."""
+    dj = engines['django']
+    try:
+        dj.from_string(src)
+    except TemplateSyntaxError as exc:
+        return str(exc)
+    except Exception as exc:  # noqa: BLE001
+        return str(exc)
+    return None
+
+
+def _validate_templated_string(
+    *,
+    idx: int,
+    step_type: str,
+    field: str,
+    value: Any,
+    errors: list[str],
+) -> None:
+    """Validate a single templated string field."""
+    if value is None:
+        return
+    if not isinstance(value, str):
+        _error(errors, _('Step #%s (%s): %s must be a string if provided.') % (idx, step_type, field))
+        return
+
+    bad = _contains_forbidden_template_tokens(value)
+    if bad:
+        _error(
+            errors,
+            _(
+                "Step #%s (%s): '%s' is not valid in templates. "
+                "Use 'ctx.vars' (dict), or a specific key like 'ctx.vars.response'."
+            )
+            % (idx, step_type, bad),
+        )
+        return
+
+    msg = _compile_django_template(value)
+    if msg:
+        _error(errors, _('Step #%s (%s): template syntax error in %s: %s') % (idx, step_type, field, msg))
+
+
+# ---------------------- no-future-step-refs validation ----------------------
+
+# Match runtime keys: ctx.steps.<safe_key>
+_STEP_REF_RE = re.compile(r'\bctx\.steps\.([A-Za-z_][A-Za-z0-9_]*)\b')
+
+
+@dataclass(frozen=True, slots=True)
+class _StepFieldValidationCtx:
+    idx: int
+    step_type: str
+    errors: list[str]
+    key_order: dict[str, int]
+
+
+def _validate_no_future_step_refs(
+    ctx: _StepFieldValidationCtx,
+    *,
+    field: str,
+    value: Any,
+) -> None:
+    """Disallow references to ctx.steps.<key> where <key> belongs to a future step or is unknown."""
+    if not isinstance(value, str) or not value:
+        return
+
+    refs = [m.group(1) for m in _STEP_REF_RE.finditer(value)]
+    if not refs:
+        return
+
+    unknown = sorted({r for r in refs if r not in ctx.key_order})
+    if unknown:
+        _error(
+            ctx.errors,
+            _(
+                'Step #%s (%s): %s references unknown step key(s): %s. '
+                'Step keys must match the runtime-safe form derived from step ids '
+                '(e.g. id "step-1" becomes key "step_1").'
+            )
+            % (ctx.idx, ctx.step_type, field, ', '.join(unknown)),
+        )
+
+    future = sorted(
+        {r for r in refs if r in ctx.key_order and ctx.key_order[r] >= ctx.idx},
+        key=lambda k: ctx.key_order[k],
+    )
+    if future:
+        _error(
+            ctx.errors,
+            _(
+                'Step #%s (%s): %s references not-yet-executed step(s): %s. '
+                'A step may only reference already executed steps.'
+            )
+            % (ctx.idx, ctx.step_type, field, ', '.join(future)),
+        )
+
+
+# ---------------------- event-dependent allowed steps policy ----------------------
+
+
+def _allowed_step_types_for_event(payload: dict[str, Any]) -> set[str] | None:
+    """Return allowed step types for the current event, or None to allow all.
+
+    Current policy:
+    - handler == "device_action": disallow Approval
+    """
+    registered = _registered_step_types()
+    handler, _protocol, _operation = _get_primary_event(payload)
+
+    if handler == 'device_action':
+        return {t for t in registered if t != 'Approval'}
+
+    return None
+
+
+def _validate_step_types_allowed(payload: dict[str, Any], errors: list[str]) -> None:
+    allowed = _allowed_step_types_for_event(payload)
+    if allowed is None:
+        return
+
+    steps = _get_steps(payload)
+    for i, s in enumerate(steps, start=1):
+        if not isinstance(s, dict):
+            continue
+        st = s.get('type')
+        if isinstance(st, str) and st and st not in allowed:
+            handler, protocol, operation = _get_primary_event(payload)
+            _error(
+                errors,
+                _(
+                    'Step #%s: type "%s" is not allowed for event "%s" (protocol="%s", operation="%s").'
+                )
+                % (i, st, handler or '', protocol or '', operation or ''),
+            )
 
 
 # --------------------------- field checks ---------------------------
@@ -89,11 +338,8 @@ def _validate_headers_dict(val: Any) -> bool:
 
 def _validate_webhook_auth(val: Any) -> tuple[bool, str | None]:
     """Validate webhook auth object."""
-    ok = True
-    msg: str | None = None
-
     if val is None:
-        return ok, msg
+        return True, None
 
     if not isinstance(val, Mapping):
         return False, _('auth must be an object.')
@@ -101,17 +347,14 @@ def _validate_webhook_auth(val: Any) -> tuple[bool, str | None]:
     t = (val.get('type') or '').strip().lower()
     if t == 'basic':
         if not isinstance(val.get('username'), str) or not isinstance(val.get('password'), str):
-            ok = False
-            msg = _('auth.basic requires username and password (strings).')
+            return False, _('auth.basic requires username and password (strings).')
     elif t == 'bearer':
         if not isinstance(val.get('token'), str) or not val.get('token'):
-            ok = False
-            msg = _('auth.bearer requires a non-empty token (string).')
+            return False, _('auth.bearer requires a non-empty token (string).')
     else:
-        ok = False
-        msg = _('auth.type must be "basic" or "bearer".')
+        return False, _('auth.type must be "basic" or "bearer".')
 
-    return ok, msg
+    return True, None
 
 
 def _is_valid_from_path(s: str) -> bool:
@@ -121,7 +364,6 @@ def _is_valid_from_path(s: str) -> bool:
     if s in {'status', 'text', 'json', 'headers'}:
         return True
     if s.startswith(('json.', 'headers.')):
-        # After the prefix, enforce dotpath (letters/digits/_/.)
         return _is_dotpath(s)
     return False
 
@@ -129,23 +371,51 @@ def _is_valid_from_path(s: str) -> bool:
 # ---------------------------- per step -----------------------------
 
 
-def _validate_email_step(idx: int, params: dict[str, Any], errors: list[str]) -> None:
+def _validate_email_step(
+    idx: int,
+    params: dict[str, Any],
+    errors: list[str],
+    key_order: dict[str, int],
+) -> None:
     recips_raw = params.get('recipients', '')
     to: Sequence[str] = normalize_addresses(recips_raw)
     if not to:
         _error(errors, _('Step #%s (Email): at least one recipient is required.') % idx)
 
+    normalize_addresses(params.get('cc'))
+    normalize_addresses(params.get('bcc'))
+
     template = (params.get('template') or '').strip()
     subject = (params.get('subject') or '').strip()
     body = (params.get('body') or '').strip()
 
-    # Template mode skips subject/body requirements.
-    if template:
-        return
-    if not subject:
-        _error(errors, _('Step #%s (Email): subject is required in custom mode.') % idx)
-    if not body:
-        _error(errors, _('Step #%s (Email): body is required in custom mode.') % idx)
+    if not template:
+        if not subject:
+            _error(errors, _('Step #%s (Email): subject is required in custom mode.') % idx)
+        if not body:
+            _error(errors, _('Step #%s (Email): body is required in custom mode.') % idx)
+
+    ctx = _StepFieldValidationCtx(idx=idx, step_type='Email', errors=errors, key_order=key_order)
+
+    if subject:
+        _validate_templated_string(
+            idx=idx,
+            step_type='Email',
+            field='subject',
+            value=params.get('subject'),
+            errors=errors,
+        )
+        _validate_no_future_step_refs(ctx, field='subject', value=params.get('subject'))
+
+    if body:
+        _validate_templated_string(
+            idx=idx,
+            step_type='Email',
+            field='body',
+            value=params.get('body'),
+            errors=errors,
+        )
+        _validate_no_future_step_refs(ctx, field='body', value=params.get('body'))
 
 
 def _validate_approval_step(idx: int, params: dict[str, Any], errors: list[str]) -> None:
@@ -169,55 +439,103 @@ def _validate_condition_step(idx: int, params: dict[str, Any], errors: list[str]
         _error(errors, _('Step #%s (Condition): expression is required (string).') % idx)
 
 
-def _validate_webhook_basic_fields(
-    idx: int,
-    params: dict[str, Any],
-    errors: list[str],
-) -> None:
-    """URL, method, headers, body for webhook step."""
-    # url
-    url = (params.get('url') or '').strip()
-    if not _is_http_url(url):
-        _error(errors, _('Step #%s (Webhook): url is required and must start with http:// or https://.') % idx)
-
-    # method
-    method = (params.get('method') or 'POST').upper()
+def _validate_webhook_method_and_body(idx: int, *, method: str, body: Any, errors: list[str]) -> None:
     if method not in _ALLOWED_METHODS:
         _error(
             errors,
             _('Step #%s (Webhook): method must be one of %s.') % (idx, ', '.join(sorted(_ALLOWED_METHODS))),
         )
+        return
 
-    # headers
-    headers = params.get('headers')
+    if method == 'GET' and body not in (None, '', {}):
+        _error(errors, _('Step #%s (Webhook): body is not allowed for GET requests.') % idx)
+        return
+
+    if body is not None and not isinstance(body, (str, Mapping, list)):
+        _error(errors, _('Step #%s (Webhook): body must be a string, object, or array if provided.') % idx)
+
+
+def _validate_webhook_headers(idx: int, headers: Any, errors: list[str]) -> None:
     if headers is not None and not _validate_headers_dict(headers):
         _error(
             errors,
             _(
-                'Step #%s (Webhook): headers must be an object of string keys and string/number values.'
+                'Step #%s (Webhook): headers must be an object of string keys '
+                'and string/number values.'
             )
             % idx,
         )
 
-    # body
-    body = params.get('body')
-    if method == 'GET' and body not in (None, '', {}):
-        _error(errors, _('Step #%s (Webhook): body is not allowed for GET requests.') % idx)
-    elif body is not None and not isinstance(body, (str, Mapping, list)):
-        _error(errors, _('Step #%s (Webhook): body must be a string, object, or array if provided.') % idx)
 
-
-def _validate_webhook_auth_and_timeout(
+def _validate_webhook_templated_parts(
     idx: int,
     params: dict[str, Any],
     errors: list[str],
+    key_order: dict[str, int],
 ) -> None:
-    """Auth and timeout for webhook step."""
+    ctx = _StepFieldValidationCtx(idx=idx, step_type='Webhook', errors=errors, key_order=key_order)
+
+    url_val = params.get('url')
+    if isinstance(url_val, str) and url_val.strip():
+        _validate_templated_string(
+            idx=idx,
+            step_type='Webhook',
+            field='url',
+            value=url_val,
+            errors=errors,
+        )
+        _validate_no_future_step_refs(ctx, field='url', value=url_val)
+
+    headers = params.get('headers')
+    if isinstance(headers, Mapping):
+        for hk, hv in headers.items():
+            if isinstance(hv, str) and hv:
+                _validate_templated_string(
+                    idx=idx,
+                    step_type='Webhook',
+                    field=f'headers.{hk}',
+                    value=hv,
+                    errors=errors,
+                )
+                _validate_no_future_step_refs(ctx, field=f'headers.{hk}', value=hv)
+
+    body = params.get('body')
+    if isinstance(body, str) and body.strip():
+        _validate_templated_string(
+            idx=idx,
+            step_type='Webhook',
+            field='body',
+            value=body,
+            errors=errors,
+        )
+        _validate_no_future_step_refs(ctx, field='body', value=body)
+
+
+def _validate_webhook_basic_fields(
+    idx: int,
+    params: dict[str, Any],
+    errors: list[str],
+    key_order: dict[str, int],
+) -> None:
+    url = (params.get('url') or '').strip()
+    if not _is_http_url(url):
+        _error(errors, _('Step #%s (Webhook): url is required and must start with http:// or https://.') % idx)
+
+    method = (params.get('method') or 'POST').upper()
+    body = params.get('body')
+    _validate_webhook_method_and_body(idx, method=method, body=body, errors=errors)
+
+    headers = params.get('headers')
+    _validate_webhook_headers(idx, headers, errors)
+
+    _validate_webhook_templated_parts(idx, params, errors, key_order)
+
+
+def _validate_webhook_auth_and_timeout(idx: int, params: dict[str, Any], errors: list[str]) -> None:
     ok, msg = _validate_webhook_auth(params.get('auth'))
     if not ok:
         _error(errors, _('Step #%s (Webhook): %s') % (idx, msg or _('invalid auth')))
 
-    # timeout
     tmo = params.get('timeoutSecs')
     if tmo is None:
         return
@@ -229,43 +547,31 @@ def _validate_webhook_auth_and_timeout(
         return
 
     if not (1 <= tmo_i <= _WEBHOOK_MAX_TIMEOUT_SECS):
-        _error(
-            errors,
-            _('Step #%s (Webhook): timeoutSecs must be between 1 and 120.') % idx,
-        )
+        _error(errors, _('Step #%s (Webhook): timeoutSecs must be between 1 and 120.') % idx)
 
 
-def _validate_webhook_result_mapping(
-    idx: int,
-    params: dict[str, Any],
-    errors: list[str],
-) -> None:
-    """result_to/result_source/exports for webhook step."""
-    # result_to/result_source (optional but must be valid if present)
-    result_to = (params.get('result_to') or '').strip()
-    if result_to and not _is_bare_var_path(result_to):
+def _validate_webhook_variable_mapping(idx: int, params: dict[str, Any], errors: list[str]) -> None:
+    webhook_variable = (params.get('webhook_variable') or '').strip()
+    if webhook_variable and not _is_bare_var_path(webhook_variable):
         _error(
             errors,
             _(
-                'Step #%s (Webhook): result_to must be a variable path like "serial_number" or "http.status".'
+                "Step #%s (Webhook): webhook_variable must be a variable path like "
+                "'serial_number' or 'http.status'."
             )
             % idx,
         )
 
     result_source = (params.get('result_source') or 'auto').strip().lower()
     if result_source and result_source not in {'auto', 'json', 'text', 'status', 'headers'}:
-        _error(
-            errors,
-            _('Step #%s (Webhook): result_source must be one of auto/json/text/status/headers.') % idx,
-        )
+        _error(errors, _('Step #%s (Webhook): result_source must be one of auto/json/text/status/headers.') % idx)
 
-    # exports (fine-grained mappings)
     if 'export' in params and 'exports' not in params:
         _error(
             errors,
             _(
-                'Step #%s (Webhook): use "exports": [ {"from_path":"json.foo","to_path":"my.foo"} ] '
-                'instead of legacy "export" mapping.'
+                "Step #%s (Webhook): use 'exports': [ {'from_path':'json.foo','to_path':'my.foo'} ] "
+                "instead of legacy 'export' mapping."
             )
             % idx,
         )
@@ -288,8 +594,8 @@ def _validate_webhook_result_mapping(
             _error(
                 errors,
                 _(
-                    'Step #%s (Webhook): export #%s from_path must be one of '
-                    '"status", "text", "json[.path]" or "headers[.path]".'
+                    "Step #%s (Webhook): export #%s from_path must be one of "
+                    "'status', 'text', 'json[.path]' or 'headers[.path]'."
                 )
                 % (idx, j),
             )
@@ -298,21 +604,26 @@ def _validate_webhook_result_mapping(
             _error(
                 errors,
                 _(
-                    'Step #%s (Webhook): export #%s to_path must be a variable path like '
-                    '"serial_number" or "http.status" (no "vars." prefix).'
+                    "Step #%s (Webhook): export #%s to_path must be a variable path like "
+                    "'serial_number' or 'http.status' (no 'vars.' prefix)."
                 )
                 % (idx, j),
             )
         elif tp in seen_to:
-            _error(errors, _('Step #%s (Webhook): duplicate to_path "%s" in exports.') % (idx, tp))
+            _error(errors, _("Step #%s (Webhook): duplicate to_path '%s' in exports.") % (idx, tp))
         else:
             seen_to.add(tp)
 
 
-def _validate_webhook_step(idx: int, params: dict[str, Any], errors: list[str]) -> None:
-    _validate_webhook_basic_fields(idx, params, errors)
+def _validate_webhook_step(
+    idx: int,
+    params: dict[str, Any],
+    errors: list[str],
+    key_order: dict[str, int],
+) -> None:
+    _validate_webhook_basic_fields(idx, params, errors, key_order)
     _validate_webhook_auth_and_timeout(idx, params, errors)
-    _validate_webhook_result_mapping(idx, params, errors)
+    _validate_webhook_variable_mapping(idx, params, errors)
 
 
 # ---------------------------- top-level -----------------------------
@@ -325,8 +636,8 @@ def _validate_name(payload: dict[str, Any], errors: list[str]) -> None:
 
 
 def _validate_events(payload: dict[str, Any], errors: list[str]) -> None:
-    events = payload.get('events')
-    if not isinstance(events, list) or not events:
+    events = _get_events(payload)
+    if not events:
         _error(errors, _('At least one event is required.'))
         return
 
@@ -337,7 +648,7 @@ def _validate_events(payload: dict[str, Any], errors: list[str]) -> None:
             continue
 
         handler = (t.get('handler') or '').strip()
-        protocol = (t.get('protocol') or '').strip().lower()  # canonical lower
+        protocol = (t.get('protocol') or '').strip().lower()
         operation = (t.get('operation') or '').strip()
 
         if not handler:
@@ -346,14 +657,33 @@ def _validate_events(payload: dict[str, Any], errors: list[str]) -> None:
 
         needs_po = handler == 'certificate_request'
         if needs_po and (not protocol or not operation):
-            _error(
-                errors,
-                _('Event #%s: protocol and operation are required for certificate_request.') % i,
-            )
+            _error(errors, _('Event #%s: protocol and operation are required for certificate_request.') % i)
 
         key = (handler, protocol, operation) if needs_po else (handler, protocol or '', operation or '')
         if key not in triples:
             _error(errors, _('Event #%s: unknown handler/protocol/operation combination.') % i)
+
+
+def _ensure_step_ids(payload: dict[str, Any], errors: list[str]) -> None:
+    """Ensure every step has an id. If missing, inject 'step-<n>'.
+
+    This is a failsafe for UI bugs; it keeps the backend stable enough to validate.
+    """
+    steps = _get_steps(payload)
+    if not steps:
+        return
+
+    seen: set[str] = set()
+    for i, s in enumerate(steps, start=1):
+        if not isinstance(s, dict):
+            continue
+        sid = s.get('id')
+        if not isinstance(sid, str) or not sid.strip():
+            sid = f'step-{i}'
+            s['id'] = sid
+        if sid in seen:
+            _error(errors, _("Duplicate step id '%s'. Step ids must be unique.") % sid)
+        seen.add(sid)
 
 
 def _validate_single_step(
@@ -361,15 +691,23 @@ def _validate_single_step(
     step: Any,
     registered: set[str],
     errors: list[str],
+    key_order: dict[str, int],
 ) -> None:
-    """Validate a single step object."""
     if not isinstance(step, dict):
         _error(errors, _('Step #%s is not an object.') % idx)
         return
 
+    sid = step.get('id')
+    if not isinstance(sid, str) or not sid.strip():
+        _error(errors, _('Step #%s: id is required and must be a string.') % idx)
+
     stype = step.get('type')
     if stype not in registered:
-        _error(errors, _('Step #%s: unknown type "%s".') % (idx, stype))
+        _error(
+            errors,
+            _('Step #%s: unknown type "%s". Supported types: %s.')
+            % (idx, stype, ', '.join(sorted(registered)) or '<none>'),
+        )
         return
 
     params = step.get('params') or {}
@@ -378,27 +716,49 @@ def _validate_single_step(
         return
 
     if stype == 'Email':
-        _validate_email_step(idx, params, errors)
+        _validate_email_step(idx, params, errors, key_order)
     elif stype == 'Webhook':
-        _validate_webhook_step(idx, params, errors)
-    elif stype == 'Timer':
-        _validate_timer_step(idx, params, errors)
+        _validate_webhook_step(idx, params, errors, key_order)
     elif stype == 'Approval':
         _validate_approval_step(idx, params, errors)
+    elif stype == 'Timer':
+        _validate_timer_step(idx, params, errors)
     elif stype == 'Condition':
         _validate_condition_step(idx, params, errors)
-    # other step types currently have no extra server-side rules
 
 
 def _validate_steps(payload: dict[str, Any], errors: list[str]) -> None:
-    steps = payload.get('steps')
-    if not isinstance(steps, list) or not steps:
+    steps = _get_steps(payload)
+    if not steps:
         _error(errors, _('At least one step is required.'))
         return
 
     registered = _registered_step_types()
+    key_order = _step_key_order_map(payload)
+
     for i, step in enumerate(steps, start=1):
-        _validate_single_step(i, step, registered, errors)
+        _validate_single_step(i, step, registered, errors, key_order)
+
+
+def _validate_transitions(payload: dict[str, Any], errors: list[str]) -> None:
+    transitions = _get_transitions(payload)
+    if not transitions:
+        return
+
+    steps = _get_steps(payload)
+    step_ids = {s.get('id') for s in steps if isinstance(s, dict) and isinstance(s.get('id'), str)}
+
+    for i, t in enumerate(transitions, start=1):
+        if not isinstance(t, dict):
+            _error(errors, _('Transition #%s is not an object.') % i)
+            continue
+
+        frm = t.get('from')
+        to = t.get('to')
+        if frm not in step_ids:
+            _error(errors, _("Transition #%s: from '%s' does not match any step id.") % (i, frm))
+        if to not in step_ids:
+            _error(errors, _("Transition #%s: to '%s' does not match any step id.") % (i, to))
 
 
 def _validate_scopes(payload: dict[str, Any], errors: list[str]) -> None:
@@ -424,12 +784,20 @@ def validate_wizard_payload(payload: dict[str, Any]) -> list[str]:
         payload: Raw wizard configuration payload as a dictionary.
 
     Returns:
-        list[str]: A list of human-readable error messages. The list is empty
-        if the payload passes all validation checks.
+        list[str]: Human-readable error messages. Empty if valid.
     """
     errors: list[str] = []
+
+    # Failsafe: ensure step ids exist (mutates payload)
+    _ensure_step_ids(payload, errors)
+
     _validate_name(payload, errors)
     _validate_events(payload, errors)
+
+    # Event-dependent step policy (enforced server-side)
+    _validate_step_types_allowed(payload, errors)
+
     _validate_steps(payload, errors)
+    _validate_transitions(payload, errors)
     _validate_scopes(payload, errors)
     return errors

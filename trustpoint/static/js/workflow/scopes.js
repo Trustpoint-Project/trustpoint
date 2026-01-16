@@ -6,6 +6,7 @@ export async function initScopesUI({typeEl, multiEl, addBtnEl, listEl, onChange}
 
   typeEl.onchange = async () => {
     await loadChoices(typeEl.value, multiEl);
+    // Note: preview is rendered by onChange() in main.js; do not call it twice here.
   };
 
   addBtnEl.onclick = () => {
@@ -22,7 +23,12 @@ export async function initScopesUI({typeEl, multiEl, addBtnEl, listEl, onChange}
 async function loadChoices(kind, multiEl) {
   try {
     const list = await api.scopes(kind);
+
+    // Keep the name cache for this kind deterministic.
+    state.scopesChoices[kind].clear();
     list.forEach(it => state.scopesChoices[kind].set(String(it.id), it.name));
+
+    // Populate the select
     multiEl.innerHTML = '';
     list.forEach(it => multiEl.add(new Option(it.name, it.id)));
   } catch {

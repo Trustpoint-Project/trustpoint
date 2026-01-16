@@ -9,7 +9,7 @@ register('Webhook', {
     return {
       url: '',
       method: 'POST',
-      result_to: '',
+      webhook_variable: '',
       result_source: 'auto',
       // (optional future: exports: [{ from_path, to_path }, ...])
     };
@@ -55,8 +55,8 @@ register('Webhook', {
       'Save response to (variable path)',
       ui.input({
         type: 'text',
-        value: step.params.result_to || '',
-        onInput: (v) => { updateStepParam(step.id, 'result_to', v); onChange(); },
+        value: step.params.webhook_variable || '',
+        onInput: (v) => { updateStepParam(step.id, 'webhook_variable', v); onChange(); },
       }),
     )));
     rowTop.appendChild(ui.col(ui.labeledNode(

@@ -1,0 +1,32 @@
+{% load i18n %}
+
+<h5 class="mb-3">{% trans 'Actions' %}</h5>
+
+<div class="d-flex flex-wrap gap-2">
+
+  {% if can_signal %}
+    <form method="post" action="{% url 'workflows:signal' inst.id %}" class="d-inline">
+      {% csrf_token %}
+      <button type="submit" name="action" value="approve" class="btn btn-success me-2">
+        {% trans 'Approve' %}
+      </button>
+      <button type="submit" name="action" value="reject" class="btn btn-danger me-2">
+        {% trans 'Reject' %}
+      </button>
+    </form>
+  {% endif %}
+
+  {% if runtime_catalog_url %}
+    <a class="btn btn-outline-secondary"
+       href="{{ runtime_catalog_url }}"
+       target="_blank"
+       rel="noopener">
+      {% trans 'Runtime context (JSON)' %}
+    </a>
+  {% endif %}
+
+  <button type="button" class="btn btn-secondary" onClick="history.back()">
+    {% trans 'Back' %}
+  </button>
+
+</div>
