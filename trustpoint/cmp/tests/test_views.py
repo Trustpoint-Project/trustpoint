@@ -19,10 +19,20 @@ def request_factory():
 @pytest.fixture
 def mock_request_context():
     """Mock CmpCertificateRequestContext."""
+    from django.http import HttpResponse
+    
     ctx = Mock()
     ctx.http_response_content = b'test response'
     ctx.http_response_status = 200
     ctx.http_response_content_type = 'application/pkixcmp'
+    
+    # Mock to_http_response to return actual HttpResponse
+    ctx.to_http_response.return_value = HttpResponse(
+        content=ctx.http_response_content,
+        status=ctx.http_response_status,
+        content_type=ctx.http_response_content_type
+    )
+    
     return ctx
 
 
