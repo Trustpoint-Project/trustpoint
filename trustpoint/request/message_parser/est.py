@@ -54,6 +54,7 @@ class EstAuthorizationHeaderParsing(ParsingComponent, LoggerMixin):
         except Exception as e:
             error_message = "Malformed 'Authorization' header credentials."
             self.logger.warning('Authorization header validation failed: Malformed credentials - %s', e)
+            context.error(error_message, http_status=401)
             raise ValueError(error_message) from e
 
 

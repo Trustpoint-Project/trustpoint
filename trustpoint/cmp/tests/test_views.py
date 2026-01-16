@@ -18,7 +18,7 @@ def request_factory():
 
 @pytest.fixture
 def mock_request_context():
-    """Mock RequestContext."""
+    """Mock CmpCertificateRequestContext."""
     ctx = Mock()
     ctx.http_response_content = b'test response'
     ctx.http_response_status = 200
@@ -48,7 +48,7 @@ class TestCmpInitializationRequestView:
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
-    @patch('cmp.views.RequestContext')
+    @patch('cmp.views.CmpCertificateRequestContext')
     def test_post_initialization_with_domain_only(
         self,
         mock_context_cls,
@@ -70,7 +70,7 @@ class TestCmpInitializationRequestView:
         
         response = view.post(request, domain_name='test_domain')
         
-        # Verify RequestContext was created with correct parameters
+        # Verify CmpCertificateRequestContext was created with correct parameters
         mock_context_cls.assert_called_once()
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['domain_str'] == 'test_domain'
@@ -99,7 +99,7 @@ class TestCmpInitializationRequestView:
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
-    @patch('cmp.views.RequestContext')
+    @patch('cmp.views.CmpCertificateRequestContext')
     def test_post_initialization_with_certificate_profile(
         self,
         mock_context_cls,
@@ -121,7 +121,7 @@ class TestCmpInitializationRequestView:
         
         response = view.post(request, domain_name='test_domain', certificate_profile='tls_client')
         
-        # Verify RequestContext was created with correct profile
+        # Verify CmpCertificateRequestContext was created with correct profile
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['cert_profile_str'] == 'tls_client'
         
@@ -135,7 +135,7 @@ class TestCmpInitializationRequestView:
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
-    @patch('cmp.views.RequestContext')
+    @patch('cmp.views.CmpCertificateRequestContext')
     def test_post_authorization_with_correct_operations(
         self,
         mock_context_cls,
@@ -182,7 +182,7 @@ class TestCmpCertificationRequestView:
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
-    @patch('cmp.views.RequestContext')
+    @patch('cmp.views.CmpCertificateRequestContext')
     def test_post_certification_with_domain_only(
         self,
         mock_context_cls,
@@ -204,7 +204,7 @@ class TestCmpCertificationRequestView:
         
         response = view.post(request, domain_name='test_domain')
         
-        # Verify RequestContext was created with correct parameters
+        # Verify CmpCertificateRequestContext was created with correct parameters
         mock_context_cls.assert_called_once()
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['domain_str'] == 'test_domain'
@@ -233,7 +233,7 @@ class TestCmpCertificationRequestView:
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
-    @patch('cmp.views.RequestContext')
+    @patch('cmp.views.CmpCertificateRequestContext')
     def test_post_certification_with_certificate_profile(
         self,
         mock_context_cls,
@@ -255,7 +255,7 @@ class TestCmpCertificationRequestView:
         
         response = view.post(request, domain_name='test_domain', certificate_profile='tls_server')
         
-        # Verify RequestContext was created with correct profile
+        # Verify CmpCertificateRequestContext was created with correct profile
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['cert_profile_str'] == 'tls_server'
         
@@ -269,7 +269,7 @@ class TestCmpCertificationRequestView:
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
-    @patch('cmp.views.RequestContext')
+    @patch('cmp.views.CmpCertificateRequestContext')
     def test_post_authorization_with_certification_operation(
         self,
         mock_context_cls,
