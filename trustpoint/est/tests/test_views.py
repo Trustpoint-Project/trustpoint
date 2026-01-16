@@ -178,12 +178,24 @@ def test_process_enrollment_success(
     request_factory,
 ):
     """Test successful enrollment processing."""
+    from django.http import HttpResponse
+    
     # Setup mocks
     mock_ctx = Mock(spec=EstCertificateRequestContext)
     mock_ctx.http_response_content = b'Certificate issued'
     mock_ctx.http_response_status = 200
     mock_ctx.http_response_content_type = 'application/pkcs7-mime'
     mock_request_context.return_value = mock_ctx
+    
+    # Configure parser mock to return the context
+    mock_parser.return_value.parse.return_value = mock_ctx
+    
+    # Mock to_http_response to return actual HttpResponse
+    mock_ctx.to_http_response.return_value = HttpResponse(
+        content=mock_ctx.http_response_content,
+        status=mock_ctx.http_response_status,
+        content_type=mock_ctx.http_response_content_type
+    )
     
     # Create view and request
     mixin = EstSimpleEnrollmentMixin()
@@ -235,11 +247,20 @@ def test_process_enrollment_validation_failure(
     mock_request_context, mock_validator, mock_error_responder, request_factory
 ):
     """Test enrollment processing when validation fails."""
+    from django.http import HttpResponse
+    
     mock_ctx = Mock(spec=EstCertificateRequestContext)
     mock_ctx.http_response_content = b'Validation error'
     mock_ctx.http_response_status = 400
     mock_ctx.http_response_content_type = 'text/plain'
     mock_request_context.return_value = mock_ctx
+    
+    # Mock to_http_response to return actual HttpResponse
+    mock_ctx.to_http_response.return_value = HttpResponse(
+        content=mock_ctx.http_response_content,
+        status=mock_ctx.http_response_status,
+        content_type=mock_ctx.http_response_content_type
+    )
     
     mock_validator.return_value.validate.side_effect = Exception('Validation failed')
     
@@ -388,12 +409,24 @@ def test_est_simple_reenrollment_view_post_success(
     request_factory,
 ):
     """Test successful reenrollment via POST."""
+    from django.http import HttpResponse
+    
     # Setup mocks
     mock_ctx = MagicMock(spec=EstCertificateRequestContext)
     mock_ctx.http_response_content = b'Certificate renewed'
     mock_ctx.http_response_status = 200
     mock_ctx.http_response_content_type = 'application/pkcs7-mime'
     mock_request_context.return_value = mock_ctx
+    
+    # Configure parser mock to return the context
+    mock_parser.return_value.parse.return_value = mock_ctx
+    
+    # Mock to_http_response to return actual HttpResponse
+    mock_ctx.to_http_response.return_value = HttpResponse(
+        content=mock_ctx.http_response_content,
+        status=mock_ctx.http_response_status,
+        content_type=mock_ctx.http_response_content_type
+    )
     
     # Create view and request
     view = EstSimpleReEnrollmentView.as_view()
@@ -447,11 +480,20 @@ def test_est_simple_reenrollment_view_post_authentication_failure(
     mock_request_context, mock_validator, mock_auth, mock_error_responder, request_factory
 ):
     """Test reenrollment when authentication fails."""
+    from django.http import HttpResponse
+    
     mock_ctx = Mock(spec=EstCertificateRequestContext)
     mock_ctx.http_response_content = b'Authentication error'
     mock_ctx.http_response_status = 401
     mock_ctx.http_response_content_type = 'text/plain'
     mock_request_context.return_value = mock_ctx
+    
+    # Mock to_http_response to return actual HttpResponse
+    mock_ctx.to_http_response.return_value = HttpResponse(
+        content=mock_ctx.http_response_content,
+        status=mock_ctx.http_response_status,
+        content_type=mock_ctx.http_response_content_type
+    )
     
     mock_auth.return_value.authenticate.side_effect = Exception('Auth failed')
     

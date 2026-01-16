@@ -165,7 +165,7 @@ class TestESTHelper(LoggerMixin):
             f"Client certificate common name '{client_cert_cn}' does not match expected '{expected_cert_cn}'"
 
         # Parse request
-        parser.parse(mock_context)
+        mock_context = parser.parse(mock_context)
 
         assert mock_context.cert_requested is not None
         assert isinstance(mock_context.cert_requested, x509.CertificateSigningRequest), \
