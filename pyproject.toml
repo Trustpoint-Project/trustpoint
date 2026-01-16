@@ -68,6 +68,7 @@ docs = [
     "sphinxcontrib-plantuml>=0.30",
     "furo >= 2024.8.6",
     "pillow >= 11.2.1",
+    "sphinxcontrib-openapi>=0.8.4",
 ]
 
 [build-system]
