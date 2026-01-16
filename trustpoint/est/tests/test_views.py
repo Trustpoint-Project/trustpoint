@@ -185,6 +185,9 @@ def test_process_enrollment_success(
     mock_ctx.http_response_content_type = 'application/pkcs7-mime'
     mock_request_context.return_value = mock_ctx
     
+    # Configure parser mock to return the context
+    mock_parser.return_value.parse.return_value = mock_ctx
+    
     # Create view and request
     mixin = EstSimpleEnrollmentMixin()
     request = request_factory.post(
@@ -394,6 +397,9 @@ def test_est_simple_reenrollment_view_post_success(
     mock_ctx.http_response_status = 200
     mock_ctx.http_response_content_type = 'application/pkcs7-mime'
     mock_request_context.return_value = mock_ctx
+    
+    # Configure parser mock to return the context
+    mock_parser.return_value.parse.return_value = mock_ctx
     
     # Create view and request
     view = EstSimpleReEnrollmentView.as_view()
