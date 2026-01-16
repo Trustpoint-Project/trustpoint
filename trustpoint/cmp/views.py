@@ -11,12 +11,13 @@ from django.views.generic.base import View
 from est.views import LoggedHttpResponse  # TEMP
 from request.authentication import CmpAuthentication
 from request.authorization import CmpAuthorization
-from request.cmp_responder import CmpMessageResponder
-from request.http_request_validator import CmpHttpRequestValidator
+from request.message_parser import CmpMessageParser
+from request.message_responder.cmp import CmpMessageResponder
 from request.operation_processor import CertificateIssueProcessor
-from request.pki_message_parser import CmpMessageParser
 from request.profile_validator import ProfileValidator
-from request.request_context import RequestContext
+from request.request_context import BaseRequestContext, CmpCertificateRequestContext
+from request.request_validator.http_req import CmpHttpRequestValidator
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from typing import Any
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class CmpInitializationRequestView(View):
+class CmpInitializationRequestView(LoggerMixin, View):
     """Handles CMP Initialization Request Messages."""
 
     http_method_names = ('post',)
@@ -42,41 +43,48 @@ class CmpInitializationRequestView(View):
         # Default to 'domain_credential' if not provided
         cert_profile = cast('str', kwargs.get('certificate_profile', 'domain_credential'))
 
-        ctx = RequestContext(
-            raw_message=request,
-            domain_str=domain_name,
-            protocol='cmp',
-            operation='initialization',
-            cert_profile_str=cert_profile
+        ctx: BaseRequestContext
+        try:
+            ctx = CmpCertificateRequestContext(
+                raw_message=request,
+                domain_str=domain_name,
+                protocol='cmp',
+                operation='initialization',
+                cert_profile_str=cert_profile
         )
+        except Exception:
+            err_msg = 'Failed to set up CMP request context.'
+            self.logger.exception(err_msg)
+            return LoggedHttpResponse(err_msg, status=500)
 
-        validator = CmpHttpRequestValidator()
-        validator.validate(ctx)
+        try:
+            validator = CmpHttpRequestValidator()
+            validator.validate(ctx)
 
-        parser = CmpMessageParser()
-        parser.parse(ctx)
+            parser = CmpMessageParser()
+            ctx = parser.parse(ctx)
 
-        authenticator = CmpAuthentication()
-        authenticator.authenticate(ctx)
+            authenticator = CmpAuthentication()
+            authenticator.authenticate(ctx)
 
-        authorizer = CmpAuthorization(
-            ['initialization', 'certification']
-        )
-        authorizer.authorize(ctx)
+            authorizer = CmpAuthorization(
+                ['initialization', 'certification']
+            )
+            authorizer.authorize(ctx)
 
-        ProfileValidator.validate(ctx)
+            ProfileValidator.validate(ctx)
 
-        CertificateIssueProcessor().process_operation(ctx)
+            CertificateIssueProcessor().process_operation(ctx)
+        except Exception:
+            self.logger.exception('Error processing CMP request')
 
         CmpMessageResponder.build_response(ctx)
 
-        return LoggedHttpResponse(content=ctx.http_response_content or b'',
-                                  status=ctx.http_response_status,
-                                  content_type=ctx.http_response_content_type)
+        return ctx.to_http_response()
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-class CmpCertificationRequestView(View):
+class CmpCertificationRequestView(LoggerMixin, View):
     """Handles CMP Certification Request Messages."""
 
     http_method_names = ('post',)
@@ -93,34 +101,41 @@ class CmpCertificationRequestView(View):
         # Default to 'tls_client' if not provided (TBD)
         cert_profile = cast('str', kwargs.get('certificate_profile', 'tls_client'))
 
-        ctx = RequestContext(
-            raw_message=request,
-            domain_str=domain_name,
-            protocol='cmp',
-            operation='certification',
-            cert_profile_str=cert_profile
-        )
+        ctx: BaseRequestContext
+        try:
+            ctx = CmpCertificateRequestContext(
+                raw_message=request,
+                domain_str=domain_name,
+                protocol='cmp',
+                operation='certification',
+                cert_profile_str=cert_profile
+            )
+        except Exception:
+            err_msg = 'Failed to set up CMP request context.'
+            self.logger.exception(err_msg)
+            return LoggedHttpResponse(err_msg, status=500)
 
-        validator = CmpHttpRequestValidator()
-        validator.validate(ctx)
+        try:
+            validator = CmpHttpRequestValidator()
+            validator.validate(ctx)
 
-        parser = CmpMessageParser()
-        parser.parse(ctx)
+            parser = CmpMessageParser()
+            ctx = parser.parse(ctx)
 
-        authenticator = CmpAuthentication()
-        authenticator.authenticate(ctx)
+            authenticator = CmpAuthentication()
+            authenticator.authenticate(ctx)
 
-        authorizer = CmpAuthorization(
-            ['certification']
-        )
-        authorizer.authorize(ctx)
+            authorizer = CmpAuthorization(
+                ['certification']
+            )
+            authorizer.authorize(ctx)
 
-        ProfileValidator.validate(ctx)
+            ProfileValidator.validate(ctx)
 
-        CertificateIssueProcessor().process_operation(ctx)
+            CertificateIssueProcessor().process_operation(ctx)
+        except Exception:
+            self.logger.exception('Error processing CMP request')
 
         CmpMessageResponder.build_response(ctx)
 
-        return LoggedHttpResponse(content=ctx.http_response_content or b'',
-                                  status=ctx.http_response_status,
-                                  content_type=ctx.http_response_content_type)
+        return ctx.to_http_response()

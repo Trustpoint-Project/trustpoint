@@ -3,9 +3,10 @@ import json
 
 from pydantic_core import ValidationError
 
+from cmp.util import PKIFailureInfo as CMPErrs
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from pki.util.cert_req_converter import JSONCertRequestConverter
-from request.request_context import RequestContext
+from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin
 
 
@@ -13,35 +14,41 @@ class ProfileValidator(LoggerMixin):
     """Converts and validates certificate requests against profiles."""
 
     @classmethod
-    def validate(cls, context: RequestContext) -> None:
+    def validate(cls, context: BaseRequestContext) -> None:
         """Validates the certificate request against the profile.
 
         Args:
-            context (RequestContext): The request context containing the certificate request.
+            context (BaseRequestContext): The request context containing the certificate request.
         """
+        if not isinstance(context, BaseCertificateRequestContext):
+            exc_msg = 'Profile validation can only be performed on certificate request contexts.'
+            context.error('Invalid request context for profile validation.',
+                          http_status=500, cmp_code=CMPErrs.SYSTEM_FAILURE)
+            raise TypeError(exc_msg)
+
         cert_request_json = JSONCertRequestConverter.to_json(context.cert_requested)
         cls.logger.info('Cert Request JSON: %s', cert_request_json)
 
         if not context.certificate_profile_model:
             exc_msg = 'Certificate profile model is not set in the context.'
-            context.http_response_content = 'Corresponding certificate profile is missing.'
-            context.http_response_status = 422
+            context.error('Corresponding certificate profile is missing.',
+                          http_status=422, cmp_code=CMPErrs.UNACCEPTED_POLICY)
             raise ValueError(exc_msg)
 
         try:
             cert_profile = json.loads(context.certificate_profile_model.profile_json)
         except json.JSONDecodeError as e:
             exc_msg = f'Error decoding certificate profile JSON: {e}'
-            context.http_response_content = 'Certificate profile data is corrupted.'
-            context.http_response_status = 500
+            context.error('Certificate profile data is corrupted.',
+                          http_status=500, cmp_code=CMPErrs.UNACCEPTED_POLICY)
             raise ValueError(exc_msg) from e
 
         try:
             validated_request = JSONProfileVerifier(cert_profile).apply_profile_to_request(cert_request_json)
         except (ValidationError, ProfileValidationError) as e:
             exc_msg = f'Certificate request validation against profile failed: {e}'
-            context.http_response_content = 'Request does not match the certificate profile.'
-            context.http_response_status = 400
+            context.error('Request does not match the certificate profile.',
+                          http_status=400, cmp_code=CMPErrs.UNACCEPTED_POLICY)
             raise ValueError(exc_msg) from e
 
         cls.logger.info('Validated Cert Request JSON: %s', validated_request)

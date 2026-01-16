@@ -1,55 +1,27 @@
-"""Responds to the PKI message according to the original request protocol."""
+"""EST-specific message responder classes."""
 import base64
-from abc import ABC, abstractmethod
 
 from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
 
 from devices.models import OnboardingStatus
-from request.request_context import RequestContext
+from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from workflows.models import State
 
-
-class AbstractMessageResponder(ABC):
-    """Abstract base class for message responders."""
-
-    @staticmethod
-    @abstractmethod
-    def build_response(context: RequestContext) -> None:
-        """Abstract base method for building a response to a message."""
+from .base import AbstractMessageResponder
 
 
 class EstMessageResponder(AbstractMessageResponder):
     """Builds response to EST requests."""
 
     @staticmethod
-    def build_response(context: RequestContext) -> None:
+    def build_response(context: BaseRequestContext) -> None:
         """Respond to an EST message."""
-        if not context.enrollment_request:
-            exc_msg = 'No enrollment request is set in the context.'
-            raise ValueError(exc_msg)
+        if not isinstance(context, EstBaseRequestContext):
+            exc_msg = 'EstMessageResponder requires a subclass of EstBaseRequestContext.'
+            raise TypeError(exc_msg)
 
-        workflow_state = context.enrollment_request.aggregated_state
-        if workflow_state == State.AWAITING:
-            context.http_response_status = 202
-            context.http_response_content_type = 'text/plain'
-            context.http_response_content = 'Enrollment request pending manual approval.'
-            # TODO(Air): Implement Retry-After header  # noqa: FIX002
-            return None
-        if workflow_state == State.REJECTED:
-            context.enrollment_request.finalize(State.REJECTED)
-            context.http_response_status = 403
-            context.http_response_content_type = 'text/plain'
-            context.http_response_content = 'Enrollment request Rejected.'
-            return None
-        if workflow_state == State.FAILED:
-            context.http_response_status = 500
-            context.http_response_content_type = 'text/plain'
-            context.http_response_content = \
-                f'Workflow failed. Check here: -> /workflows/requests/{context.enrollment_request.id}'
-            return None
-        if context.enrollment_request.is_valid() and context.operation in ['simpleenroll', 'simplereenroll']:
+        if context.operation in ['simpleenroll', 'simplereenroll']:
             responder = EstCertificateMessageResponder()
-            context.enrollment_request.finalize(State.FINALIZED)
             return responder.build_response(context)
         exc_msg = 'No suitable responder found for this EST message.'
         context.http_response_status = 500
@@ -61,8 +33,48 @@ class EstCertificateMessageResponder(EstMessageResponder):
     """Respond to an EST enrollment message with the issued certificate."""
 
     @staticmethod
-    def build_response(context: RequestContext) -> None:
+    def _check_workflow_state(context: EstCertificateRequestContext) -> bool:
+        """Check if the workflow state allows for certificate issuance."""
+        if not context.enrollment_request:
+            exc_msg = 'No enrollment request is set in the context.'
+            raise ValueError(exc_msg)
+
+        workflow_state = context.enrollment_request.aggregated_state
+        if workflow_state == State.AWAITING:
+            context.http_response_status = 202
+            context.http_response_content_type = 'text/plain'
+            context.http_response_content = 'Enrollment request pending manual approval.'
+            # TODO(Air): Implement Retry-After header  # noqa: FIX002
+            return False
+        if workflow_state == State.REJECTED:
+            context.enrollment_request.finalize(State.REJECTED)
+            context.http_response_status = 403
+            context.http_response_content_type = 'text/plain'
+            context.http_response_content = 'Enrollment request Rejected.'
+            return False
+        if workflow_state == State.FAILED:
+            context.http_response_status = 500
+            context.http_response_content_type = 'text/plain'
+            context.http_response_content = \
+                f'Workflow failed. Check here: -> /workflows/requests/{context.enrollment_request.id}'
+            return False
+        if not context.enrollment_request.is_valid():
+            context.http_response_status = 500
+            context.http_response_content_type = 'text/plain'
+            context.http_response_content = 'Enrollment request is not in a valid state for certificate issuance.'
+            return False
+        context.enrollment_request.finalize(State.FINALIZED)
+        return True
+
+    @staticmethod
+    def build_response(context: BaseRequestContext) -> None:  # noqa: C901 - Splitting this method adds unnecessary complexity
         """Respond to an EST enrollment message with the issued certificate."""
+        if not isinstance(context, EstCertificateRequestContext):
+            exc_msg = 'EstCertificateMessageResponder requires an EstCertificateRequestContext.'
+            raise TypeError(exc_msg)
+
+        if not EstCertificateMessageResponder._check_workflow_state(context):
+            return
         if context.issued_certificate is None:
             exc_msg = 'Issued certificate is not set in the context.'
             raise ValueError(exc_msg)
@@ -109,9 +121,12 @@ class EstErrorMessageResponder(EstMessageResponder):
     """Respond to an EST message with an error."""
 
     @staticmethod
-    def build_response(context: RequestContext) -> None:
+    def build_response(context: BaseRequestContext) -> None:
         """Respond to an EST message with an error."""
         # Set appropriate HTTP status code and error message in context
+        if not isinstance(context, EstBaseRequestContext):
+            exc_msg = 'EstErrorMessageResponder requires an EstBaseRequestContext.'
+            raise TypeError(exc_msg)
         context.http_response_status = context.http_response_status or 500
         context.http_response_content = context.http_response_content or 'An error occurred processing the EST request.'
         context.http_response_content_type = context.http_response_content_type or 'text/plain'

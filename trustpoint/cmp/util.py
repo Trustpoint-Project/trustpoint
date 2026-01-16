@@ -52,6 +52,38 @@ class Popo(enum.Enum):
     KEY_AGREEMENT = 'keyAgreement'
 
 
+class PKIFailureInfo(enum.IntEnum):
+    """PKI Failure Info Enum."""
+
+    BAD_ALG = 0
+    BAD_MESSAGE_CHECK = 1
+    BAD_REQUEST = 2
+    BAD_TIME = 3
+    BAD_CERT_ID = 4
+    BAD_DATA_FORMAT = 5
+    WRONG_AUTHORITY = 6
+    INCORRECT_DATA = 7
+    MISSING_TIME_STAMP = 8
+    BAD_POP = 9
+    CERT_REVOKED = 10
+    CERT_CONFIRMED = 11
+    WRONG_INTEGRITY = 12
+    BAD_RECIPIENT_NONCE = 13
+    TIME_NOT_AVAILABLE = 14
+    UNACCEPTED_POLICY = 15
+    UNACCEPTED_EXTENSION = 16
+    ADD_INFO_NOT_AVAILABLE = 17
+    BAD_SENDER_NONCE = 18
+    BAD_CERT_TEMPLATE = 19
+    SIGNER_NOT_TRUSTED = 20
+    TRANSACTION_ID_IN_USE = 21
+    UNSUPPORTED_VERSION = 22
+    NOT_AUTHORIZED = 23
+    SYSTEM_UNAVAIL = 24
+    SYSTEM_FAILURE = 25
+    DUPLICATE_CERT_REQ = 26
+
+
 class NameParser:
     """Provides class methods to transform pyasn1 (General)Names into x509.(General)Names."""
 
