@@ -7,8 +7,8 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('devices', '0003_tp_v0_5_0_dev1'),
-        ('pki', '0003_tp_v0_5_0_dev1'),
+        ('devices', '0002_tp_v0_4_0'),
+        ('pki', '0002_tp_v0_4_0'),
         ('workflows', '0001_tp_v0_4_0'),
     ]
 
