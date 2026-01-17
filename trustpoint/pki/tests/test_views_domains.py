@@ -413,7 +413,7 @@ class TestDevIdRegistrationCreateView:
         success_url = view.get_success_url()
         
         # The actual URL pattern is /pki/domains/config/<pk>/
-        assert f'/pki/domains/config/{domain.id}' in success_url
+        assert f'/pki/domains/config/{domain.id}/' in success_url
 
 
 @pytest.mark.django_db

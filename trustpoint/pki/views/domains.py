@@ -61,7 +61,6 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
     """View to create a new domain."""
 
     model = DomainModel
-    model = DomainModel
     fields = '__all__'
     template_name = 'pki/domains/add.html'
     success_url = reverse_lazy('pki:domains')
@@ -265,16 +264,17 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         if pk:
             try:
                 return DomainModel.objects.get(pk=pk)
-            except DomainModel.DoesNotExist:
-                raise Http404('Domain does not exist.')
-
+            except DomainModel.DoesNotExist as err:
+                msg = 'Domain does not exist.'
+                raise Http404(msg) from err
         if self.request.method == 'POST':
             domain_id = self.request.POST.get('domain')
             if domain_id:
                 try:
                     return DomainModel.objects.get(pk=domain_id)
-                except (DomainModel.DoesNotExist, ValueError):
-                    raise Http404('Domain does not exist.')
+                except (DomainModel.DoesNotExist, ValueError) as err:
+                    msg = 'Domain does not exist.'
+                    raise Http404(msg) from err
 
         return None
 
@@ -301,7 +301,7 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
     def get_success_url(self) -> str:
         """Return the URL to redirect to upon successful form submission."""
         if self.kwargs.get('pk'):
-            domain = get_object_or_404(DomainModel, pk=self.kwargs["pk"])
+            domain = get_object_or_404(DomainModel, pk=self.kwargs['pk'])
             return reverse_lazy('pki:domains-config', kwargs={'pk': domain.id})
         return reverse_lazy('devices:devices')
 

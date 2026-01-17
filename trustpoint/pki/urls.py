@@ -16,7 +16,9 @@ urlpatterns = [
         name='truststores',
     ),
     path('truststores/add/', truststores.TruststoreCreateView.as_view(), name='truststores-add'),
-    re_path(r'^truststores/add/(?P<pk>\d+)?/?$', truststores.TruststoreCreateView.as_view(), name='truststores-add-with-pk'),
+    re_path(r'^truststores/add/(?P<pk>\d+)?/?$',
+            truststores.TruststoreCreateView.as_view(),
+            name='truststores-add-with-pk'),
     re_path(
         r'^truststores/download/(?P<pk>[0-9]+)/?$',
         truststores.TruststoreDownloadView.as_view(),
