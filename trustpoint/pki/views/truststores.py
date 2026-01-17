@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -82,7 +82,7 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
             self.for_devid = True
         else:
             self.for_devid = False
-        return super().dispatch(request, *args, **kwargs)
+        return cast('HttpResponse',super().dispatch(request, *args, **kwargs))
 
     def form_valid(self, form: TruststoreAddForm) -> HttpResponseRedirect:
         """If the form is valid, redirect to Truststore overview."""
