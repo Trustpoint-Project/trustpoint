@@ -1,0 +1,2336 @@
+openapi: 3.0.3
+info:
+  title: Trustpoint APIs
+  version: v0.0.5
+  description: API documentation for Trustpoint project
+paths:
+  /api/backups/:
+    get:
+      operationId: api_backups_list
+      description: |-
+        ViewSet for managing Backup instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: user
+        schema:
+          type: string
+      tags:
+      - Backup
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Backup'
+          description: ''
+    post:
+      operationId: api_backups_create
+      description: |-
+        ViewSet for managing Backup instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      tags:
+      - Backup
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Backup'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Backup'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Backup'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Backup'
+          description: ''
+  /api/backups/{id}/:
+    get:
+      operationId: api_backups_retrieve
+      description: |-
+        ViewSet for managing Backup instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Backup Option.
+        required: true
+      tags:
+      - Backup
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Backup'
+          description: ''
+    put:
+      operationId: api_backups_update
+      description: |-
+        ViewSet for managing Backup instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Backup Option.
+        required: true
+      tags:
+      - Backup
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Backup'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Backup'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Backup'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Backup'
+          description: ''
+    patch:
+      operationId: api_backups_partial_update
+      description: |-
+        ViewSet for managing Backup instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Backup Option.
+        required: true
+      tags:
+      - Backup
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedBackup'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedBackup'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedBackup'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Backup'
+          description: ''
+    delete:
+      operationId: api_backups_destroy
+      description: |-
+        ViewSet for managing Backup instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this Backup Option.
+        required: true
+      tags:
+      - Backup
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/cert-profiles/:
+    get:
+      operationId: api_cert_profiles_list
+      description: |-
+        ViewSet for managing Certificate Profile instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: query
+        name: created_at
+        schema:
+          type: string
+          format: date-time
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: unique_name
+        schema:
+          type: string
+      tags:
+      - Certificate Profile
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CertProfile'
+          description: ''
+    post:
+      operationId: api_cert_profiles_create
+      description: |-
+        ViewSet for managing Certificate Profile instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      tags:
+      - Certificate Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertProfile'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CertProfile'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CertProfile'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertProfile'
+          description: ''
+  /api/cert-profiles/{id}/:
+    get:
+      operationId: api_cert_profiles_retrieve
+      description: |-
+        ViewSet for managing Certificate Profile instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this certificate profile model.
+        required: true
+      tags:
+      - Certificate Profile
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertProfile'
+          description: ''
+    put:
+      operationId: api_cert_profiles_update
+      description: |-
+        ViewSet for managing Certificate Profile instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this certificate profile model.
+        required: true
+      tags:
+      - Certificate Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CertProfile'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CertProfile'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CertProfile'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertProfile'
+          description: ''
+    patch:
+      operationId: api_cert_profiles_partial_update
+      description: |-
+        ViewSet for managing Certificate Profile instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this certificate profile model.
+        required: true
+      tags:
+      - Certificate Profile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCertProfile'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCertProfile'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCertProfile'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertProfile'
+          description: ''
+    delete:
+      operationId: api_cert_profiles_destroy
+      description: |-
+        ViewSet for managing Certificate Profile instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this certificate profile model.
+        required: true
+      tags:
+      - Certificate Profile
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/certificates/:
+    get:
+      operationId: api_certificates_list
+      description: Retrieve certificates from the database.
+      summary: List certificates
+      parameters:
+      - in: query
+        name: not_valid_before
+        schema:
+          type: string
+          format: date-time
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: serial_number
+        schema:
+          type: string
+      tags:
+      - Certificate
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Certificate'
+          description: ''
+    post:
+      operationId: api_certificates_create
+      description: |-
+        ViewSet for managing Certificate instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      tags:
+      - Certificate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+          description: ''
+  /api/certificates/{id}/:
+    get:
+      operationId: api_certificates_retrieve
+      description: |-
+        ViewSet for managing Certificate instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this certificate model.
+        required: true
+      tags:
+      - Certificate
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+          description: ''
+    put:
+      operationId: api_certificates_update
+      description: |-
+        ViewSet for managing Certificate instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this certificate model.
+        required: true
+      tags:
+      - Certificate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Certificate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+          description: ''
+    patch:
+      operationId: api_certificates_partial_update
+      description: |-
+        ViewSet for managing Certificate instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this certificate model.
+        required: true
+      tags:
+      - Certificate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCertificate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCertificate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCertificate'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Certificate'
+          description: ''
+    delete:
+      operationId: api_certificates_destroy
+      description: |-
+        ViewSet for managing Certificate instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this certificate model.
+        required: true
+      tags:
+      - Certificate
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/devices/:
+    get:
+      operationId: api_devices_list
+      description: |-
+        ViewSet for managing Device instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - Device
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Device'
+          description: ''
+    post:
+      operationId: api_devices_create
+      description: |-
+        ViewSet for managing Device instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      tags:
+      - Device
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Device'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Device'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Device'
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+          description: ''
+  /api/devices/{id}/:
+    get:
+      operationId: api_devices_retrieve
+      description: |-
+        ViewSet for managing Device instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this device model.
+        required: true
+      tags:
+      - Device
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+          description: ''
+    put:
+      operationId: api_devices_update
+      description: |-
+        ViewSet for managing Device instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this device model.
+        required: true
+      tags:
+      - Device
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Device'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Device'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Device'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+          description: ''
+    patch:
+      operationId: api_devices_partial_update
+      description: |-
+        ViewSet for managing Device instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this device model.
+        required: true
+      tags:
+      - Device
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDevice'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDevice'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDevice'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Device'
+          description: ''
+    delete:
+      operationId: api_devices_destroy
+      description: |-
+        ViewSet for managing Device instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this device model.
+        required: true
+      tags:
+      - Device
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/domains/:
+    get:
+      operationId: api_domains_list
+      description: |-
+        ViewSet for managing Device instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - Domain
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Domain'
+          description: ''
+    post:
+      operationId: api_domains_create
+      description: |-
+        ViewSet for managing Device instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      tags:
+      - Domain
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Domain'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Domain'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Domain'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Domain'
+          description: ''
+  /api/domains/{id}/:
+    get:
+      operationId: api_domains_retrieve
+      description: |-
+        ViewSet for managing Device instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this domain model.
+        required: true
+      tags:
+      - Domain
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Domain'
+          description: ''
+    put:
+      operationId: api_domains_update
+      description: |-
+        ViewSet for managing Device instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this domain model.
+        required: true
+      tags:
+      - Domain
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Domain'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Domain'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Domain'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Domain'
+          description: ''
+    patch:
+      operationId: api_domains_partial_update
+      description: |-
+        ViewSet for managing Device instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this domain model.
+        required: true
+      tags:
+      - Domain
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDomain'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDomain'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDomain'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Domain'
+          description: ''
+    delete:
+      operationId: api_domains_destroy
+      description: |-
+        ViewSet for managing Device instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this domain model.
+        required: true
+      tags:
+      - Domain
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/issuing-cas/:
+    get:
+      operationId: api_issuing_cas_list
+      description: Retrieve all Issuing CAs from the database.
+      summary: List Issuing CAs
+      parameters:
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - in: query
+        name: issuing_ca_type
+        schema:
+          type: integer
+          enum:
+          - 0
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+        description: |-
+          * `0` - Auto-Generated Root
+          * `1` - Auto-Generated
+          * `2` - Local-Unprotected
+          * `3` - Local-PKCS11
+          * `4` - Remote-EST
+          * `5` - Remote-CMP
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: unique_name
+        schema:
+          type: string
+      tags:
+      - Issuing-CA
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/IssuingCa'
+          description: ''
+  /api/issuing-cas/{id}/:
+    get:
+      operationId: api_issuing_cas_retrieve
+      description: Retrieve details of a specific Issuing CA by ID.
+      summary: Retrieve Issuing CA
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this issuing ca model.
+        required: true
+      tags:
+      - Issuing-CA
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuingCa'
+          description: ''
+  /api/issuing-cas/{id}/crl/:
+    get:
+      operationId: api_issuing_cas_crl_retrieve
+      description: Download the CRL for this Issuing CA.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this issuing ca model.
+        required: true
+      tags:
+      - Issuing-CA
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuingCa'
+          description: ''
+  /api/issuing-cas/{id}/generate-crl/:
+    post:
+      operationId: api_issuing_cas_generate_crl_create
+      description: Generate a new CRL for this Issuing CA.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this issuing ca model.
+        required: true
+      tags:
+      - Issuing-CA
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IssuingCa'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/IssuingCa'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/IssuingCa'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IssuingCa'
+          description: ''
+  /api/logging/delete/{file_name}/:
+    delete:
+      operationId: api_logging_delete_destroy
+      description: |-
+        Delete a log file by name.
+
+        DELETE /logs/delete/app.log/
+      parameters:
+      - in: path
+        name: file_name
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      tags:
+      - Logging
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/logging/download/{file_name}/:
+    get:
+      operationId: api_logging_download_retrieve
+      description: |-
+        Download a log file by name:
+        /logs/download/?file=app.log
+      parameters:
+      - in: path
+        name: file_name
+        schema:
+          type: string
+          pattern: ^[^/]+$
+        required: true
+      tags:
+      - Logging
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Logging'
+          description: ''
+  /api/logging/list_files/:
+    get:
+      operationId: api_logging_list_files_retrieve
+      description: Return detailed info for all log files.
+      tags:
+      - Logging
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Logging'
+          description: ''
+  /api/signed-messages/:
+    get:
+      operationId: api_signed_messages_list
+      description: Returns a list of all signed messages, ordered by creation date
+        (newest first).
+      summary: List all signed messages
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: signer
+        schema:
+          type: integer
+      tags:
+      - Signer
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SignedMessage'
+          description: ''
+  /api/signed-messages/{id}/:
+    get:
+      operationId: api_signed_messages_retrieve
+      description: Returns details of a specific signed message.
+      summary: Retrieve a signed message
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this signed message model.
+        required: true
+      tags:
+      - Signer
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignedMessage'
+          description: ''
+  /api/signers/:
+    get:
+      operationId: api_signers_list
+      description: ViewSet for Signer operations.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - Signer
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Signer'
+          description: ''
+  /api/signers/{id}/:
+    get:
+      operationId: api_signers_retrieve
+      description: ViewSet for Signer operations.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this signer model.
+        required: true
+      tags:
+      - Signer
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Signer'
+          description: ''
+  /api/signers/{id}/certificate/:
+    get:
+      operationId: api_signers_certificate_retrieve
+      description: Get the signer's certificate in PEM format.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this signer model.
+        required: true
+      tags:
+      - Signer
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Signer'
+          description: ''
+  /api/signers/sign/:
+    post:
+      operationId: api_signers_sign_create
+      description: Sign a hash value with the specified signer.
+      tags:
+      - Signer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Signer'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Signer'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Signer'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Signer'
+          description: ''
+  /api/tls/:
+    get:
+      operationId: api_tls_list
+      description: |-
+        ViewSet for managing Backup instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: query
+        name: credential_type
+        schema:
+          type: integer
+          enum:
+          - 0
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+        description: |-
+          * `0` - Trustpoint TLS Server
+          * `1` - Root CA
+          * `2` - Issuing CA
+          * `3` - Issued Credential
+          * `4` - DevOwnerID
+          * `5` - Signer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - Tls
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Credential'
+          description: ''
+    post:
+      operationId: api_tls_create
+      description: |-
+        ViewSet for managing Backup instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      tags:
+      - Tls
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credential'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Credential'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Credential'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credential'
+          description: ''
+  /api/tls/{id}/:
+    get:
+      operationId: api_tls_retrieve
+      description: |-
+        ViewSet for managing Backup instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this credential model.
+        required: true
+      tags:
+      - Tls
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credential'
+          description: ''
+    put:
+      operationId: api_tls_update
+      description: |-
+        ViewSet for managing Backup instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this credential model.
+        required: true
+      tags:
+      - Tls
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credential'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Credential'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Credential'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credential'
+          description: ''
+    patch:
+      operationId: api_tls_partial_update
+      description: |-
+        ViewSet for managing Backup instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this credential model.
+        required: true
+      tags:
+      - Tls
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCredential'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCredential'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCredential'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Credential'
+          description: ''
+    delete:
+      operationId: api_tls_destroy
+      description: |-
+        ViewSet for managing Backup instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this credential model.
+        required: true
+      tags:
+      - Tls
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/token/:
+    post:
+      operationId: api_token_create
+      description: |-
+        Takes a set of user credentials and returns an access and refresh JSON web
+        token pair to prove the authentication of those credentials.
+      tags:
+      - Auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPair'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
+  /api/token/refresh/:
+    post:
+      operationId: api_token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - Auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/truststores/:
+    get:
+      operationId: api_truststores_list
+      description: Retrieve truststore from the database.
+      summary: List Truststores
+      parameters:
+      - in: query
+        name: intended_usage
+        schema:
+          type: integer
+          enum:
+          - 0
+          - 1
+          - 2
+          - 3
+        description: |-
+          * `0` - IDevID
+          * `1` - TLS
+          * `2` - Generic
+          * `3` - Device Owner ID
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - Truststore
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Truststore'
+          description: ''
+    post:
+      operationId: api_truststores_create
+      description: Add a new truststore by providing its unique_name, intended_usage
+        and trust_store_file.
+      summary: Create a new truststore
+      tags:
+      - Truststore
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Truststore'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Truststore'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Truststore'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Truststore'
+          description: ''
+  /api/truststores/{id}/:
+    get:
+      operationId: api_truststores_retrieve
+      description: |-
+        ViewSet for managing Truststore instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this truststore model.
+        required: true
+      tags:
+      - Truststore
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Truststore'
+          description: ''
+    put:
+      operationId: api_truststores_update
+      description: |-
+        ViewSet for managing Truststore instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this truststore model.
+        required: true
+      tags:
+      - Truststore
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Truststore'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Truststore'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Truststore'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Truststore'
+          description: ''
+    patch:
+      operationId: api_truststores_partial_update
+      description: |-
+        ViewSet for managing Truststore instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this truststore model.
+        required: true
+      tags:
+      - Truststore
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTruststore'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTruststore'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTruststore'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Truststore'
+          description: ''
+    delete:
+      operationId: api_truststores_destroy
+      description: |-
+        ViewSet for managing Truststore instances.
+
+        Supports standard CRUD operations such as list, retrieve,
+        create, update, and delete.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this truststore model.
+        required: true
+      tags:
+      - Truststore
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /schema/:
+    get:
+      operationId: schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+
+        - YAML: application/vnd.oai.openapi
+        - JSON: application/vnd.oai.openapi+json
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - de
+          - en
+      tags:
+      - schema
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/vnd.oai.openapi+json:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+components:
+  schemas:
+    Backup:
+      type: object
+      description: |-
+        Serializer for Backup instances.
+
+        Handles conversion between Backup model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        remote_directory:
+          type: string
+          description: Remote directory (e.g. /backups/) where files should be uploaded.
+            Trailing slash is optional.
+          maxLength: 512
+      required:
+      - id
+    CertProfile:
+      type: object
+      description: |-
+        Serializer for Certificate profile instances.
+
+        Handles conversion between Certificate Profile model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        unique_name:
+          type: string
+          maxLength: 255
+      required:
+      - id
+      - unique_name
+    Certificate:
+      type: object
+      description: |-
+        Serializer for Certificate instances.
+
+        Handles conversion between Certificate model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        common_name:
+          type: string
+          maxLength: 256
+      required:
+      - id
+    Credential:
+      type: object
+      description: |-
+        Serializer for Credential instances.
+
+        Handles conversion between Credential model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        credential_type:
+          allOf:
+          - $ref: '#/components/schemas/CredentialTypeEnum'
+          minimum: -9223372036854775808
+          maximum: 9223372036854775807
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Created
+      required:
+      - created_at
+      - credential_type
+      - id
+    CredentialTypeEnum:
+      enum:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      type: integer
+      description: |-
+        * `0` - Trustpoint TLS Server
+        * `1` - Root CA
+        * `2` - Issuing CA
+        * `3` - Issued Credential
+        * `4` - DevOwnerID
+        * `5` - Signer
+    Device:
+      type: object
+      description: |-
+        Serializer for Device instances.
+
+        Handles conversion between Device model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        common_name:
+          type: string
+          title: Device
+          maxLength: 100
+        serial_number:
+          type: string
+          maxLength: 100
+        device_type:
+          allOf:
+          - $ref: '#/components/schemas/DeviceTypeEnum'
+          minimum: -9223372036854775808
+          maximum: 9223372036854775807
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Created
+        domain:
+          type: integer
+          nullable: true
+        onboarding_config:
+          type: integer
+          nullable: true
+        no_onboarding_config:
+          type: integer
+          nullable: true
+      required:
+      - created_at
+      - id
+    DeviceTypeEnum:
+      enum:
+      - 0
+      - 1
+      type: integer
+      description: |-
+        * `0` - Generic Device
+        * `1` - OPC UA GDS
+    Domain:
+      type: object
+      description: |-
+        Serializer for Domain instances.
+
+        Handles conversion between Domain model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        unique_name:
+          type: string
+          title: Domain Name
+          pattern: ^[^\u0000-\u001F\u007F-\u009F]+$
+          maxLength: 100
+      required:
+      - id
+      - unique_name
+    IntendedUsageEnum:
+      enum:
+      - 0
+      - 1
+      - 2
+      - 3
+      type: integer
+      description: |-
+        * `0` - IDevID
+        * `1` - TLS
+        * `2` - Generic
+        * `3` - Device Owner ID
+    IssuingCa:
+      type: object
+      description: Serializer for Issuing CA instances.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        unique_name:
+          type: string
+          readOnly: true
+          title: Issuing CA Name
+        common_name:
+          type: string
+          readOnly: true
+        issuing_ca_type:
+          allOf:
+          - $ref: '#/components/schemas/IssuingCaTypeEnum'
+          readOnly: true
+        issuing_ca_type_display:
+          type: string
+          readOnly: true
+        is_active:
+          type: boolean
+          readOnly: true
+          title: Active
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Created
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Updated
+        last_crl_issued_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          title: Last CRL Issued
+        has_crl:
+          type: boolean
+          description: Check if the Issuing CA has a CRL available.
+          readOnly: true
+      required:
+      - common_name
+      - created_at
+      - has_crl
+      - id
+      - is_active
+      - issuing_ca_type
+      - issuing_ca_type_display
+      - last_crl_issued_at
+      - unique_name
+      - updated_at
+    IssuingCaTypeEnum:
+      enum:
+      - 0
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      type: integer
+      description: |-
+        * `0` - Auto-Generated Root
+        * `1` - Auto-Generated
+        * `2` - Local-Unprotected
+        * `3` - Local-PKCS11
+        * `4` - Remote-EST
+        * `5` - Remote-CMP
+    Logging:
+      type: object
+      description: |-
+        Serializer for Logging instances.
+
+        Handles conversion between Log files and JSON representations.
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        modified:
+          type: string
+          format: date-time
+      required:
+      - modified
+      - name
+      - size
+    PatchedBackup:
+      type: object
+      description: |-
+        Serializer for Backup instances.
+
+        Handles conversion between Backup model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        remote_directory:
+          type: string
+          description: Remote directory (e.g. /backups/) where files should be uploaded.
+            Trailing slash is optional.
+          maxLength: 512
+    PatchedCertProfile:
+      type: object
+      description: |-
+        Serializer for Certificate profile instances.
+
+        Handles conversion between Certificate Profile model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        unique_name:
+          type: string
+          maxLength: 255
+    PatchedCertificate:
+      type: object
+      description: |-
+        Serializer for Certificate instances.
+
+        Handles conversion between Certificate model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        common_name:
+          type: string
+          maxLength: 256
+    PatchedCredential:
+      type: object
+      description: |-
+        Serializer for Credential instances.
+
+        Handles conversion between Credential model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        credential_type:
+          allOf:
+          - $ref: '#/components/schemas/CredentialTypeEnum'
+          minimum: -9223372036854775808
+          maximum: 9223372036854775807
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Created
+    PatchedDevice:
+      type: object
+      description: |-
+        Serializer for Device instances.
+
+        Handles conversion between Device model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        common_name:
+          type: string
+          title: Device
+          maxLength: 100
+        serial_number:
+          type: string
+          maxLength: 100
+        device_type:
+          allOf:
+          - $ref: '#/components/schemas/DeviceTypeEnum'
+          minimum: -9223372036854775808
+          maximum: 9223372036854775807
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Created
+        domain:
+          type: integer
+          nullable: true
+        onboarding_config:
+          type: integer
+          nullable: true
+        no_onboarding_config:
+          type: integer
+          nullable: true
+    PatchedDomain:
+      type: object
+      description: |-
+        Serializer for Domain instances.
+
+        Handles conversion between Domain model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        unique_name:
+          type: string
+          title: Domain Name
+          pattern: ^[^\u0000-\u001F\u007F-\u009F]+$
+          maxLength: 100
+    PatchedTruststore:
+      type: object
+      description: |-
+        Serializer for Certificate instances.
+
+        Handles conversion between Certificate model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        unique_name:
+          type: string
+          description: Optional unique name
+          pattern: ^[^\u0000-\u001F\u007F-\u009F]+$
+          maxLength: 256
+        intended_usage:
+          allOf:
+          - $ref: '#/components/schemas/IntendedUsageEnum'
+          description: |-
+            Intended usage for this truststore
+
+            * `0` - IDevID
+            * `1` - TLS
+            * `2` - Generic
+            * `3` - Device Owner ID
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        trust_store_file:
+          type: string
+          format: uri
+          writeOnly: true
+    SignedMessage:
+      type: object
+      description: Serializer for SignedMessage instances.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        signer:
+          type: integer
+          readOnly: true
+        signer_name:
+          type: string
+          readOnly: true
+        hash_value:
+          type: string
+          readOnly: true
+        signature:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - hash_value
+      - id
+      - signature
+      - signer
+      - signer_name
+    Signer:
+      type: object
+      description: Serializer for Signer instances.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        unique_name:
+          type: string
+          readOnly: true
+        certificate_cn:
+          type: string
+          readOnly: true
+          nullable: true
+        certificate_not_valid_after:
+          type: string
+          format: date-time
+          readOnly: true
+        signature_suite:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Created
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          title: Updated
+      required:
+      - certificate_cn
+      - certificate_not_valid_after
+      - created_at
+      - id
+      - signature_suite
+      - unique_name
+      - updated_at
+    TokenObtainPair:
+      type: object
+      properties:
+        username:
+          type: string
+          writeOnly: true
+        password:
+          type: string
+          writeOnly: true
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - password
+      - refresh
+      - username
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          writeOnly: true
+      required:
+      - access
+      - refresh
+    Truststore:
+      type: object
+      description: |-
+        Serializer for Certificate instances.
+
+        Handles conversion between Certificate model objects and JSON representations.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        unique_name:
+          type: string
+          description: Optional unique name
+          pattern: ^[^\u0000-\u001F\u007F-\u009F]+$
+          maxLength: 256
+        intended_usage:
+          allOf:
+          - $ref: '#/components/schemas/IntendedUsageEnum'
+          description: |-
+            Intended usage for this truststore
+
+            * `0` - IDevID
+            * `1` - TLS
+            * `2` - Generic
+            * `3` - Device Owner ID
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        trust_store_file:
+          type: string
+          format: uri
+          writeOnly: true
+      required:
+      - created_at
+      - id
+      - intended_usage
+      - trust_store_file
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
