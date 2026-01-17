@@ -16,6 +16,7 @@ from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
+from drf_spectacular.utils import extend_schema  # type: ignore[import-untyped]
 from rest_framework import viewsets
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
@@ -377,6 +378,7 @@ class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdR
 
         return context
 
+@extend_schema(tags=['Domain'])
 class DomainViewSet(viewsets.ModelViewSet):
     """ViewSet for managing Device instances.
 

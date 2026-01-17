@@ -16,6 +16,7 @@ from django.utils.translation import gettext as _
 from django.views.generic.edit import UpdateView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema  # type: ignore[import-untyped]
 from rest_framework import filters, viewsets
 from rest_framework.permissions import IsAuthenticated
 
@@ -160,6 +161,7 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
 
         return response
 
+@extend_schema(tags=['Certificate Profile'])
 class CertProfileViewSet(viewsets.ModelViewSet):
     """ViewSet for managing Certificate Profile instances.
 

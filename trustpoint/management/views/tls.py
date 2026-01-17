@@ -11,6 +11,9 @@ from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import FormView, TemplateView, View
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import (  # type: ignore[import-untyped]
+    extend_schema,
+)
 from rest_framework import filters, viewsets
 from rest_framework.permissions import IsAuthenticated
 
@@ -305,7 +308,7 @@ class ActivateTlsServerView(View, LoggerMixin):
             messages.error(request, 'An unexpected error occurred while activating TLS certificate')
         return redirect(reverse('management:tls'))
 
-
+@extend_schema(tags=['Tls'])
 class TlsViewSet(viewsets.ModelViewSet):
     """ViewSet for managing Backup instances.
 

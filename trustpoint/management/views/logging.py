@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import io
+import os
 import re
 import tarfile
 import zipfile
@@ -16,6 +17,9 @@ from django.utils.translation import gettext as _
 from django.views.generic import TemplateView, View
 from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
+from drf_spectacular.utils import (  # type: ignore[import-untyped]
+    extend_schema,
+)
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -214,7 +218,7 @@ class LoggingFilesDownloadMultipleView(PageContextMixin, LoggerMixin, View):
         response['Content-Disposition'] = 'attachment; filename=trustpoint-logs.tar.gz'
         return response
 
-
+@extend_schema(tags=['Logging'])
 class LoggingViewSet(viewsets.GenericViewSet):
     """ViewSet for managing Backup instances.
 
@@ -226,7 +230,7 @@ class LoggingViewSet(viewsets.GenericViewSet):
 
     @action(detail=False, methods=['get'])
     def list_files(self, request):
-        """Return detailed info for all log files"""
+        """Return detailed info for all log files."""
         if not os.path.exists(LOG_DIR_PATH):
             return Response({"error": "Log files not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -282,8 +286,8 @@ class LoggingViewSet(viewsets.GenericViewSet):
         url_path=r'delete/(?P<file_name>[^/]+)'
     )
     def delete(self, request, file_name=None):
-        """
-        Delete a log file by name
+        """Delete a log file by name.
+
         DELETE /logs/delete/app.log/
         """
         if not file_name:

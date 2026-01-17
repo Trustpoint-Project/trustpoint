@@ -8,7 +8,7 @@ from typing import Any, ClassVar
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
-from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
+from drf_spectacular.utils import extend_schema  # type: ignore[import-untyped]
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -26,6 +26,7 @@ from signer.serializers import (
 from trustpoint.logger import LoggerMixin
 
 
+@extend_schema(tags=['Signer'])
 class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
     """ViewSet for Signer operations."""
 
@@ -33,17 +34,17 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
     serializer_class = SignerSerializer
     permission_classes: ClassVar[list[Any]] = [IsAuthenticated]  # type: ignore[misc]
 
-    @swagger_auto_schema(  # type: ignore[misc]
-        method='post',
-        request_body=SignHashRequestSerializer,
+    @extend_schema(  # type: ignore[misc]
+        methods='post',
+        request=SignHashRequestSerializer,
         responses={
             200: SignHashResponseSerializer,
             400: 'Bad Request - Invalid input data',
             404: 'Not Found - Signer does not exist',
             500: 'Internal Server Error - Failed to sign hash',
         },
-        operation_summary='Sign a hash value',
-        operation_description=(
+        summary='Sign a hash value',
+        description=(
             'Signs a hash value using the specified signer. '
             'The hash value must be provided as a hexadecimal string. '
             'The signature is returned in hexadecimal format.'
@@ -123,14 +124,14 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @swagger_auto_schema(  # type: ignore[misc]
-        method='get',
+    @extend_schema(  # type: ignore[misc]
+        methods='get',
         responses={
             200: SignerCertificateSerializer,
             404: 'Not Found - Signer does not exist',
         },
-        operation_summary='Get signer certificate',
-        operation_description=(
+        summary='Get signer certificate',
+        description=(
             "Returns the signer's certificate in PEM format. "
             'The certificate can be used to verify signatures created by this signer.'
         ),
@@ -173,7 +174,7 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-
+@extend_schema(tags=['Signer'])
 class SignedMessageViewSet(viewsets.ReadOnlyModelViewSet[SignedMessageModel]):
     """ViewSet for SignedMessage operations."""
 
@@ -182,17 +183,17 @@ class SignedMessageViewSet(viewsets.ReadOnlyModelViewSet[SignedMessageModel]):
     permission_classes: ClassVar[list[Any]] = [IsAuthenticated]  # type: ignore[misc]
     filterset_fields: ClassVar[list[str]] = ['signer']
 
-    @swagger_auto_schema(  # type: ignore[misc]
-        operation_summary='List all signed messages',
-        operation_description='Returns a list of all signed messages, ordered by creation date (newest first).',
+    @extend_schema(  # type: ignore[misc]
+        summary='List all signed messages',
+        description='Returns a list of all signed messages, ordered by creation date (newest first).',
     )
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """List all signed messages."""
         return super().list(request, *args, **kwargs)
 
-    @swagger_auto_schema(  # type: ignore[misc]
-        operation_summary='Retrieve a signed message',
-        operation_description='Returns details of a specific signed message.',
+    @extend_schema(  # type: ignore[misc]
+        summary='Retrieve a signed message',
+        description='Returns details of a specific signed message.',
     )
     def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Retrieve a specific signed message."""

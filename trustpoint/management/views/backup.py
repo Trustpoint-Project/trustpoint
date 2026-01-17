@@ -15,6 +15,9 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView, View
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import (  # type: ignore[import-untyped]
+    extend_schema,
+)
 from rest_framework import filters, viewsets
 from rest_framework.permissions import IsAuthenticated
 
@@ -420,7 +423,7 @@ class BackupFilesDeleteMultipleView(View, LoggerMixin):
 
         return redirect('management:backups')
 
-
+@extend_schema(tags=['Backup'])
 class BackupViewSet(viewsets.ModelViewSet):
     """ViewSet for managing Backup instances.
 

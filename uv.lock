@@ -657,21 +657,20 @@ wheels = [
 ]
 
 [[package]]
-name = "drf-yasg"
-version = "1.21.11"
+name = "drf-spectacular"
+version = "0.29.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "django" },
     { name = "djangorestframework" },
     { name = "inflection" },
-    { name = "packaging" },
-    { name = "pytz" },
+    { name = "jsonschema" },
     { name = "pyyaml" },
     { name = "uritemplate" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/5f/19/8aa1eac9a67aaa09ff9761c6aec7878fb6d7bdbac59a9398c3dda2cd9d9d/drf_yasg-1.21.11.tar.gz", hash = "sha256:0190b3de884aa593a39c75e6daba2ae69f285f0691de1eb0e3f4c6307faa1817", size = 4599786, upload-time = "2025-09-26T22:18:27.333Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5e/0e/a4f50d83e76cbe797eda88fc0083c8ca970cfa362b5586359ef06ec6f70a/drf_spectacular-0.29.0.tar.gz", hash = "sha256:0a069339ea390ce7f14a75e8b5af4a0860a46e833fd4af027411a3e94fc1a0cc", size = 241722, upload-time = "2025-11-02T03:40:26.348Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/68/ea/c94362b34f3d81ac2cf5e3e955773f7d6c3813866bdc3869480c230827b7/drf_yasg-1.21.11-py3-none-any.whl", hash = "sha256:ec741f313b3b5f0b5fc8c1e1b6ed323c34f1f492a41fe7cc7421d8c6de9753e4", size = 4291885, upload-time = "2025-09-26T22:18:25.506Z" },
+    { url = "https://files.pythonhosted.org/packages/32/d9/502c56fc3ca960075d00956283f1c44e8cafe433dada03f9ed2821f3073b/drf_spectacular-0.29.0-py3-none-any.whl", hash = "sha256:d1ee7c9535d89848affb4427347f7c4a22c5d22530b8842ef133d7b72e19b41a", size = 105433, upload-time = "2025-11-02T03:40:24.823Z" },
 ]
 
 [[package]]
@@ -1691,7 +1690,7 @@ dependencies = [
     { name = "django-taggit" },
     { name = "djangorestframework" },
     { name = "djangorestframework-simplejwt" },
-    { name = "drf-yasg" },
+    { name = "drf-spectacular" },
     { name = "furo" },
     { name = "packaging" },
     { name = "paramiko" },
@@ -1753,7 +1752,7 @@ requires-dist = [
     { name = "django-taggit", specifier = ">=6.1.0,<7" },
     { name = "djangorestframework", specifier = ">=3.16.1" },
     { name = "djangorestframework-simplejwt", specifier = ">=5.5.1" },
-    { name = "drf-yasg", specifier = ">=1.21.11" },
+    { name = "drf-spectacular", specifier = ">=0.29.0" },
     { name = "furo", specifier = ">=2024.8.6" },
     { name = "packaging", specifier = ">=25.0" },
     { name = "paramiko", specifier = ">=3.5.1" },
