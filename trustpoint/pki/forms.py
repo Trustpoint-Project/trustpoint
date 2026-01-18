@@ -85,6 +85,7 @@ class DevIdRegistrationForm(forms.ModelForm[DevIdRegistration]):
             'serial_number_pattern': 'Serial Number Pattern (Regex)',
         }
 
+
     unique_name = forms.CharField(
         max_length=256,
         label=_('[Optional] Unique Name'),
