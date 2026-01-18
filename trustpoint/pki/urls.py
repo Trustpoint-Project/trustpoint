@@ -155,11 +155,13 @@ urlpatterns = [
         DevIdMethodSelectView.as_view(),
         name='devid_registration-method_select',
     ),
+
     re_path(
-        r'devid-registration/create/(?P<pk>\d+)/$',
+        r'devid-registration/create/(?P<pk>\d+)?/?$',
         DevIdRegistrationCreateView.as_view(),
         name='devid_registration_create',
     ),
+
     path(
         'devid-registration/create/<int:pk>/<int:truststore_id>/',
         DevIdRegistrationCreateView.as_view(),
