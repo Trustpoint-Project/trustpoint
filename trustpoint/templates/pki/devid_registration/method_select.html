@@ -16,9 +16,9 @@
                     <a href="{% url 'pki:devid_registration_create' pk=domain.id %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Use existing Truststore' %}</a>
                     <br>
                                        {% if domain %}
-                        <a href="{% url 'pki:truststores-add-with-pk' pk=domain.id %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Upload a new  Truststore (d)' %}</a>
+                        <a href="{% url 'pki:truststores-add-with-pk' pk=domain.id %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Upload a new  Truststore' %}</a>
                     {% else %}
-                        <a href="{% url 'pki:truststores-add-from-device' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Upload a new  Truststore (no d)' %}</a>
+                        <a href="{% url 'pki:truststores-add-from-device' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Upload a new  Truststore' %}</a>
                     {% endif %}
                 </div>
             </div>
