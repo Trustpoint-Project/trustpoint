@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 
     from trustpoint_core.crypto_types import PrivateKey
 
-    from pki.models.domain import DomainModel
     from pki.models.credential import CredentialModel
+    from pki.models.domain import DomainModel
 
 
 class AutoGenPkiKeyAlgorithm(models.TextChoices):

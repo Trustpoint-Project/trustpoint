@@ -3,10 +3,10 @@
 from django.contrib import admin
 from django.http import HttpRequest
 
+from .models import CaModel
 from .models.certificate import CertificateModel
 from .models.credential import CertificateChainOrderModel, CredentialModel
 from .models.devid_registration import DevIdRegistration
-from .models import CaModel
 
 
 class DevIdRegistrationAdmin(admin.ModelAdmin[DevIdRegistration]):

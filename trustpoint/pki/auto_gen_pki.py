@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import secrets
 import threading
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 from pki.models import CaModel, CredentialModel, DomainModel, RevokedCertificateModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm, KeyGenerator

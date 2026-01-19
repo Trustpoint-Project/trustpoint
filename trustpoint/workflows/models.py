@@ -9,8 +9,8 @@ from django.db import models
 from django.db.models import JSONField
 
 from devices.models import DeviceModel
-from pki.models.domain import DomainModel
 from pki.models import CaModel
+from pki.models.domain import DomainModel
 
 # -------------------------------
 # Workflow definitions + scoping
