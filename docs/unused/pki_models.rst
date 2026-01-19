@@ -8,12 +8,12 @@ Overview
     :align: center
 
     class CertificateModel
-    class IssuingCaModel
+    class CaModel
     class TrustStoreModel
     class CrlModel
     class X509CredentialModel
 
-    CertificateModel o-- IssuingCaModel
+    CertificateModel o-- CaModel
     CertificateModel o-- TrustStoreModel
     CertificateModel o-- CrlModel
     CertificateModel o-- X509CredentialModel
@@ -93,7 +93,7 @@ Issuing CA Model
 .. uml::
     :align: center
 
-    class IssuingCaModel {
+    class CaModel {
         +root_ca_cert : models.ForeignKey(CertificateModel)
         +intermediate_ca_certs : models.ManyToManyField(CertificateChainOrderModel)
         +issuing_ca_cert : models.ForeignKey(CertificateModel)
@@ -107,11 +107,11 @@ Issuing CA Model
         +order : models.PositiveSmallIntegerField
         +certificate : models.Foreignkey(CertificateModel)
         +certificate : models.Foreignkey(CertificateModel)
-        +issuing_ca : models.ForeignKey(IssuingCaModel)
+        +issuing_ca : models.ForeignKey(CaModel)
         --
     }
 
-    IssuingCaModel --o CertificateChainOrderModel
+    CaModel --o CertificateChainOrderModel
 
 DB constraints
 ~~~~~~~~~~~~~~

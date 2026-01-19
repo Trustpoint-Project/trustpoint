@@ -8,11 +8,11 @@ from cryptography import x509
 from django.utils import timezone
 from trustpoint_core import oid
 
-from pki.models import DomainModel, IssuingCaModel
+from pki.models import DomainModel, CaModel
 
 COMMON_NAME = 'Root CA'
 UNIQUE_NAME = COMMON_NAME.replace(' ', '_').lower()
-CA_TYPE = IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
+CA_TYPE = CaModel.CaTypeChoice.LOCAL_UNPROTECTED
 
 DOMAIN_UNIQUE_NAME = 'domain_name'
 
@@ -26,7 +26,7 @@ def test_attributes_and_properties(domain_instance: dict[str, Any]) -> None:
     cert = domain_instance.get('cert')
     if (
         not isinstance(domain, DomainModel)
-        or not isinstance(issuing_ca, IssuingCaModel)
+        or not isinstance(issuing_ca, CaModel)
         or not isinstance(cert, x509.Certificate)
     ):
         msg = 'Domain or IssuingCA not created properly'

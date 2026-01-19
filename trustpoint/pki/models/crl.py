@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from cryptography import x509
 from django.core.exceptions import ValidationError
@@ -15,7 +14,9 @@ from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
 
 if TYPE_CHECKING:
-    from pki.models.ca import CaModel
+    import datetime
+
+    from pki.models import CaModel
 
 
 class CrlModel(LoggerMixin, CustomDeleteActionModel):
@@ -26,7 +27,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
     """
 
     ca = models.ForeignKey(
-        'CaModel',
+        'pki.CaModel',
         related_name='crls',
         on_delete=models.CASCADE,
         verbose_name=_('Certificate Authority'),
@@ -85,9 +86,9 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
 
         verbose_name = _('Certificate Revocation List')
         verbose_name_plural = _('Certificate Revocation Lists')
-        ordering = ['-this_update']
-        unique_together = [['ca', 'crl_number']]
-        indexes = [
+        ordering: ClassVar[list[str]] = ['-this_update']
+        unique_together: ClassVar[list[list[str]]] = [['ca', 'crl_number']]
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['ca', '-this_update']),
             models.Index(fields=['ca', 'is_active']),
         ]
@@ -135,7 +136,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         except Exception as e:
             raise ValidationError(_('Failed to parse the CRL. It may be corrupted or invalid.')) from e
 
-        ca_cert = ca.keyless_ca.get_certificate_crypto()
+        ca_cert = ca.ca_certificate.get_certificate_serializer().as_crypto()
         if crl.issuer != ca_cert.subject:
             raise ValidationError(
                 _(

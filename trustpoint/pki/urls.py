@@ -42,7 +42,7 @@ urlpatterns = [
     ),
     path('truststores/details/<int:pk>/', truststores.TruststoreDetailView.as_view(), name='truststore-detail'),
     re_path(
-        r'^truststores/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        r'^truststores/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         truststores.TruststoreBulkDeleteConfirmView.as_view(),
         name='truststore-delete_confirm',
     ),
@@ -86,6 +86,11 @@ urlpatterns = [
     ),
     path('certificates/details/<int:pk>/', certificates.CertificateDetailView.as_view(), name='certificate-detail'),
     path('cas/', ca.CaTableView.as_view(), name='cas'),
+    re_path(
+        r'^cas/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
+        ca.CaBulkDeleteConfirmView.as_view(),
+        name='cas-delete_confirm',
+    ),
     path('issuing-cas/', issuing_cas.IssuingCaTableView.as_view(), name='issuing_cas'),
     path(
         'issuing-cas/add/method-select/',
@@ -117,7 +122,7 @@ urlpatterns = [
         name='issuing_ca-issued_certificates',
     ),
     re_path(
-        r'^issuing-cas/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        r'^issuing-cas/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         issuing_cas.IssuingCaBulkDeleteConfirmView.as_view(),
         name='issuing_cas-delete_confirm',
     ),
@@ -141,7 +146,7 @@ urlpatterns = [
     ),
     path('domains/detail/<int:pk>/', domains.DomainDetailView.as_view(), name='domains-detail'),
     re_path(
-        r'^domains/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        r'^domains/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         domains.DomainCaBulkDeleteConfirmView.as_view(),
         name='domains-delete_confirm',
     ),
@@ -181,7 +186,7 @@ urlpatterns = [
         name='owner_credentials-add',
     ),
     re_path(
-        r'^owner-credentials/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        r'^owner-credentials/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         owner_credentials.OwnerCredentialBulkDeleteConfirmView.as_view(),
         name='owner_credentials-delete_confirm',
     ),
@@ -198,7 +203,7 @@ urlpatterns = [
         name='cert_profiles-add',
     ),
     re_path(
-        r'^cert-profiles/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        r'^cert-profiles/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         cert_profiles.CertProfileBulkDeleteConfirmView.as_view(),
         name='cert_profiles-delete_confirm',
     ),

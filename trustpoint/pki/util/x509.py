@@ -18,7 +18,7 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
 from management.models import KeyStorageConfig
-from pki.models import CaModel, IssuingCaModel
+from pki.models import CaModel
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
@@ -237,7 +237,7 @@ class CertificateGenerator:
         chain: list[x509.Certificate],
         private_key: PrivateKey,
         unique_name: str = 'issuing_ca',
-        ca_type: IssuingCaModel.IssuingCaTypeChoice = IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED,
+        ca_type: CaModel.CaTypeChoice = CaModel.CaTypeChoice.LOCAL_UNPROTECTED,
         parent_ca: CaModel | None = None,
     ) -> CaModel:
         """Saves an Issuing CA certificate to the database and returns the CaModel.
@@ -260,12 +260,12 @@ class CertificateGenerator:
         )
 
         # Determine private key location based on CA type and storage configuration
-        if ca_type == IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED:
+        if ca_type == CaModel.CaTypeChoice.LOCAL_UNPROTECTED:
             # Unprotected local CAs always use software storage
             private_key_location = PrivateKeyLocation.SOFTWARE
         elif ca_type in [
-            IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT,
-            IssuingCaModel.IssuingCaTypeChoice.AUTOGEN,
+            CaModel.CaTypeChoice.AUTOGEN_ROOT,
+            CaModel.CaTypeChoice.AUTOGEN,
         ]:
             # Auto-generated CAs use the configured storage type
             try:
@@ -323,33 +323,31 @@ class CertificateGenerator:
             )
         )
 
-        issuing_ca = IssuingCaModel.create_new_issuing_ca(
+        issuing_ca = CaModel.create_new_issuing_ca(
             credential_serializer=issuing_ca_credential_serializer,
-            issuing_ca_type=ca_type
+            ca_type=ca_type,
+            unique_name=unique_name,
+            parent_ca=parent_ca
         )
-
-        ca = CaModel.create_from_issuing(unique_name=unique_name, issuing_ca=issuing_ca)
-
-        if parent_ca is not None:
-            ca.parent_ca = parent_ca
-            ca.save()
 
         logger.info("Issuing CA '%s' saved successfully.", unique_name)
 
-        return ca
+        return issuing_ca
 
     @staticmethod
-    def save_root_ca(
+    def save_keyless_ca(
         root_ca_cert: x509.Certificate,
         unique_name: str = 'root_ca',
         crl_pem: str | None = None,
     ) -> CaModel:
         """Saves a keyless root CA certificate as a keyless CA to the database and returns the CaModel."""
-        ca = CaModel.create_from_keyless(
+        ca = CaModel.create_keyless_ca(
             unique_name=unique_name,
-            certificate=root_ca_cert,
-            crl_pem=crl_pem,
+            certificate_obj=root_ca_cert,
         )
+
+        if crl_pem:
+            ca.import_crl(crl_pem)
 
         logger.info("Keyless root CA '%s' saved successfully.", unique_name)
 

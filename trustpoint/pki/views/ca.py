@@ -3,39 +3,62 @@
 import logging
 from typing import Any
 
-from django.db.models import QuerySet
+from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.db.models import ProtectedError, QuerySet
+from django.forms import Form
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.urls import reverse_lazy
+from django.utils.translation import gettext as _
 from django.views.generic import ListView
 
 from pki.models import CaModel
-from trustpoint.settings import UIConfig
+from trustpoint.views.base import BulkDeleteView, ContextDataMixin
 
 logger = logging.getLogger(__name__)
 
 
-class CaTableView(ListView):
+class CaTableView(ContextDataMixin, ListView[CaModel]):
     """Table view for all CAs with hierarchy information."""
 
     model = CaModel
     template_name = 'pki/cas/cas.html'
     context_object_name = 'cas'
-    paginate_by = UIConfig.paginate_by
+    paginate_by = None
+
+    # Context attributes for sidebar navigation
+    context_page_category = 'pki'
+    context_page_name = 'cas'
 
     def get_queryset(self) -> QuerySet[CaModel]:
         """Return all CA models with parent relationships and domains prefetched, ordered by hierarchy."""
-        queryset = (super().get_queryset()
-                   .select_related('parent_ca', 'issuing_ca_ref')
-                   .prefetch_related('issuing_ca_ref__domains'))
-
-        return queryset.order_by('parent_ca__id', 'unique_name')
+        return (super().get_queryset()
+               .select_related('parent_ca')
+               .prefetch_related('domains'))
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add hierarchy information to each CA and apply hierarchical ordering."""
         context = super().get_context_data(**kwargs)
 
-        if 'page_obj' in context and context['page_obj'].object_list:
+        # Handle both paginated and non-paginated cases
+        if context.get('page_obj'):
+            # Paginated case
             ca_list = list(context['page_obj'].object_list)
+        else:
+            # Non-paginated case
+            ca_list = list(context.get(self.context_object_name, []))
+
+        if ca_list:
             ca_list = self._hierarchical_sort(ca_list)
-            context['page_obj'].object_list = ca_list
+
+            # Add display properties to each CA
+            for ca in ca_list:
+                ca.display_indentation = f'{ca.get_hierarchy_depth() * 20}px'  # type: ignore[attr-defined]
+
+            if context.get('page_obj'):
+                context['page_obj'].object_list = ca_list
+            else:
+                context[self.context_object_name] = ca_list
 
         return context
 
@@ -70,3 +93,42 @@ class CaTableView(ListView):
         add_ca_and_children(None)
 
         return result
+
+
+class CaBulkDeleteConfirmView(BulkDeleteView):
+    """View to confirm the deletion of multiple CAs."""
+
+    model = CaModel
+    success_url = reverse_lazy('pki:cas')
+    ignore_url = reverse_lazy('pki:cas')
+    template_name = 'pki/cas/confirm_delete.html'
+    context_object_name = 'cas'
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
+        queryset = self.get_queryset()
+        if not queryset.exists():
+            messages.error(request, _('No CAs selected for deletion.'))
+            return HttpResponseRedirect(self.success_url)
+        return super().get(request, *args, **kwargs)
+
+    def form_valid(self, form: Form) -> HttpResponse:
+        """Delete the selected CAs on valid form."""
+        queryset = self.get_queryset()
+        deleted_count = queryset.count() if queryset else 0
+
+        try:
+            response = super().form_valid(form)
+        except ProtectedError:
+            messages.error(
+                self.request,
+                _('Cannot delete the selected CA(s) because they are referenced by other objects.'),
+            )
+            return HttpResponseRedirect(self.success_url)
+        except ValidationError as exc:
+            messages.error(self.request, exc.message)
+            return HttpResponseRedirect(self.success_url)
+
+        messages.success(self.request, _('Successfully deleted {count} CA(s).').format(count=deleted_count))
+
+        return response

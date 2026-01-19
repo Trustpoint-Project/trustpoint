@@ -31,7 +31,7 @@
                 </div>
 
                 <h3>
-                    {% if keyless_ca.keyless_ca.certificate.subject_public_bytes == keyless_ca.keyless_ca.certificate.issuer_public_bytes %}
+                    {% if keyless_ca.certificate.subject_public_bytes == keyless_ca.certificate.issuer_public_bytes %}
                         {% trans 'Keyless CA Certificate (This is a self-signed Root CA Certificate)' %}
                     {% else %}
                         {% trans 'Keyless CA Certificate' %}
@@ -42,16 +42,16 @@
                     <div>
                         <div>{% trans 'Keyless CA Certificate' %}</div>
                         <div>
-                            <a href="{% url 'pki:certificate-detail' pk=keyless_ca.keyless_ca.certificate.id %}">
-                                {% if keyless_ca.keyless_ca.certificate.common_name %}
-                                    CN: {{ keyless_ca.keyless_ca.certificate.common_name }}
+                            <a href="{% url 'pki:certificate-detail' pk=keyless_ca.certificate.id %}">
+                                {% if keyless_ca.certificate.common_name %}
+                                    CN: {{ keyless_ca.certificate.common_name }}
                                 {% else %}
                                     {% trans 'Keyless CA Certificate' %}
                                 {% endif %}
                             </a>
                         </div>
                     </div>
-                    {% with keyless_ca_certificate=keyless_ca.keyless_ca.certificate %}
+                    {% with keyless_ca_certificate=keyless_ca.certificate %}
                         <div>
                             <div>{% trans 'Serial Number' %}</div>
                             <div>{{ keyless_ca_certificate.serial_number }}</div>
@@ -95,6 +95,37 @@
                             </div>
                         </div>
                     {% endwith %}
+                </div>
+
+                <h3>{% trans 'CRL' %}</h3>
+                <hr class="hr-m">
+                <div class="tp-kvp-list">
+                    {% if keyless_ca.last_crl_issued_at %}
+                        <div>
+                            <div>{% trans 'Last CRL issued' %}</div>
+                            <div>{{ keyless_ca.last_crl_issued_at }} (#{{ keyless_ca.crl_number }})</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'CRL Download' %}</div>
+                            <div>
+                                <a href="{% url 'crl-download' pk=keyless_ca.pk %}"
+                                   class="btn btn-primary btn-sm me-2"
+                                   title="{% trans 'Download CRL in PEM format' %}">
+                                    {% trans 'Download CRL (PEM)' %}
+                                </a>
+                                <a href="{% url 'crl-download' pk=keyless_ca.pk %}?encoding=der"
+                                   class="btn btn-primary btn-sm"
+                                   title="{% trans 'Download CRL in DER format' %}">
+                                    {% trans 'Download CRL (DER)' %}
+                                </a>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div>
+                            <div>{% trans 'Last CRL issued' %}</div>
+                            <div>{% trans 'No CRL has been imported yet.' %}</div>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

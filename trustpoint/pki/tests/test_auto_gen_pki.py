@@ -11,7 +11,7 @@ from management.models import KeyStorageConfig, PKCS11Token
 
 from pki.auto_gen_pki import AutoGenPki
 
-from pki.models import CertificateModel, DomainModel, IssuingCaModel
+from pki.models import CertificateModel, DomainModel, CaModel
 
 from pki.models.credential import CredentialModel, PKCS11Key
 
@@ -45,10 +45,10 @@ def test_auto_gen_pki(key_alg: AutoGenPkiKeyAlgorithm) -> None:
 
     with mock.patch.object(KeyStorageConfig, 'get_config', return_value=mock_config), \
          mock.patch('pki.models.credential.PKCS11Token.objects.first', return_value=mock_token), \
-         mock.patch('pki.models.issuing_ca.IssuingCaModel.create_new_issuing_ca', return_value=mock_issuing_ca), \
+         mock.patch('pki.models.issuing_ca.CaModel.create_new_issuing_ca', return_value=mock_issuing_ca), \
          mock.patch('pki.models.domain.DomainModel.objects.get_or_create', return_value=(mock_domain, True)), \
          mock.patch('pki.models.domain.DomainModel.objects.get', return_value=mock_domain), \
-         mock.patch('pki.models.issuing_ca.IssuingCaModel.objects.get', return_value=mock_issuing_ca), \
+         mock.patch('pki.models.issuing_ca.CaModel.objects.get', return_value=mock_issuing_ca), \
          mock.patch('pki.auto_gen_pki.AutoGenPki.get_auto_gen_pki', mock_get_auto_gen_pki), \
          mock.patch('pki.util.x509.CertificateGenerator.save_issuing_ca', return_value=mock_issuing_ca), \
          mock.patch('pki.util.x509.CertificateGenerator.create_issuing_ca', return_value=(mock.MagicMock(), mock.MagicMock())), \
@@ -79,7 +79,7 @@ def test_auto_gen_pki(key_alg: AutoGenPkiKeyAlgorithm) -> None:
         assert issued_credential.credential.certificate.certificate_status == CertificateModel.CertificateStatus.REVOKED
 
         # Check that the issuing CA has been revoked and set as inactive
-        issuing_ca = IssuingCaModel.objects.get(pk=issuing_ca.pk)  # reload from DB
+        issuing_ca = CaModel.objects.get(pk=issuing_ca.pk)  # reload from DB
         assert issuing_ca.credential.certificate.certificate_status == CertificateModel.CertificateStatus.REVOKED
         assert not issuing_ca.is_active
 

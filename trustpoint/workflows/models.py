@@ -10,7 +10,7 @@ from django.db.models import JSONField
 
 from devices.models import DeviceModel
 from pki.models.domain import DomainModel
-from pki.models.issuing_ca import IssuingCaModel
+from pki.models import CaModel
 
 # -------------------------------
 # Workflow definitions + scoping
@@ -149,7 +149,7 @@ class DeviceRequest(models.Model):
     )
 
     ca = models.ForeignKey(
-        IssuingCaModel,
+        CaModel,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -228,7 +228,7 @@ class EnrollmentRequest(models.Model):
     device = models.ForeignKey(DeviceModel, on_delete=models.CASCADE, related_name='device', null=True, blank=True)
     domain = models.ForeignKey(DomainModel, on_delete=models.CASCADE, related_name='domain', null=True, blank=True)
     ca = models.ForeignKey(
-        IssuingCaModel,
+        CaModel,
         on_delete=models.CASCADE,
         related_name='enrollment_requests',
         null=True,

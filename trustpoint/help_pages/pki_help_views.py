@@ -26,7 +26,7 @@ from help_pages.commands import (
 )
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from management.models import TlsSettings
-from pki.models import DevIdRegistration, IssuingCaModel
+from pki.models import CaModel, DevIdRegistration
 from trustpoint.page_context import (
     PKI_PAGE_CATEGORY,
     PKI_PAGE_DOMAIN_SUBCATEGORY,
@@ -240,13 +240,13 @@ class OnboardingEstIdevidRegistrationHelpView(BaseHelpView):
 # ------------------------------------------ CRL Download Help Page ---------------------------------------------------
 
 
-class CrlDownloadHelpView(PageContextMixin, DetailView[IssuingCaModel]):
+class CrlDownloadHelpView(PageContextMixin, DetailView[CaModel]):
     """Help view for downloading CRLs via curl commands."""
 
     template_name = 'help/help_page.html'
     http_method_names = ('get',)
-    model = IssuingCaModel
-    context_object_name = 'issuing_ca'
+    model = CaModel
+    context_object_name = 'ca'
 
     page_category = PKI_PAGE_CATEGORY
     page_name = PKI_PAGE_ISSUING_CAS_SUBCATEGORY
@@ -255,15 +255,15 @@ class CrlDownloadHelpView(PageContextMixin, DetailView[IssuingCaModel]):
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Gets the context data and builds the HelpPage for CRL download."""
         context = super().get_context_data(**kwargs)
-        issuing_ca = self.object
+        ca = self.object
 
         host_base = f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}'
-        crl_endpoint = f'{host_base}/crl/{issuing_ca.pk}/'
+        crl_endpoint = f'{host_base}/crl/{ca.pk}/'
 
-        has_crl = bool(issuing_ca.crl_pem)
+        has_crl = bool(ca.crl_pem)
         crl_status_rows = []
 
-        if has_crl and issuing_ca.last_crl_issued_at:
+        if has_crl and ca.last_crl_issued_at:
             crl_status_rows.append(
                 HelpRow(
                     _non_lazy('CRL Status'),
@@ -274,7 +274,7 @@ class CrlDownloadHelpView(PageContextMixin, DetailView[IssuingCaModel]):
             crl_status_rows.append(
                 HelpRow(
                     _non_lazy('Last Generated'),
-                    issuing_ca.last_crl_issued_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
+                    ca.last_crl_issued_at.strftime('%Y-%m-%d %H:%M:%S UTC'),
                     ValueRenderType.PLAIN,
                 )
             )
@@ -287,8 +287,8 @@ class CrlDownloadHelpView(PageContextMixin, DetailView[IssuingCaModel]):
                 )
             )
 
-        help_page_url = reverse('pki:help_issuing_cas_crl_download', kwargs={'pk': issuing_ca.pk})
-        generate_url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': issuing_ca.pk})
+        help_page_url = reverse('pki:help_issuing_cas_crl_download', kwargs={'pk': ca.pk})
+        generate_url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': ca.pk})
         generate_url_with_next = f'{generate_url}?next={help_page_url}'
         generate_button = format_html(
             '<a href="{}" class="btn btn-primary w-100">{}</a>',
@@ -309,8 +309,8 @@ class CrlDownloadHelpView(PageContextMixin, DetailView[IssuingCaModel]):
             _non_lazy('Summary'),
             [
                 HelpRow(
-                    _non_lazy('Issuing CA'),
-                    issuing_ca.unique_name,
+                    _non_lazy('CA'),
+                    ca.unique_name,
                     ValueRenderType.PLAIN,
                 ),
                 HelpRow(
@@ -323,13 +323,13 @@ class CrlDownloadHelpView(PageContextMixin, DetailView[IssuingCaModel]):
 
         download_pem_cmd = (
             f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
-            f'  -o {issuing_ca.unique_name}.pem.crl \\\n'
+            f'  -o {ca.unique_name}.pem.crl \\\n'
             f'  "{crl_endpoint}"'
         )
 
         download_der_cmd = (
             f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
-            f'  -o {issuing_ca.unique_name}.der.crl \\\n'
+            f'  -o {ca.unique_name}.der.crl \\\n'
             f'  "{crl_endpoint}?encoding=der"'
         )
 
@@ -368,13 +368,13 @@ class CrlDownloadHelpView(PageContextMixin, DetailView[IssuingCaModel]):
         sections = [summary, crl_status_section, tls_trust_store_section, download_section, notes_section]
 
         context['help_page'] = HelpPage(
-            heading=_non_lazy(f'Help - Download CRL for {issuing_ca.unique_name}'), sections=sections
+            heading=_non_lazy(f'Help - Download CRL for {ca.unique_name}'), sections=sections
         )
         context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
         context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
 
         context['idevid_registration'] = type('obj', (object,), {
-            'domain': type('obj', (object,), {'pk': issuing_ca.pk})()
+            'domain': type('obj', (object,), {'pk': ca.pk})()
         })()
         context['back_url'] = f'{self.page_category}:{self.page_name}-config'
         context['back_button_text'] = _non_lazy('Back to Issuing CA Configuration')

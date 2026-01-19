@@ -8,16 +8,16 @@ from typing import ClassVar
 
 from rest_framework import serializers
 
-from pki.models.ca import CaModel
+from pki.models import CaModel
 
 
 class IssuingCaSerializer(serializers.ModelSerializer[CaModel]):
     """Serializer for Issuing CA instances."""
 
     common_name = serializers.SerializerMethodField()
-    issuing_ca_type = serializers.CharField(source='issuing_ca_ref.issuing_ca_type', read_only=True)
-    issuing_ca_type_display = serializers.CharField(
-        source='issuing_ca_ref.get_issuing_ca_type_display',
+    ca_type = serializers.CharField(read_only=True)
+    ca_type_display = serializers.CharField(
+        source='get_ca_type_display',
         read_only=True
     )
     last_crl_issued_at = serializers.SerializerMethodField()
@@ -31,8 +31,8 @@ class IssuingCaSerializer(serializers.ModelSerializer[CaModel]):
             'id',
             'unique_name',
             'common_name',
-            'issuing_ca_type',
-            'issuing_ca_type_display',
+            'ca_type',
+            'ca_type_display',
             'is_active',
             'created_at',
             'updated_at',
@@ -43,8 +43,8 @@ class IssuingCaSerializer(serializers.ModelSerializer[CaModel]):
             'id',
             'unique_name',
             'common_name',
-            'issuing_ca_type',
-            'issuing_ca_type_display',
+            'ca_type',
+            'ca_type_display',
             'is_active',
             'created_at',
             'updated_at',
@@ -53,13 +53,14 @@ class IssuingCaSerializer(serializers.ModelSerializer[CaModel]):
         ]
 
     def get_has_crl(self, obj: CaModel) -> bool:
-        """Check if the Issuing CA has a CRL available."""
-        return bool(obj.issuing_ca_ref.crl_pem)
+        """Check if the CA has a CRL available."""
+        return bool(obj.crl_pem)
 
     def get_last_crl_issued_at(self, obj: CaModel) -> str | None:
         """Get the last CRL issued at timestamp."""
-        return obj.issuing_ca_ref.last_crl_issued_at
+        timestamp = obj.last_crl_issued_at
+        return timestamp.isoformat() if timestamp else None
 
     def get_common_name(self, obj: CaModel) -> str:
-        """Get the common name of the issuing CA."""
-        return obj.issuing_ca_ref.common_name
+        """Get the common name of the CA."""
+        return obj.common_name

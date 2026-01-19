@@ -268,7 +268,8 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 
     def get_pks_path(self) -> str:
         """Retrieve the primary key path from the URL parameters."""
-        return str(self.kwargs.get('pks'))
+        pks = self.kwargs.get('pks')
+        return str(pks) if pks is not None else ''
 
     def get_queryset(self) -> models.QuerySet[Any, Any]:
         """Retrieve a queryset based on primary keys provided in the URL."""
@@ -277,7 +278,7 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 
         pks = self.get_pks_as_list(self.get_pks_path())
         if not pks:
-            return self.model.objects.all()  # type: ignore[attr-defined, no-any-return]
+            return self.model.objects.none()  # type: ignore[attr-defined, no-any-return]
         queryset = self.model.objects.filter(pk__in=pks)  # type: ignore[attr-defined]
 
         if len(pks) != len(queryset):

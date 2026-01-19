@@ -4,8 +4,11 @@
 {% block content %}
 
 <div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
-    <div class="card-header">
+    <div class="card-header d-flex justify-content-between align-items-center">
         <h1>{% trans "Certificate Authorities" %}</h1>
+        <a href="{% url 'pki:issuing_cas' %}" class="btn btn-outline-primary btn-sm">
+            {% trans "Issuing CAs View" %}
+        </a>
     </div>
     <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
         <table class="table">
@@ -20,15 +23,14 @@
                 </tr>
             </thead>
             <tbody>
-                {# When adding or removing columns, please update the "colspan" attribute in the {% empty %} section accordingly #}
-                {% for ca in page_obj %}
+                {% for ca in page_obj|default:cas %}
                     <tr{% if not ca.is_active %} class="text-muted"{% endif %}>
                         <td class="row_checkbox">
                             <input type="checkbox" name="row_checkbox" value="{{ ca.id }}"/>
                         </td>
                         <td>
-                            {% if ca.parent_ca %}
-                                <span style="padding-left: 1.5em; display: inline-block;">
+                            {% if ca.get_hierarchy_depth > 0 %}
+                                <span style="padding-left: {{ ca.display_indentation }}; display: inline-block;">
                                     <span style="color: #999;">└─</span> {{ ca.common_name }}
                                 </span>
                             {% else %}
@@ -36,20 +38,26 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if ca.is_issuing_ca and ca.issuing_ca_ref.domains.exists %}
-                                {% for domain in ca.issuing_ca_ref.domains.all %}
+                            {% if ca.is_issuing_ca and ca.domains.exists %}
+                                {% for domain in ca.domains.all %}
                                     <a href="{% url 'pki:domains-detail' domain.pk %}">{{ domain }}</a>{% if not forloop.last %}, {% endif %}
                                 {% endfor %}
                             {% else %}
                                 -
                             {% endif %}
                         </td>
-                        <td>{{ ca.certificate.not_valid_after }}</td>
+                        <td>
+{% if ca.is_issuing_ca %}
+    {{ ca.ca_certificate.not_valid_after }}
+{% else %}
+    {{ ca.certificate.not_valid_after }}
+{% endif %}
+                        </td>
                         <td>{{ ca.signature_suite }}</td>
                         <td>
                             {% if ca.is_issuing_ca %}
                                 <a href="{% url 'pki:issuing_cas-config' ca.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a>
-                            {% elif ca.keyless_ca %}
+                            {% elif ca.is_keyless_ca %}
                                 <a href="{% url 'pki:keyless_cas-config' ca.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a>
                             {% else %}
                                 <span class="text-muted">-</span>

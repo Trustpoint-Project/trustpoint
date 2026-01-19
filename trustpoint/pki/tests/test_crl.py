@@ -14,8 +14,6 @@ from django.test import Client
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from pki.models import CertificateModel, IssuingCaModel
-
 User = get_user_model()
 
 

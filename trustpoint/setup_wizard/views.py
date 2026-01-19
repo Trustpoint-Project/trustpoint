@@ -23,7 +23,7 @@ from django.views.generic import FormView, TemplateView, View
 
 from management.forms import KeyStorageConfigForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.models import KeyStorageConfig, PKCS11Token
-from pki.models import CertificateModel, CredentialModel, IssuingCaModel
+from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard import SetupWizardState
@@ -1235,7 +1235,7 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
         require the missing private keys.
         """
         try:
-            active_cas = IssuingCaModel.objects.filter(is_active=True)
+            active_cas = CaModel.objects.filter(is_active=True)
             count = active_cas.count()
 
             if count > 0:
@@ -1988,7 +1988,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
 
     def _clear_credential_and_certificate_data(self) -> None:
         """Clears all credential and certificate data if canceled in the 'WIZARD_TLS_SERVER_CREDENTIAL_APPLY' state."""
-        IssuingCaModel.objects.all().delete()
+        CaModel.objects.all().delete()
         CredentialModel.objects.all().delete()
         #ActiveTrustpointTlsServerCredentialModel.objects.all().delete()  # noqa: ERA001
         CertificateModel.objects.all().delete()

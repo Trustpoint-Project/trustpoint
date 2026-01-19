@@ -762,7 +762,7 @@ class RevokedCertificateModel(models.Model):
     )
 
     ca = models.ForeignKey(
-        'IssuingCaModel',
+        'CaModel',
         verbose_name=_('Issuing CA'),
         related_name='revoked_certificates',
         on_delete=models.SET_NULL,  # Safe to remove CRL if CA is removed?

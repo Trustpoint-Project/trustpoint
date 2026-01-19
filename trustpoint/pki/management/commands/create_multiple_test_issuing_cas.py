@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.core.management.base import BaseCommand
 from management.models import KeyStorageConfig
-from pki.models import IssuingCaModel
+from pki.models import CaModel
 
 from trustpoint.logger import LoggerMixin
 
@@ -42,11 +42,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         else:
             self.stdout.write(message)
 
-    def get_ca_type_from_storage_config(self) -> IssuingCaModel.IssuingCaTypeChoice:
+    def get_ca_type_from_storage_config(self) -> CaModel.CaTypeChoice:
         """Determine the CA type based on the crypto storage configuration.
 
         Returns:
-            IssuingCaModel.IssuingCaTypeChoice: The appropriate CA type.
+            CaModel.CaTypeChoice: The appropriate CA type.
         """
         try:
             config = KeyStorageConfig.get_config()
@@ -54,14 +54,14 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
                 KeyStorageConfig.StorageType.SOFTHSM,
                 KeyStorageConfig.StorageType.PHYSICAL_HSM
             ]:
-                return IssuingCaModel.IssuingCaTypeChoice.LOCAL_PKCS11
-            return IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
+                return CaModel.CaTypeChoice.LOCAL_PKCS11
+            return CaModel.CaTypeChoice.LOCAL_UNPROTECTED
         except KeyStorageConfig.DoesNotExist:
             self.log_and_stdout(
                 'KeyStorageConfig not found, defaulting to LOCAL_UNPROTECTED',
                 level='warning'
             )
-            return IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
+            return CaModel.CaTypeChoice.LOCAL_UNPROTECTED
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Adds a Root CA and three issuing CAs to the database."""
@@ -69,30 +69,78 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ca_type = self.get_ca_type_from_storage_config()
         self.log_and_stdout(f'Using CA type: {ca_type}')
 
-        self.log_and_stdout('Creating RSA-2048 Root CA and Issuing CA A...')
+        self.log_and_stdout('Creating RSA-2048 Root CA, Intermediate CA, and Issuing CA A...')
         rsa2_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        rsa2_issuing_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        rsa2_int_ca_key_1 = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        rsa2_int_ca_key_2 = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        rsa2_issuing_ca_key_1 = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        rsa2_issuing_ca_key_2 = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         rsa2_root, _ = self.create_root_ca(
             'Root-CA RSA-2048-SHA256', private_key=rsa2_root_ca_key, hash_algorithm=hashes.SHA256()
         )
-        rsa2_root_ca = self.save_root_ca(
+        rsa2_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa2_root,
             unique_name='root-ca-rsa-2048-sha256',
         )
-        rsa2_issuing_ca, _key = self.create_issuing_ca(
+
+        rsa2_int_ca_1, _key = self.create_issuing_ca(
             issuer_private_key=rsa2_root_ca_key,
-            private_key=rsa2_issuing_ca_key,
+            private_key=rsa2_int_ca_key_1,
             issuer_cn='Root-CA RSA-2048-SHA256',
-            subject_cn='Issuing CA A',
+            subject_cn='Intermediate CA A-1',
+            hash_algorithm=hashes.SHA256(),
+        )
+        rsa2_int_ca_model_1 = self.save_keyless_ca(
+            root_ca_cert=rsa2_int_ca_1,
+            unique_name='intermediate-ca-a-1',
+        )
+        rsa2_int_ca_model_1.parent_ca = rsa2_root_ca
+        rsa2_int_ca_model_1.save()
+
+        rsa2_int_ca_2, _key = self.create_issuing_ca(
+            issuer_private_key=rsa2_root_ca_key,
+            private_key=rsa2_int_ca_key_2,
+            issuer_cn='Root-CA RSA-2048-SHA256',
+            subject_cn='Intermediate CA A-2',
+            hash_algorithm=hashes.SHA256(),
+        )
+        rsa2_int_ca_model_2 = self.save_keyless_ca(
+            root_ca_cert=rsa2_int_ca_2,
+            unique_name='intermediate-ca-a-2',
+        )
+        rsa2_int_ca_model_2.parent_ca = rsa2_root_ca
+        rsa2_int_ca_model_2.save()
+
+        rsa2_issuing_ca_1, _key = self.create_issuing_ca(
+            issuer_private_key=rsa2_int_ca_key_1,
+            private_key=rsa2_issuing_ca_key_1,
+            issuer_cn='Intermediate CA A-1',
+            subject_cn='Issuing CA A-1',
             hash_algorithm=hashes.SHA256(),
         )
         self.save_issuing_ca(
-            issuing_ca_cert=rsa2_issuing_ca,
-            private_key=rsa2_issuing_ca_key,
-            chain=[rsa2_root],
-            unique_name='issuing-ca-a',
+            issuing_ca_cert=rsa2_issuing_ca_1,
+            private_key=rsa2_issuing_ca_key_1,
+            chain=[rsa2_root, rsa2_int_ca_1],
+            unique_name='issuing-ca-a-1',
             ca_type=ca_type,
-            parent_ca=rsa2_root_ca,
+            parent_ca=rsa2_int_ca_model_1,
+        )
+
+        rsa2_issuing_ca_2, _key = self.create_issuing_ca(
+            issuer_private_key=rsa2_int_ca_key_2,
+            private_key=rsa2_issuing_ca_key_2,
+            issuer_cn='Intermediate CA A-2',
+            subject_cn='Issuing CA A-2',
+            hash_algorithm=hashes.SHA256(),
+        )
+        self.save_issuing_ca(
+            issuing_ca_cert=rsa2_issuing_ca_2,
+            private_key=rsa2_issuing_ca_key_2,
+            chain=[rsa2_root, rsa2_int_ca_2],
+            unique_name='issuing-ca-a-2',
+            ca_type=ca_type,
+            parent_ca=rsa2_int_ca_model_2,
         )
 
         self.log_and_stdout('Creating RSA-3072 Root CA and Issuing CA B...')
@@ -101,7 +149,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         rsa3_root, _ = self.create_root_ca(
             'Root-CA RSA-3072-SHA256', private_key=rsa3_root_ca_key, hash_algorithm=hashes.SHA256()
         )
-        rsa3_root_ca = self.save_root_ca(
+        rsa3_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa3_root,
             unique_name='root-ca-rsa-3072-sha256',
         )
@@ -127,7 +175,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         rsa4_root, _ = self.create_root_ca(
             'Root-CA RSA-4096-SHA256', private_key=rsa4_root_ca_key, hash_algorithm=hashes.SHA512()
         )
-        rsa4_root_ca = self.save_root_ca(
+        rsa4_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa4_root,
             unique_name='root-ca-rsa-4096-sha256',
         )
@@ -153,7 +201,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ecc1_root, _ = self.create_root_ca(
             'Root-CA SECP256R1-SHA256', private_key=ecc1_root_ca_key, hash_algorithm=hashes.SHA256()
         )
-        ecc1_root_ca = self.save_root_ca(
+        ecc1_root_ca = self.save_keyless_ca(
             root_ca_cert=ecc1_root,
             unique_name='root-ca-secp256r1-sha256',
         )
@@ -179,7 +227,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ecc2_root, _ = self.create_root_ca(
             'Root-CA SECP384R1-SHA256', private_key=ecc2_root_ca_key, hash_algorithm=hashes.SHA256()
         )
-        ecc2_root_ca = self.save_root_ca(
+        ecc2_root_ca = self.save_keyless_ca(
             root_ca_cert=ecc2_root,
             unique_name='root-ca-secp384r1-sha256',
         )
@@ -205,7 +253,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ecc3_root, _ = self.create_root_ca(
             'Root-CA SECP521R1-SHA256', private_key=ecc3_root_ca_key, hash_algorithm=hashes.SHA3_512()
         )
-        ecc3_root_ca = self.save_root_ca(
+        ecc3_root_ca = self.save_keyless_ca(
             root_ca_cert=ecc3_root,
             unique_name='root-ca-secp521r1-sha256',
         )

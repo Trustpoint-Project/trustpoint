@@ -18,10 +18,8 @@ from .extension import (
     SubjectAlternativeNameExtension,
 )
 from .certificate import CertificateModel, RevokedCertificateModel
-from .keyless_ca import KeylessCaModel
-from .ca import CaModel
 from .crl import CrlModel
-from .issuing_ca import IssuingCaModel
+from .issuing_ca import CaModel
 from .credential import (CredentialAlreadyExistsError,
                          CredentialModel,
                          CertificateChainOrderModel,
@@ -45,8 +43,6 @@ __all__ = [
     'DomainAllowedCertificateProfileModel',
     'DomainModel',
     'GeneralNameIpAddress',
-    'IssuingCaModel',
-    'KeylessCaModel',
     'OwnerCredentialModel',
     'PKCS11Key',
     'RevokedCertificateModel',

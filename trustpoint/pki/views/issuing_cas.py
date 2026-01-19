@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import binascii
 from base64 import b64decode
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -32,7 +32,7 @@ from pki.forms import (
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddMethodSelectForm,
 )
-from pki.models import CaModel, CertificateModel, IssuingCaModel
+from pki.models import CaModel, CertificateModel
 from pki.serializer import IssuingCaSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
@@ -47,19 +47,21 @@ if TYPE_CHECKING:
     from django.forms import Form
     from django.http import HttpRequest
 
+    from pki.models.credential import CredentialModel
+
 
 class IssuingCaContextMixin(ContextDataMixin):
     """Mixin which adds context_data for the PKI -> Issuing CAs pages."""
 
     context_page_category = 'pki'
-    context_page_name = 'issuing_cas'
+    context_page_name = 'cas'
 
 
 class KeylessCaContextMixin(ContextDataMixin):
     """Mixin which adds context_data for the PKI -> Keyless CAs pages."""
 
     context_page_category = 'pki'
-    context_page_name = 'keyless_cas'
+    context_page_name = 'cas'
 
 
 class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin[CaModel], ListView[CaModel]):
@@ -73,7 +75,26 @@ class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin[CaModel], Lis
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().filter(issuing_ca_ref__isnull=False)
+        queryset = self.model.objects.all().filter(ca_type__isnull=False)
+
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        if sort_param == 'common_name':
+            sort_param = 'credential__certificate__common_name'
+        elif sort_param == '-common_name':
+            sort_param = '-credential__certificate__common_name'
+
+        if hasattr(self.model, 'is_active'):
+            return queryset.order_by('-is_active', sort_param)
+        return queryset.order_by(sort_param)
+
+    def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        """Add sorting information to the context."""
+        context = super().get_context_data(*args, **kwargs)
+
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        context['current_sort'] = sort_param
+
+        return context
 
 
 class IssuingCaAddMethodSelectView(IssuingCaContextMixin, FormView[IssuingCaAddMethodSelectForm]):
@@ -139,7 +160,7 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().filter(issuing_ca_ref__isnull=False)
+        return super().get_queryset().filter(ca_type__isnull=False)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the issued certificates to the context.
@@ -153,7 +174,7 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         context = super().get_context_data(**kwargs)
         issuing_ca = self.get_object()
         issued_certificates = CertificateModel.objects.filter(
-            issuer_public_bytes=issuing_ca.issuing_ca_ref.credential.certificate.subject_public_bytes
+            issuer_public_bytes=cast('CredentialModel', issuing_ca.credential).certificate.subject_public_bytes
         )
         context['issued_certificates'] = issued_certificates
         return context
@@ -172,7 +193,7 @@ class KeylessCaConfigView(LoggerMixin, KeylessCaContextMixin, DetailView[CaModel
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only keyless CAs."""
-        return super().get_queryset().filter(keyless_ca__isnull=False)
+        return super().get_queryset().filter(certificate__isnull=False, credential__isnull=True)
 
 
 class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateModel]):
@@ -188,13 +209,13 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
         Returns:
             The filtered QuerySet.
         """
-        issuing_ca = get_object_or_404(CaModel.objects.filter(issuing_ca_ref__isnull=False), pk=self.kwargs['pk'])
+        issuing_ca = get_object_or_404(CaModel.objects.filter(ca_type__isnull=False), pk=self.kwargs['pk'])
 
         # PyCharm TypeChecker issue - this passes mypy
         # noinspection PyTypeChecker
         # TODO(AlexHx8472): This is not a good query. Use issued credentials to get the certificates.  # noqa: FIX002
         return CertificateModel.objects.filter(
-            issuer_public_bytes=issuing_ca.issuing_ca_ref.credential.certificate.subject_public_bytes
+            issuer_public_bytes=issuing_ca.subject_public_bytes
         )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -208,7 +229,7 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
         """
         context = super().get_context_data(**kwargs)
         context['issuing_ca'] = get_object_or_404(
-            CaModel.objects.filter(issuing_ca_ref__isnull=False), pk=self.kwargs['pk']
+            CaModel.objects.filter(ca_type__isnull=False), pk=self.kwargs['pk']
         )
         return context
 
@@ -224,7 +245,7 @@ class IssuingCaDetailView(IssuingCaContextMixin, DetailView[CaModel]):
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().filter(issuing_ca_ref__isnull=False)
+        return super().get_queryset().filter(ca_type__isnull=False)
 
 
 class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
@@ -236,9 +257,17 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
     template_name = 'pki/issuing_cas/confirm_delete.html'
     context_object_name = 'issuing_cas'
 
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
+        queryset = self.get_queryset()
+        if not queryset.exists():
+            messages.error(request, _('No Issuing CAs selected for deletion.'))
+            return HttpResponseRedirect(self.success_url)
+        return super().get(request, *args, **kwargs)
+
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().filter(issuing_ca_ref__isnull=False)
+        return super().get_queryset().filter(ca_type__isnull=False)
 
     def form_valid(self, form: Form) -> HttpResponse:
         """Delete the selected Issuing CAs on valid form."""
@@ -274,7 +303,7 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[CaModel]):
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().filter(issuing_ca_ref__isnull=False)
+        return super().get_queryset().filter(ca_type__isnull=False)
 
     # TODO(Air): This view should use a POST request as it is an action.    # noqa: FIX002
     # However, this is not trivial in the config view as that already contains a form.
@@ -284,7 +313,7 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[CaModel]):
         del kwargs
 
         issuing_ca = self.get_object()
-        if issuing_ca.issuing_ca_ref.issue_crl():
+        if issuing_ca.issue_crl():
             messages.success(request, _('CRL for Issuing CA %s has been generated.') % issuing_ca.unique_name)
         else:
             messages.error(request, _('Failed to generate CRL for Issuing CA %s.') % issuing_ca.unique_name)
@@ -306,7 +335,7 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().filter(issuing_ca_ref__isnull=False)
+        return super().get_queryset().filter(ca_type__isnull=False)
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Download the CRL of the Issuing CA."""
@@ -314,7 +343,7 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
         del kwargs
 
         issuing_ca = self.get_object()
-        crl_pem = issuing_ca.issuing_ca_ref.crl_pem
+        crl_pem = issuing_ca.crl_pem
         if not crl_pem:
             messages.warning(request, _('No CRL available for issuing CA %s.') % issuing_ca.unique_name)
             return redirect('pki:issuing_cas')
@@ -344,7 +373,7 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
 class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
     """ViewSet for managing Issuing CA instances via REST API."""
 
-    queryset = CaModel.objects.filter(issuing_ca_ref__isnull=False).order_by('-created_at')
+    queryset = CaModel.objects.filter(ca_type__isnull=False).order_by('-created_at')
     serializer_class = IssuingCaSerializer
     permission_classes = (IsAuthenticated,)
     filter_backends = (
@@ -353,7 +382,7 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
         filters.OrderingFilter,
     )
     filterset_fields: ClassVar = ['unique_name', 'is_active']
-    search_fields: ClassVar = ['unique_name', 'issuing_ca_ref__credential__certificate__common_name']
+    search_fields: ClassVar = ['unique_name', 'credential__certificate__common_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at', 'updated_at']
 
     # ignoring untyped decorator (drf-yasg not typed)
@@ -421,13 +450,12 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
     def generate_crl(self, _request: HttpRequest, **_kwargs: Any) -> Response:
         """Generate a new CRL for this Issuing CA."""
         ca = self.get_object()
-        issuing_ca = ca.issuing_ca_ref
 
-        if issuing_ca.issue_crl():
+        if ca.issue_crl():
             return Response(
                 {
                     'message': f'CRL generated successfully for Issuing CA "{ca.unique_name}".',
-                    'last_crl_issued_at': issuing_ca.last_crl_issued_at,
+                    'last_crl_issued_at': ca.last_crl_issued_at,
                 },
                 status=status.HTTP_200_OK,
             )
@@ -479,8 +507,7 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
     def crl(self, request: HttpRequest, **_kwargs: Any) -> HttpResponse:
         """Download the CRL for this Issuing CA."""
         ca = self.get_object()
-        issuing_ca = ca.issuing_ca_ref
-        crl_pem = issuing_ca.crl_pem
+        crl_pem = ca.crl_pem
 
         if not crl_pem:
             return Response(

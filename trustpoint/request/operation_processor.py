@@ -1,7 +1,7 @@
 """Carries out the requested operation after authentication and authorization."""
 import contextlib
 from abc import ABC, abstractmethod
-from typing import get_args
+from typing import cast, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
@@ -95,7 +95,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             err_msg = f'The public key in the certificate is missing or of unsupported type: {type(public_key)}.'
             raise TypeError(err_msg)
 
-        issuing_credential = ca.credential
+        issuing_credential = cast('CredentialModel', ca.credential)
         issuer_certificate = issuing_credential.get_certificate()
         context.issuer_credential = issuing_credential
 
@@ -286,7 +286,7 @@ class LocalCaCmpSignatureProcessor(LoggerMixin, AbstractOperationProcessor):
                     raise ValueError(exc_msg)
 
                 ca = context.domain.get_issuing_ca_or_value_error()
-                context.issuer_credential = ca.credential
+                context.issuer_credential = cast('CredentialModel', ca.credential)
             signer_credential = context.issuer_credential
 
         self._signature = GenericSigner.sign(self._data, signer_credential)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
@@ -16,7 +16,9 @@ from util.field import UniqueNameValidator
 if TYPE_CHECKING:
     from typing import Any, ClassVar
 
-from . import IssuingCaModel
+    from .credential import CredentialModel
+
+from . import CaModel
 from .cert_profile import CertificateProfileModel
 
 __all__ = ['DomainAllowedCertificateProfileModel', 'DomainModel']
@@ -28,7 +30,7 @@ class DomainModel(models.Model):
     unique_name = models.CharField(_('Domain Name'), max_length=100, unique=True, validators=[UniqueNameValidator()])
 
     issuing_ca = models.ForeignKey(
-        IssuingCaModel,
+        CaModel,
         on_delete=models.PROTECT,
         blank=False,
         null=True,
@@ -75,7 +77,8 @@ class DomainModel(models.Model):
     def signature_suite(self) -> oid.SignatureSuite:
         """Get the signature suite for the domain (based on its Issuing CA)."""
         return oid.SignatureSuite.from_certificate(
-            self.get_issuing_ca_or_value_error().credential.get_certificate_serializer().as_crypto())
+            cast('CredentialModel', self.get_issuing_ca_or_value_error().credential)
+            .get_certificate_serializer().as_crypto())
 
     @property
     def public_key_info(self) -> oid.PublicKeyInfo:
@@ -84,11 +87,11 @@ class DomainModel(models.Model):
 
     def clean(self) -> None:
         """Validate that the issuing CA is not an auto-generated root CA."""
-        if self.issuing_ca and self.issuing_ca.issuing_ca_type == IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT:
+        if self.issuing_ca and self.issuing_ca.ca_type == CaModel.CaTypeChoice.AUTOGEN_ROOT:
             exc_msg = 'The issuing CA associated with the domain cannot be an auto-generated root CA.'
             raise ValidationError(exc_msg)
 
-    def get_issuing_ca_or_value_error(self) -> IssuingCaModel:
+    def get_issuing_ca_or_value_error(self) -> CaModel:
         """Gets the corresponding Issuing CA.
 
         Returns:
