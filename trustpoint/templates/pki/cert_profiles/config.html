@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load crispy_forms_filters %}
+{% load static %}
 
 {% block content %}
 <div class="card">
@@ -26,7 +27,7 @@
                 <div class="tp-kvp-list">
                     <div>
                         <div>{% trans 'Unique Name' %}</div>
-                        <div><input type="text" class="form-control {% if form.unique_name.errors %}is-invalid{% endif %}" 
+                        <div><input type="text" class="form-control {% if form.unique_name.errors %}is-invalid{% endif %}"
                             name="unique_name" value="{{ form.unique_name.value }}" id="unique_name" aria-describedby="unique_name_error" />
                         {% for error in form.unique_name.errors %}
                             <div class="invalid-feedback" id="unique_name_error">{{ error }}</div>
@@ -42,11 +43,20 @@
                 </div>
                 <h2>{% trans 'Profile Details' %}</h2>
                 <hr class="hr-m">
-                <textarea class="form-control {% if form.profile_json.errors %}is-invalid{% endif %}"
-                    id="json-editor" name="profile_json" rows="10" aria-describedby="profile_json_error">{{ profile_json }}</textarea>
-                {% for error in form.profile_json.errors %}
-                    <div class="invalid-feedback" id="profile_json_error">{{ error }}</div>
-                {% endfor %}
+                <div style="position: relative; display: flex;">
+                    <div style="flex: 1;">
+                        <textarea class="form-control {% if form.profile_json.errors %}is-invalid{% endif %}"
+                            id="json-editor" name="profile_json" rows="10" aria-describedby="profile_json_error">{{ profile_json }}</textarea>
+                        {% for error in form.profile_json.errors %}
+                            <div class="invalid-feedback" id="profile_json_error">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Keyboard shortcut hint -->
+                <div style="margin-top: 12px; padding: 12px; background: rgba(100, 150, 255, 0.08); border-radius: 6px; border-left: 3px solid rgba(100, 150, 255, 0.4); font-size: 13px; color: #666;">
+                    💡 Tip: Press <kbd style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-family: monospace;">Ctrl+K</kbd> to open the field builder sidebar
+                </div>
             </div>
         </div>
         <div class="card-footer d-flex">
@@ -58,6 +68,10 @@
     </form>
 </div>
 
+<!-- Profile Builder Sidebar -->
+{% include "pki/cert_profiles/includes/profile-builder-sidebar.html" %}
+
+
 {% if json_valid %}
     {{ profile_json|json_script:"json-data" }}
     <script>
@@ -65,5 +79,10 @@
         document.getElementById("json-editor").textContent = JSON.stringify(data, null, 2);
     </script>
 {% endif %}
+
+<!-- Include styles -->
+<link rel="stylesheet" href="{% static 'css/profile-builder-styles.css' %}">
+<!-- Include JavaScript -->
+<script src="{% static 'js/profile-builder.js' %}"></script>
 
 {% endblock content %}
