@@ -174,6 +174,10 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     # The DER encoded issuer as hex string. Without prefix, all uppercase, no whitespace / trimmed.
     issuer_public_bytes = models.CharField(verbose_name=_('Issuer Public Bytes'), max_length=2048, editable=False)
 
+    issuer_id = models.ForeignKey(
+        to='CertificateModel', verbose_name=_('Issuer Certificate'),
+        null=True, blank=True, on_delete=models.SET_NULL, db_column='issuer_id')
+
     # The validity entries use datetime objects with UTC timezone.
     not_valid_before = models.DateTimeField(verbose_name=_('Not Valid Before (UTC)'), editable=False)
     not_valid_after = models.DateTimeField(verbose_name=_('Not Valid After (UTC)'), editable=False)
@@ -472,7 +476,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         return subject
 
     @staticmethod
-    def _get_issuer(cert: x509.Certificate) -> list[tuple[str, str]]:
+    def _get_issuer_name(cert: x509.Certificate) -> list[tuple[str, str]]:
         issuer: list[tuple[str, str]] = []
         for rdn in cert.issuer.rdns:
             for attr_type_and_value in rdn:
@@ -480,7 +484,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
                     value = attr_type_and_value.value.hex()
                 else:
                     value = attr_type_and_value.value
-            issuer.append((attr_type_and_value.oid.dotted_string, value))
+                issuer.append((attr_type_and_value.oid.dotted_string, value))
         return issuer
 
     @staticmethod
@@ -507,6 +511,12 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     def get_public_key_serializer(self) -> PublicKeySerializer:
         """Get the serializer for the certificate's public key."""
         return PublicKeySerializer.from_pem(self.public_key_pem.encode())
+
+    def get_certificate_chain(self) -> list[CertificateModel]:
+        """Get the certificate chain from this certificate up to the root CA."""
+        if not self.issuer_id or self.issuer_id == self:
+            return []
+        return [self.issuer_id, *self.issuer_id.get_certificate_chain()]
 
     # ---------------------------------------------- Private save methods ----------------------------------------------
 
@@ -538,7 +548,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         version = certificate.version.value
         serial_number = f'{certificate.serial_number:x}'.upper()
 
-        issuer = cls._get_issuer(certificate)
+        issuer = cls._get_issuer_name(certificate)
         issuer_public_bytes = certificate.issuer.public_bytes().hex().upper()
 
         not_valid_before = certificate.not_valid_before_utc
@@ -664,7 +674,32 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         cls._save_issuer(cert_model, issuer)
         cls._save_extensions(cert_model, certificate)
 
+        # Adding issuer CertificateModel reference
+        issuer_candidates = cls.objects.filter(subject_public_bytes=cert_model.issuer_public_bytes)
+
+        for issuer_candidate in issuer_candidates:
+            try:
+                certificate.verify_directly_issued_by(
+                    issuer_candidate.get_certificate_serializer().as_crypto())
+                cert_model.issuer_id = issuer_candidate
+                break
+            except (ValueError, TypeError, InvalidSignature):
+                pass
+
         cert_model._save()
+
+        # Adding issuer references on CertificateModels that were issued by this certificate
+        issued_candidates = cls.objects.filter(issuer_public_bytes=cert_model.subject_public_bytes,
+                                               issuer_id__isnull=True)
+
+        for issued_candidate in issued_candidates:
+            try:
+                issued_candidate.get_certificate_serializer().as_crypto().verify_directly_issued_by(certificate)
+                issued_candidate.issuer_id = cert_model
+                issued_candidate._save()  # noqa: SLF001
+            except (ValueError, TypeError, InvalidSignature):
+                pass
+
         return cert_model
 
     # ---------------------------------------------- Public save methods -----------------------------------------------
