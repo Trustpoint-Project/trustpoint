@@ -3,7 +3,7 @@
 from django.urls import path, re_path
 
 from help_pages import pki_help_views
-from pki.views import ca, cert_profiles, certificates, domains, issuing_cas, owner_credentials, truststores
+from pki.views import ca, cert_profiles, certificates, crls, domains, issuing_cas, owner_credentials, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView
 
@@ -90,6 +90,22 @@ urlpatterns = [
         r'^cas/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         ca.CaBulkDeleteConfirmView.as_view(),
         name='cas-delete_confirm',
+    ),
+    path('crls/', crls.CrlTableView.as_view(), name='crls'),
+    re_path(
+        r'^crls/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
+        crls.CrlBulkDeleteConfirmView.as_view(),
+        name='crls-delete_confirm',
+    ),
+    re_path(
+        r'^crls/download/(?P<pk>[0-9]+)/?$',
+        crls.CrlDownloadView.as_view(),
+        name='crl-download',
+    ),
+    re_path(
+        r'^crls/download/(?P<file_format>[a-zA-Z0-9_]+)/(?P<pk>[0-9]+)/?$',
+        crls.CrlDownloadView.as_view(),
+        name='crl-file-download',
     ),
     path('issuing-cas/', issuing_cas.IssuingCaTableView.as_view(), name='issuing_cas'),
     path(
