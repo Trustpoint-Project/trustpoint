@@ -65,7 +65,7 @@
                             </div>
                         </div>
                     </div>
-                    <a class="btn btn-primary min-width-15 my-2" href="{% url 'pki:crls' %}">{% trans 'Back to CRLs' %}</a><br>
+                    <a class="btn btn-primary min-width-15 my-2" href="{% url 'pki:crl-detail' pk=crl.id %}">{% trans 'CRL Details' %}</a><br>
                     <hr>
 
                     <h2>{% trans 'Download CRL' %}</h2>

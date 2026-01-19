@@ -197,11 +197,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """Returns the CA certificate model for both issuing and keyless CAs."""
         if self.is_issuing_ca:
             return self.credential.certificate
-        elif self.is_keyless_ca:
+        if self.is_keyless_ca:
             return self.certificate
-        else:
-            msg = 'CA has neither credential nor certificate'
-            raise ValueError(msg)
+        msg = 'CA has neither credential nor certificate'
+        raise ValueError(msg)
 
     @property
     def last_crl_issued_at(self) -> datetime.datetime | None:

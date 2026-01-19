@@ -97,6 +97,7 @@ urlpatterns = [
         crls.CrlBulkDeleteConfirmView.as_view(),
         name='crls-delete_confirm',
     ),
+    path('crls/details/<int:pk>/', crls.CrlDetailView.as_view(), name='crl-detail'),
     re_path(
         r'^crls/download/(?P<pk>[0-9]+)/?$',
         crls.CrlDownloadView.as_view(),

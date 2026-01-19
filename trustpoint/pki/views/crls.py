@@ -1,10 +1,8 @@
 """CRL views for the PKI application."""
 
 import binascii
-import logging
 from typing import Any
 
-from cryptography import x509
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError, QuerySet
@@ -15,23 +13,24 @@ from django.utils.translation import gettext as _
 from django.views.generic import ListView
 from django.views.generic.detail import DetailView
 
-from pki.models import CrlModel
+from pki.models import CertificateModel, CrlModel
 from trustpoint.views.base import BulkDeleteView, ContextDataMixin
 
-logger = logging.getLogger(__name__)
+
+class CrlContextMixin(ContextDataMixin):
+    """Mixin which adds context_data for the PKI -> CRLs pages."""
+
+    context_page_category = 'pki'
+    context_page_name = 'crls'
 
 
-class CrlTableView(ContextDataMixin, ListView[CrlModel]):
+class CrlTableView(CrlContextMixin, ListView[CrlModel]):
     """Table view for all CRLs."""
 
     model = CrlModel
     template_name = 'pki/crls/crls.html'
     context_object_name = 'crls'
     paginate_by = None
-
-    # Context attributes for sidebar navigation
-    context_page_category = 'pki'
-    context_page_name = 'crls'
 
     def get_queryset(self) -> QuerySet[CrlModel]:
         """Return all CRL models with related CA information."""
@@ -79,7 +78,7 @@ class CrlBulkDeleteConfirmView(BulkDeleteView):
         return response
 
 
-class CrlDownloadView(ContextDataMixin, DetailView[CrlModel]):
+class CrlDownloadView(CrlContextMixin, DetailView[CrlModel]):
     """View for downloading a single CRL."""
 
     model = CrlModel
@@ -87,10 +86,6 @@ class CrlDownloadView(ContextDataMixin, DetailView[CrlModel]):
     ignore_url = reverse_lazy('pki:crls')
     template_name = 'pki/crls/download.html'
     context_object_name = 'crl'
-
-    # Context attributes for sidebar navigation
-    context_page_category = 'pki'
-    context_page_name = 'crls'
 
     def get_queryset(self) -> QuerySet[CrlModel]:
         """Return all CRL models with related CA information."""
@@ -135,8 +130,11 @@ class CrlDownloadView(ContextDataMixin, DetailView[CrlModel]):
             mime_type = 'application/x-pem-file'
             file_extension = '.crl'
         elif file_format == 'der':
-            # Convert PEM to DER
-            pem_lines = [line.strip() for line in crl_model.crl_pem.splitlines() if line and not line.startswith('-----')]
+            pem_lines = [
+                line.strip()
+                for line in crl_model.crl_pem.splitlines()
+                if line and not line.startswith('-----')
+            ]
             b64data = ''.join(pem_lines)
             try:
                 file_bytes = binascii.a2b_base64(b64data)
@@ -149,15 +147,16 @@ class CrlDownloadView(ContextDataMixin, DetailView[CrlModel]):
                 )
                 return HttpResponseRedirect(self.success_url)
         elif file_format in ['pkcs7_pem', 'pkcs7_der']:
-            # For PKCS#7, we currently return the CRL as-is
-            # TODO: Implement proper PKCS#7 packaging for CRLs
             if file_format == 'pkcs7_pem':
                 file_bytes = crl_model.crl_pem.encode()
                 mime_type = 'application/x-pem-file'
                 file_extension = '.p7c'
             else:
-                # Convert PEM to DER for PKCS#7 DER
-                pem_lines = [line.strip() for line in crl_model.crl_pem.splitlines() if line and not line.startswith('-----')]
+                pem_lines = [
+                    line.strip()
+                    for line in crl_model.crl_pem.splitlines()
+                    if line and not line.startswith('-----')
+                ]
                 b64data = ''.join(pem_lines)
                 try:
                     file_bytes = binascii.a2b_base64(b64data)
@@ -172,7 +171,6 @@ class CrlDownloadView(ContextDataMixin, DetailView[CrlModel]):
         else:
             raise Http404
 
-        # Generate filename
         ca_name_safe = ''.join(c if c.isalnum() or c in '._-' else '_' for c in crl_model.ca.unique_name)
         if crl_model.crl_number:
             file_name = f'{ca_name_safe}_crl_{crl_model.crl_number}{file_extension}'
@@ -183,3 +181,56 @@ class CrlDownloadView(ContextDataMixin, DetailView[CrlModel]):
         response['Content-Disposition'] = f'attachment; filename="{file_name}"'
 
         return response
+
+class CrlDetailView(CrlContextMixin, DetailView[CrlModel]):
+    """Detail view for a single CRL."""
+
+    model = CrlModel
+    success_url = reverse_lazy('pki:crls')
+    ignore_url = reverse_lazy('pki:crls')
+    template_name = 'pki/crls/details.html'
+    context_object_name = 'crl'
+
+    def get_queryset(self) -> QuerySet[CrlModel]:
+        """Return CRL models with related CA information."""
+        return super().get_queryset().select_related('ca')
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add additional context data for the CRL detail view."""
+        context = super().get_context_data(**kwargs)
+        crl = context['crl']
+
+        crypto_crl = crl.get_crl_as_crypto()
+
+        revoked_certs = []
+        serial_numbers = [f'{revoked_cert.serial_number:x}'.upper() for revoked_cert in crypto_crl]
+
+        certificates_by_serial = {}
+        if serial_numbers:
+            certificates = CertificateModel.objects.filter(serial_number__in=serial_numbers)
+            certificates_by_serial = {cert.serial_number: cert.id for cert in certificates}
+
+        for revoked_cert in crypto_crl:
+            serial_hex = f'{revoked_cert.serial_number:x}'.upper()
+            cert_id = certificates_by_serial.get(serial_hex)
+            revoked_certs.append({
+                'serial_number': revoked_cert.serial_number,
+                'serial_number_hex': serial_hex,
+                'revocation_date': revoked_cert.revocation_date_utc,
+                'reason': getattr(revoked_cert, 'reason', None),
+                'certificate_id': cert_id,
+            })
+        context['revoked_certificates'] = revoked_certs
+
+        extensions = [
+            {
+                'oid': ext.oid.dotted_string,
+                'name': getattr(ext.oid, '_name', str(ext.oid)),
+                'critical': ext.critical,
+                'value': ext.value,
+            }
+            for ext in crypto_crl.extensions
+        ]
+        context['extensions'] = extensions
+
+        return context

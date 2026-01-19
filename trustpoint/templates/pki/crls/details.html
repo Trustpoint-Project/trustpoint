@@ -1,0 +1,243 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block head %}
+    <script src="{% static 'js/copy_clipboard.js' %}"></script>
+{% endblock head %}
+
+{% block content %}
+
+<div class="card" style="display: flex; flex-direction: column; height: calc(100vh - 120px);">
+    <div class="card-header">
+        <h1>{% trans "CRL Details" %}</h1>
+    </div>
+    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; padding-top: 0;">
+        <ul class="nav nav-tabs mt-3" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="tab1-tab" data-bs-toggle="tab" data-bs-target="#tab1-panel"
+                    type="button" role="tab">{% trans "General" %}</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab2-tab" data-bs-toggle="tab" data-bs-target="#tab2-panel" type="button"
+                    role="tab">{% trans "Revoked Certificates" %}</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="tab3-tab" data-bs-toggle="tab" data-bs-target="#tab3-panel" type="button"
+                    role="tab">{% trans "Extensions" %}</button>
+            </li>
+        </ul>
+        <div class="tab-content pt-4">
+            <div class="tab-pane fade show active" id="tab1-panel" role="tabpanel">
+                <div class="tp-card-centered-content">
+                    <h2>{% trans "CRL Information" %}</h2>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>{% trans 'CA Name' %}</div>
+                            <div>
+                                <a href="{% if crl.ca.is_issuing_ca %}{% url 'pki:issuing_cas-config' crl.ca.id %}{% elif crl.ca.is_keyless_ca %}{% url 'pki:keyless_cas-config' crl.ca.id %}{% endif %}">
+                                    {{ crl.ca.unique_name }}
+                                </a>
+                            </div>
+                        </div>
+                        <div>
+                            <div>{% trans 'CRL Number' %}</div>
+                            <div>
+                                {% if crl.crl_number %}
+                                    {{ crl.crl_number }}
+                                {% else %}
+                                    {% trans 'No number' %}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <div>{% trans 'This Update' %}</div>
+                            <div>{{ crl.this_update }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Next Update' %}</div>
+                            <div>
+                                {% if crl.next_update %}
+                                    {{ crl.next_update }}
+                                {% else %}
+                                    {% trans 'Not set' %}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Validity Period' %}</div>
+                            <div>
+                                {% if crl.validity_period %}
+                                    {{ crl.get_validity_hours|floatformat:1 }} {% trans 'hours' %}
+                                {% else %}
+                                    {% trans 'Not set' %}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Status' %}</div>
+                            <div>
+                                {% if crl.is_active %}
+                                    <span class="badge bg-success">{% trans 'Active' %}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{% trans 'Inactive' %}</span>
+                                {% endif %}
+                                {% if crl.is_expired %}
+                                    <br><span class="badge bg-warning text-dark">{% trans 'Expired' %}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Total Revoked Certificates' %}</div>
+                            <div>{{ revoked_certificates|length }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Created' %}</div>
+                            <div>{{ crl.created_at }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Updated' %}</div>
+                            <div>{{ crl.updated_at }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab2-panel" role="tabpanel">
+                <div class="tp-card-centered-content">
+                    <h2>{% trans "Revoked Certificates" %}</h2>
+                    <hr class="hr-m">
+                    {% if revoked_certificates %}
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>{% trans 'Serial Number' %}</th>
+                                    <th>{% trans 'Revocation Date' %}</th>
+                                    <th>{% trans 'Reason' %}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for cert in revoked_certificates %}
+                                    <tr>
+                                        <td>
+                                            {% if cert.certificate_id %}
+                                                <a href="{% url 'pki:certificate-detail' pk=cert.certificate_id %}">{{ cert.serial_number_hex }}</a>
+                                            {% else %}
+                                                {{ cert.serial_number_hex }}
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ cert.revocation_date }}</td>
+                                        <td>
+                                            {% if cert.reason %}
+                                                {{ cert.reason }}
+                                            {% else %}
+                                                {% trans 'Not specified' %}
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    {% else %}
+                        <div class="text-muted">{% trans 'No certificates have been revoked in this CRL.' %}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="tab3-panel" role="tabpanel">
+                <div class="tp-card-centered-content">
+                    <h2>{% trans "Extensions" %}</h2>
+                    <hr class="hr-m">
+                    {% if extensions %}
+                        <div class="tp-kvp-list">
+                            {% for ext in extensions %}
+                                <div>
+                                    <div>{{ ext.name }} ({{ ext.oid }})</div>
+                                    <div>
+                                        {{ ext.value }}
+                                        {% if ext.critical %}
+                                            <span class="badge bg-warning text-dark">{% trans 'Critical' %}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-muted">{% trans 'No extensions present in this CRL.' %}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+        <div class="tp-card-btn-footer m-1">
+            <button type="button" value="Back" class="btn btn-secondary btn-half" onClick="history.back()">{% trans 'Back' %}</button>
+            <a href="{% url 'pki:crls' %}" class="btn btn-secondary btn-half">{% trans 'Cancel' %}</a>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#pemModal">{% trans 'Show PEM' %}</button>
+            <a href="{% url 'pki:crl-download' pk=crl.id %}" class="btn btn-primary">{% trans 'Download' %}</a>
+        </div>
+    </div>
+</div>
+
+<!-- PEM Modal -->
+<div class="modal fade" id="pemModal" tabindex="-1" aria-labelledby="pemModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pemModalLabel">{% trans "CRL PEM" %}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"
+                    aria-label="{% trans 'Close' %}"></button>
+            </div>
+            <div class="modal-body">
+                <div class="copy-container" style="position: relative;">
+                    <pre class="command-text"
+                        style="background-color: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: 'Courier New', monospace; font-size: 12px; max-height: 500px;">{{ crl.crl_pem }}</pre>
+                    <button type="button" class="copy-button" data-tooltip="Copy to clipboard"
+                        aria-label="Copy to clipboard" style="position: absolute; top: 10px; right: 10px;">
+                        <svg class="icon icon-copy" width="24" height="24" fill="currentColor">
+                            <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .nav-tabs {
+        border-bottom: 1px solid #34373c;
+        background: none;
+    }
+
+    .nav-tabs .nav-link {
+        border: none !important;
+        border-bottom: 3px solid transparent !important;
+        background: none !important;
+        color: #b7b8be;
+        font-weight: 500;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        margin-bottom: -1px;
+        transition: color 0.16s, border-bottom 0.16s;
+    }
+
+    .nav-tabs .nav-link.active {
+        color: #5196ff;
+        border-bottom: 3px solid #5196ff !important;
+        background: none !important;
+        font-weight: 600;
+        box-shadow: none !important;
+    }
+
+    .nav-tabs .nav-link:hover:not(.active),
+    .nav-tabs .nav-link:focus:not(.active) {
+        color: #dde8ff;
+        border-bottom: 3px solid #363b40;
+        background: none !important;
+        box-shadow: none !important;
+    }
+</style>
+
+{% endblock content %}

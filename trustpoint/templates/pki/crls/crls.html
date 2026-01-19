@@ -16,7 +16,6 @@
                     <th>{% trans 'CA Name' %}</th>
                     <th>{% trans 'This Update' %}</th>
                     <th>{% trans 'Next Update' %}</th>
-                    <th>{% trans 'Validity Period' %}</th>
                     <th>{% trans 'Status' %}</th>
                     <th>{% trans 'Revoked Certificates' %}</th>
                     <th>{% trans 'Download' %}</th>
@@ -30,9 +29,9 @@
                         </td>
                         <td>
                             {% if crl.crl_number %}
-                                #{{ crl.crl_number }}
+                                <a href="{% url 'pki:crl-detail' pk=crl.id %}">{{ crl.crl_number }}</a>
                             {% else %}
-                                {% trans 'No number' %}
+                                <a href="{% url 'pki:crl-detail' pk=crl.id %}">{% trans 'No number' %}</a>
                             {% endif %}
                         </td>
                         <td>
@@ -44,13 +43,6 @@
                         <td>
                             {% if crl.next_update %}
                                 {{ crl.next_update }}
-                            {% else %}
-                                {% trans 'Not set' %}
-                            {% endif %}
-                        </td>
-                        <td>
-                            {% if crl.validity_period %}
-                                {{ crl.get_validity_hours|floatformat:1 }} {% trans 'hours' %}
                             {% else %}
                                 {% trans 'Not set' %}
                             {% endif %}
