@@ -29,6 +29,25 @@ class PkiMessageType(enum.Enum):
     """PKI Message Type (CMP) Enum."""
 
     IR = 'ir'
+    CR = 'cr'
+    KUR = 'kur'
+    RR = 'rr'
+    GENM = 'genm'
+
+
+class PkiOperation(enum.Enum):
+    """PKI Management Operation Path Segments (RFC 9483)."""
+
+    INITIALIZATION = 'initialization'
+    CERTIFICATION = 'certification'
+    KEYUPDATE = 'keyupdate'
+    PKCS10 = 'pkcs10'
+    REVOCATION = 'revocation'
+    GETCACERTS = 'getcacerts'
+    GETROOTUPDATE = 'getrootupdate'
+    GETCERTREQTEMPLATE = 'getcertreqtemplate'
+    GETCRLS = 'getcrls'
+    NESTED = 'nested'
 
 
 class GeneralNameType(enum.Enum):
