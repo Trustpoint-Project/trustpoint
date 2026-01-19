@@ -491,7 +491,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             QuerySet: Certificates issued by this CA.
         """
-        ca_subject_public_bytes = self.subject_public_bytes
+        ca_subject_public_bytes = self.credential.certificate.subject_public_bytes
 
         # do not return self-signed CA certificate
         return CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude(

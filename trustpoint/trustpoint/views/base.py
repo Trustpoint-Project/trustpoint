@@ -278,7 +278,7 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 
         pks = self.get_pks_as_list(self.get_pks_path())
         if not pks:
-            return self.model.objects.none()  # type: ignore[attr-defined, no-any-return]
+            return self.model.objects.all()  # type: ignore[attr-defined, no-any-return]
         queryset = self.model.objects.filter(pk__in=pks)  # type: ignore[attr-defined]
 
         if len(pks) != len(queryset):

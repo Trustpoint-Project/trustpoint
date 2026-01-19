@@ -152,8 +152,8 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         except x509.ExtensionNotFound:
             pass
 
-        this_update = crl.last_update
-        next_update = crl.next_update
+        this_update = crl.last_update_utc
+        next_update = crl.next_update_utc
 
         if next_update_delta is not None:
             next_update = this_update + next_update_delta
