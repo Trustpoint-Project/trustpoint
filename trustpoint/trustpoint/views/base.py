@@ -292,6 +292,12 @@ class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFrom
     """View for bulk deletion of objects."""
     model: type[models.Model]
 
+    def get_queryset(self) -> models.QuerySet[Any, Any]:
+        """Return queryset for bulk delete. If no pks provided, return empty queryset."""
+        if not self.get_pks_path():
+            return self.model.objects.none()  # type: ignore[attr-defined]
+        return super().get_queryset()
+
 
 THRESHOLD_LOGGER_HTTP_STATUS: int = 400
 

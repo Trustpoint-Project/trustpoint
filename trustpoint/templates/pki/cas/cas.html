@@ -47,11 +47,11 @@
                             {% endif %}
                         </td>
                         <td>
-{% if ca.is_issuing_ca %}
-    {{ ca.ca_certificate.not_valid_after }}
-{% else %}
-    {{ ca.certificate.not_valid_after }}
-{% endif %}
+                            {% if ca.is_issuing_ca %}
+                                {{ ca.credential.certificate.not_valid_after }}
+                            {% else %}
+                                {{ ca.certificate.not_valid_after }}
+                            {% endif %}
                         </td>
                         <td>{{ ca.signature_suite }}</td>
                         <td>

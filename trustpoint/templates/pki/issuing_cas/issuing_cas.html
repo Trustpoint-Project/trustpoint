@@ -48,8 +48,13 @@
                         </td>
                         <td>{% for domain in ca.domains.all %}<a href="{% url 'pki:domains-config' pk=domain.id %}">{{ domain.unique_name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</td>
                         <td>{{ ca.common_name }}</td>
-                        <td>{{ ca.ca_certificate.not_valid_after }}</td>
-                        <td>{{ ca.signature_suite }}</td>
+                        <td>
+                            {% if ca.is_issuing_ca %}
+                                {{ ca.credential.certificate.not_valid_after }}
+                            {% else %}
+                                {{ ca.certificate.not_valid_after }}
+                            {% endif %}
+                        </td>                        <td>{{ ca.signature_suite }}</td>
                         <td>{{ ca.created_at }}</td>
                         <td><a href="config/{{ ca.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a></td>
                     </tr>
