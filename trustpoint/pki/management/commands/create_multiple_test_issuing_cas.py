@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from cryptography.hazmat.primitives import hashes
+import datetime
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.core.management.base import BaseCommand
 from management.models import KeyStorageConfig
@@ -14,9 +17,9 @@ from .base_commands import CertificateCreationCommandMixin
 
 
 class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
-    """Adds a Root CA and three issuing CAs to the database."""
+    """Adds a Root CA, Intermediate CAs, and Issuing CAs to the database."""
 
-    help = 'Adds a Root CA and three issuing CAs to the database.'
+    help = 'Adds a Root CA, Intermediate CAs, and Issuing CAs to the database.'
 
     def log_and_stdout(self, message: str, level: str = 'info') -> None:
         """Log a message and write it to stdout.
@@ -63,6 +66,38 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             )
             return CaModel.CaTypeChoice.LOCAL_UNPROTECTED
 
+    def generate_empty_crl(
+        self,
+        ca_cert: x509.Certificate,
+        private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey,
+        hash_algorithm: hashes.HashAlgorithm = hashes.SHA256(),
+        crl_validity_hours: int = 2400,
+    ) -> str:
+        """Generate an empty CRL for a CA.
+
+        Args:
+            ca_cert: The CA certificate.
+            private_key: The private key of the CA.
+            hash_algorithm: The hash algorithm to use.
+            crl_validity_hours: Validity period in hours.
+
+        Returns:
+            str: The CRL in PEM format.
+        """
+        crl_issued_at = datetime.datetime.now(datetime.timezone.utc)
+        ca_subject = ca_cert.subject
+
+        crl_builder = x509.CertificateRevocationListBuilder(
+            issuer_name=ca_subject,
+            last_update=crl_issued_at,
+            next_update=crl_issued_at + datetime.timedelta(hours=crl_validity_hours),
+        )
+        crl_builder = crl_builder.add_extension(x509.CRLNumber(1), critical=False)
+
+        crl = crl_builder.sign(private_key=private_key, algorithm=hash_algorithm)
+        crl_pem = crl.public_bytes(encoding=serialization.Encoding.PEM).decode()
+        return crl_pem
+
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Adds a Root CA and three issuing CAs to the database."""
         # Determine CA type based on storage configuration
@@ -78,9 +113,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         rsa2_root, _ = self.create_root_ca(
             'Root-CA RSA-2048-SHA256', private_key=rsa2_root_ca_key, hash_algorithm=hashes.SHA256()
         )
+        rsa2_root_crl = self.generate_empty_crl(rsa2_root, rsa2_root_ca_key, hashes.SHA256())
         rsa2_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa2_root,
             unique_name='root-ca-rsa-2048-sha256',
+            crl_pem=rsa2_root_crl,
         )
 
         rsa2_int_ca_1, _key = self.create_issuing_ca(
@@ -90,9 +127,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             subject_cn='Intermediate CA A-1',
             hash_algorithm=hashes.SHA256(),
         )
+        rsa2_int_ca_crl = self.generate_empty_crl(rsa2_int_ca_1, rsa2_int_ca_key_1, hashes.SHA256())
         rsa2_int_ca_model_1 = self.save_keyless_ca(
             root_ca_cert=rsa2_int_ca_1,
             unique_name='intermediate-ca-a-1',
+            crl_pem=rsa2_int_ca_crl,
         )
         rsa2_int_ca_model_1.parent_ca = rsa2_root_ca
         rsa2_int_ca_model_1.save()
@@ -104,9 +143,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             subject_cn='Intermediate CA A-2',
             hash_algorithm=hashes.SHA256(),
         )
+        rsa2_int_ca_crl_2 = self.generate_empty_crl(rsa2_int_ca_2, rsa2_int_ca_key_2, hashes.SHA256())
         rsa2_int_ca_model_2 = self.save_keyless_ca(
             root_ca_cert=rsa2_int_ca_2,
             unique_name='intermediate-ca-a-2',
+            crl_pem=rsa2_int_ca_crl_2,
         )
         rsa2_int_ca_model_2.parent_ca = rsa2_root_ca
         rsa2_int_ca_model_2.save()
@@ -149,9 +190,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         rsa3_root, _ = self.create_root_ca(
             'Root-CA RSA-3072-SHA256', private_key=rsa3_root_ca_key, hash_algorithm=hashes.SHA256()
         )
+        rsa3_root_crl = self.generate_empty_crl(rsa3_root, rsa3_root_ca_key, hashes.SHA256())
         rsa3_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa3_root,
             unique_name='root-ca-rsa-3072-sha256',
+            crl_pem=rsa3_root_crl,
         )
         rsa3_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=rsa3_root_ca_key,
@@ -175,9 +218,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         rsa4_root, _ = self.create_root_ca(
             'Root-CA RSA-4096-SHA256', private_key=rsa4_root_ca_key, hash_algorithm=hashes.SHA512()
         )
+        rsa4_root_crl = self.generate_empty_crl(rsa4_root, rsa4_root_ca_key, hashes.SHA512())
         rsa4_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa4_root,
             unique_name='root-ca-rsa-4096-sha256',
+            crl_pem=rsa4_root_crl,
         )
         rsa4_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=rsa4_root_ca_key,
@@ -201,9 +246,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ecc1_root, _ = self.create_root_ca(
             'Root-CA SECP256R1-SHA256', private_key=ecc1_root_ca_key, hash_algorithm=hashes.SHA256()
         )
+        ecc1_root_crl = self.generate_empty_crl(ecc1_root, ecc1_root_ca_key, hashes.SHA256())
         ecc1_root_ca = self.save_keyless_ca(
             root_ca_cert=ecc1_root,
             unique_name='root-ca-secp256r1-sha256',
+            crl_pem=ecc1_root_crl,
         )
         ecc1_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=ecc1_root_ca_key,
@@ -227,9 +274,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ecc2_root, _ = self.create_root_ca(
             'Root-CA SECP384R1-SHA256', private_key=ecc2_root_ca_key, hash_algorithm=hashes.SHA256()
         )
+        ecc2_root_crl = self.generate_empty_crl(ecc2_root, ecc2_root_ca_key, hashes.SHA256())
         ecc2_root_ca = self.save_keyless_ca(
             root_ca_cert=ecc2_root,
             unique_name='root-ca-secp384r1-sha256',
+            crl_pem=ecc2_root_crl,
         )
         ecc2_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=ecc2_root_ca_key,
@@ -253,9 +302,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ecc3_root, _ = self.create_root_ca(
             'Root-CA SECP521R1-SHA256', private_key=ecc3_root_ca_key, hash_algorithm=hashes.SHA3_512()
         )
+        ecc3_root_crl = self.generate_empty_crl(ecc3_root, ecc3_root_ca_key, hashes.SHA3_512())
         ecc3_root_ca = self.save_keyless_ca(
             root_ca_cert=ecc3_root,
             unique_name='root-ca-secp521r1-sha256',
+            crl_pem=ecc3_root_crl,
         )
         ecc3_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=ecc3_root_ca_key,

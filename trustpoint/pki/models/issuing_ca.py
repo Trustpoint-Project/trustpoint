@@ -193,12 +193,15 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return bytes.fromhex(self.credential.certificate.subject_public_bytes)
 
     @property
-    def ca_certificate(self) -> CertificateModel:
-        """Returns the CA certificate model."""
-        if self.credential is None:
-            msg = 'Credential is None for issuing CA'
+    def ca_certificate_model(self) -> CertificateModel:
+        """Returns the CA certificate model for both issuing and keyless CAs."""
+        if self.is_issuing_ca:
+            return self.credential.certificate
+        elif self.is_keyless_ca:
+            return self.certificate
+        else:
+            msg = 'CA has neither credential nor certificate'
             raise ValueError(msg)
-        return self.credential.certificate
 
     @property
     def last_crl_issued_at(self) -> datetime.datetime | None:

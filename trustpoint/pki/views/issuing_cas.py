@@ -324,28 +324,28 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[CaModel]):
 
 
 class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
-    """Unauthenticated view to download the certificate revocation list of an Issuing CA."""
+    """Unauthenticated view to download the certificate revocation list of any CA."""
 
     http_method_names = ('get',)
 
     model = CaModel
     success_url = reverse_lazy('pki:issuing_cas')
     ignore_url = reverse_lazy('pki:issuing_cas')
-    context_object_name = 'issuing_ca'
+    context_object_name = 'ca'
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
-        """Return only issuing CAs."""
-        return super().get_queryset().filter(ca_type__isnull=False)
+        """Return all CAs."""
+        return super().get_queryset().all()
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Download the CRL of the Issuing CA."""
+        """Download the CRL of the CA."""
         del args
         del kwargs
 
-        issuing_ca = self.get_object()
-        crl_pem = issuing_ca.crl_pem
+        ca = self.get_object()
+        crl_pem = ca.crl_pem
         if not crl_pem:
-            messages.warning(request, _('No CRL available for issuing CA %s.') % issuing_ca.unique_name)
+            messages.warning(request, _('No CRL available for CA %s.') % ca.unique_name)
             return redirect('pki:issuing_cas')
         encoding = request.GET.get('encoding', '').lower()
         if encoding == 'der':
@@ -357,16 +357,16 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
                 messages.error(
                     request,
                     _(
-                        'Failed to convert CRL to DER for issuing CA %s: %s'
-                    ) % (issuing_ca.unique_name, str(exc)),
+                        'Failed to convert CRL to DER for CA %s: %s'
+                    ) % (ca.unique_name, str(exc)),
                 )
                 return redirect('pki:issuing_cas')
 
             response = HttpResponse(crl_der, content_type='application/pkix-crl')
-            response['Content-Disposition'] = f'attachment; filename="{issuing_ca.unique_name}.crl.der"'
+            response['Content-Disposition'] = f'attachment; filename="{ca.unique_name}.crl.der"'
         else:
             response = HttpResponse(crl_pem, content_type='application/x-pem-file')
-            response['Content-Disposition'] = f'attachment; filename="{issuing_ca.unique_name}.crl"'
+            response['Content-Disposition'] = f'attachment; filename="{ca.unique_name}.crl"'
         return response
 
 

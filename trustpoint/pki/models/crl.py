@@ -136,7 +136,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         except Exception as e:
             raise ValidationError(_('Failed to parse the CRL. It may be corrupted or invalid.')) from e
 
-        ca_cert = ca.ca_certificate.get_certificate_serializer().as_crypto()
+        ca_cert = ca.ca_certificate_model.get_certificate_serializer().as_crypto()
         if crl.issuer != ca_cert.subject:
             raise ValidationError(
                 _(
