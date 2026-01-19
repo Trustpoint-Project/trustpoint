@@ -37,6 +37,7 @@ class State(models.TextChoices):
     REJECTED = 'Rejected', 'Rejected'
     FAILED = 'Failed', 'Failed'
     ABORTED = 'Aborted', 'Aborted'
+    STOP = 'Stopped', 'Stopped'
 
 
 StatusBadge = tuple[str, str]
@@ -52,6 +53,7 @@ BADGE_MAP: dict[str, StatusBadge] = {
     State.ABORTED: ('Aborted', 'bg-dark'),
     State.PASSED: ('Passed', 'bg-success'),
     State.FINALIZED: ('Finalized', 'bg-secondary'),
+    State.STOP: ('Stopped', 'bg-danger'),
 }
 
 
@@ -228,6 +230,8 @@ class DeviceRequest(models.Model):
             states = {str(inst.state) for inst in instances}
             if State.FAILED in states:
                 self.aggregated_state = State.FAILED
+            elif State.STOP in states:
+                self.aggregated_state = State.STOP
             elif all(s in {State.FINALIZED, State.ABORTED, State.PASSED} for s in states):
                 self.aggregated_state = State.FINALIZED
                 self.finalized = True
@@ -354,6 +358,8 @@ class EnrollmentRequest(models.Model):
         status = State.AWAITING
         if State.REJECTED in inst_states:
             status = State.REJECTED
+        elif State.STOP in inst_states:
+            status = State.STOP
         elif State.FAILED in inst_states:
             status = State.FAILED
         elif State.ABORTED in inst_states:

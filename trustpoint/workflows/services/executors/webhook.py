@@ -12,9 +12,11 @@ Exports:
 - to_path may be "serial" or "vars.serial"; "vars." is stripped and stored under $vars.
 
 Collision policy:
-- Exports and webhook_variable writes are no-overwrite.
-- Collisions raise ValueError and are handled by the engine as a FAILED instance.
+- Within a single webhook step execution, exports/webhook_variable writes are no-overwrite
+  (conflicting destinations in the same step are treated as a step failure).
+- Across steps, the engine allows overwriting existing ctx.vars values.
 """
+
 
 from __future__ import annotations
 
@@ -42,6 +44,11 @@ class WebhookExecutor(AbstractStepExecutor):
 
         Performs template rendering, executes the HTTP request, builds a StepContext
         describing the outcome, and returns exported variables for merging into ctx.vars.
+
+        Notes:
+            The engine allows overwriting existing values in ctx.vars across steps.
+            This executor still enforces no-overwrite *within* the variables it produces
+            (i.e., conflicting exports in the same webhook step are treated as an error).
         """
         params = _get_step_params(instance)
 
@@ -90,15 +97,25 @@ class WebhookExecutor(AbstractStepExecutor):
 
         step_ctx = _build_step_context(method, url, resp, resp_json)
 
-        # no silent suppression; collisions propagate to engine (FAILED + engine context)
-        flat_vars = _build_flat_vars(resp, resp_json, webhook_variable_raw, result_source, exports)
+        # Build vars to export. Conflicts inside this step are treated as a step failure.
+        try:
+            flat_vars = _build_flat_vars(resp, resp_json, webhook_variable_raw, result_source, exports)
+        except ValueError as exc:
+            return ExecutorResult(
+                status=State.FAILED,
+                context=_make_error_context(f'Webhook exports collision: {exc}'),
+            )
+        except KeyError as exc:
+            return ExecutorResult(
+                status=State.FAILED,
+                context=_make_error_context(f'Webhook exports invalid path: {exc}'),
+            )
 
         return ExecutorResult(
             status=State.PASSED,
             context=step_ctx,
             vars=(flat_vars or None),
         )
-
 
 def _get_step_params(instance: WorkflowInstance) -> dict[str, Any]:
     step = next((s for s in instance.get_steps() if s.get('id') == instance.current_step), None)

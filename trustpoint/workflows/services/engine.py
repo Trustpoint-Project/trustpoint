@@ -6,7 +6,7 @@ Runtime contract:
 - AWAITING pauses on the current step.
 - REJECTED/FAILED/ABORTED/FINALIZED are terminal (engine stops).
 - Step context (ExecutorResult.context) is stored under step_contexts[str(current_step)].
-- Global vars (ExecutorResult.vars) are merged into step_contexts["$vars"] with a no-overwrite policy.
+- Global vars (ExecutorResult.vars) are merged into step_contexts["$vars"].
 
 Engine-owned failure reporting:
 - If vars merge fails (collision or oversize), the engine marks the instance FAILED
@@ -33,6 +33,7 @@ _TERMINAL_STATES: set[str] = {
     State.FAILED,
     State.ABORTED,
     State.FINALIZED,
+    State.STOP,
 }
 _CONTINUE_STATES: set[str] = {
     State.PASSED,
@@ -48,7 +49,35 @@ def _current_step(inst: WorkflowInstance) -> dict[str, Any]:
     raise ValueError(msg)
 
 
-def _advance_pointer(inst: WorkflowInstance) -> bool:
+def _advance_pointer(inst: WorkflowInstance, target_step: str | None = None) -> bool:
+    """Advance the step pointer.
+
+    If target_step is provided, jump to that step (forward-only).
+    Otherwise advance linearly to the next step.
+
+    Returns:
+        True if the pointer was advanced.
+        False if there is no next step (only possible for linear advance).
+    """
+    if target_step is not None:
+        steps = inst.get_steps()
+        cur_idx = inst.get_current_step_index()
+
+        try:
+            tgt_idx = next(i for i, s in enumerate(steps) if str(s.get('id')) == target_step)
+        except StopIteration:
+            msg = f'Unknown goto target step id {target_step!r}'
+            raise ValueError(msg)
+
+        if tgt_idx <= cur_idx:
+            msg = f'Backward or same-step goto is not allowed: {inst.current_step!r} -> {target_step!r}'
+            raise ValueError(msg)
+
+        inst.current_step = target_step
+        inst.state = State.RUNNING
+        inst.save(update_fields=['current_step', 'state'])
+        return True
+
     nxt = inst.get_next_step()
     if nxt:
         inst.current_step = nxt
@@ -69,21 +98,57 @@ def _size_bytes(obj: Any) -> int:
     return len(json.dumps(obj, ensure_ascii=False))
 
 
-def _deep_merge_no_overwrite(dst: dict[str, Any], src: dict[str, Any]) -> None:
-    """Deep-merge src into dst; if a leaf exists with a different value, raise ValueError."""
+def _flatten_leaf_paths(src: dict[str, Any], *, prefix: str = '') -> list[tuple[str, Any]]:
+    """Return a list of (dot_path, value) for all non-dict leaves in src.
+
+    Dicts are traversed recursively. Empty dicts are treated as a leaf (assigned as {}).
+    Lists are treated as leaves.
+    """
+    out: list[tuple[str, Any]] = []
     for k, v in src.items():
-        if k not in dst:
-            dst[k] = v
+        key = str(k)
+        path = f'{prefix}.{key}' if prefix else key
+        if isinstance(v, dict):
+            if not v:
+                out.append((path, {}))
+            else:
+                out.extend(_flatten_leaf_paths(v, prefix=path))
+        else:
+            out.append((path, v))
+    return out
+
+
+def _apply_vars_assignments(dst: dict[str, Any], updates: dict[str, Any]) -> None:
+    """Apply updates into dst as deterministic leaf assignments (overwrite allowed).
+
+    Supported input forms:
+    - dot-path assignments: {"user.name": "Alice"}
+    - nested dict assignments: {"user": {"name": "Alice"}}
+
+    Semantics:
+    - Assignments overwrite existing values at the target leaf path.
+    - Sibling keys are not deleted.
+    - Empty dict values are treated as an explicit assignment (path is set to {}).
+    """
+    # Local import avoids widening the module import surface and keeps helpers consistent.
+    from workflows.services.context import set_in
+
+    for k, v in updates.items():
+        key = str(k)
+
+        # Dot-path form: assign directly.
+        if '.' in key:
+            set_in(dst, key, v, forbid_overwrite=False)
             continue
 
-        dv = dst[k]
-        if isinstance(dv, dict) and isinstance(v, dict):
-            _deep_merge_no_overwrite(dv, v)
+        # Nested dict form: traverse and assign leaves.
+        if isinstance(v, dict):
+            for path, leaf in _flatten_leaf_paths({key: v}):
+                set_in(dst, path, leaf, forbid_overwrite=False)
             continue
 
-        if dv != v:
-            msg = f'ctx.vars collision at key "{k}": {dv!r} vs {v!r}'
-            raise ValueError(msg)
+        # Scalar at top-level key.
+        dst[key] = v
 
 
 def _persist_step_context(inst: WorkflowInstance, ctx: dict[str, Any]) -> None:
@@ -132,24 +197,31 @@ def _fail_instance_with_step_context(
 
 
 def _merge_global_vars(inst: WorkflowInstance, result: ExecutorResult) -> bool:
-    """Merge vars into global $vars with a no-overwrite policy.
+    """Merge vars into global $vars (overwrite allowed).
+
+    Semantics:
+    - Executors may return nested dicts and/or dot-path keys.
+    - Updates are applied as leaf assignments into step_contexts["$vars"].
+    - Overwrites are allowed.
+    - Engine enforces VARS_MAX_BYTES and fails deterministically if exceeded.
 
     Returns:
         True if processing can continue.
-        False if merge failed or vars exceed VARS_MAX_BYTES (instance marked FAILED).
+        False if merge failed (illegal path) or vars exceed VARS_MAX_BYTES (instance marked FAILED).
     """
     if not (result.vars and isinstance(result.vars, dict)):
         return True
 
     step_contexts = dict(inst.step_contexts or {})
-    vars_map = dict(step_contexts.get('$vars') or {})
+    vars_map_raw = step_contexts.get('$vars') or {}
+    vars_map: dict[str, Any] = dict(vars_map_raw) if isinstance(vars_map_raw, dict) else {}
 
     try:
-        _deep_merge_no_overwrite(vars_map, dict(result.vars))
-    except ValueError as exc:
+        _apply_vars_assignments(vars_map, dict(result.vars))
+    except (ValueError, KeyError) as exc:
         _fail_instance_with_step_context(
             inst,
-            message='Global vars merge failed (collision).',
+            message='Global vars merge failed.',
             details={'reason': str(exc)},
         )
         return False
@@ -167,7 +239,6 @@ def _merge_global_vars(inst: WorkflowInstance, result: ExecutorResult) -> bool:
     inst.step_contexts = step_contexts
     inst.save(update_fields=['step_contexts'])
     return True
-
 
 def _recompute_parent(inst: WorkflowInstance) -> None:
     if inst.enrollment_request:
@@ -195,7 +266,6 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
             try:
                 result: ExecutorResult = executor.execute(inst, signal)
             except Exception as exc:  # noqa: BLE001
-                # Executor crashed: fail instance and record error deterministically.
                 _fail_instance_with_step_context(
                     inst,
                     message='Executor raised an exception.',
@@ -204,34 +274,38 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
                 _recompute_parent(inst)
                 break
 
-            # Persist executor-produced context (if any) before any engine-owned failures.
             _persist_executor_context(inst, result)
 
-            # Vars merge may fail the instance deterministically and record a reason.
             if not _merge_global_vars(inst, result):
                 _recompute_parent(inst)
                 break
 
-            # Store the resulting state from the executor.
             inst.state = result.status
             inst.save(update_fields=['state'])
 
-            # Continuation semantics: only PASSED/APPROVED advance.
             if result.status in _CONTINUE_STATES:
-                if _advance_pointer(inst):
+                try:
+                    advanced = _advance_pointer(inst, result.next_step)
+                except ValueError as exc:
+                    _fail_instance_with_step_context(
+                        inst,
+                        message='Invalid goto target.',
+                        details={'step_type': step_type, 'reason': str(exc)},
+                    )
+                    _recompute_parent(inst)
+                    break
+
+                if advanced:
                     signal = None
                     continue
 
-                # No next step -> keep the status (PASSED/APPROVED) and stop.
                 _recompute_parent(inst)
                 break
 
-            # Waiting or terminal semantics: do not advance pointer.
             if result.status == State.AWAITING or result.status in _TERMINAL_STATES:
                 _recompute_parent(inst)
                 break
 
-            # Defensive fallback: unknown status -> fail deterministically.
             _fail_instance_with_step_context(
                 inst,
                 message='Unknown executor status.',

@@ -64,10 +64,14 @@ class ExecutorResult:
     Attributes:
         status: Workflow state guiding engine behavior.
         context: Optional StepContext to persist for this step.
-        vars: Optional nested dict to merge into the instance-global ctx.vars
-              (stored under step_contexts["$vars"]).
+        vars: Optional dict of assignments to merge into the instance-global ctx.vars
+              (stored under step_contexts["$vars"]). Overwrites are allowed by the engine.
+        next_step: Optional raw step id to jump to (forward-only).
+            If set and status is PASSED/APPROVED, the engine will move the pointer to this step
+            instead of advancing linearly.
     """
 
     status: State
     context: StepContext | None = None
     vars: JsonDict | None = None
+    next_step: str | None = None
