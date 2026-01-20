@@ -45,6 +45,21 @@ def get_private_key_location_from_config() -> PrivateKeyLocation:
     return PrivateKeyLocation.SOFTWARE
 
 
+def get_ca_type_from_config() -> CaModel.CaTypeChoice:
+    """Determine the appropriate CA type based on KeyStorageConfig."""
+    try:
+        storage_config = KeyStorageConfig.get_config()
+        if storage_config.storage_type in [
+            KeyStorageConfig.StorageType.SOFTHSM,
+            KeyStorageConfig.StorageType.PHYSICAL_HSM
+        ]:
+            return CaModel.CaTypeChoice.LOCAL_PKCS11
+    except KeyStorageConfig.DoesNotExist:
+        pass
+
+    return CaModel.CaTypeChoice.LOCAL_UNPROTECTED
+
+
 class IssuingCaImportMixin:
     """Mixin for Issuing CA import forms providing common validation and creation logic."""
 
@@ -100,7 +115,7 @@ class IssuingCaImportMixin:
         try:
             CaModel.create_new_issuing_ca(
                 credential_serializer=credential_serializer,
-                ca_type=CaModel.CaTypeChoice.LOCAL_PKCS11,
+                ca_type=get_ca_type_from_config(),
                 unique_name=unique_name,
             )
         except ValidationError:
