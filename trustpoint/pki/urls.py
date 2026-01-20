@@ -92,6 +92,7 @@ urlpatterns = [
         name='cas-delete_confirm',
     ),
     path('crls/', crls.CrlTableView.as_view(), name='crls'),
+    path('crls/import/', crls.CrlImportView.as_view(), name='crl-import'),
     re_path(
         r'^crls/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         crls.CrlBulkDeleteConfirmView.as_view(),

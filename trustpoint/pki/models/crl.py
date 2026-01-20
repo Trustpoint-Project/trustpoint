@@ -31,7 +31,9 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         related_name='crls',
         on_delete=models.CASCADE,
         verbose_name=_('Certificate Authority'),
-        help_text=_('The CA that issued this CRL')
+        help_text=_('The CA that issued this CRL'),
+        null=True,
+        blank=True,
     )
 
     crl_pem = models.TextField(
@@ -99,9 +101,13 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             str: Human-readable string representation.
         """
+        if self.ca is not None:
+            if self.crl_number is not None:
+                return f'CRL #{self.crl_number} for {self.ca.unique_name}'
+            return f'CRL for {self.ca.unique_name} (no number)'
         if self.crl_number is not None:
-            return f'CRL #{self.crl_number} for {self.ca.unique_name}'
-        return f'CRL for {self.ca.unique_name} (no number)'
+            return f'CRL #{self.crl_number} (no associated CA)'
+        return 'CRL (no associated CA)'
 
     def __repr__(self) -> str:
         """Returns a string representation of the instance."""
@@ -110,7 +116,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
     @classmethod
     def create_from_pem(
         cls,
-        ca: CaModel,
+        ca: CaModel | None,
         crl_pem: str,
         *,
         set_active: bool = True,
@@ -119,9 +125,9 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         """Creates a new CRL from PEM data.
 
         Args:
-            ca: The CA that issued this CRL.
+            ca: The CA that issued this CRL. Can be None for CRLs not associated with a CA.
             crl_pem: The CRL in PEM format.
-            set_active: If True, deactivates other CRLs for this CA and sets this as active.
+            set_active: If True and ca is provided, deactivates other CRLs for this CA and sets this as active.
             next_update_delta: Optional timedelta to override the CRL's nextUpdate field.
                               If provided, sets nextUpdate to thisUpdate + delta.
 
@@ -136,14 +142,15 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         except Exception as e:
             raise ValidationError(_('Failed to parse the CRL. It may be corrupted or invalid.')) from e
 
-        ca_cert = ca.ca_certificate_model.get_certificate_serializer().as_crypto()
-        if crl.issuer != ca_cert.subject:
-            raise ValidationError(
-                _(
-                    'The CRL issuer does not match the CA subject. '
-                    'This CRL was not issued by this CA.'
+        if ca is not None:
+            ca_cert = ca.ca_certificate_model.get_certificate_serializer().as_crypto()
+            if crl.issuer != ca_cert.subject:
+                raise ValidationError(
+                    _(
+                        'The CRL issuer does not match the CA subject. '
+                        'This CRL was not issued by this CA.'
+                    )
                 )
-            )
 
         crl_number = None
         try:
@@ -169,11 +176,11 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
             this_update=this_update,
             next_update=next_update,
             validity_period=validity_period,
-            is_active=set_active,
+            is_active=set_active if ca is not None else False,
         )
         crl_model.save()
 
-        if set_active:
+        if set_active and ca is not None:
             cls.objects.filter(ca=ca, is_active=True).exclude(pk=crl_model.pk).update(is_active=False)
 
         return crl_model
@@ -190,7 +197,8 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         try:
             return x509.load_pem_x509_crl(self.crl_pem.encode())
         except Exception as e:
-            self.logger.exception('Failed to load CRL for CA %s', self.ca.unique_name)
+            ca_name = self.ca.unique_name if self.ca else 'no associated CA'
+            self.logger.exception('Failed to load CRL for CA %s', ca_name)
             raise ValidationError(_('Failed to parse the stored CRL.')) from e
 
     def get_revoked_serial_numbers(self) -> set[int]:

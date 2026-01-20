@@ -36,9 +36,23 @@
                         <div>
                             <div>{% trans 'CA Name' %}</div>
                             <div>
-                                <a href="{% if crl.ca.is_issuing_ca %}{% url 'pki:issuing_cas-config' crl.ca.id %}{% elif crl.ca.is_keyless_ca %}{% url 'pki:keyless_cas-config' crl.ca.id %}{% endif %}">
-                                    {{ crl.ca.unique_name }}
-                                </a>
+                                {% if crl.ca %}
+                                    <a href="{% if crl.ca.is_issuing_ca %}{% url 'pki:issuing_cas-config' crl.ca.id %}{% elif crl.ca.is_keyless_ca %}{% url 'pki:keyless_cas-config' crl.ca.id %}{% endif %}">
+                                        {{ crl.ca.unique_name }}
+                                    </a>
+                                {% else %}
+                                    <em>{% trans 'No linked CA from Trustpoint' %}</em>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <div>{% trans 'CA Subject' %}</div>
+                            <div>
+                                {% if crl.ca %}
+                                    {{ crl.ca.common_name }}
+                                {% else %}
+                                    {{ crl_issuer }}
+                                {% endif %}
                             </div>
                         </div>
                         <div>
