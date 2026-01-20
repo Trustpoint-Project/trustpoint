@@ -194,7 +194,7 @@ class KeylessCaConfigView(LoggerMixin, KeylessCaContextMixin, DetailView[CaModel
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only keyless CAs."""
-        return super().get_queryset().filter(certificate__isnull=False, credential__isnull=True)
+        return super().get_queryset().filter(ca_type=CaModel.CaTypeChoice.KEYLESS)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add active CRL information to the context."""

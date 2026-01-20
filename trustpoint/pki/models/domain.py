@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
@@ -15,8 +15,6 @@ from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
     from typing import Any, ClassVar
-
-    from .credential import CredentialModel
 
 from . import CaModel
 from .cert_profile import CertificateProfileModel
@@ -77,8 +75,7 @@ class DomainModel(models.Model):
     def signature_suite(self) -> oid.SignatureSuite:
         """Get the signature suite for the domain (based on its Issuing CA)."""
         return oid.SignatureSuite.from_certificate(
-            cast('CredentialModel', self.get_issuing_ca_or_value_error().credential)
-            .get_certificate_serializer().as_crypto())
+            self.get_issuing_ca_or_value_error().get_certificate())
 
     @property
     def public_key_info(self) -> oid.PublicKeyInfo:

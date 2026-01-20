@@ -19,7 +19,7 @@ from .extension import (
 )
 from .certificate import CertificateModel, RevokedCertificateModel
 from .crl import CrlModel
-from .issuing_ca import CaModel
+from .ca import CaModel
 from .credential import (CredentialAlreadyExistsError,
                          CredentialModel,
                          CertificateChainOrderModel,

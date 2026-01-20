@@ -2,29 +2,28 @@
 
 from __future__ import annotations
 
-import datetime
-from typing import TYPE_CHECKING, Any, ClassVar, get_args
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core import oid
-from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
+from pki.models.crl import CrlModel
 from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
+    import datetime
+
     from django.db.models.query import QuerySet
     from trustpoint_core.serializer import CredentialSerializer
-
-    from pki.models.crl import CrlModel
 
 
 class CaModel(LoggerMixin, CustomDeleteActionModel):
@@ -35,7 +34,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
        Used for trust anchors, upstream CAs, certificate chain validation.
     2. Issuing CAs: CAs managed by Trustpoint that can issue certificates.
 
-    For keyless CAs: Only 'certificate' field is set, 'credential' and 'ca_type' are null.
+    For keyless CAs: Only 'certificate' field is set, 'credential' is null, ca_type is KEYLESS.
     For issuing CAs: 'credential' and 'ca_type' are set, 'certificate' is null.
     """
 
@@ -97,7 +96,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         choices=CaTypeChoice,
         null=True,
         blank=True,
-        help_text=_('Type of CA - null for keyless CAs')
+        help_text=_('Type of CA - KEYLESS for keyless CAs')
     )
 
     # For keyless CAs: certificate without private key
@@ -132,7 +131,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=(
-                    models.Q(certificate__isnull=False, credential__isnull=True, ca_type__isnull=True) |
+                    models.Q(certificate__isnull=False, credential__isnull=True, ca_type=-1) |
                     models.Q(certificate__isnull=True, credential__isnull=False, ca_type__isnull=False)
                 ),
                 name='exactly_one_ca_mode',
@@ -196,11 +195,31 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
     def ca_certificate_model(self) -> CertificateModel:
         """Returns the CA certificate model for both issuing and keyless CAs."""
         if self.is_issuing_ca:
+            if self.credential is None:
+                msg = 'Credential is None for issuing CA'
+                raise ValueError(msg)
             return self.credential.certificate
         if self.is_keyless_ca:
+            if self.certificate is None:
+                msg = 'Certificate is None for keyless CA'
+                raise ValueError(msg)
             return self.certificate
         msg = 'CA has neither credential nor certificate'
         raise ValueError(msg)
+
+    def get_certificate(self) -> x509.Certificate:
+        """Returns the CA certificate (crypto object) for both issuing and keyless CAs."""
+        return self.ca_certificate_model.get_certificate_serializer().as_crypto()
+
+    def get_credential(self) -> CredentialModel:
+        """Returns the credential for issuing CAs. Raises ValueError for keyless CAs."""
+        if self.is_keyless_ca:
+            msg = 'Cannot get credential from keyless CA'
+            raise ValueError(msg)
+        if self.credential is None:
+            msg = 'Credential is None for issuing CA'
+            raise ValueError(msg)
+        return self.credential
 
     @property
     def last_crl_issued_at(self) -> datetime.datetime | None:
@@ -241,8 +260,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(_('Cannot set both certificate and credential.'))
         if self.credential is not None and self.ca_type is None:
             raise ValidationError(_('ca_type must be set for issuing CAs.'))
-        if self.certificate is not None and self.ca_type is not None:
-            raise ValidationError(_('ca_type must be null for keyless CAs.'))
+        if self.certificate is not None and self.ca_type != self.CaTypeChoice.KEYLESS:
+            raise ValidationError(_('ca_type must be KEYLESS for keyless CAs.'))
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to ensure validation."""
@@ -293,7 +312,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             unique_name=unique_name,
             certificate=cert_model,
             parent_ca=parent_ca,
-            ca_type=None,  # Explicitly null for keyless CAs
+            ca_type=cls.CaTypeChoice.KEYLESS,  # Keyless CAs use KEYLESS type
         )
         keyless_ca.save()
         return keyless_ca
@@ -393,49 +412,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         Raises:
             AttributeError: If called on a keyless CA.
         """
-        if self.is_keyless_ca:
-            msg = 'Keyless CAs cannot issue CRLs (no private key available).'
-            raise AttributeError(msg)
-        if self.credential is None:
-            msg = 'Credential is None for issuing CA'
-            raise ValueError(msg)
+        from pki.util.crl import generate_crl_with_revoked_certs  # noqa: PLC0415
 
-        from pki.models.crl import CrlModel  # noqa: PLC0415
-
-        crl_issued_at = timezone.now()
-        ca_subject = self.credential.certificate.get_certificate_serializer().as_crypto().subject
-
-        latest_crl = self.get_latest_crl()
-        next_crl_number = (latest_crl.crl_number + 1) if latest_crl and latest_crl.crl_number else 1
-
-        crl_builder = x509.CertificateRevocationListBuilder(
-            issuer_name=ca_subject,
-            last_update=crl_issued_at,
-            next_update=crl_issued_at + datetime.timedelta(hours=crl_validity_hours),
-        )
-        crl_builder = crl_builder.add_extension(x509.CRLNumber(next_crl_number), critical=False)
-
-        crl_certificates = self.revoked_certificates.all()
-
-        for cert in crl_certificates:
-            revoked_cert = (
-                x509.RevokedCertificateBuilder()
-                .serial_number(int(cert.certificate.serial_number, 16))
-                .revocation_date(cert.revoked_at)
-                .add_extension(x509.CRLReason(x509.ReasonFlags(cert.revocation_reason)), critical=False)
-                .build()
-            )
-            crl_builder = crl_builder.add_revoked_certificate(revoked_cert)
-
-        hash_algorithm = self.credential.hash_algorithm
-
-        if hash_algorithm is not None and not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
-            err_msg = f'CRL: Hash algo must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
-            raise TypeError(err_msg)
-
-        priv_k = self.credential.get_private_key_serializer().as_crypto()
-
-        crl = crl_builder.sign(private_key=priv_k, algorithm=hash_algorithm)
+        crl = generate_crl_with_revoked_certs(self, crl_validity_hours)
 
         crl_pem = crl.public_bytes(encoding=serialization.Encoding.PEM).decode()
 
@@ -493,6 +472,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             QuerySet: Certificates issued by this CA.
         """
+        if self.credential is None:
+            msg = 'Credential is None for issuing CA'
+            raise ValueError(msg)
         ca_subject_public_bytes = self.credential.certificate.subject_public_bytes
 
         # do not return self-signed CA certificate
@@ -619,7 +601,21 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             bool: True if this is a root CA.
         """
-        return self.parent_ca is None
+        if self.parent_ca is not None:
+            return False
+
+        try:
+            ca_cert = self.ca_certificate_model.get_certificate_serializer().as_crypto()
+        except (AttributeError, ValueError) as err:
+            msg = f'Cannot determine if CA {self.unique_name} is a root CA: unable to access certificate'
+            raise ValueError(msg) from err
+
+        try:
+            ca_cert.verify_directly_issued_by(ca_cert)
+        except InvalidSignature:
+            return False
+        else:
+            return True
 
     def revoke_all_issued_certificates(self, reason: str = RevokedCertificateModel.ReasonCode.UNSPECIFIED) -> None:
         """Revokes all certificates issued by this CA."""

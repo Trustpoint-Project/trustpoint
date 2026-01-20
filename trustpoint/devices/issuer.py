@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 import re
-from typing import TYPE_CHECKING, cast, get_args
+from typing import TYPE_CHECKING, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
@@ -349,7 +349,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
             self.device.pk
         )
         try:
-            issuing_credential = cast('CredentialModel', self.domain.get_issuing_ca_or_value_error().credential)
+            issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
             issuer_certificate = issuing_credential.get_certificate()
             algorithm_identifier = SignatureSuite.from_certificate(
                 issuer_certificate
@@ -462,7 +462,7 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
             The issued credential model.
         """
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
-        issuing_credential = cast('CredentialModel', self.domain.get_issuing_ca_or_value_error().credential)
+        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
 
         san_uri = re.sub(r'[^a-zA-Z0-9_.-]', '', common_name) + '.alt'
         certificate = self._build_certificate(
@@ -504,7 +504,7 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
         Returns:
             The issued TLS client certificate.
         """
-        issuing_credential = cast('CredentialModel', self.domain.get_issuing_ca_or_value_error().credential)
+        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
 
         san_uri = re.sub(r'[^a-zA-Z0-9_.-]', '', common_name) + '.alt'
         certificate = self._build_certificate(
@@ -577,7 +577,7 @@ class LocalTlsServerCredentialIssuer(BaseTlsCredentialIssuer):
             The issued TLS server credential.
         """
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
-        issuing_credential = cast('CredentialModel', self.domain.get_issuing_ca_or_value_error().credential)
+        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
 
         san_extension = self._build_san_extension(ipv4_addresses, ipv6_addresses, domain_names)
 
@@ -625,7 +625,7 @@ class LocalTlsServerCredentialIssuer(BaseTlsCredentialIssuer):
         Returns:
             The issued TLS server certificate.
         """
-        issuing_credential = cast('CredentialModel', self.domain.get_issuing_ca_or_value_error().credential)
+        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
 
         san_extension = self._build_san_extension(ipv4_addresses, ipv6_addresses, domain_names)
 
@@ -661,7 +661,7 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             The issued domain credential model.
         """
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
-        issuing_credential = cast('CredentialModel', self.domain.get_issuing_ca_or_value_error().credential)
+        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
 
         certificate = self._build_certificate(
             common_name=self._pseudonym,
@@ -704,7 +704,7 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
         """
         # TODO(AlexHx8472): Check matching public_key and signature suite.  # noqa: FIX002
 
-        issuing_credential = cast('CredentialModel', self.domain.get_issuing_ca_or_value_error().credential)
+        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
 
         certificate = self._build_certificate(
             common_name=self._pseudonym,
@@ -804,7 +804,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
         validity_days: int = 365,
     ) -> IssuedCredentialModel:
         """Issues an OPC UA server credential (certificate + private key) following OPC UA security standards."""
-        issuing_credential = cast('CredentialModel', self.domain.get_issuing_ca_or_value_error().credential)
+        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
 
         self._validate_application_uri(application_uri)
 
@@ -857,7 +857,7 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
         public_key: PublicKey,
     ) -> IssuedCredentialModel:
         """Issues an OPC UA server certificate (no private key) following OPC UA security standards."""
-        issuing_credential = cast('CredentialModel', self.domain.get_issuing_ca_or_value_error().credential)
+        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
         self._validate_application_uri(application_uri)
         if isinstance(application_uri, list):
             application_uri = application_uri[0]
@@ -946,7 +946,7 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
         self, common_name: str, application_uri: str | list[str], validity_days: int = 365
     ) -> IssuedCredentialModel:
         """Issues an OPC UA client credential (certificate + private key) following OPC UA security standards."""
-        issuing_credential = cast('CredentialModel', self.domain.get_issuing_ca_or_value_error().credential)
+        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
         self._validate_application_uri(application_uri)
         if isinstance(application_uri, list):
             application_uri = application_uri[0]
@@ -986,7 +986,7 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
         self, common_name: str, application_uri: str | list[str], validity_days: int, public_key: PublicKey
     ) -> IssuedCredentialModel:
         """Issues an OPC UA client certificate (no private key) following OPC UA security standards."""
-        issuing_credential = cast('CredentialModel', self.domain.get_issuing_ca_or_value_error().credential)
+        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
         self._validate_application_uri(application_uri)
         if isinstance(application_uri, list):
             application_uri = application_uri[0]

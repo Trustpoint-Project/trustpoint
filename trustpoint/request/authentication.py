@@ -1,7 +1,7 @@
 """Provides the `EstAuthentication` class using the Composite pattern for modular EST authentication."""
 
 from abc import ABC, abstractmethod
-from typing import Never, cast
+from typing import Never
 
 from cryptography import x509
 from cryptography.exceptions import InvalidSignature
@@ -814,7 +814,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             self._raise_value_error(err_msg)
 
         # Verify certificate was issued by domain's issuing CA
-        issuing_ca_credential = cast('CredentialModel', device.domain.get_issuing_ca_or_value_error().credential)
+        issuing_ca_credential = device.domain.get_issuing_ca_or_value_error().get_credential()
         issuing_ca_cert = issuing_ca_credential.get_certificate()
         cmp_signer_cert.verify_directly_issued_by(issuing_ca_cert)
 

@@ -436,11 +436,10 @@ def test_crl_model_create_from_pem_valid_crl(issuing_ca_instance: dict[str, Any]
     # Generate a CRL manually to get valid PEM data
     from cryptography import x509
     from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa
     from datetime import datetime, timedelta, timezone
 
-    # Create a simple CRL
-    private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    # Use the CA's private key to sign the CRL
+    private_key = issuing_ca_instance['priv_key']
     subject = issuing_ca.ca_certificate_model.get_certificate_serializer().as_crypto().subject
 
     builder = x509.CertificateRevocationListBuilder()
@@ -462,12 +461,31 @@ def test_crl_model_create_from_pem_valid_crl(issuing_ca_instance: dict[str, Any]
     assert crl_model.is_active is True
 
 
-def test_crl_model_create_from_pem_invalid_pem() -> None:
-    """Test creating CRL from invalid PEM data raises ValidationError."""
-    from pki.models import CrlModel
+def test_crl_model_create_from_pem_invalid_signature(issuing_ca_instance: dict[str, Any]) -> None:
+    """Test that CRLs with invalid signatures are rejected."""
+    issuing_ca = issuing_ca_instance['issuing_ca']
 
-    with pytest.raises(ValidationError, match='Failed to parse the CRL'):
-        CrlModel.create_from_pem(None, 'invalid pem data')
+    # Generate a CRL with wrong private key (invalid signature)
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from datetime import datetime, timedelta, timezone
+
+    # Use a different private key than the CA's
+    wrong_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = issuing_ca.ca_certificate_model.get_certificate_serializer().as_crypto().subject
+
+    builder = x509.CertificateRevocationListBuilder()
+    builder = builder.issuer_name(subject)
+    builder = builder.last_update(datetime.now(timezone.utc))
+    builder = builder.next_update(datetime.now(timezone.utc) + timedelta(days=1))
+
+    crl = builder.sign(wrong_private_key, hashes.SHA256())
+    crl_pem = crl.public_bytes(serialization.Encoding.PEM).decode()
+
+    # Should raise ValidationError due to invalid signature
+    with pytest.raises(ValidationError, match='The CRL signature is invalid'):
+        CrlModel.create_from_pem(issuing_ca, crl_pem)
 
 
 def test_crl_model_create_from_pem_wrong_issuer(issuing_ca_instance: dict[str, Any]) -> None:
@@ -486,7 +504,7 @@ def test_crl_model_create_from_pem_wrong_issuer(issuing_ca_instance: dict[str, A
     )
 
     # Save the other CA
-    from pki.models.issuing_ca import CaModel
+    from pki.models.ca import CaModel
     other_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=other_cert, private_key=other_key, chain=[root_cert],
         unique_name='other-ca-test', ca_type=CaModel.CaTypeChoice.LOCAL_UNPROTECTED

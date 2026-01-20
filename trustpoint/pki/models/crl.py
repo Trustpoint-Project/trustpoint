@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Never
 
 from cryptography import x509
 from django.core.exceptions import ValidationError
@@ -106,6 +106,15 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         """Returns a string representation of the instance."""
         return f'CrlModel(id={self.pk}, ca={self.ca_id}, crl_number={self.crl_number})'
 
+    def raise_invalid_signature_error(self) -> Never:
+        """Raises a ValidationError indicating an invalid CRL signature."""
+        raise ValidationError(
+            _(
+                'The CRL signature is invalid. '
+                'This CRL was not signed by this CA.'
+            )
+        )
+
     @classmethod
     def create_from_pem(
         cls,
@@ -137,11 +146,18 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
 
         if ca is not None:
             ca_cert = ca.ca_certificate_model.get_certificate_serializer().as_crypto()
+
+            # Check if CRL issuer matches CA subject
             if crl.issuer != ca_cert.subject:
                 raise ValidationError(
+                    _('The CRL issuer does not match the CA subject.')
+                )
+
+            if not crl.is_signature_valid(ca_cert.public_key()):  # type: ignore[arg-type]
+                raise ValidationError(
                     _(
-                        'The CRL issuer does not match the CA subject. '
-                        'This CRL was not issued by this CA.'
+                        'The CRL signature is invalid. '
+                        'This CRL was not signed by this CA.'
                     )
                 )
 
