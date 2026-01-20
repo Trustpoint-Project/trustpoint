@@ -115,7 +115,7 @@ class LocalCaCmpSignatureProcessor(LoggerMixin, AbstractOperationProcessor):
                     raise ValueError(exc_msg)
 
                 ca = context.domain.get_issuing_ca_or_value_error()
-                context.issuer_credential = ca.credential
+                context.issuer_credential = ca.get_credential()
             signer_credential = context.issuer_credential
 
         self._signature = GenericSigner.sign(self._data, signer_credential)
