@@ -14,7 +14,6 @@ urlpatterns = [
 
     # empty (.well-known/cmp) URLs for any operation
     path('', CmpRequestView.as_view(), name='req'),
-    path('/', CmpRequestView.as_view(), name='req_slash'),
 
     # operation specified in URL, no path segments for domain or profile
     path('<str:operation>', CmpRequestView.as_view(), name='req_op'),
