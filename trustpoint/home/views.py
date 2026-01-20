@@ -22,7 +22,7 @@ from django.views.generic.list import ListView
 
 from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingStatus
 from notifications.models import NotificationModel, NotificationStatus
-from pki.models import CertificateModel, CertificateProfileModel, IssuingCaModel
+from pki.models import CaModel, CertificateModel, CertificateProfileModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import SortableTableMixin
@@ -479,7 +479,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         today = timezone.make_aware(datetime.combine(timezone.now().date(), datetime.min.time()))
         issuing_ca_counts = {}
         try:
-            issuing_ca_counts = IssuingCaModel.objects.aggregate(
+            issuing_ca_counts = CaModel.objects.aggregate(
                 total=Count('id'),
                 active=Count(
                     Case(
@@ -689,21 +689,21 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         Returns:
             It returns issuing ca counts grouped by type.
         """
-        issuing_ca_type_counts = {str(cert_type): 0 for _, cert_type in IssuingCaModel.IssuingCaTypeChoice.choices}
+        ca_type_counts = {str(cert_type): 0 for _, cert_type in CaModel.CaTypeChoice.choices}
         try:
             ca_type_qr = (
-                IssuingCaModel.objects.filter(created_at__gt=start_date)
-                .values('issuing_ca_type')
-                .annotate(count=Count('issuing_ca_type'))
+                CaModel.objects.filter(created_at__gt=start_date)
+                .values('ca_type')
+                .annotate(count=Count('ca_type'))
             )
 
-            protocol_mapping = {key: str(value) for key, value in IssuingCaModel.IssuingCaTypeChoice.choices}
-            issuing_ca_type_counts = {protocol_mapping[item['issuing_ca_type']]: item['count'] for item in ca_type_qr}
+            protocol_mapping = {key: str(value) for key, value in CaModel.CaTypeChoice.choices}
+            ca_type_counts = {protocol_mapping[item['ca_type']]: item['count'] for item in ca_type_qr}
 
         except Exception as exception:
             err_msg = f'Error occurred in ca counts by type query: {exception}'
             self.logger.exception(err_msg)
-        return issuing_ca_type_counts
+        return ca_type_counts
 
     def get_expiring_device_counts(self) -> dict[str, Any]:
         """Fetch expiring device counts from database.
@@ -769,11 +769,11 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         expiring_issuing_ca_counts = {}
         try:
             expiring_issuing_ca_counts = {
-                'expiring_in_24_hours': IssuingCaModel.objects.filter(
+                'expiring_in_24_hours': CaModel.objects.filter(
                     credential__certificate__not_valid_after__gt=now,
                     credential__certificate__not_valid_after__lte=next_24_hours
                 ).count(),
-                'expiring_in_7_days': IssuingCaModel.objects.filter(
+                'expiring_in_7_days': CaModel.objects.filter(
                     credential__certificate__not_valid_after__gt=now,
                     credential__certificate__not_valid_after__lte=next_7_days
                 ).count(),

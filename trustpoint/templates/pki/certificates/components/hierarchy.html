@@ -42,10 +42,10 @@
                         <td>{{ entry.oid }}</td>
                       {% endif %}
                       <td>
-                        {% if cert.is_self_signed %}
-                          <span class="btn-primary">{{ entry.value }}</span>
+                        {% if forloop.first and not cert.is_self_signed and cert.issuer_id %}
+                          <a href="{% url 'pki:certificate-detail' pk=cert.issuer_id.id %}" class="btn-primary">{{ entry.value }}</a>
                         {% else %}
-                          <a href="{% url 'pki:certificate-detail' pk=entry.id %}" class="btn-primary">{{ entry.value }}</a>
+                          <span class="btn-primary">{{ entry.value }}</span>
                         {% endif %}
                       </td>
                   </tr>
@@ -74,23 +74,27 @@
             <div>{{ cert.is_self_signed }}</div>
         </div>
 
-        {% for certificate_chain in cert.get_certificate_chains %}
-            <div class="tp-row-br">
-                <div>{% trans 'Certificate Chain' %} {{ forloop.counter }}</div>
-                <div>
-                    {% for certificate in certificate_chain %}
-                        <a href="{% url 'pki:certificate-detail' pk=certificate.id %}">
-                            {% if certificate.common_name %}
-                                commonName={{ certificate.common_name }}
-                            {% else %}
-                                serialNumber={{ certificate.serial_number }}
-                            {% endif %}
-                        </a><br>
-                    {% endfor %}
-                    <br>
-                </div>
+        <div class="tp-row-br">
+            <div>{% trans 'Certificate Chain' %}</div>
+            <div>
+                {% for certificate in cert.get_certificate_chain %}
+                    <a href="{% url 'pki:certificate-detail' pk=certificate.id %}">
+                        {% if certificate.common_name %}
+                            {{ certificate.common_name }}
+                        {% else %}
+                            Serial Number {{ certificate.serial_number }}
+                        {% endif %}
+                    </a><br>
+                {% empty %}
+                    {% if cert.is_self_signed %}
+                        {% trans 'This is a self-signed certificate.' %}
+                    {% else %}
+                        {% trans 'No parent certificates in database.' %}
+                    {% endif %}
+                {% endfor %}
+                <br>
             </div>
-        {% endfor %}
+        </div>
 
         {% if cert.issued_certificate_references.all %}
             <div>

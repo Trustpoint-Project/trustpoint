@@ -14,10 +14,10 @@ from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 
+from pki.models import CaModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
-from pki.models.issuing_ca import IssuingCaModel
 from pki.models.truststore import TruststoreModel
 from util.db import CustomDeleteActionModel
 from util.encrypted_fields import EncryptedCharField
@@ -507,10 +507,10 @@ class IssuedCredentialModel(CustomDeleteActionModel):
             if status in (CertificateModel.CertificateStatus.REVOKED, CertificateModel.CertificateStatus.EXPIRED):
                 continue
             try:
-                ca = IssuingCaModel.objects.get(credential__certificate__subject_public_bytes=cert.issuer_public_bytes)
-            except IssuingCaModel.DoesNotExist:
+                ca = CaModel.objects.get(credential__certificate__subject_public_bytes=cert.issuer_public_bytes)
+            except CaModel.DoesNotExist:
                 continue
-            except IssuingCaModel.MultipleObjectsReturned:
+            except CaModel.MultipleObjectsReturned:
                 continue
             RevokedCertificateModel.objects.create(
                 certificate=cert, revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION, ca=ca

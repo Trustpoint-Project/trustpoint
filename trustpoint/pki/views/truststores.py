@@ -390,6 +390,14 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
     template_name = 'pki/truststores/confirm_delete.html'
     context_object_name = 'truststores'
 
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
+        queryset = self.get_queryset()
+        if not queryset.exists():
+            messages.error(request, _('No truststores selected for deletion.'))
+            return HttpResponseRedirect(self.success_url)
+        return super().get(request, *args, **kwargs)
+
     def form_valid(self, form: Form) -> HttpResponse:
         """Attempts to delete the selected truststores on valid form."""
         queryset = self.get_queryset()

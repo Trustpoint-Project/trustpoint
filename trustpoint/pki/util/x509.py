@@ -18,7 +18,7 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
 from management.models import KeyStorageConfig
-from pki.models import IssuingCaModel
+from pki.models import CaModel
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
@@ -94,7 +94,6 @@ class CertificateGenerator:
         builder = builder.not_valid_after(datetime.datetime.now(tz=datetime.UTC) + (one_day * validity_days))
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
-
         is_root_ca = issuer_private_key == private_key
         path_length = 1 if is_root_ca else 0
         builder = builder.add_extension(x509.BasicConstraints(ca=True, path_length=path_length), critical=True)
@@ -239,14 +238,27 @@ class CertificateGenerator:
         return (certs, keys)
 
     @staticmethod
-    def save_issuing_ca(
+    def save_issuing_ca(  # noqa: PLR0913
         issuing_ca_cert: x509.Certificate,
         chain: list[x509.Certificate],
         private_key: PrivateKey,
         unique_name: str = 'issuing_ca',
-        ca_type: IssuingCaModel.IssuingCaTypeChoice = IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED,
-    ) -> IssuingCaModel:
-        """Saves an Issuing CA certificate to the database."""
+        ca_type: CaModel.CaTypeChoice = CaModel.CaTypeChoice.LOCAL_UNPROTECTED,
+        parent_ca: CaModel | None = None,
+    ) -> CaModel:
+        """Saves an Issuing CA certificate to the database and returns the CaModel.
+
+        Args:
+            issuing_ca_cert: The issuing CA certificate.
+            chain: List of intermediate certificates in the chain.
+            private_key: The private key for the issuing CA.
+            unique_name: Unique name for this CA.
+            ca_type: The type of issuing CA.
+            parent_ca: Optional parent CA in the hierarchy (the CA that issued this certificate).
+
+        Returns:
+            CaModel: The created CA model.
+        """
         issuing_ca_credential_serializer = CredentialSerializer(
             private_key=private_key,
             certificate=issuing_ca_cert,
@@ -254,12 +266,12 @@ class CertificateGenerator:
         )
 
         # Determine private key location based on CA type and storage configuration
-        if ca_type == IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED:
+        if ca_type == CaModel.CaTypeChoice.LOCAL_UNPROTECTED:
             # Unprotected local CAs always use software storage
             private_key_location = PrivateKeyLocation.SOFTWARE
         elif ca_type in [
-            IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT,
-            IssuingCaModel.IssuingCaTypeChoice.AUTOGEN,
+            CaModel.CaTypeChoice.AUTOGEN_ROOT,
+            CaModel.CaTypeChoice.AUTOGEN,
         ]:
             # Auto-generated CAs use the configured storage type
             try:
@@ -317,15 +329,35 @@ class CertificateGenerator:
             )
         )
 
-        issuing_ca = IssuingCaModel.create_new_issuing_ca(
-            unique_name=unique_name,
+        issuing_ca = CaModel.create_new_issuing_ca(
             credential_serializer=issuing_ca_credential_serializer,
-            issuing_ca_type=ca_type
+            ca_type=ca_type,
+            unique_name=unique_name,
+            parent_ca=parent_ca
         )
 
         logger.info("Issuing CA '%s' saved successfully.", unique_name)
 
         return issuing_ca
+
+    @staticmethod
+    def save_keyless_ca(
+        root_ca_cert: x509.Certificate,
+        unique_name: str = 'root_ca',
+        crl_pem: str | None = None,
+    ) -> CaModel:
+        """Saves a keyless root CA certificate as a keyless CA to the database and returns the CaModel."""
+        ca = CaModel.create_keyless_ca(
+            unique_name=unique_name,
+            certificate_obj=root_ca_cert,
+        )
+
+        if crl_pem:
+            ca.import_crl(crl_pem)
+
+        logger.info("Keyless root CA '%s' saved successfully.", unique_name)
+
+        return ca
 
 
 class ClientCertificateAuthenticationError(Exception):

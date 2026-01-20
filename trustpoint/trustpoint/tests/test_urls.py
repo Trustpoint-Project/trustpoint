@@ -48,7 +48,7 @@ class TestUrls:
 
     def test_cmp_url_included(self):
         """Test that the 'cmp/' URL pattern is included and resolves to the correct namespace."""
-        url = reverse('cmp:initialization', kwargs={'domain_name': 'test-domain'})
+        url = reverse('cmp:req_op', kwargs={'operation': 'initialization'})
         assert resolve(url).namespace == 'cmp'
 
     def test_jsi18n_url_resolves(self):
