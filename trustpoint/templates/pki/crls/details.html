@@ -67,25 +67,51 @@
                         </div>
                         <div>
                             <div>{% trans 'This Update' %}</div>
-                            <div>{{ crl.this_update }}</div>
+                            <div>{{ crl.this_update|date:"Y-m-d H:i:s" }} UTC</div>
                         </div>
                         <div>
                             <div>{% trans 'Next Update' %}</div>
                             <div>
                                 {% if crl.next_update %}
-                                    {{ crl.next_update }}
+                                    {{ crl.next_update|date:"Y-m-d H:i:s" }} UTC
                                 {% else %}
                                     {% trans 'Not set' %}
                                 {% endif %}
                             </div>
                         </div>
                         <div>
-                            <div>{% trans 'Validity Period' %}</div>
+                            <div>{% trans 'Days Until Expiration' %}</div>
                             <div>
-                                {% if crl.validity_period %}
-                                    {{ crl.get_validity_hours|floatformat:1 }} {% trans 'hours' %}
+                                {% if crl.next_update %}
+                                    {% if crl.days_left <= 3 %}
+                                        <span class="badge bg-danger">
+                                            {{ crl.days_left }} {% trans "days" %}
+                                            {% if crl.days_left == 1 %}
+                                                – {% trans "URGENT" %}
+                                            {% endif %}
+                                        </span>
+                                    {% elif crl.days_left <= 10 %}
+                                        <span class="badge bg-warning text-dark">
+                                            {{ crl.days_left }} {% trans "days" %}
+                                            – {% trans "Soon" %}
+                                        </span>
+                                    {% elif crl.days_left <= 31 %}
+                                        <span class="badge bg-warning text-dark" style="color:#795500;background:#fffde7; border:1px solid #ffc107;">
+                                            {{ crl.days_left }} {% trans "days" %}
+                                            – {% trans "Month" %}
+                                        </span>
+                                    {% elif crl.days_left == 0 %}
+                                        <span class="badge bg-danger">
+                                            {% trans "Expired" %}
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-success">
+                                            {{ crl.days_left }} {% trans "days" %}
+                                            – {% trans "Valid" %}
+                                        </span>
+                                    {% endif %}
                                 {% else %}
-                                    {% trans 'Not set' %}
+                                    <span class="badge bg-secondary">{% trans "Not set" %}</span>
                                 {% endif %}
                             </div>
                         </div>
@@ -108,11 +134,11 @@
                         </div>
                         <div>
                             <div>{% trans 'Created' %}</div>
-                            <div>{{ crl.created_at }}</div>
+                            <div>{{ crl.created_at|date:"Y-m-d H:i:s" }} UTC</div>
                         </div>
                         <div>
                             <div>{% trans 'Updated' %}</div>
-                            <div>{{ crl.updated_at }}</div>
+                            <div>{{ crl.updated_at|date:"Y-m-d H:i:s" }} UTC</div>
                         </div>
                     </div>
                 </div>

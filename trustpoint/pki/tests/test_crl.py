@@ -459,7 +459,6 @@ def test_crl_model_create_from_pem_valid_crl(issuing_ca_instance: dict[str, Any]
     assert crl_model.crl_number is None  # This CRL doesn't have a number extension
     assert crl_model.this_update is not None
     assert crl_model.next_update is not None
-    assert crl_model.validity_period is not None
     assert crl_model.is_active is True
 
 

@@ -7,7 +7,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('devices', '0002_tp_v0_4_0'),
+        ('devices', '0003_tp_v0_5_0_dev1'),
     ]
 
     operations = [

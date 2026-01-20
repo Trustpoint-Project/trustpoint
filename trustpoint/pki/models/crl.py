@@ -60,13 +60,6 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         help_text=_('The nextUpdate field from the CRL')
     )
 
-    validity_period = models.DurationField(
-        verbose_name=_('Validity Period'),
-        null=True,
-        blank=True,
-        help_text=_('The duration between this_update and next_update (how long this CRL is valid)')
-    )
-
     is_active = models.BooleanField(
         _('Active'),
         default=True,
@@ -165,17 +158,12 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         if next_update_delta is not None:
             next_update = this_update + next_update_delta
 
-        validity_period = None
-        if next_update is not None:
-            validity_period = next_update - this_update
-
         crl_model = cls(
             ca=ca,
             crl_pem=crl_pem,
             crl_number=crl_number,
             this_update=this_update,
             next_update=next_update,
-            validity_period=validity_period,
             is_active=set_active if ca is not None else False,
         )
         crl_model.save()
@@ -231,15 +219,26 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
             return False
         return timezone.now() > self.next_update
 
+    @property
+    def days_left(self) -> int:
+        """Returns number of days from now until next_update. If expired or no next_update, returns 0."""
+        if self.next_update is None:
+            return 0
+        now = timezone.now()
+        if self.next_update > now:
+            return (self.next_update - now).days
+        return 0
+
     def get_validity_hours(self) -> float | None:
         """Returns the validity period in hours.
 
         Returns:
             float | None: The validity period in hours, or None if not set.
         """
-        if self.validity_period is None:
+        if self.next_update is None:
             return None
-        return self.validity_period.total_seconds() / 3600
+        validity_period = self.next_update - self.this_update
+        return validity_period.total_seconds() / 3600
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to validate before saving."""
@@ -250,4 +249,5 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
 
     def pre_delete(self) -> None:
         """Called before deleting the model."""
-        self.logger.info('Deleting CRL for CA %s (CRL Number: %s)', self.ca.unique_name, self.crl_number)
+        ca_name = self.ca.unique_name if self.ca else 'no associated CA'
+        self.logger.info('Deleting CRL for CA %s (CRL Number: %s)', ca_name, self.crl_number)
