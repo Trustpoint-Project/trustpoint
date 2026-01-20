@@ -1,13 +1,9 @@
-"""Provides the `PkiMessageParser` class for parsing PKI messages."""
-import base64
-import contextlib
+"""Provides classes for parsing CMP PKI messages."""
+
 import ipaddress
-import re
-from abc import ABC, abstractmethod
 from typing import Any, Never, get_args
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
 from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.x509.oid import ExtensionOID
@@ -17,202 +13,21 @@ from pyasn1.codec.der import encoder as der_encoder
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
 
 from cmp.util import NameParser
-from pki.models import DomainModel
-from request.request_context import RequestContext
+from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
-
-class ParsingComponent(ABC):
-    """Abstract base class for components in the composite parsing pattern."""
-
-    @abstractmethod
-    def parse(self, context: RequestContext) -> None:
-        """Execute parsing logic and store results in the context."""
-
-
-class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
-    """Component for parsing EST-specific PKI messages."""
-
-    def parse(self, context: RequestContext) -> None:
-        """Parse a DER-encoded PKCS#10 certificate signing request."""
-
-        def raise_parsing_error(message: str) -> None:
-            """Helper to raise a ValueError with given error message."""
-            raise ValueError(message)
-
-        if context.raw_message is None:
-            error_message = 'Raw message is missing from the context.'
-            self.logger.warning('EST PKI message parsing failed: Raw message is missing')
-            raise ValueError(error_message)
-
-        if not hasattr(context.raw_message, 'body') or not context.raw_message.body:
-            error_message = 'Raw message is missing body.'
-            self.logger.warning('EST PKI message parsing failed: Raw message body is missing')
-            raise ValueError(error_message)
-
-        try:
-            body_size = len(context.raw_message.body)
-
-            # Our response format is based on the incoming CSR format for maximum compatibility
-            # For DER-encoded CSRs (optional Base64), we respond with PKCS#7 DER (CMS, RFC 7030-compliant)
-            # For PEM-encoded CSRs, we respond with the PEM-encoded certificate
-            if b'CERTIFICATE REQUEST-----' in context.raw_message.body:
-                est_encoding = 'pem'
-                csr = x509.load_pem_x509_csr(context.raw_message.body)
-                self.logger.debug('EST PKI message parsing: Detected PEM format, body size: %(body_size)s bytes',
-                                   extra={'body_size': body_size})
-            elif re.match(rb'^[A-Za-z0-9+/=\n]+$', context.raw_message.body):
-                est_encoding = 'pkcs7' #'base64_der'
-                der_data = base64.b64decode(context.raw_message.body)
-                csr = x509.load_der_x509_csr(der_data)
-                self.logger.debug(
-                    'EST PKI message parsing: Detected Base64 DER format, '
-                    'body size: %(body_size)s bytes, decoded: %(decoded_size)s bytes',
-                    extra={'body_size': body_size, 'decoded_size': len(der_data)}
-                )
-            elif context.raw_message.body.startswith(b'\x30'):  # ASN.1 DER starts with 0x30
-                est_encoding = 'pkcs7' #'der'
-                csr = x509.load_der_x509_csr(context.raw_message.body)
-                self.logger.debug('EST PKI message parsing: Detected DER format, body size: %(body_size)s bytes',
-                                   extra={'body_size': body_size})
-            else:
-                self.logger.warning(
-                    'EST PKI message parsing failed: Unsupported CSR format, '
-                    'body size: %(body_size)s bytes',
-                    extra={'body_size': body_size}
-                )
-                raise_parsing_error("Unsupported CSR format. Ensure it's PEM, Base64, or raw DER.")
-
-            context.cert_requested = csr
-            context.est_encoding = est_encoding
-
-            subject_cn = 'unknown'
-            with contextlib.suppress(IndexError, AttributeError):
-                cn_value = csr.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
-                subject_cn = cn_value if isinstance(cn_value, str) else cn_value.decode('utf-8')
-
-            self.logger.info('EST PKI message parsing successful: %(format)s format, subject CN: %(subject_cn)s',
-                             extra={'format': est_encoding, 'subject_cn': subject_cn})
-
-        except Exception as e:
-            error_message = 'Failed to parse the CSR.'
-            self.logger.exception('EST PKI message parsing failed', extra={'exception': str(e)})
-            raise ValueError(error_message) from e
-
-class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
-    """Parses the context to fetch the CSR and verifies its signature using the public key contained in the CSR."""
-
-    def parse(self, context: RequestContext) -> None:
-        """Validates the signature of the CSR stored in the context."""
-        csr = context.cert_requested
-        if csr is None:
-            err_msg = 'CSR not found in the parsing context. Ensure it was parsed before signature verification.'
-            self.logger.warning('EST CSR signature verification failed: CSR not found in context')
-            self._raise_validation_error(err_msg)
-
-        if not isinstance(csr, x509.CertificateSigningRequest):
-            err_msg = 'CSR signature verification only supports EST requests with CertificateSigningRequest objects.'
-            self.logger.warning('EST CSR signature verification failed: Expected CertificateSigningRequest, got %s',
-                              type(csr).__name__)
-            self._raise_validation_error(err_msg)
-
-        public_key = csr.public_key()
-        signature_hash_algorithm = csr.signature_hash_algorithm
-
-        if signature_hash_algorithm is None:
-            error_message = 'CSR does not contain a signature hash algorithm.'
-            self.logger.warning('EST CSR signature verification failed: No signature hash algorithm')
-            raise ValueError(error_message)
-
-        if not isinstance(public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)):
-            error_message = 'Unsupported public key type for CSR signature verification.'
-            self.logger.warning(
-                'EST CSR signature verification failed: Unsupported public key type',
-                extra={'public_key_type': str(type(public_key))})
-            raise TypeError(error_message)
-
-        try:
-            key_type = 'RSA' if isinstance(public_key, rsa.RSAPublicKey) else 'EC'
-
-            if isinstance(public_key, rsa.RSAPublicKey):
-                public_key.verify(
-                    signature=csr.signature,
-                    data=csr.tbs_certrequest_bytes,
-                    padding=padding.PKCS1v15(),
-                    algorithm=signature_hash_algorithm,
-                )
-            elif isinstance(public_key, ec.EllipticCurvePublicKey):
-                public_key.verify(
-                    signature=csr.signature,
-                    data=csr.tbs_certrequest_bytes,
-                    signature_algorithm=ec.ECDSA(signature_hash_algorithm),
-                )
-
-            self.logger.info('EST CSR signature verification successful: %s key with %s hash',
-                             key_type, signature_hash_algorithm.name)
-        except Exception as e:
-            error_message = 'Failed to verify the CSR signature.'
-            self.logger.exception('EST CSR signature verification failed', extra={'exception': str(e)})
-            raise ValueError(error_message) from e
-
-    def _raise_validation_error(self, message: str) -> Never:
-        """Raise a ValueError with the given message."""
-        raise ValueError(message)
-
-class DomainParsing(ParsingComponent, LoggerMixin):
-    """Parses and validates the domain from the request context object."""
-
-    def parse(self, context: RequestContext) -> None:
-        """Extract and validate the domain, then add it to the context."""
-        domain_str = context.domain_str
-        if not domain_str:
-            error_msg = 'Domain str missing in request context, deferring domain resolution to authentication step'
-            self.logger.warning(error_msg)
-            return
-        if domain_str == '.aoki':
-            self.logger.info('Special domain ".aoki" detected, deferring domain resolution to authentication step')
-            return
-
-        domain = self._extract_requested_domain(domain_str)
-        context.domain = domain
-        self.logger.info("Domain parsing successful: Domain '%s'", domain_str)
-
-
-    def _extract_requested_domain(self, domain_name: str) -> DomainModel:
-        """Validate and fetch the domain object by name."""
-        try:
-            domain = DomainModel.objects.get(unique_name=domain_name)
-        except DomainModel.DoesNotExist as e:
-            error_message = f"Domain '{domain_name}' does not exist."
-            self.logger.warning("Domain lookup failed: Domain '%s' does not exist", domain_name)
-            raise ValueError(error_message) from e
-        except DomainModel.MultipleObjectsReturned as e:
-            error_message = f"Multiple domains found for '{domain_name}'."
-            self.logger.warning("Domain lookup failed: Multiple domains found for '%s'", domain_name)
-            raise ValueError(error_message) from e
-        else:
-            self.logger.debug("Domain lookup successful: Found domain '%s'", domain_name)
-            return domain
-
-class CertProfileParsing(ParsingComponent, LoggerMixin):
-    """Parses the certificate profile from the request context object."""
-
-    def parse(self, context: RequestContext) -> None:
-        """Extract and validate the certificate profile, then add it to the context."""
-        certprofile_str = context.cert_profile_str
-        if not certprofile_str:
-            error_message = 'Certificate profile is missing in the request context.'
-            self.logger.warning('Certificate profile parsing failed: Profile string is missing')
-            raise ValueError(error_message)
-
-        self.logger.info("Certificate profile parsing successful: Profile '%s'", certprofile_str)
+from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
 
 
 class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
     """Component for parsing CMP-specific PKI messages."""
 
-    def parse(self, context: RequestContext) -> None:
+    def parse(self, context: BaseRequestContext) -> None:
         """Parse a CMP PKI message."""
+        if not isinstance(context, CmpBaseRequestContext):
+            exc_msg = 'CmpPkiMessageParsing requires a CmpBaseRequestContext.'
+            raise TypeError(exc_msg)
+
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
             self.logger.warning('CMP PKI message parsing failed: Raw message is missing')
@@ -236,7 +51,7 @@ class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
             self.logger.exception('CMP PKI message parsing failed')
             raise ValueError(error_message) from e
 
-    def _extract_signer_certificate(self, context: RequestContext) -> None:
+    def _extract_signer_certificate(self, context: CmpBaseRequestContext) -> None:
         """Extract the CMP signer certificate from extraCerts if available (optional)."""
         try:
             if not context.parsed_message or not hasattr(context.parsed_message, '__getitem__'):
@@ -298,8 +113,12 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
         self.implicit_confirm_oid = implicit_confirm_oid
         self.implicit_confirm_str_value = implicit_confirm_str_value
 
-    def parse(self, context: RequestContext) -> None:
+    def parse(self, context: BaseRequestContext) -> None:
         """Validate the CMP message header."""
+        if not isinstance(context, CmpBaseRequestContext):
+            exc_msg = 'CmpHeaderValidation requires a CmpBaseRequestContext.'
+            raise TypeError(exc_msg)
+
         if context.parsed_message is None:
             error_message = 'Parsed message is missing from the context.'
             self.logger.warning('CMP header validation failed: Parsed message is missing')
@@ -346,75 +165,16 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
             raise ValueError(err_msg)
 
 
-class CmpBodyValidation(ParsingComponent, LoggerMixin):
-    """Component for validating CMP body based on operation context."""
+class CmpCertificateBodyValidation(LoggerMixin):
+    """Sub-component for validating CMP certificate body for IR and CR message types."""
 
     def __init__(self, cert_template_version: int = 2) -> None:
-        """Initialize the CMP body validation component.
+        """Initialize the CMP IR/CR body validation component.
 
         Args:
             cert_template_version: Expected certificate template version (default: 2)
         """
         self.cert_template_version = cert_template_version
-
-    def parse(self, context: RequestContext) -> None:
-        """Validate the CMP body type and extract the appropriate body."""
-        if context.parsed_message is None:
-            error_message = 'Parsed message is missing from the context.'
-            self.logger.warning('CMP body type validation failed: Parsed message is missing')
-            self._raise_value_error(error_message)
-
-        try:
-            if not hasattr(context.parsed_message, '__getitem__'):
-                error_message = 'Parsed message is not a CMP message structure.'
-                self.logger.warning('CMP body type validation failed: Invalid message structure')
-                self._raise_value_error(error_message)
-
-            parsed_message = context.parsed_message
-            if not hasattr(parsed_message, '__getitem__'):
-                error_message = 'Parsed message is not indexable.'
-                self.logger.warning('CMP body type validation failed: Message not indexable')
-                self._raise_value_error(error_message)
-
-            pki_body = parsed_message['body']
-
-            body_type = pki_body.getName()
-
-            if body_type not in ('ir', 'cr'):
-                err_msg = f'Unsupported CMP body type: {body_type}'
-                self._raise_value_error(err_msg)
-
-            # Validate body type matches operation
-            self._validate_operation_body_match(context.operation, body_type)
-
-            # Extract and validate certificate request messages
-            cert_req_messages = pki_body[body_type]
-            self._validate_cert_req_messages(cert_req_messages)
-
-            # Validate certificate request details
-            cert_req_msg = cert_req_messages[0]['certReq']
-            request_builder = self._validate_cert_request(cert_req_msg)
-
-            context.cert_requested = request_builder
-
-            self.logger.info('CMP body type validation successful: %s body extracted', body_type.upper())
-
-        except ValueError as e:
-            self.logger.exception('CMP body type validation failed', extra={'error': str(e)})
-            raise
-
-    def _validate_operation_body_match(self, operation: str | None, body_type: str) -> None:
-        """Validate that the operation matches the body type."""
-        if operation == 'initialization' and body_type != 'ir':
-            err_msg = f'Expected CMP IR body for initialization operation, but got CMP {body_type.upper()} body.'
-            raise ValueError(err_msg)
-        if operation == 'certification' and body_type != 'cr':
-            err_msg = f'Expected CMP CR body for certification operation, but got CMP {body_type.upper()} body.'
-            raise ValueError(err_msg)
-
-    def _raise_value_error(self, message: str) -> Never:
-        """Helper function to raise a ValueError with the given message."""
-        raise ValueError(message)
 
     def _validate_cert_req_messages(self, cert_req_messages: list[rfc2511.CertReqMsg]) -> None:
         """Validate the certificate request messages structure."""
@@ -439,10 +199,6 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             self._raise_validation_error('Version must be 2 if supplied in certificate request.')
 
         return self._cert_template_to_builder(cert_req_template)
-
-    def _raise_validation_error(self, message: str) -> Never:
-        """Helper function to raise a ValueError with the given message."""
-        raise ValueError(message)
 
     def _cert_template_to_builder(
             self,
@@ -488,9 +244,9 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
 
         return builder.public_key(public_key)
 
-    def _raise_not_implemented_error(self, message: str) -> None:
-        """Helper function to raise NotImplementedError with a given message."""
-        raise NotImplementedError(message)
+    def _raise_validation_error(self, message: str) -> Never:
+        """Helper function to raise a ValueError with the given message."""
+        raise ValueError(message)
 
     def _parse_cert_template_extensions(self, extensions_asn1: rfc2459.Extensions) -> list[x509.Extension[Any]]:  # noqa: C901 - Core workflow orchestration requires multiple validation and conditional paths
         """Parse ASN.1 extensions from certTemplate into cryptography extension objects using fallback approach."""
@@ -730,58 +486,123 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             self.logger.exception('Failed to parse Certificate Policies extension')
             raise
 
+    def _raise_value_error(self, message: str) -> Never:
+        """Helper function to raise a ValueError with the given message."""
+        raise ValueError(message)
 
-class CompositeParsing(ParsingComponent, LoggerMixin):
-    """Composite parser to group multiple parsing strategies."""
+    def _raise_not_implemented_error(self, message: str) -> None:
+        """Helper function to raise NotImplementedError with a given message."""
+        raise NotImplementedError(message)
 
-    def __init__(self) -> None:
-        """Initialize the composite parser with an empty list of components."""
-        self.components: list[ParsingComponent] = []
+    def parse_ircr_body(self, context: CmpCertificateRequestContext, pki_body: rfc4210.PKIBody, body_type: str) -> None:
+        """Extract the certificate request messages from CMP IR/CR body."""
+        cert_req_messages = pki_body[body_type]
+        self._validate_cert_req_messages(cert_req_messages)
 
-    def add(self, component: ParsingComponent) -> None:
-        """Add a parsing component to the composite parser."""
-        self.components.append(component)
+        cert_req_msg = cert_req_messages[0]['certReq']
+        request_builder = self._validate_cert_request(cert_req_msg)
 
-    def remove(self, component: ParsingComponent) -> None:
-        """Remove a parsing component from the composite parser."""
-        if component in self.components:
-            self.components.remove(component)
-            self.logger.debug('Removed parsing component: %(component_name)s',
-                              extra={'component_name': component.__class__.__name__})
-        else:
-            error_message = f'Attempted to remove non-existent parsing component: {component.__class__.__name__}'
-            self.logger.warning(error_message)
-            raise ValueError(error_message)
+        context.cert_requested = request_builder
 
 
-    def parse(self, context: RequestContext) -> None:
-        """Execute all child parsers."""
-        self.logger.debug('Starting composite parsing with %i components', len(self.components))
+class CmpBodyValidation(ParsingComponent, LoggerMixin):
+    """Component for validating CMP body based on operation context."""
 
-        for i, component in enumerate(self.components):
-            try:
-                component.parse(context)
-                self.logger.debug('Parsing component %s completed successfully',
-                                  component.__class__.__name__)
-            except ValueError as e:
-                error_message = f'{component.__class__.__name__}: {e}'
-                self.logger.warning('Parsing component %s failed: %s',
-                                    component.__class__.__name__, str(e))
-                self.logger.exception(
-                    'Composite parsing failed at component %s/%s: %s',
-                    i + 1, len(self.components), component.__class__.__name__)
-                raise ValueError(error_message) from e
-            except Exception as e:
-                error_message = f'Unexpected error in {component.__class__.__name__}: {e}'
-                self.logger.exception('Unexpected error in parsing component %s',
-                                      component.__class__.__name__)
-                self.logger.exception(
-                    'Composite parsing failed at component %s/%s: %s',
-                    i + 1, len(self.components), component.__class__.__name__)
-                raise ValueError(error_message) from e
+    def parse(self, context: BaseRequestContext) -> CmpBaseRequestContext:
+        """Validate the CMP body type and extract the appropriate body."""
+        if not isinstance(context, CmpBaseRequestContext):
+            exc_msg = 'CmpBodyValidation requires a CmpBaseRequestContext.'
+            raise TypeError(exc_msg)
 
-        self.logger.info('Composite parsing successful. All %i components completed',
-                         len(self.components))
+        if context.parsed_message is None:
+            error_message = 'Parsed message is missing from the context.'
+            self.logger.warning('CMP body type validation failed: Parsed message is missing')
+            self._raise_value_error(error_message)
+
+        try:
+            if not hasattr(context.parsed_message, '__getitem__'):
+                error_message = 'Parsed message is not a CMP message structure.'
+                self.logger.warning('CMP body type validation failed: Invalid message structure')
+                self._raise_value_error(error_message)
+
+            parsed_message = context.parsed_message
+            if not hasattr(parsed_message, '__getitem__'):
+                error_message = 'Parsed message is not indexable.'
+                self.logger.warning('CMP body type validation failed: Message not indexable')
+                self._raise_value_error(error_message)
+
+            pki_body = parsed_message['body']
+
+            body_type = pki_body.getName()
+
+            self._validate_body_type_supported(body_type)
+
+            if not context.operation:
+                inferred_operation = self._operation_from_body_type(body_type)
+                context.operation = inferred_operation
+                self.logger.debug('Inferred operation from body type: %s', inferred_operation)
+
+            # Validate body type matches operation
+            self._validate_operation_body_match(context.operation, body_type)
+
+            if body_type in ('ir', 'cr'):
+                context = context.narrow(CmpCertificateRequestContext)
+                CmpCertificateBodyValidation().parse_ircr_body(context, pki_body, body_type)
+            elif body_type == 'rr':
+                self._raise_not_implemented_error('CMP RR is not implemented yet.')
+
+            self.logger.info('CMP body type validation successful: %s body extracted', body_type.upper())
+
+        except ValueError as e:
+            self.logger.exception('CMP body type validation failed', extra={'error': str(e)})
+            raise
+
+        self.logger.debug('Context obj type: %s', type(context).__name__)
+        return context
+
+    def _validate_body_type_supported(self, body_type: str) -> None:
+        """Validate that the CMP body type is supported by the request pipeline."""
+        if body_type not in ('ir', 'cr'):
+            err_msg = f'Unsupported CMP body type: {body_type}'
+            self._raise_value_error(err_msg)
+
+    def _operation_from_body_type(self, body_type: str) -> str | None:
+        """Map CMP body type to operation."""
+        if body_type == 'ir':
+            return 'initialization'
+        if body_type == 'cr':
+            return 'certification'
+        if body_type == 'rr':
+            return 'revocation'
+        err_msg = f'Unsupported CMP body type: {body_type}'
+        self._raise_value_error(err_msg)
+        return None
+
+    def _validate_operation_body_match(self, operation: str | None, body_type: str) -> None:
+        """Validate that the operation matches the body type."""
+        if operation == 'initialization':
+            if body_type != 'ir':
+                err_msg = f'Expected CMP IR body for initialization operation, but got CMP {body_type.upper()} body.'
+                raise ValueError(err_msg)
+            return
+        if operation == 'certification':
+            if body_type != 'cr':
+                err_msg = f'Expected CMP CR body for certification operation, but got CMP {body_type.upper()} body.'
+                raise ValueError(err_msg)
+            return
+        if operation == 'revocation':
+            if body_type != 'rr':
+                err_msg = f'Expected CMP RR body for revocation operation, but got CMP {body_type.upper()} body.'
+                raise ValueError(err_msg)
+            return
+
+    def _raise_value_error(self, message: str) -> Never:
+        """Helper function to raise a ValueError with the given message."""
+        raise ValueError(message)
+
+    def _raise_not_implemented_error(self, message: str) -> None:
+        """Helper function to raise NotImplementedError with a given message."""
+        raise NotImplementedError(message)
 
 
 class CmpMessageParser(CompositeParsing):
@@ -795,15 +616,3 @@ class CmpMessageParser(CompositeParsing):
         self.add(CmpBodyValidation())
         self.add(DomainParsing())
         self.add(CertProfileParsing())
-
-
-class EstMessageParser(CompositeParsing):
-    """Parser for EST-specific HTTP requests."""
-
-    def __init__(self) -> None:
-        """Initialize the composite parser with the default set of parsing components."""
-        super().__init__()
-        self.add(EstPkiMessageParsing())
-        self.add(DomainParsing())
-        self.add(CertProfileParsing())
-        self.add(EstCsrSignatureVerification())

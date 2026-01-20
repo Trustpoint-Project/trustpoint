@@ -1,36 +1,34 @@
-"""Carries out the requested operation after authentication and authorization."""
+"""Certificate issuance operation processor classes."""
+
 import contextlib
+from typing import TYPE_CHECKING, get_args
 from abc import ABC, abstractmethod
 from typing import cast, get_args
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
-from django.http import HttpRequest
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 
 from devices.issuer import CredentialSaver
 from devices.models import IssuedCredentialModel
 from management.models import TlsSettings
-from pki.models import CredentialModel
 from pki.util.keys import is_supported_public_key
-from request.request_context import RequestContext
-from trustpoint.logger import LoggerMixin
+from request.request_context import BaseCertificateRequestContext, BaseRequestContext, HttpBaseRequestContext
 
+from .base import AbstractOperationProcessor
 
-class AbstractOperationProcessor(ABC):
-    """Abstract base class for operation processors."""
-
-    @abstractmethod
-    def process_operation(self, context: RequestContext) -> None:
-        """Execute operation processing logic."""
+if TYPE_CHECKING:
+    from django.http import HttpRequest
 
 
 class CertificateIssueProcessor(AbstractOperationProcessor):
     """Operation processor for issuing certificates."""
 
-    def process_operation(self, context: RequestContext) -> None:
+    def process_operation(self, context: BaseRequestContext) -> None:
         """Process the certificate issuance operation."""
+        if not isinstance(context, BaseCertificateRequestContext):
+            exc_msg = 'Certificate issuance requires a subclass of BaseCertificateRequestContext.'
+            raise TypeError(exc_msg)
         if context.enrollment_request and not context.enrollment_request.is_valid():
             return None
         # decide which processor to use based on domain configuration
@@ -42,7 +40,7 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
         raise ValueError(exc_msg)
 
     @staticmethod
-    def _get_credential_type_for_template(context: RequestContext
+    def _get_credential_type_for_template(context: BaseCertificateRequestContext
             ) -> tuple[IssuedCredentialModel.IssuedCredentialType, str]:
         """Map certificate template to issued credential type."""
         if context.certificate_profile_model is None:
@@ -60,20 +58,26 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
 class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
     """Operation processor for issuing certificates via a local CA."""
 
-    def _get_crl_distribution_point_url(self, request: HttpRequest | None, ca_id: int) -> str:
+    def _get_crl_distribution_point_url(self, context: BaseRequestContext, ca_id: int) -> str:
         """Get the CRL distribution point URL for this Issuing CA.
 
         Returns:
             str: The CRL distribution point URL.
         """
+        request: HttpRequest | None = None
+        if isinstance(context, HttpBaseRequestContext):
+            request = context.raw_message
         port = request.META.get('SERVER_PORT', '') if request else ''
         if port == '443': # CRL always served via HTTP
             port = ''
         port_str = f':{port}' if port else ''
         return f'http://{TlsSettings.get_first_ipv4_address()}{port_str}/crl/{ca_id}'
 
-    def process_operation(self, context: RequestContext) -> None:  # noqa: C901, PLR0915 - Core workflow orchestration requires multiple validation and conditional paths
+    def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0915 - Core pipeline orchestration requires multiple validation and conditional paths
         """Process the certificate issuance operation."""
+        if not isinstance(context, BaseCertificateRequestContext):
+            exc_msg = 'Certificate issuance requires a subclass of BaseCertificateRequestContext.'
+            raise TypeError(exc_msg)
         if not context.device:
             exc_msg = 'Device must be set in the context to issue a certificate.'
             raise ValueError(exc_msg)
@@ -95,7 +99,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             err_msg = f'The public key in the certificate is missing or of unsupported type: {type(public_key)}.'
             raise TypeError(err_msg)
 
-        issuing_credential = cast('CredentialModel', ca.credential)
+        issuing_credential = ca.credential
         issuer_certificate = issuing_credential.get_certificate()
         context.issuer_credential = issuing_credential
 
@@ -152,7 +156,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             x509.CRLDistributionPoints: (x509.CRLDistributionPoints([
                 x509.DistributionPoint(
                     full_name=[x509.UniformResourceIdentifier(
-                        self._get_crl_distribution_point_url(context.raw_message, ca.id)
+                        self._get_crl_distribution_point_url(context, ca.id)
                     )], relative_name=None, reasons=None, crl_issuer=None
                 ),
             ]), False),
