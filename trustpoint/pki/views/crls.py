@@ -95,6 +95,30 @@ class CrlDownloadView(CrlContextMixin, DetailView[CrlModel]):
         """Return all CRL models with related CA information."""
         return super().get_queryset().select_related('ca')
 
+    def get_object(self, queryset: QuerySet[CrlModel] | None = None) -> CrlModel:
+        """Get the CRL object, handling both CRL primary keys and CA primary keys."""
+        if queryset is None:
+            queryset = self.get_queryset()
+
+        pk = self.kwargs.get('pk')
+        if pk is None:
+            raise Http404
+
+        try:
+            return queryset.get(pk=pk)
+        except CrlModel.DoesNotExist:
+            pass
+
+        try:
+            ca = CaModel.objects.get(pk=pk)
+            active_crl = ca.get_active_crl()
+            if active_crl:
+                return active_crl
+        except (CaModel.DoesNotExist, AttributeError):
+            pass
+
+        raise Http404
+
     def get(
         self,
         request: HttpRequest,
@@ -200,6 +224,30 @@ class CrlDetailView(CrlContextMixin, DetailView[CrlModel]):
         """Return CRL models with related CA information."""
         return super().get_queryset().select_related('ca')
 
+    def get_object(self, queryset: QuerySet[CrlModel] | None = None) -> CrlModel:
+        """Get the CRL object, handling both CRL primary keys and CA primary keys."""
+        if queryset is None:
+            queryset = self.get_queryset()
+
+        pk = self.kwargs.get('pk')
+        if pk is None:
+            raise Http404
+
+        try:
+            return queryset.get(pk=pk)
+        except CrlModel.DoesNotExist:
+            pass
+
+        try:
+            ca = CaModel.objects.get(pk=pk)
+            active_crl = ca.get_active_crl()
+            if active_crl:
+                return active_crl
+        except (CaModel.DoesNotExist, AttributeError):
+            pass
+
+        raise Http404
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data for the CRL detail view."""
         context = super().get_context_data(**kwargs)
@@ -278,7 +326,7 @@ class CrlImportForm(forms.Form):
         ca_field = self.fields['ca']
         if isinstance(ca_field, forms.ModelChoiceField):
             ca_field.queryset = CaModel.objects.all().order_by('unique_name')
-            ca_field.label_from_instance = lambda obj: obj.common_name  # type: ignore
+            ca_field.label_from_instance = lambda obj: obj.common_name  # type: ignore[method-assign]
 
 
 class CrlImportView(CrlContextMixin, FormView[CrlImportForm]):

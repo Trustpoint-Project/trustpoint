@@ -106,17 +106,18 @@
                             <div>{{ keyless_ca.last_crl_issued_at }} (#{{ keyless_ca.crl_number }})</div>
                         </div>
                         <div>
-                            <div>{% trans 'CRL Download' %}</div>
+                            <div>{% trans 'CRL Management' %}</div>
                             <div>
-                                <a href="{% url 'crl-download' pk=keyless_ca.pk %}"
-                                   class="btn btn-primary btn-sm me-2"
-                                   title="{% trans 'Download CRL in PEM format' %}">
-                                    {% trans 'Download CRL (PEM)' %}
+                                <a href="{% url 'pki:crl-import' %}" class="btn btn-primary btn-sm me-2">
+                                    {% trans 'Import CRL' %}
                                 </a>
-                                <a href="{% url 'crl-download' pk=keyless_ca.pk %}?encoding=der"
+                                <a href="{% url 'pki:crl-detail' pk=active_crl.pk %}" class="btn btn-primary btn-sm me-2">
+                                    {% trans 'CRL Details' %}
+                                </a>
+                                <a href="{% url 'pki:crl-download' pk=active_crl.pk %}"
                                    class="btn btn-primary btn-sm"
-                                   title="{% trans 'Download CRL in DER format' %}">
-                                    {% trans 'Download CRL (DER)' %}
+                                   title="{% trans 'Download CRL' %}">
+                                    {% trans 'Download CRL' %}
                                 </a>
                             </div>
                         </div>
@@ -124,6 +125,20 @@
                         <div>
                             <div>{% trans 'Last CRL issued' %}</div>
                             <div>{% trans 'No CRL has been imported yet.' %}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'CRL Management' %}</div>
+                            <div>
+                                <a href="{% url 'pki:crl-import' %}" class="btn btn-primary btn-sm me-2">
+                                    {% trans 'Import CRL' %}
+                                </a>
+                                <button class="btn btn-secondary btn-sm me-2" disabled title="{% trans 'No CRL available' %}">
+                                    {% trans 'CRL Details' %}
+                                </button>
+                                <button class="btn btn-secondary btn-sm" disabled title="{% trans 'No CRL available' %}">
+                                    {% trans 'Download CRL' %}
+                                </button>
+                            </div>
                         </div>
                     {% endif %}
                 </div>

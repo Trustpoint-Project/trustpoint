@@ -248,34 +248,31 @@
                         <hr class="hr-m">
                         <div class="tp-kvp-list">
                             <div>
-                                <div>{% trans 'Revocation list' %}</div>
+                                <div>{% trans 'CRL Management' %}</div>
                                 <div>
                                     <div class="mb-2">
                                         <a href="{% url 'pki:issuing_cas-crl-gen' pk=issuing_ca.pk %}"
-                                            class="btn btn-sm btn-primary">
+                                            class="btn btn-sm btn-primary me-2">
                                             {% trans 'Generate CRL' %}
                                         </a>
-                                    </div>
-                                    {% if issuing_ca.last_crl_issued_at %}
-                                        <div class="mb-2">
-                                            <div class="btn-group" role="group">
-                                                <a href="{% url 'crl-download' pk=issuing_ca.pk %}"
-                                                    class="btn btn-sm btn-primary">
-                                                    {% trans 'Download CRL (PEM)' %}
-                                                </a>
-                                                <a href="{% url 'crl-download' pk=issuing_ca.pk %}?encoding=der"
-                                                    class="btn btn-sm btn-primary">
-                                                    {% trans 'Download CRL (DER)' %}
-                                                </a>
-                                            </div>
-                                        </div>
-                                    {% else %}
-                                        <div class="mb-2">
-                                            <a class="btn btn-sm btn-primary disabled">
+                                        {% if issuing_ca.last_crl_issued_at %}
+                                            <a href="{% url 'pki:crl-detail' pk=active_crl.pk %}" class="btn btn-sm btn-primary me-2">
+                                                {% trans 'CRL Details' %}
+                                            </a>
+                                            <a href="{% url 'pki:crl-download' pk=active_crl.pk %}"
+                                                class="btn btn-sm btn-primary me-2"
+                                                title="{% trans 'Download CRL' %}">
                                                 {% trans 'Download CRL' %}
                                             </a>
-                                        </div>
-                                    {% endif %}
+                                        {% else %}
+                                            <button class="btn btn-sm btn-secondary me-2" disabled title="{% trans 'No CRL available' %}">
+                                                {% trans 'CRL Details' %}
+                                            </button>
+                                            <button class="btn btn-sm btn-secondary me-2" disabled title="{% trans 'No CRL available' %}">
+                                                {% trans 'Download CRL' %}
+                                            </button>
+                                        {% endif %}
+                                    </div>
                                     <div>
                                         <a href="{% url 'pki:help_issuing_cas_crl_download' pk=issuing_ca.pk %}"
                                             class="btn btn-sm btn-primary"
