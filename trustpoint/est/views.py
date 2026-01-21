@@ -1,12 +1,15 @@
 """Views for EST (Enrollment over Secure Transport) handling authentication and certificate issuance."""
 
 import base64
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+
+if TYPE_CHECKING:
+    from pki.models.credential import CredentialModel
 
 from pki.models.domain import DomainModel
 from request.authentication import EstAuthentication
@@ -274,7 +277,10 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
                 if not requested_domain.issuing_ca:
                     return LoggedHttpResponse('The requested domain has no issuing CA configured', status=500)
 
-                ca_credential_serializer = requested_domain.issuing_ca.credential.get_credential_serializer()
+                ca_credential_serializer = (
+                    cast('CredentialModel', requested_domain.issuing_ca.credential)
+                    .get_credential_serializer()
+                )
                 pkcs7_certs = ca_credential_serializer.get_full_chain_as_serializer().as_pkcs7_der()
                 b64_pkcs7 = base64.b64encode(pkcs7_certs).decode()
 

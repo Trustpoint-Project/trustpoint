@@ -97,7 +97,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             err_msg = f'The public key in the certificate is missing or of unsupported type: {type(public_key)}.'
             raise TypeError(err_msg)
 
-        issuing_credential = ca.credential
+        issuing_credential = ca.get_credential()
         issuer_certificate = issuing_credential.get_certificate()
         context.issuer_credential = issuing_credential
 

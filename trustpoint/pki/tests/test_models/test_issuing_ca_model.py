@@ -1,4 +1,4 @@
-"""Tests for the IssuingCaModel class."""
+"""Tests for the CaModel class."""
 
 import datetime
 from typing import Any
@@ -12,12 +12,12 @@ from django.utils import timezone
 from trustpoint_core import oid
 
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
-from pki.models.issuing_ca import IssuingCaModel
+from pki.models import CaModel
 from pki.util.x509 import CertificateGenerator
 
 COMMON_NAME = 'Root CA'
 UNIQUE_NAME = COMMON_NAME.replace(' ', '_').lower()
-CA_TYPE = IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
+CA_TYPE = CaModel.CaTypeChoice.LOCAL_UNPROTECTED
 
 
 def test_attributes_and_properties(issuing_ca_instance: dict[str, Any]) -> None:
@@ -28,7 +28,7 @@ def test_attributes_and_properties(issuing_ca_instance: dict[str, Any]) -> None:
     priv_key = issuing_ca_instance.get('priv_key')
     cert = issuing_ca_instance.get('cert')
     if (
-        not isinstance(issuing_ca, IssuingCaModel)
+        not isinstance(issuing_ca, CaModel)
         or not isinstance(cert, x509.Certificate)
         or not isinstance(priv_key, RSAPrivateKey)
     ):
@@ -36,7 +36,7 @@ def test_attributes_and_properties(issuing_ca_instance: dict[str, Any]) -> None:
         raise TypeError(msg)
     assert issuing_ca.unique_name == UNIQUE_NAME
     assert issuing_ca.credential
-    assert issuing_ca.issuing_ca_type == CA_TYPE
+    assert issuing_ca.ca_type == CA_TYPE
     assert issuing_ca.is_active
     time_difference = (current_time - issuing_ca.created_at).total_seconds()
     assert time_difference <= 20
@@ -51,7 +51,7 @@ def test_issue_crl(issuing_ca_instance: dict[str, Any]) -> None:
     current_time = datetime.datetime.now(tz)
     issuing_ca = issuing_ca_instance.get('issuing_ca')
     priv_key = issuing_ca_instance.get('priv_key')
-    if not isinstance(issuing_ca, IssuingCaModel) or not isinstance(priv_key, RSAPrivateKey):
+    if not isinstance(issuing_ca, CaModel) or not isinstance(priv_key, RSAPrivateKey):
         msg = 'Issuig CA not created properly'
         raise TypeError(msg)
 
@@ -74,7 +74,7 @@ def test_revoke_all_issued_certificates_and_crl(issuing_ca_instance: dict[str, A
     priv_key = issuing_ca_instance.get('priv_key')
     cert = issuing_ca_instance.get('cert')
     if (
-        not isinstance(issuing_ca, IssuingCaModel)
+        not isinstance(issuing_ca, CaModel)
         or not isinstance(cert, x509.Certificate)
         or not isinstance(priv_key, RSAPrivateKey)
     ):
@@ -113,5 +113,5 @@ def test_issuing_ca_delete(issuing_ca_instance: dict[str, Any], domain_instance:
         issuing_ca.delete()
     domain.delete()
     issuing_ca.delete()
-    with pytest.raises(IssuingCaModel.DoesNotExist):
-        IssuingCaModel.objects.get(id=issuing_ca_id)
+    with pytest.raises(CaModel.DoesNotExist):
+        CaModel.objects.get(id=issuing_ca_id)

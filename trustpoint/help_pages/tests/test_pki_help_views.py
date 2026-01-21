@@ -6,7 +6,7 @@ from django.http import Http404
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
-from pki.models import DevIdRegistration, IssuingCaModel
+from pki.models import DevIdRegistration, CaModel
 from ..help_section import ValueRenderType
 from ..pki_help_views import (
     BaseHelpView,
@@ -237,7 +237,7 @@ class CrlDownloadHelpViewTests(TestCase):
         mock_get_ip.return_value = '192.168.1.1'
         mock_tls_section.return_value = Mock(heading='TLS', rows=[])
 
-        mock_issuing_ca = Mock(spec=IssuingCaModel)
+        mock_issuing_ca = Mock(spec=CaModel)
         mock_issuing_ca.pk = 123
         mock_issuing_ca.unique_name = 'test-ca'
         mock_issuing_ca.crl_pem = 'PEM_DATA'
@@ -274,7 +274,7 @@ class CrlDownloadHelpViewTests(TestCase):
         mock_tls_section.return_value = Mock(heading='TLS', rows=[])
         mock_reverse.side_effect = lambda name, **kwargs: f'/{name}/{kwargs.get("pk", "")}'
 
-        mock_issuing_ca = Mock(spec=IssuingCaModel)
+        mock_issuing_ca = Mock(spec=CaModel)
         mock_issuing_ca.pk = 123
         mock_issuing_ca.unique_name = 'test-ca'
         mock_issuing_ca.crl_pem = None
@@ -305,7 +305,7 @@ class CrlDownloadHelpViewTests(TestCase):
         mock_get_ip.return_value = '192.168.1.1'
         mock_tls_section.return_value = Mock(heading='TLS', rows=[])
 
-        mock_issuing_ca = Mock(spec=IssuingCaModel)
+        mock_issuing_ca = Mock(spec=CaModel)
         mock_issuing_ca.pk = 123
         mock_issuing_ca.unique_name = 'test-ca'
         mock_issuing_ca.crl_pem = 'PEM_DATA'

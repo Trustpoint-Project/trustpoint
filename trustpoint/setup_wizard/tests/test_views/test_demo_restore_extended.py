@@ -7,7 +7,7 @@ import pytest
 from django.contrib.messages import get_messages
 from django.test import RequestFactory
 
-from pki.models import CredentialModel, IssuingCaModel
+from pki.models import CredentialModel, CaModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import EmptyForm

@@ -537,6 +537,11 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
 
             self._validate_body_type_supported(body_type)
 
+            if not context.operation:
+                inferred_operation = self._operation_from_body_type(body_type)
+                context.operation = inferred_operation
+                self.logger.debug('Inferred operation from body type: %s', inferred_operation)
+
             # Validate body type matches operation
             self._validate_operation_body_match(context.operation, body_type)
 
@@ -560,6 +565,18 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
         if body_type not in ('ir', 'cr'):
             err_msg = f'Unsupported CMP body type: {body_type}'
             self._raise_value_error(err_msg)
+
+    def _operation_from_body_type(self, body_type: str) -> str | None:
+        """Map CMP body type to operation."""
+        if body_type == 'ir':
+            return 'initialization'
+        if body_type == 'cr':
+            return 'certification'
+        if body_type == 'rr':
+            return 'revocation'
+        err_msg = f'Unsupported CMP body type: {body_type}'
+        self._raise_value_error(err_msg)
+        return None
 
     def _validate_operation_body_match(self, operation: str | None, body_type: str) -> None:
         """Validate that the operation matches the body type."""

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
@@ -107,6 +107,14 @@ class OwnerCredentialBulkDeleteConfirmView(OwnerCredentialContextMixin, BulkDele
     ignore_url = reverse_lazy('pki:owner_credentials')
     template_name = 'pki/owner_credentials/confirm_delete.html'
     context_object_name = 'owner_credentials'
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
+        queryset = self.get_queryset()
+        if not queryset.exists():
+            messages.error(request, _('No owner credentials selected for deletion.'))
+            return HttpResponseRedirect(self.success_url)
+        return super().get(request, *args, **kwargs)
 
     def form_valid(self, form: Form) -> HttpResponse:
         """Delete the selected credentials on valid form."""
