@@ -219,42 +219,10 @@ class GdsPushService:
             msg = f'Domain "{self.device.domain.unique_name}" has no issuing CA configured'
             raise GdsPushError(msg)
 
-        ca_chain = []
-        current_ca = self.device.domain.issuing_ca
-        visited_cas = set()
+        issuing_ca = self.device.domain.issuing_ca
 
-        while current_ca is not None:
-            if current_ca.pk in visited_cas:
-                msg = f'Circular reference detected in CA chain at CA "{current_ca.unique_name}"'
-                raise GdsPushError(msg)
+        return issuing_ca.get_ca_chain_from_truststore()
 
-            visited_cas.add(current_ca.pk)
-            ca_chain.append(current_ca)
-
-            if current_ca.is_root_ca():
-                logger.debug('Reached root CA: %s', current_ca.unique_name)
-                break
-
-            if not current_ca.parent_ca:
-                msg = (
-                    f'Incomplete CA chain: CA "{current_ca.unique_name}" is not a root CA '
-                    f'but has no parent CA configured'
-                )
-                raise GdsPushError(msg)
-
-            current_ca = current_ca.parent_ca
-
-        if not ca_chain:
-            msg = 'Failed to build CA chain: chain is empty'
-            raise GdsPushError(msg)
-
-        logger.info(
-            'Built CA chain with %d CA(s): %s',
-            len(ca_chain),
-            ' → '.join(ca.unique_name for ca in ca_chain)
-        )
-
-        return ca_chain
 
     def _build_trustlist_for_server(self) -> ua.TrustListDataType:
         """Build OPC UA TrustList to push to server.
@@ -306,12 +274,11 @@ class GdsPushService:
                 msg = f'Failed to load CRL for CA "{ca.unique_name}": {e}'
                 raise GdsPushError(msg) from e
 
-            # Validate CRL is still valid
             now = datetime.datetime.now(tz=datetime.UTC)
-            if crl_crypto.next_update and crl_crypto.next_update < now:
+            if crl_crypto.next_update_utc and crl_crypto.next_update_utc < now:
                 msg = (
                     f'CRL for CA "{ca.unique_name}" has expired. '
-                    f'Next update was: {crl_crypto.next_update.isoformat()}, '
+                    f'Next update was: {crl_crypto.next_update_utc.isoformat()}, '
                     f'Current time: {now.isoformat()}'
                 )
                 raise GdsPushError(msg)
@@ -324,7 +291,7 @@ class GdsPushService:
             logger.debug(
                 'Added valid CRL from CA "%s" (next update: %s)',
                 ca.unique_name,
-                crl_crypto.next_update.isoformat() if crl_crypto.next_update else 'N/A'
+                crl_crypto.next_update_utc.isoformat() if crl_crypto.next_update_utc else 'N/A'
             )
 
         trustlist = ua.TrustListDataType()

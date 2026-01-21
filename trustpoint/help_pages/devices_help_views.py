@@ -827,7 +827,7 @@ class OpcUaGdsPushApplicationCertificateStrategy(HelpPageStrategy):
             discover_html = (
                 '<form method="post" action="' + discover_server_url + '" style="display: inline;">'
                 'CSRF_TOKEN_PLACEHOLDER'
-                '<button type="submit" class="btn btn-info">Discover Server</button>'
+                '<button type="submit" class="btn btn-primary">Discover Server</button>'
                 '</form>'
                 '<p class="text-muted mt-2">Connects to the OPC UA server without authentication '
                 'to retrieve server information and certificates for initial configuration.</p>'
@@ -1034,74 +1034,92 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                 ],
             )
 
-        # Add section for trusted certificates and CRLs
-        truststore = onboarding_config.opc_trust_store
-        if truststore:
-            trusted_certs_rows = []
-            crl_rows = []
+        if device.domain and device.domain.issuing_ca:
+            try:
+                ca_chain = device.domain.issuing_ca.get_ca_chain_from_truststore()
+                ca_chain = list(reversed(ca_chain))
 
-            for truststore_entry in truststore.truststoreordermodel_set.order_by('order'):
-                cert = truststore_entry.certificate
-                cert_serializer = cert.get_certificate_serializer()
-                cert_crypto = cert_serializer.as_crypto()
+                hierarchy_html = (
+                    '<div style="font-family: monospace;">'
+                    '<strong>Certificate Authority Hierarchy:</strong><br>'
+                )
 
-                subject = cert_crypto.subject.rfc4514_string()
-                issuer = cert_crypto.issuer.rfc4514_string()
-                not_before = cert_crypto.not_valid_before.isoformat()
-                not_after = cert_crypto.not_valid_after.isoformat()
-
-                cert_info = f'Subject: {subject}<br>Issuer: {issuer}<br>Valid from: {not_before} to {not_after}'
-                trusted_certs_rows.append(HelpRow(
-                    _non_lazy(f'Certificate {truststore_entry.order}'),
-                    cert_info,
-                    ValueRenderType.HTML,
-                ))
-
-                # Check for CRL
-                ca_model = truststore_entry.certificate.credential_set.first()
-                if ca_model and hasattr(ca_model, 'crl_pem') and ca_model.crl_pem:
+                for idx, ca in enumerate(ca_chain):
                     try:
-                        crl_crypto = x509.load_pem_x509_crl(ca_model.crl_pem.encode())
-                        crl_info = (
-                            f'Issuer: {crl_crypto.issuer.rfc4514_string()}<br>'
-                            f'Last update: {crl_crypto.last_update.isoformat()}<br>'
-                            f'Next update: {crl_crypto.next_update.isoformat() if crl_crypto.next_update else "N/A"}'
+                        cert_serializer = ca.ca_certificate_model.get_certificate_serializer()
+                        cert_crypto = cert_serializer.as_crypto()
+
+                        common_name = cert_crypto.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
+                        cn_value = common_name[0].value if common_name else ca.unique_name
+
+                        # Check CRL status
+                        crl_status = 'MISSING'
+                        crl_link = ''
+                        if ca.crl_pem:
+                            try:
+                                x509.load_pem_x509_crl(ca.crl_pem.encode())
+                                active_crl = ca.get_active_crl()
+                                if active_crl:
+                                    crl_detail_url = reverse('pki:crl-detail', kwargs={'pk': active_crl.pk})
+                                    crl_link = f'<a href="{crl_detail_url}" target="_blank">CRL</a> '
+                                crl_status = 'OK'
+                            except (ValueError, TypeError):
+                                crl_status = 'INVALID'
+
+                        ca_detail_url = reverse('pki:issuing_cas-detail', kwargs={'pk': ca.pk})
+                        indent = '&nbsp;' * (idx * 4)  # 4 spaces per level
+                        hierarchy_html += (
+                            f'{indent}└─ <a href="{ca_detail_url}" target="_blank">{cn_value}</a> '
+                            f'[{crl_link}{crl_status}]<br>'
                         )
-                        crl_rows.append(HelpRow(
-                            _non_lazy(f'CRL for Certificate {truststore_entry.order}'),
-                            crl_info,
+
+                    except (ValueError, TypeError, AttributeError):
+                        continue
+
+                hierarchy_html += '</div>'
+
+                trusted_certs_section = HelpSection(
+                    _non_lazy('CA Hierarchy'),
+                    [
+                        HelpRow(
+                            _non_lazy('Certificate Chain'),
+                            hierarchy_html,
                             ValueRenderType.HTML,
-                        ))
-                    except (ValueError, TypeError):
-                        crl_rows.append(HelpRow(
-                            _non_lazy(f'CRL for Certificate {truststore_entry.order}'),
-                            'CRL data available but could not be parsed',
+                        ),
+                    ],
+                )
+
+            except ValueError:
+                trusted_certs_section = HelpSection(
+                    _non_lazy('CA Certificates'),
+                    [
+                        HelpRow(
+                            _non_lazy('Error'),
+                            'Invalid truststore configuration for the issuing CA.',
                             ValueRenderType.PLAIN,
-                        ))
-                else:
-                    crl_rows.append(HelpRow(
-                        _non_lazy(f'CRL for Certificate {truststore_entry.order}'),
-                        'No CRL available',
-                        ValueRenderType.PLAIN,
-                    ))
-
+                        ),
+                    ],
+                )
+        else:
             trusted_certs_section = HelpSection(
-                _non_lazy('Trusted Certificates'),
-                trusted_certs_rows,
+                _non_lazy('CA Certificates'),
+                [
+                    HelpRow(
+                        _non_lazy('No CA Configured'),
+                        'No issuing CA is configured for this device.',
+                        ValueRenderType.PLAIN,
+                    ),
+                ],
             )
 
-            crls_section = HelpSection(
-                _non_lazy('Certificate Revocation Lists (CRLs)'),
-                crl_rows,
-            )
-
-            # Add download section
+        # Add download section
+        if device.domain and device.domain.issuing_ca:
             download_url = reverse(
-                f'devices:{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_trust_bundle_download',
-                kwargs={'pk': device.pk}
+                'devices:trust_bundle_download',
+                kwargs={'pk': device.domain.issuing_ca.pk}
             )
             download_html = (
-                f'<a href="{download_url}" class="btn btn-success">Download Trust Bundle</a>'
+                f'<a href="{download_url}" class="btn btn-primary">Download Trust Bundle</a>'
                 '<p class="text-muted mt-2">Download a ZIP file containing all CA certificates '
                 'and CRLs in DER format for use with OPC UA servers.</p>'
             )
@@ -1115,19 +1133,24 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                     ),
                 ],
             )
-
-            sections = [
-                summary,
-                trusted_certs_section,
-                crls_section,
-                download_section,
-                actions,
-            ]
         else:
-            sections = [
-                summary,
-                actions,
-            ]
+            download_section = HelpSection(
+                _non_lazy('Download Trust Bundle'),
+                [
+                    HelpRow(
+                        _non_lazy('Trust Bundle Download'),
+                        '<p class="text-muted">No issuing CA configured for this device.</p>',
+                        ValueRenderType.HTML,
+                    ),
+                ],
+            )
+
+        sections = [
+            summary,
+            trusted_certs_section,
+            download_section,
+            actions,
+        ]
 
         return sections, _non_lazy('Help - OPC UA GDS Push Onboarding')
 

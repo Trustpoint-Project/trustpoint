@@ -265,9 +265,9 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_onboarding_truststore_associated_help',
     ),
     path(
-        'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/trust-bundle-download/',
-        views.OpcUaGdsPushTrustBundleDownloadView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_trust_bundle_download',
+        'trust-bundle-download/<int:pk>/',
+        views.TrustBundleDownloadView.as_view(),
+        name='trust_bundle_download',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/cmp-domain-credential/',

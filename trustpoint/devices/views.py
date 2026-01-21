@@ -5,6 +5,7 @@ from __future__ import annotations
 import abc
 import datetime
 import io
+import zipfile
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from cryptography import x509
@@ -69,6 +70,7 @@ from devices.revocation import DeviceCredentialRevocation
 from devices.serializers import DeviceSerializer
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
+from pki.models.ca import CaModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -2158,13 +2160,11 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
         )
 
 
-class OpcUaGdsPushTrustBundleDownloadView(PageContextMixin, DetailView[DeviceModel]):
-    """View to download the trust bundle (CA certificates and CRLs) for an OPC UA GDS Push device."""
+class TrustBundleDownloadView(PageContextMixin, DetailView[CaModel]):
+    """View to download the trust bundle (CA certificates and CRLs) for a given Issuing CA."""
 
     http_method_names = ('get',)
-    model = DeviceModel
-    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
-    page_category = DEVICES_PAGE_CATEGORY
+    model = CaModel
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:  # noqa: ARG002
         """Handle the GET request to download the trust bundle.
@@ -2179,74 +2179,56 @@ class OpcUaGdsPushTrustBundleDownloadView(PageContextMixin, DetailView[DeviceMod
         """
         self.object = self.get_object()
 
-        # Check if device has onboarding config and truststore
-        if not self.object.onboarding_config or not self.object.onboarding_config.opc_trust_store:
-            messages.error(request, 'No truststore associated with this device.')
-            return HttpResponseRedirect(
-                reverse_lazy(
-                    f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
-                    kwargs={'pk': self.object.pk}
-                )
-            )
+        issuing_ca = self.object
 
-        truststore = self.object.onboarding_config.opc_trust_store
+        try:
+            ca_chain = issuing_ca.get_ca_chain_from_truststore()
+        except ValueError as e:
+            msg = f'Invalid truststore configuration: {e}'
+            raise Http404(msg) from e
 
-        # Collect certificates and CRLs
         data_to_archive = {}
 
-        for entry in truststore.truststoreordermodel_set.order_by('order'):
-            cert = entry.certificate
+        for ca in ca_chain:
             try:
-                cert_der = cert.get_certificate_serializer().as_der()
+                cert_der = ca.ca_certificate_model.get_certificate_serializer().as_der()
                 if cert_der is None:
-                    continue  # Skip certificates that can't be serialized
-                    
-                # Add certificate
-                cert_filename = f'ca_{entry.order}.der'
-                data_to_archive[cert_filename] = cert_der
-            except Exception:
-                continue  # Skip certificates that can't be serialized
+                    continue
 
-            # Try to add CRL if available
-            ca_model = cert.credential_set.first()
-            if ca_model and hasattr(ca_model, 'crl_pem') and ca_model.crl_pem:
+                safe_name = ''.join(c if c.isalnum() or c in '._-' else '_' for c in ca.unique_name)
+                cert_filename = f'{safe_name}.der'
+                data_to_archive[cert_filename] = cert_der
+            except (ValueError, TypeError, AttributeError):
+                continue
+
+            if ca.crl_pem:
                 try:
-                    crl_crypto = x509.load_pem_x509_crl(ca_model.crl_pem.encode())
+                    crl_crypto = x509.load_pem_x509_crl(ca.crl_pem.encode())
                     crl_der = crl_crypto.public_bytes(serialization.Encoding.DER)
-                    crl_filename = f'crl_{entry.order}.der'
+                    crl_filename = f'{safe_name}_crl.der'
                     data_to_archive[crl_filename] = crl_der
                 except (ValueError, TypeError):
-                    # Skip CRL if it can't be parsed
                     pass
 
         if not data_to_archive:
-            messages.error(request, 'No certificates found in truststore.')
-            return HttpResponseRedirect(
-                reverse_lazy(
-                    f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
-                    kwargs={'pk': self.object.pk}
-                )
-            )
+            msg = 'No certificates found in truststore.'
+            raise Http404(msg)
 
-        # Create zip file
-        zip_data = Archiver.archive_zip(data_to_archive)
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for filename, data in data_to_archive.items():
+                zip_file.writestr(filename, data)
+        zip_data = zip_buffer.getvalue()
 
-        # Debug: Check if zip_data is valid
         if not zip_data or len(zip_data) == 0:
-            messages.error(request, f'Failed to create ZIP file. Found {len(data_to_archive)} files to archive.')
-            return HttpResponseRedirect(
-                reverse_lazy(
-                    f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
-                    kwargs={'pk': self.object.pk}
-                )
-            )
+            msg = f'Failed to create ZIP file. Found {len(data_to_archive)} files to archive.'
+            raise Http404(msg)
 
-        # Create response
         response = FileResponse(
             io.BytesIO(zip_data),
             content_type='application/zip',
             as_attachment=True,
-            filename=f'trustpoint-{self.object.common_name}-trust-bundle.zip',
+            filename=f'trustpoint-{self.object.unique_name}-trust-bundle.zip',
         )
 
         return cast('HttpResponse', response)
