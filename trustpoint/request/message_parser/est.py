@@ -37,7 +37,7 @@ class EstAuthorizationHeaderParsing(ParsingComponent, LoggerMixin):
             self.logger.debug('Authorization header validation skipped: No Authorization header present')
             return
 
-        if not auth_header.startswith('Basic '):
+        if not auth_header.lower().startswith('basic '):
             error_message = "Authorization header must start with 'Basic'."
             self.logger.warning("Authorization header validation failed: "
                                 "Header does not start with 'Basic': %s...", auth_header[:20])

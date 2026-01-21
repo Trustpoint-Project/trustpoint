@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
@@ -25,6 +25,7 @@ from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.oid import NameOid
 from trustpoint_core.serializer import CertificateFormat
 
+from pki.filters import TruststoreFilter
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
 from pki.models.truststore import TruststoreModel
@@ -72,6 +73,41 @@ class TruststoreTableView(TruststoresContextMixin, SortableTableMixin[Truststore
     context_object_name = 'truststores'
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'unique_name'
+    filterset_class = TruststoreFilter
+
+    def apply_filters(self, qs: QuerySet[TruststoreModel]) -> QuerySet[TruststoreModel]:
+        """Applies the `TruststoreFilter` to the given queryset.
+
+        Args:
+            qs: The base queryset to filter.
+
+        Returns:
+            The filtered queryset according to GET parameters.
+        """
+        self.filterset = TruststoreFilter(self.request.GET, queryset=qs)
+        return cast('QuerySet[TruststoreModel]', self.filterset.qs)
+
+    def get_queryset(self) -> QuerySet[TruststoreModel]:
+        """Filter queryset to only include truststores filtered by UI filters.
+
+        Returns:
+            Returns a queryset of all TruststoreModels, filtered by UI filters.
+        """
+        base_qs = super().get_queryset()
+        return self.apply_filters(base_qs)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the filter to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the truststores page.
+        """
+        context = super().get_context_data(**kwargs)
+        context['filter'] = getattr(self, 'filterset', None)
+        return context
 
 
 class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm]):
