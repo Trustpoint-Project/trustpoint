@@ -530,3 +530,64 @@ class WorkflowInstance(models.Model):
         """Return True if the current step is the last Approval step in the workflow."""
         approval_ids = [step['id'] for step in self.get_steps() if step.get('type') == 'Approval']
         return bool(approval_ids and self.current_step == approval_ids[-1])
+
+
+class WorkflowStepRun(models.Model):
+    """Append-only execution log for workflow steps.
+
+    One row is created per step execution attempt (including repeats due to future loops,
+    retries, or explicit forward gotos). This table is the authoritative audit trail.
+
+    Notes:
+        - run_index is monotonic per instance, assigned by the engine transaction.
+        - step_id is the raw workflow step id (e.g. "step-2").
+        - context stores the executor StepContext dict (uncompacted) or an engine-owned error dict.
+        - vars_delta stores the *delta* returned by the executor (not the merged snapshot).
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    instance = models.ForeignKey(
+        WorkflowInstance,
+        on_delete=models.CASCADE,
+        related_name='step_runs',
+    )
+
+    run_index = models.PositiveIntegerField(help_text='Monotonic per-instance sequence number (1..n).')
+
+    step_id = models.CharField(max_length=100, help_text='Raw step id (e.g. "step-1").')
+    step_type = models.CharField(max_length=50, help_text='Step type (e.g. "Webhook", "Logic").')
+
+    status = models.CharField(max_length=32, choices=State.choices, help_text='Executor returned State.')
+
+    # Executor-produced per-step context (or engine error context), uncompressed for readability.
+    context = models.JSONField(null=True, blank=True)
+
+    # Delta vars returned by the executor (not the merged view).
+    vars_delta = models.JSONField(null=True, blank=True)
+
+    # Executor returned goto target (raw step id), if any.
+    next_step = models.CharField(max_length=100, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        """Model metadata for step run history."""
+        db_table = 'workflow_step_runs'
+        ordering = ('instance_id', 'run_index')
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['instance', 'run_index'],
+                name='uq_workflow_step_run_instance_run_index',
+            ),
+        ]
+        indexes = (
+            models.Index(fields=['instance', 'run_index']),
+            models.Index(fields=['instance', 'step_id']),
+            models.Index(fields=['status']),
+            models.Index(fields=['created_at']),
+        )
+
+    def __str__(self) -> str:
+        """Return a compact representation for admin/logging."""
+        return f'Run#{self.run_index} {self.instance_id} {self.step_id} {self.step_type} {self.status}'

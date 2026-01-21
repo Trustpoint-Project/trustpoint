@@ -36,57 +36,61 @@ class LogicExecutor(AbstractStepExecutor):
             raise ValueError(msg)
 
         params: dict[str, Any] = dict(step.get('params') or {})
-        cases = list(params.get('cases') or [])
+        rules = list(params.get('rules') or [])
         default = params.get('default')
 
-        if default is None:
+        if not isinstance(default, dict):
             return ExecutorResult(
                 status=State.FAILED,
-                context=_logic_error('Logic step missing required "default" outcome.'),
+                context=_logic_error('Logic step missing required "default" object.'),
             )
 
         ctx = _build_logic_context(instance)
 
         evaluations: list[bool] = []
-        matched_idx: int | None = None
-        chosen_case: dict[str, Any] | None = None
+        matched_rule_idx: int | None = None
+        chosen_block: dict[str, Any] | None = None
+        chosen_label: str = 'default'
 
-        for idx, case in enumerate(cases):
-            if not isinstance(case, dict):
+        # Evaluate rules in order; first match wins
+        for idx, rule in enumerate(rules):
+            if not isinstance(rule, dict):
                 evaluations.append(False)
                 continue
 
-            when_expr = case.get('when')
-            ok = bool(_eval_bool_expr(when_expr, ctx))
+            when_expr = rule.get('when')
+            ok = _eval_when(when_expr, ctx)
             evaluations.append(ok)
-            if ok and matched_idx is None:
-                matched_idx = idx
-                chosen_case = case
+            if ok:
+                matched_rule_idx = idx
+                chosen_block = rule
+                chosen_label = f'rule[{idx}]'
                 break
 
-        if matched_idx is not None and chosen_case is not None:
-            set_map = chosen_case.get('set')
-            then = chosen_case.get('then')
-        else:
-            set_map = None
-            then = default
+        if chosen_block is None:
+            chosen_block = default
 
-        flat_vars: dict[str, Any] | None = None
+        actions = chosen_block.get('actions', [])
+        then = chosen_block.get('then')
+
+        # Apply actions (currently only "set") and compute vars updates
         try:
-            flat_vars = _build_vars_assignments(set_map)
+            flat_vars, assigned_keys = _execute_actions(actions=actions, ctx=ctx)
         except (ValueError, KeyError) as exc:
             return ExecutorResult(
                 status=State.FAILED,
-                context=_logic_error(f'Invalid vars assignment: {exc}'),
+                context=_logic_error(f'Invalid actions: {exc}'),
             )
 
         outcome, next_step, stop_reason = _resolve_outcome(then)
 
         outputs: dict[str, Any] = {
             'logic': {
-                'outcome': outcome,
-                'matched_case': matched_idx,
+                'selected': chosen_label,
+                'matched_rule': matched_rule_idx,
                 'evaluations': evaluations,
+                'assigned_keys': assigned_keys,
+                'outcome': outcome,
                 'goto': next_step,
                 'stop_reason': stop_reason,
             }
@@ -154,24 +158,40 @@ def _build_full_steps_context(instance: WorkflowInstance) -> dict[str, Any]:
     return out
 
 
-def _eval_bool_expr(expr: Any, ctx: dict[str, Any]) -> bool:
-    """Evaluate an expression and coerce to boolean deterministically."""
-    v = _eval_value(expr, ctx)
-    return bool(v)
+def _eval_when(when: Any, ctx: dict[str, Any]) -> bool:
+    """Evaluate `when`, allowing list-of-exprs as AND sugar."""
+    if isinstance(when, list):
+        # Empty lists should not happen (validator blocks), but be deterministic.
+        if not when:
+            return False
+        for e in when:
+            if not bool(_eval_value(e, ctx)):
+                return False
+        return True
+    return bool(_eval_value(when, ctx))
 
 
 def _eval_value(expr: Any, ctx: dict[str, Any]) -> Any:
+    """Evaluate an expression deterministically.
+
+    Supported forms:
+    - primitives and lists are literal values
+    - {"const": ...}
+    - {"path": "ctx.vars.foo"} (or "vars.foo", "steps.step_1.outputs.x", etc.)
+    - {"op": "...", ...} for supported operators
+    """
     if expr is None:
         return None
 
-    # literal primitives and arrays are allowed as literals
     if isinstance(expr, (str, int, float, bool, list)):
         return expr
 
     if not isinstance(expr, dict):
         return None
 
-    # Path lookup
+    if 'const' in expr:
+        return expr.get('const')
+
     if 'path' in expr and isinstance(expr.get('path'), str):
         return _resolve_path(ctx, str(expr['path']))
 
@@ -179,12 +199,32 @@ def _eval_value(expr: Any, ctx: dict[str, Any]) -> Any:
     if not op:
         return None
 
-    if op == 'eq':
+    if op in {'eq', 'ne', 'lt', 'lte', 'gt', 'gte'}:
         left = _eval_value(expr.get('left'), ctx)
         right = _eval_value(expr.get('right'), ctx)
-        return left == right
+
+        if op == 'eq':
+            return left == right
+        if op == 'ne':
+            return left != right
+
+        # Comparisons: TypeErrors become deterministic False
+        try:
+            if op == 'lt':
+                return left < right
+            if op == 'lte':
+                return left <= right
+            if op == 'gt':
+                return left > right
+            if op == 'gte':
+                return left >= right
+        except TypeError:
+            return False
+
+        return False
 
     if op == 'exists':
+        # Exists means: path resolves to a non-None value
         arg = _eval_value(expr.get('arg'), ctx)
         return arg is not None
 
@@ -197,14 +237,14 @@ def _eval_value(expr: Any, ctx: dict[str, Any]) -> Any:
         return not bool(arg)
 
     if op == 'not':
-        return not _eval_bool_expr(expr.get('arg'), ctx)
+        return not bool(_eval_value(expr.get('arg'), ctx))
 
     if op == 'and':
         args = expr.get('args')
         if not isinstance(args, list) or not args:
             return False
         for a in args:
-            if not _eval_bool_expr(a, ctx):
+            if not bool(_eval_value(a, ctx)):
                 return False
         return True
 
@@ -213,7 +253,7 @@ def _eval_value(expr: Any, ctx: dict[str, Any]) -> Any:
         if not isinstance(args, list) or not args:
             return False
         for a in args:
-            if _eval_bool_expr(a, ctx):
+            if bool(_eval_value(a, ctx)):
                 return True
         return False
 
@@ -221,7 +261,13 @@ def _eval_value(expr: Any, ctx: dict[str, Any]) -> Any:
 
 
 def _resolve_path(ctx: dict[str, Any], path: str) -> Any:
-    """Resolve a dot path like 'ctx.vars.x' against {'ctx': ctx}."""
+    """Resolve a dot path against ctx.
+
+    Accepted examples:
+    - "ctx.vars.x"
+    - "vars.x"
+    - "steps.step_1.outputs.webhook.status"
+    """
     if not isinstance(path, str) or not path:
         return None
 
@@ -229,13 +275,11 @@ def _resolve_path(ctx: dict[str, Any], path: str) -> Any:
     if not parts:
         return None
 
-    # We support paths that start with "ctx".
-    root: Any = ctx
+    # Allow optional "ctx." prefix
     if parts[0] == 'ctx':
-        root = ctx
         parts = parts[1:]
 
-    cur: Any = root
+    cur: Any = ctx
     for p in parts:
         if not isinstance(cur, dict):
             return None
@@ -245,23 +289,44 @@ def _resolve_path(ctx: dict[str, Any], path: str) -> Any:
     return cur
 
 
-def _build_vars_assignments(set_map: Any) -> dict[str, Any] | None:
-    """Convert a case 'set' mapping into dot-path assignments."""
-    if set_map is None:
-        return None
-    if not isinstance(set_map, dict):
-        raise ValueError('"set" must be a dict of dot-path assignments')
+def _execute_actions(*, actions: Any, ctx: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
+    """Execute actions and return (flat_vars, assigned_keys).
 
-    out: dict[str, Any] = {}
-    for k, v in set_map.items():
-        key = str(k).strip()
-        if not key:
-            continue
-        # Use set_in to enforce segment rules and to build a nested structure.
-        # We return dot-path keys anyway, but this validates the path.
-        set_in(out, key, v, forbid_overwrite=False)
-    # Flatten nested dict back into dot paths, so the engine can apply leaf-assignments.
-    return _flatten_to_dot_paths(out)
+    Supported actions (Pass-1):
+    - {"type":"set", "assign": { "a.b": <expr>, ... } }
+    """
+    if actions is None:
+        return None,_toggle_list([])
+
+    if not isinstance(actions, list):
+        raise ValueError('"actions" must be an array')
+
+    nested_updates: dict[str, Any] = {}
+    assigned: list[str] = []
+
+    for i, act in enumerate(actions, start=1):
+        if not isinstance(act, dict):
+            raise ValueError(f'action #{i} must be an object')
+
+        t = str(act.get('type') or '').strip().lower()
+        if t != 'set':
+            raise ValueError(f'action #{i} unknown type {t!r}')
+
+        assign = act.get('assign')
+        if not isinstance(assign, dict):
+            raise ValueError(f'action #{i} set.assign must be an object')
+
+        for raw_key, raw_val in assign.items():
+            key = str(raw_key).strip()
+            if not key:
+                continue
+            value = _eval_value(raw_val, ctx)
+            # Validate + build nested structure; overwrite within this step is allowed.
+            set_in(nested_updates, key, value, forbid_overwrite=False)
+            assigned.append(key)
+
+    flat = _flatten_to_dot_paths(nested_updates)
+    return (flat or None), assigned
 
 
 def _flatten_to_dot_paths(src: dict[str, Any]) -> dict[str, Any]:
@@ -270,6 +335,7 @@ def _flatten_to_dot_paths(src: dict[str, Any]) -> dict[str, Any]:
     def walk(node: Any, prefix: str) -> None:
         if isinstance(node, dict):
             if not node:
+                # explicit assignment to empty dict
                 out[prefix] = {}
                 return
             for kk, vv in node.items():
@@ -280,7 +346,6 @@ def _flatten_to_dot_paths(src: dict[str, Any]) -> dict[str, Any]:
             out[prefix] = node
 
     walk(src, '')
-    # Remove empty key that could appear if src is empty.
     out.pop('', None)
     return out
 
@@ -310,5 +375,10 @@ def _resolve_outcome(then: Any) -> tuple[str, str | None, str | None]:
                     reason = str(r)
             return 'stop', None, reason
 
-    # Fallback: treat unknown outcome as pass (deterministic).
+    # Deterministic fallback
     return 'pass', None, None
+
+
+def _toggle_list(x: list[str]) -> list[str]:
+    # small helper to keep tuple return type simple without extra branches
+    return x

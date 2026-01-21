@@ -1,0 +1,72 @@
+{% load i18n %}
+
+<h5 class="mb-3">{% trans "Execution history" %}</h5>
+
+{% if history %}
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th>{% trans "Run" %}</th>
+        <th>{% trans "Time" %}</th>
+        <th>{% trans "Step" %}</th>
+        <th>{% trans "Type" %}</th>
+        <th>{% trans "Status" %}</th>
+        <th>{% trans "Goto" %}</th>
+        <th>{% trans "Vars" %}</th>
+        <th>{% trans "Outputs" %}</th>
+        <th>{% trans "Error" %}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for h in history %}
+        <tr>
+          <td><code>#{{ h.run_index }}</code></td>
+          <td><span class="text-muted">{{ h.created_at }}</span></td>
+          <td><code>{{ h.step_id }}</code></td>
+          <td><code>{{ h.step_type }}</code></td>
+          <td><code>{{ h.status }}</code></td>
+
+          <td>
+            {% if h.next_step %}
+              <code>{{ h.next_step }}</code>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td>
+            {% if h.vars_delta %}
+              <details>
+                <summary class="text-muted">{% trans "show" %}</summary>
+                <pre class="mb-0 small">{{ h.vars_delta|pprint }}</pre>
+              </details>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td>
+            {% if h.context.outputs %}
+              <details>
+                <summary class="text-muted">{% trans "show" %}</summary>
+                <pre class="mb-0 small">{{ h.context.outputs|pprint }}</pre>
+              </details>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+
+          <td>
+            {% if h.error %}
+              <span class="text-danger">{{ h.error }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p class="text-muted mb-0">{% trans "No history rows recorded for this instance." %}</p>
+{% endif %}

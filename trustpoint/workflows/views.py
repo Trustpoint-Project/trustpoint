@@ -51,12 +51,13 @@ from workflows.models import (
     WorkflowDefinition,
     WorkflowInstance,
     WorkflowScope,
+    WorkflowStepRun,
     get_status_badge,
 )
 from workflows.services.context import build_context
 from workflows.services.context_catalog import build_catalog
 from workflows.services.engine import advance_instance
-from workflows.services.validators import validate_wizard_payload
+from workflows.services.validators.api import validate_wizard_payload
 from workflows.services.wizard import transform_to_definition_schema
 
 if TYPE_CHECKING:
@@ -769,7 +770,7 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
         ca, dm, dv = self._resolve_scope_objects(payload, enr, dr)
         protocol, operation = self._resolve_protocol_operation(payload, enr, dr)
 
-        steps, current_step_label = self._build_steps(inst)
+        steps, current_step_label, history = self._build_steps(inst)
 
         csr_pem = payload.get('csr_pem')
         csr_info = self._parse_csr_info(csr_pem)
@@ -788,6 +789,7 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
             operation=operation,
             steps=steps,
             current_step_label=current_step_label,
+            history=history,
             csr_info=csr_info,
             csr_pem=csr_pem,
             runtime_catalog_url=runtime_catalog_url,
@@ -865,7 +867,7 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
 
         return None
 
-    def _build_steps(self, inst: WorkflowInstance) -> tuple[list[dict[str, Any]], str | None]:
+    def _build_steps(self, inst: WorkflowInstance) -> tuple[list[dict[str, Any]], str | None, list[dict[str, Any]]]:
         steps_raw = inst.get_steps()
         step_contexts: dict[str, dict[str, Any]] = inst.step_contexts or {}
 
@@ -874,27 +876,54 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
         except Exception:  # noqa: BLE001
             current_idx = None
 
+        # Pull all runs for this instance (small enough for a detail page).
+        runs = list(
+            WorkflowStepRun.objects.filter(instance=inst)
+            .order_by('run_index')
+            .values('run_index', 'step_id', 'step_type', 'status', 'context', 'vars_delta', 'next_step', 'created_at')
+        )
+
+        # Build "latest run per step_id"
+        latest_by_step: dict[str, dict[str, Any]] = {}
+        for r in runs:
+            sid = str(r.get('step_id') or '')
+            if not sid:
+                continue
+            latest_by_step[sid] = r
+
         steps: list[dict[str, Any]] = []
         current_step_label: str | None = None
 
         for idx0, step_def in enumerate(steps_raw):
-            step_id = step_def.get('id') or f'step-{idx0 + 1}'
-            step_type = step_def.get('type', 'Unknown')
-            step_label = step_def.get('name') or step_def.get('label') or step_id
-
-            ctx = step_contexts.get(step_id, {}) or {}
-            raw_status = ctx.get('status', '')
-            display_status, badge_class = get_status_badge(raw_status)
+            step_id = str(step_def.get('id') or f'step-{idx0 + 1}')
+            step_type = str(step_def.get('type', 'Unknown'))
+            step_label = str(step_def.get('name') or step_def.get('label') or step_id)
 
             if current_idx is not None and idx0 == current_idx:
                 current_step_label = step_label
 
+            # Prefer latest history context; fallback to instance.step_contexts
+            latest = latest_by_step.get(step_id)
+            if latest and isinstance(latest.get('context'), dict):
+                ctx = dict(latest['context'])
+                raw_status = str(latest.get('status') or ctx.get('status') or '')
+            else:
+                ctx = step_contexts.get(step_id, {}) or {}
+                raw_status = str(ctx.get('status') or '')
+
+            display_status, badge_class = get_status_badge(raw_status)
             normalized_error = self._extract_error(ctx)
 
-            details = dict(ctx)
+            details = dict(ctx) if isinstance(ctx, dict) else {}
             details.pop('status', None)
             details.pop('ok', None)
             details['error'] = normalized_error
+
+            # Add a tiny hint if history exists
+            if latest:
+                details['last_run'] = str(latest.get('run_index'))
+                if latest.get('next_step'):
+                    details['goto'] = str(latest.get('next_step'))
 
             steps.append(
                 {
@@ -908,7 +937,26 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
                 }
             )
 
-        return steps, current_step_label
+        # Build history list for template rendering
+        history: list[dict[str, Any]] = []
+        for r in runs:
+            ctx_raw = r.get('context')
+            ctx_dict: dict[str, Any] = dict(ctx_raw) if isinstance(ctx_raw, dict) else {}
+            history.append(
+                {
+                    'run_index': r.get('run_index'),
+                    'created_at': r.get('created_at'),
+                    'step_id': str(r.get('step_id') or ''),
+                    'step_type': str(r.get('step_type') or ''),
+                    'status': str(r.get('status') or ''),
+                    'next_step': (None if r.get('next_step') is None else str(r.get('next_step'))),
+                    'vars_delta': r.get('vars_delta') if isinstance(r.get('vars_delta'), dict) else None,
+                    'error': self._extract_error(ctx_dict),
+                    'context': ctx_dict,  # keep full ctx for outputs
+                }
+            )
+
+        return steps, current_step_label, history
 
     @staticmethod
     def _parse_csr_info(csr_pem: Any) -> dict[str, Any] | None:
@@ -954,6 +1002,7 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
         operation: str | None,
         steps: list[dict[str, Any]],
         current_step_label: str | None,
+        history: list[dict[str, Any]],
         csr_info: dict[str, Any] | None,
         csr_pem: Any,
         runtime_catalog_url: str,
@@ -974,6 +1023,7 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
             'operation': operation,
             'steps': steps,
             'current_step_label': current_step_label,
+            'history': history,
             'csr_info': csr_info,
             'csr_pem': csr_pem,
             'can_signal': (

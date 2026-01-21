@@ -8,7 +8,7 @@ import { getTypes, get as getExecutor } from './executors/index.js';
 import './executors/approval.js';
 import './executors/email.js';
 import './executors/webhook.js';
-import './executors/condition.js';
+import './executors/logic.js';
 
 let _stylesInjected = false;
 function injectStylesOnce() {
@@ -49,37 +49,20 @@ function injectStylesOnce() {
 
 /**
  * Policy: which step types are allowed for a given event selection.
- * Extend here as needed.
- *
- * Return value:
- *   - array of allowed step type strings
- *   - null => allow everything registered
  */
 function allowedStepTypesForEvent({ handler, protocol, operation }, allTypes) {
   const h = String(handler || '').trim();
-  const p = String(protocol || '').trim().toLowerCase();
-  const o = String(operation || '').trim().toLowerCase();
-
-  // If no handler selected yet, keep it permissive (or make empty to force selection first).
   if (!h) return allTypes;
 
-  // ---- Device actions: disallow Approval (and you can add more rules later) ----
   if (h === 'device_action') {
-    // Example: allow only "Webhook", "Email", "Condition" for device actions
-    // (whatever is actually registered)
-    const allowed = new Set(['Webhook', 'Email', 'Condition']);
-    return allTypes.filter(t => allowed.has(t));
+    const allowed = new Set(['Webhook', 'Email', 'Logic']);
+    return allTypes.filter((t) => allowed.has(t));
   }
 
-  // ---- Certificate request: allow all registered types for now ----
   if (h === 'certificate_request') {
-    // Future example (you can refine later):
-    // if (p === 'cmp') { ... }
-    // if (p === 'est' && o === 'simplereenroll') { ... }
     return allTypes;
   }
 
-  // Default: allow everything
   return allTypes;
 }
 
@@ -94,23 +77,125 @@ function computeAllowedTypes() {
     all,
   );
   const set = new Set(Array.isArray(allowed) ? allowed : all);
-  return { allTypes: all, allowedTypes: all.filter(t => set.has(t)), allowedSet: set };
+  return { allTypes: all, allowedTypes: all.filter((t) => set.has(t)), allowedSet: set };
 }
+
+// ---- DEFAULT PARAMS ----
+function getDefaultParamsForType(type) {
+  const exec = getExecutor(type);
+  if (!exec || typeof exec.getDefaultParams !== 'function') return {};
+  try {
+    const p = exec.getDefaultParams();
+    return (p && typeof p === 'object' && !Array.isArray(p)) ? p : {};
+  } catch {
+    return {};
+  }
+}
+
+function setStepParamsToDefaults(stepId, type) {
+  const defaults = getDefaultParamsForType(type);
+
+  // Clear existing params via normal pipeline
+  const s = state.steps.find((x) => x.id === stepId);
+  const existing = (s && s.params && typeof s.params === 'object' && !Array.isArray(s.params))
+    ? Object.keys(s.params)
+    : [];
+
+  existing.forEach((k) => updateStepParam(stepId, k, undefined));
+  Object.entries(defaults).forEach(([k, v]) => updateStepParam(stepId, k, v));
+}
+// ------------------------
 
 let _lastEventKey = null;
 let _boundReRender = false;
 
+// ---------- focus/scroll preservation ----------
+function _focusables(root) {
+  return Array.from(root.querySelectorAll('input, select, textarea, button, [tabindex]'))
+    .filter((el) => {
+      if (!(el instanceof HTMLElement)) return false;
+      if (el.tabIndex < 0) return false;
+      if (el.hasAttribute('disabled')) return false;
+      if (el.getAttribute('aria-disabled') === 'true') return false;
+      return true;
+    });
+}
+
+function _captureUIState(containerEl) {
+  const winY = window.scrollY;
+  const contY = containerEl.scrollTop;
+
+  const ae = document.activeElement;
+  if (!ae || !(ae instanceof HTMLElement) || !containerEl.contains(ae)) {
+    return { winY, contY, focus: null };
+  }
+
+  const card = ae.closest('.ww-step-card');
+  const stepId = card ? String(card.dataset.stepId || '') : '';
+  const within = card || containerEl;
+
+  const focusables = _focusables(within);
+  const focusIndex = Math.max(0, focusables.indexOf(ae));
+
+  let selection = null;
+  if (ae instanceof HTMLInputElement || ae instanceof HTMLTextAreaElement) {
+    try {
+      selection = { start: ae.selectionStart, end: ae.selectionEnd };
+    } catch {
+      selection = null;
+    }
+  }
+
+  return { winY, contY, focus: { stepId, focusIndex, selection } };
+}
+
+function _restoreUIState(containerEl, snap) {
+  if (!snap) return;
+
+  // restore scroll first (prevents browser from choosing a new anchor)
+  try { window.scrollTo(0, snap.winY); } catch {}
+  try { containerEl.scrollTop = snap.contY; } catch {}
+
+  const f = snap.focus;
+  if (!f) return;
+
+  const card = f.stepId
+    ? containerEl.querySelector(`.ww-step-card[data-step-id="${CSS.escape(f.stepId)}"]`)
+    : null;
+
+  const within = card || containerEl;
+  const focusables = _focusables(within);
+  const target = focusables[f.focusIndex] || null;
+
+  if (target) {
+    try { target.focus({ preventScroll: true }); } catch { try { target.focus(); } catch {} }
+    if (f.selection && (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) {
+      try { target.setSelectionRange(f.selection.start ?? 0, f.selection.end ?? 0); } catch {}
+    }
+  }
+
+  // enforce scroll again after focus to avoid focus-induced jump
+  try { window.scrollTo(0, snap.winY); } catch {}
+  try { containerEl.scrollTop = snap.contY; } catch {}
+}
+// ---------------------------------------------
+
 export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
   injectStylesOnce();
 
-  // Bind once: auto-rerender when event selection changes (handler/protocol/operation)
+  const rerender = () => {
+    const snap = _captureUIState(containerEl);
+    renderStepsUI({ containerEl, addBtnEl, onChange });
+    _restoreUIState(containerEl, snap);
+  };
+
   if (!_boundReRender) {
     _boundReRender = true;
     document.addEventListener('wf:changed', () => {
       const k = eventKey();
       if (k !== _lastEventKey) {
         _lastEventKey = k;
-        renderStepsUI({ containerEl, addBtnEl, onChange });
+        rerender();
       }
     });
   }
@@ -120,7 +205,6 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
 
   const { allowedTypes } = computeAllowedTypes();
 
-  // Add button behavior: disable if nothing allowed
   if (!allowedTypes.length) {
     addBtnEl.disabled = true;
     addBtnEl.title = 'No step types available for this event selection.';
@@ -130,24 +214,29 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
   }
 
   const frag = document.createDocumentFragment();
-  state.steps.forEach((step, idx) => frag.appendChild(stepCard(step, idx, { containerEl, addBtnEl, onChange })));
+  state.steps.forEach((step, idx) => frag.appendChild(stepCard(step, idx, { containerEl, addBtnEl, onChange, rerender })));
   containerEl.appendChild(frag);
 
   addBtnEl.onclick = () => {
+    const snap = _captureUIState(containerEl);
+
     const { allowedTypes: allowedNow } = computeAllowedTypes();
     const firstAllowed = allowedNow[0];
     if (!firstAllowed) return;
 
-    addStep(firstAllowed, {});
+    addStep(firstAllowed, getDefaultParamsForType(firstAllowed));
+
+    // Render + restore scroll/focus near where user was
     renderStepsUI({ containerEl, addBtnEl, onChange });
+    _restoreUIState(containerEl, snap);
     onChange();
   };
 
-  enableDnD(containerEl, addBtnEl, onChange);
+  enableDnD(containerEl, addBtnEl, onChange, rerender);
 }
 
 function stepCard(step, displayIndex, ctx) {
-  const { containerEl, addBtnEl, onChange } = ctx;
+  const { onChange, rerender } = ctx;
   const { allTypes, allowedTypes, allowedSet } = computeAllowedTypes();
 
   const isAllowed = allowedSet.has(step.type);
@@ -186,7 +275,7 @@ function stepCard(step, displayIndex, ctx) {
   rm.className = 'btn-close';
   rm.onclick = () => {
     removeStep(step.id);
-    renderStepsUI({ containerEl, addBtnEl, onChange });
+    rerender();
     onChange();
   };
 
@@ -201,11 +290,9 @@ function stepCard(step, displayIndex, ctx) {
     card.appendChild(note);
   }
 
-  // Type selector
   const sel = document.createElement('select');
   sel.className = 'form-select form-select-sm mb-2';
 
-  // Only show allowed types (plus the current type if it is disallowed, as disabled)
   const options = [...allowedTypes];
   if (!allowedSet.has(step.type) && !options.includes(step.type) && allTypes.includes(step.type)) {
     options.unshift(step.type);
@@ -217,7 +304,6 @@ function stepCard(step, displayIndex, ctx) {
     sel.add(opt);
   });
 
-  // If current type isn’t even registered anymore, still display it
   if (!allTypes.includes(step.type)) {
     const opt = new Option(step.type, step.type);
     opt.disabled = true;
@@ -227,19 +313,20 @@ function stepCard(step, displayIndex, ctx) {
   sel.value = step.type;
 
   sel.onchange = () => {
-    // Prevent switching to disallowed
     if (!allowedSet.has(sel.value)) {
       sel.value = step.type;
       return;
     }
+
     updateStepType(step.id, sel.value);
-    renderStepsUI({ containerEl, addBtnEl, onChange });
+    setStepParamsToDefaults(step.id, sel.value);
+
+    rerender();
     onChange();
   };
 
   card.appendChild(sel);
 
-  // Params area
   const paramsDiv = document.createElement('div');
   card.appendChild(paramsDiv);
 
@@ -248,17 +335,18 @@ function stepCard(step, displayIndex, ctx) {
     exec.renderParams(paramsDiv, step, {
       updateStepParam,
       onChange,
+      rerender,
     });
   }
 
   return card;
 }
 
-function enableDnD(containerEl, addBtnEl, onChange) {
+function enableDnD(containerEl, addBtnEl, onChange, rerender) {
   let dragId = null;
   let dragCard = null;
 
-  containerEl.querySelectorAll('.ww-drag-handle[draggable="true"]').forEach(handle => {
+  containerEl.querySelectorAll('.ww-drag-handle[draggable="true"]').forEach((handle) => {
     handle.ondragstart = (e) => {
       const card = handle.closest('.ww-step-card');
       if (!card) return;
@@ -273,13 +361,13 @@ function enableDnD(containerEl, addBtnEl, onChange) {
       if (dragCard) dragCard.classList.remove('ww-dragging');
       dragId = null;
       dragCard = null;
-      containerEl.querySelectorAll('.ww-step-card').forEach(c => {
+      containerEl.querySelectorAll('.ww-step-card').forEach((c) => {
         c.classList.remove('ww-drop-indicator-top', 'ww-drop-indicator-bottom');
       });
     };
   });
 
-  containerEl.querySelectorAll('.ww-step-card').forEach(card => {
+  containerEl.querySelectorAll('.ww-step-card').forEach((card) => {
     card.ondragover = (e) => {
       if (!dragId) return;
       e.preventDefault();
@@ -300,15 +388,15 @@ function enableDnD(containerEl, addBtnEl, onChange) {
       if (dragId === targetId) return;
 
       const steps = state.steps;
-      const fromIndex = steps.findIndex(s => s.id === dragId);
-      const toIndexBase = steps.findIndex(s => s.id === targetId);
+      const fromIndex = steps.findIndex((s) => s.id === dragId);
+      const toIndexBase = steps.findIndex((s) => s.id === targetId);
 
       const rect = card.getBoundingClientRect();
       const before = (e.clientY - rect.top) < rect.height / 2;
       let toIndex = toIndexBase + (before ? 0 : 1);
 
       moveStep(dragId, toIndex > fromIndex ? toIndex - 1 : toIndex);
-      renderStepsUI({ containerEl, addBtnEl, onChange });
+      rerender();
       onChange();
     };
   });

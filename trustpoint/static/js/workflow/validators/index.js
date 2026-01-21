@@ -2,7 +2,7 @@
 import { validateEmail } from './email.js';
 import { validateWebhook } from './webhook.js';
 import { validateApproval } from './approval.js';
-import { validateCondition } from './condition.js';
+import { validateLogic } from './logic.js';
 
 export function validateWizardState(state, eventsMap) {
   const errors = [];
@@ -28,7 +28,7 @@ export function validateWizardState(state, eventsMap) {
   }
 
   // steps
-  const allowed = new Set(['Approval', 'Email', 'Webhook', 'Timer', 'Condition']);
+  const allowed = new Set(['Approval', 'Email', 'Webhook', 'Timer', 'Logic']);
   if (!Array.isArray(state.steps) || state.steps.length === 0) {
     errors.push('At least one step is required.');
   } else {
@@ -43,7 +43,7 @@ export function validateWizardState(state, eventsMap) {
         case 'Webhook':   validateWebhook(s, i, errors); break;
         case 'Approval':  validateApproval(s, i, errors); break;
         case 'Timer':     validateTimer(s, i, errors); break;
-        case 'Condition': validateCondition(s, i, errors); break;
+        case 'Logic': validateLogic(s, i, errors); break;
       }
     });
   }

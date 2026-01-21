@@ -19,8 +19,9 @@ import json
 from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
+from django.db.models import Max
 
-from workflows.models import State, WorkflowInstance
+from workflows.models import State, WorkflowInstance, WorkflowStepRun
 from workflows.services.context import VARS_MAX_BYTES, compact_context_blob
 from workflows.services.executors.factory import StepExecutorFactory
 
@@ -191,10 +192,22 @@ def _fail_instance_with_step_context(
     message: str,
     details: dict[str, Any] | None = None,
 ) -> None:
-    """Fail instance and persist an engine-owned error context on the current step."""
+    """Fail instance, persist engine error context, and append history row."""
     _fail_instance(inst)
-    _persist_step_context(inst, _make_engine_error_context(message=message, details=details))
+    ctx = _make_engine_error_context(message=message, details=details)
+    _persist_step_context(inst, ctx)
 
+    # Best-effort history write (still inside same transaction).
+    # step_type may be unknown here; use "Engine".
+    _append_step_run(
+        inst,
+        step_id=str(inst.current_step),
+        step_type='Engine',
+        status=str(State.FAILED),
+        context=dict(ctx),
+        vars_delta=None,
+        next_step=None,
+    )
 
 def _merge_global_vars(inst: WorkflowInstance, result: ExecutorResult) -> bool:
     """Merge vars into global $vars (overwrite allowed).
@@ -240,11 +253,42 @@ def _merge_global_vars(inst: WorkflowInstance, result: ExecutorResult) -> bool:
     inst.save(update_fields=['step_contexts'])
     return True
 
+
 def _recompute_parent(inst: WorkflowInstance) -> None:
     if inst.enrollment_request:
         inst.enrollment_request.recompute_and_save()
     elif inst.device_request:
         inst.device_request.recompute_and_save()
+
+
+def _next_run_index(inst: WorkflowInstance) -> int:
+    """Return the next monotonic run_index for this instance (1..n)."""
+    agg = WorkflowStepRun.objects.filter(instance=inst).aggregate(m=Max('run_index'))
+    cur = agg.get('m')
+    return (int(cur) + 1) if cur is not None else 1
+
+
+def _append_step_run(
+    inst: WorkflowInstance,
+    *,
+    step_id: str,
+    step_type: str,
+    status: str,
+    context: dict[str, Any] | None,
+    vars_delta: dict[str, Any] | None,
+    next_step: str | None,
+) -> None:
+    """Append an immutable execution record for the current attempt."""
+    WorkflowStepRun.objects.create(
+        instance=inst,
+        run_index=_next_run_index(inst),
+        step_id=step_id,
+        step_type=step_type,
+        status=str(status),
+        context=context,
+        vars_delta=vars_delta,
+        next_step=next_step,
+    )
 
 
 def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
@@ -274,15 +318,34 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
                 _recompute_parent(inst)
                 break
 
+            # Persist executor-produced context (snapshot/latest view)
             _persist_executor_context(inst, result)
 
+            # Append immutable history row for this execution attempt
+            history_context: dict[str, Any] | None = None
+            if result.context is not None:
+                history_context = result.context.to_dict()
+
+            _append_step_run(
+                inst,
+                step_id=str(inst.current_step),
+                step_type=step_type,
+                status=str(result.status),
+                context=history_context,
+                vars_delta=(dict(result.vars) if isinstance(result.vars, dict) else None),
+                next_step=(str(result.next_step) if result.next_step else None),
+            )
+
+            # Merge vars (overwrite allowed) and enforce VARS_MAX_BYTES.
             if not _merge_global_vars(inst, result):
                 _recompute_parent(inst)
                 break
 
+            # Store resulting state.
             inst.state = result.status
             inst.save(update_fields=['state'])
 
+            # Continuation semantics
             if result.status in _CONTINUE_STATES:
                 try:
                     advanced = _advance_pointer(inst, result.next_step)
@@ -302,10 +365,12 @@ def advance_instance(inst: WorkflowInstance, signal: str | None = None) -> None:
                 _recompute_parent(inst)
                 break
 
+            # Waiting or terminal semantics
             if result.status == State.AWAITING or result.status in _TERMINAL_STATES:
                 _recompute_parent(inst)
                 break
 
+            # Defensive fallback
             _fail_instance_with_step_context(
                 inst,
                 message='Unknown executor status.',

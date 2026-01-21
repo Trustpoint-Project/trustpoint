@@ -2,7 +2,7 @@
 """Django admin configuration for the PKI app."""
 from django.contrib import admin
 
-from workflows.models import DeviceRequest, EnrollmentRequest, WorkflowDefinition, WorkflowInstance, WorkflowScope
+from workflows.models import DeviceRequest, EnrollmentRequest, WorkflowDefinition, WorkflowInstance, WorkflowScope, WorkflowStepRun
 
 
 class WorkflowDefinitionAdmin(admin.ModelAdmin[WorkflowDefinition]):
@@ -22,9 +22,13 @@ class EnrollmentRequestAdmin(admin.ModelAdmin[EnrollmentRequest]):
 class DeviceRequestAdmin(admin.ModelAdmin[DeviceRequest]):
     """Admin configuration for the WorkflowScopeModel."""
 
+class WorkflowStepRunadmin(admin.ModelAdmin[WorkflowStepRun]):
+    """Admin configuration for the WorkflowScopeModel."""
+
 
 admin.site.register(WorkflowDefinition, WorkflowDefinitionAdmin)
 admin.site.register(WorkflowInstance, WorkflowInstanceAdmin)
 admin.site.register(WorkflowScope, WorkflowScopeAdmin)
 admin.site.register(EnrollmentRequest, EnrollmentRequestAdmin)
 admin.site.register(DeviceRequest, DeviceRequestAdmin)
+admin.site.register(WorkflowStepRun, WorkflowStepRunadmin)

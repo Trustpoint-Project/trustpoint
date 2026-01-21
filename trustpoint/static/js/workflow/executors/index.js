@@ -1,6 +1,14 @@
+// static/js/workflow/executors/index.js
 // Registry for executors + small UI helper toolkit (shared look & feel).
 
 const _registry = new Map();
+
+function help(text) {
+  const p = document.createElement('div');
+  p.className = 'form-text text-muted small';
+  p.textContent = String(text || '');
+  return p;
+}
 
 /** Register an executor by type. */
 export function register(type, impl) {
@@ -11,7 +19,7 @@ export function register(type, impl) {
   // normalize optional helpers
   const norm = {
     getDefaultParams: () => ({}),
-    hints: () => [],                  // new: per-type variable hints (relative to ctx.steps.step_X)
+    hints: () => [], // per-type variable hints (relative to ctx.steps.step_X)
     validate: () => [],
     ...impl,
   };
@@ -39,7 +47,7 @@ export function getHintsForStep(step) {
     // Merge (dedupe, preserve order: common first, then type-specific)
     const seen = new Set();
     const out = [];
-    [...common, ...rel].forEach(k => {
+    [...common, ...rel].forEach((k) => {
       const key = String(k || '').trim();
       if (!key || seen.has(key)) return;
       seen.add(key);
@@ -54,13 +62,17 @@ export function getHintsForStep(step) {
 /** ------- Shared UI helpers (consistent layout/labels/spacing) ------- */
 
 function labeledNode(label, node) {
+  const wrap = document.createElement('div');
+  wrap.className = 'mb-2';
   const lbl = document.createElement('label');
-  lbl.className = 'form-label small d-block';
-  lbl.textContent = `${label}: `;
-  lbl.appendChild(node);
-  return lbl;
+  lbl.className = 'form-label small d-block mb-1';
+  lbl.textContent = String(label || '');
+  wrap.appendChild(lbl);
+  wrap.appendChild(node);
+  return wrap;
 }
-function input({ type='text', value='', onInput }) {
+
+function input({ type = 'text', value = '', onInput }) {
   const el = document.createElement('input');
   el.className = 'form-control form-control-sm';
   el.type = type;
@@ -68,7 +80,8 @@ function input({ type='text', value='', onInput }) {
   el.oninput = () => onInput?.(el.value);
   return el;
 }
-function textarea({ rows=4, value='', onInput }) {
+
+function textarea({ rows = 4, value = '', onInput }) {
   const el = document.createElement('textarea');
   el.className = 'form-control form-control-sm';
   el.rows = rows;
@@ -76,28 +89,34 @@ function textarea({ rows=4, value='', onInput }) {
   el.oninput = () => onInput?.(el.value);
   return el;
 }
-function select({ options=[], value='', onChange }) {
+
+function select({ options = [], value = '', onChange }) {
   const el = document.createElement('select');
   el.className = 'form-select form-select-sm';
-  options.forEach(o => el.add(new Option(o.label ?? o, o.value ?? o)));
+  options.forEach((o) => el.add(new Option(o.label ?? o, o.value ?? o)));
   el.value = value ?? '';
   el.onchange = () => onChange?.(el.value);
   return el;
 }
+
 function row() {
   const r = document.createElement('div');
   r.className = 'row g-2';
   return r;
 }
-function col(node, w='col-md-6') {
+
+function col(node, w = 'col-md-6') {
   const c = document.createElement('div');
   c.className = w;
   c.appendChild(node);
   return c;
 }
+
 function radio(name, text, checked, onChange) {
-  const id = `${name}-${Math.random().toString(36).slice(2,8)}`;
-  const wrap = document.createElement('div'); wrap.className = 'form-check form-check-inline';
+  const id = `${name}-${Math.random().toString(36).slice(2, 8)}`;
+  const wrap = document.createElement('div');
+  wrap.className = 'form-check form-check-inline';
+
   const inputEl = document.createElement('input');
   inputEl.className = 'form-check-input';
   inputEl.type = 'radio';
@@ -118,5 +137,12 @@ function radio(name, text, checked, onChange) {
 
 /** Export helpers for executors */
 export const ui = {
-  labeledNode, input, textarea, select, row, col, radio,
+  labeledNode,
+  input,
+  textarea,
+  select,
+  row,
+  col,
+  radio,
+  help,
 };

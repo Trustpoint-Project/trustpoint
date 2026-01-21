@@ -41,6 +41,9 @@
     <hr>
     {% include "workflows/instance_detail/_steps.html" %}
 
+    <hr>
+    {% include "workflows/instance_detail/_history.html" %}
+
     {% if csr_info or csr_pem %}
       <hr>
       {% include "workflows/instance_detail/_csr.html" %}
