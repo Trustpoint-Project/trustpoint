@@ -75,7 +75,9 @@ class IssuingCaTableView(IssuingCaContextMixin, SortableTableMixin[CaModel], Lis
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        queryset = self.model.objects.all().filter(ca_type__isnull=False)
+        queryset = self.model.objects.all().exclude(
+            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+        )
 
         sort_param = self.request.GET.get('sort', self.default_sort_param)
         if sort_param == 'common_name':
@@ -160,7 +162,9 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().filter(ca_type__isnull=False)
+        return super().get_queryset().exclude(
+            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+        )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the issued certificates to the context.
@@ -217,7 +221,9 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
         Returns:
             The filtered QuerySet.
         """
-        issuing_ca = get_object_or_404(CaModel.objects.filter(ca_type__isnull=False), pk=self.kwargs['pk'])
+        issuing_ca = get_object_or_404(CaModel.objects.exclude(
+            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+        ), pk=self.kwargs['pk'])
 
         # PyCharm TypeChecker issue - this passes mypy
         # noinspection PyTypeChecker
@@ -237,7 +243,9 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
         """
         context = super().get_context_data(**kwargs)
         context['issuing_ca'] = get_object_or_404(
-            CaModel.objects.filter(ca_type__isnull=False), pk=self.kwargs['pk']
+            CaModel.objects.exclude(
+                ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+            ), pk=self.kwargs['pk']
         )
         return context
 
@@ -253,7 +261,9 @@ class IssuingCaDetailView(IssuingCaContextMixin, DetailView[CaModel]):
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().filter(ca_type__isnull=False)
+        return super().get_queryset().exclude(
+            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+        )
 
 
 class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
@@ -275,7 +285,9 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().filter(ca_type__isnull=False)
+        return super().get_queryset().exclude(
+            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+        )
 
     def form_valid(self, form: Form) -> HttpResponse:
         """Delete the selected Issuing CAs on valid form."""
@@ -311,7 +323,9 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[CaModel]):
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().filter(ca_type__isnull=False)
+        return super().get_queryset().exclude(
+            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+        )
 
     # TODO(Air): This view should use a POST request as it is an action.    # noqa: FIX002
     # However, this is not trivial in the config view as that already contains a form.
@@ -381,7 +395,9 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
 class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
     """ViewSet for managing Issuing CA instances via REST API."""
 
-    queryset = CaModel.objects.filter(ca_type__isnull=False).order_by('-created_at')
+    queryset = CaModel.objects.exclude(
+        ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+    ).order_by('-created_at')
     serializer_class = IssuingCaSerializer
     permission_classes = (IsAuthenticated,)
     filter_backends = (
