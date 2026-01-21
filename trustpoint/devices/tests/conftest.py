@@ -3,7 +3,7 @@
 from typing import Any
 
 import pytest
-from pki.models import DomainModel, IssuingCaModel
+from pki.models import DomainModel, CaModel
 from management.models import KeyStorageConfig
 from pki.util.x509 import CertificateGenerator
 
@@ -34,7 +34,7 @@ def create_mock_models() -> dict[str, Any]:
         issuing_ca_cert=issuing_1, private_key=issuing_1_key, chain=[root_1], unique_name='test_local_ca'
     )
 
-    mock_ca = IssuingCaModel.objects.get(unique_name='test_local_ca')
+    mock_ca = CaModel.objects.get(unique_name='test_local_ca')
 
     mock_domain = DomainModel(unique_name='test_domain', issuing_ca=mock_ca)
     mock_domain.save()

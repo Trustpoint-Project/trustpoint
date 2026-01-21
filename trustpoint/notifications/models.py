@@ -313,7 +313,7 @@ class NotificationModel(models.Model):
     )
 
     issuing_ca = models.ForeignKey(
-        'pki.IssuingCaModel', on_delete=models.SET_NULL, blank=True, null=True, related_name='notifications'
+        'pki.CaModel', on_delete=models.SET_NULL, blank=True, null=True, related_name='notifications'
     )
 
     event = models.CharField(max_length=255, blank=True, default='')

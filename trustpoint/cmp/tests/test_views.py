@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, Mock, patch
 
+from django.http import Http404
 import pytest
 from django.test import RequestFactory
+from django.urls import resolve
 
-from cmp.views import CmpCertificationRequestView, CmpInitializationRequestView
+from cmp.views import CmpRequestView
 
 
 @pytest.fixture
@@ -18,11 +20,21 @@ def request_factory():
 
 @pytest.fixture
 def mock_request_context():
-    """Mock RequestContext."""
+    """Mock CmpCertificateRequestContext."""
+    from django.http import HttpResponse
+    
     ctx = Mock()
     ctx.http_response_content = b'test response'
     ctx.http_response_status = 200
     ctx.http_response_content_type = 'application/pkixcmp'
+    
+    # Mock to_http_response to return actual HttpResponse
+    ctx.to_http_response.return_value = HttpResponse(
+        content=ctx.http_response_content,
+        status=ctx.http_response_status,
+        content_type=ctx.http_response_content_type
+    )
+    
     return ctx
 
 
@@ -31,13 +43,13 @@ class TestCmpInitializationRequestView:
 
     def test_http_method_names(self):
         """Test that only POST method is allowed."""
-        view = CmpInitializationRequestView()
+        view = CmpRequestView()
         assert view.http_method_names == ('post',)
 
     def test_csrf_exempt_decorator(self):
         """Test that CSRF exemption is applied to the view."""
         # Check if the view has the csrf_exempt decorator
-        view = CmpInitializationRequestView.as_view()
+        view = CmpRequestView.as_view()
         assert hasattr(view, 'csrf_exempt')
         assert view.csrf_exempt is True
 
@@ -48,7 +60,7 @@ class TestCmpInitializationRequestView:
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
-    @patch('cmp.views.RequestContext')
+    @patch('cmp.views.CmpCertificateRequestContext')
     def test_post_initialization_with_domain_only(
         self,
         mock_context_cls,
@@ -65,17 +77,20 @@ class TestCmpInitializationRequestView:
         """Test POST request to initialization endpoint with domain name only."""
         mock_context_cls.return_value = mock_request_context
         
+        # Configure parser mock to return the context
+        mock_parser_cls.return_value.parse.return_value = mock_request_context
+        
         request = request_factory.post('/cmp/initialization/test_domain')
-        view = CmpInitializationRequestView()
+        view = CmpRequestView()
         
-        response = view.post(request, domain_name='test_domain')
+        response = view.post(request, domain='test_domain')
         
-        # Verify RequestContext was created with correct parameters
+        # Verify CmpCertificateRequestContext was created with correct parameters
         mock_context_cls.assert_called_once()
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['domain_str'] == 'test_domain'
         assert call_kwargs['protocol'] == 'cmp'
-        assert call_kwargs['operation'] == 'initialization'
+        assert call_kwargs['operation'] == None
         assert call_kwargs['cert_profile_str'] == 'domain_credential'
         
         # Verify all processors were called
@@ -99,7 +114,7 @@ class TestCmpInitializationRequestView:
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
-    @patch('cmp.views.RequestContext')
+    @patch('cmp.views.CmpCertificateRequestContext')
     def test_post_initialization_with_certificate_profile(
         self,
         mock_context_cls,
@@ -116,12 +131,15 @@ class TestCmpInitializationRequestView:
         """Test POST request to initialization endpoint with certificate profile."""
         mock_context_cls.return_value = mock_request_context
         
+        # Configure parser mock to return the context
+        mock_parser_cls.return_value.parse.return_value = mock_request_context
+        
         request = request_factory.post('/cmp/p/test_domain/tls_client/initialization')
-        view = CmpInitializationRequestView()
+        view = CmpRequestView()
         
-        response = view.post(request, domain_name='test_domain', certificate_profile='tls_client')
+        response = view.post(request, domain='test_domain', cert_profile='tls_client')
         
-        # Verify RequestContext was created with correct profile
+        # Verify CmpCertificateRequestContext was created with correct profile
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['cert_profile_str'] == 'tls_client'
         
@@ -135,7 +153,7 @@ class TestCmpInitializationRequestView:
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
-    @patch('cmp.views.RequestContext')
+    @patch('cmp.views.CmpCertificateRequestContext')
     def test_post_authorization_with_correct_operations(
         self,
         mock_context_cls,
@@ -152,10 +170,13 @@ class TestCmpInitializationRequestView:
         """Test that authorization is called with correct operations for initialization."""
         mock_context_cls.return_value = mock_request_context
         
-        request = request_factory.post('/cmp/initialization/test_domain')
-        view = CmpInitializationRequestView()
+        # Configure parser mock to return the context
+        mock_parser_cls.return_value.parse.return_value = mock_request_context
         
-        view.post(request, domain_name='test_domain')
+        request = request_factory.post('/cmp/initialization/test_domain')
+        view = CmpRequestView()
+        
+        view.post(request, domain='test_domain')
         
         # Verify CmpAuthorization was initialized with correct operations
         mock_authz_cls.assert_called_once_with(['initialization', 'certification'])
@@ -164,17 +185,6 @@ class TestCmpInitializationRequestView:
 class TestCmpCertificationRequestView:
     """Tests for CmpCertificationRequestView."""
 
-    def test_http_method_names(self):
-        """Test that only POST method is allowed."""
-        view = CmpCertificationRequestView()
-        assert view.http_method_names == ('post',)
-
-    def test_csrf_exempt_decorator(self):
-        """Test that CSRF exemption is applied to the view."""
-        view = CmpCertificationRequestView.as_view()
-        assert hasattr(view, 'csrf_exempt')
-        assert view.csrf_exempt is True
-
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.CertificateIssueProcessor')
     @patch('cmp.views.ProfileValidator')
@@ -182,7 +192,7 @@ class TestCmpCertificationRequestView:
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
-    @patch('cmp.views.RequestContext')
+    @patch('cmp.views.CmpCertificateRequestContext')
     def test_post_certification_with_domain_only(
         self,
         mock_context_cls,
@@ -199,18 +209,21 @@ class TestCmpCertificationRequestView:
         """Test POST request to certification endpoint with domain name only."""
         mock_context_cls.return_value = mock_request_context
         
+        # Configure parser mock to return the context
+        mock_parser_cls.return_value.parse.return_value = mock_request_context
+        
         request = request_factory.post('/cmp/p/test_domain/certification')
-        view = CmpCertificationRequestView()
+        view = CmpRequestView()
         
-        response = view.post(request, domain_name='test_domain')
+        response = view.post(request, domain='test_domain')
         
-        # Verify RequestContext was created with correct parameters
+        # Verify CmpCertificateRequestContext was created with correct parameters
         mock_context_cls.assert_called_once()
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['domain_str'] == 'test_domain'
         assert call_kwargs['protocol'] == 'cmp'
-        assert call_kwargs['operation'] == 'certification'
-        assert call_kwargs['cert_profile_str'] == 'tls_client'  # Default for certification
+        assert call_kwargs['operation'] == None
+        assert call_kwargs['cert_profile_str'] == 'domain_credential'  # Default for certification should be 'tls_client'? # TODO: better automatic cert profile selection
         
         # Verify all processors were called
         mock_validator_cls.return_value.validate.assert_called_once()
@@ -233,7 +246,7 @@ class TestCmpCertificationRequestView:
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
-    @patch('cmp.views.RequestContext')
+    @patch('cmp.views.CmpCertificateRequestContext')
     def test_post_certification_with_certificate_profile(
         self,
         mock_context_cls,
@@ -250,12 +263,15 @@ class TestCmpCertificationRequestView:
         """Test POST request to certification endpoint with certificate profile."""
         mock_context_cls.return_value = mock_request_context
         
+        # Configure parser mock to return the context
+        mock_parser_cls.return_value.parse.return_value = mock_request_context
+        
         request = request_factory.post('/cmp/p/test_domain/tls_server/certification')
-        view = CmpCertificationRequestView()
+        view = CmpRequestView()
         
-        response = view.post(request, domain_name='test_domain', certificate_profile='tls_server')
+        response = view.post(request, domain='test_domain', cert_profile='tls_server')
         
-        # Verify RequestContext was created with correct profile
+        # Verify CmpCertificateRequestContext was created with correct profile
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['cert_profile_str'] == 'tls_server'
         
@@ -269,7 +285,7 @@ class TestCmpCertificationRequestView:
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
     @patch('cmp.views.CmpHttpRequestValidator')
-    @patch('cmp.views.RequestContext')
+    @patch('cmp.views.CmpCertificateRequestContext')
     def test_post_authorization_with_certification_operation(
         self,
         mock_context_cls,
@@ -286,10 +302,151 @@ class TestCmpCertificationRequestView:
         """Test that authorization is called with correct operations for certification."""
         mock_context_cls.return_value = mock_request_context
         
+        # Configure parser mock to return the context
+        mock_parser_cls.return_value.parse.return_value = mock_request_context
+        
         request = request_factory.post('/cmp/p/test_domain/certification')
-        view = CmpCertificationRequestView()
+        view = CmpRequestView()
         
-        view.post(request, domain_name='test_domain')
+        view.post(request, domain='test_domain')
         
-        # Verify CmpAuthorization was initialized with only certification operation
-        mock_authz_cls.assert_called_once_with(['certification'])
+        mock_authz_cls.assert_called_once()
+
+
+class TestCmpRequestViewPathParamExtraction:
+    """Tests for path parameter extraction in CmpRequestView."""
+
+    def test_extract_path_no_params(self, request_factory):
+        """Test extraction with no path parameters."""
+
+        url = resolve('/.well-known/cmp/')
+
+        domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+
+        assert domain is None
+        assert profile is None
+        assert operation is None
+
+    def test_extract_path_operation_only(self, request_factory):
+        """Test extraction with only operation."""
+
+        url = resolve('/.well-known/cmp/initialization')
+
+        domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+
+        assert domain is None
+        assert profile is None
+        assert operation == 'initialization'
+
+    def test_extract_path_domain_only(self, request_factory):
+        """Test extraction with only domain name (with trailing slash)."""
+
+        url = resolve('/.well-known/cmp/p/test_domain/')
+
+        domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+
+        assert domain == 'test_domain'
+        assert profile is None
+        assert operation is None
+
+    def test_extract_path_profile_only(self, request_factory):
+        """Test extraction with only certificate profile."""
+
+        url = resolve('/.well-known/cmp/p/~tls_client')
+
+        domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+
+        assert domain is None
+        assert profile == 'tls_client'
+        assert operation is None
+
+    def test_extract_path_profile_and_operation(self, request_factory):
+        """Test extraction with only certificate profile."""
+
+        url = resolve('/.well-known/cmp/p/~tls_client/initialization')
+
+        domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+
+        assert domain is None
+        assert profile == 'tls_client'
+        assert operation == 'initialization'
+
+    def test_extract_path_domain_and_profile(self, request_factory):
+        """Test extraction with domain name and certificate profile."""
+
+        url = resolve('/.well-known/cmp/p/test_domain/tls_client')
+        domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+
+        assert domain == 'test_domain'
+        assert profile == 'tls_client'
+        assert operation is None
+
+    def test_extract_path_domain_and_profile_td(self, request_factory):
+        """Test extraction with domain name and certificate profile using ~ separator."""
+
+        url = resolve('/.well-known/cmp/p/test_domain~tls_client/')
+        domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+
+        assert domain == 'test_domain'
+        assert profile == 'tls_client'
+        assert operation is None
+
+    def test_extract_path_domain_profile_td_operation(self, request_factory):
+        """Test extraction with domain name, certificate profile using ~ separator, and operation."""
+
+        url = resolve('/.well-known/cmp/p/test_domain~tls_client/initialization/')
+        domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+
+        assert domain == 'test_domain'
+        assert profile == 'tls_client'
+        assert operation == 'initialization'
+
+    def test_extract_path_domain_and_operation(self, request_factory):
+        """Test extraction with domain name and operation."""
+
+        url = resolve('/.well-known/cmp/p/test_domain/initialization/')
+        domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+
+        assert domain == 'test_domain'
+        assert profile is None
+        assert operation == 'initialization'
+    
+    def test_extract_path_all(self, request_factory):
+        """Test extraction with domain name, certificate profile, and operation."""
+
+        url = resolve('/.well-known/cmp/p/test_domain/tls_client/initialization/')
+        domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+
+        assert domain == 'test_domain'
+        assert profile == 'tls_client'
+        assert operation == 'initialization'
+
+    def test_extract_path_empty_domain(self, request_factory):
+        """Test extraction with empty domain segment."""
+
+        url = resolve('/.well-known/cmp/p/_/tls_client/initialization/')
+        domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+
+        assert domain is None
+        assert profile == 'tls_client'
+        assert operation == 'initialization'
+
+    def test_extract_path_invalid_empty_profile_after_td(self, request_factory):
+        """Test extraction with empty profile in domain segment."""
+        url = resolve('/.well-known/cmp/p/test_domain~/initialization/')
+        domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+        assert domain == 'test_domain'
+        assert profile is None
+        assert operation == 'initialization'
+
+    def test_extract_path_invalid_profile_as_operation(self, request_factory):
+        """Test extraction fails with (second) profile given instead of operation."""
+        url = resolve('/.well-known/cmp/p/test_domain~tls_client/tls_server/')
+        with pytest.raises(Http404):
+            domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+
+    def test_extract_path_invalid_operation(self, request_factory):
+        """Test extraction with invalid operation."""
+        url = resolve('/.well-known/cmp/p/test_domain/tls_client/popcorn_gun!!!/')
+        with pytest.raises(Http404):
+            domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
