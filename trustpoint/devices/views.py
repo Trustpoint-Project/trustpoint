@@ -1438,15 +1438,11 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
             # Import here to avoid circular import
             from request.gds_push import GdsPushService
 
-            # Create GDS Push service (truststore not required for discovery)
-            service = GdsPushService(
-                device=self.object,
-                domain_credential=None,  # Not needed for discovery
-                truststore=None  # Not needed for discovery
-            )
+            # Create GDS Push service for insecure discovery
+            service = GdsPushService(device=self.object, insecure=True)
 
             # Discover server information
-            success, message, server_info = service.discover_server_insecurely()
+            success, message, server_info = service.discover_server()
 
             if success and server_info:
                 messages.success(request, f'Server discovered successfully: {message}')
@@ -1879,29 +1875,11 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
         self.object = self.get_object()
 
         try:
-            # Get the domain credential for authentication
-            domain_credentials = IssuedCredentialModel.objects.filter(
-                device=self.object,
-                issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
-            ).order_by('-created_at')
-
-            if not domain_credentials.exists():
-                messages.error(
-                    request,
-                    'No domain credential found for device. Please issue a domain credential first.'
-                )
-                return self._redirect_to_help_page()
-
-            domain_credential = domain_credentials.first()
-
             # Import here to avoid circular import
             from request.gds_push import GdsPushError, GdsPushService
 
-            # Create GDS Push service
-            service = GdsPushService(
-                device=self.object,
-                domain_credential=domain_credential,
-            )
+            # Create GDS Push service - automatically retrieves credentials and builds truststore
+            service = GdsPushService(device=self.object)
 
             # Update trustlist
             success, message = service.update_trustlist()
@@ -1959,15 +1937,11 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
             # Import here to avoid circular import
             from request.gds_push import GdsPushError, GdsPushService
 
-            # Create GDS Push service (no domain credential needed for insecure discovery)
-            # Don't pass truststore=None to allow it to use device.onboarding_config.opc_trust_store
-            service = GdsPushService(
-                device=self.object,
-                domain_credential=None,  # Not needed for insecure discovery
-            )
+            # Create GDS Push service for insecure discovery
+            service = GdsPushService(device=self.object, insecure=True)
 
             # Discover server information
-            success, message, server_info = service.discover_server_insecurely()
+            success, message, server_info = service.discover_server()
 
             if success and server_info:
                 messages.success(request, f'Server discovered successfully: {message}')
@@ -2086,29 +2060,11 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
         self.object = self.get_object()
 
         try:
-            # Get the domain credential for authentication
-            domain_credentials = IssuedCredentialModel.objects.filter(
-                device=self.object,
-                issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
-            ).order_by('-created_at')
-
-            if not domain_credentials.exists():
-                messages.error(
-                    request,
-                    'No domain credential found for device. Please issue a domain credential first.'
-                )
-                return self._redirect_to_help_page()
-
-            domain_credential = domain_credentials.first()
-
             # Import here to avoid circular import
             from request.gds_push import GdsPushError, GdsPushService
 
-            # Create GDS Push service
-            service = GdsPushService(
-                device=self.object,
-                domain_credential=domain_credential,
-            )
+            # Create GDS Push service - it will automatically retrieve domain credential and truststore
+            service = GdsPushService(device=self.object)
 
             # Update server certificate
             success, message, certificate_bytes = service.update_server_certificate()
