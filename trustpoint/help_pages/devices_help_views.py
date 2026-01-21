@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, override
 
+from cryptography import x509
 from django.http import Http404
+from django.urls import reverse
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.detail import DetailView
@@ -783,9 +785,6 @@ class OpcUaGdsPushApplicationCertificateStrategy(HelpPageStrategy):
         )
 
         # Check if domain credential exists for this device
-        from devices.models import IssuedCredentialModel
-        from django.urls import reverse
-        
         has_domain_credential = IssuedCredentialModel.objects.filter(
             device=device,
             issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
@@ -860,7 +859,7 @@ class OpcUaGdsPushApplicationCertificateStrategy(HelpPageStrategy):
                 'devices:opc_ua_gds_push_discover_server',
                 kwargs={'pk': device.pk}
             )
-            
+
             discover_html = (
                 '<form method="post" action="' + discover_server_url + '" style="display: inline;">'
                 'CSRF_TOKEN_PLACEHOLDER'
@@ -896,8 +895,252 @@ class OpcUaGdsPushApplicationCertificateStrategy(HelpPageStrategy):
         return sections, _non_lazy('Help - Issue Application Certificates using OPC UA GDS Push')
 
 
+class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
+    """Strategy for building the OPC UA GDS Push onboarding help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        onboarding_config = getattr(device, 'onboarding_config', None)
+        if not onboarding_config:
+            raise Http404(_('Onboarding is not configured for this device.'))
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(
+                    _non_lazy('Protocol'),
+                    'OPC UA GDS Push',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Device Type'),
+                    'OPC UA GDS Push Device',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Domain'),
+                    help_context.domain_unique_name,
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Required Public Key Type'),
+                    str(help_context.domain.public_key_info),
+                    ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+        # Check if domain credential exists for this device
+        has_domain_credential = IssuedCredentialModel.objects.filter(
+            device=device,
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
+        ).exists()
+
+        if has_domain_credential:
+            # Build action buttons
+            update_trustlist_url = reverse(
+                'devices:opc_ua_gds_push_update_trustlist',
+                kwargs={'pk': device.pk}
+            )
+            update_cert_url = reverse(
+                'devices:opc_ua_gds_push_update_server_certificate',
+                kwargs={'pk': device.pk}
+            )
+            discover_server_url = reverse(
+                'devices:opc_ua_gds_push_discover_server',
+                kwargs={'pk': device.pk}
+            )
+
+            # Use CSRF_TOKEN_PLACEHOLDER that will be replaced in template
+            trustlist_html = (
+                '<form method="post" action="' + update_trustlist_url + '" style="display: inline;">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<button type="submit" class="btn btn-primary">Update Trustlist</button>'
+                '</form>'
+                '<p class="text-muted mt-2">Updates the device\'s trust list with CA certificates '
+                'and CRLs from the associated truststore.</p>'
+            )
+
+            cert_html = (
+                '<form method="post" action="' + update_cert_url + '" style="display: inline;">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<button type="submit" class="btn btn-success">Update Server Certificate</button>'
+                '</form>'
+                '<p class="text-muted mt-2">Generates a new CSR on the server, signs it with the '
+                'domain CA, and updates the server certificate.</p>'
+            )
+
+            discover_html = (
+                '<form method="post" action="' + discover_server_url + '" style="display: inline;">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<button type="submit" class="btn btn-info">Discover Server</button>'
+                '</form>'
+                '<p class="text-muted mt-2">Connects to the OPC UA server without authentication '
+                'to retrieve server information and certificates for initial configuration.</p>'
+            )
+
+            actions = HelpSection(
+                _non_lazy('Available Actions'),
+                [
+                    HelpRow(
+                        _non_lazy('Discover Server'),
+                        discover_html,
+                        ValueRenderType.HTML,
+                    ),
+                    HelpRow(
+                        _non_lazy('Update Trustlist'),
+                        trustlist_html,
+                        ValueRenderType.HTML,
+                    ),
+                    HelpRow(
+                        _non_lazy('Update Server Certificate'),
+                        cert_html,
+                        ValueRenderType.HTML,
+                    ),
+                ],
+            )
+        else:
+            # Show instructions to issue domain credential first, but allow server discovery
+            discover_server_url = reverse(
+                'devices:opc_ua_gds_push_discover_server',
+                kwargs={'pk': device.pk}
+            )
+
+            discover_html = (
+                '<form method="post" action="' + discover_server_url + '" style="display: inline;">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<button type="submit" class="btn btn-info">Discover Server</button>'
+                '</form>'
+                '<p class="text-muted mt-2">Connects to the OPC UA server without authentication '
+                'to retrieve server information and certificates for initial configuration.</p>'
+            )
+
+            actions = HelpSection(
+                _non_lazy('Available Actions'),
+                [
+                    HelpRow(
+                        _non_lazy('Discover Server'),
+                        discover_html,
+                        ValueRenderType.HTML,
+                    ),
+                    HelpRow(
+                        _non_lazy('Domain Credential Required'),
+                        'Before you can update the trustlist or server certificate, you must first issue '
+                        'a domain credential for this device. This credential is used to authenticate '
+                        'securely with the OPC UA server.',
+                        ValueRenderType.PLAIN,
+                    ),
+                ],
+            )
+
+        # Add section for trusted certificates and CRLs
+        truststore = onboarding_config.opc_trust_store
+        if truststore:
+            trusted_certs_rows = []
+            crl_rows = []
+
+            for truststore_entry in truststore.truststoreordermodel_set.order_by('order'):
+                cert = truststore_entry.certificate
+                cert_serializer = cert.get_certificate_serializer()
+                cert_crypto = cert_serializer.as_crypto()
+
+                subject = cert_crypto.subject.rfc4514_string()
+                issuer = cert_crypto.issuer.rfc4514_string()
+                not_before = cert_crypto.not_valid_before.isoformat()
+                not_after = cert_crypto.not_valid_after.isoformat()
+
+                cert_info = f'Subject: {subject}<br>Issuer: {issuer}<br>Valid from: {not_before} to {not_after}'
+                trusted_certs_rows.append(HelpRow(
+                    _non_lazy(f'Certificate {truststore_entry.order}'),
+                    cert_info,
+                    ValueRenderType.HTML,
+                ))
+
+                # Check for CRL
+                ca_model = truststore_entry.certificate.credential_set.first()
+                if ca_model and hasattr(ca_model, 'crl_pem') and ca_model.crl_pem:
+                    try:
+                        crl_crypto = x509.load_pem_x509_crl(ca_model.crl_pem.encode())
+                        crl_info = (
+                            f'Issuer: {crl_crypto.issuer.rfc4514_string()}<br>'
+                            f'Last update: {crl_crypto.last_update.isoformat()}<br>'
+                            f'Next update: {crl_crypto.next_update.isoformat() if crl_crypto.next_update else "N/A"}'
+                        )
+                        crl_rows.append(HelpRow(
+                            _non_lazy(f'CRL for Certificate {truststore_entry.order}'),
+                            crl_info,
+                            ValueRenderType.HTML,
+                        ))
+                    except (ValueError, TypeError):
+                        crl_rows.append(HelpRow(
+                            _non_lazy(f'CRL for Certificate {truststore_entry.order}'),
+                            'CRL data available but could not be parsed',
+                            ValueRenderType.PLAIN,
+                        ))
+                else:
+                    crl_rows.append(HelpRow(
+                        _non_lazy(f'CRL for Certificate {truststore_entry.order}'),
+                        'No CRL available',
+                        ValueRenderType.PLAIN,
+                    ))
+
+            trusted_certs_section = HelpSection(
+                _non_lazy('Trusted Certificates'),
+                trusted_certs_rows,
+            )
+
+            crls_section = HelpSection(
+                _non_lazy('Certificate Revocation Lists (CRLs)'),
+                crl_rows,
+            )
+
+            # Add download section
+            download_url = reverse(
+                f'devices:{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_trust_bundle_download',
+                kwargs={'pk': device.pk}
+            )
+            download_html = (
+                f'<a href="{download_url}" class="btn btn-success">Download Trust Bundle</a>'
+                '<p class="text-muted mt-2">Download a ZIP file containing all CA certificates '
+                'and CRLs in DER format for use with OPC UA servers.</p>'
+            )
+            download_section = HelpSection(
+                _non_lazy('Download Trust Bundle'),
+                [
+                    HelpRow(
+                        _non_lazy('Trust Bundle Download'),
+                        download_html,
+                        ValueRenderType.HTML,
+                    ),
+                ],
+            )
+
+            sections = [
+                summary,
+                trusted_certs_section,
+                crls_section,
+                download_section,
+                actions,
+            ]
+        else:
+            sections = [
+                summary,
+                actions,
+            ]
+
+        return sections, _non_lazy('Help - OPC UA GDS Push Onboarding')
+
+
 class OpcUaGdsPushApplicationCertificateHelpView(BaseHelpView):
     """Help view for OPC UA GDS Push application certificates."""
 
     page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
     strategy = OpcUaGdsPushApplicationCertificateStrategy()
+
+
+class OpcUaGdsPushOnboardingHelpView(BaseHelpView):
+    """Help view for OPC UA GDS Push onboarding."""
+
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+    strategy = OpcUaGdsPushOnboardingStrategy()

@@ -8,6 +8,7 @@ import io
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from cryptography import x509
+from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
@@ -1446,10 +1447,10 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
 
             if success and server_info:
                 messages.success(request, f'Server discovered successfully: {message}')
-                
+
                 # Store server info in session for display
                 request.session['opc_ua_server_info'] = server_info
-                
+
                 # If server certificate is available, offer to update truststore
                 if server_info.get('server_certificate_available'):
                     messages.info(
@@ -1509,7 +1510,7 @@ class OpcUaGdsPushTruststoreAssociationView(PageContextMixin, FormView[OpcUaGdsP
         )
         return HttpResponseRedirect(
             reverse_lazy(
-                f'devices:{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_certificate_lifecycle_management',
+                f'devices:{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_onboarding_truststore_associated_help',
                 kwargs={'pk': self.get_device().pk}
             )
         )
@@ -1945,17 +1946,17 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
 
             if success and server_info:
                 messages.success(request, f'Server discovered successfully: {message}')
-                
+
                 # Store server info in session for display
                 request.session['opc_ua_server_info'] = server_info
-                
+
                 # Also try to update truststore with server certificate if available
                 if server_info.get('server_certificate_available') and server_info.get('server_certificate'):
                     try:
                         self._update_truststore_with_certificate(server_info['server_certificate'])
                     except Exception as e:
                         messages.warning(request, f'Server discovered but failed to update truststore: {e}')
-                        
+
             else:
                 messages.error(request, f'Failed to discover server: {message}')
 
@@ -2155,6 +2156,100 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
                 kwargs={'pk': self.object.pk}
             )
         )
+
+
+class OpcUaGdsPushTrustBundleDownloadView(PageContextMixin, DetailView[DeviceModel]):
+    """View to download the trust bundle (CA certificates and CRLs) for an OPC UA GDS Push device."""
+
+    http_method_names = ('get',)
+    model = DeviceModel
+    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:  # noqa: ARG002
+        """Handle the GET request to download the trust bundle.
+
+        Args:
+            request: The Django request object.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            FileResponse with the trust bundle zip file.
+        """
+        self.object = self.get_object()
+
+        # Check if device has onboarding config and truststore
+        if not self.object.onboarding_config or not self.object.onboarding_config.opc_trust_store:
+            messages.error(request, 'No truststore associated with this device.')
+            return HttpResponseRedirect(
+                reverse_lazy(
+                    f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
+                    kwargs={'pk': self.object.pk}
+                )
+            )
+
+        truststore = self.object.onboarding_config.opc_trust_store
+
+        # Collect certificates and CRLs
+        data_to_archive = {}
+
+        for entry in truststore.truststoreordermodel_set.order_by('order'):
+            cert = entry.certificate
+            try:
+                cert_der = cert.get_certificate_serializer().as_der()
+                if cert_der is None:
+                    continue  # Skip certificates that can't be serialized
+                    
+                # Add certificate
+                cert_filename = f'ca_{entry.order}.der'
+                data_to_archive[cert_filename] = cert_der
+            except Exception:
+                continue  # Skip certificates that can't be serialized
+
+            # Try to add CRL if available
+            ca_model = cert.credential_set.first()
+            if ca_model and hasattr(ca_model, 'crl_pem') and ca_model.crl_pem:
+                try:
+                    crl_crypto = x509.load_pem_x509_crl(ca_model.crl_pem.encode())
+                    crl_der = crl_crypto.public_bytes(serialization.Encoding.DER)
+                    crl_filename = f'crl_{entry.order}.der'
+                    data_to_archive[crl_filename] = crl_der
+                except (ValueError, TypeError):
+                    # Skip CRL if it can't be parsed
+                    pass
+
+        if not data_to_archive:
+            messages.error(request, 'No certificates found in truststore.')
+            return HttpResponseRedirect(
+                reverse_lazy(
+                    f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
+                    kwargs={'pk': self.object.pk}
+                )
+            )
+
+        # Create zip file
+        zip_data = Archiver.archive_zip(data_to_archive)
+
+        # Debug: Check if zip_data is valid
+        if not zip_data or len(zip_data) == 0:
+            messages.error(request, f'Failed to create ZIP file. Found {len(data_to_archive)} files to archive.')
+            return HttpResponseRedirect(
+                reverse_lazy(
+                    f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
+                    kwargs={'pk': self.object.pk}
+                )
+            )
+
+        # Create response
+        response = FileResponse(
+            io.BytesIO(zip_data),
+            content_type='application/zip',
+            as_attachment=True,
+            filename=f'trustpoint-{self.object.common_name}-trust-bundle.zip',
+        )
+
+        return cast('HttpResponse', response)
 
 
 # ---------------------------------------------- Credential Download Help ----------------------------------------------

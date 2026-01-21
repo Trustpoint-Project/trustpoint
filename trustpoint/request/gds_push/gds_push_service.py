@@ -348,11 +348,11 @@ class GdsPushService:
     # OPC UA Client Creation & Connection
     # ========================================================================
 
-    def _get_client_credentials(self) -> tuple[bytes, bytes]:
+    def _get_client_credentials(self) -> tuple[x509.Certificate, bytes]:
         """Get client certificate and private key from domain credential.
 
         Returns:
-            Tuple of (certificate DER bytes, private key PEM bytes).
+            Tuple of (certificate crypto object, private key PEM bytes).
 
         Raises:
             GdsPushError: If credentials are invalid.
@@ -372,7 +372,6 @@ class GdsPushService:
             raise GdsPushError(msg)
 
         cert_crypto = cert_model.get_certificate_serializer().as_crypto()
-        cert_der = cert_crypto.public_bytes(encoding=serialization.Encoding.DER)
 
         try:
             key_crypto = self.domain_credential.credential.get_private_key()
@@ -386,7 +385,30 @@ class GdsPushService:
             encryption_algorithm=serialization.NoEncryption()
         )
 
-        return cert_der, key_pem
+        return cert_crypto, key_pem
+
+    def _extract_application_uri(self, cert: x509.Certificate) -> str:
+        """Extract application URI from certificate.
+
+        Args:
+            cert: The certificate to extract from.
+
+        Returns:
+            The application URI.
+
+        Raises:
+            GdsPushError: If no application URI found.
+        """
+        try:
+            san = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
+            for general_name in san.value:
+                if isinstance(general_name, x509.UniformResourceIdentifier):
+                    return general_name.value
+        except x509.ExtensionNotFound:
+            pass
+
+        msg = 'No application URI found in domain credential certificate'
+        raise GdsPushError(msg)
 
     def _get_server_certificate(self) -> bytes:
         """Get OPC UA server certificate from truststore.
@@ -420,8 +442,12 @@ class GdsPushService:
             GdsPushError: If client creation fails.
         """
         try:
-            client_cert_der, client_key_pem = self._get_client_credentials()
+            client_cert_crypto, client_key_pem = self._get_client_credentials()
             server_cert_der = self._get_server_certificate()
+
+            application_uri = self._extract_application_uri(client_cert_crypto)
+
+            client_cert_der = client_cert_crypto.public_bytes(encoding=serialization.Encoding.DER)
 
             with tempfile.NamedTemporaryFile(mode='wb', suffix='.der', delete=False) as f:
                 f.write(client_cert_der)
@@ -438,7 +464,7 @@ class GdsPushService:
             logger.debug('Created temporary credential files for OPC UA client')
 
             client = Client(self.server_url)
-            client.application_uri = 'urn:trustpoint:gds-push'
+            client.application_uri = application_uri
             client.secure_channel_timeout = 30000  # 30 seconds
             client.session_timeout = 60000  # 60 seconds
 

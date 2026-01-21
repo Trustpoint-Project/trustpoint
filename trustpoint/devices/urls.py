@@ -3,7 +3,11 @@
 from django.urls import path, re_path
 
 from help_pages import devices_help_views
-from trustpoint.page_context import DEVICES_PAGE_DEVICES_SUBCATEGORY, DEVICES_PAGE_OPC_UA_SUBCATEGORY, DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+from trustpoint.page_context import (
+    DEVICES_PAGE_DEVICES_SUBCATEGORY,
+    DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY,
+    DEVICES_PAGE_OPC_UA_SUBCATEGORY,
+)
 
 from . import views
 
@@ -254,6 +258,16 @@ urlpatterns = [
         'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/truststore-association/',
         views.OpcUaGdsPushTruststoreAssociationView.as_view(),
         name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_truststore_association',
+    ),
+    path(
+        'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/onboarding/truststore-associated/',
+        devices_help_views.OpcUaGdsPushOnboardingHelpView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_onboarding_truststore_associated_help',
+    ),
+    path(
+        'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/trust-bundle-download/',
+        views.OpcUaGdsPushTrustBundleDownloadView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY}_trust_bundle_download',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/cmp-domain-credential/',
