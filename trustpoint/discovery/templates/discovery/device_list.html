@@ -1,0 +1,72 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n static %}
+
+{% block head %}
+    {% if scan_running %}<meta http-equiv="refresh" content="5">{% endif %}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .card { border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.3); margin-bottom: 20px; border-radius: 10px; background: #2b2b2b; }
+        .stat-card { border-left: 5px solid !important; }
+        .table-dark { background-color: transparent !important; }
+        .card-header { border-bottom: 1px solid rgba(255,255,255,0.1) !important; padding: 15px 20px !important; }
+    </style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3 fw-bold mb-0 text-white">Trustpoint Device Discovery</h1>
+        <span class="badge {% if scan_running %}bg-warning text-dark{% else %}bg-success{% endif %} px-3 py-2">
+            {% if scan_running %}Scanning Active{% else %}System Ready{% endif %}
+        </span>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4"><div class="card stat-card border-primary p-3"><h6>Total Assets</h6><h2 class="fw-bold">{{ stats.total }}</h2></div></div>
+        <div class="col-md-4"><div class="card stat-card border-info p-3"><h6>Industrial / OT</h6><h2 class="fw-bold">{{ stats.industrial }}</h2></div></div>
+        <div class="col-md-4"><div class="card stat-card border-warning p-3"><h6>Security Risks</h6><h2 class="fw-bold">{{ stats.risks }}</h2></div></div>
+    </div>
+
+    <div class="card p-4">
+        <form action="{% url 'discovery:start_scan' %}" method="post" class="row g-3 align-items-center">
+            {% csrf_token %}
+            <div class="col-auto"><label class="fw-bold">Target Network (CIDR):</label></div>
+            <div class="col-auto"><input type="text" name="cidr" class="form-control bg-dark text-white border-secondary" value="172.18.0.0/24"></div>
+            <div class="col-auto"><button type="submit" class="btn btn-primary">Run Scan</button></div>
+        </form>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 text-white">Discovered Assets</h5>
+            {% if devices %}
+            <a href="{% url 'discovery:export_csv' %}" class="btn btn-sm btn-success">
+                <i class="fa-solid fa-file-csv me-1"></i> Download CSV
+            </a>
+            {% endif %}
+        </div>
+        <div class="table-responsive">
+            <table class="table table-dark table-hover mb-0">
+                <thead><tr><th class="ps-4">IP Address</th><th>Hostname</th><th>Ports</th><th>SSL Status</th><th class="text-end pe-4">Actions</th></tr></thead>
+                <tbody>
+                    {% for d in devices %}
+                    <tr>
+                        <td class="ps-4"><a href="{% url 'discovery:device_detail' d.id %}" class="text-info fw-bold">{{ d.ip_address }}</a></td>
+                        <td>{{ d.hostname|default:"-" }}</td>
+                        <td>{% for p in d.open_ports %}<span class="badge bg-secondary me-1">{{ p }}</span>{% endfor %}</td>
+                        <td>
+                            {% if d.ssl_info %}
+                                <span class="{% if d.ssl_info.is_self_signed %}text-warning{% else %}text-success{% endif %} small">
+                                    <i class="fa-solid fa-lock me-1"></i>{% if d.ssl_info.is_self_signed %}Self-Signed{% else %}Valid CA{% endif %}
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4"><a href="{% url 'discovery:device_detail' d.id %}" class="btn btn-sm btn-outline-info">View Details</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -279,6 +279,7 @@ INSTALLED_APPS = [
     'workflows.apps.WorkflowsConfig',
     'rest_framework',
     'drf_yasg',
+    'discovery.apps.DiscoveryConfig',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:

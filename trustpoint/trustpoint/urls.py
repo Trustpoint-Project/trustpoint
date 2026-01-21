@@ -76,6 +76,7 @@ urlpatterns += [
     path('management/', include('management.urls')),
     path('notifications/', include('notifications.urls')),
     path('i18n/', include('django.conf.urls.i18n')),
+    path('discovery/', include('discovery.urls')),
     path(
         'jsi18n/',
         vary_on_cookie(last_modified(lambda _req, **_kw: last_modified_date)(JavaScriptCatalog.as_view())),

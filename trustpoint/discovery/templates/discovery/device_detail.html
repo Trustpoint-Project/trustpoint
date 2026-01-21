@@ -1,0 +1,41 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="container-fluid p-4">
+    <a href="{% url 'discovery:device_list' %}" class="btn btn-primary mb-4 shadow-sm">
+        <i class="fa-solid fa-arrow-left me-2"></i>Back to Discovery Dashboard
+    </a>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card bg-dark text-white shadow">
+                <div class="card-header border-bottom py-3">
+                    <h4 class="mb-0 text-primary"><i class="fa-solid fa-server me-2"></i> {{ device.ip_address }}</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3"><div class="col-sm-4 text-muted">Hostname:</div><div class="col-sm-8 fw-bold text-white">{{ device.hostname|default:"Unknown" }}</div></div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4 text-muted">Open Ports:</div>
+                        <div class="col-sm-8">{% for port in device.open_ports %}<span class="badge bg-secondary me-1">{{ port }}</span>{% endfor %}</div>
+                    </div>
+                    <div class="row"><div class="col-sm-4 text-muted">Last Seen:</div><div class="col-sm-8 text-white">{{ device.last_seen|date:"Y-m-d H:i:s" }}</div></div>
+                </div>
+            </div>
+
+            {% if device.ssl_info %}
+            <div class="card bg-dark text-white shadow mt-4">
+                <div class="card-header border-bottom py-3"><h5 class="mb-0">SSL/TLS Details</h5></div>
+                <div class="card-body">
+                    <div class="alert {% if device.ssl_info.is_self_signed %}alert-warning text-dark{% else %}alert-success{% endif %} py-2">
+                        <i class="fa-solid fa-shield-halved me-2"></i>
+                        {% if device.ssl_info.is_self_signed %}Self-Signed Certificate Detected{% else %}Trusted CA Certificate Detected{% endif %}
+                    </div>
+                    <pre class="bg-black p-3 rounded small text-info" style="white-space: pre-wrap; border: 1px solid #333;">{{ device.ssl_info }}</pre>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock content %}

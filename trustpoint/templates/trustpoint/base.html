@@ -1,195 +1,103 @@
-{% load static %}
-{% load i18n %}
-<!doctype html>
-<html lang="en" data-bs-theme="dark">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Trustpoint</title>
-        <script src="{% static 'js/theme.js' %}"></script>
-        <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
-        <link rel="stylesheet" href="{% static 'css/bootstrap-icons.min.css' %}">
-        <link rel="stylesheet" href="{% static 'css/trustpoint.css' %}">
-        <link rel="icon" href="{% static 'img/favicon-32.png' %}">
-        {% block head %}{% endblock head %}
-    </head>
+{% load i18n static %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Trustpoint</title>
+    <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/trustpoint.css' %}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    <style>
+        /* This ensures the sidebar is wide enough for the text */
+        .tp-sidenav { width: 260px !important; min-width: 260px !important; }
 
-    <body id="bs-override">
-        <div class="tp-content-wrapper">
-            <header class="tp-page-header navbar border-bottom border-body">
-                <div class="menu-icon">
-                    <svg id="menu-icon-menu" class="bi bi-size100" fill="currentColor" role="img" aria-label="Show Menu">
-                        <use href="{% static 'img/icons.svg' %}#icon-menu"></use></svg>
-                    <svg id="menu-icon-back" class="bi bi-size100 d-none" fill="currentColor" role="img" aria-label="Hide Menu">
-                        <use href="{% static 'img/icons.svg' %}#icon-x"></use></svg>
-                </div>
-                <a class="navbar-brand tp-primary" href="{% url 'home:dashboard' %}">
-                    <img src="{% static 'img/tp-logo-horizontal-512.png' %}" alt="Trustpoint" id="tp-logo" class="light-only">
-                    <img src="{% static 'img/tp-logo-horizontal-white-point.png' %}" alt="Trustpoint" id="tp-logo" class="dark-only">
-                </a>
-                <div><!-- Intentionally empty for flex layout --></div>
-            </header>
+        /* This makes the search icon behave exactly like the native SVGs */
+        .tp-menu-head i {
+            width: 1.25rem !important;   /* 20px */
+            height: 1.25rem !important;  /* 20px */
+            margin-right: 0.5rem !important; /* 8px spacing */
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            vertical-align: middle;
+            font-size: 1rem;
+        }
+        
+        .tp-menu-head span {
+            vertical-align: middle;
+        }
+    </style>
+    {% block head %}{% endblock head %}
+</head>
 
-
-{#    <div class="container-fluid p-0 m-0 d-flex">#}
-        <nav class="tp-sidenav">
-            <div class="tp-menu-group">
-                <a href="{% url 'home:dashboard' %}" class="tp-menu-head {% if page_name == 'dashboard' %}tp-menu-active{% endif %}">
-                    <svg class="bi" fill="currentColor" role="img">
-                        <use href="{% static 'img/icons.svg' %}#icon-home"></use></svg>
-                    {% translate "Dashboard" %}
-                </a>
+<body id="bs-override">
+    <div class="tp-content-wrapper">
+        <header class="tp-page-header navbar border-bottom border-body">
+            <div class="menu-icon">
+                <svg id="menu-icon-menu" class="bi bi-size100" fill="currentColor"><use href="{% static 'img/icons.svg' %}#icon-menu"></use></svg>
             </div>
+            <a class="navbar-brand tp-primary" href="{% url 'home:dashboard' %}">
+                <img src="{% static 'img/tp-logo-horizontal-white-point.png' %}" alt="Trustpoint" id="tp-logo">
+            </a>
+            <div></div>
+        </header>
 
-            <div class="tp-menu-group">
-                <a href="{% url 'devices:devices' %}" class="tp-menu-head {% if page_category == 'devices' %}tp-menu-active{% endif %}">
-                    <svg class="bi" fill="currentColor" role="img">
-                        <use href="{% static 'img/icons.svg' %}#icon-boxes"></use></svg>
-                    {% translate "Devices" %}
-                    <div class="btn-collapse" data-category="devices"
-                        aria-expanded="{% if page_category == 'devices' %}true{% else %}false{% endif %}">
-                    </div>
-                </a>
-                <div class="tp-menu-collapse {% if page_category == 'devices' %}show{% endif %}">
-                    <a href="{% url 'devices:devices' %}" class="tp-menu-item {% if page_name == 'devices' %}tp-menu-active{% endif %}">{% trans 'Devices' %}</a>
-                    <a href="{% url 'devices:opc_ua_gds' %}" class="tp-menu-item {% if page_name == 'opc_ua_gds' %}tp-menu-active{% endif %}">{% trans 'OPC UA GDS' %}</a>
-                </div>
-            </div>
-
-
-
-            <div class="tp-menu-group">
-                <a href="{% url 'pki:domains' %}" class="tp-menu-head {% if page_category == 'pki' %}tp-menu-active{% endif %}">
-                    <svg class="bi" fill="currentColor" role="img">
-                        <use href="{% static 'img/icons.svg' %}#icon-key"></use></svg>
-                    {% translate "PKI" %}
-                    <div class="btn-collapse" data-category="pki"
-                        aria-expanded="{% if page_category == 'pki' %}true{% else %}false{% endif %}">
-                    </div>
-                </a>
-                <div class="tp-menu-collapse {% if page_category == 'pki' %}show{% endif %}">
-                    <a href="{% url 'pki:domains' %}" class="tp-menu-item {% if page_name == 'domains' %}tp-menu-active{% endif %}">{% trans 'Domains' %}</a>
-                    <a href="{% url 'pki:issuing_cas' %}" class="tp-menu-item {% if page_name == 'issuing_cas' %}tp-menu-active{% endif %}">{% trans 'Issuing CAs' %}</a>
-                    <a href="{% url 'pki:certificates' %}" class="tp-menu-item {% if page_name == 'certificates' %}tp-menu-active{% endif %}">{% trans 'Certificates' %}</a>
-                    <a href="{% url 'pki:cert_profiles' %}" class="tp-menu-item {% if page_name == 'cert_profiles' %}tp-menu-active{% endif %}">{% trans 'Certificate Profiles' %}</a>
-                    <a href="{% url 'pki:truststores' %}" class="tp-menu-item {% if page_name == 'truststores' %}tp-menu-active{% endif %}">{% trans 'Truststores' %}</a>
-                    <a href="{% url 'pki:owner_credentials' %}" class="tp-menu-item {% if page_name == 'owner_credentials' %}tp-menu-active{% endif %}">{% trans 'DevOwnerIDs' %}</a>
-                </div>
-            </div>
-            <div class="tp-menu-group">
-                <a href="{% url 'signer:signer_list' %}" class="tp-menu-head {% if page_category == 'signer' %}tp-menu-active{% endif %}">
-                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pen" viewBox="0 0 16 16">
-  <path d="m13.498.795.149-.149a1.207 1.207 0 1 1 1.707 1.708l-.149.148a1.5 1.5 0 0 1-.059 2.059L4.854 14.854a.5.5 0 0 1-.233.131l-4 1a.5.5 0 0 1-.606-.606l1-4a.5.5 0 0 1 .131-.232l9.642-9.642a.5.5 0 0 0-.642.056L6.854 4.854a.5.5 0 1 1-.708-.708L9.44.854A1.5 1.5 0 0 1 11.5.796a1.5 1.5 0 0 1 1.998-.001m-.644.766a.5.5 0 0 0-.707 0L1.95 11.756l-.764 3.057 3.057-.764L14.44 3.854a.5.5 0 0 0 0-.708z"/>
-</svg>
-                    {% translate "Signing" %}
-
-                </a>
-
-            </div>
-
-            <div class="tp-menu-group">
-               <a href="{% url 'management:settings' %}" class="tp-menu-head {% if page_category == 'management' %}tp-menu-active{% endif %}">
-                    <svg class="bi" fill="currentColor" role="img">
-                        <use href="{% static 'img/icons.svg' %}#icon-settings"></use></svg>
-                        {% translate "Management" %}
-                    <div class="btn-collapse" data-category="management"
-                        aria-expanded="{% if page_category == 'management' %}true{% else %}false{% endif %}">
-                    </div>
-                </a>
-                <div class="tp-menu-collapse {% if page_category == 'management' %}show{% endif %}">
-                    <a href="{% url 'management:settings' %}" class="tp-menu-item {% if page_name == 'settings' %}tp-menu-active{% endif %}">{% trans "Settings" %}</a>
-                    <a href="{% url 'management:logging-files' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Logging" %}</a>
-                    <a href="{% url 'management:tls' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "TLS" %}</a>
-                    <a href="{% url 'management:backups' %}" class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}">{% trans "Backups" %}</a>
-                    <a href="{% url 'management:key_storage' %}" class="tp-menu-item {% if page_name == 'key_storage' %}tp-menu-active{% endif %}">{% trans "Key Storage" %}</a>
-                </div>
-            </div>
-
-            <div class="tp-menu-group">
-                <a href="{% url 'workflows:definition_table' %}"
-                    class="tp-menu-head {% if page_category == 'workflows' %}tp-menu-active{% endif %}">
-                    <svg class="bi" fill="currentColor" role="img">
-                    <use href="{% static 'img/icons.svg' %}#icon-card-checklist"></use>
-                    </svg>
-                    {% translate "Workflows" %}
-                    <div class="btn-collapse" data-category="workflows"
-                        aria-expanded="{% if page_category == 'workflows' %}true{% else %}false{% endif %}">
-                    </div>
-                </a>
-
-                <div class="tp-menu-collapse {% if page_category == 'workflows' %}show{% endif %}">
-                    <a href="{% url 'workflows:definition_table' %}"
-                    class="tp-menu-item {% if page_name == 'definitions' %}tp-menu-active{% endif %}">
-                    {% trans "Workflows" %}
-                    </a>
-
-                    <a href="{% url 'workflows:request_table' %}"
-                    class="tp-menu-item {% if page_name == 'pending_requests' %}tp-menu-active{% endif %}">
-                    {% trans "Pending Requests" %}
-                    </a>
-
-                </div>
-                </div>
-            <div class="tp-menu-footer">
+        <div class="d-flex">
+            <nav class="tp-sidenav">
+                <!-- Dashboard -->
                 <div class="tp-menu-group">
-                    <button class="tp-menu-head theme-toggle" type="button">
-                        <svg class="bi theme-icon dark-only" width="20" height="20" fill="#ffffff" role="img" aria-label="Change theme">
-                            <use href="{% static 'img/icons.svg' %}#icon-sun"></use></svg>
-                        <span class="dark-only">{% trans "Light theme" %}</span>
-                        <svg class="bi theme-icon light-only" width="20" height="20" fill="#000000" role="img" aria-label="Change theme">
-                            <use href="{% static 'img/icons.svg' %}#icon-moon-stars"></use></svg>
-                            <span class="light-only">{% trans "Dark theme" %}</span>
-                    </button>
-                    <a href="{% url 'management:help' %}" class="tp-menu-head">
-                        <svg class="bi" fill="currentColor" width="16" height="16" role="img">
-                            <use href="{% static 'img/icons.svg' %}#icon-question-circle"></use>
-                        </svg>
-                        {% trans "Help & Support" %}
+                    <a href="{% url 'home:dashboard' %}" class="tp-menu-head {% if page_name == 'dashboard' %}tp-menu-active{% endif %}">
+                        <svg class="bi" fill="currentColor"><use href="{% static 'img/icons.svg' %}#icon-home"></use></svg>
+                        <span>{% translate "Dashboard" %}</span>
                     </a>
-                    <form method="POST" action="{% url 'users:logout' %}">
-                        {% csrf_token %}
-                        <button class="tp-menu-head" type="submit">
-                            <svg class="bi" fill="currentColor" role="img">
-                            <use href="{% static 'img/icons.svg' %}#icon-door"></use></svg>
-                            {% translate "Logout" %}
-                        </button>
-                    </form>
-
                 </div>
-                <div id="tp-version">v{{ APP_VERSION }}</div>
-            </div>
-        </nav>
 
-        <main class="tp-main">
-            {% if messages %}
-                <div class="messages tp-messages text-center">
-                    {% for message in messages %}
-                        <div class="tp-message alert
-                            {% if message.tags %}
-                                {% if message.tags == "error" %}
-                                    alert-danger
-                                {% else %}
-                                    alert-{{ message.tags }}
-                                {% endif %}
-                            {% endif %} d-flex" role="alert">
+                <!-- Network Discovery (PIXEL PERFECT ALIGNMENT) -->
+                <div class="tp-menu-group">
+                    <a href="/discovery/" class="tp-menu-head {% if 'discovery' in request.path %}tp-menu-active{% endif %}">
+                        <i class="bi bi-search"></i>
+                        <span>{% translate "Network Discovery" %}</span>
+                    </a>
+                </div>
 
-                            <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="{{ message.tags }}:">
-                                <use xlink:href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use></svg>
-                            <div>
-                              {{ message }}
+                <!-- Devices -->
+                <div class="tp-menu-group">
+                    <a href="{% url 'devices:devices' %}" class="tp-menu-head {% if page_category == 'devices' %}tp-menu-active{% endif %}">
+                        <svg class="bi" fill="currentColor"><use href="{% static 'img/icons.svg' %}#icon-boxes"></use></svg>
+                        <span>{% translate "Devices" %}</span>
+                    </a>
+                </div>
+
+                <!-- PKI -->
+                <div class="tp-menu-group">
+                    <a href="{% url 'pki:certificates' %}" class="tp-menu-head {% if page_category == 'pki' %}tp-menu-active{% endif %}">
+                        <svg class="bi" fill="currentColor"><use href="{% static 'img/icons.svg' %}#icon-key"></use></svg>
+                        <span>{% translate "PKI" %}</span>
+                    </a>
+                </div>
+            </nav>
+
+            <main class="flex-grow-1 bg-dark" style="height: calc(100vh - 60px); overflow-y: auto;">
+                {% if messages %}
+                    <div class="container-fluid pt-3">
+                        {% for message in messages %}
+                            <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert" style="background-color: #198754; color: white; border: none;">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-check-circle-fill me-2"></i>
+                                    <div>{{ message }}</div>
+                                </div>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
                             </div>
-                        </div>
-                    {% endfor %}
-                </div>
-            {% endif %}
-            {% block content %}{% endblock content %}
-        </main>
-
+                        {% endfor %}
+                    </div>
+                {% endif %}
+                {% block content %}{% endblock content %}
+            </main>
+        </div>
     </div>
-
-        <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
-        <script src="{% static 'js/trustpoint.js' %}"></script>
-        <script src="{% static 'js/chart.js' %}"></script>
-    </body>
-
+    <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+    <script src="{% static 'js/trustpoint.js' %}"></script>
+</body>
 </html>
