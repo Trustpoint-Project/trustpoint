@@ -159,8 +159,6 @@ class CertificateRequestHandler(WorkflowHandler):
             raise ValueError
         if not context.cert_requested:
             raise ValueError
-        if not context.cert_requested:
-            raise ValueError
         if not context.protocol:
             raise ValueError
         if not context.operation:
