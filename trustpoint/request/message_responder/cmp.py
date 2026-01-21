@@ -15,12 +15,13 @@ from pyasn1_modules import rfc2459, rfc4210  # type: ignore[import-untyped]
 from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 
 from devices.models import OnboardingStatus
-from request.message_responder import AbstractMessageResponder
+from request.message_responder.base import AbstractMessageResponder
 from request.operation_processor import LocalCaCmpSignatureProcessor
+from request.request_context import CmpBaseRequestContext, CmpCertificateRequestContext
 
 if TYPE_CHECKING:
     from pki.models import CredentialModel
-    from request.request_context import RequestContext
+    from request.request_context import BaseRequestContext
 
 CMP_MESSAGE_VERSION = 2
 SENDER_NONCE_LENGTH = 16
@@ -30,10 +31,10 @@ class CmpMessageResponder(AbstractMessageResponder):
     """Builds response to CMP requests."""
 
     @staticmethod
-    def build_response(context: RequestContext) -> None:
+    def build_response(context: BaseRequestContext) -> None:
         """Respond to a CMP message."""
         responder: CmpMessageResponder
-        if context.issued_certificate:
+        if isinstance(context, CmpCertificateRequestContext) and context.issued_certificate:
             if context.operation == 'initialization':
                 responder = CmpInitializationResponder()
                 return responder.build_response(context)
@@ -97,7 +98,7 @@ class CmpMessageResponder(AbstractMessageResponder):
 
     @staticmethod
     def _add_protection_shared_secret(
-            pki_message: rfc4210.PKIMessage, context: RequestContext
+            pki_message: rfc4210.PKIMessage, context: CmpBaseRequestContext
     ) -> rfc4210.PKIMessage:
         """Adds HMAC-based shared-secret protection to the base PKI message."""
         if not context.cmp_shared_secret:
@@ -158,7 +159,7 @@ class CmpMessageResponder(AbstractMessageResponder):
 
     @staticmethod
     def _sign_pki_message(
-        pki_message: rfc4210.PKIMessage, context: RequestContext
+        pki_message: rfc4210.PKIMessage, context: CmpBaseRequestContext
         ) -> rfc4210.PKIMessage:
         """Applies signature-based protection to the base PKI message."""
         encoded_protected_part = CmpMessageResponder._get_encoded_protected_part(pki_message)
@@ -253,8 +254,12 @@ class CmpInitializationResponder(CmpMessageResponder):
 
 
     @staticmethod
-    def build_response(context: RequestContext) -> None:
+    def build_response(context: BaseRequestContext) -> None:
         """Respond to a CMP initialization message with the issued certificate."""
+        if not isinstance(context, CmpCertificateRequestContext):
+            exc_msg = 'CmpInitializationResponder requires a CmpCertificateRequestContext.'
+            raise TypeError(exc_msg)
+
         if context.issued_certificate is None:
             exc_msg = 'Issued certificate is not set in the context.'
             raise ValueError(exc_msg)
@@ -367,8 +372,12 @@ class CmpCertificationResponder(CmpMessageResponder):
         return cp_message
 
     @staticmethod
-    def build_response(context: RequestContext) -> None:
-        """Respond to a CMP initialization message with the issued certificate."""
+    def build_response(context: BaseRequestContext) -> None:
+        """Respond to a CMP certification message with the issued certificate."""
+        if not isinstance(context, CmpCertificateRequestContext):
+            exc_msg = 'CmpCertificationResponder requires a CmpCertificateRequestContext.'
+            raise TypeError(exc_msg)
+
         if context.issued_certificate is None:
             exc_msg = 'Issued certificate is not set in the context.'
             raise ValueError(exc_msg)
@@ -412,8 +421,11 @@ class CmpErrorMessageResponder(CmpMessageResponder):
     """Respond to a CMP message with an error."""
 
     @staticmethod
-    def build_response(context: RequestContext) -> None:
+    def build_response(context: BaseRequestContext) -> None:
         """Respond to a CMP message with an error."""
+        if not isinstance(context, CmpBaseRequestContext):
+            exc_msg = 'CmpErrorMessageResponder requires a CmpBaseRequestContext.'
+            raise TypeError(exc_msg)
         # Set appropriate HTTP status code and error message in context
         # TODO(Air): Use CMP error message format instead of plain text  # noqa: FIX002
         # perhaps add context.cmp_failure_status from PKIFailureInfo values

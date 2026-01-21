@@ -3,10 +3,10 @@
 from django.contrib import admin
 from django.http import HttpRequest
 
+from .models import CaModel
 from .models.certificate import CertificateModel
 from .models.credential import CertificateChainOrderModel, CredentialModel
 from .models.devid_registration import DevIdRegistration
-from .models.issuing_ca import IssuingCaModel
 
 
 class DevIdRegistrationAdmin(admin.ModelAdmin[DevIdRegistration]):
@@ -29,12 +29,12 @@ class CertificateChainOrderModelAdmin(admin.ModelAdmin[CertificateChainOrderMode
     """Admin configuration for the CertificateChainOrderModel."""
 
 
-class IssuingCaModelAdmin(admin.ModelAdmin[IssuingCaModel]):
-    """Admin configuration for the IssuingCaModel."""
+class CaModelAdmin(admin.ModelAdmin[CaModel]):
+    """Admin configuration for the CaModel."""
 
 
 admin.site.register(CertificateModel, CertificateModelAdmin)
 admin.site.register(CredentialModel, CredentialModelAdmin)
 admin.site.register(CertificateChainOrderModel, CertificateChainOrderModelAdmin)
-admin.site.register(IssuingCaModel, IssuingCaModelAdmin)
+admin.site.register(CaModel, CaModelAdmin)
 admin.site.register(DevIdRegistration, DevIdRegistrationAdmin)

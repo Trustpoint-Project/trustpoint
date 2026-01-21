@@ -1,103 +1,138 @@
-{% load i18n static %}
-<!DOCTYPE html>
-<html lang="{{ LANGUAGE_CODE }}" data-bs-theme="dark">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Trustpoint</title>
-    <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
-    <link rel="stylesheet" href="{% static 'css/trustpoint.css' %}">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    
-    <style>
-        /* This ensures the sidebar is wide enough for the text */
-        .tp-sidenav { width: 260px !important; min-width: 260px !important; }
-
-        /* This makes the search icon behave exactly like the native SVGs */
-        .tp-menu-head i {
-            width: 1.25rem !important;   /* 20px */
-            height: 1.25rem !important;  /* 20px */
-            margin-right: 0.5rem !important; /* 8px spacing */
-            display: inline-flex !important;
-            align-items: center;
-            justify-content: center;
-            vertical-align: middle;
-            font-size: 1rem;
-        }
+{% load static %}
+{% load i18n %}
+<!doctype html>
+<html lang="en" data-bs-theme="dark">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Trustpoint</title>
+        <script src="{% static 'js/theme.js' %}"></script>
+        <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+        <link rel="stylesheet" href="{% static 'css/bootstrap-icons.min.css' %}">
+        <link rel="stylesheet" href="{% static 'css/trustpoint.css' %}">
+        <link rel="icon" href="{% static 'img/favicon-32.png' %}">
         
-        .tp-menu-head span {
-            vertical-align: middle;
-        }
-    </style>
-    {% block head %}{% endblock head %}
-</head>
+        <style>
+            /* UI Alignment for Discovery Module */
+            .tp-sidenav { width: 280px !important; min-width: 280px !important; }
+            .tp-menu-head i.bi-search {
+                width: 1.25rem;
+                height: 1.25rem;
+                margin-right: 0.5rem;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                vertical-align: middle;
+                font-size: 1rem;
+            }
+            .tp-menu-head span { vertical-align: middle; }
+        </style>
+        
+        {% block head %}{% endblock head %}
+    </head>
 
-<body id="bs-override">
-    <div class="tp-content-wrapper">
-        <header class="tp-page-header navbar border-bottom border-body">
-            <div class="menu-icon">
-                <svg id="menu-icon-menu" class="bi bi-size100" fill="currentColor"><use href="{% static 'img/icons.svg' %}#icon-menu"></use></svg>
-            </div>
-            <a class="navbar-brand tp-primary" href="{% url 'home:dashboard' %}">
-                <img src="{% static 'img/tp-logo-horizontal-white-point.png' %}" alt="Trustpoint" id="tp-logo">
-            </a>
-            <div></div>
-        </header>
-
-        <div class="d-flex">
-            <nav class="tp-sidenav">
-                <!-- Dashboard -->
-                <div class="tp-menu-group">
-                    <a href="{% url 'home:dashboard' %}" class="tp-menu-head {% if page_name == 'dashboard' %}tp-menu-active{% endif %}">
-                        <svg class="bi" fill="currentColor"><use href="{% static 'img/icons.svg' %}#icon-home"></use></svg>
-                        <span>{% translate "Dashboard" %}</span>
-                    </a>
+    <body id="bs-override">
+        <div class="tp-content-wrapper">
+            <header class="tp-page-header navbar border-bottom border-body">
+                <div class="menu-icon">
+                    <svg id="menu-icon-menu" class="bi bi-size100" fill="currentColor" role="img" aria-label="Show Menu">
+                        <use href="{% static 'img/icons.svg' %}#icon-menu"></use></svg>
+                    <svg id="menu-icon-back" class="bi bi-size100 d-none" fill="currentColor" role="img" aria-label="Hide Menu">
+                        <use href="{% static 'img/icons.svg' %}#icon-x"></use></svg>
                 </div>
+                <a class="navbar-brand tp-primary" href="{% url 'home:dashboard' %}">
+                    <img src="{% static 'img/tp-logo-horizontal-512.png' %}" alt="Trustpoint" id="tp-logo" class="light-only">
+                    <img src="{% static 'img/tp-logo-horizontal-white-point.png' %}" alt="Trustpoint" id="tp-logo" class="dark-only">
+                </a>
+                <div><!-- Intentionally empty for flex layout --></div>
+            </header>
 
-                <!-- Network Discovery (PIXEL PERFECT ALIGNMENT) -->
-                <div class="tp-menu-group">
-                    <a href="/discovery/" class="tp-menu-head {% if 'discovery' in request.path %}tp-menu-active{% endif %}">
-                        <i class="bi bi-search"></i>
-                        <span>{% translate "Network Discovery" %}</span>
-                    </a>
-                </div>
-
-                <!-- Devices -->
-                <div class="tp-menu-group">
-                    <a href="{% url 'devices:devices' %}" class="tp-menu-head {% if page_category == 'devices' %}tp-menu-active{% endif %}">
-                        <svg class="bi" fill="currentColor"><use href="{% static 'img/icons.svg' %}#icon-boxes"></use></svg>
-                        <span>{% translate "Devices" %}</span>
-                    </a>
-                </div>
-
-                <!-- PKI -->
-                <div class="tp-menu-group">
-                    <a href="{% url 'pki:certificates' %}" class="tp-menu-head {% if page_category == 'pki' %}tp-menu-active{% endif %}">
-                        <svg class="bi" fill="currentColor"><use href="{% static 'img/icons.svg' %}#icon-key"></use></svg>
-                        <span>{% translate "PKI" %}</span>
-                    </a>
-                </div>
-            </nav>
-
-            <main class="flex-grow-1 bg-dark" style="height: calc(100vh - 60px); overflow-y: auto;">
-                {% if messages %}
-                    <div class="container-fluid pt-3">
-                        {% for message in messages %}
-                            <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert" style="background-color: #198754; color: white; border: none;">
-                                <div class="d-flex align-items-center">
-                                    <i class="bi bi-check-circle-fill me-2"></i>
-                                    <div>{{ message }}</div>
-                                </div>
-                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
-                            </div>
-                        {% endfor %}
+            <div class="d-flex">
+                <nav class="tp-sidenav">
+                    <!-- Dashboard -->
+                    <div class="tp-menu-group">
+                        <a href="{% url 'home:dashboard' %}" class="tp-menu-head {% if page_name == 'dashboard' %}tp-menu-active{% endif %}">
+                            <svg class="bi" fill="currentColor" role="img">
+                                <use href="{% static 'img/icons.svg' %}#icon-home"></use></svg>
+                            {% translate "Dashboard" %}
+                        </a>
                     </div>
-                {% endif %}
-                {% block content %}{% endblock content %}
-            </main>
+
+                    <!-- Network Discovery (Integrated) -->
+                    <div class="tp-menu-group">
+                        <a href="/discovery/" class="tp-menu-head {% if 'discovery' in request.path %}tp-menu-active{% endif %}">
+                            <i class="bi bi-search"></i>
+                            <span>{% translate "Network Discovery" %}</span>
+                        </a>
+                    </div>
+
+                    <!-- Devices -->
+                    <div class="tp-menu-group">
+                        <a href="{% url 'devices:devices' %}" class="tp-menu-head {% if page_category == 'devices' %}tp-menu-active{% endif %}">
+                            <svg class="bi" fill="currentColor" role="img">
+                                <use href="{% static 'img/icons.svg' %}#icon-boxes"></use></svg>
+                            {% translate "Devices" %}
+                            <div class="btn-collapse" data-category="devices"
+                                aria-expanded="{% if page_category == 'devices' %}true{% else %}false{% endif %}">
+                            </div>
+                        </a>
+                        <div class="tp-menu-collapse {% if page_category == 'devices' %}show{% endif %}">
+                            <a href="{% url 'devices:devices' %}" class="tp-menu-item {% if page_name == 'devices' %}tp-menu-active{% endif %}">{% trans 'Devices' %}</a>
+                            <a href="{% url 'devices:opc_ua_gds' %}" class="tp-menu-item {% if page_name == 'opc_ua_gds' %}tp-menu-active{% endif %}">{% trans 'OPC UA GDS' %}</a>
+                        </div>
+                    </div>
+
+                    <!-- PKI -->
+                    <div class="tp-menu-group">
+                        <a href="{% url 'pki:domains' %}" class="tp-menu-head {% if page_category == 'pki' %}tp-menu-active{% endif %}">
+                            <svg class="bi" fill="currentColor" role="img">
+                                <use href="{% static 'img/icons.svg' %}#icon-key"></use></svg>
+                            {% translate "PKI" %}
+                            <div class="btn-collapse" data-category="pki"
+                                aria-expanded="{% if page_category == 'pki' %}true{% else %}false{% endif %}">
+                            </div>
+                        </a>
+                        <div class="tp-menu-collapse {% if page_category == 'pki' %}show{% endif %}">
+                            <a href="{% url 'pki:domains' %}" class="tp-menu-item {% if page_name == 'domains' %}tp-menu-active{% endif %}">{% trans 'Domains' %}</a>
+                            <a href="{% url 'pki:cas' %}" class="tp-menu-item {% if page_name == 'cas' %}tp-menu-active{% endif %}">{% trans 'Certificate Authorities' %}</a>
+                            <a href="{% url 'pki:crls' %}" class="tp-menu-item {% if page_name == 'crls' %}tp-menu-active{% endif %}">{% trans 'CRLs' %}</a>
+                            <a href="{% url 'pki:certificates' %}" class="tp-menu-item {% if page_name == 'certificates' %}tp-menu-active{% endif %}">{% trans 'Certificates' %}</a>
+                            <a href="{% url 'pki:cert_profiles' %}" class="tp-menu-item {% if page_name == 'cert_profiles' %}tp-menu-active{% endif %}">{% trans 'Certificate Profiles' %}</a>
+                            <a href="{% url 'pki:truststores' %}" class="tp-menu-item {% if page_name == 'truststores' %}tp-menu-active{% endif %}">{% trans 'Truststores' %}</a>
+                            <a href="{% url 'pki:owner_credentials' %}" class="tp-menu-item {% if page_name == 'owner_credentials' %}tp-menu-active{% endif %}">{% trans 'DevOwnerIDs' %}</a>
+                        </div>
+                    </div>
+
+                    <!-- Signing -->
+                    <div class="tp-menu-group">
+                        <a href="{% url 'signer:signer_list' %}" class="tp-menu-head {% if page_category == 'signer' %}tp-menu-active{% endif %}">
+                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pen" viewBox="0 0 16 16">
+                             <path d="m13.498.795.149-.149a1.207 1.207 0 1 1 1.707 1.708l-.149.148a1.5 1.5 0 0 1-.059 2.059L4.854 14.854a.5.5 0 0 1-.233.131l-4 1a.5.5 0 0 1-.606-.606l1-4a.5.5 0 0 1 .131-.232l9.642-9.642a.5.5 0 0 0-.642.056L6.854 4.854a.5.5 0 1 1-.708-.708L9.44.854A1.5 1.5 0 0 1 11.5.796a1.5 1.5 0 0 1 1.998-.001m-.644.766a.5.5 0 0 0-.707 0L1.95 11.756l-.764 3.057 3.057-.764L14.44 3.854a.5.5 0 0 0 0-.708z"/>
+                           </svg>
+                           {% translate "Signing" %}
+                        </a>
+                    </div>
+                </nav>
+
+                <main class="flex-grow-1 bg-dark" style="height: calc(100vh - 60px); overflow-y: auto;">
+                    {% if messages %}
+                        <div class="container-fluid pt-3">
+                            {% for message in messages %}
+                                <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert" style="background-color: #198754; color: white; border: none;">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-check-circle-fill me-2"></i>
+                                        <div>{{ message }}</div>
+                                    </div>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    {% block content %}{% endblock content %}
+                </main>
+            </div>
         </div>
-    </div>
-    <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
-    <script src="{% static 'js/trustpoint.js' %}"></script>
-</body>
+        <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+        <script src="{% static 'js/trustpoint.js' %}"></script>
+    </body>
 </html>
