@@ -153,30 +153,7 @@ class EstSimpleEnrollmentView(EstSimpleEnrollmentMixin, View):
         del args
 
         domain_name = cast('str', kwargs.get('domain'))
-        cert_profile = cast('str', kwargs.get('cert_profile'))
-
-        return self.process_enrollment(request, domain_name, cert_profile)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class EstSimpleEnrollmentDefaultView(EstSimpleEnrollmentMixin, View):
-    """Handles simple EST enrollment requests without requiring domain or cert profile in URL."""
-
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle POST requests for simple enrollment with optional domain/cert profile."""
-        del args
-        del kwargs
-
-        domain_name = 'arburg'
-        cert_profile = 'tls_client'
-
-        try:
-             DomainModel.objects.get(unique_name=domain_name)
-        except DomainModel.DoesNotExist:
-            return LoggedHttpResponse(
-                f'Default domain "{domain_name}" does not exist. Please configure it first.',
-                status=404
-            )
+        cert_profile = cast('str', kwargs.get('cert_profile', 'domain_credential'))
 
         return self.process_enrollment(request, domain_name, cert_profile)
 

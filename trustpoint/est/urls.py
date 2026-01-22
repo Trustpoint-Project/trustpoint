@@ -8,7 +8,7 @@ app_name = 'est'
 urlpatterns = [
     re_path(
         r'^simpleenroll/?$',
-        views.EstSimpleEnrollmentDefaultView.as_view(),
+        views.EstSimpleEnrollmentView.as_view(),
         name='simple-enrollment-default'
     ),
     re_path(
