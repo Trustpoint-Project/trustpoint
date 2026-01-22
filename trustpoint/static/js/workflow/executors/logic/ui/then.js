@@ -14,8 +14,11 @@ function stepOptions() {
   }));
 }
 
-export function renderThen(container, thenObj, onUpdateThen, touch) {
+export function renderThen(container, thenObj, onUpdateThen, touch, opts = {}) {
   container.textContent = '';
+
+  const prefix = String(opts.fieldPrefix || '').trim();
+
   const t = ensureObj(thenObj);
 
   const mode =
@@ -23,6 +26,13 @@ export function renderThen(container, thenObj, onUpdateThen, touch) {
       : ('goto' in t) ? 'goto'
         : ('stop' in t) ? 'stop'
           : 'pass';
+
+  const body = document.createElement('div');
+  body.className = 'mt-2';
+
+  const callUpdate = (val, structural = false) => {
+    try { onUpdateThen?.(val, { structural }); } catch { onUpdateThen?.(val); }
+  };
 
   const modeSel = ui.select({
     options: [
@@ -32,20 +42,18 @@ export function renderThen(container, thenObj, onUpdateThen, touch) {
     ],
     value: mode,
     onChange: (v) => {
-      if (v === 'pass') onUpdateThen({ pass: true });
+      if (v === 'pass') callUpdate({ pass: true }, false);
       else if (v === 'goto') {
-        const opts = stepOptions();
-        onUpdateThen({ goto: String(t.goto || opts[0]?.value || 'step-1') });
+        const opts2 = stepOptions();
+        callUpdate({ goto: String(t.goto || opts2[0]?.value || 'step-1') }, false);
       } else if (v === 'stop') {
-        onUpdateThen({ stop: { reason: String((t.stop && t.stop.reason) || '') } });
+        callUpdate({ stop: { reason: String((t.stop && t.stop.reason) || '') } }, false);
       }
       touch?.();
       rebuildBody();
     },
   });
-
-  const body = document.createElement('div');
-  body.className = 'mt-2';
+  if (prefix) modeSel.dataset.wwField = `${prefix}-mode`;
 
   function rebuildBody() {
     body.textContent = '';
@@ -57,15 +65,16 @@ export function renderThen(container, thenObj, onUpdateThen, touch) {
     }
 
     if (m === 'goto') {
-      const opts = stepOptions();
+      const opts2 = stepOptions();
       const gotoSel = ui.select({
-        options: opts.length ? opts : [{ label: 'No steps available', value: '' }],
-        value: String(t.goto || opts[0]?.value || 'step-1'),
+        options: opts2.length ? opts2 : [{ label: 'No steps available', value: '' }],
+        value: String(t.goto || opts2[0]?.value || 'step-1'),
         onChange: (v) => {
-          onUpdateThen({ goto: String(v || '').trim() || 'step-1' });
+          callUpdate({ goto: String(v || '').trim() || 'step-1' }, false);
           touch?.();
         },
       });
+      if (prefix) gotoSel.dataset.wwField = `${prefix}-goto`;
       body.appendChild(ui.labeledNode('Target step', gotoSel));
       return;
     }
@@ -75,10 +84,11 @@ export function renderThen(container, thenObj, onUpdateThen, touch) {
         type: 'text',
         value: String((t.stop && t.stop.reason) || ''),
         onInput: (v) => {
-          onUpdateThen({ stop: { reason: String(v || '') } });
+          callUpdate({ stop: { reason: String(v || '') } }, false);
           touch?.();
         },
       });
+      if (prefix) reasonInp.dataset.wwField = `${prefix}-stop-reason`;
       body.appendChild(ui.labeledNode('Reason (optional)', reasonInp));
     }
   }

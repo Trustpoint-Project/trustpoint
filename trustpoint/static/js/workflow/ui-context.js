@@ -12,19 +12,28 @@ function _key({ handler, protocol, operation }) {
   return `h=${h}::p=${p}::o=${o}`;
 }
 
+/**
+ * Fetch context catalog from backend.
+ * IMPORTANT: send undefined (not "") for protocol/operation if empty,
+ * otherwise backend may treat "" as a real filter and return empty groups.
+ */
 export async function fetchContextCatalog({ handler, protocol, operation }) {
   const h = String(handler || '').trim();
   if (!h) return { groups: [] };
 
-  const key = _key({ handler: h, protocol, operation });
+  const pStr = String(protocol || '').trim();
+  const oStr = String(operation || '').trim();
 
-  // 1) resolved cache
+  // For the API call:
+  const proto = pStr ? pStr : undefined;
+  const oper = oStr ? oStr : undefined;
+
+  const key = _key({ handler: h, protocol: pStr, operation: oStr });
+
   if (_catalogCache.has(key)) return _catalogCache.get(key);
-
-  // 2) in-flight cache
   if (_catalogInFlight.has(key)) return _catalogInFlight.get(key);
 
-  const p = api.wizardContextCatalog({ handler: h, protocol, operation })
+  const prom = api.wizardContextCatalog({ handler: h, protocol: proto, operation: oper })
     .then((data) => {
       const normalized = (data && Array.isArray(data.groups)) ? { groups: data.groups } : { groups: [] };
       _catalogCache.set(key, normalized);
@@ -35,8 +44,8 @@ export async function fetchContextCatalog({ handler, protocol, operation }) {
       _catalogInFlight.delete(key);
     });
 
-  _catalogInFlight.set(key, p);
-  return p;
+  _catalogInFlight.set(key, prom);
+  return prom;
 }
 
 /**
@@ -61,6 +70,7 @@ export function buildStepsGroup({ stepCount, selectedStepNo, selectedStepType })
       { key: 'steps.<step>.outputs.webhook.text',   label: 'webhook.text',   ctxPath: `ctx.steps.${stepKey}.outputs.webhook.text`,   _tpl: 'ctx.steps.<step>.outputs.webhook.text' },
     );
   }
+
   if (String(selectedStepType || '') === 'Email') {
     vars.push(
       { key: 'steps.<step>.outputs.email.recipients', label: 'email.recipients', ctxPath: `ctx.steps.${stepKey}.outputs.email.recipients`, _tpl: 'ctx.steps.<step>.outputs.email.recipients' },

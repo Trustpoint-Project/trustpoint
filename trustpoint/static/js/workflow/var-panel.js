@@ -1,6 +1,6 @@
 // static/js/workflow/var-panel.js
 import { fetchContextCatalog, buildStepsGroup } from './ui-context.js';
-import { insertIntoActive } from './template-fields.js';
+import { insertIntoActive, getActiveTemplatable } from './template-fields.js';
 
 export class VarPanel {
   constructor({ getState }) {
@@ -15,11 +15,19 @@ export class VarPanel {
     this._toastTimer = null;
 
     this._selectedGroupKey = null;
-
     this._selectedStepNo = 1;
 
     this._lastCatalogKey = null;
     this._lastCatalog = { groups: [] };
+
+    // Insert formatting mode:
+    // - "auto" => raw if focused field requests raw, else template
+    // - "template" => always {{ ctx.* }}
+    // - "raw" => always ctx.*
+    this._insertMode = 'auto';
+
+    // Prevent async catalog races from overwriting latest render
+    this._renderToken = 0;
   }
 
   mount() {
@@ -45,7 +53,19 @@ export class VarPanel {
       </div>
 
       <div class="vp-footer small text-muted">
-        Tip: focus a field, then click <strong>Insert</strong>. Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> to toggle.
+        <div class="vp-footer-row">
+          <div>
+            Tip: focus a field, then click <strong>Insert</strong>. Press <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>K</kbd> to toggle.
+          </div>
+          <div class="vp-insertmode" role="group" aria-label="Insert mode">
+            <button type="button" class="btn btn-sm btn-outline-secondary vp-mode" data-mode="auto">Auto</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary vp-mode" data-mode="template">Template</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary vp-mode" data-mode="raw">Raw</button>
+          </div>
+        </div>
+        <div class="vp-footnote">
+          Auto inserts <code>ctx.*</code> for fields marked <code>data-tpl-mode="raw"</code>, otherwise <code>{{ ctx.* }}</code>.
+        </div>
       </div>
     `;
     document.body.appendChild(panel);
@@ -57,6 +77,17 @@ export class VarPanel {
 
     panel.querySelector('.vp-close').onclick = () => this.close();
     this.searchEl.addEventListener('input', () => this._render());
+
+    // Insert mode buttons
+    panel.querySelectorAll('.vp-mode').forEach((btn) => {
+      btn.onclick = () => {
+        const mode = String(btn.dataset.mode || 'auto');
+        this._insertMode = (mode === 'template' || mode === 'raw') ? mode : 'auto';
+        this._syncInsertModeButtons();
+        this._toast(`Insert mode: ${this._insertMode}`);
+      };
+    });
+    this._syncInsertModeButtons();
 
     window.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
@@ -92,8 +123,38 @@ export class VarPanel {
     this.isOpen ? this.close() : this.open();
   }
 
+  _syncInsertModeButtons() {
+    if (!this.root) return;
+    this.root.querySelectorAll('.vp-mode').forEach((btn) => {
+      const m = String(btn.dataset.mode || '');
+      btn.classList.toggle('btn-primary', m === this._insertMode);
+      btn.classList.toggle('btn-outline-secondary', m !== this._insertMode);
+    });
+  }
+
+  _focusedWantsRaw() {
+    const el = getActiveTemplatable();
+    if (!el || !(el instanceof HTMLElement)) return false;
+    return String(el.dataset.tplMode || '').toLowerCase() === 'raw';
+  }
+
+  _formatInsert(ctxPath) {
+    const path = String(ctxPath || '').trim();
+    if (!path) return '';
+
+    const mode = this._insertMode;
+
+    if (mode === 'raw') return path;
+    if (mode === 'template') return `{{ ${path} }}`;
+
+    // auto
+    return this._focusedWantsRaw() ? path : `{{ ${path} }}`;
+  }
+
   async _render() {
     if (!this.treeEl || !this.resultsEl) return;
+
+    const token = ++this._renderToken;
 
     const st = (typeof this.getState === 'function') ? this.getState() : {};
     const handler = String(st?.handler || '').trim();
@@ -106,7 +167,8 @@ export class VarPanel {
     if (stepCount > 0 && this._selectedStepNo > stepCount) this._selectedStepNo = stepCount;
     if (stepCount === 0) this._selectedStepNo = 1;
 
-    const selectedStepType = (Array.isArray(st?.steps) && st.steps[this._selectedStepNo - 1] && st.steps[this._selectedStepNo - 1].type) || '';
+    const selectedStepType =
+      (Array.isArray(st?.steps) && st.steps[this._selectedStepNo - 1] && st.steps[this._selectedStepNo - 1].type) || '';
 
     const catalogKey = `h=${handler}::p=${protocol}::o=${operation}`;
 
@@ -117,11 +179,18 @@ export class VarPanel {
       if (!handler) {
         this._lastCatalog = { groups: [] };
       } else {
-        this._lastCatalog = await fetchContextCatalog({ handler, protocol, operation })
-          .catch(() => ({ groups: [] }));
+        try {
+          const data = await fetchContextCatalog({ handler, protocol, operation });
+          // Guard against in-flight stale completion
+          if (token !== this._renderToken || catalogKey !== this._lastCatalogKey) return;
+          this._lastCatalog = data || { groups: [] };
+        } catch {
+          if (token !== this._renderToken || catalogKey !== this._lastCatalogKey) return;
+          this._lastCatalog = { groups: [] };
+        }
       }
 
-      // Reset group selection on handler change
+      // Reset group selection on catalog key change
       this._selectedGroupKey = null;
     }
 
@@ -131,10 +200,10 @@ export class VarPanel {
     // Always remove backend Steps group; we inject exactly one clean Steps group
     groups = groups.filter(g => String(g.key) !== 'steps' && String(g.label).toLowerCase() !== 'steps');
 
-    // Inject Steps group (single, non-crowded)
+    // Inject Steps group
     groups = this._insertStepsGroup(groups, { stepCount, selectedStepType });
 
-    // De-dupe again (in case backend also had equivalent groups under different keys)
+    // De-dupe again
     groups = this._dedupeGroupsByLabelAndVars(groups);
 
     // Default selection
@@ -169,8 +238,6 @@ export class VarPanel {
   }
 
   _normalizeGroups(groups) {
-    // backend: { name, vars:[{path,label}] }
-    // allow:  { key,label, vars:[{key,label}] }
     return (groups || []).map((g, gi) => {
       const key = String(g.key || g.name || `group_${gi}`);
       const label = String(g.label || g.name || key);
@@ -190,9 +257,6 @@ export class VarPanel {
   }
 
   _dedupeGroupsByLabelAndVars(groups) {
-    // Stronger de-dupe than "by key":
-    // - groups are merged by normalized label
-    // - vars are de-duped by ctxPath
     const normLabel = (s) => String(s || '').trim().toLowerCase();
 
     const map = new Map();
@@ -212,7 +276,6 @@ export class VarPanel {
       }
     }
 
-    // Keep stable order: original order of first occurrence
     const out = [];
     const seenLabels = new Set();
     for (const g of groups) {
@@ -263,7 +326,6 @@ export class VarPanel {
     const q = (this.searchEl?.value || '').trim().toLowerCase();
     const frag = document.createDocumentFragment();
 
-    // Searching = search across all groups
     if (q) {
       const visible = [];
       for (const g of groups) {
@@ -311,7 +373,6 @@ export class VarPanel {
       return;
     }
 
-    // Not searching: only selected group
     const sel = groups.find(x => x.key === this._selectedGroupKey) || groups[0];
 
     if (sel && String(sel.key) === 'steps') {
@@ -358,8 +419,6 @@ export class VarPanel {
 
     sel.onchange = () => {
       this._selectedStepNo = Number(sel.value || '1') || 1;
-
-      // Do NOT refetch catalog; only update injected Steps group
       this._render();
     };
 
@@ -386,13 +445,15 @@ export class VarPanel {
     const [insertBtn, copyBtn] = row.querySelectorAll('.btn');
 
     insertBtn.onclick = () => {
-      const ok = insertIntoActive(`{{ ${v.ctxPath} }}`);
+      const text = this._formatInsert(v.ctxPath);
+      const ok = insertIntoActive(text);
       if (!ok) this._toast('Focus a field first.');
     };
 
     copyBtn.onclick = async () => {
+      const text = this._formatInsert(v.ctxPath);
       try {
-        await navigator.clipboard.writeText(`{{ ${v.ctxPath} }}`);
+        await navigator.clipboard.writeText(text);
         this._toast('Copied!');
       } catch {
         this._toast('Copy failed.');
@@ -515,7 +576,12 @@ export class VarPanel {
       }
       .vp-item-actions{ display:flex; align-items:center; gap:.4rem; flex:0 0 auto; }
       .vp-empty{ padding:.5rem; }
-      .vp-footer{ padding:.4rem .6rem; border-top:1px solid var(--bs-border-color,#333); }
+      .vp-footer{ padding:.45rem .6rem; border-top:1px solid var(--bs-border-color,#333); }
+      .vp-footer-row{
+        display:flex; align-items:center; justify-content:space-between; gap:.5rem; flex-wrap:wrap;
+      }
+      .vp-insertmode{ display:flex; gap:.35rem; }
+      .vp-footnote{ margin-top:.35rem; opacity:.9; }
       .vp-toast{
         position:absolute; bottom:.6rem; left:50%; transform:translateX(-50%);
         background: rgba(0,0,0,.8); color:#fff;

@@ -1,5 +1,6 @@
+// static/js/workflow/template-fields.js
 // Track templatable inputs and provide caret insertion.
-// Now remembers the *last* focused templatable field so Insert works
+// Remembers the *last* focused templatable field so Insert works
 // even if the side panel steals focus.
 
 let activeEl = null;           // currently focused templatable
@@ -42,10 +43,10 @@ export function registerTemplatableFields(root) {
   nodes.forEach(n => markTemplatable(n));
 }
 
-/** Prefer the active templatable; fall back to the last one. */
+/** Prefer the active templatable; fall back to the last one. Ignore detached nodes. */
 export function getActiveTemplatable() {
-  if (activeEl && tracked.has(activeEl)) return activeEl;
-  if (lastTemplatableEl && tracked.has(lastTemplatableEl)) return lastTemplatableEl;
+  if (activeEl && tracked.has(activeEl) && activeEl.isConnected) return activeEl;
+  if (lastTemplatableEl && tracked.has(lastTemplatableEl) && lastTemplatableEl.isConnected) return lastTemplatableEl;
   return null;
 }
 
@@ -53,6 +54,8 @@ export function getActiveTemplatable() {
 export function insertIntoActive(text) {
   const el = getActiveTemplatable();
   if (!el) return false;
+
+  const winY = window.scrollY;
 
   const start = el.selectionStart ?? el.value.length;
   const end   = el.selectionEnd ?? el.value.length;
@@ -63,6 +66,10 @@ export function insertIntoActive(text) {
   const pos = before.length + text.length;
   try { el.setSelectionRange(pos, pos); } catch {}
   el.dispatchEvent(new Event('input', { bubbles: true }));
-  el.focus(); // return focus to the field
+
+  // return focus without scrolling/jumping
+  try { el.focus({ preventScroll: true }); } catch { try { el.focus(); } catch {} }
+  try { window.scrollTo(0, winY); } catch {}
+
   return true;
 }

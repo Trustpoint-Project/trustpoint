@@ -21,6 +21,56 @@ function syncBackendFromParams(step, updateStepParam) {
   updateStepParam(step.id, 'default', defaultToBackend(p.default));
 }
 
+// Per-container token so multiple Logic steps do not cancel each other.
+const _tokenByContainer = new WeakMap();
+function nextToken(container) {
+  const cur = _tokenByContainer.get(container) || 0;
+  const next = cur + 1;
+  _tokenByContainer.set(container, next);
+  return next;
+}
+function isCurrent(container, token) {
+  return (_tokenByContainer.get(container) || 0) === token;
+}
+
+/**
+ * Prevent scroll jumps caused by re-rendering a Logic block above the active field.
+ * Keeps the currently focused element at the same viewport Y position.
+ */
+function preserveActiveViewportPosition(domWriteFn) {
+  const active = (document.activeElement instanceof HTMLElement) ? document.activeElement : null;
+  const hadActive = !!(active && document.contains(active));
+
+  const beforeTop = hadActive ? active.getBoundingClientRect().top : null;
+
+  // Optional selection snapshot (safe for inputs/textarea only).
+  let sel = null;
+  if (hadActive && (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement)) {
+    try { sel = { start: active.selectionStart, end: active.selectionEnd }; } catch { sel = null; }
+  }
+
+  domWriteFn();
+
+  // Restore on next frame after layout settles.
+  requestAnimationFrame(() => {
+    if (!hadActive) return;
+    if (!active || !document.contains(active)) return;
+
+    const afterTop = active.getBoundingClientRect().top;
+    const delta = afterTop - beforeTop;
+
+    if (delta) {
+      try { window.scrollBy(0, delta); } catch {}
+    }
+
+    // Re-affirm focus without scrolling (some browsers may blur during heavy DOM ops).
+    try { active.focus({ preventScroll: true }); } catch { try { active.focus(); } catch {} }
+    if (sel && (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement)) {
+      try { active.setSelectionRange(sel.start ?? 0, sel.end ?? 0); } catch {}
+    }
+  });
+}
+
 register('Logic', {
   getDefaultParams() {
     return {
@@ -30,24 +80,20 @@ register('Logic', {
     };
   },
 
-  async renderParams(container, step, { updateStepParam, onChange }) {
+  renderParams(container, step, { updateStepParam, onChange }) {
     injectStylesOnce();
 
-    // Ensure minimums once, without looping:
+    // Ensure minimum structure once.
     const p = ensureLogicDefaults(ensureObj(step.params));
     const ensured = ensureMinRulesAndConds(p._ui_rules);
 
     if (ensured !== p._ui_rules) {
       updateStepParam(step.id, '_ui_rules', ensured);
-      // Sync backend ONCE here, but do not trigger any full UI rebuild.
       syncBackendFromParams(step, updateStepParam);
       onChange?.();
     }
 
-    // Cache catalog separately (your catalog.js should already do this)
-    const catalogItems = await getCatalogItems();
-
-    // Soft touch: preview/validation only; MUST NOT rebuild the Logic DOM.
+    // Soft touch only (no UI rebuild).
     let softScheduled = false;
     const touch = () => {
       if (softScheduled) return;
@@ -58,21 +104,41 @@ register('Logic', {
       });
     };
 
-    // Hard render: rebuild the Logic DOM, but ONLY when structure changes.
+    const token = nextToken(container);
+
+    // Local catalog state for this container.
+    let lastCatalogItems = [];
+
     const hardRender = async () => {
-      container.textContent = '';
-      renderLogicParamsUI(container, {
-        step,
-        params: ensureLogicDefaults(ensureObj(step.params)),
-        catalogItems,
-        updateStepParam,
-        touch,
-        hardRender,
-        syncBackend: () => syncBackendFromParams(step, updateStepParam),
+      if (!container.isConnected) return;
+      if (!isCurrent(container, token)) return;
+
+      preserveActiveViewportPosition(() => {
+        container.textContent = '';
+        renderLogicParamsUI(container, {
+          step,
+          params: ensureLogicDefaults(ensureObj(step.params)),
+          catalogItems: lastCatalogItems,
+          updateStepParam,
+          touch,
+          hardRender,
+          syncBackend: () => syncBackendFromParams(step, updateStepParam),
+        });
       });
     };
 
-    await hardRender();
+    // First render immediately (no catalog yet).
+    hardRender();
+
+    // Load catalog async, then rerender deterministically if still current.
+    (async () => {
+      const items = await getCatalogItems().catch(() => []);
+      if (!container.isConnected) return;
+      if (!isCurrent(container, token)) return;
+
+      lastCatalogItems = Array.isArray(items) ? items : [];
+      await hardRender();
+    })();
   },
 
   validate(params) {

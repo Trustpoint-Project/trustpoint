@@ -7,6 +7,16 @@ export function injectStylesOnce() {
 
   const style = document.createElement('style');
   style.textContent = `
+    /* Prevent browser scroll anchoring from "jumping" when Logic async renders */
+    .ww-step-card.logic-step,
+    .ww-step-card.logic-step * ,
+    .lg-wrap,
+    .lg-wrap * ,
+    .lg-card,
+    .lg-card * {
+      overflow-anchor: none;
+    }
+
     .lg-wrap { display:flex; flex-direction:column; gap:1rem; }
     .lg-topline { display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap; }
 

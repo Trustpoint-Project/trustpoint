@@ -10,16 +10,40 @@ function help(text) {
   return p;
 }
 
+function _slug(s) {
+  return String(s || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9\-_]/g, '');
+}
+
+function _tagField(node, label) {
+  if (!node || !(node instanceof HTMLElement)) return;
+
+  const key = _slug(label);
+  if (!key) return;
+
+  // If the passed node is itself a control, tag it.
+  if (node.matches('input, select, textarea')) {
+    node.dataset.wwField = key;
+    return;
+  }
+
+  // Otherwise tag the first control inside.
+  const ctrl = node.querySelector('input, select, textarea');
+  if (ctrl && ctrl instanceof HTMLElement) ctrl.dataset.wwField = key;
+}
+
 /** Register an executor by type. */
 export function register(type, impl) {
   if (!type || typeof type !== 'string') throw new Error('executor type required');
   if (!impl || typeof impl.renderParams !== 'function') {
     throw new Error(`executor "${type}" must provide renderParams(container, step, ctx)`);
   }
-  // normalize optional helpers
   const norm = {
     getDefaultParams: () => ({}),
-    hints: () => [], // per-type variable hints (relative to ctx.steps.step_X)
+    hints: () => [],
     validate: () => [],
     ...impl,
   };
@@ -42,9 +66,7 @@ export function getHintsForStep(step) {
   if (!exec) return [];
   try {
     const rel = exec.hints?.(step) ?? [];
-    // Always add the common, executor-agnostic fields at the top:
     const common = ['status', 'error', 'outputs'];
-    // Merge (dedupe, preserve order: common first, then type-specific)
     const seen = new Set();
     const out = [];
     [...common, ...rel].forEach((k) => {
@@ -64,11 +86,17 @@ export function getHintsForStep(step) {
 function labeledNode(label, node) {
   const wrap = document.createElement('div');
   wrap.className = 'mb-2';
+
   const lbl = document.createElement('label');
   lbl.className = 'form-label small d-block mb-1';
   lbl.textContent = String(label || '');
+
   wrap.appendChild(lbl);
   wrap.appendChild(node);
+
+  // NEW: tag the control (or first control inside) with a stable field key.
+  _tagField(node, label);
+
   return wrap;
 }
 

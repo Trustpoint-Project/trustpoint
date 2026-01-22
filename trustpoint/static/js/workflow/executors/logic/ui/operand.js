@@ -29,8 +29,10 @@ function convertConstValue(fromValue, toType) {
  * - onInput => SOFT update only (no structural re-render)
  * - kind/type changes => structural re-render (caller hardRender)
  */
-export function renderOperand(container, operand, onUpdate, catalogItems) {
+export function renderOperand(container, operand, onUpdate, catalogItems, opts = {}) {
   container.textContent = '';
+
+  const prefix = String(opts.fieldPrefix || '').trim();
 
   const kindSel = ui.select({
     options: [
@@ -43,6 +45,7 @@ export function renderOperand(container, operand, onUpdate, catalogItems) {
       else await onUpdate('', { structural: true });
     },
   });
+  if (prefix) kindSel.dataset.wwField = `${prefix}-kind`;
 
   const body = document.createElement('div');
   body.className = 'mt-2';
@@ -63,11 +66,15 @@ export function renderOperand(container, operand, onUpdate, catalogItems) {
           await onUpdate({ path: String(v || '').trim() }, { structural: false });
         },
       });
+      // raw insertion for Logic operand paths
+      inp.dataset.tplMode = 'raw';
+      if (prefix) inp.dataset.wwField = `${prefix}-path-input`;
       markTemplatable(inp);
       body.appendChild(ui.labeledNode('Path', inp));
     } else {
       const sel = document.createElement('select');
       sel.className = 'form-select form-select-sm';
+      if (prefix) sel.dataset.wwField = `${prefix}-path-select`;
 
       const groups = new Map();
       selectable.forEach((it) => {
@@ -113,8 +120,8 @@ export function renderOperand(container, operand, onUpdate, catalogItems) {
         const nextVal = convertConstValue(operand, t);
         await onUpdate(nextVal, { structural: true });
       },
-   
     });
+    if (prefix) typeSel.dataset.wwField = `${prefix}-const-type`;
 
     const valInp = ui.input({
       type: 'text',
@@ -127,6 +134,7 @@ export function renderOperand(container, operand, onUpdate, catalogItems) {
         await onUpdate(String(v ?? ''), { structural: false });
       },
     });
+    if (prefix) valInp.dataset.wwField = `${prefix}-const-value`;
     markTemplatable(valInp);
 
     const line = document.createElement('div');

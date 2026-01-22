@@ -17,6 +17,7 @@ export function renderRuleCard(container, { idx, rule, rulesCount, catalogItems,
 
   const card = document.createElement('div');
   card.className = 'lg-card';
+  card.dataset.wwField = `logic-rule-${idx}`;
 
   const head = document.createElement('div');
   head.className = 'lg-rule-head';
@@ -41,6 +42,7 @@ export function renderRuleCard(container, { idx, rule, rulesCount, catalogItems,
   rm.type = 'button';
   rm.className = 'btn btn-outline-danger btn-sm';
   rm.textContent = 'Remove rule';
+  rm.dataset.wwField = `logic-rule-${idx}-remove`;
   rm.disabled = rulesCount <= 1;
   rm.style.display = rulesCount <= 1 ? 'none' : '';
   rm.onclick = removeRule;
@@ -61,10 +63,12 @@ export function renderRuleCard(container, { idx, rule, rulesCount, catalogItems,
       await updateRule({ ...r, ui: { ...uiCond, mode: v, predicates } }, { structural: true });
     },
   });
+  modeSel.dataset.wwField = `logic-rule-${idx}-mode`;
 
   card.appendChild(ui.labeledNode('Match when', modeSel));
 
   renderConditions(card, {
+    idx,
     rule: r,
     mode: modeSel.value,
     predicates,
@@ -76,6 +80,7 @@ export function renderRuleCard(container, { idx, rule, rulesCount, catalogItems,
   addPred.type = 'button';
   addPred.className = 'btn btn-outline-secondary btn-sm';
   addPred.textContent = 'Add condition';
+  addPred.dataset.wwField = `logic-rule-${idx}-add-cond`;
   addPred.onclick = async () => {
     const nextPreds = [...predicates, newPredicate()];
     await updateRule({ ...r, ui: { ...uiCond, mode: modeSel.value, predicates: nextPreds } }, { structural: true });
@@ -85,19 +90,33 @@ export function renderRuleCard(container, { idx, rule, rulesCount, catalogItems,
   card.appendChild(document.createElement('hr')).className = 'lg-divider';
 
   const assignHost = document.createElement('div');
-  renderAssignments(assignHost, ensureObj(r.assign), async (m, { structural = false } = {}) => {
-    await updateRule({ ...r, assign: m }, { structural });
-  }, touch);
+  assignHost.dataset.wwField = `logic-rule-${idx}-assignments`;
+  renderAssignments(
+    assignHost,
+    ensureObj(r.assign),
+    async (m, { structural = false } = {}) => {
+      await updateRule({ ...r, assign: m }, { structural });
+    },
+    touch,
+    { fieldPrefix: `logic-rule-${idx}-assignments` },
+  );
   card.appendChild(assignHost);
 
   card.appendChild(document.createElement('hr')).className = 'lg-divider';
 
   const thenWrap = document.createElement('div');
   thenWrap.className = 'lg-card';
+  thenWrap.dataset.wwField = `logic-rule-${idx}-then`;
   thenWrap.appendChild(ui.help('Outcome if this rule matches.'));
-  renderThen(thenWrap, ensureObj(r.then), async (t, { structural = false } = {}) => {
-    await updateRule({ ...r, then: t }, { structural });
-  }, touch);
+  renderThen(
+    thenWrap,
+    ensureObj(r.then),
+    async (t, { structural = false } = {}) => {
+      await updateRule({ ...r, then: t }, { structural });
+    },
+    touch,
+    { fieldPrefix: `logic-rule-${idx}-then` },
+  );
   card.appendChild(thenWrap);
 
   container.appendChild(card);

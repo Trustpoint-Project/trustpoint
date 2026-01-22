@@ -5,12 +5,13 @@ import { renderOperand } from './operand.js';
 
 function ensureObj(v) { return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
 
-export function renderConditions(card, { rule, mode, predicates, catalogItems, updateRule }) {
+export function renderConditions(card, { idx, rule, mode, predicates, catalogItems, updateRule }) {
   const r = ensureObj(rule);
   const uiCond = ensureObj(r.ui);
 
   const conds = document.createElement('div');
   conds.className = 'lg-conds';
+  conds.dataset.wwField = `logic-rule-${idx}-conds`;
 
   const joinWord = mode === 'any' ? 'OR' : 'AND';
 
@@ -26,16 +27,24 @@ export function renderConditions(card, { rule, mode, predicates, catalogItems, u
 
     const cond = document.createElement('div');
     cond.className = 'lg-cond';
+    cond.dataset.wwField = `logic-rule-${idx}-pred-${pidx}`;
 
     const grid = document.createElement('div');
     grid.className = 'lg-cond-grid';
 
     const leftBox = document.createElement('div');
-    renderOperand(leftBox, p.left ?? { path: 'ctx.vars.' }, async (v, { structural = false } = {}) => {
-      const nextPreds = predicates.slice();
-      nextPreds[pidx] = { ...p, left: v };
-      await updateRule({ ...r, ui: { ...uiCond, mode, predicates: nextPreds } }, { structural });
-    }, catalogItems);
+    leftBox.dataset.wwField = `logic-rule-${idx}-pred-${pidx}-left`;
+    renderOperand(
+      leftBox,
+      p.left ?? { path: 'ctx.vars.' },
+      async (v, { structural = false } = {}) => {
+        const nextPreds = predicates.slice();
+        nextPreds[pidx] = { ...p, left: v };
+        await updateRule({ ...r, ui: { ...uiCond, mode, predicates: nextPreds } }, { structural });
+      },
+      catalogItems,
+      { fieldPrefix: `logic-rule-${idx}-pred-${pidx}-left` },
+    );
 
     const opSel = ui.select({
       options: [
@@ -57,23 +66,30 @@ export function renderConditions(card, { rule, mode, predicates, catalogItems, u
         }
 
         nextPreds[pidx] = next;
-        // structural because right side field may appear/disappear
         await updateRule({ ...r, ui: { ...uiCond, mode, predicates: nextPreds } }, { structural: true });
       },
     });
+    opSel.dataset.wwField = `logic-rule-${idx}-pred-${pidx}-op`;
 
     const opBox = document.createElement('div');
     opBox.appendChild(ui.labeledNode('Operator', opSel));
 
     const needsRight = ['eq', 'ne'].includes(String(p.op || 'eq'));
     const rightBox = document.createElement('div');
+    rightBox.dataset.wwField = `logic-rule-${idx}-pred-${pidx}-right`;
 
     if (needsRight) {
-      renderOperand(rightBox, p.right, async (v, { structural = false } = {}) => {
-        const nextPreds = predicates.slice();
-        nextPreds[pidx] = { ...p, right: v };
-        await updateRule({ ...r, ui: { ...uiCond, mode, predicates: nextPreds } }, { structural });
-      }, catalogItems);
+      renderOperand(
+        rightBox,
+        p.right,
+        async (v, { structural = false } = {}) => {
+          const nextPreds = predicates.slice();
+          nextPreds[pidx] = { ...p, right: v };
+          await updateRule({ ...r, ui: { ...uiCond, mode, predicates: nextPreds } }, { structural });
+        },
+        catalogItems,
+        { fieldPrefix: `logic-rule-${idx}-pred-${pidx}-right` },
+      );
     } else {
       rightBox.appendChild(ui.help(''));
     }
@@ -93,6 +109,7 @@ export function renderConditions(card, { rule, mode, predicates, catalogItems, u
     rmPred.type = 'button';
     rmPred.className = 'btn btn-outline-danger btn-sm';
     rmPred.textContent = 'Remove condition';
+    rmPred.dataset.wwField = `logic-rule-${idx}-pred-${pidx}-remove`;
     rmPred.disabled = predicates.length <= 1;
     rmPred.style.display = predicates.length <= 1 ? 'none' : '';
     rmPred.onclick = async () => {
