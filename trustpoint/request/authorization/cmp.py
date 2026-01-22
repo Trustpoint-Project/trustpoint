@@ -100,8 +100,8 @@ class CmpAuthorization(CompositeAuthorization):
         if allowed_operations is None:
             allowed_operations = ['certification', 'initialization']
 
-        self.add(CertificateProfileAuthorization())
         self.add(DomainScopeValidation())
+        self.add(CertificateProfileAuthorization())
         self.add(DevOwnerIDAuthorization())
         self.add(ProtocolAuthorization(['cmp']))
         self.add(CmpOperationAuthorization(allowed_operations))

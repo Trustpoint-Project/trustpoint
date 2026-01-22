@@ -10,6 +10,7 @@ from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 
+from cmp.util import PKIFailureInfo
 from devices.models import (
     DeviceModel,
     NoOnboardingConfigModel,
@@ -142,6 +143,8 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
         self.logger.info(
             'Successfully authenticated device %s (ID: %s) via CMP shared secret', device.common_name, sender_kid)
         context.device = device
+        if not context.domain:
+            context.domain = device.domain
 
     def _handle_authentication_error(self, error: Exception) -> None:
         """Handle known authentication errors."""
@@ -602,7 +605,8 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
         if not device.domain:
             self._raise_value_error('Device is not part of any domain.')
 
-        device.domain.get_issuing_ca_or_value_error() #.credential # ???
+        if not context.domain:
+            context.domain = device.domain
 
         self.logger.info(
             'Successfully authenticated device via CMP signature-based certification',
