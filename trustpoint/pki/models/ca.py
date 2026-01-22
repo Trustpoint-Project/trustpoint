@@ -15,6 +15,7 @@ from trustpoint_core import oid
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.crl import CrlModel
+from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
 from util.field import UniqueNameValidator
@@ -119,6 +120,16 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         blank=True,
         verbose_name=_('Credential'),
         help_text=_('The CA credential with private key (for issuing CAs)')
+    )
+
+    chain_truststore = models.OneToOneField(
+        'pki.TruststoreModel',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='issuing_ca',
+        verbose_name=_('Chain Truststore'),
+        help_text=_('The truststore containing the full certificate chain for this CA.')
     )
 
     class Meta:
@@ -399,6 +410,22 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             parent_ca=parent_ca,
         )
         issuing_ca.save()
+
+        chain = issuing_ca.get_hierarchy_path()
+        cert_models = [ca.ca_certificate_model for ca in chain]
+        truststore = TruststoreModel.objects.create(
+            unique_name=f'{unique_name}_chain',
+            intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN,
+        )
+        for idx, cert in enumerate(cert_models):
+            TruststoreOrderModel.objects.create(
+                order=idx,
+                certificate=cert,
+                trust_store=truststore
+            )
+        issuing_ca.chain_truststore = truststore
+        issuing_ca.save(update_fields=['chain_truststore'])
+
         return issuing_ca
 
     def _issue_crl(self, crl_validity_hours: int = 24) -> None:
