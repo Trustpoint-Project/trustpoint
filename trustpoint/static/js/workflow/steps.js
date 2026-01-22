@@ -4,7 +4,7 @@ import {
 } from './state.js';
 import { getTypes, get as getExecutor } from './executors/index.js';
 
-// Side-effect imports (register executors)
+// Side-effect imports (register executors) — REQUIRED
 import './executors/approval.js';
 import './executors/email.js';
 import './executors/webhook.js';
@@ -46,8 +46,7 @@ function injectStylesOnce() {
       margin:.25rem 0 .5rem;
     }
 
-    /* CRITICAL: disable browser scroll anchoring inside steps.
-       Prevents viewport jumps when cards above change height. */
+    /* Disable browser scroll anchoring inside steps. */
     #steps-list, .ww-step-card, .ww-step-card * {
       overflow-anchor: none;
     }
@@ -103,17 +102,14 @@ function setStepParamsToDefaults(stepId, type) {
   // Remove existing keys
   Object.keys(s.params).forEach((k) => { delete s.params[k]; });
 
-  // Apply defaults (via your state helper to keep behavior consistent)
+  // Apply defaults
   Object.entries(defaults).forEach(([k, v]) => updateStepParam(stepId, k, v));
 }
 // ------------------------
 
-// ---------- INCREMENTAL RENDERING (fixes jumping) ----------
+// ---------- INCREMENTAL RENDERING ----------
 const _stepCardMap = new Map(); // stepId -> HTMLElement
-
-function _clearStepDomCache() {
-  _stepCardMap.clear();
-}
+function _clearStepDomCache() { _stepCardMap.clear(); }
 // ---------------------------------------------------------
 
 export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
@@ -131,15 +127,13 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
     addBtnEl.title = '';
   }
 
-  // If the container was replaced (navigation / template), reset cache.
-  // Also reset cache if container is empty but we think we have cards.
+  // If container was replaced, reset cache.
   if (!_stepCardMap.size && containerEl.children.length === 0) {
     // ok
   } else if (_stepCardMap.size && containerEl.children.length === 0) {
     _clearStepDomCache();
   }
 
-  // --- Incremental mount/update ---
   const seen = new Set();
 
   state.steps.forEach((step, idx) => {
@@ -148,9 +142,14 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
 
     const existing = _stepCardMap.get(step.id);
     if (existing && existing.isConnected) {
-      // Update display index + title without rebuilding
       const title = existing.querySelector('[data-ww-role="step-title"]');
       if (title) title.textContent = `Step ${idx + 1} • ${step.type}`;
+
+      // Keep select value synced, but do not disrupt if focused
+      const sel = existing.querySelector('select[data-ww-field="step-type"]');
+      if (sel instanceof HTMLSelectElement && document.activeElement !== sel) {
+        sel.value = step.type;
+      }
       return;
     }
 
@@ -167,7 +166,7 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
     }
   }
 
-  // Add step (append only, no full rebuild)
+  // Add step
   addBtnEl.onclick = () => {
     const { allowedTypes: allowedNow } = computeAllowedTypes();
     const firstAllowed = allowedNow[0];
@@ -175,7 +174,6 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
 
     addStep(firstAllowed, getDefaultParamsForType(firstAllowed));
 
-    // The new step is the last one in state.steps
     const step = state.steps[state.steps.length - 1];
     if (!step) return;
 
@@ -184,7 +182,7 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
     containerEl.appendChild(card);
 
     onChange?.();
-    enableDnD(containerEl, onChange); // re-bind DnD handlers for new card
+    enableDnD(containerEl, onChange);
   };
 
   enableDnD(containerEl, onChange);
@@ -286,7 +284,7 @@ function stepCard(step, displayIndex, ctx) {
 
   const paramsDiv = document.createElement('div');
 
-  // Replace only THIS card on type change (no global rerender -> no jumping)
+  // Replace only THIS card on type change
   sel.onchange = () => {
     if (!allowedSet.has(sel.value)) {
       sel.value = step.type;
@@ -310,7 +308,7 @@ function stepCard(step, displayIndex, ctx) {
     }
     _stepCardMap.set(step.id, newCard);
 
-    // Re-label titles (in case ordering changed elsewhere)
+    // Re-label titles
     state.steps.forEach((s, i) => {
       const node = _stepCardMap.get(s.id);
       const t = node?.querySelector?.('[data-ww-role="step-title"]');
@@ -353,7 +351,6 @@ function enableDnD(containerEl, onChange) {
   let dragId = null;
   let dragCard = null;
 
-  // Bind handles
   containerEl.querySelectorAll('.ww-drag-handle[draggable="true"]').forEach((handle) => {
     handle.ondragstart = (e) => {
       const card = handle.closest('.ww-step-card');
@@ -406,7 +403,6 @@ function enableDnD(containerEl, onChange) {
       moveStep(dragId, toIndex > fromIndex ? toIndex - 1 : toIndex);
 
       // Reorder DOM to match state without rebuilding
-      // (detach + append in state order)
       const frag = document.createDocumentFragment();
       state.steps.forEach((s, idx) => {
         const node = _stepCardMap.get(s.id);
@@ -418,7 +414,6 @@ function enableDnD(containerEl, onChange) {
         frag.appendChild(node);
       });
 
-      // Append fragment (moves existing nodes; does not recreate)
       containerEl.appendChild(frag);
 
       onChange?.();

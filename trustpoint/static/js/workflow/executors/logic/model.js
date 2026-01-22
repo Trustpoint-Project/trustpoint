@@ -35,11 +35,48 @@ function buildWhenExpr(mode, predicates) {
   return (String(mode) === 'any') ? { op: 'or', args: preds } : { op: 'and', args: preds };
 }
 
+/**
+ * Parse JSON-like strings only at backend conversion time.
+ * - Keeps templates like "{{ ctx.* }}" as raw strings.
+ * - Leaves non-strings untouched.
+ * - Falls back to the original string if parsing fails.
+ */
+function parseMaybeJSON(v) {
+  if (typeof v !== 'string') return v;
+
+  const s = v.trim();
+
+  // Preserve template strings verbatim.
+  if (s.includes('{{') || s.includes('}}')) return v;
+
+  // Only attempt parse for plausible JSON tokens.
+  const c = s[0];
+  const looksJson =
+    c === '{' || c === '[' || c === '"' || c === '-' ||
+    (c >= '0' && c <= '9') ||
+    s === 'true' || s === 'false' || s === 'null';
+
+  if (!looksJson) return v;
+
+  try { return JSON.parse(s); } catch { return v; }
+}
+
+function normalizeAssignForBackend(assign) {
+  const a = ensureObj(assign);
+  const out = {};
+  for (const [k, v] of Object.entries(a)) {
+    out[k] = parseMaybeJSON(v);
+  }
+  return out;
+}
+
 export function ruleToBackend(rule) {
   const r = ensureObj(rule);
   const uiPart = ensureObj(r.ui);
   const when = buildWhenExpr(uiPart.mode, ensureArray(uiPart.predicates));
-  const assign = ensureObj(r.assign);
+
+  const assignUi = ensureObj(r.assign);
+  const assign = normalizeAssignForBackend(assignUi);
 
   const actions = [];
   if (Object.keys(assign).length) actions.push({ type: 'set', assign });
@@ -56,9 +93,11 @@ export function defaultToBackend(def) {
 
   // Extract assign from first set-action if present, otherwise {}
   const a0 = ensureArray(d.actions)[0];
-  const assign = (a0 && typeof a0 === 'object' && String(a0.type).toLowerCase() === 'set')
+  const assignUi = (a0 && typeof a0 === 'object' && String(a0.type).toLowerCase() === 'set')
     ? ensureObj(a0.assign)
     : {};
+
+  const assign = normalizeAssignForBackend(assignUi);
 
   return {
     actions: [{ type: 'set', assign }],

@@ -15,18 +15,30 @@ export function renderRules(container, { step, rules, catalogItems, updateStepPa
   // Render snapshot only
   const snapshot = ensureArray(rules);
 
-  // Live getters to prevent stale overwrites
   const getLiveRules = () => ensureArray(ensureObj(step.params)._ui_rules);
+  const getLiveRuleAt = (idx) => ensureObj(getLiveRules()[idx]);
 
   snapshot.forEach((rule, idx) => {
     const cardHost = document.createElement('div');
     cardHost.dataset.wwField = `logic-rule-host-${idx}`;
 
-    const updateRule = async (nextRule, { structural = false } = {}) => {
-      // Always base on LIVE rules, not on the render snapshot
+    /**
+     * Callers provide patch objects: { ui }, { assign }, { then }.
+     * We always merge into the live rule at idx to avoid stale overwrites.
+     */
+    const updateRule = async (patch, { structural = false } = {}) => {
       const live = getLiveRules();
+      const base = ensureObj(live[idx]);
       const next = live.slice();
-      next[idx] = nextRule;
+
+      const p = ensureObj(patch);
+
+      const merged = { ...base, ...p };
+      if ('ui' in p) merged.ui = ensureObj(p.ui);
+      if ('assign' in p) merged.assign = ensureObj(p.assign);
+      if ('then' in p) merged.then = ensureObj(p.then);
+
+      next[idx] = merged;
 
       const ensured = ensureMinRulesAndConds(next);
       updateStepParam(step.id, '_ui_rules', ensured);
@@ -52,9 +64,10 @@ export function renderRules(container, { step, rules, catalogItems, updateStepPa
 
     renderRuleCard(cardHost, {
       idx,
-      rule,
+      rule, // snapshot for display
       rulesCount: snapshot.length,
       catalogItems,
+      getLiveRule: () => getLiveRuleAt(idx),
       updateRule,
       removeRule,
       touch,

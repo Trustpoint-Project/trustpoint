@@ -16,9 +16,11 @@ function nextFreeKey(assign) {
 
 export function renderAssignments(container, assignObj, onUpdateAssign, touch, opts = {}) {
   container.textContent = '';
-  const assign = ensureObj(assignObj);
 
   const prefix = String(opts.fieldPrefix || '').trim();
+  const getLiveAssign = (typeof opts.getLiveAssign === 'function')
+    ? opts.getLiveAssign
+    : () => ensureObj(assignObj);
 
   const callUpdate = (next, structural = false) => {
     try { onUpdateAssign?.(next, { structural }); } catch { onUpdateAssign?.(next); }
@@ -30,7 +32,9 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
 
   wrap.appendChild(ui.help('Assignments write to ctx.vars. Values may be JSON or {{ ctx.* }} templates.'));
 
-  const entries = Object.entries(assign);
+  // Snapshot for display only
+  const snapAssign = ensureObj(assignObj);
+  const entries = Object.entries(snapAssign);
   if (!entries.length) wrap.appendChild(ui.help('No assignments yet.'));
 
   entries.forEach(([k, v], idx) => {
@@ -43,10 +47,13 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
       value: k,
       onInput: (newKey) => {
         const nk = String(newKey || '').trim();
-        const next = { ...assign };
+        const live = ensureObj(getLiveAssign());
+        const next = { ...live };
+
         const oldVal = next[k];
         delete next[k];
         if (nk) next[nk] = oldVal;
+
         callUpdate(next, false);
         touch?.();
       },
@@ -55,11 +62,10 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
 
     const valInp = ui.input({
       type: 'text',
-      value: JSON.stringify(v ?? null),
+      value: (v == null) ? '' : String(v),
       onInput: (raw) => {
-        let parsed;
-        try { parsed = JSON.parse(raw); } catch { parsed = raw; }
-        const next = { ...assign, [k]: parsed };
+        const live = ensureObj(getLiveAssign());
+        const next = { ...live, [k]: String(raw ?? '') };
         callUpdate(next, false);
         touch?.();
       },
@@ -73,11 +79,11 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
     rm.textContent = '✕';
     if (prefix) rm.dataset.wwField = `${prefix}-remove-${idx}`;
     rm.onclick = () => {
-      const next = { ...assign };
+      const live = ensureObj(getLiveAssign());
+      const next = { ...live };
       delete next[k];
       callUpdate(next, true);
       touch?.();
-      // keep this block correct even if outer chooses not to hardRender
       renderAssignments(container, next, onUpdateAssign, touch, opts);
     };
 
@@ -93,9 +99,10 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
   addBtn.textContent = 'Add assignment';
   if (prefix) addBtn.dataset.wwField = `${prefix}-add`;
   addBtn.onclick = () => {
-    const next = { ...assign };
+    const live = ensureObj(getLiveAssign());
+    const next = { ...live };
     const k = nextFreeKey(next);
-    next[k] = 'value';
+    next[k] = '';
     callUpdate(next, true);
     touch?.();
     renderAssignments(container, next, onUpdateAssign, touch, opts);

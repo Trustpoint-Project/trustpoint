@@ -4,10 +4,12 @@ import { newPredicate } from '../model.js';
 import { renderOperand } from './operand.js';
 
 function ensureObj(v) { return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
+function ensureArray(v) { return Array.isArray(v) ? v : []; }
 
-export function renderConditions(card, { idx, rule, mode, predicates, catalogItems, updateRule }) {
-  const r = ensureObj(rule);
-  const uiCond = ensureObj(r.ui);
+export function renderConditions(card, { idx, rule, mode, predicates, catalogItems, getLiveRule, updateRule }) {
+  const snapRule = ensureObj(rule);
+  const snapUI = ensureObj(snapRule.ui);
+  const snapPreds = ensureArray(predicates);
 
   const conds = document.createElement('div');
   conds.className = 'lg-conds';
@@ -15,7 +17,7 @@ export function renderConditions(card, { idx, rule, mode, predicates, catalogIte
 
   const joinWord = mode === 'any' ? 'OR' : 'AND';
 
-  predicates.forEach((pred, pidx) => {
+  snapPreds.forEach((pred, pidx) => {
     if (pidx > 0) {
       const join = document.createElement('div');
       join.className = 'lg-join-pill';
@@ -23,7 +25,7 @@ export function renderConditions(card, { idx, rule, mode, predicates, catalogIte
       conds.appendChild(join);
     }
 
-    const p = ensureObj(pred);
+    const snapP = ensureObj(pred);
 
     const cond = document.createElement('div');
     cond.className = 'lg-cond';
@@ -34,13 +36,20 @@ export function renderConditions(card, { idx, rule, mode, predicates, catalogIte
 
     const leftBox = document.createElement('div');
     leftBox.dataset.wwField = `logic-rule-${idx}-pred-${pidx}-left`;
+
     renderOperand(
       leftBox,
-      p.left ?? { path: 'ctx.vars.' },
+      snapP.left ?? { path: 'ctx.vars.' },
       async (v, { structural = false } = {}) => {
-        const nextPreds = predicates.slice();
-        nextPreds[pidx] = { ...p, left: v };
-        await updateRule({ ...r, ui: { ...uiCond, mode, predicates: nextPreds } }, { structural });
+        const live = ensureObj(getLiveRule?.());
+        const liveUI = ensureObj(live.ui);
+        const livePreds = ensureArray(liveUI.predicates);
+        const basePred = ensureObj(livePreds[pidx] || snapP);
+
+        const nextPreds = livePreds.slice();
+        nextPreds[pidx] = { ...basePred, left: v };
+
+        await updateRule({ ui: { ...liveUI, mode, predicates: nextPreds } }, { structural });
       },
       catalogItems,
       { fieldPrefix: `logic-rule-${idx}-pred-${pidx}-left` },
@@ -54,10 +63,14 @@ export function renderConditions(card, { idx, rule, mode, predicates, catalogIte
         { label: 'is truthy', value: 'truthy' },
         { label: 'is falsy', value: 'falsy' },
       ],
-      value: String(p.op || 'eq'),
+      value: String(snapP.op || 'eq'),
       onChange: async (v) => {
-        const nextPreds = predicates.slice();
-        const next = { ...p, op: v };
+        const live = ensureObj(getLiveRule?.());
+        const liveUI = ensureObj(live.ui);
+        const livePreds = ensureArray(liveUI.predicates);
+        const basePred = ensureObj(livePreds[pidx] || snapP);
+
+        const next = { ...basePred, op: v };
 
         if (!['eq', 'ne'].includes(String(v))) {
           delete next.right;
@@ -65,8 +78,10 @@ export function renderConditions(card, { idx, rule, mode, predicates, catalogIte
           next.right = '';
         }
 
+        const nextPreds = livePreds.slice();
         nextPreds[pidx] = next;
-        await updateRule({ ...r, ui: { ...uiCond, mode, predicates: nextPreds } }, { structural: true });
+
+        await updateRule({ ui: { ...liveUI, mode, predicates: nextPreds } }, { structural: true });
       },
     });
     opSel.dataset.wwField = `logic-rule-${idx}-pred-${pidx}-op`;
@@ -74,18 +89,24 @@ export function renderConditions(card, { idx, rule, mode, predicates, catalogIte
     const opBox = document.createElement('div');
     opBox.appendChild(ui.labeledNode('Operator', opSel));
 
-    const needsRight = ['eq', 'ne'].includes(String(p.op || 'eq'));
+    const needsRight = ['eq', 'ne'].includes(String(snapP.op || 'eq'));
     const rightBox = document.createElement('div');
     rightBox.dataset.wwField = `logic-rule-${idx}-pred-${pidx}-right`;
 
     if (needsRight) {
       renderOperand(
         rightBox,
-        p.right,
+        snapP.right,
         async (v, { structural = false } = {}) => {
-          const nextPreds = predicates.slice();
-          nextPreds[pidx] = { ...p, right: v };
-          await updateRule({ ...r, ui: { ...uiCond, mode, predicates: nextPreds } }, { structural });
+          const live = ensureObj(getLiveRule?.());
+          const liveUI = ensureObj(live.ui);
+          const livePreds = ensureArray(liveUI.predicates);
+          const basePred = ensureObj(livePreds[pidx] || snapP);
+
+          const nextPreds = livePreds.slice();
+          nextPreds[pidx] = { ...basePred, right: v };
+
+          await updateRule({ ui: { ...liveUI, mode, predicates: nextPreds } }, { structural });
         },
         catalogItems,
         { fieldPrefix: `logic-rule-${idx}-pred-${pidx}-right` },
@@ -110,13 +131,26 @@ export function renderConditions(card, { idx, rule, mode, predicates, catalogIte
     rmPred.className = 'btn btn-outline-danger btn-sm';
     rmPred.textContent = 'Remove condition';
     rmPred.dataset.wwField = `logic-rule-${idx}-pred-${pidx}-remove`;
-    rmPred.disabled = predicates.length <= 1;
-    rmPred.style.display = predicates.length <= 1 ? 'none' : '';
+
+    // Disable based on LIVE count (best effort); fallback to snapshot count.
+    const liveCount = (() => {
+      const live = ensureObj(getLiveRule?.());
+      const liveUI = ensureObj(live.ui);
+      return ensureArray(liveUI.predicates).length || snapPreds.length;
+    })();
+
+    rmPred.disabled = liveCount <= 1;
+    rmPred.style.display = liveCount <= 1 ? 'none' : '';
     rmPred.onclick = async () => {
-      const nextPreds = predicates.slice();
+      const live = ensureObj(getLiveRule?.());
+      const liveUI = ensureObj(live.ui);
+      const livePreds = ensureArray(liveUI.predicates);
+
+      const nextPreds = livePreds.slice();
       nextPreds.splice(pidx, 1);
       const ensured = nextPreds.length ? nextPreds : [newPredicate()];
-      await updateRule({ ...r, ui: { ...uiCond, mode, predicates: ensured } }, { structural: true });
+
+      await updateRule({ ui: { ...liveUI, mode, predicates: ensured } }, { structural: true });
     };
 
     condActions.appendChild(spacer);

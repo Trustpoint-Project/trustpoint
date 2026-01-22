@@ -8,12 +8,21 @@ import { renderThen } from './then.js';
 function ensureObj(v) { return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
 function ensureArray(v) { return Array.isArray(v) ? v : []; }
 
-export function renderRuleCard(container, { idx, rule, rulesCount, catalogItems, updateRule, removeRule, touch }) {
+export function renderRuleCard(container, {
+  idx,
+  rule,
+  rulesCount,
+  catalogItems,
+  getLiveRule,
+  updateRule,
+  removeRule,
+  touch,
+}) {
   container.textContent = '';
 
-  const r = ensureObj(rule);
-  const uiCond = ensureObj(r.ui);
-  const predicates = ensureArray(uiCond.predicates);
+  const snapRule = ensureObj(rule);
+  const snapUI = ensureObj(snapRule.ui);
+  const snapPredicates = ensureArray(snapUI.predicates);
 
   const card = document.createElement('div');
   card.className = 'lg-card';
@@ -58,9 +67,12 @@ export function renderRuleCard(container, { idx, rule, rulesCount, catalogItems,
       { label: 'ALL conditions (AND)', value: 'all' },
       { label: 'ANY condition (OR)', value: 'any' },
     ],
-    value: uiCond.mode === 'any' ? 'any' : 'all',
+    value: snapUI.mode === 'any' ? 'any' : 'all',
     onChange: async (v) => {
-      await updateRule({ ...r, ui: { ...uiCond, mode: v, predicates } }, { structural: true });
+      const live = ensureObj(getLiveRule?.());
+      const liveUI = ensureObj(live.ui);
+      const livePreds = ensureArray(liveUI.predicates);
+      await updateRule({ ui: { ...liveUI, mode: v, predicates: livePreds } }, { structural: true });
     },
   });
   modeSel.dataset.wwField = `logic-rule-${idx}-mode`;
@@ -69,11 +81,13 @@ export function renderRuleCard(container, { idx, rule, rulesCount, catalogItems,
 
   renderConditions(card, {
     idx,
-    rule: r,
     mode: modeSel.value,
-    predicates,
     catalogItems,
+    getLiveRule,
     updateRule,
+    // snapshot for display only:
+    rule: snapRule,
+    predicates: snapPredicates,
   });
 
   const addPred = document.createElement('button');
@@ -82,8 +96,11 @@ export function renderRuleCard(container, { idx, rule, rulesCount, catalogItems,
   addPred.textContent = 'Add condition';
   addPred.dataset.wwField = `logic-rule-${idx}-add-cond`;
   addPred.onclick = async () => {
-    const nextPreds = [...predicates, newPredicate()];
-    await updateRule({ ...r, ui: { ...uiCond, mode: modeSel.value, predicates: nextPreds } }, { structural: true });
+    const live = ensureObj(getLiveRule?.());
+    const liveUI = ensureObj(live.ui);
+    const livePreds = ensureArray(liveUI.predicates);
+    const nextPreds = [...livePreds, newPredicate()];
+    await updateRule({ ui: { ...liveUI, mode: modeSel.value, predicates: nextPreds } }, { structural: true });
   };
   card.appendChild(addPred);
 
@@ -91,15 +108,22 @@ export function renderRuleCard(container, { idx, rule, rulesCount, catalogItems,
 
   const assignHost = document.createElement('div');
   assignHost.dataset.wwField = `logic-rule-${idx}-assignments`;
+
   renderAssignments(
     assignHost,
-    ensureObj(r.assign),
+    ensureObj(snapRule.assign),
     async (m, { structural = false } = {}) => {
-      await updateRule({ ...r, assign: m }, { structural });
+      // Always merge against LIVE rule at update time.
+      await updateRule({ assign: ensureObj(m) }, { structural });
+      touch?.();
     },
     touch,
-    { fieldPrefix: `logic-rule-${idx}-assignments` },
+    {
+      fieldPrefix: `logic-rule-${idx}-assignments`,
+      getLiveAssign: () => ensureObj(ensureObj(getLiveRule?.()).assign),
+    },
   );
+
   card.appendChild(assignHost);
 
   card.appendChild(document.createElement('hr')).className = 'lg-divider';
@@ -108,11 +132,13 @@ export function renderRuleCard(container, { idx, rule, rulesCount, catalogItems,
   thenWrap.className = 'lg-card';
   thenWrap.dataset.wwField = `logic-rule-${idx}-then`;
   thenWrap.appendChild(ui.help('Outcome if this rule matches.'));
+
   renderThen(
     thenWrap,
-    ensureObj(r.then),
+    ensureObj(snapRule.then),
     async (t, { structural = false } = {}) => {
-      await updateRule({ ...r, then: t }, { structural });
+      await updateRule({ then: ensureObj(t) }, { structural });
+      touch?.();
     },
     touch,
     { fieldPrefix: `logic-rule-${idx}-then` },
