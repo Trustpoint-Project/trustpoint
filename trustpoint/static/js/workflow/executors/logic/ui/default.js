@@ -10,7 +10,6 @@ function getLiveDefault(step) {
   const p = ensureObj(step?.params);
   const def = ensureObj(p.default);
 
-  // normalize shape
   if (!Array.isArray(def.actions)) def.actions = [];
   if (!def.then || typeof def.then !== 'object') def.then = { pass: true };
 
@@ -20,9 +19,8 @@ function getLiveDefault(step) {
 export function renderDefaultBlock(container, { step, params, updateStepParam, touch, hardRender }) {
   container.textContent = '';
 
-  // Use render snapshot for display only
   const p = ensureObj(params);
-  void p; // keep signature stable, but writes use live step.params
+  void p;
 
   const elseTop = document.createElement('div');
   elseTop.className = 'lg-topline';
@@ -58,8 +56,19 @@ export function renderDefaultBlock(container, { step, params, updateStepParam, t
       if (structural) await hardRender?.();
     },
     touch,
-    { fieldPrefix: 'logic-default-assignments' },
+    {
+      fieldPrefix: 'logic-default-assignments',
+      getLiveAssign: () => {
+        const liveDef = getLiveDefault(step);
+        const a0 = ensureArray(liveDef.actions)[0];
+        if (a0 && typeof a0 === 'object' && String(a0.type).toLowerCase() === 'set') {
+          return ensureObj(a0.assign);
+        }
+        return {};
+      },
+    },
   );
+
   defCard.appendChild(assignHost);
 
   defCard.appendChild(document.createElement('hr')).className = 'lg-divider';
@@ -79,7 +88,7 @@ export function renderDefaultBlock(container, { step, params, updateStepParam, t
       if (structural) await hardRender?.();
     },
     touch,
-    { fieldPrefix: 'logic-default-then' },
+    { fieldPrefix: 'logic-default-then', headline: 'Default outcome' },
   );
 
   defCard.appendChild(thenWrap);

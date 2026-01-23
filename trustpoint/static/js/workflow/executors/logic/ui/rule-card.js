@@ -8,10 +8,16 @@ import { renderThen } from './then.js';
 function ensureObj(v) { return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
 function ensureArray(v) { return Array.isArray(v) ? v : []; }
 
+function normalizeModeStrict(raw) {
+  const m = String(raw || '').trim().toLowerCase();
+  return (m === 'or') ? 'or' : 'and';
+}
+
 export function renderRuleCard(container, {
   ruleId,
-  rule,
+  displayIndex,
   rulesCount,
+  rule,
   catalogItems,
   getLiveRule,
   updateRule,
@@ -36,10 +42,10 @@ export function renderRuleCard(container, {
 
   const tag = document.createElement('span');
   tag.className = 'lg-rule-tag';
-  tag.textContent = 'IF'; // label in UI; ordering handled elsewhere
+  tag.textContent = (displayIndex === 0) ? 'IF' : 'ELSE IF';
 
   const title = document.createElement('strong');
-  title.textContent = `Rule`;
+  title.textContent = `Rule ${Number(displayIndex) + 1}`;
 
   leftHead.appendChild(tag);
   leftHead.appendChild(title);
@@ -64,20 +70,20 @@ export function renderRuleCard(container, {
 
   const modeSel = ui.select({
     options: [
-      { label: 'ALL conditions (AND)', value: 'all' },
-      { label: 'ANY condition (OR)', value: 'any' },
+      { label: 'AND', value: 'and' },
+      { label: 'OR', value: 'or' },
     ],
-    value: snapUI.mode === 'any' ? 'any' : 'all',
+    value: normalizeModeStrict(snapUI.mode),
     onChange: async (v) => {
       const live = ensureObj(getLiveRule?.());
       const liveUI = ensureObj(live.ui);
       const livePreds = ensureArray(liveUI.predicates);
-      await updateRule({ ui: { ...liveUI, mode: v, predicates: livePreds } }, { structural: true });
+      await updateRule({ ui: { ...liveUI, mode: normalizeModeStrict(v), predicates: livePreds } }, { structural: true });
     },
   });
   modeSel.dataset.wwField = `logic-rule-${ruleId}-mode`;
 
-  card.appendChild(ui.labeledNode('Match when', modeSel));
+  card.appendChild(ui.labeledNode('', modeSel));
 
   renderConditions(card, {
     ruleId,
@@ -85,7 +91,6 @@ export function renderRuleCard(container, {
     catalogItems,
     getLiveRule,
     updateRule,
-    // snapshot for display only:
     predicates: snapPredicates,
   });
 
@@ -99,7 +104,7 @@ export function renderRuleCard(container, {
     const liveUI = ensureObj(live.ui);
     const livePreds = ensureArray(liveUI.predicates);
     const nextPreds = [...livePreds, newPredicate()];
-    await updateRule({ ui: { ...liveUI, mode: modeSel.value, predicates: nextPreds } }, { structural: true });
+    await updateRule({ ui: { ...liveUI, mode: normalizeModeStrict(modeSel.value), predicates: nextPreds } }, { structural: true });
   };
   card.appendChild(addPred);
 
@@ -107,6 +112,11 @@ export function renderRuleCard(container, {
 
   const assignHost = document.createElement('div');
   assignHost.dataset.wwField = `logic-rule-${ruleId}-assignments`;
+
+  const assignTitle = document.createElement('div');
+  assignTitle.className = 'lg-section-title';
+  assignTitle.textContent = 'Define variables';
+  card.appendChild(assignTitle);
 
   renderAssignments(
     assignHost,
@@ -126,10 +136,13 @@ export function renderRuleCard(container, {
 
   card.appendChild(document.createElement('hr')).className = 'lg-divider';
 
+  const thenTitle = document.createElement('div');
+  thenTitle.className = 'lg-section-title';
+  thenTitle.textContent = 'Then';
+  card.appendChild(thenTitle);
+
   const thenWrap = document.createElement('div');
-  thenWrap.className = 'lg-card';
   thenWrap.dataset.wwField = `logic-rule-${ruleId}-then`;
-  thenWrap.appendChild(ui.help('Outcome if this rule matches.'));
 
   renderThen(
     thenWrap,
@@ -139,9 +152,10 @@ export function renderRuleCard(container, {
       touch?.();
     },
     touch,
-    { fieldPrefix: `logic-rule-${ruleId}-then` },
+    { fieldPrefix: `logic-rule-${ruleId}-then`, headline: 'If true' },
   );
 
   card.appendChild(thenWrap);
+
   container.appendChild(card);
 }

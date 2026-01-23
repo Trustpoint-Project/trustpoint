@@ -12,6 +12,12 @@ function uid() {
   return `id_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function normalizeModeStrict(raw) {
+  // Only accept 'and' or 'or'. Anything else becomes 'and'.
+  const m = String(raw || '').trim().toLowerCase();
+  return (m === 'or') ? 'or' : 'and';
+}
+
 export function newPredicate() {
   return { _id: uid(), left: { path: 'ctx.vars.' }, op: 'eq', right: '' };
 }
@@ -19,7 +25,7 @@ export function newPredicate() {
 export function newRule() {
   return {
     _id: uid(),
-    ui: { mode: 'all', predicates: [newPredicate()] },
+    ui: { mode: 'and', predicates: [newPredicate()] },
     assign: {},
     then: { pass: true },
   };
@@ -43,7 +49,9 @@ function buildWhenExpr(mode, predicates) {
   const preds = ensureArray(predicates).map(buildPredicateExpr).filter(Boolean);
   if (!preds.length) return { op: 'truthy', arg: { path: 'ctx.vars.' } };
   if (preds.length === 1) return preds[0];
-  return (String(mode) === 'any') ? { op: 'or', args: preds } : { op: 'and', args: preds };
+
+  const m = normalizeModeStrict(mode);
+  return (m === 'or') ? { op: 'or', args: preds } : { op: 'and', args: preds };
 }
 
 /**
@@ -55,6 +63,7 @@ function parseMaybeJSON(v) {
 
   const s = v.trim();
 
+  // Preserve templates verbatim
   if (s.includes('{{') || s.includes('}}')) return v;
 
   const c = s[0];
@@ -80,6 +89,7 @@ function normalizeAssignForBackend(assign) {
 export function ruleToBackend(rule) {
   const r = ensureObj(rule);
   const uiPart = ensureObj(r.ui);
+
   const when = buildWhenExpr(uiPart.mode, ensureArray(uiPart.predicates));
 
   const assignUi = ensureObj(r.assign);
@@ -131,6 +141,7 @@ export function ensureLogicDefaults(params) {
  * - each rule has stable _id
  * - each predicate has stable _id
  * - each rule has at least 1 predicate
+ * - mode is strictly 'and' or 'or' (anything else becomes 'and')
  */
 export function ensureMinRulesAndConds(uiRules) {
   const rules = ensureArray(uiRules).map((r) => {
@@ -138,6 +149,8 @@ export function ensureMinRulesAndConds(uiRules) {
     if (!rr._id) rr._id = uid();
 
     const ui = ensureObj(rr.ui);
+    ui.mode = normalizeModeStrict(ui.mode);
+
     const preds0 = ensureArray(ui.predicates).map((p) => {
       const pp = ensureObj(p);
       if (!pp._id) pp._id = uid();

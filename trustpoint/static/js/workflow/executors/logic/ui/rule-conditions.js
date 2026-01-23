@@ -6,6 +6,11 @@ import { renderOperand } from './operand.js';
 function ensureObj(v) { return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
 function ensureArray(v) { return Array.isArray(v) ? v : []; }
 
+function normalizeModeStrict(raw) {
+  const m = String(raw || '').trim().toLowerCase();
+  return (m === 'or') ? 'or' : 'and';
+}
+
 export function renderConditions(card, { ruleId, mode, predicates, catalogItems, getLiveRule, updateRule }) {
   const snapPreds = ensureArray(predicates);
 
@@ -13,7 +18,7 @@ export function renderConditions(card, { ruleId, mode, predicates, catalogItems,
   conds.className = 'lg-conds';
   conds.dataset.wwField = `logic-rule-${ruleId}-conds`;
 
-  const joinWord = mode === 'any' ? 'OR' : 'AND';
+  const joinWord = (normalizeModeStrict(mode) === 'or') ? 'OR' : 'AND';
 
   const getLive = () => ensureObj(getLiveRule?.());
   const getLiveUI = () => ensureObj(getLive().ui);
@@ -57,7 +62,7 @@ export function renderConditions(card, { ruleId, mode, predicates, catalogItems,
         const nextPreds = livePreds.slice();
         nextPreds[i] = { ...base, left: v };
 
-        await updateRule({ ui: { ...liveUI, mode, predicates: nextPreds } }, { structural });
+        await updateRule({ ui: { ...liveUI, mode: normalizeModeStrict(mode), predicates: nextPreds } }, { structural });
       },
       catalogItems,
       { fieldPrefix: `logic-rule-${ruleId}-pred-${predId}-left` },
@@ -90,7 +95,7 @@ export function renderConditions(card, { ruleId, mode, predicates, catalogItems,
         const nextPreds = livePreds.slice();
         nextPreds[i] = next;
 
-        await updateRule({ ui: { ...liveUI, mode, predicates: nextPreds } }, { structural: true });
+        await updateRule({ ui: { ...liveUI, mode: normalizeModeStrict(mode), predicates: nextPreds } }, { structural: true });
       },
     });
     opSel.dataset.wwField = `logic-rule-${ruleId}-pred-${predId}-op`;
@@ -116,7 +121,7 @@ export function renderConditions(card, { ruleId, mode, predicates, catalogItems,
           const nextPreds = livePreds.slice();
           nextPreds[i] = { ...base, right: v };
 
-          await updateRule({ ui: { ...liveUI, mode, predicates: nextPreds } }, { structural });
+          await updateRule({ ui: { ...liveUI, mode: normalizeModeStrict(mode), predicates: nextPreds } }, { structural });
         },
         catalogItems,
         { fieldPrefix: `logic-rule-${ruleId}-pred-${predId}-right` },
@@ -155,7 +160,7 @@ export function renderConditions(card, { ruleId, mode, predicates, catalogItems,
       nextPreds.splice(i, 1);
 
       const ensured = nextPreds.length ? nextPreds : [newPredicate()];
-      await updateRule({ ui: { ...liveUI, mode, predicates: ensured } }, { structural: true });
+      await updateRule({ ui: { ...liveUI, mode: normalizeModeStrict(mode), predicates: ensured } }, { structural: true });
     };
 
     condActions.appendChild(spacer);

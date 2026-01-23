@@ -1,8 +1,9 @@
 // static/js/workflow/steps.js
 import {
-  state, addStep, removeStep, updateStepType, updateStepParam, moveStep,
+  state, addStep, removeStep, updateStepType, updateStepParam,
 } from './state.js';
 import { getTypes, get as getExecutor } from './executors/index.js';
+import { bindStepsDnD } from './steps-dnd.js';
 
 // Side-effect imports (register executors) — REQUIRED
 import './executors/approval.js';
@@ -17,11 +18,14 @@ function injectStylesOnce() {
 
   const style = document.createElement('style');
   style.textContent = `
-    /* Visuals */
     .ww-step-card { border-radius:.6rem; border:1px solid var(--bs-border-color,#dee2e6); }
     .ww-step-header { border-radius:.5rem; padding:.5rem .75rem; }
     .ww-drag-handle { cursor: grab; user-select:none; font-size:1.1rem; opacity:.7; }
-    .ww-dragging { opacity:.6; }
+
+    /* CHANGED: do not change opacity while dragging (caused grey tone).
+       Use a subtle outline instead. */
+    .ww-dragging { opacity: 1; outline: 2px solid var(--bs-primary,#0d6efd); outline-offset: 2px; }
+
     .ww-drop-indicator-top { box-shadow: 0 -2px 0 0 var(--bs-primary,#0d6efd) inset; }
     .ww-drop-indicator-bottom { box-shadow: 0 2px 0 0 var(--bs-primary,#0d6efd) inset; }
 
@@ -46,17 +50,28 @@ function injectStylesOnce() {
       margin:.25rem 0 .5rem;
     }
 
-    /* Disable browser scroll anchoring inside steps. */
     #steps-list, .ww-step-card, .ww-step-card * {
       overflow-anchor: none;
+    }
+
+    .ww-collapse-btn {
+      border: none;
+      background: transparent;
+      padding: .1rem .35rem;
+      line-height: 1;
+      border-radius: .35rem;
+      color: var(--bs-secondary-color,#6c757d);
+    }
+    .ww-collapse-btn:hover {
+      background: rgba(0,0,0,.04);
+    }
+    .ww-step-collapsed .ww-step-body {
+      display: none !important;
     }
   `;
   document.head.appendChild(style);
 }
 
-/**
- * Policy: which step types are allowed for a given event selection.
- */
 function allowedStepTypesForEvent({ handler }, allTypes) {
   const h = String(handler || '').trim();
   if (!h) return allTypes;
@@ -81,7 +96,6 @@ function computeAllowedTypes() {
   return { allTypes: all, allowedTypes: all.filter((t) => set.has(t)), allowedSet: set };
 }
 
-// ---- DEFAULT PARAMS ----
 function getDefaultParamsForType(type) {
   const exec = getExecutor(type);
   if (!exec || typeof exec.getDefaultParams !== 'function') return {};
@@ -99,22 +113,20 @@ function setStepParamsToDefaults(stepId, type) {
   const s = state.steps.find((x) => x.id === stepId);
   if (!s || !s.params || typeof s.params !== 'object' || Array.isArray(s.params)) return;
 
-  // Remove existing keys
+  // preserve UI-only keys like _ui_collapsed when switching types
+  const keepCollapsed = s.params._ui_collapsed === true;
+
   Object.keys(s.params).forEach((k) => { delete s.params[k]; });
-
-  // Apply defaults
   Object.entries(defaults).forEach(([k, v]) => updateStepParam(stepId, k, v));
-}
-// ------------------------
 
-// ---------- INCREMENTAL RENDERING ----------
-const _stepCardMap = new Map(); // stepId -> HTMLElement
+  if (keepCollapsed) updateStepParam(stepId, '_ui_collapsed', true);
+}
+
+const _stepCardMap = new Map();
 function _clearStepDomCache() { _stepCardMap.clear(); }
-// ---------------------------------------------------------
 
 export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
   injectStylesOnce();
-
   if (!containerEl || !addBtnEl) return;
 
   const { allowedTypes } = computeAllowedTypes();
@@ -127,7 +139,6 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
     addBtnEl.title = '';
   }
 
-  // If container was replaced, reset cache.
   if (!_stepCardMap.size && containerEl.children.length === 0) {
     // ok
   } else if (_stepCardMap.size && containerEl.children.length === 0) {
@@ -145,11 +156,16 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
       const title = existing.querySelector('[data-ww-role="step-title"]');
       if (title) title.textContent = `Step ${idx + 1} • ${step.type}`;
 
-      // Keep select value synced, but do not disrupt if focused
+      // sync collapsed class from state
+      const collapsed = step?.params?._ui_collapsed === true;
+      existing.classList.toggle('ww-step-collapsed', collapsed);
+
+      const btn = existing.querySelector('button[data-ww-role="collapse-btn"]');
+      if (btn) btn.textContent = collapsed ? '▸' : '▾';
+
       const sel = existing.querySelector('select[data-ww-field="step-type"]');
-      if (sel instanceof HTMLSelectElement && document.activeElement !== sel) {
-        sel.value = step.type;
-      }
+      if (sel instanceof HTMLSelectElement && document.activeElement !== sel) sel.value = step.type;
+
       return;
     }
 
@@ -158,7 +174,6 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
     containerEl.appendChild(card);
   });
 
-  // Remove DOM nodes for deleted steps
   for (const [id, node] of Array.from(_stepCardMap.entries())) {
     if (!seen.has(id)) {
       try { node.remove(); } catch {}
@@ -166,14 +181,12 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
     }
   }
 
-  // Add step
   addBtnEl.onclick = () => {
     const { allowedTypes: allowedNow } = computeAllowedTypes();
     const firstAllowed = allowedNow[0];
     if (!firstAllowed) return;
 
     addStep(firstAllowed, getDefaultParamsForType(firstAllowed));
-
     const step = state.steps[state.steps.length - 1];
     if (!step) return;
 
@@ -182,10 +195,10 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
     containerEl.appendChild(card);
 
     onChange?.();
-    enableDnD(containerEl, onChange);
+    bindStepsDnD(containerEl, onChange, _stepCardMap);
   };
 
-  enableDnD(containerEl, onChange);
+  bindStepsDnD(containerEl, onChange, _stepCardMap);
 }
 
 function stepCard(step, displayIndex, ctx) {
@@ -197,6 +210,9 @@ function stepCard(step, displayIndex, ctx) {
   const card = document.createElement('div');
   card.className = 'card ww-step-card mb-2 p-2';
   card.dataset.stepId = String(step.id);
+
+  const collapsed = step?.params?._ui_collapsed === true;
+  card.classList.toggle('ww-step-collapsed', collapsed);
 
   const header = document.createElement('div');
   header.className = 'ww-step-header d-flex justify-content-between align-items-center mb-2';
@@ -210,11 +226,28 @@ function stepCard(step, displayIndex, ctx) {
   grip.textContent = '⋮⋮';
   grip.setAttribute('draggable', 'true');
 
+  const collapseBtn = document.createElement('button');
+  collapseBtn.type = 'button';
+  collapseBtn.className = 'ww-collapse-btn';
+  collapseBtn.dataset.wwRole = 'collapse-btn';
+  collapseBtn.title = 'Collapse/expand';
+  collapseBtn.textContent = collapsed ? '▸' : '▾';
+  collapseBtn.onclick = () => {
+    const s = state.steps.find((x) => x.id === step.id);
+    if (!s) return;
+    const now = !(s?.params?._ui_collapsed === true);
+    updateStepParam(step.id, '_ui_collapsed', now);
+    card.classList.toggle('ww-step-collapsed', now);
+    collapseBtn.textContent = now ? '▸' : '▾';
+    onChange?.();
+  };
+
   const title = document.createElement('strong');
   title.dataset.wwRole = 'step-title';
   title.textContent = `Step ${displayIndex + 1} • ${step.type}`;
 
   left.appendChild(grip);
+  left.appendChild(collapseBtn);
   left.appendChild(title);
 
   if (!isAllowed) {
@@ -230,14 +263,12 @@ function stepCard(step, displayIndex, ctx) {
   rm.dataset.wwField = 'remove-step';
   rm.onclick = () => {
     removeStep(step.id);
-
     const old = _stepCardMap.get(step.id);
     if (old) {
       try { old.remove(); } catch {}
       _stepCardMap.delete(step.id);
     }
 
-    // Re-label titles after removal
     state.steps.forEach((s, idx) => {
       const node = _stepCardMap.get(s.id);
       const t = node?.querySelector?.('[data-ww-role="step-title"]');
@@ -245,7 +276,7 @@ function stepCard(step, displayIndex, ctx) {
     });
 
     onChange?.();
-    enableDnD(containerEl, onChange);
+    bindStepsDnD(containerEl, onChange, _stepCardMap);
   };
 
   header.appendChild(left);
@@ -258,6 +289,9 @@ function stepCard(step, displayIndex, ctx) {
     note.textContent = 'This step type is not allowed for the currently selected event. Change the event, or remove/replace this step.';
     card.appendChild(note);
   }
+
+  const body = document.createElement('div');
+  body.className = 'ww-step-body';
 
   const sel = document.createElement('select');
   sel.className = 'form-select form-select-sm mb-2';
@@ -284,7 +318,6 @@ function stepCard(step, displayIndex, ctx) {
 
   const paramsDiv = document.createElement('div');
 
-  // Replace only THIS card on type change
   sel.onchange = () => {
     if (!allowedSet.has(sel.value)) {
       sel.value = step.type;
@@ -301,14 +334,11 @@ function stepCard(step, displayIndex, ctx) {
     const newCard = stepCard(updatedStep, idx, { containerEl, onChange });
 
     const oldCard = _stepCardMap.get(step.id);
-    if (oldCard && oldCard.isConnected) {
-      oldCard.replaceWith(newCard);
-    } else {
-      containerEl.appendChild(newCard);
-    }
+    if (oldCard && oldCard.isConnected) oldCard.replaceWith(newCard);
+    else containerEl.appendChild(newCard);
+
     _stepCardMap.set(step.id, newCard);
 
-    // Re-label titles
     state.steps.forEach((s, i) => {
       const node = _stepCardMap.get(s.id);
       const t = node?.querySelector?.('[data-ww-role="step-title"]');
@@ -316,18 +346,18 @@ function stepCard(step, displayIndex, ctx) {
     });
 
     onChange?.();
-    enableDnD(containerEl, onChange);
+    bindStepsDnD(containerEl, onChange, _stepCardMap);
   };
 
-  card.appendChild(sel);
-  card.appendChild(paramsDiv);
+  body.appendChild(sel);
+  body.appendChild(paramsDiv);
+  card.appendChild(body);
 
   const exec = getExecutor(step.type);
   if (exec?.renderParams) {
     exec.renderParams(paramsDiv, step, {
       updateStepParam,
       onChange,
-      // Keep rerender available for executors that call it; implement as local replace:
       rerender: () => {
         const idx = state.steps.findIndex((s) => s.id === step.id);
         const refreshed = state.steps[idx];
@@ -337,87 +367,10 @@ function stepCard(step, displayIndex, ctx) {
         if (oldCard && oldCard.isConnected) oldCard.replaceWith(newCard);
         else containerEl.appendChild(newCard);
         _stepCardMap.set(step.id, newCard);
-        enableDnD(containerEl, onChange);
+        bindStepsDnD(containerEl, onChange, _stepCardMap);
       },
     });
   }
 
   return card;
-}
-
-function enableDnD(containerEl, onChange) {
-  if (!containerEl) return;
-
-  let dragId = null;
-  let dragCard = null;
-
-  containerEl.querySelectorAll('.ww-drag-handle[draggable="true"]').forEach((handle) => {
-    handle.ondragstart = (e) => {
-      const card = handle.closest('.ww-step-card');
-      if (!card) return;
-      dragId = Number(card.dataset.stepId);
-      dragCard = card;
-      card.classList.add('ww-dragging');
-      e.dataTransfer.effectAllowed = 'move';
-      try { e.dataTransfer.setData('text/plain', String(dragId)); } catch {}
-      try { e.dataTransfer.setDragImage(card, 10, 10); } catch {}
-    };
-    handle.ondragend = () => {
-      if (dragCard) dragCard.classList.remove('ww-dragging');
-      dragId = null;
-      dragCard = null;
-      containerEl.querySelectorAll('.ww-step-card').forEach((c) => {
-        c.classList.remove('ww-drop-indicator-top', 'ww-drop-indicator-bottom');
-      });
-    };
-  });
-
-  containerEl.querySelectorAll('.ww-step-card').forEach((card) => {
-    card.ondragover = (e) => {
-      if (!dragId) return;
-      e.preventDefault();
-      const rect = card.getBoundingClientRect();
-      const before = (e.clientY - rect.top) < rect.height / 2;
-      card.classList.toggle('ww-drop-indicator-top', before);
-      card.classList.toggle('ww-drop-indicator-bottom', !before);
-    };
-    card.ondragleave = () => {
-      card.classList.remove('ww-drop-indicator-top', 'ww-drop-indicator-bottom');
-    };
-    card.ondrop = (e) => {
-      e.preventDefault();
-      card.classList.remove('ww-drop-indicator-top', 'ww-drop-indicator-bottom');
-      if (!dragId) return;
-
-      const targetId = Number(card.dataset.stepId);
-      if (dragId === targetId) return;
-
-      const steps = state.steps;
-      const fromIndex = steps.findIndex((s) => s.id === dragId);
-      const toIndexBase = steps.findIndex((s) => s.id === targetId);
-
-      const rect = card.getBoundingClientRect();
-      const before = (e.clientY - rect.top) < rect.height / 2;
-      let toIndex = toIndexBase + (before ? 0 : 1);
-
-      moveStep(dragId, toIndex > fromIndex ? toIndex - 1 : toIndex);
-
-      // Reorder DOM to match state without rebuilding
-      const frag = document.createDocumentFragment();
-      state.steps.forEach((s, idx) => {
-        const node = _stepCardMap.get(s.id);
-        if (!node) return;
-
-        const t = node.querySelector?.('[data-ww-role="step-title"]');
-        if (t) t.textContent = `Step ${idx + 1} • ${s.type}`;
-
-        frag.appendChild(node);
-      });
-
-      containerEl.appendChild(frag);
-
-      onChange?.();
-      enableDnD(containerEl, onChange);
-    };
-  });
 }

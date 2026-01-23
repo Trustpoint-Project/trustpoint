@@ -27,7 +27,7 @@ export function renderRules(container, { step, rules, catalogItems, updateStepPa
     return ensureObj(getLiveRules()[i]);
   };
 
-  snapshot.forEach((ruleSnap) => {
+  snapshot.forEach((ruleSnap, displayIndex) => {
     const ruleId = String(ensureObj(ruleSnap)._id || '');
 
     const cardHost = document.createElement('div');
@@ -76,8 +76,9 @@ export function renderRules(container, { step, rules, catalogItems, updateStepPa
 
     renderRuleCard(cardHost, {
       ruleId,
-      rule: ruleSnap, // snapshot for display
+      displayIndex,
       rulesCount: snapshot.length,
+      rule: ruleSnap,
       catalogItems,
       getLiveRule: () => getLiveRuleById(ruleId),
       updateRule,

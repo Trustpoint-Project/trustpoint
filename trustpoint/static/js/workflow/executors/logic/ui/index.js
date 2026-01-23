@@ -18,6 +18,7 @@ export function renderLogicParamsUI(container, {
 }) {
   container.textContent = '';
 
+  // Header
   const top = document.createElement('div');
   top.className = 'lg-topline';
   top.innerHTML = `<strong>Logic</strong>`;
@@ -25,30 +26,16 @@ export function renderLogicParamsUI(container, {
   container.appendChild(top);
 
   container.appendChild(
-    ui.help('Rules are evaluated from top to bottom. The first matching rule runs. If none match, Default runs.'),
+    ui.help('Rules are evaluated top to bottom. The first IF that is true runs. If none match, ELSE runs.'),
   );
 
+  // Rules title
   const rulesHead = document.createElement('div');
   rulesHead.className = 'lg-topline mt-3';
   rulesHead.innerHTML = `<div class="lg-section-title mb-0">Rules</div>`;
-
-  const addRuleBtn = document.createElement('button');
-  addRuleBtn.type = 'button';
-  addRuleBtn.className = 'btn btn-outline-secondary btn-sm';
-  addRuleBtn.textContent = 'Add rule';
-  addRuleBtn.dataset.wwField = 'logic-add-rule';
-  addRuleBtn.onclick = async () => {
-    const cur = ensureArray(ensureObj(step.params)._ui_rules);
-    const next = [...cur, newRule()];
-    updateStepParam(step.id, '_ui_rules', next);
-    syncBackend?.();
-    touch?.();
-    await hardRender?.();
-  };
-
-  rulesHead.appendChild(addRuleBtn);
   container.appendChild(rulesHead);
 
+  // Rules list
   const rulesWrapHost = document.createElement('div');
   rulesWrapHost.dataset.wwField = 'logic-rules-host';
   container.appendChild(rulesWrapHost);
@@ -63,6 +50,23 @@ export function renderLogicParamsUI(container, {
     hardRender,
   });
 
+  // Add rule (BOTTOM, after last rule)
+  const addRuleBtn = document.createElement('button');
+  addRuleBtn.type = 'button';
+  addRuleBtn.className = 'btn btn-sm btn-primary mt-2';
+  addRuleBtn.textContent = 'Add rule';
+  addRuleBtn.dataset.wwField = 'logic-add-rule';
+  addRuleBtn.onclick = async () => {
+    const cur = ensureArray(ensureObj(step.params)._ui_rules);
+    const next = [...cur, newRule()];
+    updateStepParam(step.id, '_ui_rules', next);
+    syncBackend?.();
+    touch?.();
+    await hardRender?.();
+  };
+  container.appendChild(addRuleBtn);
+
+  // Default
   container.appendChild(document.createElement('hr')).className = 'lg-divider';
 
   const defHost = document.createElement('div');

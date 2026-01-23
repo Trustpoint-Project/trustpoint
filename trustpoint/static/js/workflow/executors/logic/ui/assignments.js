@@ -18,8 +18,8 @@ function nextFreeKey(assign, base = 'var') {
 }
 
 /**
- * Preserve focus inside this container by wwField during local rerenders.
- * This avoids "cursor jumps" when we rebuild the assignments block.
+ * Preserve focus inside this container by data-ww-field during local rerenders.
+ * Keeps caret position stable when the assignments block rebuilds.
  */
 function preserveFocus(container, domWriteFn) {
   const active = (document.activeElement instanceof HTMLElement) ? document.activeElement : null;
@@ -48,7 +48,7 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
 
   const prefix = String(opts.fieldPrefix || '').trim();
 
-  // IMPORTANT: always read LIVE assign for mutations, never rely on render snapshot
+  // Always read LIVE assign for mutations, never rely on render snapshot.
   const getLiveAssign = (typeof opts.getLiveAssign === 'function')
     ? opts.getLiveAssign
     : () => ensureObj(assignObj);
@@ -61,17 +61,19 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
   wrap.className = 'lg-card';
   if (prefix) wrap.dataset.wwField = `${prefix}-wrap`;
 
-  wrap.appendChild(ui.help('Assignments write to ctx.vars. Values may be JSON or {{ ctx.* }} templates.'));
+  wrap.appendChild(
+    ui.help('Defines ctx.vars.* when this branch is true.'),
+  );
 
-  // Render snapshot for display only
+  // Snapshot for display only
   const snapAssign = ensureObj(assignObj);
   const entries = Object.entries(snapAssign);
 
-  if (!entries.length) wrap.appendChild(ui.help('No assignments yet.'));
+  if (!entries.length) wrap.appendChild(ui.help('No variables defined yet.'));
 
   /**
    * Commit a rename from oldKey -> newKey using LIVE state.
-   * - Only called on blur or Enter (structural).
+   * - Only called on blur or Enter (structural commit).
    * - Rebuilds this block after commit so value handlers bind to the new key.
    */
   const commitRename = (oldKey, rawNewKey) => {
@@ -81,11 +83,11 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
     const live = ensureObj(getLiveAssign());
     const next = { ...live };
 
-    // If old key disappeared, nothing to do.
     if (!(oldKey in next)) return;
 
-    // Resolve collisions deterministically
     let nk = nk0;
+
+    // Resolve collisions deterministically
     if (nk in next) {
       nk = nextFreeKey(next, nk);
     }
@@ -97,7 +99,6 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
     callUpdate(next, true);
     touch?.();
 
-    // Local rerender so handlers capture the new key immediately.
     preserveFocus(container, () => {
       renderAssignments(container, next, onUpdateAssign, touch, opts);
     });
@@ -108,8 +109,8 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
     row.className = 'lg-row mb-2';
     if (prefix) row.dataset.wwField = `${prefix}-row-${idx}`;
 
-    // Key editor: DO NOT mutate state on every keystroke.
-    // Keep the draft in the input, commit on blur/Enter only.
+    // Key editor: do NOT mutate state on every keystroke.
+    // Keep the draft in the input; commit on blur/Enter only.
     const keyInp = ui.input({
       type: 'text',
       value: k,
@@ -126,7 +127,8 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
       if (e.key === 'Enter') {
         e.preventDefault();
         commitRename(k, keyInp.value);
-        // Move focus to value field if present
+
+        // Move focus to value field for this row if present
         const valEl = row.querySelector?.(`[data-ww-field="${CSS.escape(`${prefix}-value-${idx}`)}"]`);
         if (valEl instanceof HTMLElement) {
           try { valEl.focus({ preventScroll: true }); } catch { try { valEl.focus(); } catch {} }
@@ -138,8 +140,8 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
       }
     };
 
-    // Value editor: always writes to the CURRENT key for this row (k).
-    // After rename commit, the block is rebuilt, so this closure updates.
+    // Value editor: updates the current key (k) for this row.
+    // After rename commit, the block rebuilds, so closures update.
     const valInp = ui.input({
       type: 'text',
       value: (v == null) ? '' : String(v),
@@ -169,7 +171,7 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
       });
     };
 
-    row.appendChild(ui.labeledNode('var', keyInp));
+    row.appendChild(ui.labeledNode('name', keyInp));
     row.appendChild(ui.labeledNode('value', valInp));
     row.appendChild(rm);
     wrap.appendChild(row);
@@ -178,7 +180,7 @@ export function renderAssignments(container, assignObj, onUpdateAssign, touch, o
   const addBtn = document.createElement('button');
   addBtn.type = 'button';
   addBtn.className = 'btn btn-outline-secondary btn-sm';
-  addBtn.textContent = 'Add assignment';
+  addBtn.textContent = 'Define variable';
   if (prefix) addBtn.dataset.wwField = `${prefix}-add`;
   addBtn.onclick = () => {
     const live = ensureObj(getLiveAssign());

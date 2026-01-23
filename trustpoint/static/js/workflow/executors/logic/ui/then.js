@@ -18,6 +18,7 @@ export function renderThen(container, thenObj, onUpdateThen, touch, opts = {}) {
   container.textContent = '';
 
   const prefix = String(opts.fieldPrefix || '').trim();
+  const headline = String(opts.headline || 'If true').trim() || 'If true';
 
   const t = ensureObj(thenObj);
 
@@ -93,7 +94,7 @@ export function renderThen(container, thenObj, onUpdateThen, touch, opts = {}) {
     }
   }
 
-  container.appendChild(ui.labeledNode('If matched', modeSel));
+  container.appendChild(ui.labeledNode(headline, modeSel));
   container.appendChild(body);
   rebuildBody();
 }
