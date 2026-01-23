@@ -398,7 +398,7 @@ class DeviceModel(CustomDeleteActionModel):
     common_name = models.CharField(_('Device'), max_length=100, default='', unique=True)
     serial_number = models.CharField(_('Serial-Number'), max_length=100, default='', blank=True, null=False)
     ip_address = models.GenericIPAddressField(_('IP Address'), protocol='both', unpack_ipv4=True, null=True, blank=True)
-    port = models.PositiveIntegerField(_('Port'), default=0, blank=True, null=False)
+    opc_server_port = models.PositiveIntegerField(_('OPC Server Port'), default=0, blank=True, null=False)
     domain = models.ForeignKey(
         DomainModel, verbose_name=_('Domain'), related_name='devices', blank=True, null=True, on_delete=models.PROTECT
     )

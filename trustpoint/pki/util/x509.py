@@ -37,9 +37,24 @@ class CertificateGenerator:
         validity_days: int = 7300,
         private_key: None | PrivateKey = None,
         hash_algorithm: None | HashAlgorithm = None,
+        path_length: int | None = None,
     ) -> tuple[x509.Certificate, PrivateKey]:
-        """Creates a root CA certificate for testing and AutoGenPKI."""
-        return CertificateGenerator.create_issuing_ca(None, cn, cn, private_key, validity_days, hash_algorithm)
+        """Creates a root CA certificate for testing and AutoGenPKI.
+
+        Args:
+            cn: Common name for the root CA.
+            validity_days: Validity period in days.
+            private_key: Private key to use. If None, generates new RSA-2048 key.
+            hash_algorithm: Hash algorithm to use for signing.
+            path_length: Maximum number of CA certificates that may follow this
+                        certificate. If None, defaults to 1.
+
+        Returns:
+            Tuple of (certificate, private_key).
+        """
+        return CertificateGenerator.create_issuing_ca(
+            None, cn, cn, private_key, validity_days, hash_algorithm, path_length
+        )
 
     @staticmethod
     def create_issuing_ca(  # noqa: PLR0913
@@ -49,8 +64,24 @@ class CertificateGenerator:
         private_key: None | PrivateKey = None,
         validity_days: int = 3650,
         hash_algorithm: None | HashAlgorithm = None,
+        path_length: int | None = None,
     ) -> tuple[x509.Certificate, PrivateKey]:
-        """Creates an issuing CA certificate + key pair."""
+        """Creates an issuing CA certificate + key pair.
+
+        Args:
+            issuer_private_key: Private key of the issuing CA. None for root CA.
+            issuer_cn: Common name of the issuer.
+            subject_cn: Common name of the subject.
+            private_key: Private key to use. If None, generates new RSA-2048 key.
+            validity_days: Validity period in days.
+            hash_algorithm: Hash algorithm to use for signing.
+            path_length: Maximum number of CA certificates that may follow this
+                        certificate in a valid certification path. If None, defaults
+                        to 1 for root CAs and 0 for intermediate CAs.
+
+        Returns:
+            Tuple of (certificate, private_key).
+        """
         one_day = datetime.timedelta(1, 0, 0)
         if private_key is None:
             private_key = rsa.generate_private_key(
@@ -95,7 +126,10 @@ class CertificateGenerator:
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
         is_root_ca = issuer_private_key == private_key
-        path_length = 1 if is_root_ca else 0
+
+        if path_length is None:
+            path_length = 1 if is_root_ca else 0
+
         builder = builder.add_extension(x509.BasicConstraints(ca=True, path_length=path_length), critical=True)
         builder = builder.add_extension(
             x509.KeyUsage(

@@ -12,7 +12,7 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
 
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingStatus
 from pki.models.credential import CredentialModel
 from pki.util.keys import KeyGenerator
 from trustpoint.logger import LoggerMixin
@@ -712,7 +712,13 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             issued_using_cert_profile='Trustpoint Domain Credential',
         )
 
-        if self.device.onboarding_config:
+        # Only mark as onboarded if NOT OPC UA GDS Push
+        # For GDS Push, onboarding is complete only after server certificate is updated
+        if (
+            self.device.onboarding_config
+            and self.device.onboarding_config.onboarding_protocol
+            != OnboardingProtocol.OPC_GDS_PUSH
+        ):
             self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             self.device.onboarding_config.save()
 
@@ -765,7 +771,13 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             issued_using_cert_profile='Trustpoint Domain Credential'
         )
 
-        if self.device.onboarding_config:
+        # Only mark as onboarded if NOT OPC UA GDS Push
+        # For GDS Push, onboarding is complete only after server certificate is updated
+        if (
+            self.device.onboarding_config
+            and self.device.onboarding_config.onboarding_protocol
+            != OnboardingProtocol.OPC_GDS_PUSH
+        ):
             self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             self.device.onboarding_config.save()
 

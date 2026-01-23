@@ -516,7 +516,7 @@ class OpcUaGdsPushCreateForm(forms.Form):
     domain_queryset: QuerySet[DomainModel] = DomainModel.objects.filter(is_active=True)
     domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label='----------', required=False)
     ip_address = forms.GenericIPAddressField(protocol='both', required=True, label=_('IP Address'))
-    port = forms.IntegerField(min_value=1, max_value=65535, required=True, label=_('Port'))
+    opc_server_port = forms.IntegerField(min_value=1, max_value=65535, required=True, label=_('OPC Server Port'))
     opc_user = forms.CharField(
         max_length=128,
         required=False,
@@ -542,7 +542,7 @@ class OpcUaGdsPushCreateForm(forms.Form):
             Field('serial_number'),
             Field('domain'),
             Field('ip_address'),
-            Field('port'),
+            Field('opc_server_port'),
             HTML('<h2>OPC UA Credentials</h2><hr>'),
             Field('opc_user'),
             Field('opc_password'),
@@ -576,7 +576,7 @@ class OpcUaGdsPushCreateForm(forms.Form):
         serial_number = cast('str', self.cleaned_data.get('serial_number'))
         domain = cast('DomainModel | None', self.cleaned_data.get('domain'))
         ip_address = cast('str', self.cleaned_data.get('ip_address'))
-        port = cast('int', self.cleaned_data.get('port'))
+        opc_server_port = cast('int', self.cleaned_data.get('opc_server_port'))
         opc_user = cast('str', self.cleaned_data.get('opc_user'))
         opc_password = cast('str', self.cleaned_data.get('opc_password'))
 
@@ -602,7 +602,7 @@ class OpcUaGdsPushCreateForm(forms.Form):
             device_type=device_type,
             onboarding_config=onboarding_config_model,
             ip_address=ip_address,
-            port=port,
+            opc_server_port=opc_server_port,
         )
 
         device_model.full_clean()
@@ -706,7 +706,7 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
     domain_queryset: QuerySet[DomainModel] = DomainModel.objects.filter(is_active=True)
     domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label='----------', required=False)
     ip_address = forms.GenericIPAddressField(protocol='both', required=True, label=_('IP Address'))
-    port = forms.IntegerField(min_value=1, max_value=65535, required=True, label=_('Port'))
+    opc_server_port = forms.IntegerField(min_value=1, max_value=65535, required=True, label=_('OPC Server Port'))
     truststore_queryset: QuerySet[TruststoreModel] = TruststoreModel.objects.filter(
         intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
     )
@@ -737,7 +737,7 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             'serial_number': self.instance.serial_number,
             'domain': self.instance.domain,
             'ip_address': self.instance.ip_address,
-            'port': self.instance.port,
+            'opc_server_port': self.instance.opc_server_port,
             'opc_trust_store': (
                 self.instance.onboarding_config.opc_trust_store
                 if self.instance.onboarding_config else None
@@ -764,7 +764,7 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             Field('serial_number'),
             Field('domain'),
             Field('ip_address'),
-            Field('port'),
+            Field('opc_server_port'),
             Field('opc_trust_store'),
             HTML('<h2>Device Onboarding Configuration</h2><hr>'),
             Field('onboarding_protocol'),
@@ -789,7 +789,7 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             self.instance.serial_number = self.cleaned_data['serial_number']
             self.instance.domain = self.cleaned_data['domain']
             self.instance.ip_address = self.cleaned_data['ip_address']
-            self.instance.port = self.cleaned_data['port']
+            self.instance.opc_server_port = self.cleaned_data['opc_server_port']
             self.instance.onboarding_config.opc_trust_store = self.cleaned_data['opc_trust_store']
 
             # For GDS Push, protocol is fixed

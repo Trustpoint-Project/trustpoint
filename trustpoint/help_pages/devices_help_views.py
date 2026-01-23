@@ -818,7 +818,7 @@ class OpcUaGdsPushApplicationCertificateStrategy(HelpPageStrategy):
             cert_html = (
                 '<form method="post" action="' + update_cert_url + '" style="display: inline;">'
                 'CSRF_TOKEN_PLACEHOLDER'
-                '<button type="submit" class="btn btn-success">Update Server Certificate</button>'
+                '<button type="submit" class="btn btn-primary">Update Server Certificate</button>'
                 '</form>'
                 '<p class="text-muted mt-2">Generates a new CSR on the server, signs it with the '
                 'domain CA, and updates the server certificate.</p>'
@@ -863,7 +863,7 @@ class OpcUaGdsPushApplicationCertificateStrategy(HelpPageStrategy):
             discover_html = (
                 '<form method="post" action="' + discover_server_url + '" style="display: inline;">'
                 'CSRF_TOKEN_PLACEHOLDER'
-                '<button type="submit" class="btn btn-info">Discover Server</button>'
+                '<button type="submit" class="btn btn-primary">Discover Server</button>'
                 '</form>'
                 '<p class="text-muted mt-2">Connects to the OPC UA server without authentication '
                 'to retrieve server information and certificates for initial configuration.</p>'
@@ -965,7 +965,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             cert_html = (
                 '<form method="post" action="' + update_cert_url + '" style="display: inline;">'
                 'CSRF_TOKEN_PLACEHOLDER'
-                '<button type="submit" class="btn btn-success">Update Server Certificate</button>'
+                '<button type="submit" class="btn btn-primary">Update Server Certificate</button>'
                 '</form>'
                 '<p class="text-muted mt-2">Generates a new CSR on the server, signs it with the '
                 'domain CA, and updates the server certificate.</p>'
@@ -974,7 +974,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             discover_html = (
                 '<form method="post" action="' + discover_server_url + '" style="display: inline;">'
                 'CSRF_TOKEN_PLACEHOLDER'
-                '<button type="submit" class="btn btn-info">Discover Server</button>'
+                '<button type="submit" class="btn btn-primary">Discover Server</button>'
                 '</form>'
                 '<p class="text-muted mt-2">Connects to the OPC UA server without authentication '
                 'to retrieve server information and certificates for initial configuration.</p>'

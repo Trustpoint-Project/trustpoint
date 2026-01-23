@@ -818,7 +818,7 @@ class OpcUaGdsPushCertificateLifecycleManagementSummaryView(AbstractCertificateL
             'serial_number': self.object.serial_number,
             'domain': self.object.domain,
             'ip_address': self.object.ip_address,
-            'port': self.object.port,
+            'opc_server_port': self.object.opc_server_port,
             'onboarding_protocol': OnboardingProtocol.OPC_GDS_PUSH.label,
             'onboarding_status': OnboardingStatus(self.object.onboarding_config.onboarding_status).label,
             'pki_protocol_opc_gds_push': self.object.onboarding_config.has_pki_protocol(
@@ -1334,7 +1334,7 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
             (
                 x509.KeyUsage(
                     digital_signature=True,
-                    content_commitment=False,
+                    content_commitment=True,
                     key_encipherment=True,  # Required for OPC UA SignAndEncrypt security mode
                     data_encipherment=True,  # Additional encryption capability
                     key_agreement=False,
@@ -1881,10 +1881,8 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
             # Import here to avoid circular import
             from request.gds_push import GdsPushError, GdsPushService
 
-            # Create GDS Push service - automatically retrieves credentials and builds truststore
             service = GdsPushService(device=self.object)
 
-            # Update trustlist
             success, message = service.update_trustlist()
 
             if success:
@@ -1974,6 +1972,10 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
     def _update_truststore_with_certificate(self, certificate_bytes: bytes) -> None:
         """Update or create truststore with the discovered server certificate.
 
+        This method adds the new server certificate to the truststore WITHOUT removing
+        the old one immediately. This ensures that if something goes wrong, the old
+        certificate is still available for recovery.
+
         Args:
             certificate_bytes: DER-encoded certificate bytes
         """
@@ -1983,13 +1985,10 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
             from pki.models.certificate import CertificateModel
             from pki.models.truststore import TruststoreModel
 
-            # Load certificate
             cert = x509.load_der_x509_certificate(certificate_bytes, default_backend())
 
-            # Get or create truststore for this device
             truststore = self.object.onboarding_config.opc_trust_store
             if not truststore:
-                # Create new truststore
                 truststore = TruststoreModel.objects.create(
                     unique_name=f'opc_server_{self.object.common_name}',
                     friendly_name=f'OPC Server Certificate for {self.object.common_name}',
@@ -1998,20 +1997,53 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
                 self.object.onboarding_config.opc_trust_store = truststore
                 self.object.onboarding_config.save()
 
-            # Remove old server certificates from truststore
-            truststore.certificates.clear()
+            existing_certs = list(truststore.certificates.all())
+            cert_serial = cert.serial_number
+            cert_fingerprint = cert.fingerprint(cert.signature_hash_algorithm)
 
-            # Create new certificate model
-            cert_model = CertificateModel.from_cryptography(cert)
-            cert_model.save()
+            cert_exists = False
+            for existing_cert_model in existing_certs:
+                existing_cert = existing_cert_model.get_certificate_serializer().as_crypto()
+                if (existing_cert.serial_number == cert_serial and
+                    existing_cert.fingerprint(existing_cert.signature_hash_algorithm) == cert_fingerprint):
+                    cert_exists = True
+                    break
 
-            # Add to truststore
-            truststore.certificates.add(cert_model)
+            if not cert_exists:
+                cert_model = CertificateModel.save_certificate(cert)
 
-            messages.info(
-                self._get_request(),
-                f'Updated truststore "{truststore.unique_name}" with discovered server certificate'
-            )
+                # Delete old certificates BEFORE adding new one to avoid order conflicts
+                from pki.models.truststore import TruststoreOrderModel
+                if truststore.certificates.count() >= 2:
+                    # Keep only the most recent certificate (delete all but the last one)
+                    oldest_certs = truststore.truststoreordermodel_set.order_by('order')[:-1]
+                    for old_cert_order in oldest_certs:
+                        old_cert_order.delete()
+
+                # Get the next order number for the truststore
+                from django.db import models as db_models
+                max_order = truststore.truststoreordermodel_set.aggregate(
+                    max_order=db_models.Max('order')
+                )['max_order']
+                next_order = (max_order or -1) + 1
+
+                # Add certificate with explicit order
+                TruststoreOrderModel.objects.create(
+                    trust_store=truststore,
+                    certificate=cert_model,
+                    order=next_order
+                )
+
+                messages.info(
+                    self._get_request(),
+                    f'Added discovered server certificate to truststore "{truststore.unique_name}". '
+                    f'Old certificate kept as backup (total: {truststore.certificates.count()} cert(s))'
+                )
+            else:
+                messages.info(
+                    self._get_request(),
+                    f'Discovered server certificate already exists in truststore "{truststore.unique_name}"'
+                )
 
         except Exception as e:
             messages.warning(
@@ -2075,6 +2107,12 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
             if success and certificate_bytes:
                 messages.success(request, f'Server certificate updated successfully: {message}')
 
+                # Mark device as onboarded now that server certificate is updated
+                if self.object.onboarding_config:
+                    from devices.models import OnboardingStatus
+                    self.object.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+                    self.object.onboarding_config.save()
+
                 # Update truststore with new server certificate
                 self._update_truststore_with_certificate(certificate_bytes)
 
@@ -2092,6 +2130,10 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
 
     def _update_truststore_with_certificate(self, certificate_bytes: bytes) -> None:
         """Update or create truststore with the new server certificate.
+
+        This method adds the new server certificate to the truststore WITHOUT removing
+        the old one immediately. This ensures that if something goes wrong, the old
+        certificate is still available for recovery.
 
         Args:
             certificate_bytes: DER-encoded certificate bytes
@@ -2117,20 +2159,46 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
                 self.object.onboarding_config.opc_trust_store = truststore
                 self.object.onboarding_config.save()
 
-            # Remove old server certificates from truststore
-            truststore.certificates.clear()
+            # Check if this certificate already exists in the truststore
+            existing_certs = list(truststore.certificates.all())
+            cert_serial = cert.serial_number
+            cert_fingerprint = cert.fingerprint(cert.signature_hash_algorithm)
 
-            # Create new certificate model
-            cert_model = CertificateModel.from_cryptography(cert)
-            cert_model.save()
+            # Check if certificate with same serial number and fingerprint exists
+            cert_exists = False
+            for existing_cert_model in existing_certs:
+                existing_cert = existing_cert_model.get_certificate_serializer().as_crypto()
+                if (existing_cert.serial_number == cert_serial and
+                    existing_cert.fingerprint(existing_cert.signature_hash_algorithm) == cert_fingerprint):
+                    cert_exists = True
+                    break
 
-            # Add to truststore
-            truststore.certificates.add(cert_model)
+            if not cert_exists:
+                # Delete ALL existing certificates from truststore BEFORE adding new one
+                # to avoid UNIQUE constraint violations on (order, trust_store_id)
+                from pki.models.truststore import TruststoreOrderModel
+                truststore.truststoreordermodel_set.all().delete()
 
-            messages.info(
-                self._get_request(),
-                f'Updated truststore "{truststore.unique_name}" with new server certificate'
-            )
+                # Create new certificate model
+                cert_model = CertificateModel.save_certificate(cert)
+
+                # Add certificate with order=0 (starting fresh after clearing all)
+                TruststoreOrderModel.objects.create(
+                    trust_store=truststore,
+                    certificate=cert_model,
+                    order=0
+                )
+
+                messages.info(
+                    self._get_request(),
+                    f'Updated truststore "{truststore.unique_name}" with new server certificate '
+                    f'(total: {truststore.certificates.count()} cert(s))'
+                )
+            else:
+                messages.info(
+                    self._get_request(),
+                    f'Server certificate already exists in truststore "{truststore.unique_name}"'
+                )
 
         except Exception as e:
             messages.warning(
