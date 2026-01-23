@@ -12,22 +12,32 @@ export function renderRules(container, { step, rules, catalogItems, updateStepPa
   wrap.className = 'lg-wrap';
   wrap.dataset.wwField = 'logic-rules-wrap';
 
-  // Render snapshot only
   const snapshot = ensureArray(rules);
 
   const getLiveRules = () => ensureArray(ensureObj(step.params)._ui_rules);
-  const getLiveRuleAt = (idx) => ensureObj(getLiveRules()[idx]);
 
-  snapshot.forEach((rule, idx) => {
+  const findLiveIndexByRuleId = (ruleId) => {
+    const live = getLiveRules();
+    return live.findIndex((r) => String(ensureObj(r)._id || '') === String(ruleId || ''));
+  };
+
+  const getLiveRuleById = (ruleId) => {
+    const i = findLiveIndexByRuleId(ruleId);
+    if (i < 0) return {};
+    return ensureObj(getLiveRules()[i]);
+  };
+
+  snapshot.forEach((ruleSnap) => {
+    const ruleId = String(ensureObj(ruleSnap)._id || '');
+
     const cardHost = document.createElement('div');
-    cardHost.dataset.wwField = `logic-rule-host-${idx}`;
+    cardHost.dataset.wwField = `logic-rule-host-${ruleId || 'noid'}`;
 
-    /**
-     * Callers provide patch objects: { ui }, { assign }, { then }.
-     * We always merge into the live rule at idx to avoid stale overwrites.
-     */
     const updateRule = async (patch, { structural = false } = {}) => {
       const live = getLiveRules();
+      const idx = findLiveIndexByRuleId(ruleId);
+      if (idx < 0) return;
+
       const base = ensureObj(live[idx]);
       const next = live.slice();
 
@@ -50,6 +60,8 @@ export function renderRules(container, { step, rules, catalogItems, updateStepPa
 
     const removeRule = async () => {
       const live = getLiveRules();
+      const idx = findLiveIndexByRuleId(ruleId);
+      if (idx < 0) return;
       if (live.length <= 1) return;
 
       const next = live.slice();
@@ -63,11 +75,11 @@ export function renderRules(container, { step, rules, catalogItems, updateStepPa
     };
 
     renderRuleCard(cardHost, {
-      idx,
-      rule, // snapshot for display
+      ruleId,
+      rule: ruleSnap, // snapshot for display
       rulesCount: snapshot.length,
       catalogItems,
-      getLiveRule: () => getLiveRuleAt(idx),
+      getLiveRule: () => getLiveRuleById(ruleId),
       updateRule,
       removeRule,
       touch,

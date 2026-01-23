@@ -2,12 +2,23 @@
 function ensureArray(v) { return Array.isArray(v) ? v : []; }
 function ensureObj(v) { return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
 
+function uid() {
+  // Stable enough for UI identity; crypto.randomUUID preferred.
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {}
+  return `id_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function newPredicate() {
-  return { left: { path: 'ctx.vars.' }, op: 'eq', right: '' };
+  return { _id: uid(), left: { path: 'ctx.vars.' }, op: 'eq', right: '' };
 }
 
 export function newRule() {
   return {
+    _id: uid(),
     ui: { mode: 'all', predicates: [newPredicate()] },
     assign: {},
     then: { pass: true },
@@ -37,19 +48,15 @@ function buildWhenExpr(mode, predicates) {
 
 /**
  * Parse JSON-like strings only at backend conversion time.
- * - Keeps templates like "{{ ctx.* }}" as raw strings.
- * - Leaves non-strings untouched.
- * - Falls back to the original string if parsing fails.
+ * Preserves template strings verbatim.
  */
 function parseMaybeJSON(v) {
   if (typeof v !== 'string') return v;
 
   const s = v.trim();
 
-  // Preserve template strings verbatim.
   if (s.includes('{{') || s.includes('}}')) return v;
 
-  // Only attempt parse for plausible JSON tokens.
   const c = s[0];
   const looksJson =
     c === '{' || c === '[' || c === '"' || c === '-' ||
@@ -91,7 +98,6 @@ export function ruleToBackend(rule) {
 export function defaultToBackend(def) {
   const d = ensureObj(def);
 
-  // Extract assign from first set-action if present, otherwise {}
   const a0 = ensureArray(d.actions)[0];
   const assignUi = (a0 && typeof a0 === 'object' && String(a0.type).toLowerCase() === 'set')
     ? ensureObj(a0.assign)
@@ -113,7 +119,6 @@ export function ensureLogicDefaults(params) {
 
   if (!p.default || typeof p.default !== 'object') p.default = { actions: [], then: { pass: true } };
 
-  // normalize default.actions/default.then
   if (!Array.isArray(p.default.actions)) p.default.actions = [];
   if (!p.default.then || typeof p.default.then !== 'object') p.default.then = { pass: true };
 
@@ -123,14 +128,25 @@ export function ensureLogicDefaults(params) {
 /**
  * Enforce:
  * - at least 1 rule
+ * - each rule has stable _id
+ * - each predicate has stable _id
  * - each rule has at least 1 predicate
  */
 export function ensureMinRulesAndConds(uiRules) {
   const rules = ensureArray(uiRules).map((r) => {
     const rr = ensureObj(r);
+    if (!rr._id) rr._id = uid();
+
     const ui = ensureObj(rr.ui);
-    const preds = ensureArray(ui.predicates);
-    if (!preds.length) ui.predicates = [newPredicate()];
+    const preds0 = ensureArray(ui.predicates).map((p) => {
+      const pp = ensureObj(p);
+      if (!pp._id) pp._id = uid();
+      return pp;
+    });
+
+    if (!preds0.length) ui.predicates = [newPredicate()];
+    else ui.predicates = preds0;
+
     rr.ui = ui;
     return rr;
   });

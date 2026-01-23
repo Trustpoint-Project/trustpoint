@@ -6,53 +6,61 @@ import { renderOperand } from './operand.js';
 function ensureObj(v) { return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
 function ensureArray(v) { return Array.isArray(v) ? v : []; }
 
-export function renderConditions(card, { idx, rule, mode, predicates, catalogItems, getLiveRule, updateRule }) {
-  const snapRule = ensureObj(rule);
-  const snapUI = ensureObj(snapRule.ui);
+export function renderConditions(card, { ruleId, mode, predicates, catalogItems, getLiveRule, updateRule }) {
   const snapPreds = ensureArray(predicates);
 
   const conds = document.createElement('div');
   conds.className = 'lg-conds';
-  conds.dataset.wwField = `logic-rule-${idx}-conds`;
+  conds.dataset.wwField = `logic-rule-${ruleId}-conds`;
 
   const joinWord = mode === 'any' ? 'OR' : 'AND';
 
-  snapPreds.forEach((pred, pidx) => {
-    if (pidx > 0) {
+  const getLive = () => ensureObj(getLiveRule?.());
+  const getLiveUI = () => ensureObj(getLive().ui);
+  const getLivePreds = () => ensureArray(getLiveUI().predicates);
+
+  const findPredIndexById = (predId) => {
+    const livePreds = getLivePreds();
+    return livePreds.findIndex((p) => String(ensureObj(p)._id || '') === String(predId || ''));
+  };
+
+  snapPreds.forEach((predSnap, pidxDisplay) => {
+    const predId = String(ensureObj(predSnap)._id || '');
+
+    if (pidxDisplay > 0) {
       const join = document.createElement('div');
       join.className = 'lg-join-pill';
       join.textContent = joinWord;
       conds.appendChild(join);
     }
 
-    const snapP = ensureObj(pred);
-
     const cond = document.createElement('div');
     cond.className = 'lg-cond';
-    cond.dataset.wwField = `logic-rule-${idx}-pred-${pidx}`;
+    cond.dataset.wwField = `logic-rule-${ruleId}-pred-${predId || pidxDisplay}`;
 
     const grid = document.createElement('div');
     grid.className = 'lg-cond-grid';
 
     const leftBox = document.createElement('div');
-    leftBox.dataset.wwField = `logic-rule-${idx}-pred-${pidx}-left`;
+    leftBox.dataset.wwField = `logic-rule-${ruleId}-pred-${predId}-left`;
 
     renderOperand(
       leftBox,
-      snapP.left ?? { path: 'ctx.vars.' },
+      ensureObj(predSnap).left ?? { path: 'ctx.vars.' },
       async (v, { structural = false } = {}) => {
-        const live = ensureObj(getLiveRule?.());
-        const liveUI = ensureObj(live.ui);
-        const livePreds = ensureArray(liveUI.predicates);
-        const basePred = ensureObj(livePreds[pidx] || snapP);
+        const liveUI = getLiveUI();
+        const livePreds = getLivePreds();
+        const i = findPredIndexById(predId);
+        if (i < 0) return;
 
+        const base = ensureObj(livePreds[i]);
         const nextPreds = livePreds.slice();
-        nextPreds[pidx] = { ...basePred, left: v };
+        nextPreds[i] = { ...base, left: v };
 
         await updateRule({ ui: { ...liveUI, mode, predicates: nextPreds } }, { structural });
       },
       catalogItems,
-      { fieldPrefix: `logic-rule-${idx}-pred-${pidx}-left` },
+      { fieldPrefix: `logic-rule-${ruleId}-pred-${predId}-left` },
     );
 
     const opSel = ui.select({
@@ -63,14 +71,15 @@ export function renderConditions(card, { idx, rule, mode, predicates, catalogIte
         { label: 'is truthy', value: 'truthy' },
         { label: 'is falsy', value: 'falsy' },
       ],
-      value: String(snapP.op || 'eq'),
+      value: String(ensureObj(predSnap).op || 'eq'),
       onChange: async (v) => {
-        const live = ensureObj(getLiveRule?.());
-        const liveUI = ensureObj(live.ui);
-        const livePreds = ensureArray(liveUI.predicates);
-        const basePred = ensureObj(livePreds[pidx] || snapP);
+        const liveUI = getLiveUI();
+        const livePreds = getLivePreds();
+        const i = findPredIndexById(predId);
+        if (i < 0) return;
 
-        const next = { ...basePred, op: v };
+        const base = ensureObj(livePreds[i]);
+        const next = { ...base, op: v };
 
         if (!['eq', 'ne'].includes(String(v))) {
           delete next.right;
@@ -79,37 +88,38 @@ export function renderConditions(card, { idx, rule, mode, predicates, catalogIte
         }
 
         const nextPreds = livePreds.slice();
-        nextPreds[pidx] = next;
+        nextPreds[i] = next;
 
         await updateRule({ ui: { ...liveUI, mode, predicates: nextPreds } }, { structural: true });
       },
     });
-    opSel.dataset.wwField = `logic-rule-${idx}-pred-${pidx}-op`;
+    opSel.dataset.wwField = `logic-rule-${ruleId}-pred-${predId}-op`;
 
     const opBox = document.createElement('div');
     opBox.appendChild(ui.labeledNode('Operator', opSel));
 
-    const needsRight = ['eq', 'ne'].includes(String(snapP.op || 'eq'));
+    const needsRight = ['eq', 'ne'].includes(String(ensureObj(predSnap).op || 'eq'));
     const rightBox = document.createElement('div');
-    rightBox.dataset.wwField = `logic-rule-${idx}-pred-${pidx}-right`;
+    rightBox.dataset.wwField = `logic-rule-${ruleId}-pred-${predId}-right`;
 
     if (needsRight) {
       renderOperand(
         rightBox,
-        snapP.right,
+        ensureObj(predSnap).right,
         async (v, { structural = false } = {}) => {
-          const live = ensureObj(getLiveRule?.());
-          const liveUI = ensureObj(live.ui);
-          const livePreds = ensureArray(liveUI.predicates);
-          const basePred = ensureObj(livePreds[pidx] || snapP);
+          const liveUI = getLiveUI();
+          const livePreds = getLivePreds();
+          const i = findPredIndexById(predId);
+          if (i < 0) return;
 
+          const base = ensureObj(livePreds[i]);
           const nextPreds = livePreds.slice();
-          nextPreds[pidx] = { ...basePred, right: v };
+          nextPreds[i] = { ...base, right: v };
 
           await updateRule({ ui: { ...liveUI, mode, predicates: nextPreds } }, { structural });
         },
         catalogItems,
-        { fieldPrefix: `logic-rule-${idx}-pred-${pidx}-right` },
+        { fieldPrefix: `logic-rule-${ruleId}-pred-${predId}-right` },
       );
     } else {
       rightBox.appendChild(ui.help(''));
@@ -130,26 +140,21 @@ export function renderConditions(card, { idx, rule, mode, predicates, catalogIte
     rmPred.type = 'button';
     rmPred.className = 'btn btn-outline-danger btn-sm';
     rmPred.textContent = 'Remove condition';
-    rmPred.dataset.wwField = `logic-rule-${idx}-pred-${pidx}-remove`;
+    rmPred.dataset.wwField = `logic-rule-${ruleId}-pred-${predId}-remove`;
 
-    // Disable based on LIVE count (best effort); fallback to snapshot count.
-    const liveCount = (() => {
-      const live = ensureObj(getLiveRule?.());
-      const liveUI = ensureObj(live.ui);
-      return ensureArray(liveUI.predicates).length || snapPreds.length;
-    })();
-
+    const liveCount = getLivePreds().length || snapPreds.length;
     rmPred.disabled = liveCount <= 1;
     rmPred.style.display = liveCount <= 1 ? 'none' : '';
     rmPred.onclick = async () => {
-      const live = ensureObj(getLiveRule?.());
-      const liveUI = ensureObj(live.ui);
-      const livePreds = ensureArray(liveUI.predicates);
+      const liveUI = getLiveUI();
+      const livePreds = getLivePreds();
+      const i = findPredIndexById(predId);
+      if (i < 0) return;
 
       const nextPreds = livePreds.slice();
-      nextPreds.splice(pidx, 1);
-      const ensured = nextPreds.length ? nextPreds : [newPredicate()];
+      nextPreds.splice(i, 1);
 
+      const ensured = nextPreds.length ? nextPreds : [newPredicate()];
       await updateRule({ ui: { ...liveUI, mode, predicates: ensured } }, { structural: true });
     };
 
