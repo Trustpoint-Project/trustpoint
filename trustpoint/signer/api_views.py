@@ -8,7 +8,10 @@ from typing import Any, ClassVar
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
-from drf_spectacular.utils import extend_schema  # type: ignore[import-untyped]
+from drf_spectacular.utils import (  # type: ignore[import-untyped]
+    OpenApiResponse,
+    extend_schema,  # type: ignore[import-untyped]
+)
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -21,7 +24,6 @@ from signer.serializers import (
     SignerCertificateSerializer,
     SignerSerializer,
     SignHashRequestSerializer,
-    SignHashResponseSerializer,
 )
 from trustpoint.logger import LoggerMixin
 
@@ -34,21 +36,21 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
     serializer_class = SignerSerializer
     permission_classes: ClassVar[list[Any]] = [IsAuthenticated]  # type: ignore[misc]
 
-    @extend_schema(  # type: ignore[misc]
-        methods='post',
-        request=SignHashRequestSerializer,
-        responses={
-            200: SignHashResponseSerializer,
-            400: 'Bad Request - Invalid input data',
-            404: 'Not Found - Signer does not exist',
-            500: 'Internal Server Error - Failed to sign hash',
-        },
+    @extend_schema(
+        methods=['post'],
         summary='Sign a hash value',
         description=(
             'Signs a hash value using the specified signer. '
             'The hash value must be provided as a hexadecimal string. '
             'The signature is returned in hexadecimal format.'
         ),
+        responses={
+            200: OpenApiResponse(description='Signature generated successfully'),
+            400: OpenApiResponse(description='Bad Request - Invalid input data'),
+            404: OpenApiResponse(description='Not Found - Signer does not exist'),
+            500: OpenApiResponse(description='Internal Server Error - Failed to sign hash')
+        },
+        request=None
     )
     @action(detail=False, methods=['post'], url_path='sign')
     def sign_hash(self, request: Request) -> Response:
