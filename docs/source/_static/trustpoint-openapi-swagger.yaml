@@ -1020,8 +1020,21 @@ paths:
   /api/issuing-cas/{id}/crl/:
     get:
       operationId: api_issuing_cas_crl_retrieve
-      description: Download the CRL for this Issuing CA.
+      description: Download the Certificate Revocation List (CRL) for this Issuing
+        CA. Requires authentication. Supports both PEM (default) and DER formats via
+        the format query parameter. If no CRL is available, use the POST /api/issuing-cas/<pk>/generate-crl/
+        endpoint to generate one first.
+      summary: Download CRL
       parameters:
+      - in: query
+        name: encoding
+        schema:
+          type: string
+          enum:
+          - der
+          - pem
+          default: pem
+        description: 'CRL encoding: "pem" (default) or "der"'
       - in: path
         name: id
         schema:
@@ -1037,12 +1050,46 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IssuingCa'
+                type: object
+                additionalProperties: {}
+              examples:
+                CRLGenerated:
+                  value:
+                    detail: CRL file downloaded successfully.
+                  summary: CRL Generated
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                InvalidFormatParameter:
+                  value:
+                    error: No CRL available for Issuing CA "MyCA".
+                    hint: Generate a CRL first using POST /api/issuing-cas/1/generate-crl/
+                  summary: Invalid format parameter
+          description: ''
+        '404':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                NotFound:
+                  value:
+                    error: No CRL available for Issuing CA "MyCA".
+                    hint: Generate a CRL first using POST /api/issuing-cas/1/generate-crl/
+                  summary: Not Found
           description: ''
   /api/issuing-cas/{id}/generate-crl/:
     post:
       operationId: api_issuing_cas_generate_crl_create
-      description: Generate a new CRL for this Issuing CA.
+      description: Manually generate a new Certificate Revocation List (CRL) for this
+        Issuing CA. No request body is required.
+      summary: Generate CRL
       parameters:
       - in: path
         name: id
@@ -1052,17 +1099,6 @@ paths:
         required: true
       tags:
       - Issuing-CA
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/IssuingCa'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/IssuingCa'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/IssuingCa'
       security:
       - jwtAuth: []
       responses:
@@ -1070,7 +1106,26 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/IssuingCa'
+                type: object
+                additionalProperties: {}
+              examples:
+                CRLGenerated:
+                  value:
+                    message: CRL generated successfully for Issuing CA "MyCA".
+                    last_crl_issued_at: '2025-12-02T16:30:00Z'
+                  summary: CRL Generated
+          description: ''
+        '500':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+              examples:
+                ServerError:
+                  value:
+                    detail: Failed to generate CRL
+                  summary: Server Error
           description: ''
   /api/logging/delete/{file_name}/:
     delete:
@@ -1268,29 +1323,23 @@ paths:
   /api/signers/sign/:
     post:
       operationId: api_signers_sign_create
-      description: Sign a hash value with the specified signer.
+      description: Signs a hash value using the specified signer. The hash value must
+        be provided as a hexadecimal string. The signature is returned in hexadecimal
+        format.
+      summary: Sign a hash value
       tags:
       - Signer
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/Signer'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/Signer'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/Signer'
       security:
       - jwtAuth: []
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Signer'
-          description: ''
+          description: Signature generated successfully
+        '400':
+          description: Bad Request - Invalid input data
+        '404':
+          description: Not Found - Signer does not exist
+        '500':
+          description: Internal Server Error - Failed to sign hash
   /api/tls/:
     get:
       operationId: api_tls_list
