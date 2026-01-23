@@ -11,3 +11,4 @@ Definition
 
 .. openapi:: ../_static/trustpoint-openapi-swagger.yaml
    :group:
+   :examples:
