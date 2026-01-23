@@ -318,7 +318,6 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[IssuingCaModel]):
     @extend_schema(
         summary='List Issuing CAs',
         description='Retrieve all Issuing CAs from the database.',
-        tags=['Issuing-CA'],
     )  # type: ignore[misc]
     def list(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> Response:
         """API endpoint to get all Issuing CAs."""
@@ -339,25 +338,17 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[IssuingCaModel]):
     @extend_schema(
         summary='Retrieve Issuing CA',
         description='Retrieve details of a specific Issuing CA by ID.',
-        tags=['Issuing-CA'],
     )  # type: ignore[misc]
     def retrieve(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Response:
         """API endpoint to get a single Issuing CA by ID."""
         return super().retrieve(request, *args, **kwargs)  # type: ignore[arg-type]
 
-    @action(
-        detail=True,
-        methods=['post'],
-        permission_classes=[IsAuthenticated],
-        url_path='generate-crl',
-    )
     @extend_schema(
         summary='Generate CRL',
         description=(
             'Manually generate a new Certificate Revocation List (CRL) for this Issuing CA. '
             'No request body is required.'
         ),
-        tags=['issuing-cas'],
         request=inline_serializer(name='Empty', fields={}),
         responses={
             200: OpenApiTypes.OBJECT,
@@ -384,6 +375,12 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[IssuingCaModel]):
                 media_type='application/json',
             ),
         ],
+    )
+    @action(
+        detail=True,
+        methods=['post'],
+        permission_classes=[IsAuthenticated],
+        url_path='generate-crl',
     )  # type: ignore[misc]
     def generate_crl(self, _request: HttpRequest, **_kwargs: Any) -> Response:
         """Generate a new CRL for this Issuing CA."""
@@ -403,12 +400,6 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[IssuingCaModel]):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
-    @action(
-        detail=True,
-        methods=['get'],
-        permission_classes=[IsAuthenticated],
-        url_path='crl',
-    )
     @extend_schema(
         summary='Download CRL',
         description=(
@@ -417,7 +408,6 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[IssuingCaModel]):
             'Supports both PEM (default) and DER formats via the format query parameter. '
             'If no CRL is available, use the POST /api/issuing-cas/<pk>/generate-crl/ endpoint to generate one first.'
         ),
-        tags=['Issuing-CA'],
         parameters=[
             OpenApiParameter(
                 'encoding',
@@ -464,6 +454,12 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[IssuingCaModel]):
                 media_type='application/json',
             ),
         ],
+    )
+    @action(
+        detail=True,
+        methods=['get'],
+        permission_classes=[IsAuthenticated],
+        url_path='crl',
     )  # type: ignore[misc]
     def crl(self, request: HttpRequest, **_kwargs: Any) -> HttpResponse:
         """Download the CRL for this Issuing CA."""
