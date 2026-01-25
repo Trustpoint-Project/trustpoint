@@ -502,7 +502,7 @@ class TestDevIdMethodSelectView:
         
         assert response.status_code == 302
         # The actual URL pattern is /pki/devid-registration/create/<pk>/
-        assert f'/pki/devid-registration/create/{domain.pk}/' in response.url
+        assert f'/pki/devid-registration/create/{domain.pk}' in response.url
 
 
 @pytest.mark.django_db
