@@ -5,7 +5,7 @@ from __future__ import annotations
 import abc
 from collections import Counter
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from django.http import Http404
 from django.urls import reverse
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from trustpoint_core import oid
 
     from devices.models import DeviceModel
-    from pki.models import DevIdRegistration
+    from pki.models import CredentialModel, DevIdRegistration
     from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
 
 
@@ -194,7 +194,7 @@ def build_cmp_signer_trust_store_section(domain: DomainModel) -> HelpSection:
     if not issuing_ca:
         err_msg = 'Issuing CA not configured'
         raise ValueError(err_msg)
-    root_ca_model = issuing_ca.credential.get_last_in_chain()
+    root_ca_model = cast('CredentialModel', issuing_ca.credential).get_last_in_chain()
     if not root_ca_model:
         err_msg = 'No Root CA certificate found.'
         raise ValueError(err_msg)
