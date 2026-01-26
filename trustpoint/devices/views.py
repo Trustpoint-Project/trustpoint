@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+import asyncio
 import datetime
 import io
 import zipfile
@@ -1445,7 +1446,7 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
             service = GdsPushService(device=self.object, insecure=True)
 
             # Discover server information
-            success, message, server_info = service.discover_server()
+            success, message, server_info = asyncio.run(service.discover_server())
 
             if success and server_info:
                 messages.success(request, f'Server discovered successfully: {message}')
@@ -1883,7 +1884,7 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
 
             service = GdsPushService(device=self.object)
 
-            success, message = service.update_trustlist()
+            success, message = asyncio.run(service.update_trustlist())
 
             if success:
                 messages.success(request, f'Trustlist updated successfully: {message}')
@@ -1942,7 +1943,7 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
             service = GdsPushService(device=self.object, insecure=True)
 
             # Discover server information
-            success, message, server_info = service.discover_server()
+            success, message, server_info = asyncio.run(service.discover_server())
 
             if success and server_info:
                 messages.success(request, f'Server discovered successfully: {message}')
@@ -2102,7 +2103,7 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
             service = GdsPushService(device=self.object)
 
             # Update server certificate
-            success, message, certificate_bytes = service.update_server_certificate()
+            success, message, certificate_bytes = asyncio.run(service.update_server_certificate())
 
             if success and certificate_bytes:
                 messages.success(request, f'Server certificate updated successfully: {message}')
