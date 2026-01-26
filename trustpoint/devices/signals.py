@@ -6,7 +6,7 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
 from devices.models import DeviceModel
-from request.request_context import RequestContext
+from request.request_context import BaseRequestContext
 from request.workflow_handler import WorkflowHandler
 from workflows.events import Events
 
@@ -23,7 +23,7 @@ def _trigger_device_events(sender: ModelBase, instance: DeviceModel, *, created:
 
     # 1) Device created
     if created:
-        ctx = RequestContext(
+        ctx = BaseRequestContext(  # Prob. better not to use Workflow Pipeline here (or add DeviceEventRequestContext)
             event=Events.device_created,
             device=instance,
             domain=instance.domain,
@@ -38,7 +38,7 @@ def _trigger_device_events(sender: ModelBase, instance: DeviceModel, *, created:
     new = instance.domain_id
 
     if old != new and new is not None:
-        ctx = RequestContext(
+        ctx = BaseRequestContext(
             event=Events.device_onboarded,
             device=instance,
             domain=instance.domain,
