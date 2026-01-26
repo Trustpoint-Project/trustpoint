@@ -6,11 +6,9 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from devices.models import IssuedCredentialModel
 
-from request.authentication import (
-    ClientCertificateAuthentication,
-    UsernamePasswordAuthentication,
-)
-from request.request_context import RequestContext
+from request.authentication.base import ClientCertificateAuthentication
+from request.authentication.est import UsernamePasswordAuthentication
+from request.request_context import BaseRequestContext, EstBaseRequestContext
 
 
 class TestUsernamePasswordAuthentication:
@@ -19,7 +17,7 @@ class TestUsernamePasswordAuthentication:
     def setup_method(self):
         """Set up test fixtures."""
         self.auth = UsernamePasswordAuthentication()
-        self.context = Mock(spec=RequestContext)
+        self.context = Mock(spec=EstBaseRequestContext)
 
     def test_authenticate_success(self, est_device_without_onboarding):
         """Test successful username/password authentication."""
@@ -91,7 +89,7 @@ class TestClientCertificateAuthentication:
     def setup_method(self):
         """Set up test fixtures."""
         self.auth = ClientCertificateAuthentication()
-        self.context = Mock(spec=RequestContext)
+        self.context = Mock(spec=BaseRequestContext)
 
     def test_authenticate_success(self, domain_credential_est_onboarding):
         """Test successful client certificate authentication."""

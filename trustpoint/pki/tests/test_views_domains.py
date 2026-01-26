@@ -9,7 +9,7 @@ from django.test import RequestFactory
 
 from pki.models import (
     DomainModel,
-    IssuingCaModel,
+    CaModel,
     DevIdRegistration,
     TruststoreModel,
     CertificateModel,
@@ -97,9 +97,9 @@ class TestDomainCreateView:
         # Check that regular issuing CA is included
         ca_ids = [ca.id for ca in form.fields['issuing_ca'].queryset]
         assert issuing_ca.id in ca_ids
-        # Verify that queryset excludes IssuingCaTypeChoice.AUTOGEN_ROOT (type 0)
+        # Verify that queryset excludes CaTypeChoice.AUTOGEN_ROOT (type 0)
         for ca in form.fields['issuing_ca'].queryset:
-            assert ca.issuing_ca_type != IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
+            assert ca.ca_type != CaModel.CaTypeChoice.AUTOGEN_ROOT
 
     def test_create_view_removes_is_active_field(self, rf: RequestFactory, admin_user):
         """Test that is_active field is removed from the form."""

@@ -8,7 +8,7 @@ import pytest
 from django.contrib.messages import get_messages
 from django.test import RequestFactory
 
-from pki.models import IssuingCaModel, CredentialModel
+from pki.models import CaModel, CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.forms import PasswordAutoRestoreForm
 from setup_wizard.views import BackupAutoRestorePasswordView
@@ -268,7 +268,7 @@ class TestBackupAutoRestorePasswordViewHelpers:
         with pytest.raises(RuntimeError, match='Test error message'):
             self.view._raise_runtime_error('Test error message')
 
-    @patch('setup_wizard.views.IssuingCaModel.objects.filter')
+    @patch('setup_wizard.views.CaModel.objects.filter')
     def test_deactivate_all_issuing_cas_with_active_cas(self, mock_filter):
         """Test _deactivate_all_issuing_cas with active CAs."""
         mock_queryset = Mock()
@@ -281,7 +281,7 @@ class TestBackupAutoRestorePasswordViewHelpers:
         mock_filter.assert_called_once_with(is_active=True)
         mock_queryset.update.assert_called_once_with(is_active=False)
 
-    @patch('setup_wizard.views.IssuingCaModel.objects.filter')
+    @patch('setup_wizard.views.CaModel.objects.filter')
     def test_deactivate_all_issuing_cas_no_active_cas(self, mock_filter):
         """Test _deactivate_all_issuing_cas with no active CAs."""
         mock_queryset = Mock()
@@ -293,7 +293,7 @@ class TestBackupAutoRestorePasswordViewHelpers:
         mock_filter.assert_called_once_with(is_active=True)
         mock_queryset.update.assert_not_called()
 
-    @patch('setup_wizard.views.IssuingCaModel.objects.filter')
+    @patch('setup_wizard.views.CaModel.objects.filter')
     def test_deactivate_all_issuing_cas_exception(self, mock_filter):
         """Test _deactivate_all_issuing_cas handles exception."""
         mock_filter.side_effect = Exception('Database error')

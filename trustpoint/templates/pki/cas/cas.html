@@ -1,0 +1,90 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h1>{% trans "Certificate Authorities" %}</h1>
+        <a href="{% url 'pki:issuing_cas' %}" class="btn btn-outline-primary btn-sm">
+            {% trans "Show Issuing CAs only" %}
+        </a>
+    </div>
+    <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th id="checkbox-column"><input type="checkbox"/></th>
+                    <th>{% trans 'CA Name' %}</th>
+                    <th>{% trans 'Domain' %}</th>
+                    <th>{% trans 'Not valid after' %}</th>
+                    <th>{% trans 'Signature Suite' %}</th>
+                    <th>{% trans 'Config' %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ca in page_obj|default:cas %}
+                    <tr{% if not ca.is_active %} class="text-muted"{% endif %}>
+                        <td class="row_checkbox">
+                            <input type="checkbox" name="row_checkbox" value="{{ ca.id }}"/>
+                        </td>
+                        <td>
+                            {% if ca.get_hierarchy_depth > 0 %}
+                                <span style="padding-left: {{ ca.display_indentation }}; display: inline-block;">
+                                    <span style="color: #999;">└─</span> {{ ca.common_name }}
+                                </span>
+                            {% else %}
+                                {{ ca.common_name }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if ca.is_issuing_ca and ca.domains.exists %}
+                                {% for domain in ca.domains.all %}
+                                    <a href="{% url 'pki:domains-detail' domain.pk %}">{{ domain }}</a>{% if not forloop.last %}, {% endif %}
+                                {% endfor %}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if ca.is_issuing_ca %}
+                                {{ ca.credential.certificate.not_valid_after }}
+                            {% else %}
+                                {{ ca.certificate.not_valid_after }}
+                            {% endif %}
+                        </td>
+                        <td>{{ ca.signature_suite }}</td>
+                        <td>
+                            {% if ca.is_issuing_ca %}
+                                <a href="{% url 'pki:issuing_cas-config' ca.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a>
+                            {% elif ca.is_keyless_ca %}
+                                <a href="{% url 'pki:keyless_cas-config' ca.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="middle">{% trans 'No CAs have been added yet.' %}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% include 'trustpoint/pagination.html' %}
+    </div>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button type="button" class="btn btn-danger tp-table-select-btn me-2" data-tp-url="delete">{% trans 'Delete selected' %}</button>
+        </div>
+        <div class="m-1">
+            <a class="btn btn-primary ms-2" href="{% url 'pki:issuing_cas-add-method_select' %}">
+                {% trans 'Add new Issuing CA' %}
+            </a>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}

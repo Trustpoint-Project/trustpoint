@@ -3,7 +3,7 @@
 import pytest
 from devices.models import DeviceModel
 from django.utils import timezone
-from pki.models import DomainModel, IssuingCaModel
+from pki.models import DomainModel, CaModel
 
 from notifications.models import (
     NotificationConfig,
@@ -21,7 +21,7 @@ EXPECTED_STATUS_COUNT = 2
 def test_create_notification_with_issuing_ca(
         test_message: NotificationMessageModel,
         test_status: NotificationStatus,
-        setup_test_issuing_ca: IssuingCaModel) -> None:
+        setup_test_issuing_ca: CaModel) -> None:
     """Test creation of a NotificationModel linked to an Issuing CA."""
     notification = NotificationModel.objects.create(
         notification_type=NotificationModel.NotificationTypes.WARNING,
@@ -171,7 +171,7 @@ def test_notification_str_with_special_characters(test_domain: DomainModel) -> N
 def test_notification_for_issuing_ca_creation(
         test_message: NotificationMessageModel,
         test_status: NotificationStatus,
-        setup_test_issuing_ca: IssuingCaModel) -> None:
+        setup_test_issuing_ca: CaModel) -> None:
     """Test notification creation when a new issuing CA is created."""
     notification = NotificationModel.objects.create(
         notification_type=NotificationModel.NotificationTypes.INFO,
@@ -181,7 +181,7 @@ def test_notification_for_issuing_ca_creation(
         issuing_ca=setup_test_issuing_ca,
         message_data={
             'ca_name': setup_test_issuing_ca.unique_name,
-            'ca_type': str(setup_test_issuing_ca.IssuingCaTypeChoice(setup_test_issuing_ca.issuing_ca_type).label),
+            'ca_type': str(setup_test_issuing_ca.CaTypeChoice(setup_test_issuing_ca.ca_type).label),
             'common_name': setup_test_issuing_ca.common_name
         }
     )
