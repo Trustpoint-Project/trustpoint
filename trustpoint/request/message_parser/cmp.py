@@ -13,7 +13,7 @@ from pyasn1.codec.der import encoder as der_encoder
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
 
 from cmp.util import NameParser
-from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext
+from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext, CmpRevocationRequestContext
 from trustpoint.logger import LoggerMixin
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
@@ -505,6 +505,37 @@ class CmpCertificateBodyValidation(LoggerMixin):
         context.cert_requested = request_builder
 
 
+class CmpRevocationBodyValidation(LoggerMixin):
+    """Sub-component for validating CMP revocation body for RR message type."""
+
+    def parse_rr_body(self, context: CmpRevocationRequestContext, pki_body: rfc4210.PKIBody) -> None:
+        """Extract the revocation request details from CMP RR body."""
+        rev_req = pki_body['rr']
+
+        if len(rev_req) > 1:
+            self._raise_value_error('Multiple RevReqMessages found.')
+
+        if len(rev_req) < 1:
+            self._raise_value_error('No RevReqMessages found.')
+
+        rev_req_msg = rev_req[0]
+        context.revocation_reason = int(rev_req_msg['reason']) if rev_req_msg['reason'].hasValue() else None
+
+        if not rev_req_msg['certTemplate'].hasValue():
+            self._raise_value_error('certTemplate must be contained in RR RevReqMessage.')
+
+        cert_template = rev_req_msg['certTemplate']
+
+        if cert_template['serialNumber'].hasValue():
+            context.cert_serial_number = int(cert_template['serialNumber'])
+        else:
+            self._raise_value_error('serialNumber must be present in certTemplate for revocation request.')
+
+    def _raise_value_error(self, message: str) -> Never:
+        """Helper function to raise a ValueError with the given message."""
+        raise ValueError(message)
+
+
 class CmpBodyValidation(ParsingComponent, LoggerMixin):
     """Component for validating CMP body based on operation context."""
 
@@ -549,7 +580,8 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
                 context = context.narrow(CmpCertificateRequestContext)
                 CmpCertificateBodyValidation().parse_ircr_body(context, pki_body, body_type)
             elif body_type == 'rr':
-                self._raise_not_implemented_error('CMP RR is not implemented yet.')
+                context = context.narrow(CmpRevocationRequestContext)
+                CmpRevocationBodyValidation().parse_rr_body(context, pki_body)
 
             self.logger.info('CMP body type validation successful: %s body extracted', body_type.upper())
 

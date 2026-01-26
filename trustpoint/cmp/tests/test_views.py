@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, Mock, patch
 
-from django.http import Http404
+from django.http import Http404, HttpResponse
 import pytest
 from django.test import RequestFactory
 from django.urls import resolve
@@ -54,8 +54,7 @@ class TestCmpInitializationRequestView:
         assert view.csrf_exempt is True
 
     @patch('cmp.views.CmpMessageResponder')
-    @patch('cmp.views.CertificateIssueProcessor')
-    @patch('cmp.views.ProfileValidator')
+    @patch('cmp.views.OperationProcessor')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
@@ -68,7 +67,6 @@ class TestCmpInitializationRequestView:
         mock_parser_cls,
         mock_auth_cls,
         mock_authz_cls,
-        mock_profile_validator_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
@@ -98,7 +96,6 @@ class TestCmpInitializationRequestView:
         mock_parser_cls.return_value.parse.assert_called_once()
         mock_auth_cls.return_value.authenticate.assert_called_once()
         mock_authz_cls.return_value.authorize.assert_called_once()
-        mock_profile_validator_cls.validate.assert_called_once()
         mock_processor_cls.return_value.process_operation.assert_called_once()
         mock_responder_cls.build_response.assert_called_once()
         
@@ -108,8 +105,7 @@ class TestCmpInitializationRequestView:
         assert response['Content-Type'] == 'application/pkixcmp'
 
     @patch('cmp.views.CmpMessageResponder')
-    @patch('cmp.views.CertificateIssueProcessor')
-    @patch('cmp.views.ProfileValidator')
+    @patch('cmp.views.OperationProcessor')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
@@ -118,11 +114,9 @@ class TestCmpInitializationRequestView:
     def test_post_initialization_with_certificate_profile(
         self,
         mock_context_cls,
-        mock_validator_cls,
         mock_parser_cls,
         mock_auth_cls,
         mock_authz_cls,
-        mock_profile_validator_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
@@ -133,6 +127,15 @@ class TestCmpInitializationRequestView:
         
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
+        parser_instance = mock_parser_cls.return_value
+        context = parser_instance.parse.return_value
+
+        # Mock to_http_response to return actual HttpResponse
+        mock_request_context.to_http_response.return_value = HttpResponse(
+            content=mock_request_context.http_response_content,
+            status=context.http_response_status,
+            content_type=mock_request_context.http_response_content_type
+        )
         
         request = request_factory.post('/cmp/p/test_domain/tls_client/initialization')
         view = CmpRequestView()
@@ -147,8 +150,7 @@ class TestCmpInitializationRequestView:
         assert response.status_code == 200
 
     @patch('cmp.views.CmpMessageResponder')
-    @patch('cmp.views.CertificateIssueProcessor')
-    @patch('cmp.views.ProfileValidator')
+    @patch('cmp.views.OperationProcessor')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
@@ -161,7 +163,6 @@ class TestCmpInitializationRequestView:
         mock_parser_cls,
         mock_auth_cls,
         mock_authz_cls,
-        mock_profile_validator_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
@@ -179,15 +180,14 @@ class TestCmpInitializationRequestView:
         view.post(request, domain='test_domain')
         
         # Verify CmpAuthorization was initialized with correct operations
-        mock_authz_cls.assert_called_once_with(['initialization', 'certification'])
+        mock_authz_cls.assert_called_once_with(['initialization', 'certification', 'revocation'])
 
 
 class TestCmpCertificationRequestView:
     """Tests for CmpCertificationRequestView."""
 
     @patch('cmp.views.CmpMessageResponder')
-    @patch('cmp.views.CertificateIssueProcessor')
-    @patch('cmp.views.ProfileValidator')
+    @patch('cmp.views.OperationProcessor')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
@@ -200,7 +200,6 @@ class TestCmpCertificationRequestView:
         mock_parser_cls,
         mock_auth_cls,
         mock_authz_cls,
-        mock_profile_validator_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
@@ -230,7 +229,6 @@ class TestCmpCertificationRequestView:
         mock_parser_cls.return_value.parse.assert_called_once()
         mock_auth_cls.return_value.authenticate.assert_called_once()
         mock_authz_cls.return_value.authorize.assert_called_once()
-        mock_profile_validator_cls.validate.assert_called_once()
         mock_processor_cls.return_value.process_operation.assert_called_once()
         mock_responder_cls.build_response.assert_called_once()
         
@@ -240,8 +238,7 @@ class TestCmpCertificationRequestView:
         assert response['Content-Type'] == 'application/pkixcmp'
 
     @patch('cmp.views.CmpMessageResponder')
-    @patch('cmp.views.CertificateIssueProcessor')
-    @patch('cmp.views.ProfileValidator')
+    @patch('cmp.views.OperationProcessor')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
@@ -254,7 +251,6 @@ class TestCmpCertificationRequestView:
         mock_parser_cls,
         mock_auth_cls,
         mock_authz_cls,
-        mock_profile_validator_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
@@ -279,8 +275,7 @@ class TestCmpCertificationRequestView:
         assert response.status_code == 200
 
     @patch('cmp.views.CmpMessageResponder')
-    @patch('cmp.views.CertificateIssueProcessor')
-    @patch('cmp.views.ProfileValidator')
+    @patch('cmp.views.OperationProcessor')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
@@ -293,7 +288,6 @@ class TestCmpCertificationRequestView:
         mock_parser_cls,
         mock_auth_cls,
         mock_authz_cls,
-        mock_profile_validator_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,

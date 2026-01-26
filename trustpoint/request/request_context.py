@@ -4,10 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from cryptography import x509
 from django.http import HttpResponse
 
 if TYPE_CHECKING:
-    from cryptography import x509
     from cryptography.x509 import CertificateSigningRequest
     from cryptography.x509.base import CertificateBuilder
     from django.http import HttpRequest
@@ -106,6 +106,7 @@ class BaseCertificateRequestContext(BaseRequestContext):
 class BaseRevocationRequestContext(BaseRequestContext):
     """Shared context for all revocation request operations."""
     credential_to_revoke: IssuedCredentialModel | None = None
+    revocation_reason: x509.ReasonFlags = x509.ReasonFlags.unspecified
 
 
 @dataclass(kw_only=True)

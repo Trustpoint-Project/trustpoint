@@ -10,7 +10,6 @@ from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
 from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm, SignatureSuite
 
-from cmp.util import PKIFailureInfo
 from devices.models import (
     DeviceModel,
     NoOnboardingConfigModel,
