@@ -1,0 +1,34 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+
+    <form method="POST" autocomplete="off">
+        {% csrf_token %}
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h1>{% trans 'Associate Trust Store' %}</h1>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="tp-card-centered-content">
+                    <h2>{% trans 'Trust Store Association' %}</h2>
+                    <p>{% trans 'Select a trust store to associate with this device\'s onboarding configuration.' %}</p>
+                    <hr>
+                    {{ form|crispy }}
+                </div>
+
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'devices:opc_ua_gds_push_certificate_lifecycle_management' pk=device.pk %}" class="btn btn-secondary">{% trans "Skip" %}</a>
+                    <button type="submit" class="btn btn-primary">{% trans "Associate Trust Store" %}</button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+{% endblock content %}
