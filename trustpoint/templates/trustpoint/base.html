@@ -42,6 +42,14 @@
             </div>
 
             <div class="tp-menu-group">
+                <a href="{% url 'discovery:device_list' %}" class="tp-menu-head {% if 'discovery' in request.path %}tp-menu-active{% endif %}">
+                    <svg class="bi" fill="currentColor" role="img">
+                        <use href="{% static 'img/icons.svg' %}#icon-search"></use></svg>
+                    {% translate "Network Discovery" %}
+                </a>
+            </div>
+
+            <div class="tp-menu-group">
                 <a href="{% url 'devices:devices' %}" class="tp-menu-head {% if page_category == 'devices' %}tp-menu-active{% endif %}">
                     <svg class="bi" fill="currentColor" role="img">
                         <use href="{% static 'img/icons.svg' %}#icon-boxes"></use></svg>
