@@ -1,0 +1,91 @@
+{% load i18n static %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}" data-bs-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Trustpoint</title>
+    
+    <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+    <link rel="stylesheet" href="{% static 'css/trustpoint.css' %}">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    
+    {% block head %}{% endblock head %}
+</head>
+
+<body id="bs-override">
+    <div class="tp-content-wrapper">
+        <header class="tp-page-header navbar border-bottom border-body">
+            <div class="menu-icon">
+                <svg id="menu-icon-menu" class="bi bi-size100" fill="currentColor" role="img" aria-label="Show Menu">
+                    <use href="{% static 'img/icons.svg' %}#icon-menu"></use></svg>
+                <svg id="menu-icon-back" class="bi bi-size100 d-none" fill="currentColor" role="img" aria-label="Hide Menu">
+                    <use href="{% static 'img/icons.svg' %}#icon-x"></use></svg>
+            </div>
+            <a class="navbar-brand tp-primary" href="{% url 'home:dashboard' %}">
+                <img src="{% static 'img/tp-logo-horizontal-white-point.png' %}" alt="Trustpoint" id="tp-logo">
+            </a>
+            <div><!-- Spacer --></div>
+        </header>
+
+        <div class="d-flex">
+            <nav class="tp-sidenav">
+                <!-- Dashboard -->
+                <div class="tp-menu-group">
+                    <a href="{% url 'home:dashboard' %}" class="tp-menu-head {% if page_name == 'dashboard' %}tp-menu-active{% endif %}">
+                        <svg class="bi" fill="currentColor" role="img">
+                            <use href="{% static 'img/icons.svg' %}#icon-home"></use></svg>
+                        {% translate "Dashboard" %}
+                    </a>
+                </div>
+
+                <!-- Network Discovery (Using native Trustpoint SVG) -->
+                <div class="tp-menu-group">
+                    <a href="/discovery/" class="tp-menu-head {% if 'discovery' in request.path %}tp-menu-active{% endif %}">
+                        <svg class="bi" fill="currentColor" role="img">
+                            <use href="{% static 'img/icons.svg' %}#icon-search"></use></svg>
+                        {% translate "Network Discovery" %}
+                    </a>
+                </div>
+
+                <!-- Devices -->
+                <div class="tp-menu-group">
+                    <a href="{% url 'devices:devices' %}" class="tp-menu-head {% if page_category == 'devices' %}tp-menu-active{% endif %}">
+                        <svg class="bi" fill="currentColor" role="img">
+                            <use href="{% static 'img/icons.svg' %}#icon-boxes"></use></svg>
+                        {% translate "Devices" %}
+                    </a>
+                </div>
+
+                <!-- PKI -->
+                <div class="tp-menu-group">
+                    <a href="{% url 'pki:certificates' %}" class="tp-menu-head {% if page_category == 'pki' %}tp-menu-active{% endif %}">
+                        <svg class="bi" fill="currentColor" role="img">
+                            <use href="{% static 'img/icons.svg' %}#icon-key"></use></svg>
+                        {% translate "PKI" %}
+                    </a>
+                </div>
+            </nav>
+
+            <main class="flex-grow-1">
+                {% if messages %}
+                    <div class="container-fluid pt-3">
+                        {% for message in messages %}
+                            <div class="alert alert-success alert-dismissible fade show shadow-sm" role="alert" style="background-color: #198754; color: white; border: none;">
+                                <i class="bi bi-check-circle-fill me-2"></i>
+                                {{ message }}
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
+                {% block content %}{% endblock content %}
+            </main>
+        </div>
+    </div>
+
+    <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+    <script src="{% static 'js/trustpoint.js' %}"></script>
+</body>
+</html>
