@@ -11,14 +11,30 @@ function normalizeModeStrict(raw) {
   return (m === 'or') ? 'or' : 'and';
 }
 
+function needsRightOperand(op) {
+  const o = String(op || '').trim().toLowerCase();
+  return ['eq', 'ne', 'lt', 'lte', 'gt', 'gte'].includes(o);
+}
+
 export function renderConditions(card, { ruleId, mode, predicates, catalogItems, getLiveRule, updateRule }) {
   const snapPreds = ensureArray(predicates);
+
+  // Wrap all conditions for this rule so they read as one group.
+  const group = document.createElement('div');
+  group.className = 'lg-conds-group';
+  group.dataset.wwField = `logic-rule-${ruleId}-conds-group`;
+
+  // Tiny help text (explains AND/OR semantics)
+  group.appendChild(
+    ui.help(`All conditions are combined with ${normalizeModeStrict(mode).toUpperCase()}.`),
+  );
 
   const conds = document.createElement('div');
   conds.className = 'lg-conds';
   conds.dataset.wwField = `logic-rule-${ruleId}-conds`;
+  group.appendChild(conds);
 
-  const joinWord = (normalizeModeStrict(mode) === 'or') ? 'OR' : 'AND';
+  const joinWord = normalizeModeStrict(mode) === 'or' ? 'OR' : 'AND';
 
   const getLive = () => ensureObj(getLiveRule?.());
   const getLiveUI = () => ensureObj(getLive().ui);
@@ -29,6 +45,7 @@ export function renderConditions(card, { ruleId, mode, predicates, catalogItems,
     return livePreds.findIndex((p) => String(ensureObj(p)._id || '') === String(predId || ''));
   };
 
+  // Render each condition as a connected list item (joined by AND/OR pill)
   snapPreds.forEach((predSnap, pidxDisplay) => {
     const predId = String(ensureObj(predSnap)._id || '');
 
@@ -72,6 +89,10 @@ export function renderConditions(card, { ruleId, mode, predicates, catalogItems,
       options: [
         { label: 'equals', value: 'eq' },
         { label: 'not equals', value: 'ne' },
+        { label: 'greater than', value: 'gt' },
+        { label: 'greater or equal', value: 'gte' },
+        { label: 'less than', value: 'lt' },
+        { label: 'less or equal', value: 'lte' },
         { label: 'exists', value: 'exists' },
         { label: 'is truthy', value: 'truthy' },
         { label: 'is falsy', value: 'falsy' },
@@ -86,7 +107,7 @@ export function renderConditions(card, { ruleId, mode, predicates, catalogItems,
         const base = ensureObj(livePreds[i]);
         const next = { ...base, op: v };
 
-        if (!['eq', 'ne'].includes(String(v))) {
+        if (!needsRightOperand(v)) {
           delete next.right;
         } else if (!('right' in next)) {
           next.right = '';
@@ -103,7 +124,7 @@ export function renderConditions(card, { ruleId, mode, predicates, catalogItems,
     const opBox = document.createElement('div');
     opBox.appendChild(ui.labeledNode('Operator', opSel));
 
-    const needsRight = ['eq', 'ne'].includes(String(ensureObj(predSnap).op || 'eq'));
+    const needsRight = needsRightOperand(ensureObj(predSnap).op || 'eq');
     const rightBox = document.createElement('div');
     rightBox.dataset.wwField = `logic-rule-${ruleId}-pred-${predId}-right`;
 
@@ -134,6 +155,7 @@ export function renderConditions(card, { ruleId, mode, predicates, catalogItems,
     grid.appendChild(opBox);
     grid.appendChild(rightBox);
 
+    // Actions row (remove condition)
     const condActions = document.createElement('div');
     condActions.className = 'lg-cond-actions';
 
@@ -171,5 +193,26 @@ export function renderConditions(card, { ruleId, mode, predicates, catalogItems,
     conds.appendChild(cond);
   });
 
-  card.appendChild(conds);
+  // Add condition button INSIDE the list (at the end)
+  const addRow = document.createElement('div');
+  addRow.className = 'lg-conds-footer';
+  addRow.dataset.wwField = `logic-rule-${ruleId}-conds-footer`;
+
+  const addBtn = document.createElement('button');
+  addBtn.type = 'button';
+  addBtn.className = 'btn btn-outline-secondary btn-sm';
+  addBtn.textContent = 'Add condition';
+  addBtn.dataset.wwField = `logic-rule-${ruleId}-add-cond-inline`;
+  addBtn.onclick = async () => {
+    const live = getLive();
+    const liveUI = ensureObj(live.ui);
+    const livePreds = ensureArray(liveUI.predicates);
+    const nextPreds = [...livePreds, newPredicate()];
+    await updateRule({ ui: { ...liveUI, mode: normalizeModeStrict(mode), predicates: nextPreds } }, { structural: true });
+  };
+
+  addRow.appendChild(addBtn);
+  conds.appendChild(addRow);
+
+  card.appendChild(group);
 }

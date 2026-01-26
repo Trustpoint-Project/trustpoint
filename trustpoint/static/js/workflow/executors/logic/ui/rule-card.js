@@ -1,6 +1,5 @@
 // static/js/workflow/executors/logic/ui/rule-card.js
 import { ui } from '../../index.js';
-import { newPredicate } from '../model.js';
 import { renderConditions } from './rule-conditions.js';
 import { renderAssignments } from './assignments.js';
 import { renderThen } from './then.js';
@@ -34,6 +33,7 @@ export function renderRuleCard(container, {
   card.className = 'lg-card';
   card.dataset.wwField = `logic-rule-${ruleId || 'noid'}`;
 
+  // ---------- header ----------
   const head = document.createElement('div');
   head.className = 'lg-rule-head';
 
@@ -68,6 +68,25 @@ export function renderRuleCard(container, {
   head.appendChild(actions);
   card.appendChild(head);
 
+  // ---------- Conditions header + help (LEFT) + AND/OR selector (RIGHT) ----------
+  const condTop = document.createElement('div');
+  condTop.className = 'lg-conds-top';
+  condTop.dataset.wwField = `logic-rule-${ruleId}-conds-top`;
+
+  // Left column: title + help text (this makes the dropdown align with the help line)
+  const condLeft = document.createElement('div');
+  condLeft.className = 'lg-conds-left';
+
+  const condTitle = document.createElement('div');
+  condTitle.className = 'lg-section-title mb-0';
+  condTitle.textContent = 'Conditions';
+
+  const condHelp = ui.help('This rule runs only when the conditions below evaluate to true.');
+
+  condLeft.appendChild(condTitle);
+  condLeft.appendChild(condHelp);
+
+  // Right column: AND/OR selector
   const modeSel = ui.select({
     options: [
       { label: 'AND', value: 'and' },
@@ -78,13 +97,23 @@ export function renderRuleCard(container, {
       const live = ensureObj(getLiveRule?.());
       const liveUI = ensureObj(live.ui);
       const livePreds = ensureArray(liveUI.predicates);
-      await updateRule({ ui: { ...liveUI, mode: normalizeModeStrict(v), predicates: livePreds } }, { structural: true });
+      await updateRule(
+        { ui: { ...liveUI, mode: normalizeModeStrict(v), predicates: livePreds } },
+        { structural: true },
+      );
     },
   });
   modeSel.dataset.wwField = `logic-rule-${ruleId}-mode`;
 
-  card.appendChild(ui.labeledNode('', modeSel));
+  const modeWrap = document.createElement('div');
+  modeWrap.className = 'lg-conds-mode';
+  modeWrap.appendChild(ui.labeledNode('Combine with', modeSel));
 
+  condTop.appendChild(condLeft);
+  condTop.appendChild(modeWrap);
+  card.appendChild(condTop);
+
+  // ---------- conditions list (includes inline "Add condition") ----------
   renderConditions(card, {
     ruleId,
     mode: modeSel.value,
@@ -94,29 +123,35 @@ export function renderRuleCard(container, {
     predicates: snapPredicates,
   });
 
-  const addPred = document.createElement('button');
-  addPred.type = 'button';
-  addPred.className = 'btn btn-outline-secondary btn-sm';
-  addPred.textContent = 'Add condition';
-  addPred.dataset.wwField = `logic-rule-${ruleId}-add-cond`;
-  addPred.onclick = async () => {
-    const live = ensureObj(getLiveRule?.());
-    const liveUI = ensureObj(live.ui);
-    const livePreds = ensureArray(liveUI.predicates);
-    const nextPreds = [...livePreds, newPredicate()];
-    await updateRule({ ui: { ...liveUI, mode: normalizeModeStrict(modeSel.value), predicates: nextPreds } }, { structural: true });
-  };
-  card.appendChild(addPred);
-
+  // ---------- THEN-BRANCH (only if true) ----------
   card.appendChild(document.createElement('hr')).className = 'lg-divider';
 
-  const assignHost = document.createElement('div');
-  assignHost.dataset.wwField = `logic-rule-${ruleId}-assignments`;
+  const branch = document.createElement('div');
+  branch.className = 'lg-branch';
+  branch.dataset.wwField = `logic-rule-${ruleId}-branch`;
+
+  const branchHead = document.createElement('div');
+  branchHead.className = 'lg-branch-head';
+
+  const branchTag = document.createElement('span');
+  branchTag.className = 'lg-branch-tag';
+  branchTag.textContent = 'IF TRUE';
+
+  const branchHint = document.createElement('div');
+  branchHint.className = 'lg-branch-hint';
+  branchHint.textContent = 'Runs only when the conditions above match.';
+
+  branchHead.appendChild(branchTag);
+  branchHead.appendChild(branchHint);
+  branch.appendChild(branchHead);
 
   const assignTitle = document.createElement('div');
   assignTitle.className = 'lg-section-title';
   assignTitle.textContent = 'Define variables';
-  card.appendChild(assignTitle);
+  branch.appendChild(assignTitle);
+
+  const assignHost = document.createElement('div');
+  assignHost.dataset.wwField = `logic-rule-${ruleId}-assignments`;
 
   renderAssignments(
     assignHost,
@@ -132,14 +167,12 @@ export function renderRuleCard(container, {
     },
   );
 
-  card.appendChild(assignHost);
-
-  card.appendChild(document.createElement('hr')).className = 'lg-divider';
+  branch.appendChild(assignHost);
 
   const thenTitle = document.createElement('div');
-  thenTitle.className = 'lg-section-title';
-  thenTitle.textContent = 'Then';
-  card.appendChild(thenTitle);
+  thenTitle.className = 'lg-section-title mt-2';
+  thenTitle.textContent = 'Next';
+  branch.appendChild(thenTitle);
 
   const thenWrap = document.createElement('div');
   thenWrap.dataset.wwField = `logic-rule-${ruleId}-then`;
@@ -152,10 +185,11 @@ export function renderRuleCard(container, {
       touch?.();
     },
     touch,
-    { fieldPrefix: `logic-rule-${ruleId}-then`, headline: 'If true' },
+    { fieldPrefix: `logic-rule-${ruleId}-then`, headline: 'When true' },
   );
 
-  card.appendChild(thenWrap);
+  branch.appendChild(thenWrap);
 
+  card.appendChild(branch);
   container.appendChild(card);
 }

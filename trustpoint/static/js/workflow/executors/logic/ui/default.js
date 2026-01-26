@@ -28,10 +28,30 @@ export function renderDefaultBlock(container, { step, params, updateStepParam, t
   elseTop.innerHTML = `<div class="lg-rule-tag else">ELSE</div><strong>Default</strong>`;
   container.appendChild(elseTop);
 
+  container.appendChild(ui.help('Runs when no IF rule matched.'));
+
   const defCard = document.createElement('div');
   defCard.className = 'lg-card';
   defCard.dataset.wwField = 'logic-default-card';
-  defCard.appendChild(ui.help('Runs when no rule matched.'));
+
+  const branch = document.createElement('div');
+  branch.className = 'lg-branch lg-branch-else';
+  branch.dataset.wwField = 'logic-default-branch';
+
+  const branchHead = document.createElement('div');
+  branchHead.className = 'lg-branch-head';
+
+  const branchTag = document.createElement('span');
+  branchTag.className = 'lg-branch-tag';
+  branchTag.textContent = 'ELSE';
+
+  const branchHint = document.createElement('div');
+  branchHint.className = 'lg-branch-hint';
+  branchHint.textContent = 'Runs when none of the IF rules are true.';
+
+  branchHead.appendChild(branchTag);
+  branchHead.appendChild(branchHint);
+  branch.appendChild(branchHead);
 
   const liveDef0 = getLiveDefault(step);
 
@@ -42,6 +62,11 @@ export function renderDefaultBlock(container, { step, params, updateStepParam, t
     }
     return {};
   })();
+
+  const assignTitle = document.createElement('div');
+  assignTitle.className = 'lg-section-title';
+  assignTitle.textContent = 'Define variables';
+  branch.appendChild(assignTitle);
 
   const assignHost = document.createElement('div');
   assignHost.dataset.wwField = 'logic-default-assignments';
@@ -69,14 +94,15 @@ export function renderDefaultBlock(container, { step, params, updateStepParam, t
     },
   );
 
-  defCard.appendChild(assignHost);
+  branch.appendChild(assignHost);
 
-  defCard.appendChild(document.createElement('hr')).className = 'lg-divider';
+  const thenTitle = document.createElement('div');
+  thenTitle.className = 'lg-section-title mt-2';
+  thenTitle.textContent = 'Next';
+  branch.appendChild(thenTitle);
 
   const thenWrap = document.createElement('div');
-  thenWrap.className = 'lg-card';
   thenWrap.dataset.wwField = 'logic-default-then';
-  thenWrap.appendChild(ui.help('Outcome for Default (ELSE).'));
 
   renderThen(
     thenWrap,
@@ -88,9 +114,11 @@ export function renderDefaultBlock(container, { step, params, updateStepParam, t
       if (structural) await hardRender?.();
     },
     touch,
-    { fieldPrefix: 'logic-default-then', headline: 'Default outcome' },
+    { fieldPrefix: 'logic-default-then', headline: 'Default path' },
   );
 
-  defCard.appendChild(thenWrap);
+  branch.appendChild(thenWrap);
+
+  defCard.appendChild(branch);
   container.appendChild(defCard);
 }

@@ -54,7 +54,7 @@ export function renderLogicParamsUI(container, {
   const addRuleBtn = document.createElement('button');
   addRuleBtn.type = 'button';
   addRuleBtn.className = 'btn btn-sm btn-primary mt-2';
-  addRuleBtn.textContent = 'Add rule';
+  addRuleBtn.textContent = '+ ELSE IF';
   addRuleBtn.dataset.wwField = 'logic-add-rule';
   addRuleBtn.onclick = async () => {
     const cur = ensureArray(ensureObj(step.params)._ui_rules);

@@ -18,7 +18,7 @@ export function renderThen(container, thenObj, onUpdateThen, touch, opts = {}) {
   container.textContent = '';
 
   const prefix = String(opts.fieldPrefix || '').trim();
-  const headline = String(opts.headline || 'If true').trim() || 'If true';
+  const headline = String(opts.headline || 'Next').trim() || 'Next';
 
   const t = ensureObj(thenObj);
 

@@ -1,9 +1,9 @@
 // static/js/workflow/executors/logic/model.js
 function ensureArray(v) { return Array.isArray(v) ? v : []; }
 function ensureObj(v) { return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
+function isPlainObject(v) { return (v && typeof v === 'object' && !Array.isArray(v)); }
 
 function uid() {
-  // Stable enough for UI identity; crypto.randomUUID preferred.
   try {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
       return crypto.randomUUID();
@@ -13,13 +13,12 @@ function uid() {
 }
 
 function normalizeModeStrict(raw) {
-  // Only accept 'and' or 'or'. Anything else becomes 'and'.
   const m = String(raw || '').trim().toLowerCase();
   return (m === 'or') ? 'or' : 'and';
 }
 
 export function newPredicate() {
-  return { _id: uid(), left: { path: 'ctx.vars.' }, op: 'eq', right: '' };
+  return { _id: uid(), left: { path: 'ctx.vars.' }, op: 'eq', right: { const: '', _ui_type: 'string' } };
 }
 
 export function newRule() {
@@ -31,17 +30,73 @@ export function newRule() {
   };
 }
 
+function stripUiMetaFromConst(obj) {
+  // Accept {const: X, _ui_type: "..."} and return {const: X} with optional parsing.
+  const o = ensureObj(obj);
+
+  const v = o.const;
+  const t = String(o._ui_type || '').trim().toLowerCase();
+
+  if (t === 'number') {
+    // If user typed numeric string, parse it; otherwise keep raw (validator should block).
+    if (typeof v === 'number') return { const: v };
+    if (typeof v === 'string') {
+      const s = v.trim();
+      if (s === '') return { const: v }; // validator should block empty number if you require it
+      const n = Number(s);
+      if (Number.isFinite(n)) return { const: n };
+      return { const: v };
+    }
+    return { const: v };
+  }
+
+  if (t === 'boolean') {
+    if (typeof v === 'boolean') return { const: v };
+    return { const: v };
+  }
+
+  if (t === 'null') {
+    return { const: null };
+  }
+
+  // string or unknown
+  return { const: v };
+}
+
+function normalizeOperandForBackend(operand) {
+  // Backend supports:
+  // - {"path":"..."}
+  // - {"const": ...}
+  // - primitives (executor supports literals) BUT we keep const objects for clarity.
+  if (isPlainObject(operand) && typeof operand.path === 'string') {
+    return { path: String(operand.path) };
+  }
+
+  if (isPlainObject(operand) && 'const' in operand) {
+    return stripUiMetaFromConst(operand);
+  }
+
+  // legacy primitive -> wrap as const
+  return { const: operand };
+}
+
 function buildPredicateExpr(pred) {
   const p = ensureObj(pred);
-  const op = String(p.op || 'eq');
+  const op = String(p.op || 'eq').trim().toLowerCase();
 
-  const left = p.left ?? { path: 'ctx.vars.' };
-  const right = p.right;
+  const left = normalizeOperandForBackend(p.left ?? { path: 'ctx.vars.' });
+  const right = normalizeOperandForBackend(p.right);
 
   if (op === 'exists') return { op: 'exists', arg: left };
   if (op === 'truthy') return { op: 'truthy', arg: left };
   if (op === 'falsy') return { op: 'falsy', arg: left };
+
   if (op === 'ne') return { op: 'ne', left, right };
+  if (op === 'lt') return { op: 'lt', left, right };
+  if (op === 'lte') return { op: 'lte', left, right };
+  if (op === 'gt') return { op: 'gt', left, right };
+  if (op === 'gte') return { op: 'gte', left, right };
+
   return { op: 'eq', left, right };
 }
 
@@ -63,7 +118,6 @@ function parseMaybeJSON(v) {
 
   const s = v.trim();
 
-  // Preserve templates verbatim
   if (s.includes('{{') || s.includes('}}')) return v;
 
   const c = s[0];
@@ -135,14 +189,6 @@ export function ensureLogicDefaults(params) {
   return p;
 }
 
-/**
- * Enforce:
- * - at least 1 rule
- * - each rule has stable _id
- * - each predicate has stable _id
- * - each rule has at least 1 predicate
- * - mode is strictly 'and' or 'or' (anything else becomes 'and')
- */
 export function ensureMinRulesAndConds(uiRules) {
   const rules = ensureArray(uiRules).map((r) => {
     const rr = ensureObj(r);
@@ -154,6 +200,8 @@ export function ensureMinRulesAndConds(uiRules) {
     const preds0 = ensureArray(ui.predicates).map((p) => {
       const pp = ensureObj(p);
       if (!pp._id) pp._id = uid();
+      // Ensure right operand exists for binary ops; keep UI-only const shape.
+      if (!('right' in pp)) pp.right = { const: '', _ui_type: 'string' };
       return pp;
     });
 

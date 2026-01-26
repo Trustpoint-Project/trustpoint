@@ -3,25 +3,68 @@ import { ui } from '../../index.js';
 import { markTemplatable } from '../../../template-fields.js';
 
 function ensureArray(v) { return Array.isArray(v) ? v : []; }
+function isPlainObject(v) { return (v && typeof v === 'object' && !Array.isArray(v)); }
 
 function normalizeOperandKind(operand) {
-  const isPath = operand && typeof operand === 'object' && !Array.isArray(operand) && typeof operand.path === 'string';
-  return isPath ? 'path' : 'const';
+  if (isPlainObject(operand) && typeof operand.path === 'string') return 'path';
+  return 'const';
 }
 
-function convertConstValue(fromValue, toType) {
-  if (toType === 'null') return null;
-  if (toType === 'string') return fromValue == null ? '' : String(fromValue);
-  if (toType === 'number') {
-    const n = Number(fromValue);
-    return Number.isFinite(n) ? n : 0;
+function unwrapConst(operand) {
+  // We support both:
+  // - legacy primitives: "abc", 12, true, null
+  // - object form: { const: ..., _ui_type: ... }
+  if (isPlainObject(operand) && 'const' in operand) return operand.const;
+  return operand;
+}
+
+function inferUiTypeFromValue(v) {
+  if (v === null) return 'null';
+  if (typeof v === 'boolean') return 'boolean';
+  if (typeof v === 'number') return 'number';
+  return 'string';
+}
+
+function getUiType(operand) {
+  if (isPlainObject(operand) && typeof operand._ui_type === 'string') {
+    const t = operand._ui_type;
+    if (t === 'string' || t === 'number' || t === 'boolean' || t === 'null') return t;
   }
-  if (toType === 'boolean') {
-    if (typeof fromValue === 'boolean') return fromValue;
-    const s = String(fromValue || '').trim().toLowerCase();
-    return s === 'true' || s === '1' || s === 'yes';
+  return inferUiTypeFromValue(unwrapConst(operand));
+}
+
+function makeConstOperand(value, uiType) {
+  // Keep raw value; do not coerce invalid numbers to 0.
+  const t = (uiType === 'string' || uiType === 'number' || uiType === 'boolean' || uiType === 'null')
+    ? uiType
+    : inferUiTypeFromValue(value);
+
+  return { const: value, _ui_type: t };
+}
+
+function normalizeConstForType(rawValue, uiType) {
+  // IMPORTANT: Do not “fix” invalid values by replacing them with magic defaults.
+  // Keep raw user input.
+  if (uiType === 'null') return null;
+
+  if (uiType === 'boolean') {
+    if (typeof rawValue === 'boolean') return rawValue;
+    const s = String(rawValue ?? '').trim().toLowerCase();
+    if (s === 'true' || s === '1' || s === 'yes') return true;
+    if (s === 'false' || s === '0' || s === 'no') return false;
+    // keep raw if it is not clearly a boolean; validator should block save if needed
+    return rawValue;
   }
-  return fromValue;
+
+  if (uiType === 'number') {
+    // Keep as string while typing; validator will enforce numeric validity.
+    // If it is already a number, keep it.
+    if (typeof rawValue === 'number') return rawValue;
+    return String(rawValue ?? '');
+  }
+
+  // string
+  return rawValue == null ? '' : String(rawValue);
 }
 
 /**
@@ -41,8 +84,12 @@ export function renderOperand(container, operand, onUpdate, catalogItems, opts =
     ],
     value: normalizeOperandKind(operand),
     onChange: async (v) => {
-      if (v === 'path') await onUpdate({ path: 'ctx.vars.' }, { structural: true });
-      else await onUpdate('', { structural: true });
+      if (v === 'path') {
+        await onUpdate({ path: 'ctx.vars.' }, { structural: true });
+      } else {
+        // default const operand: empty string
+        await onUpdate(makeConstOperand('', 'string'), { structural: true });
+      }
     },
   });
   if (prefix) kindSel.dataset.wwField = `${prefix}-kind`;
@@ -66,7 +113,6 @@ export function renderOperand(container, operand, onUpdate, catalogItems, opts =
           await onUpdate({ path: String(v || '').trim() }, { structural: false });
         },
       });
-      // raw insertion for Logic operand paths
       inp.dataset.tplMode = 'raw';
       if (prefix) inp.dataset.wwField = `${prefix}-path-input`;
       markTemplatable(inp);
@@ -102,11 +148,8 @@ export function renderOperand(container, operand, onUpdate, catalogItems, opts =
       body.appendChild(ui.labeledNode('Path', sel));
     }
   } else {
-    const currentType =
-      operand === null ? 'null'
-        : typeof operand === 'boolean' ? 'boolean'
-          : typeof operand === 'number' ? 'number'
-            : 'string';
+    const uiType = getUiType(operand);
+    const curValue = unwrapConst(operand);
 
     const typeSel = ui.select({
       options: [
@@ -115,23 +158,40 @@ export function renderOperand(container, operand, onUpdate, catalogItems, opts =
         { label: 'boolean', value: 'boolean' },
         { label: 'null', value: 'null' },
       ],
-      value: currentType,
+      value: uiType,
       onChange: async (t) => {
-        const nextVal = convertConstValue(operand, t);
-        await onUpdate(nextVal, { structural: true });
+        // Convert representation without magic defaults.
+        const nextRaw = normalizeConstForType(curValue, t);
+        await onUpdate(makeConstOperand(nextRaw, t), { structural: true });
       },
     });
     if (prefix) typeSel.dataset.wwField = `${prefix}-const-type`;
 
     const valInp = ui.input({
       type: 'text',
-      value: operand == null ? '' : String(operand),
+      value: (uiType === 'null') ? '' : String(curValue ?? ''),
       onInput: async (v) => {
         const t = typeSel.value;
-        if (t === 'null') { await onUpdate(null, { structural: false }); return; }
-        if (t === 'boolean') { await onUpdate(convertConstValue(v, 'boolean'), { structural: false }); return; }
-        if (t === 'number') { await onUpdate(convertConstValue(v, 'number'), { structural: false }); return; }
-        await onUpdate(String(v ?? ''), { structural: false });
+
+        if (t === 'null') {
+          await onUpdate(makeConstOperand(null, 'null'), { structural: false });
+          return;
+        }
+
+        if (t === 'boolean') {
+          // Keep raw unless it is clearly a boolean token; validator can decide strictness.
+          const next = normalizeConstForType(v, 'boolean');
+          await onUpdate(makeConstOperand(next, 'boolean'), { structural: false });
+          return;
+        }
+
+        if (t === 'number') {
+          // Keep as string while typing; validator will block invalid on save.
+          await onUpdate(makeConstOperand(String(v ?? ''), 'number'), { structural: false });
+          return;
+        }
+
+        await onUpdate(makeConstOperand(String(v ?? ''), 'string'), { structural: false });
       },
     });
     if (prefix) valInp.dataset.wwField = `${prefix}-const-value`;

@@ -22,8 +22,7 @@ function injectStylesOnce() {
     .ww-step-header { border-radius:.5rem; padding:.5rem .75rem; }
     .ww-drag-handle { cursor: grab; user-select:none; font-size:1.1rem; opacity:.7; }
 
-    /* CHANGED: do not change opacity while dragging (caused grey tone).
-       Use a subtle outline instead. */
+    /* Drag state: no opacity; use outline. */
     .ww-dragging { opacity: 1; outline: 2px solid var(--bs-primary,#0d6efd); outline-offset: 2px; }
 
     .ww-drop-indicator-top { box-shadow: 0 -2px 0 0 var(--bs-primary,#0d6efd) inset; }
@@ -67,6 +66,31 @@ function injectStylesOnce() {
     }
     .ww-step-collapsed .ww-step-body {
       display: none !important;
+    }
+
+    /* ----- Header layout (title + note input) ----- */
+    .ww-step-head-left {
+      display:flex;
+      align-items:center;
+      gap:.5rem;
+      min-width: 0; /* allow ellipsis */
+      flex: 1 1 auto;
+    }
+    .ww-step-title {
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ww-step-note-input {
+      flex: 0 1 340px;           /* fits nicely on desktop */
+      min-width: 180px;
+      max-width: 520px;
+    }
+    @media (max-width: 768px) {
+      .ww-step-note-input { flex: 1 1 100%; min-width: 140px; }
+      .ww-step-head-left { flex-wrap: wrap; }
+      .ww-step-title { flex: 1 1 100%; }
     }
   `;
   document.head.appendChild(style);
@@ -113,13 +137,14 @@ function setStepParamsToDefaults(stepId, type) {
   const s = state.steps.find((x) => x.id === stepId);
   if (!s || !s.params || typeof s.params !== 'object' || Array.isArray(s.params)) return;
 
-  // preserve UI-only keys like _ui_collapsed when switching types
   const keepCollapsed = s.params._ui_collapsed === true;
+  const keepNote = (typeof s.params.note === 'string') ? s.params.note : '';
 
   Object.keys(s.params).forEach((k) => { delete s.params[k]; });
   Object.entries(defaults).forEach(([k, v]) => updateStepParam(stepId, k, v));
 
   if (keepCollapsed) updateStepParam(stepId, '_ui_collapsed', true);
+  if (keepNote) updateStepParam(stepId, 'note', keepNote);
 }
 
 const _stepCardMap = new Map();
@@ -156,7 +181,6 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
       const title = existing.querySelector('[data-ww-role="step-title"]');
       if (title) title.textContent = `Step ${idx + 1} • ${step.type}`;
 
-      // sync collapsed class from state
       const collapsed = step?.params?._ui_collapsed === true;
       existing.classList.toggle('ww-step-collapsed', collapsed);
 
@@ -165,6 +189,11 @@ export function renderStepsUI({ containerEl, addBtnEl, onChange }) {
 
       const sel = existing.querySelector('select[data-ww-field="step-type"]');
       if (sel instanceof HTMLSelectElement && document.activeElement !== sel) sel.value = step.type;
+
+      const noteInp = existing.querySelector('input[data-ww-field="step-note"]');
+      if (noteInp instanceof HTMLInputElement && document.activeElement !== noteInp) {
+        noteInp.value = String(step?.params?.note || '');
+      }
 
       return;
     }
@@ -218,7 +247,7 @@ function stepCard(step, displayIndex, ctx) {
   header.className = 'ww-step-header d-flex justify-content-between align-items-center mb-2';
 
   const left = document.createElement('div');
-  left.className = 'd-flex align-items-center gap-2';
+  left.className = 'ww-step-head-left';
 
   const grip = document.createElement('span');
   grip.className = 'ww-drag-handle';
@@ -243,12 +272,26 @@ function stepCard(step, displayIndex, ctx) {
   };
 
   const title = document.createElement('strong');
+  title.className = 'ww-step-title';
   title.dataset.wwRole = 'step-title';
   title.textContent = `Step ${displayIndex + 1} • ${step.type}`;
+
+  // NOTE INPUT (inline, always visible)
+  const noteInp = document.createElement('input');
+  noteInp.type = 'text';
+  noteInp.className = 'form-control form-control-sm ww-step-note-input';
+  noteInp.placeholder = 'Note (optional)…';
+  noteInp.dataset.wwField = 'step-note';
+  noteInp.value = String(step?.params?.note || '');
+  noteInp.oninput = () => {
+    updateStepParam(step.id, 'note', String(noteInp.value || ''));
+    onChange?.();
+  };
 
   left.appendChild(grip);
   left.appendChild(collapseBtn);
   left.appendChild(title);
+  left.appendChild(noteInp);
 
   if (!isAllowed) {
     const badge = document.createElement('span');
