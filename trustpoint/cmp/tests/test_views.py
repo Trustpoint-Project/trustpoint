@@ -123,19 +123,19 @@ class TestCmpInitializationRequestView:
         mock_request_context,
     ):
         """Test POST request to initialization endpoint with certificate profile."""
+        # Mock to_http_response to return actual HttpResponse
+        mock_request_context.to_http_response.return_value = HttpResponse(
+            content=mock_request_context.http_response_content,
+            status=mock_request_context.http_response_status,
+            content_type=mock_request_context.http_response_content_type
+        )
+
         mock_context_cls.return_value = mock_request_context
         
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
-        parser_instance = mock_parser_cls.return_value
-        context = parser_instance.parse.return_value
-
-        # Mock to_http_response to return actual HttpResponse
-        mock_request_context.to_http_response.return_value = HttpResponse(
-            content=mock_request_context.http_response_content,
-            status=context.http_response_status,
-            content_type=mock_request_context.http_response_content_type
-        )
+        #parser_instance = mock_parser_cls.return_value
+        #context = parser_instance.parse.return_value
         
         request = request_factory.post('/cmp/p/test_domain/tls_client/initialization')
         view = CmpRequestView()

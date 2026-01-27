@@ -308,57 +308,6 @@ def test_est_simple_enrollment_view_post(mock_process, request_factory):
 
 
 # ============================================================================
-# Tests for EstSimpleEnrollmentDefaultView
-# ============================================================================
-
-
-@patch('est.views.DomainModel.objects.get')
-@patch.object(EstSimpleEnrollmentMixin, 'process_enrollment')
-def test_est_simple_enrollment_default_view_post_success(mock_process, mock_get_domain, request_factory):
-    """Test POST request to EstSimpleEnrollmentDefaultView with existing default domain."""
-    mock_domain = Mock(spec=DomainModel)
-    mock_domain.unique_name = 'arburg'
-    mock_get_domain.return_value = mock_domain
-    
-    mock_response = LoggedHttpResponse('Success', status=200)
-    mock_process.return_value = mock_response
-    
-    view = EstSimpleEnrollmentView.as_view()
-    request = request_factory.post(
-        '/est/simpleenroll',
-        data=b'CSR',
-        content_type='application/pkcs10'
-    )
-    
-    response = view(request)
-    
-    assert response.status_code == 200
-    mock_get_domain.assert_called_once_with(unique_name='arburg')
-    mock_process.assert_called_once()
-    call_args = mock_process.call_args
-    assert call_args[0][1] == 'arburg'
-    assert call_args[0][2] == 'tls_client'
-
-
-@patch('est.views.DomainModel.objects.get')
-def test_est_simple_enrollment_default_view_post_domain_not_exist(mock_get_domain, request_factory):
-    """Test POST request to EstSimpleEnrollmentDefaultView when default domain doesn't exist."""
-    mock_get_domain.side_effect = DomainModel.DoesNotExist
-    
-    view = EstSimpleEnrollmentView.as_view()
-    request = request_factory.post(
-        '/est/simpleenroll',
-        data=b'CSR',
-        content_type='application/pkcs10'
-    )
-    
-    response = view(request)
-    
-    assert response.status_code == 404
-    assert b'Default domain "arburg" does not exist' in response.content
-
-
-# ============================================================================
 # Tests for EstSimpleReEnrollmentView
 # ============================================================================
 

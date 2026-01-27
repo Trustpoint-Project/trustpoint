@@ -77,12 +77,12 @@ class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
             self.logger.warning(error_message)
             raise ValueError(error_message) from e
 
+        ProfileValidator.validate(context)
+
         self.logger.debug(
             'Certificate profile authorization successful for profile: %s',
             requested_profile
         )
-
-        ProfileValidator.validate(context)
 
 
 class DomainScopeValidation(AuthorizationComponent, LoggerMixin):
