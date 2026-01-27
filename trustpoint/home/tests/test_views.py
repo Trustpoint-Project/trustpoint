@@ -10,7 +10,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from notifications.models import NotificationModel, NotificationStatus
-from pki.models import CertificateModel, CertificateProfileModel, IssuingCaModel
+from pki.models import CertificateModel, CertificateProfileModel, CaModel
 
 from ..views import (
     AddDomainsAndDevicesView,
@@ -316,7 +316,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
 
     def test_get_issuing_ca_counts(self) -> None:
         """Test get_issuing_ca_counts method."""
-        with patch.object(IssuingCaModel.objects, 'aggregate') as mock_aggregate:
+        with patch.object(CaModel.objects, 'aggregate') as mock_aggregate:
             mock_aggregate.return_value = {'total': 5, 'active': 4, 'expired': 1}
             result = self.view.get_issuing_ca_counts()
 
@@ -343,7 +343,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
 
     def test_get_expiring_issuing_ca_counts(self) -> None:
         """Test get_expiring_issuing_ca_counts method."""
-        with patch.object(IssuingCaModel.objects, 'filter') as mock_filter:
+        with patch.object(CaModel.objects, 'filter') as mock_filter:
             mock_filter.return_value.count.return_value = 1
             result = self.view.get_expiring_issuing_ca_counts()
 
@@ -416,7 +416,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
         """Test get_issuing_ca_counts_by_type method."""
         start_date = timezone.now() - timedelta(days=7)
 
-        with patch.object(IssuingCaModel.objects, 'filter') as mock_filter:
+        with patch.object(CaModel.objects, 'filter') as mock_filter:
             mock_filter.return_value.values.return_value.annotate.return_value = []
             result = self.view.get_issuing_ca_counts_by_type(start_date)
 

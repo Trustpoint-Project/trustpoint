@@ -12,7 +12,7 @@ from devices.models import DeviceModel, OnboardingConfigModel, NoOnboardingConfi
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from management.models import KeyStorageConfig
-from pki.models import DevIdRegistration, DomainModel, IssuingCaModel, TruststoreModel
+from pki.models import CaModel, DevIdRegistration, DomainModel, CaModel, TruststoreModel
 from pki.util.x509 import CertificateGenerator
 from devices.models import OnboardingPkiProtocol, NoOnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
 from signer.models import SignerModel
@@ -85,7 +85,7 @@ def _get_private_key_location_from_config() -> PrivateKeyLocation:
 
 def create_signer_for_domain(
     domain_name: str,
-    issuing_ca: IssuingCaModel
+    issuing_ca: CaModel
 ) -> SignerModel:
     """Creates a signer certificate for a domain using the domain's issuing CA."""
     issuing_ca_private_key = issuing_ca.credential.get_private_key_serializer().as_crypto()
@@ -187,6 +187,10 @@ class Command(BaseCommand, LoggerMixin):
                 'ARBIDRIVE-Servo-Motor',
                 'ALS_Arburg-Leitrechner-System',
             ],
+            'diebold_nixdorf': [
+                'ATM-Service',
+                'Kiosk-System',
+            ],
             'homag': [
                 'CENTATEQ-CNC-Processing-Center',
                 'EDGETEQ-Edge-Banding-Machine',
@@ -229,7 +233,8 @@ class Command(BaseCommand, LoggerMixin):
         }
 
         domain_ca_truststore_map = {
-            'arburg': ('issuing-ca-a', 'idevid-truststore-RSA-2048'),
+            'arburg': ('issuing-ca-a-1', 'idevid-truststore-RSA-2048'),
+            'diebold_nixdorf': ('issuing-ca-a-2', 'idevid-truststore-RSA-2048'),
             'homag': ('issuing-ca-b', 'idevid-truststore-RSA-3072'),
             'siemens': ('issuing-ca-c', 'idevid-truststore-RSA-4096'),
             'belden': ('issuing-ca-d', 'idevid-truststore-EC-256'),
@@ -249,7 +254,8 @@ class Command(BaseCommand, LoggerMixin):
         for domain_name, devices in data.items():
             issuing_ca_name, truststore_name = domain_ca_truststore_map[domain_name]
 
-            issuing_ca = IssuingCaModel.objects.get(unique_name=issuing_ca_name)
+            ca = CaModel.objects.get(unique_name=issuing_ca_name, credential__isnull=False)
+            issuing_ca = ca
             truststore = TruststoreModel.objects.get(unique_name=truststore_name)
 
             domain, created = DomainModel.objects.get_or_create(unique_name=domain_name)

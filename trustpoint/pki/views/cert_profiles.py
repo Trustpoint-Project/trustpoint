@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from django.contrib import messages
 from django.db.models import ProtectedError, QuerySet
 from django.forms import ValidationError
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
@@ -138,6 +138,14 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
     template_name = 'pki/cert_profiles/confirm_delete.html'
     context_object_name = 'cert_profiles'
     queryset: QuerySet[CertificateProfileModel]
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
+        queryset = self.get_queryset()
+        if not queryset.exists():
+            messages.error(request, _('No certificate profiles selected for deletion.'))
+            return HttpResponseRedirect(self.success_url)
+        return super().get(request, *args, **kwargs)
 
     def form_valid(self, form: Form) -> HttpResponse:
         """Delete the selected credentials on valid form."""

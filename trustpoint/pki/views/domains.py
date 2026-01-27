@@ -21,11 +21,12 @@ from rest_framework import viewsets
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import (
+    CaModel,
     CertificateModel,
     CertificateProfileModel,
+    CredentialModel,
     DevIdRegistration,
     DomainModel,
-    IssuingCaModel,
 )
 from pki.models.truststore import TruststoreModel
 from pki.serializer.domain import DomainSerializer
@@ -75,8 +76,8 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
         """Override get_form to filter out autogen root CAs."""
         form = super().get_form()
         # Filter out autogen root CAs
-        form.fields['issuing_ca'].queryset = IssuingCaModel.objects.exclude(  # type: ignore[attr-defined]
-            issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
+        form.fields['issuing_ca'].queryset = CaModel.objects.exclude(  # type: ignore[attr-defined]
+            ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT
         ).filter(is_active=True)
         # Remove empty "---------" choice
         form.fields['issuing_ca'].empty_label = None  # type: ignore[attr-defined]
@@ -197,6 +198,14 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
     ignore_url = reverse_lazy('pki:domains')
     template_name = 'pki/domains/confirm_delete.html'
     context_object_name = 'domains'
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
+        queryset = self.get_queryset()
+        if not queryset.exists():
+            messages.error(request, _('No domains selected for deletion.'))
+            return HttpResponseRedirect(self.success_url)
+        return super().get(request, *args, **kwargs)
 
     def form_valid(self, form: Form) -> HttpResponse:
         """Attempt to delete domains if the form is valid."""
@@ -349,7 +358,7 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
         # noinspection PyTypeChecker
         # TODO(AlexHx8472): This must be limited to the actual domain.  # noqa: FIX002
         return CertificateModel.objects.filter(
-            issuer_public_bytes=domain.issuing_ca.credential.certificate.subject_public_bytes
+            issuer_public_bytes=cast('CredentialModel', domain.issuing_ca.credential).certificate.subject_public_bytes
         )
 
     def get_domain(self) -> DomainModel:

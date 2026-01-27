@@ -436,8 +436,9 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         credential_model = cls._create_credential_model(
             certificate, credential_type, private_key_pem, pkcs11_private_key
         )
+        additional_certificates = list(reversed(normalized_credential_serializer.additional_certificates))
         cls._save_additional_certificates(
-            credential_model, normalized_credential_serializer.additional_certificates
+            credential_model, additional_certificates
         )
         return credential_model
 
@@ -607,13 +608,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         certificate_model = CertificateModel.save_certificate(certificate)
         self.certificate = certificate_model
 
-        # Consider adding private key update logic here if needed
-
         _, _ = PrimaryCredentialCertificate.objects.get_or_create(
             certificate=certificate_model, credential=self, is_primary=True
         )
 
-        # Store the complete chain for each new primary certificate
+        certificate_chain.reverse()
         for order, certificate_in_chain in enumerate(certificate_chain):
             certificate_model = CertificateModel.save_certificate(certificate_in_chain)
             _, _ = CertificateChainOrderModel.objects.get_or_create(

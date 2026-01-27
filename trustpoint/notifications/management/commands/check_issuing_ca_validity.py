@@ -8,7 +8,7 @@ from typing import Any, cast
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from notifications.models import NotificationConfig, NotificationModel, NotificationStatus
-from pki.models import IssuingCaModel
+from pki.models import CaModel
 
 
 class Command(BaseCommand):
@@ -40,19 +40,19 @@ class Command(BaseCommand):
         expiring_threshold = timezone.now() + timedelta(days=config.issuing_ca_expiry_warning_days)
         current_time = timezone.now()
 
-        expiring_cas = IssuingCaModel.objects.filter(
+        expiring_cas = CaModel.objects.filter(
             credential__certificate__not_valid_after__lte=expiring_threshold,
             credential__certificate__not_valid_after__gt=current_time,
         )
 
-        expired_cas = IssuingCaModel.objects.filter(credential__certificate__not_valid_after__lte=current_time)
+        expired_cas = CaModel.objects.filter(credential__certificate__not_valid_after__lte=current_time)
 
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
 
         # Handle expiring Issuing CAs
         for ca in expiring_cas:
             self._create_notification(
-                issuing_ca=cast(IssuingCaModel, ca),
+                issuing_ca=cast(CaModel, ca),
                 event='ISSUING_CA_EXPIRING',
                 notification_type=cast(
                     'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.WARNING
@@ -66,7 +66,7 @@ class Command(BaseCommand):
         # Handle expired Issuing CAs
         for ca in expired_cas:
             self._create_notification(
-                issuing_ca=cast(IssuingCaModel, ca),
+                issuing_ca=cast(CaModel, ca),
                 event='ISSUING_CA_EXPIRED',
                 notification_type=cast(
                     'NotificationModel.NotificationTypes', NotificationModel.NotificationTypes.CRITICAL
@@ -79,7 +79,7 @@ class Command(BaseCommand):
 
     def _create_notification(
         self,
-        issuing_ca: IssuingCaModel,
+        issuing_ca: CaModel,
         event: str,
         notification_type: str | NotificationModel.NotificationTypes,
         message_type: str | NotificationModel.NotificationMessageType,
