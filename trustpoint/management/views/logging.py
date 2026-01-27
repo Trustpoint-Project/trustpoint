@@ -273,7 +273,7 @@ class LoggingViewSet(viewsets.GenericViewSet):
             )
 
         return FileResponse(
-            file_path.open('rb'),
+            file_path.read_text(encoding='utf-8', errors='backslashreplace'),
             as_attachment=True,
             filename=safe_file_name
         )
@@ -294,9 +294,24 @@ class LoggingViewSet(viewsets.GenericViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Prevent path traversal
-        safe_file_name = Path(file_name)
-        file_path = LOG_DIR_PATH / safe_file_name
+        # Validate file name against allowed log file pattern
+        if not re.compile(r'^trustpoint\.log(?:\.\d+)?$').match(file_name):
+            return Response(
+                {'error': 'Invalid file name'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Prevent path traversal by restricting to a filename within LOG_DIR_PATH
+        safe_file_name = Path(file_name).name
+        log_root = LOG_DIR_PATH.resolve()
+        file_path = (log_root / safe_file_name).resolve()
+
+        # Ensure the resolved file path is within the log directory
+        if log_root not in file_path.parents:
+            return Response(
+                {'error': 'Invalid file name'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         if not file_path.exists() or not file_path.is_file():
             return Response(
