@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from typing import Any
 
     from django.http import HttpRequest
+    from rest_framework.request import Request
 
 
 class IndexView(RedirectView):
@@ -229,53 +230,50 @@ class LoggingViewSet(viewsets.GenericViewSet):
     filter_backends: ClassVar = []
 
     @action(detail=False, methods=['get'])
-    def list_files(self, request):
+    def list_files(self, request: Request) -> Response:
         """Return detailed info for all log files."""
-        if not os.path.exists(LOG_DIR_PATH):
-            return Response({"error": "Log files not found"}, status=status.HTTP_404_NOT_FOUND)
+        if not LOG_DIR_PATH.exists():
+            return Response({'error': 'Log files not found'}, status=status.HTTP_404_NOT_FOUND)
 
         files_info = []
-        all_files = os.listdir(LOG_DIR_PATH)
+        all_files = [file.name for file in LOG_DIR_PATH.iterdir()]
         valid_log_files = [f for f in all_files if re.compile(r'^trustpoint\.log(?:\.\d+)?$').match(f)]
         for filename in valid_log_files:
-            file_path = os.path.join(LOG_DIR_PATH, filename)
-            if os.path.isfile(file_path):
-                stat = os.stat(file_path)
+            file_path = LOG_DIR_PATH / Path(filename)
+            if file_path.is_file():
+                stat = file_path.stat()
                 files_info.append({
-                    "name": filename,
-                    "size": stat.st_size,
-                    "modified": datetime.datetime.fromtimestamp(stat.st_mtime)
+                    'name': filename,
+                    'size': stat.st_size,
+                    'modified': datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.UTC)
                 })
 
         serializer = self.get_serializer(files_info, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], url_path=r'download/(?P<file_name>[^/]+)')
-    def download(self, request):
-        """
-        Download a log file by name:
-        /logs/download/?file=app.log
-        """
-        file_name = request.query_params.get("file")
+    def download(self, request: Request, file_name: str) -> Response:
+        """Download a log file by name.
 
+        /logs/download/app.log/
+        """
         if not file_name:
             return Response(
-                {"error": "Missing 'file' query parameter"},
+                {'error': "Missing 'file_name' path parameter"},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         # Prevent path traversal
-        safe_file_name = os.path.basename(file_name)
-        file_path = os.path.join(LOG_DIR_PATH, safe_file_name)
-
-        if not os.path.exists(file_path) or not os.path.isfile(file_path):
+        safe_file_name = Path(file_name)
+        file_path = LOG_DIR_PATH / safe_file_name
+        if not file_path.exists() or not file_path.is_file():
             return Response(
-                {"error": "File not found"},
+                {'error': 'File not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         return FileResponse(
-            open(file_path, "rb"),
+            file_path.open('rb'),
             as_attachment=True,
             filename=safe_file_name
         )
@@ -285,35 +283,35 @@ class LoggingViewSet(viewsets.GenericViewSet):
         methods=['delete'],
         url_path=r'delete/(?P<file_name>[^/]+)'
     )
-    def delete(self, request, file_name=None):
+    def delete(self, request: Request, file_name: str) -> Response:
         """Delete a log file by name.
 
         DELETE /logs/delete/app.log/
         """
         if not file_name:
             return Response(
-                {"error": "File name is required"},
+                {'error': 'File name is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         # Prevent path traversal
-        safe_file_name = os.path.basename(file_name)
-        file_path = os.path.join(LOG_DIR_PATH, safe_file_name)
+        safe_file_name = Path(file_name)
+        file_path = LOG_DIR_PATH / safe_file_name
 
-        if not os.path.exists(file_path) or not os.path.isfile(file_path):
+        if not file_path.exists() or not file_path.is_file():
             return Response(
-                {"error": "File not found"},
+                {'error': 'File not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
         try:
-            os.remove(file_path)
+            file_path.unlink()
             return Response(
-                {"message": f"File '{safe_file_name}' deleted successfully"},
+                {'message': f"File '{safe_file_name}' deleted successfully"},
                 status=status.HTTP_200_OK
             )
-        except Exception as exc:
+        except Exception:
             return Response(
-                {"error": str(exc)},
+                {'error': 'An internal error occurred while deleting the file.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
