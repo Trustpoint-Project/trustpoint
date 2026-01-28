@@ -13,7 +13,12 @@ from pyasn1.codec.der import encoder as der_encoder
 from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
 
 from cmp.util import NameParser
-from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext, CmpRevocationRequestContext
+from request.request_context import (
+    BaseRequestContext,
+    CmpBaseRequestContext,
+    CmpCertificateRequestContext,
+    CmpRevocationRequestContext,
+)
 from trustpoint.logger import LoggerMixin
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
@@ -519,9 +524,8 @@ class CmpRevocationBodyValidation(LoggerMixin):
             self._raise_value_error('No RevReqMessages found.')
 
         rev_req_msg = rev_req[0]
-        context.revocation_reason = int(rev_req_msg['reason']) if rev_req_msg['reason'].hasValue() else None
 
-        if not rev_req_msg['certTemplate'].hasValue():
+        if not rev_req_msg['certTemplate'].hasValue(): #certDetails?
             self._raise_value_error('certTemplate must be contained in RR RevReqMessage.')
 
         cert_template = rev_req_msg['certTemplate']
@@ -530,6 +534,16 @@ class CmpRevocationBodyValidation(LoggerMixin):
             context.cert_serial_number = int(cert_template['serialNumber'])
         else:
             self._raise_value_error('serialNumber must be present in certTemplate for revocation request.')
+
+        if rev_req_msg['crlEntryDetails'].hasValue():
+            crl_entry_details = rev_req_msg['crlEntryDetails']
+            if crl_entry_details['reason'].hasValue():
+                context.revocation_reason = x509.ReasonFlags(crl_entry_details['reason'])
+            else:
+                context.revocation_reason = x509.ReasonFlags.unspecified
+        else:
+            self.logger.warning('crlEntryDetails must be contained in RR RevReqMessage.')
+            context.revocation_reason = x509.ReasonFlags.unspecified
 
     def _raise_value_error(self, message: str) -> Never:
         """Helper function to raise a ValueError with the given message."""

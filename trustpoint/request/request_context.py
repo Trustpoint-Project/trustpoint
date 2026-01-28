@@ -105,6 +105,7 @@ class BaseCertificateRequestContext(BaseRequestContext):
 @dataclass(kw_only=True)
 class BaseRevocationRequestContext(BaseRequestContext):
     """Shared context for all revocation request operations."""
+    cert_serial_number: int | None = None
     credential_to_revoke: IssuedCredentialModel | None = None
     revocation_reason: x509.ReasonFlags = x509.ReasonFlags.unspecified
 
