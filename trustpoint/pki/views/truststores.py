@@ -17,7 +17,7 @@ from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema  # type: ignore[import-untyped]
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from typing import Any, ClassVar
 
     from django.forms import Form
+    from rest_framework.request import Request
 
 
 class TruststoresRedirectView(RedirectView):
@@ -402,6 +403,12 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
         return response
 
 @extend_schema(tags=['Truststore'])
+@extend_schema_view(
+    retrieve=extend_schema(description='Retrieve a single Truststore by id.'),
+    update=extend_schema(description='Update an existing Truststore.'),
+    partial_update=extend_schema(description='Partially update an existing Truststore.'),
+    destroy=extend_schema(description='Delete a Truststore.')
+)
 class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
     """ViewSet for managing Truststore instances.
 
@@ -417,15 +424,13 @@ class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
     search_fields: ClassVar = ['unique_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at']
 
-    # ignoring untyped decorator (drf-yasg not typed)
     @extend_schema(
         summary='Create a new truststore',
         description='Add a new truststore by providing its unique_name, intended_usage and trust_store_file.',
-    )  # type: ignore[misc]
-    def create(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+    )
+    def create(self, request: Request) -> Response:
         """API endpoint to create truststore."""
-        del args, _kwargs
-        serializer = self.get_serializer(data=request.data)  # type: ignore[attr-defined]
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         truststore = TruststoreService().create(
@@ -439,10 +444,9 @@ class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
     @extend_schema(
         summary='List Truststores',
         description='Retrieve truststore from the database.',
-    )  # type: ignore[misc]
-    def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+    )
+    def list(self, _request: Request) -> Response:
         """API endpoint to get all truststores."""
-        del request, args, _kwargs
         queryset = self.get_queryset()
 
         for backend in list(self.filter_backends):

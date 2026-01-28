@@ -4,14 +4,14 @@ Defines classes that handle validation and transformation
 of Credential model instances to and from JSON.
 """
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from rest_framework import serializers
 
 from pki.models.credential import CredentialModel
 
 
-class CredentialSerializer(serializers.ModelSerializer):
+class CredentialSerializer(serializers.ModelSerializer[Any]):
     """Serializer for Credential instances.
 
     Handles conversion between Credential model objects and JSON representations.

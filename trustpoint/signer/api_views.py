@@ -8,9 +8,9 @@ from typing import Any, ClassVar
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
-from drf_spectacular.utils import (  # type: ignore[import-untyped]
+from drf_spectacular.utils import (
     OpenApiResponse,
-    extend_schema,  # type: ignore[import-untyped]
+    extend_schema,
 )
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -34,7 +34,7 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
 
     queryset = SignerModel.objects.all()
     serializer_class = SignerSerializer
-    permission_classes: ClassVar[list[Any]] = [IsAuthenticated]  # type: ignore[misc]
+    permission_classes = (IsAuthenticated,)
 
     @extend_schema(
         methods=['post'],
@@ -126,7 +126,7 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @extend_schema(  # type: ignore[misc]
+    @extend_schema(
         methods='get',
         responses={
             200: SignerCertificateSerializer,
@@ -139,7 +139,7 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
         ),
     )
     @action(detail=True, methods=['get'], url_path='certificate')
-    def get_certificate(self, request: Request, pk: int | None = None) -> Response:  # noqa: ARG002
+    def get_certificate(self, _request: Request, pk: int | None = None) -> Response:
         """Get the signer's certificate in PEM format."""
         try:
             signer = self.get_object()
@@ -182,10 +182,10 @@ class SignedMessageViewSet(viewsets.ReadOnlyModelViewSet[SignedMessageModel]):
 
     queryset = SignedMessageModel.objects.all().order_by('-created_at')
     serializer_class = SignedMessageSerializer
-    permission_classes: ClassVar[list[Any]] = [IsAuthenticated]  # type: ignore[misc]
+    permission_classes = (IsAuthenticated,)
     filterset_fields: ClassVar[list[str]] = ['signer']
 
-    @extend_schema(  # type: ignore[misc]
+    @extend_schema(
         summary='List all signed messages',
         description='Returns a list of all signed messages, ordered by creation date (newest first).',
     )
@@ -193,7 +193,7 @@ class SignedMessageViewSet(viewsets.ReadOnlyModelViewSet[SignedMessageModel]):
         """List all signed messages."""
         return super().list(request, *args, **kwargs)
 
-    @extend_schema(  # type: ignore[misc]
+    @extend_schema(
         summary='Retrieve a signed message',
         description='Returns details of a specific signed message.',
     )

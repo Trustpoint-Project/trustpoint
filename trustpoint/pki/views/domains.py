@@ -16,7 +16,7 @@ from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
-from drf_spectacular.utils import extend_schema  # type: ignore[import-untyped]
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import viewsets
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
@@ -388,8 +388,16 @@ class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdR
         return context
 
 @extend_schema(tags=['Domain'])
-class DomainViewSet(viewsets.ModelViewSet):
-    """ViewSet for managing Device instances.
+@extend_schema_view(
+    list=extend_schema(description='Retrieve a list of all domains.'),
+    retrieve=extend_schema(description='Retrieve a single domain by id.'),
+    create=extend_schema(description='Create a domain.'),
+    update=extend_schema(description='Update an existing domain.'),
+    partial_update=extend_schema(description='Partially update an existing domain.'),
+    destroy=extend_schema(description='Delete a domain.')
+)
+class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
+    """ViewSet for managing Domain instances.
 
     Supports standard CRUD operations such as list, retrieve,
     create, update, and delete.
@@ -397,18 +405,5 @@ class DomainViewSet(viewsets.ModelViewSet):
 
     queryset = DomainModel.objects.all()
     serializer_class = DomainSerializer
-    action_descriptions: ClassVar[dict[str, str]] = {
-        'list': 'Retrieve a list of all domains.',
-        'retrieve': 'Retrieve a single domain by id.',
-        'create': 'Create a new domain with name, serial number, and status.',
-        'update': 'Update an existing domain.',
-        'partial_update': 'Partially update an existing domain.',
-        'destroy': 'Delete a domain.',
-    }
 
-    def get_view_description(self, *, html: bool = False) -> str:
-        """Return a description for the given action."""
-        if hasattr(self, 'action') and self.action in self.action_descriptions:
-            return self.action_descriptions[self.action]
-        return super().get_view_description(html)
 

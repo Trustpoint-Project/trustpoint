@@ -10,7 +10,7 @@ from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema  # type: ignore[import-untyped]
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -340,6 +340,13 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
         return response
 
 @extend_schema(tags=['Certificate'])
+@extend_schema_view(
+    retrieve=extend_schema(description='Retrieve a single certificate by id.'),
+    create=extend_schema(description='Create a certificate.'),
+    update=extend_schema(description='Update an existing certificate.'),
+    partial_update=extend_schema(description='Partially update an existing certificate.'),
+    destroy=extend_schema(description='Delete a certificate.')
+)
 class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
     """ViewSet for managing Certificate instances.
 
@@ -355,13 +362,12 @@ class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
     search_fields: ClassVar = ['common_name', 'sha256_fingerprint']
     ordering_fields: ClassVar = ['common_name', 'created_at']
 
-    # ignoring untyped decorator (drf-yasg not typed)
     @extend_schema(
         summary='List certificates',
         description='Retrieve certificates from the database.',
         tags=['Certificate'],
-    )  # type: ignore[misc]
-    def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+    )
+    def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> Response:
         """API endpoint to get all certificates."""
         del request, args, _kwargs
         queryset = self.get_queryset()

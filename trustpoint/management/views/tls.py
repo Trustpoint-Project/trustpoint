@@ -11,9 +11,7 @@ from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import FormView, TemplateView, View
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import (  # type: ignore[import-untyped]
-    extend_schema,
-)
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
 from rest_framework.permissions import IsAuthenticated
 
@@ -309,7 +307,15 @@ class ActivateTlsServerView(View, LoggerMixin):
         return redirect(reverse('management:tls'))
 
 @extend_schema(tags=['Tls'])
-class TlsViewSet(viewsets.ModelViewSet):
+@extend_schema_view(
+    list=extend_schema(description='Retrieve a list of all TLS Certificates.'),
+    retrieve=extend_schema(description='Retrieve a single TLS Certificate by id.'),
+    create=extend_schema(description='Create a TLS Certificate.'),
+    update=extend_schema(description='Update an existing TLS Certificate.'),
+    partial_update=extend_schema(description='Partially update an existing TLS Certificate.'),
+    destroy=extend_schema(description='Delete a TLS Certificate.')
+)
+class TlsViewSet(viewsets.ModelViewSet[Any]):
     """ViewSet for managing Backup instances.
 
     Supports standard CRUD operations such as list, retrieve,
@@ -317,26 +323,12 @@ class TlsViewSet(viewsets.ModelViewSet):
     """
     queryset = CredentialModel.objects.all().order_by('-created_at')
     serializer_class = CredentialSerializer
-    permission_classes: ClassVar = [IsAuthenticated]
-    filter_backends: ClassVar = [
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (
         DjangoFilterBackend,
         filters.SearchFilter,
         filters.OrderingFilter
-    ]
+    )
     filterset_fields: ClassVar = ['credential_type']
     search_fields: ClassVar = ['certificates']
     ordering_fields: ClassVar = ['created_at']
-    action_descriptions: ClassVar[dict[str, str]] = {
-        'list': 'Retrieve a list of all TLS Certificates.',
-        'retrieve': 'Retrieve a single TLS Certificate by id.',
-        'create': 'Create a TLS Certificate.',
-        'update': 'Update an existing TLS Certificate.',
-        'partial_update': 'Partially update an existing TLS Certificate.',
-        'destroy': 'Delete a TLS Certificate.',
-    }
-
-    def get_view_description(self, *, html: bool = False) -> str:
-        """Return a description for the given action."""
-        if hasattr(self, 'action') and self.action in self.action_descriptions:
-            return self.action_descriptions[self.action]
-        return super().get_view_description(html)

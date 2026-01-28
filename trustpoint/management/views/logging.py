@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import datetime
 import io
-import os
 import re
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import render
@@ -17,9 +16,7 @@ from django.utils.translation import gettext as _
 from django.views.generic import TemplateView, View
 from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
-from drf_spectacular.utils import (  # type: ignore[import-untyped]
-    extend_schema,
-)
+from drf_spectacular.utils import extend_schema
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -31,7 +28,6 @@ from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
 from trustpoint.views.base import SortableTableFromListMixin
 
 if TYPE_CHECKING:
-    from typing import Any
 
     from django.http import HttpRequest
     from rest_framework.request import Request
@@ -220,18 +216,18 @@ class LoggingFilesDownloadMultipleView(PageContextMixin, LoggerMixin, View):
         return response
 
 @extend_schema(tags=['Logging'])
-class LoggingViewSet(viewsets.GenericViewSet):
+class LoggingViewSet(viewsets.GenericViewSet[Any]):
     """ViewSet for managing Backup instances.
 
     Supports standard CRUD operations such as list, retrieve,
     create, update, and delete.
     """
     serializer_class = LoggingSerializer
-    filter_backends: ClassVar = []
+    filter_backends = ()
 
     @action(detail=False, methods=['get'])
-    def list_files(self, request: Request) -> Response:
-        """Return detailed info for all log files."""
+    def list_files(self, _request: Request) -> Response:
+        """Retrieve detailed info for all log files."""
         if not LOG_DIR_PATH.exists():
             return Response({'error': 'Log files not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -252,10 +248,10 @@ class LoggingViewSet(viewsets.GenericViewSet):
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], url_path=r'download/(?P<file_name>[^/]+)')
-    def download(self, request: Request, file_name: str) -> Response:
+    def download(self, _request: Request, file_name: str) -> FileResponse | Response:
         """Download a log file by name.
 
-        /logs/download/app.log/
+        /logs/download/trustpoint.log/
         """
         if not file_name:
             return Response(
@@ -275,7 +271,7 @@ class LoggingViewSet(viewsets.GenericViewSet):
         return FileResponse(
             file_path.read_text(encoding='utf-8', errors='backslashreplace'),
             as_attachment=True,
-            filename=safe_file_name
+            filename=file_name
         )
 
     @action(
@@ -283,10 +279,10 @@ class LoggingViewSet(viewsets.GenericViewSet):
         methods=['delete'],
         url_path=r'delete/(?P<file_name>[^/]+)'
     )
-    def delete(self, request: Request, file_name: str) -> Response:
+    def delete(self, _request: Request, file_name: str) -> Response:
         """Delete a log file by name.
 
-        DELETE /logs/delete/app.log/
+        DELETE /logs/delete/trustpoint.log/
         """
         if not file_name:
             return Response(
@@ -325,7 +321,7 @@ class LoggingViewSet(viewsets.GenericViewSet):
                 {'message': f"File '{safe_file_name}' deleted successfully"},
                 status=status.HTTP_200_OK
             )
-        except Exception:
+        except Exception: # noqa: BLE001
             return Response(
                 {'error': 'An internal error occurred while deleting the file.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR

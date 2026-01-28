@@ -16,7 +16,7 @@ from django.utils.translation import gettext as _
 from django.views.generic.edit import UpdateView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema  # type: ignore[import-untyped]
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
 from rest_framework.permissions import IsAuthenticated
 
@@ -170,7 +170,14 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
         return response
 
 @extend_schema(tags=['Certificate Profile'])
-class CertProfileViewSet(viewsets.ModelViewSet):
+@extend_schema_view(
+    retrieve=extend_schema(description='Retrieve a single certificate profile by id.'),
+    create=extend_schema(description='Create a certificate profile.'),
+    update=extend_schema(description='Update an existing certificate profile.'),
+    partial_update=extend_schema(description='Partially update an existing certificate profile.'),
+    destroy=extend_schema(description='Delete a certificate profile.')
+)
+class CertProfileViewSet(viewsets.ModelViewSet[CertificateProfileModel]):
     """ViewSet for managing Certificate Profile instances.
 
     Supports standard CRUD operations such as list, retrieve,
@@ -178,28 +185,14 @@ class CertProfileViewSet(viewsets.ModelViewSet):
     """
     queryset = CertificateProfileModel.objects.all().order_by('-created_at')
     serializer_class = CertProfileSerializer
-    permission_classes: ClassVar = [IsAuthenticated]
-    filter_backends: ClassVar = [
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (
         DjangoFilterBackend,
         filters.SearchFilter,
         filters.OrderingFilter
-    ]
+    )
     filterset_fields: ClassVar = ['unique_name', 'created_at']
     search_fields: ClassVar = ['unique_name', 'display_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at']
 
-    action_descriptions: ClassVar[dict[str, str]] = {
-        'list': 'Retrieve a list of all certificate profiles.',
-        'retrieve': 'Retrieve a single certificate profiles by id.',
-        'create': 'Create a new certificate profiles .',
-        'update': 'Update an existing certificate profiles.',
-        'partial_update': 'Partially update an existing certificate profiles.',
-        'destroy': 'Delete a certificate profiles.',
-    }
-
-    def get_view_description(self, *, html: bool = False) -> str:
-        """Return a description for the given action."""
-        if hasattr(self, 'action') and self.action in self.action_descriptions:
-            return self.action_descriptions[self.action]
-        return super().get_view_description(html)
 

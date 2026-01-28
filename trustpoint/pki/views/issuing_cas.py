@@ -21,7 +21,7 @@ from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import (  # type: ignore[import-untyped]
+from drf_spectacular.utils import (
     OpenApiExample,
     OpenApiParameter,
     extend_schema,
@@ -53,6 +53,7 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
     from django.forms import Form
     from django.http import HttpRequest
+    from rest_framework.request import Request
 
     from pki.models.credential import CredentialModel
 
@@ -416,12 +417,11 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
     search_fields: ClassVar = ['unique_name', 'credential__certificate__common_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at', 'updated_at']
 
-    # ignoring untyped decorator (drf-yasg not typed)
     @extend_schema(
         summary='List Issuing CAs',
         description='Retrieve all Issuing CAs from the database.',
-    )  # type: ignore[misc]
-    def list(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> Response:
+    )
+    def list(self, _request: Request) -> Response:
         """API endpoint to get all Issuing CAs."""
         queryset = self.get_queryset()
 
@@ -440,10 +440,10 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
     @extend_schema(
         summary='Retrieve Issuing CA',
         description='Retrieve details of a specific Issuing CA by ID.',
-    )  # type: ignore[misc]
-    def retrieve(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Response:
+    )
+    def retrieve(self, request: Request) -> Response:
         """API endpoint to get a single Issuing CA by ID."""
-        return super().retrieve(request, *args, **kwargs)  # type: ignore[arg-type]
+        return super().retrieve(request)
 
     @extend_schema(
         summary='Generate CRL',
@@ -483,8 +483,8 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
         methods=['post'],
         permission_classes=[IsAuthenticated],
         url_path='generate-crl',
-    )  # type: ignore[misc]
-    def generate_crl(self, _request: HttpRequest, **_kwargs: Any) -> Response:
+    )
+    def generate_crl(self, _request: Request) -> Response:
         """Generate a new CRL for this Issuing CA."""
         ca = self.get_object()
 
@@ -562,8 +562,8 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
         methods=['get'],
         permission_classes=[IsAuthenticated],
         url_path='crl',
-    )  # type: ignore[misc]
-    def crl(self, request: HttpRequest, **_kwargs: Any) -> HttpResponse:
+    )
+    def crl(self, request: Request) -> Response | HttpResponse:
         """Download the CRL for this Issuing CA."""
         ca = self.get_object()
         crl_pem = ca.crl_pem

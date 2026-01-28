@@ -42,13 +42,17 @@ from .views import base
 
 last_modified_date = timezone.now()
 
-TokenObtainPairView = extend_schema_view(
+@extend_schema_view(
     post=extend_schema(tags=['Auth'])
-)(TokenObtainPairView)
+)
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """For Access Token."""
 
-TokenRefreshView = extend_schema_view(
+@extend_schema_view(
     post=extend_schema(tags=['Auth'])
-)(TokenRefreshView)
+)
+class CustomTokenRefreshView(TokenRefreshView):
+    """For Refresh Token."""
 
 
 if settings.DEBUG:
@@ -88,8 +92,8 @@ urlpatterns += [
     path('api/', include('management.api_urls')),
 
     # JWT endpoints
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
 
     # Swagger & Redoc
     path('schema/', SpectacularAPIView.as_view(), name='schema'),

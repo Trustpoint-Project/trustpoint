@@ -15,9 +15,7 @@ from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView, View
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import (  # type: ignore[import-untyped]
-    extend_schema,
-)
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
 from rest_framework.permissions import IsAuthenticated
 
@@ -424,7 +422,15 @@ class BackupFilesDeleteMultipleView(View, LoggerMixin):
         return redirect('management:backups')
 
 @extend_schema(tags=['Backup'])
-class BackupViewSet(viewsets.ModelViewSet):
+@extend_schema_view(
+    list=extend_schema(description='Retrieve a list of all backups.'),
+    retrieve=extend_schema(description='Retrieve a single backup by id.'),
+    create=extend_schema(description='Create a backup.'),
+    update=extend_schema(description='Update an existing backup.'),
+    partial_update=extend_schema(description='Partially update an existing backup.'),
+    destroy=extend_schema(description='Delete a backup.')
+)
+class BackupViewSet(viewsets.ModelViewSet[Any]):
     """ViewSet for managing Backup instances.
 
     Supports standard CRUD operations such as list, retrieve,
@@ -432,8 +438,8 @@ class BackupViewSet(viewsets.ModelViewSet):
     """
     queryset = BackupOptions.objects.all().order_by('-user')
     serializer_class = BackupSerializer
-    permission_classes: ClassVar = [IsAuthenticated]
-    filter_backends: ClassVar = [
+    permission_classes: ClassVar = [IsAuthenticated] # type: ignore[misc]
+    filter_backends: ClassVar = [ # type: ignore[misc]
         DjangoFilterBackend,
         filters.SearchFilter,
         filters.OrderingFilter
@@ -441,17 +447,3 @@ class BackupViewSet(viewsets.ModelViewSet):
     filterset_fields: ClassVar = ['user']
     search_fields: ClassVar = ['user']
     ordering_fields: ClassVar = ['user']
-    action_descriptions: ClassVar[dict[str, str]] = {
-        'list': 'Retrieve a list of all backups.',
-        'retrieve': 'Retrieve a single backup by id.',
-        'create': 'Create a new backup with name, serial number, and status.',
-        'update': 'Update an existing backup.',
-        'partial_update': 'Partially update an existing backup.',
-        'destroy': 'Delete a backup.',
-    }
-
-    def get_view_description(self, *, html: bool = False) -> str:
-        """Return a description for the given action."""
-        if hasattr(self, 'action') and self.action in self.action_descriptions:
-            return self.action_descriptions[self.action]
-        return super().get_view_description(html)
