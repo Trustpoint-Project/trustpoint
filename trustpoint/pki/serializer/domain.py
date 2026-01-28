@@ -11,7 +11,7 @@ from rest_framework import serializers
 from pki.models.domain import DomainModel
 
 
-class DomainSerializer(serializers.ModelSerializer):
+class DomainSerializer(serializers.ModelSerializer[DomainModel]):
     """Serializer for Domain instances.
 
     Handles conversion between Domain model objects and JSON representations.

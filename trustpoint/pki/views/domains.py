@@ -39,8 +39,6 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
-    from typing import ClassVar
-
     from django.db.models import QuerySet
     from django.forms import Form
     from django.http import HttpRequest

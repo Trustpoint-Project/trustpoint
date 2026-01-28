@@ -8,7 +8,7 @@ import re
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any
 
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import render

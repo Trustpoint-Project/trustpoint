@@ -11,7 +11,7 @@ from rest_framework import serializers
 from pki.models.cert_profile import CertificateProfileModel
 
 
-class CertProfileSerializer(serializers.ModelSerializer):
+class CertProfileSerializer(serializers.ModelSerializer[CertificateProfileModel]):
     """Serializer for Certificate profile instances.
 
     Handles conversion between Certificate Profile model objects and JSON representations.

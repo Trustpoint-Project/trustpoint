@@ -4,14 +4,14 @@ Defines classes that handle validation and transformation
 of Backup model instances to and from JSON.
 """
 
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from rest_framework import serializers
 
 from management.models import BackupOptions
 
 
-class BackupSerializer(serializers.ModelSerializer[Any]):
+class BackupSerializer(serializers.ModelSerializer[BackupOptions]):
     """Serializer for Backup instances.
 
     Handles conversion between Backup model objects and JSON representations.
