@@ -490,13 +490,13 @@ def tls_client_request_with_client_cert_header(
     domain_str = domain.unique_name
     operation_str = 'simpleenroll'
     protocol_str = 'est'
-    certtemplate_str = 'tls_client'
+    cert_profile_str = 'tls_client'
 
     domaincredential_pem = domain_credential_instance.credential.certificate.cert_pem
 
     request_factory = RequestFactory()
     request = request_factory.post(
-        path=f'/.well-known/{protocol_str}/{domain_str}/{certtemplate_str}/{operation_str}',
+        path=f'/.well-known/{protocol_str}/{domain_str}/{cert_profile_str}/{operation_str}',
         data=csr.public_bytes(serialization.Encoding.DER),
         content_type='application/pkcs10',
         HTTP_SSL_CLIENT_CERT=domaincredential_pem,

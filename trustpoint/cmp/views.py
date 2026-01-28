@@ -15,8 +15,7 @@ from request.authentication import CmpAuthentication
 from request.authorization import CmpAuthorization
 from request.message_parser import CmpMessageParser
 from request.message_responder.cmp import CmpMessageResponder
-from request.operation_processor import CertificateIssueProcessor
-from request.profile_validator import ProfileValidator
+from request.operation_processor.general import OperationProcessor
 from request.request_context import BaseRequestContext, CmpCertificateRequestContext
 from request.request_validator.http_req import CmpHttpRequestValidator
 from trustpoint.logger import LoggerMixin
@@ -110,13 +109,11 @@ class CmpRequestView(LoggerMixin, View):
             authenticator.authenticate(ctx)
 
             authorizer = CmpAuthorization(
-                ['initialization', 'certification']  # !!!
+                ['initialization', 'certification', 'revocation']
             )
             authorizer.authorize(ctx)
 
-            ProfileValidator.validate(ctx) # !!!
-
-            CertificateIssueProcessor().process_operation(ctx) # !!!
+            OperationProcessor().process_operation(ctx)
         except Exception:
             self.logger.exception('Error processing CMP request')
 

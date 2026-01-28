@@ -93,7 +93,7 @@ class CertificateGenerator:
         builder = builder.add_extension(x509.BasicConstraints(ca=True, path_length=path_length), critical=True)
         builder = builder.add_extension(
             x509.KeyUsage(
-                digital_signature=False,
+                digital_signature=True,
                 content_commitment=False,
                 key_encipherment=False,
                 data_encipherment=False,
