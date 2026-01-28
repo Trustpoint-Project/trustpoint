@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.http import HttpResponse
 from .models import DiscoveredDevice
 from .scanner import OTScanner
+from pki.models.certificate import CertificateModel 
 
 SCAN_RUNNING = False
 
@@ -16,12 +17,29 @@ def run_scan_in_background(cidr):
         scanner = OTScanner()
         results = scanner.scan_network(cidr)
         for d in results:
+            pki_cert = None
+            ssl_info = d.get('ssl_info')
+            
+            # If we found an SSL certificate, save it to the PKI model
+            if ssl_info and 'cert_object' in ssl_info:
+                try:
+                    # FIX: Pop the raw object so it doesn't crash the JSON field save below
+                    cert_obj = ssl_info.pop('cert_object')
+                    pki_cert = CertificateModel.save_certificate(cert_obj)
+                except Exception as e:
+                    print(f"PKI Error: {e}")
+
             DiscoveredDevice.objects.update_or_create(
                 ip_address=d['ip'],
-                defaults={'hostname': d['hostname'], 'open_ports': d['ports'], 'ssl_info': d['ssl_info']}
+                defaults={
+                    'hostname': d['hostname'], 
+                    'open_ports': d['ports'], 
+                    'ssl_info': ssl_info,
+                    'certificate_record': pki_cert
+                }
             )
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Scan Error: {e}")
     finally:
         SCAN_RUNNING = False
 
@@ -35,11 +53,17 @@ def device_list(request):
     stats = {'total': all_devs.count(), 'risks': 0, 'industrial': 0}
     ot_ports = [502, 102, 44818, 4840, 1883, 8883]
     for d in all_devs:
-        if d.ssl_info and d.ssl_info.get('is_self_signed'): stats['risks'] += 1
-        if any(p in ot_ports for p in d.open_ports): stats['industrial'] += 1
+        # Check for risks (self-signed) and industrial ports
+        if d.ssl_info and d.ssl_info.get('is_self_signed'): 
+            stats['risks'] += 1
+        if any(p in ot_ports for p in d.open_ports): 
+            stats['industrial'] += 1
 
     return render(request, 'discovery/device_list.html', {
-        'devices': devices, 'scan_running': SCAN_RUNNING, 'stats': stats, 'search_query': query
+        'devices': devices, 
+        'scan_running': SCAN_RUNNING, 
+        'stats': stats, 
+        'search_query': query
     })
 
 def device_detail(request, device_id):
@@ -49,7 +73,7 @@ def device_detail(request, device_id):
 def start_scan(request):
     global SCAN_RUNNING
     if request.method == 'POST':
-        cidr = request.POST.get('cidr', '172.18.0.0/24')
+        cidr = request.POST.get('cidr', '192.168.1.0/24')
         if not SCAN_RUNNING:
             thread = threading.Thread(target=run_scan_in_background, args=(cidr,))
             thread.daemon = True
