@@ -42,6 +42,7 @@ extensions = [
     'sphinx.ext.inheritance_diagram',  # Generates class inheritance diagrams
     'sphinx.ext.viewcode',  # Adds links to highlighted source code
     'sphinxcontrib.plantuml',  # Enables PlantUML diagrams
+    'sphinxcontrib.openapi' #  Generate APIs docs
 ]
 
 if BUILD_AUTODOCS:

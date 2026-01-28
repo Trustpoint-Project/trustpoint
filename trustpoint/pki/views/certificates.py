@@ -10,7 +10,7 @@ from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -42,6 +42,7 @@ class CertificatesRedirectView(RedirectView):
 
 class CertificatesContextMixin(PageContextMixin):
     """Mixin which adds data to the context for the PKI -> Certificates application."""
+
     page_category = PKI_PAGE_CATEGORY
     page_name = PKI_PAGE_CERTIFICATES_SUBCATEGORY
 
@@ -56,7 +57,9 @@ class CertificateTableView(
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
 
+
 OID_MAP = {oid.dotted_string: oid.verbose_name for oid in NameOid}
+
 
 class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateModel]):
     """The certificate detail view."""
@@ -107,6 +110,7 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
         context['ip_addresses'] = ip_addresses
 
         return context
+
 
 class IssuingCaCertificateDownloadView(CertificatesContextMixin, DetailView[CertificateModel]):
     """View for downloading a single certificate."""
@@ -335,31 +339,35 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
 
         return response
 
+@extend_schema(tags=['Certificate'])
+@extend_schema_view(
+    retrieve=extend_schema(description='Retrieve a single certificate by id.'),
+    create=extend_schema(description='Create a certificate.'),
+    update=extend_schema(description='Update an existing certificate.'),
+    partial_update=extend_schema(description='Partially update an existing certificate.'),
+    destroy=extend_schema(description='Delete a certificate.')
+)
 class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
     """ViewSet for managing Certificate instances.
 
     Supports standard CRUD operations such as list, retrieve,
     create, update, and delete.
     """
+
     queryset = CertificateModel.objects.all().order_by('-created_at')
     serializer_class = CertificateSerializer
     permission_classes = (IsAuthenticated,)
-    filter_backends = (
-        DjangoFilterBackend,
-        filters.SearchFilter,
-        filters.OrderingFilter
-    )
+    filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
     filterset_fields: ClassVar = ['serial_number', 'not_valid_before']
     search_fields: ClassVar = ['common_name', 'sha256_fingerprint']
     ordering_fields: ClassVar = ['common_name', 'created_at']
 
-    # ignoring untyped decorator (drf-yasg not typed)
-    @swagger_auto_schema(
-        operation_summary='List certificates',
-        operation_description='Retrieve certificates from the database.',
-        tags=['certificates']
-    ) # type: ignore[misc]
-    def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+    @extend_schema(
+        summary='List certificates',
+        description='Retrieve certificates from the database.',
+        tags=['Certificate'],
+    )
+    def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> Response:
         """API endpoint to get all certificates."""
         del request, args, _kwargs
         queryset = self.get_queryset()
