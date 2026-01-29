@@ -1,9 +1,12 @@
 """Tests for pki.views.truststores module."""
 
+from unittest.mock import MagicMock, Mock, patch
+
 import pytest
 from django.test import RequestFactory
 from django.urls import reverse
 
+from pki.forms import TruststoreAddForm
 from pki.models.truststore import TruststoreModel
 from pki.views.truststores import TruststoreCreateView, TruststoreTableView
 
@@ -165,7 +168,7 @@ class TestTruststoreCreateView:
         """Full dispatch test with setup for from-device."""
         view = TruststoreCreateView()
         request = factory.get('/pki/truststores/add/from-device/')
-        view.setup(request)  # Essential: sets self.request, self.kwargs={}
+        view.setup(request)
         response = view.dispatch(request)
         assert view.for_devid is True
         assert response.status_code == 200
@@ -180,7 +183,7 @@ class TestTruststoreCreateView:
         assert response.status_code == 200
 
     def test_path_logic_direct(self, factory):
-        """Direct test of dispatch if-statement (line ~115, NO dispatch call)."""
+        """Direct test of dispatch if-statement (NO dispatch call)."""
         # True branch
         view = TruststoreCreateView()
         view.request = factory.get('/from-device/')
@@ -206,10 +209,66 @@ class TestTruststoreCreateView:
         ('/fromdevice', False),
     ])
     def test_dispatch_parametrized(self, factory, path, expected_for_devid):
-        """Parametrized full dispatch with proper setup."""
+        """Test for Parametrized full dispatch with proper setup."""
         view = TruststoreCreateView()
         request = factory.get(path)
         view.setup(request)
         response = view.dispatch(request)
         assert view.for_devid == expected_for_devid
 
+
+@pytest.mark.django_db
+@patch('django.contrib.messages.success')
+class TestTruststoreCreateViewFormValid:
+    """Tests covering form_valid branches."""
+
+    @pytest.fixture
+    def view(self):
+        view = TruststoreCreateView()
+        view.request = RequestFactory().get('/')
+        return view
+
+    @pytest.fixture
+    def mock_form(self):
+        mock_form = Mock(spec=TruststoreAddForm)
+        mock_truststore = MagicMock()
+        mock_truststore.id = 123
+        mock_truststore.unique_name = 'test-ts'
+        mock_truststore.number_of_certificates = 1
+        mock_form.cleaned_data = {'truststore': mock_truststore}
+        return mock_form
+
+    def test_domain_id_branch(self, mock_messages, view, mock_form):
+        """Test if domain_id is present."""
+        view.kwargs = {'pk': '42'}
+        response = view.form_valid(mock_form)
+        expected_url = reverse('pki:devid_registration_create-with_truststore_id', kwargs={'pk': '42', 'truststore_id': 123})
+        assert response.url == expected_url
+
+    def test_for_devid_query_branch(self, mock_messages, view, mock_form):
+        """Test if getattr(self, 'for_devid', False)"""
+        view.kwargs = {}
+        view.for_devid = True
+        response = view.form_valid(mock_form)
+        expected_url = f"{reverse('pki:devid_registration_create')}?truststore_id=123"
+        assert response.url == expected_url
+
+    def test_messages_plural_success(self, mock_messages, view, mock_form):
+        """Test for normal success + ngettext plural."""
+        view.kwargs = {}
+        view.for_devid = False
+        mock_form.cleaned_data['truststore'].number_of_certificates = 2  # Triggers plural
+        response = view.form_valid(mock_form)
+        mock_messages.assert_called_once()
+        assert 'certificates' in mock_messages.call_args.args[1]  # Plural check
+        assert response.url == reverse('pki:truststores')
+
+    def test_messages_singular_success(self, mock_messages, view, mock_form):
+        """Test ngettext singular."""
+        view.kwargs = {}
+        view.for_devid = False
+        mock_form.cleaned_data['truststore'].number_of_certificates = 1
+        response = view.form_valid(mock_form)
+        mock_messages.assert_called_once()
+        assert 'certificate' in mock_messages.call_args.args[1]
+        assert response.url == reverse('pki:truststores')
