@@ -1244,32 +1244,6 @@ class GdsPushService(LoggerMixin):
             certificate_type_id = CertificateTypes.APPLICATION_CERTIFICATE
 
         try:
-            # Revoke the existing certificate for this device before updating
-            device = await sync_to_async(lambda: self.device)()
-            domain = await sync_to_async(lambda: device.domain)()
-            
-            # Find existing application credential for the device
-            existing_credential = await sync_to_async(
-                lambda: IssuedCredentialModel.objects.filter(
-                    device=device,
-                    domain=domain,
-                    issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
-                ).first()
-            )()
-            
-            if existing_credential:
-                from pki.models.certificate import RevokedCertificateModel  # noqa: PLC0415
-                cert_to_revoke = await sync_to_async(lambda: existing_credential.credential.certificate)()
-                ca = await sync_to_async(lambda: domain.issuing_ca)()
-                
-                # Revoke the certificate
-                await sync_to_async(RevokedCertificateModel.objects.create)(
-                    certificate=cert_to_revoke,
-                    revocation_reason=RevokedCertificateModel.ReasonCode.SUPERSEDED,
-                    ca=ca
-                )
-                self.logger.info('Revoked existing certificate: %s', cert_to_revoke.common_name)
-
             server_node = client.get_node('ns=0;i=2253')
             server_config = await server_node.get_child('ServerConfiguration')
 
@@ -1453,12 +1427,41 @@ class GdsPushService(LoggerMixin):
 
         try:
             from pki.models import CertificateModel, TruststoreOrderModel  # noqa: PLC0415
+            from django.db import IntegrityError  # noqa: PLC0415
+            from pki.models.certificate import RevokedCertificateModel  # noqa: PLC0415
 
             self.logger.info(
                 'Updating truststore "%s" with new server certificate + %d CA cert(s)',
                 self.server_truststore.unique_name,
                 len(issuer_chain)
             )
+
+            # Revoke the old server certificate before updating truststore
+            device = await sync_to_async(lambda: self.device)()
+            domain = await sync_to_async(lambda: device.domain)()
+            ca = await sync_to_async(lambda: domain.issuing_ca)()
+            
+            # Get the old server certificate (order=0) to revoke it
+            try:
+                old_server_order = await sync_to_async(
+                    lambda: self.server_truststore.truststoreordermodel_set.get(order=0)
+                )()
+                old_server_cert = await sync_to_async(lambda: old_server_order.certificate)()
+                
+                # Revoke the old server certificate
+                try:
+                    await sync_to_async(
+                        lambda: RevokedCertificateModel.objects.create(
+                            certificate=old_server_cert,
+                            revocation_reason=RevokedCertificateModel.ReasonCode.SUPERSEDED,
+                            ca=ca
+                        )
+                    )()
+                    self.logger.info('Revoked old server certificate: %s', old_server_cert.common_name)
+                except IntegrityError:
+                    self.logger.info('Old server certificate already revoked: %s', old_server_cert.common_name)
+            except TruststoreOrderModel.DoesNotExist:
+                self.logger.debug('No old server certificate found in truststore to revoke')
 
             # Delete all existing certificates from the truststore
             # Wrap DB access

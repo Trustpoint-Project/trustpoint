@@ -1472,7 +1472,7 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
 
         return HttpResponseRedirect(
             reverse_lazy(
-                f'devices:{self.page_name}_certificate_lifecycle_management',
+                f'devices:{self.page_name}_onboarding_truststore_associated_help',
                 kwargs={'pk': self.object.pk}
             )
         )
@@ -1911,7 +1911,7 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
         """
         return HttpResponseRedirect(
             reverse_lazy(
-                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
+                f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
                 kwargs={'pk': self.object.pk}
             )
         )
@@ -2073,7 +2073,7 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
         """
         return HttpResponseRedirect(
             reverse_lazy(
-                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
+                f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
                 kwargs={'pk': self.object.pk}
             )
         )
@@ -2239,7 +2239,7 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
         """
         return HttpResponseRedirect(
             reverse_lazy(
-                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
+                f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
                 kwargs={'pk': self.object.pk}
             )
         )
