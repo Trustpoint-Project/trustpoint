@@ -20,7 +20,7 @@ initializeFieldCatalog() {
   'DISPLAY_NAME': {
       label: 'Display Name',
       description: 'Human readable profile name',
-      icon: '',
+      icon: '📝',
       fields: [
         {
           name: 'display_name',
@@ -37,7 +37,7 @@ initializeFieldCatalog() {
     'SUBJECT': {
       label: 'Subject',
       description: 'Certificate subject fields (DN)',
-      icon: '',
+      icon: '👤',
       fields: [
         {
           name: 'CN',
@@ -124,7 +124,7 @@ initializeFieldCatalog() {
     'EXTENSIONS': {
       label: 'Extensions',
       description: 'X.509 certificate extensions',
-      icon: '',
+      icon: '🔐',
       fields: [
         {
           name: 'subjectAltName',
@@ -232,7 +232,7 @@ initializeFieldCatalog() {
     'VALIDITY': {
       label: 'Validity',
       description: 'Certificate validity period settings',
-      icon: '',
+      icon: '📅',
       fields: [
         {
           name: 'days',
@@ -285,7 +285,7 @@ initializeFieldCatalog() {
     'CONSTRAINTS': {
       label: 'Constraints',
       description: 'Global constraint settings',
-      icon: '',
+      icon: '⚙️',
       fields: [
         {
           name: 'mutable',
@@ -359,8 +359,14 @@ initializeFieldCatalog() {
       if (e.key === 'Escape' && this.sidebarOpen) this.closeSidebar();
     });
 
+    // FIXED: Only close sidebar if clicking OUTSIDE the sidebar AND modal
     document.addEventListener('click', (e) => {
-      if (this.sidebarOpen && this.sidebar && !this.sidebar.contains(e.target)) this.closeSidebar();
+      const isClickInsideSidebar = this.sidebar && this.sidebar.contains(e.target);
+      const isClickInsideModal = document.querySelector('.profile-builder-modal')?.contains(e.target);
+
+      if (this.sidebarOpen && !isClickInsideSidebar && !isClickInsideModal) {
+        this.closeSidebar();
+      }
     });
 
     this.renderFields();
@@ -405,7 +411,6 @@ initializeFieldCatalog() {
 
   const grouped = {};
   this.filteredFields.forEach(field => {
-    // Guard against bad entries
     if (!field || !field.section) return;
     if (!grouped[field.section]) grouped[field.section] = [];
     grouped[field.section].push(field);
@@ -464,28 +469,91 @@ initializeFieldCatalog() {
     modal.innerHTML = `
       <div class="profile-builder-modal-content">
         <div class="profile-builder-modal-header">
-          <h3>Select template for ${field.name}</h3>
+          <h3>Select template for <code>${field.name}</code></h3>
           <button class="profile-builder-modal-close">&times;</button>
         </div>
         <div class="profile-builder-modal-body"></div>
       </div>
     `;
 
-    modal.querySelector('.profile-builder-modal-body').innerHTML = field.templates.map(t =>
-      `<button class="profile-builder-template-btn">
+    const bodyEl = modal.querySelector('.profile-builder-modal-body');
+
+    // Add template buttons
+    field.templates.forEach((t, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'profile-builder-template-btn';
+      btn.innerHTML = `
         <div class="profile-builder-template-label">${t.label}</div>
-        <code>${JSON.stringify(t.value).substring(0, 60)}...</code>
-      </button>`
-    ).join('');
+        <code>${JSON.stringify(t.value).substring(0, 60)}${JSON.stringify(t.value).length > 60 ? '...' : ''}</code>
+      `;
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.insertField(field, field.templates[idx]);
+        modal.remove();
+      });
+      bodyEl.appendChild(btn);
+    });
 
-    modal.querySelectorAll('.profile-builder-template-btn').forEach((btn, i) =>
-      btn.addEventListener('click', () => { this.insertField(field, field.templates[i]); modal.remove(); })
-    );
+    // Add custom input section
+    const customDiv = document.createElement('div');
+    customDiv.className = 'profile-builder-custom-section';
+    customDiv.innerHTML = `
+      <div class="profile-builder-divider">Or enter a custom value</div>
+      <div style="display: flex; gap: 8px; margin-top: 12px;">
+        <input type="text"
+               id="custom-value-input"
+               class="profile-builder-custom-input"
+               placeholder="Enter custom value (JSON format)" />
+        <button class="profile-builder-custom-btn">Add Custom</button>
+      </div>
+    `;
 
-    modal.querySelector('.profile-builder-modal-close').onclick = () => modal.remove();
-    modal.onkeydown = (e) => e.key === 'Escape' && modal.remove();
+    bodyEl.appendChild(customDiv);
+
+    const customInput = customDiv.querySelector('#custom-value-input');
+    const customBtn = customDiv.querySelector('.profile-builder-custom-btn');
+
+    const insertCustom = () => {
+      const inputValue = customInput.value.trim();
+      if (!inputValue) {
+        this.showNotification('Please enter a value', 'error');
+        return;
+      }
+
+      try {
+        let value;
+        try {
+          value = JSON.parse(inputValue);
+        } catch {
+          value = inputValue;
+        }
+
+        this.insertField(field, { label: 'Custom', value });
+        modal.remove();
+      } catch (error) {
+        this.showNotification(`Error: ${error.message}`, 'error');
+      }
+    };
+
+    customBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      insertCustom();
+    });
+
+    customInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        insertCustom();
+      }
+    });
+
+    modal.querySelector('.profile-builder-modal-close').addEventListener('click', () => modal.remove());
+    modal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') modal.remove();
+    });
+
     document.body.appendChild(modal);
-    modal.focus();
+    customInput.focus();
   }
 
   /** FIXED: Safe nested insert + textarea-only .value */
@@ -497,17 +565,17 @@ initializeFieldCatalog() {
       let current = json;
       for (let i = 0; i < path.length - 1; i++) {
         const key = path[i];
-        if (current[key] === undefined) current[key] = {};  // Create if missing
+        if (current[key] === undefined) current[key] = {};
         current = current[key];
       }
 
       current[path.at(-1)] = template.value ?? null;
 
       this.updateEditor(json);
-      this.showNotification(`Inserted ${field.name} at ${field.fullPath}`, 'success');
+      this.showNotification(`✓ Inserted ${field.name}`, 'success');
     } catch (error) {
       console.error('Insert error:', error);
-      this.showNotification(`Insert failed: ${error.message}`, 'error');
+      this.showNotification(`✗ Insert failed: ${error.message}`, 'error');
     }
   }
 
@@ -527,7 +595,7 @@ initializeFieldCatalog() {
     this.editor.dispatchEvent(new Event('change', { bubbles: true }));
     this.validateJson();
     this.editor.focus();
-    this.editor.scrollTop = this.editor.scrollHeight;  // Scroll to show insert
+    this.editor.scrollTop = this.editor.scrollHeight;
   }
 
   /** FIXED: .value only */
