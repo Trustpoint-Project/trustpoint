@@ -647,6 +647,8 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['OnboardingStatus'] = OnboardingStatus
 
         context['device_form'] = self.get_device_form()
+        if self.page_name == DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY:
+            context['onboarding_form'] = self.get_onboarding_form()
 
         return context
 
@@ -1884,6 +1886,7 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
 
             service = GdsPushService(device=self.object)
 
+            # Update trustlist
             success, message = asyncio.run(service.update_trustlist())
 
             if success:
