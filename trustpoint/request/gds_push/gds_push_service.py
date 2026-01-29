@@ -1,13 +1,4 @@
-"""Service for OPC UA GDS Push operations.
-
-This module implements the GDS Push protocol for OPC UA servers, providing:
-1. UpdateTrustList workflow (OPC UA Part 12 Section 7.7.3)
-2. UpdateCertificate workflow (OPC UA Part 12 Section 7.7.4)
-
-Key concepts:
-- Truststore: Contains OPC UA server certificate for validating the server
-- TrustList: CA chain + CRLs pushed to server for validating client certificates
-"""
+"""Service for OPC UA GDS Push operations."""
 
 from __future__ import annotations
 
@@ -23,8 +14,6 @@ from asyncua.ua.ua_binary import struct_to_binary
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID
-from devices.models import IssuedCredentialModel
-from pki.models.certificate import CertificateModel
 
 from request.operation_processor import CertificateIssueProcessor
 from request.profile_validator import ProfileValidator
@@ -32,9 +21,9 @@ from request.request_context import BaseCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
-    from devices.models import DeviceModel
+    from devices.models import DeviceModel, IssuedCredentialModel
     from pki.models import CaModel
-    from pki.models.credential import CredentialModel
+    from pki.models.certificate import CertificateModel
     from pki.models.truststore import TruststoreModel
 
 __all__ = ['GdsPushError', 'GdsPushService']
@@ -116,7 +105,7 @@ class GdsPushService(LoggerMixin):
         """
         if not self.device.ip_address or not self.device.opc_server_port:
             msg = f'Device "{self.device.common_name}" must have IP address and OPC server port configured'
-            raise GdsPushError(msg)
+            self._raise_gds_push_error(msg)
 
     def _setup_secure_mode(self) -> None:
         """Setup credentials and truststore for secure operations.
@@ -217,10 +206,9 @@ class GdsPushService(LoggerMixin):
         Raises:
             GdsPushError: If chain is incomplete or invalid.
         """
-        # Ensure database access is wrapped in sync_to_async
         device = await sync_to_async(lambda: self.device)()
         domain = await sync_to_async(lambda: device.domain)()
-        
+
         if not domain:
             msg = f'Device "{device.common_name}" has no domain configured'
             raise GdsPushError(msg)
@@ -230,7 +218,6 @@ class GdsPushService(LoggerMixin):
             msg = f'Domain "{domain.unique_name}" has no issuing CA configured'
             raise GdsPushError(msg)
 
-        # get_ca_chain_from_truststore touches the DB, so we need to wrap it
         return await sync_to_async(issuing_ca.get_ca_chain_from_truststore)()
 
 
@@ -257,10 +244,8 @@ class GdsPushService(LoggerMixin):
         issuer_crls = []
 
         for ca in ca_chain:
-            # DB access for ca_certificate_model
-            ca_cert_model = await sync_to_async(lambda: ca.ca_certificate_model)()
-            
-            # This doesn't hit DB but uses the model
+            ca_cert_model = await sync_to_async(lambda ca=ca: ca.ca_certificate_model)()
+
             ca_cert_crypto = await sync_to_async(ca_cert_model.get_certificate_serializer().as_crypto)()
             ca_cert_der = ca_cert_crypto.public_bytes(encoding=serialization.Encoding.DER)
 
@@ -273,8 +258,7 @@ class GdsPushService(LoggerMixin):
                 ca_cert_crypto.subject.rfc4514_string()
             )
 
-            # CRL is mandatory for OPC UA GDS Push
-            crl_pem = await sync_to_async(lambda: ca.crl_pem)()
+            crl_pem = await sync_to_async(lambda ca=ca: ca.crl_pem)()
             if not crl_pem:
                 msg = (
                     f'CA "{ca.unique_name}" has no CRL configured. '
@@ -282,7 +266,6 @@ class GdsPushService(LoggerMixin):
                 )
                 raise GdsPushError(msg)
 
-            # Load and validate CRL
             try:
                 crl_crypto = x509.load_pem_x509_crl(crl_pem.encode())
             except Exception as e:
@@ -343,23 +326,20 @@ class GdsPushService(LoggerMixin):
             msg = 'No domain credential available'
             raise GdsPushError(msg)
 
-        # Wrap potential DB access
         is_valid, reason = await sync_to_async(self.domain_credential.is_valid_domain_credential)()
         if not is_valid:
             msg = f'Invalid domain credential: {reason}'
             raise GdsPushError(msg)
 
-        # Access relations safely
         credential = await sync_to_async(lambda: self.domain_credential.credential)()
         cert_model = await sync_to_async(lambda: credential.certificate)()
-        
+
         if not cert_model:
             msg = 'Domain credential has no certificate'
             raise GdsPushError(msg)
 
         cert_crypto = await sync_to_async(cert_model.get_certificate_serializer().as_crypto)()
 
-        # Validate certificate for OPC UA usage
         self._validate_client_certificate(cert_crypto)
 
         try:
@@ -368,7 +348,6 @@ class GdsPushService(LoggerMixin):
             msg = f'Failed to get private key: {e}'
             raise GdsPushError(msg) from e
 
-        # Verify certificate and key match
         self._verify_certificate_key_match(cert_crypto, key_crypto)
 
         key_pem = key_crypto.private_bytes(
@@ -395,7 +374,6 @@ class GdsPushService(LoggerMixin):
             msg = 'No domain credential available'
             raise GdsPushError(msg)
 
-        # Wrap potential DB access
         credential = await sync_to_async(lambda: self.domain_credential.credential)()
         cert_model = await sync_to_async(lambda: credential.certificate)()
 
@@ -403,16 +381,13 @@ class GdsPushService(LoggerMixin):
             msg = 'Domain credential has no certificate'
             raise GdsPushError(msg)
 
-        # Start with the client certificate
         client_cert = await sync_to_async(cert_model.get_certificate_serializer().as_crypto)()
 
-        # Build PEM chain with client cert + CA chain
         chain_pems = [client_cert.public_bytes(encoding=serialization.Encoding.PEM)]
 
-        # Add CA chain (issuing CA to root)
         ca_chain = await self._build_ca_chain()
         for ca in ca_chain:
-            ca_cert_model = await sync_to_async(lambda: ca.ca_certificate_model)()
+            ca_cert_model = await sync_to_async(lambda ca=ca: ca.ca_certificate_model)()
             ca_cert = await sync_to_async(ca_cert_model.get_certificate_serializer().as_crypto)()
             chain_pems.append(ca_cert.public_bytes(encoding=serialization.Encoding.PEM))
 
@@ -422,11 +397,10 @@ class GdsPushService(LoggerMixin):
             len(chain_pems)
         )
 
-        # Log details of each certificate in chain for debugging
         self.logger.debug('Certificate chain details:')
         self.logger.debug('  [0] Client: %s', client_cert.subject.rfc4514_string())
         for idx, ca in enumerate(ca_chain, start=1):
-            ca_cert_model = await sync_to_async(lambda: ca.ca_certificate_model)()
+            ca_cert_model = await sync_to_async(lambda ca=ca: ca.ca_certificate_model)()
             ca_cert = await sync_to_async(ca_cert_model.get_certificate_serializer().as_crypto)()
             self.logger.debug('  [%d] CA: %s', idx, ca_cert.subject.rfc4514_string())
 
@@ -435,7 +409,7 @@ class GdsPushService(LoggerMixin):
     def _verify_certificate_key_match(
         self,
         cert: x509.Certificate,
-        private_key: Any,  # RSA, EC, or other key types
+        private_key: Any,
     ) -> None:
         """Verify that certificate and private key are a matching pair.
 
@@ -449,7 +423,6 @@ class GdsPushService(LoggerMixin):
         cert_public_key = cert.public_key()
         private_public_key = private_key.public_key()
 
-        # Compare public key bytes
         cert_public_bytes = cert_public_key.public_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PublicFormat.SubjectPublicKeyInfo
@@ -476,14 +449,12 @@ class GdsPushService(LoggerMixin):
         """
         issues = []
 
-        # Check validity period
         now = datetime.datetime.now(tz=datetime.UTC)
         if cert.not_valid_before_utc > now:
             issues.append(f'Certificate not yet valid (valid from: {cert.not_valid_before_utc.isoformat()})')
         if cert.not_valid_after_utc < now:
             issues.append(f'Certificate expired (valid until: {cert.not_valid_after_utc.isoformat()})')
 
-        # Check Key Usage (required for OPC UA)
         try:
             key_usage = cert.extensions.get_extension_for_oid(ExtensionOID.KEY_USAGE).value
             required_usages = {
@@ -497,7 +468,6 @@ class GdsPushService(LoggerMixin):
         except x509.ExtensionNotFound:
             issues.append('Key Usage extension is missing (required for OPC UA)')
 
-        # Check Extended Key Usage (should have client auth)
         try:
             ext_key_usage = cert.extensions.get_extension_for_oid(ExtensionOID.EXTENDED_KEY_USAGE).value
             if ExtendedKeyUsageOID.CLIENT_AUTH not in ext_key_usage:
@@ -505,7 +475,6 @@ class GdsPushService(LoggerMixin):
         except x509.ExtensionNotFound:
             issues.append('Extended Key Usage extension is missing (should have CLIENT_AUTH)')
 
-        # Check Subject Alternative Name (must have URI)
         try:
             san = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
             has_uri = any(isinstance(gn, x509.UniformResourceIdentifier) for gn in san.value)
@@ -514,7 +483,6 @@ class GdsPushService(LoggerMixin):
         except x509.ExtensionNotFound:
             issues.append('Subject Alternative Name extension is missing (required for OPC UA)')
 
-        # Log validation results
         if issues:
             self.logger.warning(
                 'Client certificate validation issues:\n  - %s',
@@ -576,9 +544,7 @@ class GdsPushService(LoggerMixin):
             msg = 'No server truststore configured'
             raise GdsPushError(msg)
 
-        # Get the first certificate (order=0) which should be the server certificate
         try:
-            # Wrap DB access with sync_to_async
             truststore_order = await sync_to_async(
                 lambda: self.server_truststore.truststoreordermodel_set.get(order=0)
             )()
@@ -590,7 +556,6 @@ class GdsPushService(LoggerMixin):
         cert_crypto = await sync_to_async(cert_model.get_certificate_serializer().as_crypto)()
         cert_der = cert_crypto.public_bytes(encoding=serialization.Encoding.DER)
 
-        # Check if this is actually a server certificate (not a CA)
         is_ca = False
         try:
             basic_constraints = cert_crypto.extensions.get_extension_for_oid(
@@ -629,7 +594,6 @@ class GdsPushService(LoggerMixin):
 
             application_uri = self._extract_application_uri(client_cert_crypto)
 
-            # Build complete certificate chain (client + CA chain) in PEM format
             client_cert_chain_pem = await self._build_client_certificate_chain()
 
             self.logger.info(
@@ -648,7 +612,6 @@ class GdsPushService(LoggerMixin):
                 self.server_url
             )
 
-            # Write client certificate chain in PEM format (includes client + CA chain)
             with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as f:
                 f.write(client_cert_chain_pem)
                 client_cert_path = f.name
@@ -657,15 +620,12 @@ class GdsPushService(LoggerMixin):
                 f.write(client_key_pem)
                 client_key_path = f.name
 
-            # Write server certificate in DER format (as expected by asyncua)
             with tempfile.NamedTemporaryFile(mode='wb', suffix='.der', delete=False) as f:
                 f.write(server_cert_der)
                 server_cert_path = f.name
 
             client = Client(self.server_url)
             client.application_uri = application_uri
-            client.secure_channel_timeout = 30000  # 30 seconds
-            client.session_timeout = 60000  # 60 seconds
 
             self.logger.info(
                 'Setting security policy: Basic256Sha256, mode: SignAndEncrypt'
@@ -678,7 +638,7 @@ class GdsPushService(LoggerMixin):
                 server_certificate=server_cert_path,
                 mode=ua.MessageSecurityMode.SignAndEncrypt
             )
-            
+
             if self.device.onboarding_config:
                 opc_user = self.device.onboarding_config.opc_user
                 opc_password = self.device.onboarding_config.opc_password
@@ -713,7 +673,6 @@ class GdsPushService(LoggerMixin):
             client: The OPC UA client that failed to connect.
         """
         try:
-            # Get the expected certificate from truststore
             expected_cert_der = self._get_server_certificate()
             expected_cert = x509.load_der_x509_certificate(expected_cert_der)
 
@@ -723,8 +682,7 @@ class GdsPushService(LoggerMixin):
                 '\n=== EXPECTED (from truststore "%s") ===',
                 self.server_truststore.unique_name
             )
-            
-            # Check what python-opcua loaded
+
             self.logger.error('\n=== PYTHON-OPCUA LOADED CERTIFICATE ===')
             if hasattr(client, 'uaclient'):
                 self.logger.error('  client.uaclient exists: True')
@@ -765,8 +723,6 @@ class GdsPushService(LoggerMixin):
                 expected_cert_der[:64].hex().upper()
             )
 
-            # Try to get the actual server certificate
-            # The python-opcua library may have cached it during the failed connection attempt
             if hasattr(client, 'uaclient') and hasattr(client.uaclient, 'security_policy'):
                 security_policy = client.uaclient.security_policy
                 if hasattr(security_policy, 'server_certificate') and security_policy.server_certificate:
@@ -792,8 +748,7 @@ class GdsPushService(LoggerMixin):
                             len(actual_cert_der),
                             actual_cert_der[:64].hex().upper()
                         )
-                        
-                        # Compare byte-by-byte
+
                         if len(expected_cert_der) != len(actual_cert_der):
                             self.logger.error(
                                 '\n=== BYTE COMPARISON ==='
@@ -805,7 +760,6 @@ class GdsPushService(LoggerMixin):
                                 abs(len(expected_cert_der) - len(actual_cert_der))
                             )
                         else:
-                            # Find first differing byte
                             for i, (e_byte, a_byte) in enumerate(zip(expected_cert_der, actual_cert_der)):
                                 if e_byte != a_byte:
                                     self.logger.error(
@@ -821,14 +775,14 @@ class GdsPushService(LoggerMixin):
                                     )
                                     break
 
-                    except Exception as cert_parse_error:
-                        self.logger.error('Could not parse actual server certificate: %s', cert_parse_error)
+                    except Exception:
+                        self.logger.exception('Could not parse actual server certificate')
                 else:
                     self.logger.error('\n=== ACTUAL (presented by server) ===\n  (Certificate not captured)')
             else:
                 self.logger.error('\n=== ACTUAL (presented by server) ===\n  (Certificate not accessible)')
 
-        except Exception as log_error:
+        except Exception as log_error:  # noqa: BLE001
             self.logger.warning('Failed to log certificate mismatch details: %s', log_error)
 
     # ========================================================================
@@ -882,7 +836,7 @@ class GdsPushService(LoggerMixin):
             server_node = client.get_node('ns=0;i=2253')
             name = await server_node.get_browse_name()
             server_info['server_name'] = str(name.Name)
-        except Exception as e:  # noqa: BLE001 - OPC UA operations can throw various errors
+        except Exception as e:  # noqa: BLE001
             self.logger.debug('Failed to get server name: %s', e)
             server_info['server_name'] = 'Unknown'
 
@@ -908,7 +862,6 @@ class GdsPushService(LoggerMixin):
             self.logger.info('Connecting to OPC UA server at %s', self.server_url)
 
             try:
-                # Use async context manager for connection handling
                 async with client:
                     self.logger.info('Connected successfully')
 
@@ -933,7 +886,6 @@ class GdsPushService(LoggerMixin):
                             messages.append(f'✗ {group_name}')
 
             except Exception:
-                # Connection or other error occurred
                 app_uri = 'unknown'
                 with contextlib.suppress(Exception):
                     if self.domain_credential and self.domain_credential.credential.certificate:
@@ -1004,7 +956,7 @@ class GdsPushService(LoggerMixin):
                     })
                     self.logger.info('Discovered TrustList for group: %s', group_name)
 
-                except Exception as e:  # noqa: BLE001 - OPC UA node access can fail in various ways
+                except Exception as e:  # noqa: BLE001
                     self.logger.warning('Failed to get TrustList for group: %s', e)
                     continue
 
@@ -1060,22 +1012,10 @@ class GdsPushService(LoggerMixin):
             # Step 4: ApplyChanges if required
             if apply_changes_required:
                 self.logger.info('Applying changes server-wide')
-                # Navigate up from TrustList -> Group -> CertificateGroups -> ServerConfiguration
-                # Actually Structure is Server -> ServerConfiguration -> CertificateGroups -> Group -> TrustList
-                # We need ServerConfiguration node to call ApplyChanges
-                
-                # Safer way: get ServerConfiguration directly again
-                # Parent of TrustList is Group. Parent of Group is CertificateGroups. 
-                # Parent of CertificateGroups is ServerConfiguration.
-                # But we can just direct fetch since we know the path or relation
-                
-                # Based on OPC UA Spec, ApplyChanges is method of ServerConfiguration
-                # We can browse up or just fetch the known node
-                # Let's try browsing up since we have the node
                 group_node = await trustlist_node.get_parent()
                 cert_groups_node = await group_node.get_parent()
                 server_config_node = await cert_groups_node.get_parent()
-                
+
                 apply_changes = await server_config_node.get_child('ApplyChanges')
                 await server_config_node.call_method(apply_changes)
 
@@ -1099,21 +1039,17 @@ class GdsPushService(LoggerMixin):
         """
         client = None
         try:
-            # Create secure client and connect
             client = await self._create_secure_client()
             self.logger.info('Connecting to OPC UA server at %s', self.server_url)
-            
+
             try:
-                # Use async context manager for connection handling
                 async with client:
                     self.logger.info('Connected successfully')
-                    
-                    # Discover certificate groups
+
                     cert_groups = await self._discover_certificate_groups(client)
                     if not cert_groups:
                         return False, 'No certificate groups found on server', None
 
-                    # Update certificate for each group (skip UserToken groups)
                     success_count = 0
                     messages = []
                     issued_cert = None
@@ -1122,7 +1058,6 @@ class GdsPushService(LoggerMixin):
                     for group in cert_groups:
                         group_name = group['name']
 
-                        # Skip UserToken groups
                         if 'UserToken' in group_name:
                             self.logger.info('Skipping %s (user token group)', group_name)
                             continue
@@ -1143,7 +1078,6 @@ class GdsPushService(LoggerMixin):
                             messages.append(f'✗ {group_name}')
 
             except Exception as connect_error:
-                # If connection fails due to certificate mismatch, log details
                 if 'certificate mismatch' in str(connect_error).lower():
                     self._log_certificate_mismatch_details(client)
                     self.logger.exception(
@@ -1169,10 +1103,9 @@ class GdsPushService(LoggerMixin):
                 raise
 
             if success_count > 0:
-                # Update the truststore with the new server certificate + CA chain
                 if issued_cert and issuer_chain:
                     await self._update_truststore_with_new_certificate(issued_cert, issuer_chain)
-                
+
                 msg = (
                     f'Successfully updated {success_count}/{len(cert_groups)} '
                     f'certificate(s): {", ".join(messages)}'
@@ -1215,7 +1148,7 @@ class GdsPushService(LoggerMixin):
                     })
                     self.logger.info('Discovered certificate group: %s', group_name)
 
-                except Exception as e:  # noqa: BLE001 - OPC UA operations can fail in various ways
+                except Exception as e:  # noqa: BLE001
                     self.logger.warning('Failed to process group: %s', e)
                     continue
 
@@ -1251,21 +1184,13 @@ class GdsPushService(LoggerMixin):
             self.logger.info('Server generating CSR via CreateSigningRequest')
             create_signing_request = await server_config.get_child('CreateSigningRequest')
 
-            # Arguments for CreateSigningRequest:
-            # certificateGroupId: NodeId
-            # certificateTypeId: NodeId
-            # subjectName: String (optional - None lets server decide)
-            # regeneratePrivateKey: Boolean (True to force new key)
-            # nonce: ByteString (optional - None for no nonce)
-            
-            # Note: asyncua call_method signature is call_method(node, *args)
-            # where node is the Method node or its ID
+
             csr = await server_config.call_method(
                 create_signing_request,
                 certificate_group_id,
                 certificate_type_id,
                 None,  # subjectName
-                True,  # regeneratePrivateKey
+                True,  # regeneratePrivateKey  # noqa: FBT003
                 None   # nonce
             )
             self.logger.info('CSR generated by server (%d bytes)', len(csr))
@@ -1301,6 +1226,10 @@ class GdsPushService(LoggerMixin):
         else:
             return True, signed_cert, issuer_chain
 
+    def _raise_gds_push_error(self, msg: str) -> None:
+        """Raise a GdsPushError with the given message."""
+        raise GdsPushError(msg)
+
     async def _sign_csr(self, csr_der: bytes) -> tuple[bytes, list[bytes], CertificateModel]:
         """Sign a Certificate Signing Request using the standardized certificate issuance workflow.
 
@@ -1327,11 +1256,9 @@ class GdsPushService(LoggerMixin):
                 type(csr.public_key()).__name__
             )
 
-            # Create a minimal context for certificate issuance
-            # Wrap DB access with sync_to_async
             device = await sync_to_async(lambda: self.device)()
             domain = await sync_to_async(lambda: device.domain)()
-            
+
             context = await sync_to_async(BaseCertificateRequestContext)(
                 device=device,
                 domain=domain,
@@ -1341,10 +1268,9 @@ class GdsPushService(LoggerMixin):
                 operation='update_certificate',
             )
 
-            # Load the certificate profile model from the domain
             if not context.domain:
                 msg = 'Device has no domain configured'
-                raise GdsPushError(msg)
+                self._raise_gds_push_error(msg)
 
             certificate_profile_model = await sync_to_async(context.domain.get_allowed_cert_profile)('opc_ua')
             if not certificate_profile_model:
@@ -1352,7 +1278,7 @@ class GdsPushService(LoggerMixin):
                     'Certificate profile "opc_ua" not found or not allowed for domain '
                     f'"{context.domain.unique_name}"'
                 )
-                raise GdsPushError(msg)
+                self._raise_gds_push_error(msg)
 
             context.certificate_profile_model = certificate_profile_model
 
@@ -1367,7 +1293,7 @@ class GdsPushService(LoggerMixin):
 
             if context.issued_certificate is None:
                 msg = 'Certificate issuance failed: No certificate was issued'
-                raise GdsPushError(msg)
+                self._raise_gds_push_error(msg)
 
             # Convert to DER format (crypto operations are safe for async)
             cert_der = context.issued_certificate.public_bytes(serialization.Encoding.DER)
@@ -1381,17 +1307,16 @@ class GdsPushService(LoggerMixin):
                     try:
                         eku = ext.value
                         self.logger.info('    Extended Key Usage OIDs: %s', [str(oid) for oid in eku])
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001
                         self.logger.warning('    Failed to parse Extended Key Usage: %s', e)
 
             self.logger.info('Certificate issued successfully (%d bytes)', len(cert_der))
 
-            # Build issuer chain from CA hierarchy
             ca_chain = await self._build_ca_chain()
             issuer_chain = []
 
             for ca in ca_chain:
-                ca_cert_model = await sync_to_async(lambda: ca.ca_certificate_model)()
+                ca_cert_model = await sync_to_async(lambda ca=ca: ca.ca_certificate_model)()
                 ca_cert = await sync_to_async(ca_cert_model.get_certificate_serializer().as_crypto)()
                 issuer_chain.append(ca_cert.public_bytes(encoding=serialization.Encoding.DER))
 
@@ -1426,8 +1351,9 @@ class GdsPushService(LoggerMixin):
             raise GdsPushError(msg)
 
         try:
-            from pki.models import CertificateModel, TruststoreOrderModel  # noqa: PLC0415
             from django.db import IntegrityError  # noqa: PLC0415
+
+            from pki.models import CertificateModel, TruststoreOrderModel  # noqa: PLC0415
             from pki.models.certificate import RevokedCertificateModel  # noqa: PLC0415
 
             self.logger.info(
@@ -1436,19 +1362,16 @@ class GdsPushService(LoggerMixin):
                 len(issuer_chain)
             )
 
-            # Revoke the old server certificate before updating truststore
             device = await sync_to_async(lambda: self.device)()
             domain = await sync_to_async(lambda: device.domain)()
             ca = await sync_to_async(lambda: domain.issuing_ca)()
-            
-            # Get the old server certificate (order=0) to revoke it
+
             try:
                 old_server_order = await sync_to_async(
                     lambda: self.server_truststore.truststoreordermodel_set.get(order=0)
                 )()
                 old_server_cert = await sync_to_async(lambda: old_server_order.certificate)()
-                
-                # Revoke the old server certificate
+
                 try:
                     await sync_to_async(
                         lambda: RevokedCertificateModel.objects.create(
@@ -1463,20 +1386,20 @@ class GdsPushService(LoggerMixin):
             except TruststoreOrderModel.DoesNotExist:
                 self.logger.debug('No old server certificate found in truststore to revoke')
 
-            # Delete all existing certificates from the truststore
-            # Wrap DB access
+
             await sync_to_async(self.server_truststore.truststoreordermodel_set.all().delete)()
             self.logger.debug('Cleared existing certificates from truststore')
 
-            # Add the server certificate (order 0)
             server_cert_crypto = x509.load_der_x509_certificate(server_cert_der)
             server_cert_fingerprint = server_cert_crypto.fingerprint(hashes.SHA256()).hex()
-            
-            server_cert_model = await sync_to_async(CertificateModel.get_cert_by_sha256_fingerprint)(server_cert_fingerprint)
+
+            server_cert_model = await sync_to_async(
+                CertificateModel.get_cert_by_sha256_fingerprint
+            )(server_cert_fingerprint)
             if server_cert_model is None:
                 msg = f'Server certificate not found in database (fingerprint: {server_cert_fingerprint})'
-                raise GdsPushError(msg)
-            
+                self._raise_gds_push_error(msg)
+
             await sync_to_async(TruststoreOrderModel.objects.create)(
                 trust_store=self.server_truststore,
                 certificate=server_cert_model,
@@ -1487,16 +1410,17 @@ class GdsPushService(LoggerMixin):
                 server_cert_crypto.subject.rfc4514_string()
             )
 
-            # Add CA certificates (order 1, 2, 3, ...)
             for idx, ca_cert_der in enumerate(issuer_chain, start=1):
                 ca_cert_crypto = x509.load_der_x509_certificate(ca_cert_der)
                 ca_cert_fingerprint = ca_cert_crypto.fingerprint(hashes.SHA256()).hex()
-                
-                ca_cert_model = await sync_to_async(CertificateModel.get_cert_by_sha256_fingerprint)(ca_cert_fingerprint)
+
+                ca_cert_model = await sync_to_async(
+                    CertificateModel.get_cert_by_sha256_fingerprint
+                )(ca_cert_fingerprint)
                 if ca_cert_model is None:
                     msg = f'CA certificate not found in database (fingerprint: {ca_cert_fingerprint})'
-                    raise GdsPushError(msg)
-                
+                    self._raise_gds_push_error(msg)
+
                 await sync_to_async(TruststoreOrderModel.objects.create)(
                     trust_store=self.server_truststore,
                     certificate=ca_cert_model,

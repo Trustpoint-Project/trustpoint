@@ -122,14 +122,14 @@ class SaveCredentialToDbMixin(LoggerMixin):
 
         try:
             cert_fingerprint = certificate.fingerprint(hashes.SHA256()).hex().upper()
-            
+
             # check for existing issued credentials with the same certificate
             existing_credential = IssuedCredentialModel.objects.filter(
                 device=self.device,
                 domain=self.domain,
                 credential__certificate__sha256_fingerprint=cert_fingerprint
             ).first()
-            
+
             if existing_credential:
                 # if the certificate already exists, update the credential and return it
                 cred_model = existing_credential.credential
