@@ -8,10 +8,11 @@ import tempfile
 from typing import TYPE_CHECKING, Any
 
 from asgiref.sync import sync_to_async
-from asyncua import Client, ua
-from asyncua.crypto import security_policies
-from asyncua.ua.ua_binary import struct_to_binary
+from asyncua import Client, ua  # type: ignore[import-untyped]
+from asyncua.crypto import security_policies  # type: ignore[import-untyped]
+from asyncua.ua.ua_binary import struct_to_binary  # type: ignore[import-untyped]
 from cryptography import x509
+from cryptography.x509 import KeyUsage
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID
 
@@ -326,12 +327,14 @@ class GdsPushService(LoggerMixin):
             msg = 'No domain credential available'
             raise GdsPushError(msg)
 
-        is_valid, reason = await sync_to_async(self.domain_credential.is_valid_domain_credential)()
+        domain_cred = self.domain_credential
+
+        is_valid, reason = await sync_to_async(domain_cred.is_valid_domain_credential)()
         if not is_valid:
             msg = f'Invalid domain credential: {reason}'
             raise GdsPushError(msg)
 
-        credential = await sync_to_async(lambda: self.domain_credential.credential)()
+        credential = await sync_to_async(lambda: domain_cred.credential)()
         cert_model = await sync_to_async(lambda: credential.certificate)()
 
         if not cert_model:
@@ -374,7 +377,9 @@ class GdsPushService(LoggerMixin):
             msg = 'No domain credential available'
             raise GdsPushError(msg)
 
-        credential = await sync_to_async(lambda: self.domain_credential.credential)()
+        domain_cred = self.domain_credential
+
+        credential = await sync_to_async(lambda: domain_cred.credential)()
         cert_model = await sync_to_async(lambda: credential.certificate)()
 
         if not cert_model:
@@ -456,30 +461,33 @@ class GdsPushService(LoggerMixin):
             issues.append(f'Certificate expired (valid until: {cert.not_valid_after_utc.isoformat()})')
 
         try:
-            key_usage = cert.extensions.get_extension_for_oid(ExtensionOID.KEY_USAGE).value
-            required_usages = {
-                'digital_signature': key_usage.digital_signature,
-                'key_encipherment': key_usage.key_encipherment,
-                'data_encipherment': key_usage.data_encipherment,
-            }
-            missing_usages = [name for name, present in required_usages.items() if not present]
-            if missing_usages:
-                issues.append(f'Missing required key usages: {", ".join(missing_usages)}')
+            key_usage_value = cert.extensions.get_extension_for_oid(ExtensionOID.KEY_USAGE).value
+            if isinstance(key_usage_value, KeyUsage):
+                required_usages = {
+                    'digital_signature': key_usage_value.digital_signature,
+                    'key_encipherment': key_usage_value.key_encipherment,
+                    'data_encipherment': key_usage_value.data_encipherment,
+                }
+                missing_usages = [name for name, present in required_usages.items() if not present]
+                if missing_usages:
+                    issues.append(f'Missing required key usages: {", ".join(missing_usages)}')
         except x509.ExtensionNotFound:
             issues.append('Key Usage extension is missing (required for OPC UA)')
 
         try:
-            ext_key_usage = cert.extensions.get_extension_for_oid(ExtensionOID.EXTENDED_KEY_USAGE).value
-            if ExtendedKeyUsageOID.CLIENT_AUTH not in ext_key_usage:
+            ext_key_usage_value = cert.extensions.get_extension_for_oid(ExtensionOID.EXTENDED_KEY_USAGE).value
+            if (isinstance(ext_key_usage_value, frozenset) and
+                    ExtendedKeyUsageOID.CLIENT_AUTH not in ext_key_usage_value):
                 issues.append('Certificate missing CLIENT_AUTH extended key usage')
         except x509.ExtensionNotFound:
             issues.append('Extended Key Usage extension is missing (should have CLIENT_AUTH)')
 
         try:
-            san = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
-            has_uri = any(isinstance(gn, x509.UniformResourceIdentifier) for gn in san.value)
-            if not has_uri:
-                issues.append('Certificate SAN has no URI (application URI required for OPC UA)')
+            san_value = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value
+            if isinstance(san_value, x509.SubjectAlternativeName):
+                has_uri = any(isinstance(gn, x509.UniformResourceIdentifier) for gn in san_value)
+                if not has_uri:
+                    issues.append('Certificate SAN has no URI (application URI required for OPC UA)')
         except x509.ExtensionNotFound:
             issues.append('Subject Alternative Name extension is missing (required for OPC UA)')
 
@@ -518,7 +526,7 @@ class GdsPushService(LoggerMixin):
         """
         try:
             san = cert.extensions.get_extension_for_oid(ExtensionOID.SUBJECT_ALTERNATIVE_NAME)
-            for general_name in san.value:
+            for general_name in san.value:  # type: ignore[attr-defined]
                 if isinstance(general_name, x509.UniformResourceIdentifier):
                     return general_name.value
         except x509.ExtensionNotFound:
@@ -544,9 +552,11 @@ class GdsPushService(LoggerMixin):
             msg = 'No server truststore configured'
             raise GdsPushError(msg)
 
+        server_truststore = self.server_truststore
+
         try:
             truststore_order = await sync_to_async(
-                lambda: self.server_truststore.truststoreordermodel_set.get(order=0)
+                lambda: server_truststore.truststoreordermodel_set.get(order=0)
             )()
         except Exception as e:
             msg = f'Server truststore "{self.server_truststore.unique_name}" has no certificate at order 0: {e}'
@@ -561,7 +571,7 @@ class GdsPushService(LoggerMixin):
             basic_constraints = cert_crypto.extensions.get_extension_for_oid(
                 ExtensionOID.BASIC_CONSTRAINTS
             )
-            is_ca = basic_constraints.value.ca
+            is_ca = basic_constraints.value.ca  # type: ignore[attr-defined]
         except x509.ExtensionNotFound:
             pass
 
@@ -606,7 +616,7 @@ class GdsPushService(LoggerMixin):
                 client_cert_crypto.subject.rfc4514_string(),
                 ', '.join(str(san.value) for san in client_cert_crypto.extensions.get_extension_for_oid(
                     ExtensionOID.SUBJECT_ALTERNATIVE_NAME
-                ).value) if client_cert_crypto.extensions.get_extension_for_oid(
+                ).value) if client_cert_crypto.extensions.get_extension_for_oid(  # type: ignore[attr-defined]
                     ExtensionOID.SUBJECT_ALTERNATIVE_NAME
                 ) else 'None',
                 self.server_url
@@ -666,15 +676,19 @@ class GdsPushService(LoggerMixin):
         client.session_timeout = 20000  # 20 seconds
         return client
 
-    def _log_certificate_mismatch_details(self, client: Client) -> None:
+    async def _log_certificate_mismatch_details(self, client: Client) -> None:
         """Log detailed information about certificate mismatch.
 
         Args:
             client: The OPC UA client that failed to connect.
         """
         try:
-            expected_cert_der = self._get_server_certificate()
+            expected_cert_der = await self._get_server_certificate()
             expected_cert = x509.load_der_x509_certificate(expected_cert_der)
+
+            if self.server_truststore is None:
+                self.logger.error('Server truststore is None')
+                return
 
             self.logger.error(
                 'Server certificate mismatch detected!'
@@ -1079,7 +1093,7 @@ class GdsPushService(LoggerMixin):
 
             except Exception as connect_error:
                 if 'certificate mismatch' in str(connect_error).lower():
-                    self._log_certificate_mismatch_details(client)
+                    await self._log_certificate_mismatch_details(client)
                     self.logger.exception(
                         '\n'
                         '═══════════════════════════════════════════════════════════════\n'
@@ -1272,11 +1286,13 @@ class GdsPushService(LoggerMixin):
                 msg = 'Device has no domain configured'
                 self._raise_gds_push_error(msg)
 
-            certificate_profile_model = await sync_to_async(context.domain.get_allowed_cert_profile)('opc_ua')
+            domain = context.domain
+
+            certificate_profile_model = await sync_to_async(domain.get_allowed_cert_profile)('opc_ua')  # type: ignore[union-attr]
             if not certificate_profile_model:
                 msg = (
                     'Certificate profile "opc_ua" not found or not allowed for domain '
-                    f'"{context.domain.unique_name}"'
+                    f'"{domain.unique_name}"'  # type: ignore[union-attr]
                 )
                 self._raise_gds_push_error(msg)
 
@@ -1295,12 +1311,14 @@ class GdsPushService(LoggerMixin):
                 msg = 'Certificate issuance failed: No certificate was issued'
                 self._raise_gds_push_error(msg)
 
+            issued_cert = context.issued_certificate
+
             # Convert to DER format (crypto operations are safe for async)
-            cert_der = context.issued_certificate.public_bytes(serialization.Encoding.DER)
+            cert_der = issued_cert.public_bytes(serialization.Encoding.DER)  # type: ignore[union-attr]
 
             # Log certificate extensions for debugging
             self.logger.info('Issued certificate extensions:')
-            for ext in context.issued_certificate.extensions:
+            for ext in issued_cert.extensions:  # type: ignore[union-attr]
                 ext_name = ext.oid._name if hasattr(ext.oid, '_name') else str(ext.oid)
                 self.logger.info('  - %s (critical=%s)', ext_name, ext.critical)
                 if ext_name == 'extendedKeyUsage':
@@ -1326,7 +1344,7 @@ class GdsPushService(LoggerMixin):
             msg = f'Failed to sign CSR: {e}'
             raise GdsPushError(msg) from e
         else:
-            return cert_der, issuer_chain, context.issued_certificate
+            return cert_der, issuer_chain, context.issued_certificate  # type: ignore[return-value]
 
     async def _update_truststore_with_new_certificate(
         self,
@@ -1364,11 +1382,16 @@ class GdsPushService(LoggerMixin):
 
             device = await sync_to_async(lambda: self.device)()
             domain = await sync_to_async(lambda: device.domain)()
+            if domain is None:
+                msg = 'Device has no domain'
+                raise GdsPushError(msg)
             ca = await sync_to_async(lambda: domain.issuing_ca)()
+
+            server_truststore = self.server_truststore
 
             try:
                 old_server_order = await sync_to_async(
-                    lambda: self.server_truststore.truststoreordermodel_set.get(order=0)
+                    lambda: server_truststore.truststoreordermodel_set.get(order=0)
                 )()
                 old_server_cert = await sync_to_async(lambda: old_server_order.certificate)()
 
