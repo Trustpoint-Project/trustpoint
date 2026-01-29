@@ -23,6 +23,8 @@ from asyncua.ua.ua_binary import struct_to_binary
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID
+from devices.models import IssuedCredentialModel
+from pki.models.certificate import CertificateModel
 
 from request.operation_processor import CertificateIssueProcessor
 from request.profile_validator import ProfileValidator
@@ -30,8 +32,9 @@ from request.request_context import BaseCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
-    from devices.models import DeviceModel, IssuedCredentialModel
+    from devices.models import DeviceModel
     from pki.models import CaModel
+    from pki.models.credential import CredentialModel
     from pki.models.truststore import TruststoreModel
 
 __all__ = ['GdsPushError', 'GdsPushService']
@@ -1269,7 +1272,27 @@ class GdsPushService(LoggerMixin):
 
             # Step 2: Sign the CSR
             self.logger.info('Signing CSR with domain issuing CA')
-            signed_cert, issuer_chain = await self._sign_csr(csr)
+            signed_cert, issuer_chain, issued_certificate = await self._sign_csr(csr)
+
+            # Create IssuedCredentialModel for the issued certificate
+            from devices.issuer import CredentialSaver  # noqa: PLC0415
+
+            # Use CredentialSaver to properly save the keyless credential
+            device = await sync_to_async(lambda: self.device)()
+            domain = await sync_to_async(lambda: device.domain)()
+            saver = CredentialSaver(device=device, domain=domain)
+            
+            common_name = issued_certificate.subject.rfc4514_string()
+            
+            await sync_to_async(saver.save_keyless_credential)(
+                issued_certificate,
+                [],  # certificate_chain - empty for now, could be populated if needed
+                common_name,
+                IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+                'opc_ua',
+            )
+
+            self.logger.info('Created IssuedCredentialModel for certificate: %s', common_name)
 
             # Step 3: UpdateCertificate
             self.logger.info('Uploading signed certificate via UpdateCertificate')
@@ -1298,7 +1321,7 @@ class GdsPushService(LoggerMixin):
         else:
             return True, signed_cert, issuer_chain
 
-    async def _sign_csr(self, csr_der: bytes) -> tuple[bytes, list[bytes]]:
+    async def _sign_csr(self, csr_der: bytes) -> tuple[bytes, list[bytes], CertificateModel]:
         """Sign a Certificate Signing Request using the standardized certificate issuance workflow.
 
         This method uses the same CertificateIssueProcessor workflow as EST to ensure
@@ -1308,7 +1331,7 @@ class GdsPushService(LoggerMixin):
             csr_der: DER-encoded CSR from OPC UA server.
 
         Returns:
-            Tuple of (signed certificate DER, issuer chain as list of DER certs).
+            Tuple of (signed certificate DER, issuer chain as list of DER certs, issued certificate model).
 
         Raises:
             GdsPushError: If signing fails.
@@ -1398,7 +1421,7 @@ class GdsPushService(LoggerMixin):
             msg = f'Failed to sign CSR: {e}'
             raise GdsPushError(msg) from e
         else:
-            return cert_der, issuer_chain
+            return cert_der, issuer_chain, context.issued_certificate
 
     async def _update_truststore_with_new_certificate(
         self,

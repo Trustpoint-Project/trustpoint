@@ -7,6 +7,7 @@ import re
 from typing import TYPE_CHECKING, get_args
 
 from cryptography import x509
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
@@ -120,20 +121,21 @@ class SaveCredentialToDbMixin(LoggerMixin):
         )
 
         try:
-            # check for existing issued credentials
-            existing_credentials = IssuedCredentialModel.objects.filter(
+            cert_fingerprint = certificate.fingerprint(hashes.SHA256()).hex().upper()
+            
+            # check for existing issued credentials with the same certificate
+            existing_credential = IssuedCredentialModel.objects.filter(
                 device=self.device,
                 domain=self.domain,
-                issued_credential_type=issued_credential_type,
-                common_name=common_name,
-            )
-            for issued_credential in existing_credentials:
-                cred_model: CredentialModel = issued_credential.credential
-                if cred_model.certificate.subjects_match(certificate.subject):
-                    # if the certificate already exists, we need to update the certificate (e.g. reenroll)
-                    cred_model.update_keyless_credential(certificate, certificate_chain)
-                    cred_model.save()
-                    return issued_credential
+                credential__certificate__sha256_fingerprint=cert_fingerprint
+            ).first()
+            
+            if existing_credential:
+                # if the certificate already exists, update the credential and return it
+                cred_model = existing_credential.credential
+                cred_model.update_keyless_credential(certificate, certificate_chain)
+                cred_model.save()
+                return existing_credential
 
             credential_model = CredentialModel.save_keyless_credential(
                 certificate=certificate,

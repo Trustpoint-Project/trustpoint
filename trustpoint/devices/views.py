@@ -69,9 +69,9 @@ from devices.models import (
 )
 from devices.revocation import DeviceCredentialRevocation
 from devices.serializers import DeviceSerializer
+from pki.models.ca import CaModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
-from pki.models.ca import CaModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
