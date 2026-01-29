@@ -1244,6 +1244,32 @@ class GdsPushService(LoggerMixin):
             certificate_type_id = CertificateTypes.APPLICATION_CERTIFICATE
 
         try:
+            # Revoke the existing certificate for this device before updating
+            device = await sync_to_async(lambda: self.device)()
+            domain = await sync_to_async(lambda: device.domain)()
+            
+            # Find existing application credential for the device
+            existing_credential = await sync_to_async(
+                lambda: IssuedCredentialModel.objects.filter(
+                    device=device,
+                    domain=domain,
+                    issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
+                ).first()
+            )()
+            
+            if existing_credential:
+                from pki.models.certificate import RevokedCertificateModel  # noqa: PLC0415
+                cert_to_revoke = await sync_to_async(lambda: existing_credential.credential.certificate)()
+                ca = await sync_to_async(lambda: domain.issuing_ca)()
+                
+                # Revoke the certificate
+                await sync_to_async(RevokedCertificateModel.objects.create)(
+                    certificate=cert_to_revoke,
+                    revocation_reason=RevokedCertificateModel.ReasonCode.SUPERSEDED,
+                    ca=ca
+                )
+                self.logger.info('Revoked existing certificate: %s', cert_to_revoke.common_name)
+
             server_node = client.get_node('ns=0;i=2253')
             server_config = await server_node.get_child('ServerConfiguration')
 
@@ -1272,27 +1298,7 @@ class GdsPushService(LoggerMixin):
 
             # Step 2: Sign the CSR
             self.logger.info('Signing CSR with domain issuing CA')
-            signed_cert, issuer_chain, issued_certificate = await self._sign_csr(csr)
-
-            # Create IssuedCredentialModel for the issued certificate
-            from devices.issuer import CredentialSaver  # noqa: PLC0415
-
-            # Use CredentialSaver to properly save the keyless credential
-            device = await sync_to_async(lambda: self.device)()
-            domain = await sync_to_async(lambda: device.domain)()
-            saver = CredentialSaver(device=device, domain=domain)
-            
-            common_name = issued_certificate.subject.rfc4514_string()
-            
-            await sync_to_async(saver.save_keyless_credential)(
-                issued_certificate,
-                [],  # certificate_chain - empty for now, could be populated if needed
-                common_name,
-                IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-                'opc_ua',
-            )
-
-            self.logger.info('Created IssuedCredentialModel for certificate: %s', common_name)
+            signed_cert, issuer_chain, _ = await self._sign_csr(csr)
 
             # Step 3: UpdateCertificate
             self.logger.info('Uploading signed certificate via UpdateCertificate')

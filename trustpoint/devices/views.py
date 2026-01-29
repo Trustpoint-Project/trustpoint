@@ -2290,7 +2290,7 @@ class TrustBundleDownloadView(PageContextMixin, DetailView[CaModel]):
                 try:
                     crl_crypto = x509.load_pem_x509_crl(ca.crl_pem.encode())
                     crl_der = crl_crypto.public_bytes(serialization.Encoding.DER)
-                    crl_filename = f'{safe_name}_crl.der'
+                    crl_filename = f'{safe_name}.crl'
                     data_to_archive[crl_filename] = crl_der
                 except (ValueError, TypeError):
                     pass
