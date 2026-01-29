@@ -1363,7 +1363,7 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
             extra_extensions=opc_ua_extensions
         )
 
-    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+    def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
         """Handle the POST request with custom redirect to truststore association."""
         self.object = self.get_object()
         form = self.form_class(**self.get_form_kwargs())
@@ -1429,7 +1429,7 @@ class OpcUaGdsPushTruststoreMethodSelectView(PageContextMixin, FormView[OpcUaGds
 
 
 class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
-    """View for discovering OPC UA server information without authentication."""
+    """View to discover OPC UA server information without authentication."""
 
     http_method_names = ('post',)
     model = DeviceModel
@@ -2014,28 +2014,30 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
                     break
 
             if not cert_exists:
+                # Delete ALL existing certificates from truststore BEFORE adding new one
+                # to avoid UNIQUE constraint violations on (order, trust_store_id)
+                from pki.models.truststore import TruststoreOrderModel
+                from pki.models.certificate import RevokedCertificateModel
+                
+                # Revoke existing non-CA certificates that will be removed
+                for existing_cert_model in truststore.certificates.all():
+                    if not existing_cert_model.is_ca:
+                         RevokedCertificateModel.objects.create(
+                            certificate=existing_cert_model,
+                            revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION
+                        )
+                
+                # Clear truststore content
+                truststore.truststoreordermodel_set.all().delete()
+
+                # Create new certificate model
                 cert_model = CertificateModel.save_certificate(cert)
 
-                # Delete old certificates BEFORE adding new one to avoid order conflicts
-                from pki.models.truststore import TruststoreOrderModel
-                if truststore.certificates.count() >= 2:
-                    # Keep only the most recent certificate (delete all but the last one)
-                    oldest_certs = truststore.truststoreordermodel_set.order_by('order')[:-1]
-                    for old_cert_order in oldest_certs:
-                        old_cert_order.delete()
-
-                # Get the next order number for the truststore
-                from django.db import models as db_models
-                max_order = truststore.truststoreordermodel_set.aggregate(
-                    max_order=db_models.Max('order')
-                )['max_order']
-                next_order = (max_order or -1) + 1
-
-                # Add certificate with explicit order
+                # Add certificate with order=0 (starting fresh after clearing all)
                 TruststoreOrderModel.objects.create(
                     trust_store=truststore,
                     certificate=cert_model,
-                    order=next_order
+                    order=0
                 )
 
                 messages.info(
@@ -2181,6 +2183,17 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
                 # Delete ALL existing certificates from truststore BEFORE adding new one
                 # to avoid UNIQUE constraint violations on (order, trust_store_id)
                 from pki.models.truststore import TruststoreOrderModel
+                from pki.models.certificate import RevokedCertificateModel
+                
+                # Revoke existing non-CA certificates that will be removed
+                for existing_cert_model in truststore.certificates.all():
+                    if not existing_cert_model.is_ca:
+                         RevokedCertificateModel.objects.create(
+                            certificate=existing_cert_model,
+                            revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION
+                        )
+                
+                # Clear truststore content
                 truststore.truststoreordermodel_set.all().delete()
 
                 # Create new certificate model
