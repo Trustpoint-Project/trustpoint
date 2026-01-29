@@ -10,7 +10,8 @@ import zipfile
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from cryptography import x509
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
@@ -70,8 +71,11 @@ from devices.models import (
 from devices.revocation import DeviceCredentialRevocation
 from devices.serializers import DeviceSerializer
 from pki.models.ca import CaModel
-from pki.models.certificate import CertificateModel
+from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
+from pki.models.truststore import TruststoreModel, TruststoreOrderModel
+from request.gds_push import GdsPushService
+from request.gds_push.gds_push_service import GdsPushError
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -432,7 +436,7 @@ class OpcUaGdsCreateNoOnboardingView(AbstractCreateNoOnboardingView):
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
-class AbstractCreateOnboardingView(PageContextMixin, FormView[OnboardingCreateForm]):
+class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
     """asdfds."""
 
     http_method_names = ('get', 'post')
@@ -456,7 +460,7 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[OnboardingCreateFo
         context['cancel_create_url'] = f'{self.page_category}:{self.page_name}'
         return context
 
-    def form_valid(self, form: OnboardingCreateForm) -> HttpResponse:
+    def form_valid(self, form: forms.Form) -> HttpResponse:
         """Saves the form / creates the device model object.
 
         Args:
@@ -1331,9 +1335,7 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
         issuer = self.issuer_class(device=device, domain=device.domain)
         application_uri = cast('str', cleaned_data.get('application_uri'))
 
-        # Build OPC UA specific extensions for domain credentials
         opc_ua_extensions = [
-            # Key Usage for OPC UA domain credentials (client authentication with SignAndEncrypt)
             (
                 x509.KeyUsage(
                     digital_signature=True,
@@ -1348,22 +1350,20 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
                 ),
                 True,
             ),
-            # Extended Key Usage for client authentication
             (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
         ]
 
-        # Add Subject Alternative Name if application_uri is provided
         if application_uri:
             opc_ua_extensions.append(
                 (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)]), False)
             )
 
         return issuer.issue_domain_credential(
-            application_uri=None,  # Already included in opc_ua_extensions
+            application_uri=None,
             extra_extensions=opc_ua_extensions
         )
 
-    def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle the POST request with custom redirect to truststore association."""
         self.object = self.get_object()
         form = self.form_class(**self.get_form_kwargs())
@@ -1373,7 +1373,6 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
             messages.success(
                 request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
             )
-            # Redirect to truststore method selection instead of direct association
             return HttpResponseRedirect(
                 reverse_lazy(
                     f'devices:{self.page_name}_truststore_method_select', kwargs={'pk': self.get_object().id}
@@ -1436,27 +1435,20 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
     context_object_name = 'device'
     page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
 
-    def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle the POST request to discover server information."""
         self.object = self.get_object()
 
         try:
-            # Import here to avoid circular import
-            from request.gds_push import GdsPushService
-
-            # Create GDS Push service for insecure discovery
             service = GdsPushService(device=self.object, insecure=True)
 
-            # Discover server information
             success, message, server_info = asyncio.run(service.discover_server())
 
             if success and server_info:
                 messages.success(request, f'Server discovered successfully: {message}')
 
-                # Store server info in session for display
                 request.session['opc_ua_server_info'] = server_info
 
-                # If server certificate is available, offer to update truststore
                 if server_info.get('server_certificate_available'):
                     messages.info(
                         request,
@@ -1465,10 +1457,8 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
             else:
                 messages.error(request, f'Failed to discover server: {message}')
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             messages.error(request, f'Unexpected error during discovery: {e}')
-            import traceback
-            traceback.print_exc()
 
         return HttpResponseRedirect(
             reverse_lazy(
@@ -1867,7 +1857,7 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
     page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
     page_category = DEVICES_PAGE_CATEGORY
 
-    def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle the POST request to update the trustlist.
 
         Args:
@@ -1881,12 +1871,8 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
         self.object = self.get_object()
 
         try:
-            # Import here to avoid circular import
-            from request.gds_push import GdsPushError, GdsPushService
-
             service = GdsPushService(device=self.object)
 
-            # Update trustlist
             success, message = asyncio.run(service.update_trustlist())
 
             if success:
@@ -1896,10 +1882,8 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
 
         except GdsPushError as e:
             messages.error(request, f'GDS Push error: {e}')
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             messages.error(request, f'Unexpected error: {e}')
-            import traceback
-            traceback.print_exc()
 
         return self._redirect_to_help_page()
 
@@ -1915,169 +1899,6 @@ class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel])
                 kwargs={'pk': self.object.pk}
             )
         )
-
-
-class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
-    """View to discover OPC UA server information without authentication."""
-
-    http_method_names = ('post',)
-    model = DeviceModel
-    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
-    page_category = DEVICES_PAGE_CATEGORY
-
-    def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle the POST request to discover server information.
-
-        Args:
-            request: The Django request object.
-            _args: Positional arguments are discarded.
-            kwargs: Keyword arguments are passed to get_object().
-
-        Returns:
-            HttpResponse redirecting back to the help page.
-        """
-        self.object = self.get_object()
-
-        try:
-            # Import here to avoid circular import
-            from request.gds_push import GdsPushError, GdsPushService
-
-            # Create GDS Push service for insecure discovery
-            service = GdsPushService(device=self.object, insecure=True)
-
-            # Discover server information
-            success, message, server_info = asyncio.run(service.discover_server())
-
-            if success and server_info:
-                messages.success(request, f'Server discovered successfully: {message}')
-
-                # Store server info in session for display
-                request.session['opc_ua_server_info'] = server_info
-
-                # Also try to update truststore with server certificate if available
-                if server_info.get('server_certificate_available') and server_info.get('server_certificate'):
-                    try:
-                        self._update_truststore_with_certificate(server_info['server_certificate'])
-                    except Exception as e:
-                        messages.warning(request, f'Server discovered but failed to update truststore: {e}')
-
-            else:
-                messages.error(request, f'Failed to discover server: {message}')
-
-        except GdsPushError as e:
-            messages.error(request, f'GDS Push error: {e}')
-        except Exception as e:
-            messages.error(request, f'Unexpected error: {e}')
-            import traceback
-            traceback.print_exc()
-
-        return self._redirect_to_help_page()
-
-    def _update_truststore_with_certificate(self, certificate_bytes: bytes) -> None:
-        """Update or create truststore with the discovered server certificate.
-
-        This method adds the new server certificate to the truststore WITHOUT removing
-        the old one immediately. This ensures that if something goes wrong, the old
-        certificate is still available for recovery.
-
-        Args:
-            certificate_bytes: DER-encoded certificate bytes
-        """
-        try:
-            from cryptography import x509
-            from cryptography.hazmat.backends import default_backend
-            from pki.models.certificate import CertificateModel
-            from pki.models.truststore import TruststoreModel
-
-            cert = x509.load_der_x509_certificate(certificate_bytes, default_backend())
-
-            truststore = self.object.onboarding_config.opc_trust_store
-            if not truststore:
-                truststore = TruststoreModel.objects.create(
-                    unique_name=f'opc_server_{self.object.common_name}',
-                    friendly_name=f'OPC Server Certificate for {self.object.common_name}',
-                    intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
-                )
-                self.object.onboarding_config.opc_trust_store = truststore
-                self.object.onboarding_config.save()
-
-            existing_certs = list(truststore.certificates.all())
-            cert_serial = cert.serial_number
-            cert_fingerprint = cert.fingerprint(cert.signature_hash_algorithm)
-
-            cert_exists = False
-            for existing_cert_model in existing_certs:
-                existing_cert = existing_cert_model.get_certificate_serializer().as_crypto()
-                if (existing_cert.serial_number == cert_serial and
-                    existing_cert.fingerprint(existing_cert.signature_hash_algorithm) == cert_fingerprint):
-                    cert_exists = True
-                    break
-
-            if not cert_exists:
-                # Delete ALL existing certificates from truststore BEFORE adding new one
-                # to avoid UNIQUE constraint violations on (order, trust_store_id)
-                from pki.models.truststore import TruststoreOrderModel
-                from pki.models.certificate import RevokedCertificateModel
-                
-                # Revoke existing non-CA certificates that will be removed
-                for existing_cert_model in truststore.certificates.all():
-                    if not existing_cert_model.is_ca:
-                         RevokedCertificateModel.objects.create(
-                            certificate=existing_cert_model,
-                            revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION
-                        )
-                
-                # Clear truststore content
-                truststore.truststoreordermodel_set.all().delete()
-
-                # Create new certificate model
-                cert_model = CertificateModel.save_certificate(cert)
-
-                # Add certificate with order=0 (starting fresh after clearing all)
-                TruststoreOrderModel.objects.create(
-                    trust_store=truststore,
-                    certificate=cert_model,
-                    order=0
-                )
-
-                messages.info(
-                    self._get_request(),
-                    f'Added discovered server certificate to truststore "{truststore.unique_name}". '
-                    f'Old certificate kept as backup (total: {truststore.certificates.count()} cert(s))'
-                )
-            else:
-                messages.info(
-                    self._get_request(),
-                    f'Discovered server certificate already exists in truststore "{truststore.unique_name}"'
-                )
-
-        except Exception as e:
-            messages.warning(
-                self._get_request(),
-                f'Server discovered but failed to update truststore: {e}'
-            )
-
-    def _get_request(self) -> HttpRequest:
-        """Get the current request from view context.
-
-        Returns:
-            The current HttpRequest
-        """
-        return self.request  # type: ignore[return-value]
-
-    def _redirect_to_help_page(self) -> HttpResponseRedirect:
-        """Redirect back to the help page.
-
-        Returns:
-            HttpResponseRedirect to the help page.
-        """
-        return HttpResponseRedirect(
-            reverse_lazy(
-                f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
-                kwargs={'pk': self.object.pk}
-            )
-        )
-
 
 class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[DeviceModel]):
     """View to update the server certificate on an OPC UA GDS Push device."""
@@ -2087,7 +1908,7 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
     page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
     page_category = DEVICES_PAGE_CATEGORY
 
-    def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle the POST request to update the server certificate.
 
         Args:
@@ -2101,25 +1922,18 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
         self.object = self.get_object()
 
         try:
-            # Import here to avoid circular import
-            from request.gds_push import GdsPushError, GdsPushService
 
-            # Create GDS Push service - it will automatically retrieve domain credential and truststore
             service = GdsPushService(device=self.object)
 
-            # Update server certificate
             success, message, certificate_bytes = asyncio.run(service.update_server_certificate())
 
             if success and certificate_bytes:
                 messages.success(request, f'Server certificate updated successfully: {message}')
 
-                # Mark device as onboarded now that server certificate is updated
                 if self.object.onboarding_config:
-                    from devices.models import OnboardingStatus
                     self.object.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
                     self.object.onboarding_config.save()
 
-                # Update truststore with new server certificate
                 self._update_truststore_with_certificate(certificate_bytes)
 
             else:
@@ -2127,10 +1941,8 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
 
         except GdsPushError as e:
             messages.error(request, f'GDS Push error: {e}')
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             messages.error(request, f'Unexpected error: {e}')
-            import traceback
-            traceback.print_exc()
 
         return self._redirect_to_help_page()
 
@@ -2144,62 +1956,46 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
         Args:
             certificate_bytes: DER-encoded certificate bytes
         """
+        if self.object.onboarding_config is None:
+            msg = 'Onboarding config must exist for GDS Push devices'
+            raise ValueError(msg)
         try:
-            from cryptography import x509
-            from cryptography.hazmat.backends import default_backend
-            from pki.models.certificate import CertificateModel
-            from pki.models.truststore import TruststoreModel
 
-            # Load certificate
             cert = x509.load_der_x509_certificate(certificate_bytes, default_backend())
 
-            # Get or create truststore for this device
             truststore = self.object.onboarding_config.opc_trust_store
             if not truststore:
-                # Create new truststore
                 truststore = TruststoreModel.objects.create(
                     unique_name=f'opc_server_{self.object.common_name}',
-                    friendly_name=f'OPC Server Certificate for {self.object.common_name}',
                     intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
                 )
                 self.object.onboarding_config.opc_trust_store = truststore
                 self.object.onboarding_config.save()
 
-            # Check if this certificate already exists in the truststore
             existing_certs = list(truststore.certificates.all())
             cert_serial = cert.serial_number
-            cert_fingerprint = cert.fingerprint(cert.signature_hash_algorithm)
+            cert_fingerprint = cert.fingerprint(hashes.SHA256())
 
-            # Check if certificate with same serial number and fingerprint exists
             cert_exists = False
             for existing_cert_model in existing_certs:
                 existing_cert = existing_cert_model.get_certificate_serializer().as_crypto()
                 if (existing_cert.serial_number == cert_serial and
-                    existing_cert.fingerprint(existing_cert.signature_hash_algorithm) == cert_fingerprint):
+                    existing_cert.fingerprint(hashes.SHA256()) == cert_fingerprint):
                     cert_exists = True
                     break
 
             if not cert_exists:
-                # Delete ALL existing certificates from truststore BEFORE adding new one
-                # to avoid UNIQUE constraint violations on (order, trust_store_id)
-                from pki.models.truststore import TruststoreOrderModel
-                from pki.models.certificate import RevokedCertificateModel
-                
-                # Revoke existing non-CA certificates that will be removed
                 for existing_cert_model in truststore.certificates.all():
                     if not existing_cert_model.is_ca:
                          RevokedCertificateModel.objects.create(
                             certificate=existing_cert_model,
                             revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION
                         )
-                
-                # Clear truststore content
+
                 truststore.truststoreordermodel_set.all().delete()
 
-                # Create new certificate model
                 cert_model = CertificateModel.save_certificate(cert)
 
-                # Add certificate with order=0 (starting fresh after clearing all)
                 TruststoreOrderModel.objects.create(
                     trust_store=truststore,
                     certificate=cert_model,
@@ -2217,7 +2013,7 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
                     f'Server certificate already exists in truststore "{truststore.unique_name}"'
                 )
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             messages.warning(
                 self._get_request(),
                 f'Server certificate updated but failed to update truststore: {e}'
@@ -2229,7 +2025,7 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
         Returns:
             The current HttpRequest
         """
-        return self.request  # type: ignore[return-value]
+        return self.request
 
     def _redirect_to_help_page(self) -> HttpResponseRedirect:
         """Redirect back to the help page.

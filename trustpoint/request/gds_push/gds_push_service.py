@@ -677,7 +677,7 @@ class GdsPushService(LoggerMixin):
         return client
 
     async def _log_certificate_mismatch_details(self, client: Client) -> None:
-        """Log detailed information about certificate mismatch.
+        """Log essential information about certificate mismatch.
 
         Args:
             client: The OPC UA client that failed to connect.
@@ -691,110 +691,67 @@ class GdsPushService(LoggerMixin):
                 return
 
             self.logger.error(
-                'Server certificate mismatch detected!'
-                '\n'
-                '\n=== EXPECTED (from truststore "%s") ===',
+                'Server certificate mismatch detected! Expected from truststore "%s"',
                 self.server_truststore.unique_name
             )
 
-            self.logger.error('\n=== PYTHON-OPCUA LOADED CERTIFICATE ===')
-            if hasattr(client, 'uaclient'):
-                self.logger.error('  client.uaclient exists: True')
-                if hasattr(client.uaclient, 'security_policy'):
-                    self.logger.error('  client.uaclient.security_policy exists: True')
-                    loaded_cert = client.uaclient.security_policy.server_certificate
-                    if loaded_cert:
-                        self.logger.error('  Loaded cert type: %s', type(loaded_cert).__name__)
-                        self.logger.error('  Loaded cert length: %d', len(loaded_cert))
-                        self.logger.error('  Expected cert type: %s', type(expected_cert_der).__name__)
-                        self.logger.error('  Expected cert length: %d', len(expected_cert_der))
-                        self.logger.error('  Are they equal (==)? %s', loaded_cert == expected_cert_der)
-                        self.logger.error('  Are they not equal (!=)? %s', loaded_cert != expected_cert_der)
-                        self.logger.error('  Are they identical (is)? %s', loaded_cert is expected_cert_der)
-                        self.logger.error('  bytes() comparison: %s', bytes(loaded_cert) == bytes(expected_cert_der))
-                    else:
-                        self.logger.error('  Loaded cert is None/empty')
-                else:
-                    self.logger.error('  client.uaclient.security_policy does NOT exist')
-            else:
-                self.logger.error('  client.uaclient does NOT exist')
             self.logger.error(
-                '  Subject: %s'
-                '\n  Issuer: %s'
-                '\n  Serial: %s'
-                '\n  Not Before: %s'
-                '\n  Not After: %s'
-                '\n  SHA256: %s'
-                '\n  DER size: %d bytes'
-                '\n  DER (first 64 bytes): %s',
+                'Expected certificate:\n'
+                '  Subject: %s\n'
+                '  Issuer: %s\n'
+                '  Serial: %s\n'
+                '  SHA256: %s\n'
+                '  Valid: %s to %s',
                 expected_cert.subject.rfc4514_string(),
                 expected_cert.issuer.rfc4514_string(),
                 hex(expected_cert.serial_number),
-                expected_cert.not_valid_before_utc,
-                expected_cert.not_valid_after_utc,
                 expected_cert.fingerprint(hashes.SHA256()).hex().upper(),
-                len(expected_cert_der),
-                expected_cert_der[:64].hex().upper()
+                expected_cert.not_valid_before_utc.isoformat(),
+                expected_cert.not_valid_after_utc.isoformat()
             )
 
+            actual_cert_der = None
             if hasattr(client, 'uaclient') and hasattr(client.uaclient, 'security_policy'):
                 security_policy = client.uaclient.security_policy
                 if hasattr(security_policy, 'server_certificate') and security_policy.server_certificate:
-                    try:
-                        actual_cert_der = security_policy.server_certificate
-                        actual_cert = x509.load_der_x509_certificate(actual_cert_der)
+                    actual_cert_der = security_policy.server_certificate
+
+            if actual_cert_der:
+                try:
+                    actual_cert = x509.load_der_x509_certificate(actual_cert_der)
+                    self.logger.error(
+                        'Actual certificate presented by server:\n'
+                        '  Subject: %s\n'
+                        '  Issuer: %s\n'
+                        '  Serial: %s\n'
+                        '  SHA256: %s\n'
+                        '  Valid: %s to %s',
+                        actual_cert.subject.rfc4514_string(),
+                        actual_cert.issuer.rfc4514_string(),
+                        hex(actual_cert.serial_number),
+                        actual_cert.fingerprint(hashes.SHA256()).hex().upper(),
+                        actual_cert.not_valid_before_utc.isoformat(),
+                        actual_cert.not_valid_after_utc.isoformat()
+                    )
+
+                    if len(expected_cert_der) == len(actual_cert_der):
+                        for i, (e_byte, a_byte) in enumerate(zip(expected_cert_der, actual_cert_der, strict=True)):
+                            if e_byte != a_byte:
+                                self.logger.error(
+                                    'Certificates differ at byte %d: expected 0x%02X, got 0x%02X',
+                                    i, e_byte, a_byte
+                                )
+                                break
+                    else:
                         self.logger.error(
-                            '\n=== ACTUAL (presented by server) ==='
-                            '\n  Subject: %s'
-                            '\n  Issuer: %s'
-                            '\n  Serial: %s'
-                            '\n  Not Before: %s'
-                            '\n  Not After: %s'
-                            '\n  SHA256: %s'
-                            '\n  DER size: %d bytes'
-                            '\n  DER (first 64 bytes): %s',
-                            actual_cert.subject.rfc4514_string(),
-                            actual_cert.issuer.rfc4514_string(),
-                            hex(actual_cert.serial_number),
-                            actual_cert.not_valid_before_utc,
-                            actual_cert.not_valid_after_utc,
-                            actual_cert.fingerprint(hashes.SHA256()).hex().upper(),
-                            len(actual_cert_der),
-                            actual_cert_der[:64].hex().upper()
+                            'Certificate lengths differ: expected %d bytes, got %d bytes',
+                            len(expected_cert_der), len(actual_cert_der)
                         )
 
-                        if len(expected_cert_der) != len(actual_cert_der):
-                            self.logger.error(
-                                '\n=== BYTE COMPARISON ==='
-                                '\n  Expected length: %d bytes'
-                                '\n  Actual length: %d bytes'
-                                '\n  Length difference: %d bytes',
-                                len(expected_cert_der),
-                                len(actual_cert_der),
-                                abs(len(expected_cert_der) - len(actual_cert_der))
-                            )
-                        else:
-                            for i, (e_byte, a_byte) in enumerate(zip(expected_cert_der, actual_cert_der)):
-                                if e_byte != a_byte:
-                                    self.logger.error(
-                                        '\n=== BYTE COMPARISON ==='
-                                        '\n  Certificates are same length (%d bytes) but differ'
-                                        '\n  First difference at byte %d:'
-                                        '\n    Expected: 0x%02X'
-                                        '\n    Actual: 0x%02X',
-                                        len(expected_cert_der),
-                                        i,
-                                        e_byte,
-                                        a_byte
-                                    )
-                                    break
-
-                    except Exception:
-                        self.logger.exception('Could not parse actual server certificate')
-                else:
-                    self.logger.error('\n=== ACTUAL (presented by server) ===\n  (Certificate not captured)')
+                except Exception:
+                    self.logger.exception('Could not parse actual server certificate')
             else:
-                self.logger.error('\n=== ACTUAL (presented by server) ===\n  (Certificate not accessible)')
+                self.logger.error('No actual certificate captured from server')
 
         except Exception as log_error:  # noqa: BLE001
             self.logger.warning('Failed to log certificate mismatch details: %s', log_error)
@@ -1298,13 +1255,9 @@ class GdsPushService(LoggerMixin):
 
             context.certificate_profile_model = certificate_profile_model
 
-            # Validate certificate profile (OPC UA server certificates use a specific profile)
-            # ProfileValidator.validate(context) touches DB
             await sync_to_async(ProfileValidator.validate)(context)
 
-            # Issue certificate using standard processor
             processor = CertificateIssueProcessor()
-            # process_operation touches DB extensively
             await sync_to_async(processor.process_operation)(context)
 
             if context.issued_certificate is None:
@@ -1313,10 +1266,8 @@ class GdsPushService(LoggerMixin):
 
             issued_cert = context.issued_certificate
 
-            # Convert to DER format (crypto operations are safe for async)
             cert_der = issued_cert.public_bytes(serialization.Encoding.DER)  # type: ignore[union-attr]
 
-            # Log certificate extensions for debugging
             self.logger.info('Issued certificate extensions:')
             for ext in issued_cert.extensions:  # type: ignore[union-attr]
                 ext_name = ext.oid._name if hasattr(ext.oid, '_name') else str(ext.oid)
@@ -1384,7 +1335,7 @@ class GdsPushService(LoggerMixin):
             domain = await sync_to_async(lambda: device.domain)()
             if domain is None:
                 msg = 'Device has no domain'
-                raise GdsPushError(msg)
+                self._raise_gds_push_error(msg)
             ca = await sync_to_async(lambda: domain.issuing_ca)()
 
             server_truststore = self.server_truststore
