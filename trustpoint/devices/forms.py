@@ -114,7 +114,8 @@ class BaseCredentialForm(forms.Form):
     def clean_common_name(self) -> str:
         """Checks the common name."""
         common_name = cast('str', self.cleaned_data['common_name'])
-        if IssuedCredentialModel.objects.filter(common_name=common_name, device=self.device).exists():
+        existing_credentials = IssuedCredentialModel.objects.filter(common_name=common_name, device=self.device)
+        if any(cred.credential.is_valid_issued_credential()[0] for cred in existing_credentials):
             err_msg = _('Credential with common name %s already exists for device %s.') % (
                 common_name,
                 self.device.common_name,
