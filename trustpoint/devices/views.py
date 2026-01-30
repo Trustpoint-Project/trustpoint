@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
@@ -32,6 +33,7 @@ from trustpoint_core.serializer import CredentialFileFormat
 
 from devices.filters import DeviceFilter
 from devices.forms import (
+    BaseCredentialForm,
     BrowserLoginForm,
     ClmDeviceModelNoOnboardingForm,
     ClmDeviceModelOnboardingForm,
@@ -436,12 +438,12 @@ class OpcUaGdsCreateNoOnboardingView(AbstractCreateNoOnboardingView):
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
-class AbstractCreateOnboardingView(PageContextMixin, FormView[OnboardingCreateForm]):
+class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
     """asdfds."""
 
     http_method_names = ('get', 'post')
 
-    form_class = OnboardingCreateForm
+    form_class: type[forms.Form] = OnboardingCreateForm
     template_name = 'devices/create.html'
 
     page_category = DEVICES_PAGE_CATEGORY
@@ -460,7 +462,7 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[OnboardingCreateFo
         context['cancel_create_url'] = f'{self.page_category}:{self.page_name}'
         return context
 
-    def form_valid(self, form: OnboardingCreateForm) -> HttpResponse:
+    def form_valid(self, form: forms.Form) -> HttpResponse:
         """Saves the form / creates the device model object.
 
         Args:
@@ -470,11 +472,11 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[OnboardingCreateFo
             The HTTP Response to be returned.
         """
         if self.page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY:
-            self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
+            self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)  # type: ignore[attr-defined]
         elif self.page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY:
-            self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS)
+            self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS)  # type: ignore[attr-defined]
         else:  # DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
-            self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH)
+            self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH)  # type: ignore[attr-defined]
         return super().form_valid(form)
 
     def get_success_url(self) -> str:
@@ -697,7 +699,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             'pki_protocol_manual': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.MANUAL),
         }
 
-    def get_onboarding_form(self) -> ClmDeviceModelOnboardingForm:
+    def get_onboarding_form(self) -> forms.Form:
         """Gets the form for onboarding.
 
         Returns:
@@ -715,7 +717,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             return ClmDeviceModelNoOnboardingForm(self.request.POST, instance=self.object)
         return ClmDeviceModelNoOnboardingForm(initial=self.get_no_onboarding_initial(), instance=self.object)
 
-    def get_device_form(self) -> ClmDeviceModelOnboardingForm | ClmDeviceModelNoOnboardingForm:
+    def get_device_form(self) -> forms.Form:
         """Gets the device Form for onboarding or no onboarding.
 
         Returns:
@@ -1190,7 +1192,7 @@ class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: Ba
     context_object_name = 'device'
     template_name = 'devices/credentials/issue_application_credential.html'
 
-    form_class: type[FormClass]
+    form_class: type[BaseCredentialForm]
     issuer_class: type[IssuerClass]
     friendly_name: str
 
@@ -1278,7 +1280,7 @@ class AbstractIssueDomainCredentialView(
 ):
     """Base view for issuing domain credentials."""
 
-    form_class = IssueDomainCredentialForm
+    form_class: type[BaseCredentialForm] = IssueDomainCredentialForm
     template_name = 'devices/credentials/issue_domain_credential.html'
     issuer_class = LocalDomainCredentialIssuer
     friendly_name = 'Domain Credential'
@@ -1933,8 +1935,6 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
                 if self.object.onboarding_config:
                     self.object.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
                     self.object.onboarding_config.save()
-
-                self._update_truststore_with_certificate(certificate_bytes)
 
             else:
                 messages.error(request, f'Failed to update server certificate: {message}')

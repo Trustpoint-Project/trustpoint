@@ -674,14 +674,15 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
 
+        extensions: list[tuple[x509.ExtensionType, bool]] = [
+            (x509.BasicConstraints(ca=False, path_length=None), True)
+        ]
         if extra_extensions is None:
-            extensions = [(x509.BasicConstraints(ca=False, path_length=None), True)]
             if application_uri:
                 extensions.append(
                     (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)]), False)
                 )
         else:
-            extensions = [(x509.BasicConstraints(ca=False, path_length=None), True)]
             extensions.extend(extra_extensions)
             if application_uri:
                 has_san = any(isinstance(ext, x509.SubjectAlternativeName) for ext, _ in extra_extensions)
@@ -743,12 +744,10 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
         """
         # TODO(AlexHx8472): Check matching public_key and signature suite.  # noqa: FIX002
 
-        if extra_extensions is None:
-            # Use default extensions
-            extensions = [(x509.BasicConstraints(ca=False, path_length=None), True)]
-        else:
-            # Use provided extensions, but ensure BasicConstraints is always included
-            extensions = [(x509.BasicConstraints(ca=False, path_length=None), True)]
+        extensions: list[tuple[x509.ExtensionType, bool]] = [
+            (x509.BasicConstraints(ca=False, path_length=None), True)
+        ]
+        if extra_extensions is not None:
             extensions.extend(extra_extensions)
 
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()

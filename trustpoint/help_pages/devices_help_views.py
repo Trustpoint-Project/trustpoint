@@ -913,7 +913,11 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
                     cert_crypto = cert_serializer.as_crypto()
 
                     common_name = cert_crypto.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
-                    cn_value = common_name[0].value if common_name else ca.unique_name
+                    if common_name:
+                        value = common_name[0].value
+                        cn_value = value.decode('utf-8') if isinstance(value, bytes) else value
+                    else:
+                        cn_value = ca.unique_name
 
                     crl_status = 'MISSING'
                     crl_link = ''
