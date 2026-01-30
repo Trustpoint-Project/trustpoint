@@ -13,7 +13,7 @@ class ValueRenderType(enum.Enum):
 
     CODE = 'code'
     PLAIN = 'plain'
-    HTML = 'html'  
+    HTML = 'html'
 
 
 @dataclass

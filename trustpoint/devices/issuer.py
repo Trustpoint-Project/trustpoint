@@ -378,12 +378,10 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
                 x509.Name(
                     [
                         x509.NameAttribute(x509.NameOID.COMMON_NAME, common_name),
-                        x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, 'Trustpoint'),
-                        x509.NameAttribute(x509.NameOID.COUNTRY_NAME, 'DE'),
-                        #x509.NameAttribute(x509.NameOID.PSEUDONYM, self.pseudonym),
-                        #x509.NameAttribute(x509.NameOID.DOMAIN_COMPONENT, self.domain_component),
-                        #x509.NameAttribute(x509.NameOID.SERIAL_NUMBER, self.serial_number),
-                        #x509.NameAttribute(x509.NameOID.USER_ID, str(self.device.pk)),
+                        x509.NameAttribute(x509.NameOID.PSEUDONYM, self.pseudonym),
+                        x509.NameAttribute(x509.NameOID.DOMAIN_COMPONENT, self.domain_component),
+                        x509.NameAttribute(x509.NameOID.SERIAL_NUMBER, self.serial_number),
+                        x509.NameAttribute(x509.NameOID.USER_ID, str(self.device.pk)),
                     ]
                 )
             )

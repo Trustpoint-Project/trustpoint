@@ -3,7 +3,8 @@
 from django import template
 from django.http import HttpRequest
 from django.middleware.csrf import get_token
-from django.utils.safestring import SafeString, mark_safe
+from django.utils.html import format_html
+from django.utils.safestring import SafeString
 
 register = template.Library()
 
@@ -21,6 +22,6 @@ def replace_csrf(value: str, request: HttpRequest) -> SafeString:
     """
     if 'CSRF_TOKEN_PLACEHOLDER' in value:
         csrf_token = get_token(request)
-        csrf_input = f'<input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">'
-        return mark_safe(value.replace('CSRF_TOKEN_PLACEHOLDER', csrf_input))
-    return mark_safe(value)
+        csrf_input = format_html('<input type="hidden" name="csrfmiddlewaretoken" value="{}">', csrf_token)
+        return SafeString(value.replace('CSRF_TOKEN_PLACEHOLDER', csrf_input))
+    return SafeString(value)

@@ -12,19 +12,22 @@ from asyncua import Client, ua  # type: ignore[import-untyped]
 from asyncua.crypto import security_policies  # type: ignore[import-untyped]
 from asyncua.ua.ua_binary import struct_to_binary  # type: ignore[import-untyped]
 from cryptography import x509
-from cryptography.x509 import KeyUsage
 from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.x509 import KeyUsage
 from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID
+from django.db import IntegrityError
 
+from devices.models import IssuedCredentialModel
+from pki.models import CertificateModel, TruststoreOrderModel
+from pki.models.certificate import RevokedCertificateModel
 from request.operation_processor import CertificateIssueProcessor
 from request.profile_validator import ProfileValidator
 from request.request_context import BaseCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
-    from devices.models import DeviceModel, IssuedCredentialModel
+    from devices.models import DeviceModel
     from pki.models import CaModel
-    from pki.models.certificate import CertificateModel
     from pki.models.truststore import TruststoreModel
 
 __all__ = ['GdsPushError', 'GdsPushService']
@@ -129,8 +132,6 @@ class GdsPushService(LoggerMixin):
         Raises:
             GdsPushError: If no valid domain credential found.
         """
-        from devices.models import IssuedCredentialModel  # noqa: PLC0415
-
         credentials = IssuedCredentialModel.objects.filter(
             device=self.device,
             issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
@@ -404,7 +405,7 @@ class GdsPushService(LoggerMixin):
 
 
 
-    def _validate_client_certificate(self, cert: x509.Certificate) -> None:
+    def _validate_client_certificate(self, cert: x509.Certificate) -> None:  # noqa: C901
         """Validate client certificate meets OPC UA requirements.
 
         Args:
@@ -709,22 +710,11 @@ class GdsPushService(LoggerMixin):
                     self.logger.info('Server name: %s', server_info.get('server_name', 'Unknown'))
                     self.logger.info('Found %d endpoints:', len(server_info['endpoints']))
 
-                    security_policies = set()
+                    # Analyze endpoints for logging and message building
+                    endpoint_analysis = self._analyze_endpoints(server_info['endpoints'])
+
                     for i, endpoint in enumerate(server_info['endpoints'], 1):
-                        policy_uri = endpoint['security_policy']
-                        if 'Basic256Sha256' in policy_uri:
-                            policy_name = 'Basic256Sha256'
-                        elif 'Basic128Rsa15' in policy_uri:
-                            policy_name = 'Basic128Rsa15'
-                        elif 'Basic256' in policy_uri:
-                            policy_name = 'Basic256'
-                        elif 'None' in policy_uri:
-                            policy_name = 'None'
-                        else:
-                            policy_name = policy_uri.split('/')[-1] if '/' in policy_uri else policy_uri
-
-                        security_policies.add(policy_name)
-
+                        policy_name = endpoint_analysis['policy_names'][i-1]
                         self.logger.info(
                             '  Endpoint %d: %s | Security: %s/%s | Server Cert: %s',
                             i,
@@ -734,8 +724,9 @@ class GdsPushService(LoggerMixin):
                             'Yes' if endpoint['has_server_cert'] else 'No'
                         )
 
-                    if security_policies:
-                        self.logger.info('Available security policies: %s', ', '.join(sorted(security_policies)))
+                    if endpoint_analysis['security_policies']:
+                        policies_str = ', '.join(sorted(endpoint_analysis['security_policies']))
+                        self.logger.info('Available security policies: %s', policies_str)
 
         except Exception as e:  # noqa: BLE001
             self.logger.warning('Failed to discover server: %s', e)
@@ -743,39 +734,65 @@ class GdsPushService(LoggerMixin):
         else:
             server_name = server_info.get('server_name', 'Unknown') if server_info else 'Unknown'
             endpoint_count = len(server_info.get('endpoints', [])) if server_info else 0
-            
-            # Build detailed success message
-            security_policies = set()
-            has_secure_endpoints = False
-            has_insecure_endpoints = False
-            
-            if server_info and 'endpoints' in server_info:
-                for endpoint in server_info['endpoints']:
-                    policy_uri = endpoint['security_policy']
-                    if 'None' in policy_uri:
-                        has_insecure_endpoints = True
-                    else:
-                        has_secure_endpoints = True
-                    
-                    if 'Basic256Sha256' in policy_uri:
-                        security_policies.add('Basic256Sha256')
-                    elif 'Basic128Rsa15' in policy_uri:
-                        security_policies.add('Basic128Rsa15')
-                    elif 'Basic256' in policy_uri:
-                        security_policies.add('Basic256')
-            
+
+            # Reuse endpoint analysis if we have server_info
+            endpoint_analysis = self._analyze_endpoints(server_info.get('endpoints', [])) if server_info else {
+                'security_policies': set(),
+                'has_secure_endpoints': False,
+                'has_insecure_endpoints': False,
+                'policy_names': []
+            }
+
             message_parts = [f'Server "{server_name}" discovered with {endpoint_count} endpoint(s)']
-            if security_policies:
-                message_parts.append(f'Secure policies: {", ".join(sorted(security_policies))}')
-            if has_secure_endpoints and has_insecure_endpoints:
-                message_parts.append('(mixed secure/insecure endpoints)')
-            elif has_secure_endpoints:
-                message_parts.append('(secure endpoints only)')
-            elif has_insecure_endpoints:
-                message_parts.append('(insecure endpoints only)')
-            
+            if endpoint_analysis['security_policies']:
+                message_parts.append(f'Secure policies: {", ".join(sorted(endpoint_analysis["security_policies"]))}')
+            if endpoint_analysis['has_secure_endpoints'] or endpoint_analysis['has_insecure_endpoints']:
+                if endpoint_analysis['has_secure_endpoints'] and endpoint_analysis['has_insecure_endpoints']:
+                    desc = 'mixed secure/insecure endpoints'
+                else:
+                    desc = f'{"secure" if endpoint_analysis["has_secure_endpoints"] else "insecure"} endpoints only'
+                message_parts.append(f'({desc})')
+
             success_message = ' | '.join(message_parts)
             return True, success_message, server_info
+
+    def _analyze_endpoints(self, endpoints: list[dict[str, Any]]) -> dict[str, Any]:
+        """Analyze endpoints to extract security policies and endpoint types.
+
+        Args:
+            endpoints: List of endpoint dictionaries.
+
+        Returns:
+            Dictionary with analysis results.
+        """
+        security_policies = set()
+        has_secure_endpoints = False
+        has_insecure_endpoints = False
+        policy_names = []
+
+        for endpoint in endpoints:
+            policy_uri = endpoint['security_policy']
+            policy_name = next(
+                (p for p in ['Basic256Sha256', 'Basic128Rsa15', 'Basic256', 'None'] if p in policy_uri),
+                policy_uri.split('/')[-1] if '/' in policy_uri else policy_uri
+            )
+            policy_names.append(policy_name)
+
+            if 'None' in policy_uri:
+                has_insecure_endpoints = True
+            else:
+                has_secure_endpoints = True
+
+            for policy in ['Basic256Sha256', 'Basic128Rsa15', 'Basic256']:
+                if policy in policy_uri:
+                    security_policies.add(policy)
+
+        return {
+            'security_policies': security_policies,
+            'has_secure_endpoints': has_secure_endpoints,
+            'has_insecure_endpoints': has_insecure_endpoints,
+            'policy_names': policy_names,
+        }
 
     async def _gather_server_info(self, client: Client) -> dict[str, Any]:
         """Gather server information from connected client.
@@ -991,7 +1008,7 @@ class GdsPushService(LoggerMixin):
     # Public API - Update Server Certificate
     # ========================================================================
 
-    async def update_server_certificate(self) -> tuple[bool, str, bytes | None]:
+    async def update_server_certificate(self) -> tuple[bool, str, bytes | None]:  # noqa: C901
         """Update server certificate using CSR-based workflow.
 
         Implements OPC UA Part 12 Section 7.7.4 UpdateCertificate workflow.
@@ -1267,11 +1284,6 @@ class GdsPushService(LoggerMixin):
             raise GdsPushError(msg)
 
         try:
-            from django.db import IntegrityError  # noqa: PLC0415
-
-            from pki.models import CertificateModel, TruststoreOrderModel  # noqa: PLC0415
-            from pki.models.certificate import RevokedCertificateModel  # noqa: PLC0415
-
             self.logger.info(
                 'Updating truststore "%s" with new server certificate + %d CA cert(s)',
                 self.server_truststore.unique_name,
