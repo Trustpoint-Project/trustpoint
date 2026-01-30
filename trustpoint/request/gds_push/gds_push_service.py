@@ -704,11 +704,78 @@ class GdsPushService(LoggerMixin):
             async with client:
                 server_info = await self._gather_server_info(client)
 
+                if server_info and 'endpoints' in server_info:
+                    self.logger.info('Server discovery completed successfully')
+                    self.logger.info('Server name: %s', server_info.get('server_name', 'Unknown'))
+                    self.logger.info('Found %d endpoints:', len(server_info['endpoints']))
+
+                    security_policies = set()
+                    for i, endpoint in enumerate(server_info['endpoints'], 1):
+                        policy_uri = endpoint['security_policy']
+                        if 'Basic256Sha256' in policy_uri:
+                            policy_name = 'Basic256Sha256'
+                        elif 'Basic128Rsa15' in policy_uri:
+                            policy_name = 'Basic128Rsa15'
+                        elif 'Basic256' in policy_uri:
+                            policy_name = 'Basic256'
+                        elif 'None' in policy_uri:
+                            policy_name = 'None'
+                        else:
+                            policy_name = policy_uri.split('/')[-1] if '/' in policy_uri else policy_uri
+
+                        security_policies.add(policy_name)
+
+                        self.logger.info(
+                            '  Endpoint %d: %s | Security: %s/%s | Server Cert: %s',
+                            i,
+                            endpoint['url'],
+                            policy_name,
+                            endpoint['security_mode'].replace('MessageSecurityMode.', ''),
+                            'Yes' if endpoint['has_server_cert'] else 'No'
+                        )
+
+                    if security_policies:
+                        self.logger.info('Available security policies: %s', ', '.join(sorted(security_policies)))
+
         except Exception as e:  # noqa: BLE001
             self.logger.warning('Failed to discover server: %s', e)
             return False, f'Discovery failed: {e}', None
         else:
-            return True, 'Server discovered successfully', server_info
+            server_name = server_info.get('server_name', 'Unknown') if server_info else 'Unknown'
+            endpoint_count = len(server_info.get('endpoints', [])) if server_info else 0
+            
+            # Build detailed success message
+            security_policies = set()
+            has_secure_endpoints = False
+            has_insecure_endpoints = False
+            
+            if server_info and 'endpoints' in server_info:
+                for endpoint in server_info['endpoints']:
+                    policy_uri = endpoint['security_policy']
+                    if 'None' in policy_uri:
+                        has_insecure_endpoints = True
+                    else:
+                        has_secure_endpoints = True
+                    
+                    if 'Basic256Sha256' in policy_uri:
+                        security_policies.add('Basic256Sha256')
+                    elif 'Basic128Rsa15' in policy_uri:
+                        security_policies.add('Basic128Rsa15')
+                    elif 'Basic256' in policy_uri:
+                        security_policies.add('Basic256')
+            
+            message_parts = [f'Server "{server_name}" discovered with {endpoint_count} endpoint(s)']
+            if security_policies:
+                message_parts.append(f'Secure policies: {", ".join(sorted(security_policies))}')
+            if has_secure_endpoints and has_insecure_endpoints:
+                message_parts.append('(mixed secure/insecure endpoints)')
+            elif has_secure_endpoints:
+                message_parts.append('(secure endpoints only)')
+            elif has_insecure_endpoints:
+                message_parts.append('(insecure endpoints only)')
+            
+            success_message = ' | '.join(message_parts)
+            return True, success_message, server_info
 
     async def _gather_server_info(self, client: Client) -> dict[str, Any]:
         """Gather server information from connected client.
@@ -733,9 +800,11 @@ class GdsPushService(LoggerMixin):
             server_info['endpoints'].append(endpoint_info)
 
         try:
-            server_node = client.get_node('ns=0;i=2253')
-            name = await server_node.get_browse_name()
-            server_info['server_name'] = str(name.Name)
+            server_name_node = client.get_node('ns=0;i=2254')  # Server.ServerName property
+            server_name = await server_name_node.read_value()
+            if isinstance(server_name, list) and server_name:
+                server_name = server_name[0]
+            server_info['server_name'] = str(server_name)
         except Exception:  # noqa: BLE001
             server_info['server_name'] = 'Unknown'
 

@@ -1445,7 +1445,7 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
             success, message, server_info = asyncio.run(service.discover_server())
 
             if success and server_info:
-                messages.success(request, f'Server discovered successfully: {message}')
+                messages.success(request, message)
 
                 request.session['opc_ua_server_info'] = server_info
 
@@ -2033,6 +2033,14 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
         Returns:
             HttpResponseRedirect to the help page.
         """
+        referer = self.request.META.get('HTTP_REFERER', '')
+        if referer and 'issue-application-credential' in referer:
+            return HttpResponseRedirect(
+                reverse_lazy(
+                    f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
+                    kwargs={'pk': self.object.pk}
+                )
+            )
         return HttpResponseRedirect(
             reverse_lazy(
                 f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
