@@ -436,7 +436,7 @@ class OpcUaGdsCreateNoOnboardingView(AbstractCreateNoOnboardingView):
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
-class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
+class AbstractCreateOnboardingView(PageContextMixin, FormView[OnboardingCreateForm]):
     """asdfds."""
 
     http_method_names = ('get', 'post')
@@ -460,7 +460,7 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
         context['cancel_create_url'] = f'{self.page_category}:{self.page_name}'
         return context
 
-    def form_valid(self, form: forms.Form) -> HttpResponse:
+    def form_valid(self, form: OnboardingCreateForm) -> HttpResponse:
         """Saves the form / creates the device model object.
 
         Args:
