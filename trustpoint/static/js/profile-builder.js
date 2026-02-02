@@ -20,7 +20,7 @@ initializeFieldCatalog() {
   'DISPLAY_NAME': {
       label: 'Display Name',
       description: 'Human readable profile name',
-      icon: '📝',
+      icon: '',
       fields: [
         {
           name: 'display_name',
@@ -28,7 +28,6 @@ initializeFieldCatalog() {
           description: 'Profile display name',
           templates: [
             { label: 'Required', value: { required: true, default: 'TLS Client' } },
-            { label: 'Custom', value: "REPLACE IT WITH DISPLAY NAME" },
             { label: 'Fixed string', value: 'TLS Client' }
           ]
         }
@@ -37,7 +36,7 @@ initializeFieldCatalog() {
     'SUBJECT': {
       label: 'Subject',
       description: 'Certificate subject fields (DN)',
-      icon: '👤',
+      icon: '',
       fields: [
         {
           name: 'CN',
@@ -124,7 +123,7 @@ initializeFieldCatalog() {
     'EXTENSIONS': {
       label: 'Extensions',
       description: 'X.509 certificate extensions',
-      icon: '🔐',
+      icon: '',
       fields: [
         {
           name: 'subjectAltName',
@@ -232,7 +231,7 @@ initializeFieldCatalog() {
     'VALIDITY': {
       label: 'Validity',
       description: 'Certificate validity period settings',
-      icon: '📅',
+      icon: '',
       fields: [
         {
           name: 'days',
@@ -285,7 +284,7 @@ initializeFieldCatalog() {
     'CONSTRAINTS': {
       label: 'Constraints',
       description: 'Global constraint settings',
-      icon: '⚙️',
+      icon: '',
       fields: [
         {
           name: 'mutable',
