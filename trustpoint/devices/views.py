@@ -72,6 +72,7 @@ from devices.models import (
 )
 from devices.revocation import DeviceCredentialRevocation
 from devices.serializers import DeviceSerializer
+from management.models import KeyStorageConfig
 from pki.models.ca import CaModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
@@ -358,6 +359,35 @@ class OpcUaGdsPushCreateChooseOnboardingView(AbstractCreateChooseOnboaringView):
     """View for choosing if the new OPC UA GDS Push shall be onboarded or not."""
 
     page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Check if SOFTWARE storage is configured before allowing GDS Push creation.
+
+        Args:
+            request: The HTTP request object.
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+
+        Returns:
+            HttpResponseBase: The response object.
+        """
+        try:
+            config = KeyStorageConfig.get_config()
+            if config.storage_type != KeyStorageConfig.StorageType.SOFTWARE:
+                messages.error(
+                    request,
+                    f'OPC UA GDS Push is only available with SOFTWARE key storage. '
+                    f'Current storage type: {config.get_storage_type_display()}'
+                )
+                return redirect('devices:opc_ua_gds_push')
+        except KeyStorageConfig.DoesNotExist:
+            messages.error(
+                request,
+                'Key storage configuration not found. Please configure key storage first.'
+            )
+            return redirect('devices:opc_ua_gds_push')
+
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the cancel url href according to the subcategory.
