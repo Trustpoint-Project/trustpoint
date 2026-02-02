@@ -1,6 +1,8 @@
 """General validation utilities for Trustpoint."""
 
+import ipaddress
 import re
+import socket
 from urllib.parse import urlparse
 
 
@@ -43,3 +45,37 @@ def validate_webhook_url(url: str) -> None:
     if parsed.scheme not in ('http', 'https'):
         msg = 'Webhook URL must use HTTP or HTTPS scheme.'
         raise ValidationError(msg)
+
+    # Prevent SSRF by blocking localhost and private IP ranges
+    hostname = parsed.hostname
+    if not hostname:
+        msg = 'Webhook URL must have a valid hostname.'
+        raise ValidationError(msg)
+
+    # Block localhost variations
+    # ruff: noqa: S104 - We are explicitly blocking these dangerous addresses
+    if hostname.lower() in ('localhost', '127.0.0.1', '::1', '0.0.0.0', '0:0:0:0:0:0:0:0'):
+        msg = 'Webhook URL cannot target localhost or loopback addresses.'
+        raise ValidationError(msg)
+
+    try:
+        # Resolve hostname to IP addresses
+        ip_addresses = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        for addr_info in ip_addresses:
+            ip_str = addr_info[4][0]
+            ip = ipaddress.ip_address(ip_str)
+
+            # Block private IP ranges
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                msg = f'Webhook URL cannot target private IP address: {ip_str}'
+                raise ValidationError(msg)
+
+            # Block reserved ranges that could be used for SSRF
+            if ip in ipaddress.ip_network('169.254.0.0/16'):  # Link-local
+                msg = f'Webhook URL cannot target link-local IP address: {ip_str}'
+                raise ValidationError(msg)
+
+    except socket.gaierror:
+        pass
+    except ValueError:
+        pass
