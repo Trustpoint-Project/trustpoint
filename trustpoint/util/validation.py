@@ -23,6 +23,7 @@ def validate_common_name_characters(common_name: str) -> None:
     if parsed.scheme or parsed.netloc:
         msg = 'Common name cannot contain URL-like constructs.'
         raise ValidationError(msg)
+
 def validate_application_uri(application_uri: str) -> None:
     """Validate that the application URI has a valid scheme and is not HTTP/HTTPS."""
     parsed = urlparse(application_uri)

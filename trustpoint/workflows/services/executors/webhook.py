@@ -233,6 +233,12 @@ def _perform_request(
     data_kwargs = options.get('data_kwargs') or {}
 
     try:
+        validate_webhook_url(url)
+    except ValidationError as exc:
+        logger.exception('Webhook: final URL validation failed for %s', url)
+        return None, None, f'URL validation error: {exc!s}'
+
+    try:
         resp = requests.request(
             method,
             url,
