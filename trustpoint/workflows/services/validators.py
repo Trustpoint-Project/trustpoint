@@ -8,6 +8,7 @@ from typing import Any
 from django.utils.translation import gettext as _
 
 from util.email import normalize_addresses
+from util.validation import ValidationError, validate_webhook_url
 from workflows.events import Events
 from workflows.services.executors.factory import StepExecutorFactory
 
@@ -177,8 +178,11 @@ def _validate_webhook_basic_fields(
     """URL, method, headers, body for webhook step."""
     # url
     url = (params.get('url') or '').strip()
-    if not _is_http_url(url):
-        _error(errors, _('Step #%s (Webhook): url is required and must start with http:// or https://.') % idx)
+
+    try:
+        validate_webhook_url(url)
+    except ValidationError as exc:
+        _error(errors, _('Step #%s (Webhook): %s') % (idx, exc))
 
     # method
     method = (params.get('method') or 'POST').upper()
