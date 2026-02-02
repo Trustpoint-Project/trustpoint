@@ -7,9 +7,11 @@ import json as _json
 import logging
 import re
 from typing import Any
+from urllib.parse import quote
 
 import requests
 
+from util.validation import ValidationError, validate_webhook_url
 from workflows.models import State, WorkflowInstance
 from workflows.services.context import build_context, set_in
 from workflows.services.executors.factory import AbstractStepExecutor
@@ -29,7 +31,9 @@ def _render_ctx_placeholders(template: str, ctx: dict[str, Any]) -> str:
     def repl(m: re.Match[str]) -> str:
         path = m.group(1)
         val = _lookup_ctx_path(ctx, path)
-        return '' if val is None else str(val)
+        if val is None:
+            return ''
+        return quote(str(val))
 
     return _CTX_PLACEHOLDER_RE.sub(repl, template)
 
@@ -172,6 +176,13 @@ def _render_url(url_tpl: str, ctx: dict[str, Any]) -> tuple[bool, str, str]:
     except Exception as exc:
         logger.exception('Webhook: URL render failed')
         return False, '', f'URL render error: {exc!s}'
+
+    try:
+        validate_webhook_url(url)
+    except ValidationError as exc:
+        logger.exception('Webhook: URL validation failed')
+        return False, '', f'URL validation error: {exc!s}'
+
     return True, url, ''
 
 
