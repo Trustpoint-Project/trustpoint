@@ -59,6 +59,8 @@ def get_random_onboarding_pki_protocols(
         A list of PkiProtocols.
     """
     protocols = list(OnboardingPkiProtocol)
+    if OnboardingPkiProtocol.OPC_GDS_PUSH in protocols:
+        protocols.remove(OnboardingPkiProtocol.OPC_GDS_PUSH)
     if include_protocol:
         protocols.remove(include_protocol)
     num_choices = secrets.randbelow(len(protocols)) + 1

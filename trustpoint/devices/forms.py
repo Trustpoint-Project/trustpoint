@@ -411,7 +411,12 @@ class OnboardingCreateForm(forms.Form):
         initial=OnboardingProtocol.CMP_SHARED_SECRET,
         label=_('Onboarding Protocol'),
         widget=DisableOptionsSelect(
-            disabled_options=[OnboardingProtocol.MANUAL, OnboardingProtocol.AOKI, OnboardingProtocol.BRSKI]
+            disabled_options=[
+                OnboardingProtocol.MANUAL,
+                OnboardingProtocol.AOKI,
+                OnboardingProtocol.BRSKI,
+                OnboardingProtocol.OPC_GDS_PUSH,
+            ]
         ),
     )
 
