@@ -443,3 +443,46 @@ class TestOpcUaGdsViews:
         assert response.status_code == 200
         devices = response.context['object_list']
         assert opcua_device not in devices
+
+
+class TestOpcUaGdsPushViews:
+    """Test OPC UA GDS Push specific view functionality."""
+    
+    def test_opcua_gds_push_table_excludes_generic_devices(
+        self,
+        admin_client: Client,
+        device_instance: dict[str, Any]
+    ) -> None:
+        """Test that OPC UA GDS Push table does not show generic devices."""
+        generic_device = device_instance['device']
+        assert generic_device.device_type == DeviceModel.DeviceType.GENERIC_DEVICE
+        
+        url = reverse('devices:opc_ua_gds_push')
+        response = admin_client.get(url)
+        
+        assert response.status_code == 200
+        devices = response.context['object_list']
+        assert generic_device not in devices
+    
+    def test_device_table_excludes_opcua_gds_push_devices(
+        self,
+        admin_client: Client,
+        domain_instance: dict[str, Any]
+    ) -> None:
+        """Test that device table does not show OPC UA GDS Push devices."""
+        domain = domain_instance['domain']
+        
+        # Create OPC UA GDS Push device
+        opcua_gds_push_device = DeviceModel.objects.create(
+            common_name='opcua-gds-push-test-device',
+            serial_number='SN-GDS-PUSH',
+            domain=domain,
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        )
+        
+        url = reverse('devices:devices')
+        response = admin_client.get(url)
+        
+        assert response.status_code == 200
+        devices = response.context['object_list']
+        assert opcua_gds_push_device not in devices
