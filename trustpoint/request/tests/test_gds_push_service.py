@@ -989,3 +989,119 @@ class TestGdsPushService:
         
         assert success is True
 
+
+class TestGdsPushServiceAdditionalCoverage:
+    """Additional test cases to reach 70% coverage."""
+
+    def test_create_insecure_client(self, mock_opc_device):
+        """Test creating insecure OPC UA client."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+
+        with patch('request.gds_push.gds_push_service.Client') as mock_client_class:
+            client = service._create_insecure_client()
+
+            mock_client_class.assert_called_once_with('opc.tcp://192.168.1.100:4840')
+            assert client.application_uri == 'urn:trustpoint:gds-push'
+
+    @pytest.mark.asyncio
+    async def test_gather_server_info(self, mock_opc_device):
+        """Test gathering server information."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+
+        mock_client = Mock()
+        mock_endpoint = Mock()
+        mock_endpoint.EndpointUrl = 'opc.tcp://test:4840'
+        mock_endpoint.SecurityMode = ua.MessageSecurityMode.None_
+        mock_endpoint.SecurityPolicyUri = 'http://opcfoundation.org/UA/SecurityPolicy#None'
+
+        mock_client.get_endpoints = AsyncMock(return_value=[mock_endpoint])
+        mock_client.find_servers = AsyncMock(return_value=[])
+
+        server_info = await service._gather_server_info(mock_client)
+
+        assert 'endpoints' in server_info
+        assert len(server_info['endpoints']) == 1
+
+    @pytest.mark.asyncio
+    async def test_discover_trustlist_nodes(self, mock_opc_device):
+        """Test discovering trustlist nodes."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+
+        mock_client = Mock()
+        mock_server_node = Mock()
+        mock_cert_groups = Mock()
+        mock_group = Mock()
+        mock_trustlist = Mock()
+
+        mock_client.get_node = Mock(side_effect=[mock_server_node])
+        mock_server_node.get_child = AsyncMock(side_effect=[mock_cert_groups])
+        mock_cert_groups.get_children = AsyncMock(return_value=[mock_group])
+        mock_group.get_child = AsyncMock(return_value=mock_trustlist)
+
+        trustlist_nodes = await service._discover_trustlist_nodes(mock_client)
+
+        assert isinstance(trustlist_nodes, list)
+
+    def test_raise_gds_push_error(self, mock_opc_device):
+        """Test raising GDS push error."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+
+        with pytest.raises(GdsPushError, match='Test error message'):
+            service._raise_gds_push_error('Test error message')
+
+    @pytest.mark.asyncio
+    async def test_build_ca_chain_no_domain(self, mock_opc_device):
+        """Test building CA chain with no domain."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+
+        # Mock device with no domain
+        with patch.object(service, 'device') as mock_device:
+            mock_device.domain = None
+
+            with pytest.raises(GdsPushError, match='has no domain configured'):
+                await service._build_ca_chain()
+
+    def test_validate_client_certificate_missing_san(self, mock_opc_device):
+        """Test validating client certificate with missing SAN."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+
+        # Create certificate without SAN
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        public_key = private_key.public_key()
+
+        subject = x509.Name([
+            x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test.example.com'),
+        ])
+
+        cert = x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(public_key).serial_number(1).not_valid_before(datetime.datetime.now(tz=datetime.UTC)).not_valid_after(datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(days=365)).sign(private_key, hashes.SHA256())
+
+        with pytest.raises(GdsPushError, match='Subject Alternative Name extension is missing'):
+            service._validate_client_certificate(cert)
+
+    def test_extract_application_uri_no_san(self, mock_opc_device):
+        """Test extracting application URI with no SAN."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+
+        # Create certificate without SAN
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        public_key = private_key.public_key()
+
+        subject = x509.Name([
+            x509.NameAttribute(x509.NameOID.COMMON_NAME, 'test.example.com'),
+        ])
+
+        cert = x509.CertificateBuilder().subject_name(subject).issuer_name(subject).public_key(public_key).serial_number(1).not_valid_before(datetime.datetime.now(tz=datetime.UTC)).not_valid_after(datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(days=365)).sign(private_key, hashes.SHA256())
+
+        with pytest.raises(GdsPushError, match='No application URI found'):
+            service._extract_application_uri(cert)
+
+    def test_get_server_truststore_no_config(self, mock_opc_device):
+        """Test getting server truststore with no onboarding config."""
+        service = GdsPushService(mock_opc_device, insecure=True)
+
+        # Mock device with no onboarding config
+        service.device.onboarding_config = None
+
+        with pytest.raises(GdsPushError, match='has no onboarding config'):
+            service._get_server_truststore()
+
