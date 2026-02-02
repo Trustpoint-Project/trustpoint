@@ -14,7 +14,6 @@ from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 
-from pki.models import CaModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
@@ -501,16 +500,13 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
     def revoke(self) -> None:
         """Revokes all active certificates associated with this credential."""
+        if self.domain.issuing_ca is None:
+            return
+        ca = self.domain.issuing_ca
         cert: CertificateModel
         for cert in self.credential.certificates.all():
             status = cert.certificate_status
             if status in (CertificateModel.CertificateStatus.REVOKED, CertificateModel.CertificateStatus.EXPIRED):
-                continue
-            try:
-                ca = CaModel.objects.get(credential__certificate__subject_public_bytes=cert.issuer_public_bytes)
-            except CaModel.DoesNotExist:
-                continue
-            except CaModel.MultipleObjectsReturned:
                 continue
             RevokedCertificateModel.objects.create(
                 certificate=cert, revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION, ca=ca

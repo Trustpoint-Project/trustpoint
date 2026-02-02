@@ -115,7 +115,7 @@ def create_signer_for_domain(
 
     signer_cert, signer_key = CertificateGenerator.create_ee(
         issuer_private_key=issuing_ca_private_key,
-        issuer_cn=issuing_ca_cn,
+        issuer_name=issuing_ca_cert.subject,
         subject_name=f'Signer-{domain_name}',
         private_key=signer_key,
         extensions=[(digital_signature_extension, True)],

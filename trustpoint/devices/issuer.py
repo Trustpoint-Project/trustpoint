@@ -7,7 +7,6 @@ import re
 from typing import TYPE_CHECKING, get_args
 
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
@@ -121,21 +120,23 @@ class SaveCredentialToDbMixin(LoggerMixin):
         )
 
         try:
-            cert_fingerprint = certificate.fingerprint(hashes.SHA256()).hex().upper()
 
-            # check for existing issued credentials with the same certificate
-            existing_credential = IssuedCredentialModel.objects.filter(
+            existing_issued_credential = IssuedCredentialModel.objects.filter(
                 device=self.device,
                 domain=self.domain,
-                credential__certificate__sha256_fingerprint=cert_fingerprint
+                issued_credential_type=issued_credential_type,
+                common_name=common_name,
             ).first()
 
-            if existing_credential:
-                # if the certificate already exists, update the credential and return it
-                cred_model = existing_credential.credential
+            if existing_issued_credential:
+                cred_model = existing_issued_credential.credential
                 cred_model.update_keyless_credential(certificate, certificate_chain)
                 cred_model.save()
-                return existing_credential
+
+                existing_issued_credential.issued_using_cert_profile = issued_using_cert_profile
+                existing_issued_credential.save()
+
+                return existing_issued_credential
 
             credential_model = CredentialModel.save_keyless_credential(
                 certificate=certificate,

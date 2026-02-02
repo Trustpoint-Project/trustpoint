@@ -23,10 +23,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
         issuing_1, issuing_1_key = self.create_issuing_ca(root_1_key, 'Root CA A', 'Issuing CA')
         issuing_2, issuing_2_key = self.create_issuing_ca(root_2_key, 'Root CA B', 'Issuing CA', issuing_1_key)
 
-        ee_1, _ = self.create_ee(issuing_1_key, 'Issuing CA', 'EE A1')
-        ee_2, _ = self.create_ee(issuing_1_key, 'Issuing CA', 'EE A2')
-        ee_3, _ = self.create_ee(issuing_2_key, 'Issuing CA', 'EE B1')
-        ee_4, _ = self.create_ee(issuing_2_key, 'Issuing CA', 'EE B1')
+        ee_1, _ = self.create_ee(issuing_1_key, issuing_1.subject, 'EE A1')
+        ee_2, _ = self.create_ee(issuing_1_key, issuing_1.subject, 'EE A2')
+        ee_3, _ = self.create_ee(issuing_2_key, issuing_2.subject, 'EE B1')
+        ee_4, _ = self.create_ee(issuing_2_key, issuing_2.subject, 'EE B2')
 
         CertificateModel.save_certificate(root_1)
         CertificateModel.save_certificate(root_2)
