@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import contextlib
+import ipaddress
 import json as _json
 import logging
 import re
+import socket
 from typing import Any
+from urllib.parse import urlparse
 
 import requests
 
@@ -162,12 +165,71 @@ def _build_auth(auth_cfg: Any) -> tuple[Any, str | None]:
         if t == 'basic':
             auth = (str(auth_cfg.get('username') or ''), str(auth_cfg.get('password') or ''))
         elif t == 'bearer':
+def _is_safe_url(url: str) -> bool:
+    """Return True if the URL is allowed for outbound webhook calls.
+
+    This enforces:
+    - scheme is http or https
+    - a hostname is present
+    - resolved IP is not private/loopback/link-local/multicast/reserved
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in {'http', 'https'}:
+        return False
+    if not parsed.hostname:
+        return False
+
+    hostname = parsed.hostname
+    try:
+        addrinfos = socket.getaddrinfo(hostname, parsed.port or 0, type=socket.SOCK_STREAM)
+    except OSError:
+        # DNS resolution failed: treat as unsafe
+        return False
+
+    if not addrinfos:
+        return False
+
+    for family, _type, _proto, _canonname, sockaddr in addrinfos:
+        ip_str = sockaddr[0] if family in (socket.AF_INET, socket.AF_INET6) else None
+        if not ip_str:
+            continue
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False
+        # Reject private, loopback, link-local, multicast, and reserved addresses
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_multicast
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        ):
+            return False
+
+    return True
+
+
+def _validate_url(url: str) -> tuple[bool, str]:
+    """Validate the rendered URL and return (ok, error_message)."""
+    if not _is_safe_url(url):
+        return False, 'Rendered URL is not allowed for webhook execution'
+    return True, ''
+
+
             bearer_token = str(auth_cfg.get('token') or '')
     return auth, bearer_token
 
 
 def _render_url(url_tpl: str, ctx: dict[str, Any]) -> tuple[bool, str, str]:
     try:
+
+    ok, validation_error = _validate_url(url)
+    if not ok:
+        logger.warning('Webhook: URL validation failed for rendered URL %r: %s', url, validation_error)
+        return False, '', validation_error
+
         url = _render_ctx_placeholders(url_tpl, ctx)
     except Exception as exc:
         logger.exception('Webhook: URL render failed')
