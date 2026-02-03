@@ -269,15 +269,6 @@ initializeFieldCatalog() {
           templates: [
             { label: 'Far future', value: '99991231T235959Z' }
           ]
-        },
-        {
-          name: 'offset_s',
-          fullPath: 'validity.offset_s',
-          description: 'Offset in seconds (e.g., for clock skew)',
-          templates: [
-            { label: '-3600 (1 hour backdate)', value: -3600 },
-            { label: '-300 (5 minutes backdate)', value: -300 }
-          ]
         }
       ]
     },
@@ -286,25 +277,6 @@ initializeFieldCatalog() {
       description: 'Global constraint settings',
       icon: '',
       fields: [
-        {
-          name: 'mutable',
-          fullPath: 'mutable',
-          description: 'Global mutable flag (default: false)',
-          templates: [
-            { label: 'true - Allow overrides', value: true },
-            { label: 'false - Immutable', value: false }
-          ]
-        },
-        {
-          name: 'allow',
-          fullPath: 'allow',
-          description: 'Global allow list (undefined = only explicit, "*" = all)',
-          templates: [
-            { label: 'All fields allowed ("*")', value: '*' },
-            { label: 'Only explicit fields', value: [] },
-            { label: 'Specific allow list', value: ['CN', 'O', 'OU', 'C'] }
-          ]
-        },
         {
           name: 'reject_mods',
           fullPath: 'reject_mods',
