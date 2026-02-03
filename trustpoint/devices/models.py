@@ -60,7 +60,7 @@ class OnboardingPkiProtocol(models.IntegerChoices):
     # Bitmask: Only use powers of 2: 1, 2, 4, 8, 16 ...
     CMP = 1, _('CMP')
     EST = 2, _('EST')
-    OPC_GDS_PUSH = 3, _('OPC - GDS Push')
+    OPC_GDS_PUSH = 4, _('OPC - GDS Push')
 
 
 class NoOnboardingPkiProtocol(models.IntegerChoices):
@@ -153,7 +153,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
     est_password = EncryptedCharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
     cmp_shared_secret = EncryptedCharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
 
-    opc_user = EncryptedCharField(verbose_name=_('OPC User'), max_length=128, blank=True, default='')
+    opc_user = models.CharField(verbose_name=_('OPC User'), max_length=128, blank=True, default='')
     opc_password = EncryptedCharField(verbose_name=_('OPC Password'), max_length=128, blank=True, default='')
 
     idevid_trust_store = models.ForeignKey(
