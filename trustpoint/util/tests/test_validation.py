@@ -28,6 +28,9 @@ class TestValidateCommonNameCharacters:
             'device123',
             'device-123',
             'Device 123',
+            'device_with_underscores',
+            'device_123',
+            'Device_Name_123',
         ]
         for name in valid_names:
             validate_common_name_characters(name)
@@ -37,7 +40,6 @@ class TestValidateCommonNameCharacters:
         invalid_names = [
             'device@example.com',
             'device.com/path',
-            'device_with_underscore',
             'device@evil.com',
             'device#fragment',
         ]

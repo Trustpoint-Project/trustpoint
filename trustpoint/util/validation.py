@@ -31,13 +31,9 @@ class ValidationError(Exception):
 
 
 def validate_common_name_characters(common_name: str) -> None:
-    """Validate that the common name contains only safe characters and no URL-like constructs.
-
-    Since common_name is used in workflow contexts that may be interpolated into URLs,
-    we restrict to characters that are safe for URL interpolation.
-    """
-    if not re.match(r'^[a-zA-Z0-9 -]+$', common_name):
-        msg = 'Common name can only contain letters, numbers, spaces, and hyphens.'
+    """Validate that the common name contains only safe characters and no URL-like constructs."""
+    if not re.match(r'^[a-zA-Z0-9 _-]+$', common_name):
+        msg = 'Common name can only contain letters, numbers, spaces, underscores, and hyphens.'
         raise ValidationError(msg)
     parsed = urlparse(common_name)
     if parsed.scheme or parsed.netloc:
@@ -95,7 +91,6 @@ def _validate_webhook_port(parsed: ParseResult) -> None:
         msg = f'Webhook URL port {parsed.port} is not allowed.'
         raise ValidationError(msg)
 
-    # Allow standard ports or user ports (1024+)
     allowed_ports = STANDARD_HTTP_PORTS if parsed.scheme == 'http' else STANDARD_HTTPS_PORTS
     if parsed.port not in allowed_ports and not (MIN_USER_PORT <= parsed.port <= MAX_PORT):
         port_list = ', '.join(map(str, allowed_ports))

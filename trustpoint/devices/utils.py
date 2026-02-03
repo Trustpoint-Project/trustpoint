@@ -11,9 +11,6 @@ from util.validation import (
 from util.validation import (
     validate_common_name_characters as general_validate_common_name_characters,
 )
-from util.validation import (
-    validate_webhook_url as general_validate_webhook_url,
-)
 
 
 def validate_common_name_characters(common_name: str) -> None:
@@ -31,10 +28,3 @@ def validate_application_uri(application_uri: str) -> None:
     except GeneralValidationError as e:
         raise forms.ValidationError(str(e)) from e
 
-
-def validate_webhook_url(url: str) -> None:
-    """Validate that the webhook URL is safe and doesn't allow SSRF attacks."""
-    try:
-        general_validate_webhook_url(url)
-    except GeneralValidationError as e:
-        raise forms.ValidationError(str(e)) from e

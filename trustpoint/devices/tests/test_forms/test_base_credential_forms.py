@@ -197,6 +197,64 @@ class TestBaseCredentialForm:
         assert form.is_valid(), f'Form should accept large validity values, errors: {form.errors}'
         assert form.cleaned_data['validity'] == 9999
 
+    def test_invalid_common_name_characters(self, device_instance: dict[str, Any]) -> None:
+        """Test that common names with invalid characters are rejected."""
+        device = device_instance['device']
+        domain = device_instance['domain']
+        
+        initial_data = {
+            'pseudonym': 'test-pseudonym',
+            'domain_component': domain.unique_name,
+            'serial_number': device.serial_number,
+        }
+        
+        invalid_names = [
+            'device@example.com',
+            'device.com/path',
+            'http://evil.com',
+        ]
+        
+        for invalid_name in invalid_names:
+            form_data = {
+                'common_name': invalid_name,
+                'validity': 365,
+            }
+            
+            form = BaseCredentialForm(data=form_data, initial=initial_data, device=device)
+            
+            assert not form.is_valid(), f'Form should reject invalid common name: {invalid_name}'
+            assert 'common_name' in form.errors
+            assert 'can only contain' in str(form.errors['common_name'][0]).lower()
+
+    def test_url_like_common_name(self, device_instance: dict[str, Any]) -> None:
+        """Test that URL-like common names are rejected."""
+        device = device_instance['device']
+        domain = device_instance['domain']
+        
+        initial_data = {
+            'pseudonym': 'test-pseudonym',
+            'domain_component': domain.unique_name,
+            'serial_number': device.serial_number,
+        }
+        
+        url_like_names = [
+            'https://evil.com',
+            'ftp://test.com',
+            'device.com:8080',
+        ]
+        
+        for url_name in url_like_names:
+            form_data = {
+                'common_name': url_name,
+                'validity': 365,
+            }
+            
+            form = BaseCredentialForm(data=form_data, initial=initial_data, device=device)
+            
+            assert not form.is_valid(), f'Form should reject URL-like common name: {url_name}'
+            assert 'common_name' in form.errors
+            assert 'url-like' in str(form.errors['common_name'][0]).lower()
+
 
 @pytest.mark.django_db
 class TestBaseServerCredentialForm:
