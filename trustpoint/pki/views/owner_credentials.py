@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
-from django.urls import reverse_lazy
+from django.urls import reverse_lazy, reverse
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
@@ -96,6 +96,9 @@ class OwnerCredentialAddView(OwnerCredentialContextMixin, FormView[OwnerCredenti
             self.request,
             _('Successfully added DevOwnerID {name}.').format(name=form.cleaned_data['unique_name']),
         )
+        action = self.request.POST.get('action', 'add_only')
+        if action == 'add_with_truststore':
+            return HttpResponseRedirect(reverse('pki:truststores-add'))
         return super().form_valid(form)
 
 
