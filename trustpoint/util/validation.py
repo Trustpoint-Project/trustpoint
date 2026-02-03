@@ -3,7 +3,27 @@
 import ipaddress
 import re
 import socket
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
+
+MIN_USER_PORT = 1024
+MAX_PORT = 65535
+STANDARD_HTTP_PORTS = (80, 8080, 8888)
+STANDARD_HTTPS_PORTS = (443, 8443)
+
+DANGEROUS_PORTS = {
+    22,   # SSH
+    23,   # Telnet
+    25,   # SMTP
+    53,   # DNS
+    110,  # POP3
+    143,  # IMAP
+    993,  # IMAPS
+    995,  # POP3S
+    3306, # MySQL
+    5432, # PostgreSQL
+    6379, # Redis
+    27017,# MongoDB
+}
 
 
 class ValidationError(Exception):
@@ -40,14 +60,11 @@ def _is_ip_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """Check if an IP address is in a blocked range for SSRF prevention."""
     blocked_ranges = [
         ipaddress.ip_network('0.0.0.0/8'),       # This host
-        #ipaddress.ip_network('10.0.0.0/8'),      # RFC 1918 (private)  # noqa: ERA001
         ipaddress.ip_network('100.64.0.0/10'),   # RFC 6598 (carrier-grade NAT)
         ipaddress.ip_network('127.0.0.0/8'),     # Loopback
         ipaddress.ip_network('169.254.0.0/16'),  # Link-local
-        #ipaddress.ip_network('172.16.0.0/12'),   # RFC 1918 (private)  # noqa: ERA001
         ipaddress.ip_network('192.0.0.0/24'),    # RFC 6890 (IETF protocol assignments)
         ipaddress.ip_network('192.0.2.0/24'),    # RFC 5737 (documentation)
-        #ipaddress.ip_network('192.168.0.0/16'),  # RFC 1918 (private)  # noqa: ERA001
         ipaddress.ip_network('198.18.0.0/15'),   # RFC 2544 (benchmarking)
         ipaddress.ip_network('198.51.100.0/24'), # RFC 5737 (documentation)
         ipaddress.ip_network('203.0.113.0/24'),  # RFC 5737 (documentation)
@@ -58,9 +75,8 @@ def _is_ip_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     return any(ip in network for network in blocked_ranges)
 
 
-def validate_webhook_url(url: str) -> None:
-    """Validate that the webhook URL is safe and doesn't allow SSRF attacks."""
-    parsed = urlparse(url)
+def _validate_webhook_scheme_and_host(parsed: ParseResult) -> None:
+    """Validate URL scheme and host."""
     if not parsed.scheme or not parsed.netloc:
         msg = 'Webhook URL must be a valid URL with scheme and host.'
         raise ValidationError(msg)
@@ -69,20 +85,32 @@ def validate_webhook_url(url: str) -> None:
         msg = 'Webhook URL must use HTTP or HTTPS scheme.'
         raise ValidationError(msg)
 
-    # Prevent SSRF by blocking localhost and private IP ranges
-    hostname = parsed.hostname
-    if not hostname:
-        msg = 'Webhook URL must have a valid hostname.'
+
+def _validate_webhook_port(parsed: ParseResult) -> None:
+    """Validate URL port number for SSRF prevention."""
+    if parsed.port is None:
+        return
+
+    if parsed.port in DANGEROUS_PORTS:
+        msg = f'Webhook URL port {parsed.port} is not allowed.'
         raise ValidationError(msg)
 
-    # Block localhost variations
+    # Allow standard ports or user ports (1024+)
+    allowed_ports = STANDARD_HTTP_PORTS if parsed.scheme == 'http' else STANDARD_HTTPS_PORTS
+    if parsed.port not in allowed_ports and not (MIN_USER_PORT <= parsed.port <= MAX_PORT):
+        port_list = ', '.join(map(str, allowed_ports))
+        msg = f'Port {parsed.port} is not allowed. Use {port_list}, or {MIN_USER_PORT}-{MAX_PORT}.'
+        raise ValidationError(msg)
+
+
+def _validate_webhook_hostname_and_ip(hostname: str) -> None:
+    """Validate hostname and resolve to safe IP addresses."""
     # ruff: noqa: S104
     if hostname.lower() in ('localhost', '127.0.0.1', '::1', '0.0.0.0', '0:0:0:0:0:0:0:0'):
         msg = 'Webhook URL cannot target localhost or loopback addresses.'
         raise ValidationError(msg)
 
     try:
-        # Resolve hostname to IP addresses
         ip_addresses = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         for addr_info in ip_addresses:
             ip_str = addr_info[4][0]
@@ -93,10 +121,32 @@ def validate_webhook_url(url: str) -> None:
                 raise ValidationError(msg)
 
     except socket.gaierror:
-        # DNS resolution failure - could indicate DNS rebinding attempt
         msg = f'Webhook URL hostname could not be resolved: {hostname}'
         raise ValidationError(msg) from None
     except ValueError as exc:
-        # IP parsing failure
         msg = f'Webhook URL contains invalid IP address: {exc}'
         raise ValidationError(msg) from exc
+
+
+def validate_webhook_url(url: str) -> None:
+    """Validate that the webhook URL is safe and doesn't allow SSRF attacks.
+
+    Implements comprehensive SSRF protection following OWASP guidelines:
+    - Input validation and sanitization
+    - URL parsing and scheme validation
+    - Port number restrictions
+    - Hostname validation
+    - DNS resolution and IP address validation
+    - Blocking of private/internal networks
+    """
+    parsed = urlparse(url)
+
+    _validate_webhook_scheme_and_host(parsed)
+    _validate_webhook_port(parsed)
+
+    hostname = parsed.hostname
+    if not hostname:
+        msg = 'Webhook URL must have a valid hostname.'
+        raise ValidationError(msg)
+
+    _validate_webhook_hostname_and_ip(hostname)

@@ -37,10 +37,6 @@ def _is_bare_var_path(s: str) -> bool:
     return _is_dotpath(s)
 
 
-def _is_http_url(s: str) -> bool:
-    return isinstance(s, str) and s.strip().lower().startswith(('http://', 'https://'))
-
-
 def _known_event_triples() -> set[tuple[str, str, str]]:
     """Return set of (handler, protocol_lc, operation) from Events (protocol normalized)."""
     triples: set[tuple[str, str, str]] = set()

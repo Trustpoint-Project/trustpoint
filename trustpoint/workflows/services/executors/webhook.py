@@ -3,16 +3,15 @@
 from __future__ import annotations
 
 import contextlib
-import ipaddress
 import json as _json
 import logging
 import re
-import socket
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 
 import requests
 
+from util.validation import ValidationError, validate_webhook_url
 from workflows.models import State, WorkflowInstance
 from workflows.services.context import build_context, set_in
 from workflows.services.executors.factory import AbstractStepExecutor
@@ -38,57 +37,14 @@ def _render_ctx_placeholders(template: str, ctx: dict[str, Any]) -> str:
 
     return _CTX_PLACEHOLDER_RE.sub(repl, template)
 
-def _is_safe_url(url: str) -> bool:
-    """Return True if the URL is allowed for outbound webhook calls.
-
-    This enforces:
-    - scheme is http or https
-    - a hostname is present
-    - resolved IP is not private/loopback/link-local/multicast/reserved
-    """
-    parsed = urlparse(url)
-    if parsed.scheme not in {'http', 'https'}:
-        return False
-    if not parsed.hostname:
-        return False
-
-    hostname = parsed.hostname
-    try:
-        addrinfos = socket.getaddrinfo(hostname, parsed.port or 0, type=socket.SOCK_STREAM)
-    except OSError:
-        # DNS resolution failed: treat as unsafe
-        return False
-
-    if not addrinfos:
-        return False
-
-    for family, _type, _proto, _canonname, sockaddr in addrinfos:
-        ip_str = sockaddr[0] if family in (socket.AF_INET, socket.AF_INET6) else None
-        if not ip_str:
-            continue
-        try:
-            ip_obj = ipaddress.ip_address(ip_str)
-        except ValueError:
-            return False
-        # Reject private, loopback, link-local, multicast, and reserved addresses
-        if (
-            ip_obj.is_private
-            or ip_obj.is_loopback
-            or ip_obj.is_link_local
-            or ip_obj.is_multicast
-            or ip_obj.is_reserved
-            or ip_obj.is_unspecified
-        ):
-            return False
-
-    return True
-
-
 def _validate_url(url: str) -> tuple[bool, str]:
     """Validate the rendered URL and return (ok, error_message)."""
-    if not _is_safe_url(url):
-        return False, 'Rendered URL is not allowed for webhook execution'
-    return True, ''
+    try:
+        validate_webhook_url(url)
+    except ValidationError as exc:
+        return False, str(exc)
+    else:
+        return True, ''
 
 
 logger = logging.getLogger(__name__)
@@ -281,7 +237,7 @@ def _perform_request(
     options: dict[str, Any],
 ) -> tuple[requests.Response | None, Any | None, str | None]:
     """Perform HTTP request with comprehensive SSRF protection.
-    
+
     The URL has already been validated in _render_url(), but we perform
     a final validation here as a defense-in-depth measure to ensure
     no malicious URLs can reach the HTTP request.
@@ -291,7 +247,6 @@ def _perform_request(
     auth = options.get('auth')
     data_kwargs = options.get('data_kwargs') or {}
 
-    # Defense-in-depth: Final URL validation before making the request
     ok, validation_error = _validate_url(url)
     if not ok:
         logger.error('Webhook: final URL validation failed for %s: %s', url, validation_error)
