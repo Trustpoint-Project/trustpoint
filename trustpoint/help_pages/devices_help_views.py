@@ -35,7 +35,6 @@ from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
-    DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
     PageContextMixin,
 )
@@ -803,7 +802,7 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
         ).exists()
 
         discover_server_url = reverse(
-            'devices:opc_ua_gds_push_discover_server',
+            'devices:devices_discover_server',
             kwargs={'pk': device.pk}
         )
 
@@ -818,11 +817,11 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
 
         if has_domain_credential:
             update_trustlist_url = reverse(
-                'devices:opc_ua_gds_push_update_trustlist',
+                'devices:devices_update_trustlist',
                 kwargs={'pk': device.pk}
             )
             update_cert_url = reverse(
-                'devices:opc_ua_gds_push_update_server_certificate',
+                'devices:devices_update_server_certificate',
                 kwargs={'pk': device.pk}
             )
 
@@ -1023,12 +1022,12 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
 class OpcUaGdsPushApplicationCertificateHelpView(BaseHelpView):
     """Help view for OPC UA GDS Push application certificates."""
 
-    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     strategy = OpcUaGdsPushOnboardingStrategy()
 
 
 class OpcUaGdsPushOnboardingHelpView(BaseHelpView):
     """Help view for OPC UA GDS Push onboarding."""
 
-    page_name = DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     strategy = OpcUaGdsPushOnboardingStrategy()

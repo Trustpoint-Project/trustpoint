@@ -195,7 +195,7 @@ class OpcUaGdsPushTruststoreCreateView(TruststoresContextMixin, FormView[Trustst
         if device_pk:
             # Redirect to truststore association for the device
             return HttpResponseRedirect(
-                reverse('devices:opc_ua_gds_push_truststore_association', kwargs={'pk': device_pk})
+                reverse('devices:devices_truststore_association', kwargs={'pk': device_pk})
             )
 
         # Fallback to truststore overview

@@ -13,7 +13,7 @@ from cryptography.x509.oid import ExtensionOID, ObjectIdentifier
 from cryptography.x509.oid import ExtensionOID
 from django.core.exceptions import ValidationError
 
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingConfigModel, OnboardingProtocol
+from devices.models import DeviceModel, IssuedCredentialModel, OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
 from pki.models import CaModel, TruststoreModel
 from pki.models.truststore import TruststoreOrderModel
 from pki.util.x509 import CertificateGenerator
@@ -100,6 +100,7 @@ def mock_opc_device(mock_domain, mock_truststore, mock_server_certificate):
         onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
         opc_trust_store=mock_truststore
     )
+    onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
     onboarding_config.save()
 
     device = DeviceModel(
@@ -154,6 +155,7 @@ class TestGdsPushService:
             onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
             opc_trust_store=mock_truststore
         )
+        onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(
@@ -173,6 +175,7 @@ class TestGdsPushService:
             onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
             opc_trust_store=mock_truststore
         )
+        onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(
@@ -200,6 +203,7 @@ class TestGdsPushService:
             GdsPushService(device)
         """Test initialization with device missing OPC truststore."""
         onboarding_config = OnboardingConfigModel(onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH)
+        onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(
@@ -223,6 +227,7 @@ class TestGdsPushService:
             onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
             opc_trust_store=truststore
         )
+        onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(
@@ -248,6 +253,7 @@ class TestGdsPushService:
             onboarding_protocol=OnboardingProtocol.OPC_GDS_PUSH,
             opc_trust_store=mock_truststore
         )
+        onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
         onboarding_config.save()
 
         device = DeviceModel(

@@ -244,6 +244,10 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         if self.idevid_trust_store is not None:
             error_messages['idevid_trust_store'] = 'IDevID truststore must not be set for OPC - GDS Push onboarding.'
 
+        allowed_protocols = self.get_pki_protocols()
+        if len(allowed_protocols) != 1 or OnboardingPkiProtocol.OPC_GDS_PUSH not in allowed_protocols:
+            error_messages['pki_protocols'] = 'OPC - GDS Push onboarding must use only the OPC_GDS_PUSH PKI protocol.'
+
         return error_messages
 
     def _validate_case_manual_onboarding(self) -> dict[str, str]:
@@ -449,13 +453,28 @@ class DeviceModel(CustomDeleteActionModel):
 
     def clean(self) -> None:
         """Validation before saving the model."""
+        error_messages = {}
+
         if not (self.onboarding_config or self.no_onboarding_config):
-            err_msg = 'Either onboarding or no-onboarding has to be configured.'
-            raise ValidationError(err_msg)
+            error_messages['onboarding_config'] = 'Either onboarding or no-onboarding has to be configured.'
 
         if self.onboarding_config and self.no_onboarding_config:
-            err_msg = 'Only one of onboarding or no-onboarding can be configured.'
-            raise ValidationError(err_msg)
+            error_messages['onboarding_config'] = 'Only one of onboarding or no-onboarding can be configured.'
+
+        if self.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH:
+            if not self.onboarding_config:
+                error_messages['device_type'] = 'OPC UA GDS Push devices must use onboarding configuration.'
+            elif self.onboarding_config.onboarding_protocol != OnboardingProtocol.OPC_GDS_PUSH:
+                error_messages['device_type'] = 'OPC UA GDS Push devices must use OPC_GDS_PUSH onboarding protocol.'
+
+            if not self.ip_address:
+                error_messages['ip_address'] = 'OPC UA GDS Push devices must have an IP address.'
+
+            if not self.opc_server_port or self.opc_server_port == 0:
+                error_messages['opc_server_port'] = 'OPC UA GDS Push devices must have a valid OPC server port.'
+
+        if error_messages:
+            raise ValidationError(error_messages)
 
 
 class IssuedCredentialModel(CustomDeleteActionModel):

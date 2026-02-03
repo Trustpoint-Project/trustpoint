@@ -195,7 +195,7 @@ class TestOpcUaGdsPushCLMView:
         
         assert response.status_code == 200
         assert 'main_url' in response.context
-        assert response.context['main_url'] == 'devices:opc_ua_gds_push'
+        assert response.context['main_url'] == 'devices:devices'
 
 
 @pytest.mark.django_db

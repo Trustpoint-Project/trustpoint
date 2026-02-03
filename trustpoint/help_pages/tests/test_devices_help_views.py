@@ -618,7 +618,7 @@ class OpcUaGdsPushApplicationCertificateHelpViewTests(TestCase):
         """Test that strategy is properly configured."""
         view = OpcUaGdsPushApplicationCertificateHelpView()
         assert isinstance(view.strategy, OpcUaGdsPushOnboardingStrategy)
-        assert view.page_name == 'opc_ua_gds_push'
+        assert view.page_name == 'devices'
 
 
 class OpcUaGdsPushOnboardingHelpViewTests(TestCase):
@@ -628,4 +628,4 @@ class OpcUaGdsPushOnboardingHelpViewTests(TestCase):
         """Test that strategy is properly configured."""
         view = OpcUaGdsPushOnboardingHelpView()
         assert isinstance(view.strategy, OpcUaGdsPushOnboardingStrategy)
-        assert view.page_name == 'opc_ua_gds_push'
+        assert view.page_name == 'devices'

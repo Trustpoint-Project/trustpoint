@@ -586,7 +586,6 @@ class OpcUaGdsPushCreateForm(forms.Form):
         opc_user = cast('str', self.cleaned_data.get('opc_user'))
         opc_password = cast('str', self.cleaned_data.get('opc_password'))
 
-        # Fixed for GDS Push
         onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
         onboarding_pki_protocols = [OnboardingPkiProtocol.OPC_GDS_PUSH]
 
@@ -598,7 +597,6 @@ class OpcUaGdsPushCreateForm(forms.Form):
         )
         onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
-        # No secrets needed for GDS Push
         onboarding_config_model.full_clean()
 
         device_model = DeviceModel(
@@ -713,6 +711,18 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
     domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label='----------', required=False)
     ip_address = forms.GenericIPAddressField(protocol='both', required=True, label=_('IP Address'))
     opc_server_port = forms.IntegerField(min_value=1, max_value=65535, required=True, label=_('OPC Server Port'))
+    opc_user = forms.CharField(
+        max_length=128,
+        required=False,
+        label=_('OPC User'),
+        help_text=_('OPC UA Server security administration user (role: SecurityAdmin)')
+    )
+    opc_password = forms.CharField(
+        max_length=128,
+        required=False,
+        label=_('OPC Password'),
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password', 'placeholder': '••••••••'})
+    )
     truststore_queryset: QuerySet[TruststoreModel] = TruststoreModel.objects.filter(
         intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
     )
@@ -736,7 +746,6 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
         """Initializes the form."""
         self.instance: DeviceModel = kwargs.pop('instance')
 
-        # Set initial values
         initial = kwargs.get('initial', {})
         initial.update({
             'common_name': self.instance.common_name,
@@ -744,6 +753,14 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             'domain': self.instance.domain,
             'ip_address': self.instance.ip_address,
             'opc_server_port': self.instance.opc_server_port,
+            'opc_user': (
+                self.instance.onboarding_config.opc_user
+                if self.instance.onboarding_config else ''
+            ),
+            'opc_password': (
+                self.instance.onboarding_config.opc_password
+                if self.instance.onboarding_config else ''
+            ),
             'opc_trust_store': (
                 self.instance.onboarding_config.opc_trust_store
                 if self.instance.onboarding_config else None
@@ -771,6 +788,9 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             Field('domain'),
             Field('ip_address'),
             Field('opc_server_port'),
+            HTML('<h2>OPC UA Credentials</h2><hr>'),
+            Field('opc_user'),
+            Field('opc_password'),
             Field('opc_trust_store'),
             HTML('<h2>Device Onboarding Configuration</h2><hr>'),
             Field('onboarding_protocol'),
@@ -796,9 +816,10 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             self.instance.domain = self.cleaned_data['domain']
             self.instance.ip_address = self.cleaned_data['ip_address']
             self.instance.opc_server_port = self.cleaned_data['opc_server_port']
+            self.instance.onboarding_config.opc_user = self.cleaned_data['opc_user']
+            self.instance.onboarding_config.opc_password = self.cleaned_data['opc_password']
             self.instance.onboarding_config.opc_trust_store = self.cleaned_data['opc_trust_store']
 
-            # For GDS Push, protocol is fixed
             self.instance.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
             self.instance.onboarding_config.clear_pki_protocols()
             if self.cleaned_data['pki_protocol_opc_gds_push'] is True:
