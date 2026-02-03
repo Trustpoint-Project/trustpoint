@@ -112,6 +112,14 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
     template_name = 'pki/truststores/add/file_import.html'
     ignore_url = reverse_lazy('pki:truststores')
 
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Set context flags based on URL."""
+        if 'from-device' in request.path:
+            self.for_devid = True
+        else:
+            self.for_devid = False
+        return cast('HttpResponse',super().dispatch(request, *args, **kwargs))
+
     def form_valid(self, form: TruststoreAddForm) -> HttpResponseRedirect:
         """If the form is valid, redirect to Truststore overview."""
         truststore = form.cleaned_data['truststore']
@@ -124,6 +132,11 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
                     kwargs={'pk': domain_id, 'truststore_id': truststore.id},
                 )
             )
+
+        if getattr(self, 'for_devid', False):
+            # Use query parameter for truststore_id
+            url = reverse('pki:devid_registration_create')
+            return HttpResponseRedirect(f'{url}?truststore_id={truststore.id}')
 
         n_certificates = truststore.number_of_certificates
         msg_str = ngettext(
