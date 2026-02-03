@@ -205,6 +205,7 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
             device.clm_button = self._get_clm_button_html(device)
             device.pki_protocols = self._get_pki_protocols(device)
         context['create_url'] = f'{self.page_category}:{self.page_name}_create'
+        context['new_onboarding_url'] = f'{self.page_category}:{self.page_name}_new_onboarding'
         context['device_revoke_url'] = reverse(f'{self.page_category}:{self.page_name}_device_revoke')
         context['device_delete_url'] = reverse(f'{self.page_category}:{self.page_name}_device_delete')
 
@@ -362,6 +363,39 @@ class OpcUaGdsPushCreateChooseOnboardingView(RedirectView):
 
     permanent = True
     pattern_name = 'devices:devices_create'
+
+
+class AbstractCreateAddOnboardingTypeView(PageContextMixin, TemplateView):
+    """Abstract view for choosing how new device shall be added."""
+
+    http_method_names = ('get',)
+    template_name = 'devices/add_onboarding_type.html'
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name: str
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the cancel url href according to the subcategory.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the devices page.
+        """
+        context = super().get_context_data(**kwargs)
+        context['cancel_create_url'] = f'devices:{self.page_name}'
+        context['use_onboarding_url_name'] = 'pki:devid_registration-method_select'
+        context['use_no_onboarding_url'] = f'{self.page_category}:{self.page_name}_create_no_onboarding'
+        return context
+
+
+class DeviceCreateAddOnboardingTypeView(AbstractCreateAddOnboardingTypeView):
+    """View for choosing how new device shall be added."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
 
 
 class AbstractCreateNoOnboardingView(PageContextMixin, FormView[NoOnboardingCreateForm]):
