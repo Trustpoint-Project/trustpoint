@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, Any, TypeVar
 from cryptography import x509
 from django.http import HttpResponse
 
+from trustpoint.logger import LoggerMixin
+
 if TYPE_CHECKING:
     from cryptography.x509 import CertificateSigningRequest
     from cryptography.x509.base import CertificateBuilder
@@ -23,7 +25,7 @@ if TYPE_CHECKING:
 RCT = TypeVar('RCT', bound='BaseRequestContext')
 
 @dataclass(kw_only=True)
-class BaseRequestContext:
+class BaseRequestContext(LoggerMixin):
     """Base class for all specific request context classes."""
     operation: str | None = None
     protocol: str | None = None
@@ -70,6 +72,7 @@ class BaseRequestContext:
     def narrow(self, child_cls: type[RCT], **extra: Any) -> RCT:
         """Create a new request context of a more specific subclass, copying existing attributes."""
         data = self.to_dict()
+        data = {k: v for k, v in data.items() if hasattr(child_cls, k)}
         return child_cls(**data, **extra)
 
     def clear(self) -> None:

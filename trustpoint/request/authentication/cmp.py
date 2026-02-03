@@ -647,7 +647,7 @@ class CmpSignatureBasedRevocationAuthentication(CmpAuthenticationBase):
             err_msg = 'CMP signer certificate is missing in context client_certificate.'
             self._raise_value_error(err_msg)
 
-        ClientCertificateAuthentication().authenticate(context)
+        ClientCertificateAuthentication(domain_credential_only=False).authenticate(context)
 
         if not context.device:
             err_msg = 'Device authentication failed using CMP signer certificate.'

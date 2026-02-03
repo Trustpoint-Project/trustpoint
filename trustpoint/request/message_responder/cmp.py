@@ -17,7 +17,7 @@ from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 from devices.models import OnboardingStatus
 from request.message_responder.base import AbstractMessageResponder
 from request.operation_processor import LocalCaCmpSignatureProcessor
-from request.request_context import CmpBaseRequestContext, CmpCertificateRequestContext
+from request.request_context import CmpBaseRequestContext, CmpCertificateRequestContext, CmpRevocationRequestContext
 
 if TYPE_CHECKING:
     from pki.models import CredentialModel
@@ -40,6 +40,9 @@ class CmpMessageResponder(AbstractMessageResponder):
                 return responder.build_response(context)
             if context.operation == 'certification':
                 responder = CmpCertificationResponder()
+                return responder.build_response(context)
+            if context.operation == 'revocation':
+                responder = CmpRevocationResponder()
                 return responder.build_response(context)
 
         exc_msg = 'No suitable responder found for this CMP message.'
@@ -412,6 +415,93 @@ class CmpCertificationResponder(CmpMessageResponder):
         if context.device and context.device.onboarding_config:
             context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             context.device.onboarding_config.save()
+        context.http_response_status = 200
+        context.http_response_content = encoded_message
+        context.http_response_content_type = 'application/pkixcmp'
+
+
+class CmpRevocationResponder(CmpMessageResponder):
+    """Respond to a CMP revocation request (RR) with the revocation response (RP)."""
+
+    @staticmethod
+    def _build_base_rp_message(
+            parsed_message: rfc4210.PKIMessage,
+            issuer_credential: CredentialModel,
+            sender_kid: rfc2459.KeyIdentifier,
+    ) -> rfc4210.PKIMessage:
+        """Builds the CR response message (without the protection)."""
+        rp_header = CmpRevocationResponder._build_response_message_header(
+            serialized_pyasn1_message=parsed_message,
+            sender_kid=sender_kid,
+            issuer_cert=issuer_credential.get_certificate())
+
+        rp_extra_certs = univ.SequenceOf()
+
+        certificate_chain = [
+            issuer_credential.get_certificate(),
+            *issuer_credential.get_certificate_chain(),
+        ]
+        for certificate in certificate_chain:
+            der_bytes = certificate.public_bytes(encoding=Encoding.DER)
+            asn1_certificate, _ = decoder.decode(der_bytes, asn1Spec=rfc4210.CMPCertificate())
+            rp_extra_certs.append(asn1_certificate)
+
+        rp_body = rfc4210.PKIBody()
+        rp_body['rp'] = rfc4210.RevRepContent().subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 3)
+        )
+        # rp_body['rp']['caPubs'] = univ.SequenceOf().subtype(
+        #     sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX),
+        #     explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 1),
+        # )
+        # TODO(AlexHx8472): Add TLS Server Certificate Root CA  # noqa: FIX002
+
+        # cert_response = rfc4210.CertResponse()
+        # cert_response['certReqId'] = 0
+
+        pki_status_info = rfc4210.PKIStatusInfo()
+        pki_status_info['status'] = 0
+        rp_body['rp']['status'] = pki_status_info
+
+        # cmp_cert = rfc4210.CMPCertificate().subtype(
+        #     explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
+        # )
+
+        rp_message = rfc4210.PKIMessage()
+        rp_message['header'] = rp_header
+        rp_message['body'] = rp_body
+        for extra_cert in rp_extra_certs:
+            rp_message['extraCerts'].append(extra_cert)
+
+        return rp_message
+
+    @staticmethod
+    def build_response(context: BaseRequestContext) -> None:
+        """Respond to a CMP revocation message with the revocation response."""
+        if not isinstance(context, CmpRevocationRequestContext):
+            exc_msg = 'CmpRevocationResponder requires a CmpRevocationRequestContext.'
+            raise TypeError(exc_msg)
+
+        if context.issuer_credential is None:
+            exc_msg = 'Issuer credential is not set in the context.'
+            raise ValueError(exc_msg)
+        issuing_ca_credential = context.issuer_credential
+
+        sender_ski = x509.SubjectKeyIdentifier.from_public_key(issuing_ca_credential.get_certificate().public_key())
+        sender_kid = rfc2459.KeyIdentifier(sender_ski.digest).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
+        )
+        pki_message = CmpRevocationResponder._build_base_rp_message(
+            parsed_message=context.parsed_message,
+            sender_kid=sender_kid,
+            issuer_credential=issuing_ca_credential,
+        )
+        pki_message = CmpRevocationResponder._sign_pki_message(
+            pki_message=pki_message, context=context
+        )
+
+        encoded_message = encoder.encode(pki_message)
+
         context.http_response_status = 200
         context.http_response_content = encoded_message
         context.http_response_content_type = 'application/pkixcmp'
