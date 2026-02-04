@@ -58,10 +58,10 @@ function redirectAddIssuingCa() {
     let url;
     if (localIssuingCaRadio.checked) {
         const selectedLocal = document.querySelector('input[name="local-issuing-ca"]:checked');
-        url = selectedLocal ? selectedLocal.value : null;
+        url = selectedLocal ? selectedLocal.getAttribute('data-url') : null;
     } else if (remoteIssuingCaRadio.checked) {
         const selectedRemote = document.querySelector('input[name="remote-issuing-ca"]:checked');
-        url = selectedRemote ? selectedRemote.value : null;
+        url = selectedRemote ? selectedRemote.getAttribute('data-url') : null;
     }
     if (url) {
         try {
