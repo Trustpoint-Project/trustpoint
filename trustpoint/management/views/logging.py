@@ -30,6 +30,8 @@ if TYPE_CHECKING:
 
 _LOG_FILENAME_RE = re.compile(r'^trustpoint\.log(?:\.\d+)?$')
 
+_CONTROL_CHAR_THRESHOLD = 32
+
 
 def _validate_log_filename(filename: str) -> Path:
     """Validate a log filename and return the resolved path if valid.
@@ -43,22 +45,26 @@ def _validate_log_filename(filename: str) -> Path:
     Raises:
         Http404: If the filename is invalid or path traversal is detected
     """
-    if not isinstance(filename, str) or not _LOG_FILENAME_RE.match(filename):
+    if not isinstance(filename, str) or not filename:
         exc_msg = f'Invalid filename: {filename}'
         raise Http404(exc_msg)
 
-    # Construct the candidate path under the configured log directory.
+    if '\x00' in filename or any(ord(c) < _CONTROL_CHAR_THRESHOLD for c in filename):
+        exc_msg = f'Invalid filename: {filename}'
+        raise Http404(exc_msg)
+
+    if not _LOG_FILENAME_RE.match(filename):
+        exc_msg = f'Invalid filename: {filename}'
+        raise Http404(exc_msg)
+
     log_file_path = LOG_DIR_PATH / Path(filename)
 
-    # Resolve symlinks and normalize the path, then ensure it is contained within LOG_DIR_PATH.
     resolved_path = log_file_path.resolve()
     try:
-        # On Python 3.9+, this is a clear and explicit containment check.
         if not resolved_path.is_relative_to(LOG_DIR_PATH):
             exc_msg = f'Access denied for file: {filename}'
             raise Http404(exc_msg)
     except AttributeError:
-        # Fallback for environments without Path.is_relative_to.
         try:
             resolved_path.relative_to(LOG_DIR_PATH)
         except ValueError as exc:
