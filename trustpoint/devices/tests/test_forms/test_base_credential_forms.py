@@ -280,7 +280,7 @@ class TestBaseCredentialForm:
             
             assert not form.is_valid(), f'Form should reject URL-like common name: {url_name}'
             assert 'common_name' in form.errors
-            assert 'url-like' in str(form.errors['common_name'][0]).lower()
+            assert 'can only contain' in str(form.errors['common_name'][0]).lower()
 
 
 @pytest.mark.django_db

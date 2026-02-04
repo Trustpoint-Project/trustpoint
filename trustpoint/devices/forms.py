@@ -118,12 +118,19 @@ class BaseCredentialForm(forms.Form):
 
         if not self.fields['common_name'].disabled:
             validate_common_name_characters(common_name)
-            if IssuedCredentialModel.objects.filter(common_name=common_name, device=self.device).exists():
-                err_msg = _('Credential with common name %s already exists for device %s.') % (
-                    common_name,
-                    self.device.common_name,
-                )
-                raise forms.ValidationError(err_msg)
+            existing_credentials = IssuedCredentialModel.objects.filter(
+                common_name=common_name, device=self.device
+            )
+            for cred in existing_credentials:
+
+                if cred.credential.certificates.exclude(
+                    revoked_certificate__isnull=False
+                ).exists():
+                    err_msg = _('Credential with common name %s already exists for device %s.') % (
+                        common_name,
+                        self.device.common_name,
+                    )
+                    raise forms.ValidationError(err_msg)
 
         return common_name
 

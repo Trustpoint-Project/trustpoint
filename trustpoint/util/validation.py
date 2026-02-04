@@ -51,6 +51,10 @@ def validate_application_uri(application_uri: str) -> None:
         msg = 'HTTP and HTTPS schemes are not allowed for Application URI.'
         raise ValidationError(msg)
 
+    if parsed.scheme == 'urn' and not parsed.path:
+        msg = 'URN must have content after the scheme.'
+        raise ValidationError(msg)
+
 
 def _is_ip_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """Check if an IP address is in a blocked range for SSRF prevention."""
