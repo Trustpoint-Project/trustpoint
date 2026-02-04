@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import io
+import os
 import re
 import tarfile
 import zipfile
@@ -33,6 +34,43 @@ _LOG_FILENAME_RE = re.compile(r'^trustpoint\.log(?:\.\d+)?$')
 _CONTROL_CHAR_THRESHOLD = 32
 
 
+def _secure_log_filename(filename: str) -> str:
+    """Secure a log filename by removing any potentially dangerous characters.
+
+    This is a defense-in-depth measure inspired by werkzeug's secure_filename.
+    It removes path separators and other special characters before the filename
+    is validated against the allowlist pattern.
+
+    Args:
+        filename: The filename to secure
+
+    Returns:
+        The secured filename with dangerous characters removed
+
+    Raises:
+        Http404: If the filename is invalid
+    """
+    if not isinstance(filename, str) or not filename:
+        exc_msg = f'Invalid filename: {filename}'
+        raise Http404(exc_msg)
+
+    if '\x00' in filename or any(ord(c) < _CONTROL_CHAR_THRESHOLD for c in filename):
+        exc_msg = f'Invalid filename: {filename}'
+        raise Http404(exc_msg)
+
+    for sep in (os.sep, os.path.altsep, '/', '\\'):
+        if sep:
+            filename = filename.replace(sep, '')
+
+    filename = filename.replace('..', '').replace('~', '').replace(':', '')
+
+    if not filename:
+        exc_msg = 'Invalid filename after sanitization'
+        raise Http404(exc_msg)
+
+    return filename
+
+
 def _validate_log_filename(filename: str) -> Path:
     """Validate a log filename and return the resolved path if valid.
 
@@ -45,28 +83,23 @@ def _validate_log_filename(filename: str) -> Path:
     Raises:
         Http404: If the filename is invalid or path traversal is detected
     """
-    if not isinstance(filename, str) or not filename:
+    secured_filename = _secure_log_filename(filename)
+
+    if not _LOG_FILENAME_RE.match(secured_filename):
         exc_msg = f'Invalid filename: {filename}'
         raise Http404(exc_msg)
 
-    if '\x00' in filename or any(ord(c) < _CONTROL_CHAR_THRESHOLD for c in filename):
-        exc_msg = f'Invalid filename: {filename}'
-        raise Http404(exc_msg)
-
-    if not _LOG_FILENAME_RE.match(filename):
-        exc_msg = f'Invalid filename: {filename}'
-        raise Http404(exc_msg)
-
-    log_file_path = LOG_DIR_PATH / Path(filename)
+    log_file_path = LOG_DIR_PATH / secured_filename
 
     resolved_path = log_file_path.resolve()
+    resolved_log_dir = LOG_DIR_PATH.resolve()
     try:
-        if not resolved_path.is_relative_to(LOG_DIR_PATH):
+        if not resolved_path.is_relative_to(resolved_log_dir):
             exc_msg = f'Access denied for file: {filename}'
             raise Http404(exc_msg)
     except AttributeError:
         try:
-            resolved_path.relative_to(LOG_DIR_PATH)
+            resolved_path.relative_to(resolved_log_dir)
         except ValueError as exc:
             exc_msg = f'Access denied for file: {filename}'
             raise Http404(exc_msg) from exc
