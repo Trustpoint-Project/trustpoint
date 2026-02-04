@@ -74,6 +74,10 @@ def _secure_log_filename(filename: str) -> str:
 def _validate_log_filename(filename: str) -> Path:
     """Validate a log filename and return the resolved path if valid.
 
+    This function uses an allowlist approach: it first validates the filename format,
+    then searches the log directory for an exact match. This ensures we never use
+    user-provided input directly in path operations.
+
     Args:
         filename: The filename to validate
 
@@ -81,7 +85,7 @@ def _validate_log_filename(filename: str) -> Path:
         The resolved Path object if valid
 
     Raises:
-        Http404: If the filename is invalid or path traversal is detected
+        Http404: If the filename is invalid or not found
     """
     secured_filename = _secure_log_filename(filename)
 
@@ -89,27 +93,14 @@ def _validate_log_filename(filename: str) -> Path:
         exc_msg = 'Invalid filename.'
         raise Http404(exc_msg)
 
-
     resolved_log_dir = LOG_DIR_PATH.resolve()
-    log_file_path = resolved_log_dir / secured_filename
 
-    resolved_path = log_file_path.resolve()
-    try:
-        if not resolved_path.is_relative_to(resolved_log_dir):
-            exc_msg = 'Access denied for file.'
-            raise Http404(exc_msg)
-    except AttributeError:
-        try:
-            resolved_path.relative_to(resolved_log_dir)
-        except ValueError as exc:
-            exc_msg = 'Access denied for file.'
-            raise Http404(exc_msg) from exc
+    for file_path in resolved_log_dir.iterdir():
+        if file_path.is_file() and file_path.name == secured_filename:
+            return file_path
 
-    if not resolved_path.exists() or not resolved_path.is_file():
-        exc_msg = 'Log file not found.'
-        raise Http404(exc_msg)
-
-    return resolved_path
+    exc_msg = 'Log file not found.'
+    raise Http404(exc_msg)
 
 
 class IndexView(RedirectView):
