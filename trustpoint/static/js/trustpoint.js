@@ -63,10 +63,16 @@ function redirectAddIssuingCa() {
         const selectedRemote = document.querySelector('input[name="remote-issuing-ca"]:checked');
         url = selectedRemote ? selectedRemote.getAttribute('data-url') : null;
     }
-    if (url) {
+    if (url && typeof url === 'string') {
         try {
+            if (!url.startsWith('/')) {
+                return; 
+            }
+            
             const safeUrl = new URL(url, window.location.origin);
-            if (safeUrl.origin === window.location.origin) {
+            
+            if (safeUrl.origin === window.location.origin && 
+                (safeUrl.protocol === 'http:' || safeUrl.protocol === 'https:')) {
                 window.location.href = safeUrl.pathname + safeUrl.search + safeUrl.hash;
             }
         } catch (e) {
