@@ -18,7 +18,7 @@ from devices.models import (
     OnboardingProtocol,
 )
 from pki.util.idevid import IDevIDAuthenticator
-from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext
+from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext, CmpRevocationRequestContext
 from trustpoint.logger import LoggerMixin
 
 from .base import AuthenticationComponent, ClientCertificateAuthentication, CompositeAuthentication
@@ -608,8 +608,8 @@ class CmpSignatureBasedRevocationAuthentication(CmpAuthenticationBase):
 
     def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate using CMP signature-based protection for revocation requests."""
-        if not isinstance(context, CmpCertificateRequestContext):
-            exc_msg = 'CmpSignatureBasedRevocationAuthentication requires a CmpCertificateRequestContext.'
+        if not isinstance(context, CmpRevocationRequestContext):
+            exc_msg = 'CmpSignatureBasedRevocationAuthentication requires a CmpRevocationRequestContext.'
             raise TypeError(exc_msg)
 
         if not self._should_authenticate(context):
@@ -620,7 +620,7 @@ class CmpSignatureBasedRevocationAuthentication(CmpAuthenticationBase):
         device = self._authenticate_device(context)
         self._verify_protection_and_finalize(context, cmp_signer_cert, device)
 
-    def _should_authenticate(self, context: CmpCertificateRequestContext) -> bool:
+    def _should_authenticate(self, context: CmpRevocationRequestContext) -> bool:
         """Check if this authentication method should be applied."""
         if context.protocol != 'cmp':
             return False
@@ -640,7 +640,7 @@ class CmpSignatureBasedRevocationAuthentication(CmpAuthenticationBase):
 
         return True
 
-    def _authenticate_device(self, context: CmpCertificateRequestContext) -> DeviceModel:
+    def _authenticate_device(self, context: CmpRevocationRequestContext) -> DeviceModel:
         """Authenticate the device using the CMP signer certificate."""
         cmp_signer_cert = context.client_certificate
         if not cmp_signer_cert:

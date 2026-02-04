@@ -7,7 +7,7 @@ from typing import Any, Never, get_args
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
 from cryptography.hazmat.primitives.serialization import load_der_public_key
-from cryptography.x509.oid import ExtensionOID
+from cryptography.x509.oid import ExtensionOID, CRLEntryExtensionOID
 from pyasn1.codec.ber import decoder as ber_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import decoder as der_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import encoder as der_encoder
@@ -543,20 +543,16 @@ class CmpRevocationBodyValidation(LoggerMixin):
 
         cert_details = rev_req_msg['certDetails']
 
-        from pyasn1.codec.native import encoder as native_encoder
-        import json
-        py_dict = native_encoder.encode(rev_req_msg)
-        self.logger.warning(json.dumps(py_dict, indent=4, default=str))
-
         if cert_details['serialNumber'].hasValue():
-            context.cert_serial_number = int(cert_details['serialNumber'])
+            sn = int(cert_details['serialNumber'])
+            # uppercase hex without '0x' prefix
+            context.cert_serial_number = format(sn, 'X')
         else:
             self._raise_value_error('serialNumber must be present in certDetails for revocation request.')
 
         if rev_req_msg['crlEntryDetails'].hasValue():
             crl_entry_details = rev_req_msg['crlEntryDetails']
-            if crl_entry_details[0].hasValue():
-                context.revocation_reason = x509.ReasonFlags(crl_entry_details[0]['extnValue'])
+            if crl_entry_details[0].hasValue() and crl_entry_details[0]['extnID'] == CRLEntryExtensionOID.CRL_REASON.dotted_string:
                 inner_bytes = crl_entry_details[0]['extnValue'].asOctets()
                 reason_code, _ = der_decoder.decode(inner_bytes, asn1Spec=rfc5280.CRLReason())
                 context.revocation_reason = x509.ReasonFlags(int(reason_code))

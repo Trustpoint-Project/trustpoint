@@ -52,7 +52,8 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
             signer_credential = IssuedCredentialModel.get_credential_for_certificate(context.client_certificate)
             if signer_credential.credential.certificate.serial_number == str(context.cert_serial_number):
                 context.credential_to_revoke = signer_credential
-                self.logger.debug('Revocation authorization successful: Self-revocation')
+                self.logger.debug('Revocation authorized: Self-revocation of credential %s',
+                                  context.credential_to_revoke.common_name)
                 return
             if signer_credential.is_valid_domain_credential():
                 signer_device = signer_credential.device
@@ -69,7 +70,9 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
                 context.credential_to_revoke = IssuedCredentialModel.get_credential_for_serial_number(
                     context.domain, context.device, context.cert_serial_number
                 )
-                self.logger.debug('Revocation authorization successful: Domain credential revocation')
+                self.logger.info('Revocation authorized: Domain credential revocation of credential %s',
+                                 context.credential_to_revoke.common_name)
+                return
             error_message = (
                 'Unauthorized revocation request: Signer certificate does not match '
                 'the certificate to be revoked or the device domain credential.'
@@ -133,7 +136,7 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
         elif context.operation == 'certification' and body_type == 'cr':
             self.logger.info('CMP body type validation successful: CR body extracted')
         elif context.operation == 'revocation' and body_type == 'rr':
-
+            CmpRevocationAuthorization().authorize(context)
             self.logger.info('CMP body type validation successful: RR body extracted')
         else:
             err_msg = f'Expected CMP {context.operation} body, but got CMP {body_type.upper()} body.'

@@ -18,6 +18,7 @@ from devices.models import OnboardingStatus
 from request.message_responder.base import AbstractMessageResponder
 from request.operation_processor import LocalCaCmpSignatureProcessor
 from request.request_context import CmpBaseRequestContext, CmpCertificateRequestContext, CmpRevocationRequestContext
+from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from pki.models import CredentialModel
@@ -27,7 +28,7 @@ CMP_MESSAGE_VERSION = 2
 SENDER_NONCE_LENGTH = 16
 
 
-class CmpMessageResponder(AbstractMessageResponder):
+class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
     """Builds response to CMP requests."""
 
     @staticmethod
@@ -41,11 +42,13 @@ class CmpMessageResponder(AbstractMessageResponder):
             if context.operation == 'certification':
                 responder = CmpCertificationResponder()
                 return responder.build_response(context)
+        elif isinstance(context, CmpRevocationRequestContext):
             if context.operation == 'revocation':
                 responder = CmpRevocationResponder()
                 return responder.build_response(context)
 
         exc_msg = 'No suitable responder found for this CMP message.'
+        CmpMessageResponder.logger.warning(exc_msg)
         context.http_response_status = 500
         context.http_response_content = exc_msg
         return CmpErrorMessageResponder().build_response(context)
@@ -448,7 +451,7 @@ class CmpRevocationResponder(CmpMessageResponder):
 
         rp_body = rfc4210.PKIBody()
         rp_body['rp'] = rfc4210.RevRepContent().subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 3)
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 12)
         )
         # rp_body['rp']['caPubs'] = univ.SequenceOf().subtype(
         #     sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX),
@@ -461,7 +464,7 @@ class CmpRevocationResponder(CmpMessageResponder):
 
         pki_status_info = rfc4210.PKIStatusInfo()
         pki_status_info['status'] = 0
-        rp_body['rp']['status'] = pki_status_info
+        rp_body['rp']['status'].append(pki_status_info)
 
         # cmp_cert = rfc4210.CMPCertificate().subtype(
         #     explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
