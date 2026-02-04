@@ -16,5 +16,5 @@ export function isDotPath(s) {
   if (typeof s !== 'string' || !s) return false;
   for (const ch of s) if (!SEGMENT_CHARS.has(ch)) return false;
   const parts = s.split('.');
-  return parts.every(p => p && (/[A-Za-z_]/.test(p[0])) && (/^[A-Za-z0-9_]+$/.test(p.replaceAll('_','_'))));
+  return parts.every(p => p && (/[A-Za-z_]/.test(p[0])) && (/^[A-Za-z0-9_]+$/.test(p)));
 }
