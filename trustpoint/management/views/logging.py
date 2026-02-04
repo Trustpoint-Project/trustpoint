@@ -8,7 +8,6 @@ import os
 import re
 import tarfile
 import zipfile
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from django.http import Http404, HttpResponse
@@ -24,6 +23,7 @@ from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
 from trustpoint.views.base import SortableTableFromListMixin
 
 if TYPE_CHECKING:
+    from pathlib import Path
     from typing import Any
 
     from django.http import HttpRequest
