@@ -57,12 +57,21 @@ function resetIssuingCaRadios() {
 function redirectAddIssuingCa() {
     let url;
     if (localIssuingCaRadio.checked) {
-        url = document.querySelector('input[name="local-issuing-ca"]:checked').value;
+        const selectedLocal = document.querySelector('input[name="local-issuing-ca"]:checked');
+        url = selectedLocal ? selectedLocal.value : null;
     } else if (remoteIssuingCaRadio.checked) {
-        url = document.querySelector('input[name="remote-issuing-ca"]:checked').value;
+        const selectedRemote = document.querySelector('input[name="remote-issuing-ca"]:checked');
+        url = selectedRemote ? selectedRemote.value : null;
     }
-    if (url && url.startsWith('/')) {
-        window.location.href = url;
+    if (url) {
+        try {
+            const safeUrl = new URL(url, window.location.origin);
+            if (safeUrl.origin === window.location.origin) {
+                window.location.href = safeUrl.pathname + safeUrl.search + safeUrl.hash;
+            }
+        } catch (e) {
+            // Ignore invalid URLs
+        }
     }
 }
 
