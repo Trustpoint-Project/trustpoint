@@ -81,12 +81,32 @@ const checkboxColumn = document.querySelector('#checkbox-column > input');
 const checkboxes = document.querySelectorAll('.row_checkbox > input');
 const tableSelectButtons = document.querySelectorAll('.tp-table-select-btn');
 
+function isSafeRelativePath(path) {
+    if (typeof path !== 'string') {
+        return false;
+    }
+    // Only allow same-origin relative paths starting with a single "/"
+    if (!path.startsWith('/') || path.startsWith('//')) {
+        return false;
+    }
+    // Disallow schemes such as "javascript:", "http:", etc. before the first "/"
+    const firstSlashIndex = path.indexOf('/', 1);
+    const prefix = firstSlashIndex === -1 ? path : path.slice(0, firstSlashIndex);
+    if (prefix.includes(':')) {
+        return false;
+    }
+    return true;
+}
 
 checkboxColumn?.addEventListener('change', toggleAllCheckboxes);
 if (checkboxColumn) {
     tableSelectButtons.forEach(function(el) {
         el.addEventListener('click', function(event) {
-            let url_path = event.target.getAttribute('data-tp-url') + '/';
+            const rawUrl = event.target.getAttribute('data-tp-url');
+            if (!isSafeRelativePath(rawUrl)) {
+                return;
+            }
+            let url_path = rawUrl + '/';
             checkboxes.forEach(function(el) {
                 if (el.checked && /^\d+$/.test(el.value)) {
                     url_path += el.value + '/';
