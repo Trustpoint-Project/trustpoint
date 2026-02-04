@@ -90,10 +90,12 @@ def _validate_log_filename(filename: str) -> Path:
         exc_msg = 'Invalid filename.'
         raise Http404(exc_msg)
 
-    log_file_path = LOG_DIR_PATH / secured_filename
+    # Always resolve the log directory first to ensure we are working with an
+    # absolute, normalized base path before combining it with user input.
+    resolved_log_dir = LOG_DIR_PATH.resolve()
+    log_file_path = resolved_log_dir / secured_filename
 
     resolved_path = log_file_path.resolve()
-    resolved_log_dir = LOG_DIR_PATH.resolve()
     try:
         # Python 3.9+ has Path.is_relative_to; fall back to relative_to otherwise.
         if not resolved_path.is_relative_to(resolved_log_dir):
