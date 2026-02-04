@@ -77,9 +77,10 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
         try:
             domain, _idevid_subj_sn = IDevIDAuthenticator.authenticate_idevid_from_x509_no_device(
                 client_cert, intermediary_cas, domain=None)
-        except IDevIDAuthenticationError as e:
+        except IDevIDAuthenticationError:
+            self.logger.exception('IDevID authentication failed.')
             return LoggedHttpResponse(
-                f'IDevID authentication failed: {e}', status = 403
+                'IDevID authentication failed.', status = 403
             )
 
         owner_cred = self.get_owner_credential(client_cert)

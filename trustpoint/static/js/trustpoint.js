@@ -92,7 +92,9 @@ if (checkboxColumn) {
                     url_path += el.value + '/';
                 }
             });
-            window.location.href = url_path;
+            if (url_path.startsWith('/')) {
+                window.location.href = url_path;
+            }
         })
     });
 }

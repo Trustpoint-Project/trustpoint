@@ -15,6 +15,7 @@ from django.db.models import ProtectedError
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
@@ -340,7 +341,7 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[CaModel]):
         else:
             messages.error(request, _('Failed to generate CRL for Issuing CA %s.') % issuing_ca.unique_name)
         next_url = request.GET.get('next')
-        if next_url:
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts=[request.get_host()]):
             return redirect(next_url)
         return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
 
@@ -392,7 +393,7 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
         return response
 
 
-class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
+class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
     """ViewSet for managing Issuing CA instances via REST API."""
 
     queryset = CaModel.objects.exclude(
@@ -559,9 +560,10 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
                 crl_der = crl_obj.public_bytes(encoding=serialization.Encoding.DER)
                 response = HttpResponse(crl_der, content_type='application/pkix-crl')
                 response['Content-Disposition'] = f'attachment; filename="{ca.unique_name}.crl"'
-            except (ValueError, TypeError) as exc:
+            except (ValueError, TypeError):
+                self.logger.exception('Failed to convert CRL to DER format')
                 return Response(
-                    {'error': f'Failed to convert CRL to DER format: {exc!s}'},
+                    {'error': 'Failed to convert CRL to DER format'},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 
