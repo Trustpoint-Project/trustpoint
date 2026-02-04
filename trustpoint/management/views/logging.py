@@ -86,7 +86,8 @@ def _validate_log_filename(filename: str) -> Path:
     secured_filename = _secure_log_filename(filename)
 
     if not _LOG_FILENAME_RE.match(secured_filename):
-        exc_msg = f'Invalid filename: {filename}'
+        # Do not echo potentially unsafe user input; use a generic message.
+        exc_msg = 'Invalid filename.'
         raise Http404(exc_msg)
 
     log_file_path = LOG_DIR_PATH / secured_filename
@@ -94,14 +95,15 @@ def _validate_log_filename(filename: str) -> Path:
     resolved_path = log_file_path.resolve()
     resolved_log_dir = LOG_DIR_PATH.resolve()
     try:
+        # Python 3.9+ has Path.is_relative_to; fall back to relative_to otherwise.
         if not resolved_path.is_relative_to(resolved_log_dir):
-            exc_msg = f'Access denied for file: {filename}'
+            exc_msg = 'Access denied for file.'
             raise Http404(exc_msg)
     except AttributeError:
         try:
             resolved_path.relative_to(resolved_log_dir)
         except ValueError as exc:
-            exc_msg = f'Access denied for file: {filename}'
+            exc_msg = 'Access denied for file.'
             raise Http404(exc_msg) from exc
 
     if not resolved_path.exists() or not resolved_path.is_file():
@@ -237,7 +239,8 @@ class LoggingFilesDownloadView(PageContextMixin, LoggerMixin, TemplateView):
         response = HttpResponse(
             resolved_path.read_text(encoding='utf-8', errors='backslashreplace'), content_type='text/plain'
         )
-        response['Content-Disposition'] = f'attachment; filename={filename}'
+        # Use the validated filename from the resolved path in the response header.
+        response['Content-Disposition'] = f'attachment; filename={resolved_path.name}'
         return response
 
 
