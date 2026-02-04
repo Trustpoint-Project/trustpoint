@@ -37,10 +37,6 @@ _CONTROL_CHAR_THRESHOLD = 32
 def _secure_log_filename(filename: str) -> str:
     """Secure a log filename by removing any potentially dangerous characters.
 
-    This is a defense-in-depth measure inspired by werkzeug's secure_filename.
-    It removes path separators and other special characters before the filename
-    is validated against the allowlist pattern.
-
     Args:
         filename: The filename to secure
 
@@ -73,10 +69,6 @@ def _secure_log_filename(filename: str) -> str:
 
 def _validate_log_filename(filename: str) -> Path:
     """Validate a log filename and return the resolved path if valid.
-
-    This function uses an allowlist approach: it first validates the filename format,
-    then searches the log directory for an exact match. This ensures we never use
-    user-provided input directly in path operations.
 
     Args:
         filename: The filename to validate
