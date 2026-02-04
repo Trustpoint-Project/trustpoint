@@ -86,18 +86,15 @@ def _validate_log_filename(filename: str) -> Path:
     secured_filename = _secure_log_filename(filename)
 
     if not _LOG_FILENAME_RE.match(secured_filename):
-        # Do not echo potentially unsafe user input; use a generic message.
         exc_msg = 'Invalid filename.'
         raise Http404(exc_msg)
 
-    # Always resolve the log directory first to ensure we are working with an
-    # absolute, normalized base path before combining it with user input.
+
     resolved_log_dir = LOG_DIR_PATH.resolve()
     log_file_path = resolved_log_dir / secured_filename
 
     resolved_path = log_file_path.resolve()
     try:
-        # Python 3.9+ has Path.is_relative_to; fall back to relative_to otherwise.
         if not resolved_path.is_relative_to(resolved_log_dir):
             exc_msg = 'Access denied for file.'
             raise Http404(exc_msg)

@@ -222,7 +222,12 @@ class LoggingFilesDetailsViewTest(TestCase):
         mock_file.is_file.return_value = True
         mock_file.read_text.return_value = "Log file content here"
         mock_file.resolve.return_value = mock_file
-        mock_log_dir.__truediv__ = Mock(return_value=mock_file)
+        mock_file.is_relative_to.return_value = True
+        
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.__truediv__ = Mock(return_value=mock_file)
+        
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         self.view.kwargs = {'filename': 'trustpoint.log'}
         context = self.view.get_context_data()
@@ -265,7 +270,14 @@ class LoggingFilesDownloadViewTest(TestCase):
         mock_file.exists.return_value = True
         mock_file.is_file.return_value = True
         mock_file.read_text.return_value = "Log content"
-        mock_log_dir.__truediv__ = Mock(return_value=mock_file)
+        mock_file.resolve.return_value = mock_file
+        mock_file.is_relative_to.return_value = True
+        mock_file.name = 'trustpoint.log'
+        
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.__truediv__ = Mock(return_value=mock_file)
+        
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         response = self.view.get(self.view.request, filename='trustpoint.log')
 
@@ -310,7 +322,12 @@ class LoggingFilesDownloadMultipleViewTest(TestCase):
         mock_file = Mock(spec=Path)
         mock_file.read_bytes.return_value = b'log content'
         mock_file.resolve.return_value = mock_file
-        mock_log_dir.__truediv__ = Mock(return_value=mock_file)
+        mock_file.is_relative_to.return_value = True
+        
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.__truediv__ = Mock(return_value=mock_file)
+        
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         response = self.view.get(
             self.view.request,
@@ -334,7 +351,12 @@ class LoggingFilesDownloadMultipleViewTest(TestCase):
         mock_file = Mock(spec=Path)
         mock_file.read_bytes.return_value = b'log content'
         mock_file.resolve.return_value = mock_file
-        mock_log_dir.__truediv__ = Mock(return_value=mock_file)
+        mock_file.is_relative_to.return_value = True
+        
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.__truediv__ = Mock(return_value=mock_file)
+        
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         response = self.view.get(
             self.view.request,
@@ -401,7 +423,12 @@ class LoggingFilesDownloadMultipleViewTest(TestCase):
         mock_file = Mock(spec=Path)
         mock_file.read_bytes.return_value = b'content'
         mock_file.resolve.return_value = mock_file
-        mock_log_dir.__truediv__ = Mock(return_value=mock_file)
+        mock_file.is_relative_to.return_value = True
+        
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.__truediv__ = Mock(return_value=mock_file)
+        
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         response = self.view.get(
             self.view.request,
@@ -420,7 +447,12 @@ class LoggingFilesDownloadMultipleViewTest(TestCase):
         mock_file = Mock(spec=Path)
         mock_file.read_bytes.return_value = b'content'
         mock_file.resolve.return_value = mock_file
-        mock_log_dir.__truediv__ = Mock(return_value=mock_file)
+        mock_file.is_relative_to.return_value = True
+        
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.__truediv__ = Mock(return_value=mock_file)
+        
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         response = self.view.get(
             self.view.request,
