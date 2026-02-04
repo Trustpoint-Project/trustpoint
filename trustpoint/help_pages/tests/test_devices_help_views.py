@@ -18,6 +18,9 @@ from ..devices_help_views import (
     NoOnboardingEstUsernamePasswordStrategy,
     OnboardingDomainCredentialCmpSharedSecretStrategy,
     OnboardingDomainCredentialEstUsernamePasswordStrategy,
+    OpcUaGdsPushApplicationCertificateHelpView,
+    OpcUaGdsPushOnboardingHelpView,
+    OpcUaGdsPushOnboardingStrategy,
 )
 from ..help_section import ValueRenderType
 
@@ -401,3 +404,228 @@ class DeviceApplicationCertificateWithEstDomainCredentialHelpViewTests(TestCase)
         assert view.model == DeviceModel
         assert view.template_name == 'help/help_page.html'
         assert view.page_category == 'devices'
+
+
+class OpcUaGdsPushOnboardingStrategyTests(TestCase):
+    """Test cases for OpcUaGdsPushOnboardingStrategy."""
+
+    def setUp(self) -> None:
+        """Set up test fixtures."""
+        self.strategy = OpcUaGdsPushOnboardingStrategy()
+
+    @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
+    @patch('help_pages.devices_help_views.reverse')
+    def test_build_sections_with_domain_credential(
+        self, mock_reverse: Mock, mock_filter: Mock
+    ) -> None:
+        """Test build_sections when device has domain credential."""
+        mock_filter.return_value.exists.return_value = True
+
+        mock_reverse.side_effect = lambda name, kwargs: f'/{name}/{kwargs["pk"]}/'
+
+        mock_device = Mock()
+        mock_device.pk = 123
+        mock_device.domain = Mock()
+        mock_device.domain.issuing_ca = None  # No CA configured
+        mock_onboarding = Mock()
+        mock_device.onboarding_config = mock_onboarding
+
+        help_context = Mock()
+        help_context.get_device_or_http_404.return_value = mock_device
+        help_context.domain_unique_name = 'test-domain'
+        help_context.domain.public_key_info = 'RSA 2048'
+
+        sections, heading = self.strategy.build_sections(help_context)
+
+        assert len(sections) == 4  # summary, ca_hierarchy, download, actions
+        assert sections[0].heading == 'Summary'
+        assert sections[1].heading == 'CA Certificates'  # No CA configured
+        assert sections[2].heading == 'Download Trust Bundle'
+        assert sections[3].heading == 'Available Actions'
+        assert 'OPC UA GDS Push' in sections[0].rows[0].value
+        assert heading == 'Help - OPC UA GDS Push Certificate Management'
+
+    @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
+    @patch('help_pages.devices_help_views.reverse')
+    def test_build_sections_without_domain_credential(
+        self, mock_reverse: Mock, mock_filter: Mock
+    ) -> None:
+        """Test build_sections when device does not have domain credential."""
+        mock_filter.return_value.exists.return_value = False
+
+        mock_reverse.side_effect = lambda name, kwargs: f'/{name}/{kwargs["pk"]}/'
+
+        mock_device = Mock()
+        mock_device.pk = 123
+        mock_device.domain = Mock()
+        mock_device.domain.issuing_ca = None
+        mock_onboarding = Mock()
+        mock_device.onboarding_config = mock_onboarding
+
+        help_context = Mock()
+        help_context.get_device_or_http_404.return_value = mock_device
+        help_context.domain_unique_name = 'test-domain'
+        help_context.domain.public_key_info = 'RSA 2048'
+
+        sections, heading = self.strategy.build_sections(help_context)
+
+        assert len(sections) == 4
+        assert sections[3].heading == 'Available Actions'
+        # Should have domain credential required message
+        assert 'Domain Credential Required' in sections[3].rows[1].key
+
+    def test_build_sections_no_onboarding_config(self) -> None:
+        """Test build_sections raises Http404 when onboarding_config is missing."""
+        mock_device = Mock()
+        mock_device.onboarding_config = None
+
+        help_context = Mock()
+        help_context.get_device_or_http_404.return_value = mock_device
+
+        with self.assertRaises(Http404) as cm:
+            self.strategy.build_sections(help_context)
+
+        assert 'Onboarding is not configured for this device' in str(cm.exception)
+
+    @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
+    @patch('help_pages.devices_help_views.reverse')
+    @patch('help_pages.devices_help_views.x509')
+    def test_build_ca_hierarchy_section_with_ca_and_crl(
+        self, mock_x509: Mock, mock_reverse: Mock, mock_filter: Mock
+    ) -> None:
+        """Test _build_ca_hierarchy_section with CA and valid CRL."""
+        mock_filter.return_value.exists.return_value = True
+
+        # Mock CA chain
+        mock_ca = Mock()
+        mock_ca.unique_name = 'test-ca'
+        mock_ca.crl_pem = 'valid-crl-pem'
+        mock_ca.pk = 456
+
+        mock_cert_model = Mock()
+        mock_cert_serializer = Mock()
+        mock_cert_crypto = Mock()
+        mock_common_name = Mock()
+        mock_common_name.value = b'Test CA'
+        mock_cert_crypto.subject.get_attributes_for_oid.return_value = [mock_common_name]
+
+        mock_cert_serializer.as_crypto.return_value = mock_cert_crypto
+        mock_cert_model.get_certificate_serializer.return_value = mock_cert_serializer
+        mock_ca.ca_certificate_model = mock_cert_model
+
+        mock_active_crl = Mock()
+        mock_active_crl.pk = 789
+        mock_ca.get_active_crl.return_value = mock_active_crl
+
+        mock_reverse.side_effect = lambda name, kwargs: f'/{name}/{kwargs["pk"]}/'
+
+        mock_device = Mock()
+        mock_device.domain = Mock()
+        mock_device.domain.issuing_ca = Mock()
+        mock_device.domain.issuing_ca.get_ca_chain_from_truststore.return_value = [mock_ca]
+
+        mock_x509.load_pem_x509_crl.return_value = Mock()  # Valid CRL
+
+        section = self.strategy._build_ca_hierarchy_section(mock_device)
+
+        assert section.heading == 'CA Hierarchy'
+        assert len(section.rows) == 1  # Only certificate chain row
+        assert 'Certificate Chain' in section.rows[0].key
+        assert 'Test CA' in section.rows[0].value
+        assert 'CRL' in section.rows[0].value  # CRL link is present
+        assert 'OK' in section.rows[0].value
+
+    @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
+    @patch('help_pages.devices_help_views.reverse')
+    @patch('help_pages.devices_help_views.x509')
+    def test_build_ca_hierarchy_section_missing_crl(
+        self, mock_x509: Mock, mock_reverse: Mock, mock_filter: Mock
+    ) -> None:
+        """Test _build_ca_hierarchy_section with missing CRL."""
+        mock_filter.return_value.exists.return_value = True
+
+        mock_ca = Mock()
+        mock_ca.unique_name = 'test-ca'
+        mock_ca.crl_pem = None  # Missing CRL
+        mock_ca.pk = 456
+
+        mock_cert_model = Mock()
+        mock_cert_serializer = Mock()
+        mock_cert_crypto = Mock()
+        mock_common_name = Mock()
+        mock_common_name.value = b'Test CA'
+        mock_cert_crypto.subject.get_attributes_for_oid.return_value = [mock_common_name]
+
+        mock_cert_serializer.as_crypto.return_value = mock_cert_crypto
+        mock_cert_model.get_certificate_serializer.return_value = mock_cert_serializer
+        mock_ca.ca_certificate_model = mock_cert_model
+
+        mock_reverse.side_effect = lambda name, kwargs: f'/{name}/{kwargs["pk"]}/'
+
+        mock_device = Mock()
+        mock_device.domain = Mock()
+        mock_device.domain.issuing_ca = Mock()
+        mock_device.domain.issuing_ca.get_ca_chain_from_truststore.return_value = [mock_ca]
+
+        section = self.strategy._build_ca_hierarchy_section(mock_device)
+
+        assert section.heading == 'CA Hierarchy'
+        assert len(section.rows) == 2  # Certificate chain + warning
+        assert 'Warning' in section.rows[1].key
+        assert 'CRL Missing' in section.rows[1].value
+
+    def test_build_ca_hierarchy_section_no_ca(self) -> None:
+        """Test _build_ca_hierarchy_section when no CA is configured."""
+        mock_device = Mock()
+        mock_device.domain = None
+
+        section = self.strategy._build_ca_hierarchy_section(mock_device)
+
+        assert section.heading == 'CA Certificates'
+        assert 'No CA Configured' in section.rows[0].key
+
+    @patch('help_pages.devices_help_views.reverse')
+    def test_build_download_section_with_ca(self, mock_reverse: Mock) -> None:
+        """Test _build_download_section when CA is configured."""
+        mock_reverse.return_value = '/download/123/'
+
+        mock_device = Mock()
+        mock_device.domain = Mock()
+        mock_device.domain.issuing_ca = Mock()
+        mock_device.domain.issuing_ca.pk = 123
+
+        section = self.strategy._build_download_section(mock_device)
+
+        assert section.heading == 'Download Trust Bundle'
+        assert 'Trust Bundle Download' in section.rows[0].key
+        assert 'btn btn-primary' in section.rows[0].value
+
+    def test_build_download_section_no_ca(self) -> None:
+        """Test _build_download_section when no CA is configured."""
+        mock_device = Mock()
+        mock_device.domain = None
+
+        section = self.strategy._build_download_section(mock_device)
+
+        assert section.heading == 'Download Trust Bundle'
+        assert 'No issuing CA configured' in section.rows[0].value
+
+
+class OpcUaGdsPushApplicationCertificateHelpViewTests(TestCase):
+    """Test cases for OpcUaGdsPushApplicationCertificateHelpView."""
+
+    def test_strategy_is_configured(self) -> None:
+        """Test that strategy is properly configured."""
+        view = OpcUaGdsPushApplicationCertificateHelpView()
+        assert isinstance(view.strategy, OpcUaGdsPushOnboardingStrategy)
+        assert view.page_name == 'devices'
+
+
+class OpcUaGdsPushOnboardingHelpViewTests(TestCase):
+    """Test cases for OpcUaGdsPushOnboardingHelpView."""
+
+    def test_strategy_is_configured(self) -> None:
+        """Test that strategy is properly configured."""
+        view = OpcUaGdsPushOnboardingHelpView()
+        assert isinstance(view.strategy, OpcUaGdsPushOnboardingStrategy)
+        assert view.page_name == 'devices'

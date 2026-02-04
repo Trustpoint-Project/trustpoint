@@ -83,12 +83,12 @@ def test_revoke_all_issued_certificates_and_crl(issuing_ca_instance: dict[str, A
         raise TypeError(msg)
 
     ee_cert, _ = CertificateGenerator.create_ee(
-        issuer_private_key=priv_key, issuer_cn=COMMON_NAME, subject_name='subject_cn'
+        issuer_private_key=priv_key, issuer_name=cert.issuer, subject_name='subject_cn'
     )
     CertificateModel.save_certificate(ee_cert)
 
     ee_cert2, _ = CertificateGenerator.create_ee(
-        issuer_private_key=priv_key, issuer_cn=COMMON_NAME, subject_name='subject_cn2'
+        issuer_private_key=priv_key, issuer_name=cert.issuer, subject_name='subject_cn2'
     )
     CertificateModel.save_certificate(ee_cert2)
 

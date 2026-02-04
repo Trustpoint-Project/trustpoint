@@ -71,6 +71,33 @@ class TestBaseCredentialForm:
         assert 'common_name' in form.errors
         assert 'already exists' in str(form.errors['common_name'][0])
 
+    def test_clean_common_name_duplicate_revoked_allowed(
+        self, device_instance: dict[str, Any], tls_client_credential_instance: dict[str, Any]
+    ) -> None:
+        """Test that duplicate common_name is allowed if existing credential is revoked."""
+        device = device_instance['device']
+        domain = device_instance['domain']
+        issued_cred = tls_client_credential_instance['issued_credential']
+        
+        # Revoke the existing credential
+        issued_cred.revoke()
+        
+        initial_data = {
+            'pseudonym': 'test-pseudonym',
+            'domain_component': domain.unique_name,
+            'serial_number': device.serial_number,
+        }
+        
+        form_data = {
+            'common_name': issued_cred.common_name,  # Use existing common_name
+            'validity': 365,
+        }
+        
+        form = BaseCredentialForm(data=form_data, initial=initial_data, device=device)
+        
+        assert form.is_valid(), f'Form should be valid after revoking existing credential, errors: {form.errors}'
+        assert form.cleaned_data['common_name'] == issued_cred.common_name
+
     def test_clean_validity_positive(self, device_instance: dict[str, Any]) -> None:
         """Test that validity must be positive."""
         device = device_instance['device']

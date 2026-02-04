@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load static %}
+{% load csrf_token_filter %}
 
 {% block head %}
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
@@ -37,6 +38,10 @@
                                                     <use href="{% static 'img/icons.svg' %}#icon-copy"></use>
                                                 </svg>
                                             </button>
+                                    </div>
+                                {% elif row.value_render_type.value == ValueRenderType_HTML %}
+                                    <div class="no-copy-container" style="position:relative;">
+                                        {{ row.value|replace_csrf:request }}
                                     </div>
                                 {% elif row.value_render_type.value == ValueRenderType_PLAIN %}
                                     <div class="no-copy-container" style="position:relative;">
