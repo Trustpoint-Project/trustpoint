@@ -54,14 +54,6 @@ function resetIssuingCaRadios() {
     remoteIssuingCaCmpRadio.checked = false;
 }
 
-function redirectAddIssuingCa() {
-    if (localIssuingCaRadio.checked) {
-        window.location.href = document.querySelector('input[name="local-issuing-ca"]:checked').value;
-    } else if (remoteIssuingCaRadio.checked) {
-        window.location.href = document.querySelector('input[name="remote-issuing-ca"]:checked').value;
-    }
-}
-
 const p12FileForm = document.getElementById('p12-file-form');
 const p12FileRadio = document.getElementById('p12-file-radio');
 if (p12FileRadio) {
@@ -96,9 +88,8 @@ if (checkboxColumn) {
         el.addEventListener('click', function(event) {
             let url_path = event.target.getAttribute('data-tp-url') + '/';
             checkboxes.forEach(function(el) {
-                if (el.checked) {
+                if (el.checked && /^\d+$/.test(el.value)) {
                     url_path += el.value + '/';
-                    at_least_one_checked = true;
                 }
             });
             window.location.href = url_path;
