@@ -1,0 +1,51 @@
+{% extends "trustpoint/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4" style="max-width: 1200px;">
+  <h1 class="mb-3">Workflows v2 — YAML → IR (dev)</h1>
+
+  <form method="post" class="mb-4">
+    {% csrf_token %}
+
+    <div class="mb-3">
+      <label for="yaml_text" class="form-label">YAML</label>
+      <textarea
+        id="yaml_text"
+        name="yaml_text"
+        class="form-control"
+        rows="20"
+        style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"
+      >{{ yaml_text }}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Compile</button>
+  </form>
+
+  {% if error %}
+    <div class="alert alert-danger">
+      <strong>Compile error:</strong><br>
+      <pre style="white-space: pre-wrap; margin: 0;">{{ error }}</pre>
+    </div>
+  {% endif %}
+
+  {% if ir_json %}
+    <h2 class="h4 mt-4">IR</h2>
+    <pre class="p-3 bg-light border rounded"
+         style="white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">
+{{ ir_json|json_script:"ir_data" }}
+    </pre>
+
+    <script>
+      // Pretty-print IR JSON from json_script payload
+      (function () {
+        const el = document.getElementById("ir_data");
+        if (!el) return;
+        const obj = JSON.parse(el.textContent);
+        const pre = el.closest("pre");
+        if (pre) pre.textContent = JSON.stringify(obj, null, 2);
+      })();
+    </script>
+  {% endif %}
+</div>
+{% endblock %}

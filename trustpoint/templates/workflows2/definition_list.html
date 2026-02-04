@@ -1,0 +1,51 @@
+{% extends "trustpoint/base.html" %}
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      <h1 class="h4 mb-0">Workflows (v2)</h1>
+      <div class="text-muted small">YAML-first definitions compiled to IR on save.</div>
+    </div>
+    <a class="btn btn-primary" href="{% url 'workflows2:definitions_new' %}">New workflow</a>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Enabled</th>
+            <th class="text-muted">Created</th>
+            <th class="text-muted">IR hash</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for wf in definitions %}
+            <tr>
+              <td class="fw-semibold">{{ wf.name }}</td>
+              <td>
+                {% if wf.enabled %}
+                  <span class="badge text-bg-success">Enabled</span>
+                {% else %}
+                  <span class="badge text-bg-secondary">Disabled</span>
+                {% endif %}
+              </td>
+              <td class="text-muted">{{ wf.created_at }}</td>
+              <td class="text-muted"><code>{{ wf.ir_hash }}</code></td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'workflows2:definitions_edit' wf.id %}">Edit</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="text-muted p-4">No workflows yet.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
