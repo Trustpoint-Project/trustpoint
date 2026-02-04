@@ -56,7 +56,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         REMOTE_CMP = 5, _('Remote-CMP')
 
 
-    # Core CA attributes (from CaModel)
     unique_name = models.CharField(
         verbose_name=_('CA Name'),
         max_length=100,
@@ -156,15 +155,11 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             str: Human-readable string that represents this CaModel entry.
         """
-        if hasattr(self, 'ca') and self.ca:
-            return str(self.ca.unique_name)
-        pk_str = str(self.pk)
-        return f'CaModel(id={pk_str})'
+        return self.unique_name
 
     def __repr__(self) -> str:
         """Returns a string representation of the CaModel instance."""
-        unique_name = self.ca.unique_name if hasattr(self, 'ca') and self.ca else f'id={self.pk}'
-        return f'CaModel({unique_name})'
+        return f'CaModel({self.unique_name})'
 
     @property
     def is_issuing_ca(self) -> bool:
