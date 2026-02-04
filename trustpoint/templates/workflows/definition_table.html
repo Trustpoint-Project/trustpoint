@@ -166,7 +166,10 @@
 
       document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          form.action      = btn.getAttribute('data-delete-url');
+          const deleteUrl = btn.getAttribute('data-delete-url');
+          if (deleteUrl) {
+            form.setAttribute('action', deleteUrl);
+          }
           nameField.textContent = btn.getAttribute('data-wf-name');
           modal.show();
         });
