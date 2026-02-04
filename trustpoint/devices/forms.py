@@ -25,6 +25,7 @@ from devices.models import (
     OnboardingStatus,
     RemoteDeviceCredentialDownloadModel,
 )
+from devices.utils import validate_application_uri, validate_common_name_characters
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
@@ -114,13 +115,23 @@ class BaseCredentialForm(forms.Form):
     def clean_common_name(self) -> str:
         """Checks the common name."""
         common_name = cast('str', self.cleaned_data['common_name'])
-        existing_credentials = IssuedCredentialModel.objects.filter(common_name=common_name, device=self.device)
-        if any(cred.credential.is_valid_issued_credential()[0] for cred in existing_credentials):
-            err_msg = _('Credential with common name %s already exists for device %s.') % (
-                common_name,
-                self.device.common_name,
+
+        if not self.fields['common_name'].disabled:
+            validate_common_name_characters(common_name)
+            existing_credentials = IssuedCredentialModel.objects.filter(
+                common_name=common_name, device=self.device
             )
-            raise forms.ValidationError(err_msg)
+            for cred in existing_credentials:
+
+                if cred.credential.certificates.exclude(
+                    revoked_certificate__isnull=False
+                ).exists():
+                    err_msg = _('Credential with common name %s already exists for device %s.') % (
+                        common_name,
+                        self.device.common_name,
+                    )
+                    raise forms.ValidationError(err_msg)
+
         return common_name
 
     def clean_validity(self) -> int:
@@ -219,6 +230,8 @@ class ApplicationUriFormMixin(forms.Form):
         if not application_uri:
             err_msg = _('Application URI entry is required.')
             raise forms.ValidationError(err_msg)
+
+        validate_application_uri(application_uri)
 
         return application_uri
 
@@ -351,7 +364,8 @@ class NoOnboardingCreateForm(forms.Form):
         Returns:
             The device name if it passed the checks.
         """
-        common_name = str(self.cleaned_data.get('common_name'))
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
         if DeviceModel.objects.filter(common_name=common_name).exists():
             err_msg = _('Device with this common name already exists.')
             raise forms.ValidationError(err_msg)
@@ -366,9 +380,9 @@ class NoOnboardingCreateForm(forms.Form):
         Returns:
             _description_
         """
-        common_name = cast('str', self.cleaned_data.get('common_name'))
-        serial_number = cast('str', self.cleaned_data.get('serial_number'))
-        domain = cast('DomainModel | None', self.cleaned_data.get('domain'))
+        common_name = self.cleaned_data['common_name']
+        serial_number = self.cleaned_data.get('serial_number', '')
+        domain = self.cleaned_data.get('domain')
 
         no_onboarding_pki_protocols = [
             NoOnboardingPkiProtocol(int(protocol))
@@ -456,7 +470,8 @@ class OnboardingCreateForm(forms.Form):
         Returns:
             The device name if it passed the checks.
         """
-        common_name = str(self.cleaned_data.get('common_name'))
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
         if DeviceModel.objects.filter(common_name=common_name).exists():
             err_msg = _('Device with this common name already exists.')
             raise forms.ValidationError(err_msg)
@@ -471,19 +486,19 @@ class OnboardingCreateForm(forms.Form):
         Returns:
             _description_
         """
-        common_name = cast('str', self.cleaned_data.get('common_name'))
-        serial_number = cast('str', self.cleaned_data.get('serial_number'))
-        domain = cast('DomainModel | None', self.cleaned_data.get('domain'))
+        common_name = self.cleaned_data['common_name']
+        serial_number = self.cleaned_data.get('serial_number', '')
+        domain = self.cleaned_data.get('domain')
 
         try:
-            onboarding_protocol = OnboardingProtocol(int(cast('str', self.cleaned_data.get('onboarding_protocol'))))
+            onboarding_protocol = OnboardingProtocol(int(self.cleaned_data['onboarding_protocol']))
         except Exception as exception:
             err_msg = 'Got an invalid value for the onboarding protocol.'
             raise forms.ValidationError(err_msg) from exception
 
         onboarding_pki_protocols = [
             OnboardingPkiProtocol(int(protocol))
-            for protocol in cast('list[str]', self.cleaned_data.get('onboarding_pki_protocols'))
+            for protocol in self.cleaned_data['onboarding_pki_protocols']
         ]
         onboarding_config_model = OnboardingConfigModel(
             onboarding_status=OnboardingStatus.PENDING, onboarding_protocol=onboarding_protocol
@@ -662,6 +677,19 @@ class ClmDeviceModelOnboardingForm(forms.Form):
         )
 
         super().__init__(*args, **kwargs)
+
+    def clean_common_name(self) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
+        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
+            err_msg = _('Device with this common name already exists.')
+            raise forms.ValidationError(err_msg)
+        return common_name
 
     def save(self, onboarding_protocol: OnboardingProtocol) -> None:
         """Saves the changes to DB."""
@@ -863,6 +891,19 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
         )
 
         super().__init__(*args, **kwargs)
+
+    def clean_common_name(self) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
+        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
+            err_msg = _('Device with this common name already exists.')
+            raise forms.ValidationError(err_msg)
+        return common_name
 
     def save(self) -> None:
         """Saves the changes to DB."""
