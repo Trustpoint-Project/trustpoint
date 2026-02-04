@@ -106,14 +106,24 @@ if (checkboxColumn) {
             if (!isSafeRelativePath(rawUrl)) {
                 return;
             }
-            let url_path = rawUrl + '/';
+            
+            const checkedIds = [];
             checkboxes.forEach(function(el) {
                 if (el.checked && /^\d+$/.test(el.value)) {
-                    url_path += el.value + '/';
+                    checkedIds.push(el.value);
                 }
             });
-            if (url_path.startsWith('/')) {
-                window.location.href = url_path;
+            
+            try {
+                const url = new URL(rawUrl + '/', window.location.origin);
+                checkedIds.forEach(function(id) {
+                    url.pathname = url.pathname.replace(/\/$/, '') + '/' + encodeURIComponent(id);
+                });
+                url.pathname += '/';
+                
+                window.location.assign(url.pathname);
+            } catch (e) {
+                console.error('Invalid URL construction:', e);
             }
         })
     });
