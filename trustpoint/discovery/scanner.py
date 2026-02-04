@@ -11,7 +11,7 @@ class OTScanner:
     def __init__(self, timeout: float = 1.0, max_workers: int = 40):
         self.timeout = timeout
         self.max_workers = max_workers
-        self.stop_requested = Event() # Flag to stop the scan
+        self.stop_requested = Event() 
         self.target_ports = [80, 443, 4840, 1883, 8883, 502, 102, 44818]
         self.ssl_ports = [443, 8883]
 
@@ -30,7 +30,7 @@ class OTScanner:
             try:
                 name = socket.getfqdn(ip)
                 return name if name != ip else None
-            except:
+            except Exception: # Bot fix: Changed from bare 'except:'
                 return None
 
     def _get_ssl_info(self, ip: str, port: int) -> Dict:
@@ -49,8 +49,9 @@ class OTScanner:
                         "is_self_signed": (cert.issuer == cert.subject),
                         "issuer": cert.issuer.rfc4514_string(),
                         "subject": cert.subject.rfc4514_string(),
+                        "valid_until": str(cert.not_valid_after_utc)
                     }
-        except:
+        except Exception: # Bot fix: Changed from bare 'except:'
             return {"ssl_open": False}
 
     def _scan_host(self, ip: str) -> Optional[Dict]:
@@ -67,7 +68,7 @@ class OTScanner:
                         ssl_data = self._get_ssl_info(ip, port)
                         if ssl_data.get("ssl_open"):
                             result["ssl_info"] = ssl_data
-            except:
+            except (OSError, socket.timeout): # Bot fix: Specifically catch network errors
                 pass
         if not found: return None
         result["hostname"] = self._resolve_hostname(ip)
@@ -83,6 +84,9 @@ class OTScanner:
                 if self.stop_requested.is_set():
                     executor.shutdown(wait=False, cancel_futures=True)
                     break
-                data = future.result()
-                if data: results.append(data)
+                try:
+                    data = future.result()
+                    if data: results.append(data)
+                except Exception:
+                    pass
         return results
