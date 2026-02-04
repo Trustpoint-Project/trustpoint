@@ -658,7 +658,6 @@ class ClmDeviceModelOnboardingForm(forms.Form):
             Field('pki_protocol_est'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
-            HTML('<hr>'),
         )
 
         super().__init__(*args, **kwargs)
@@ -799,7 +798,6 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             Field('pki_protocol_opc_gds_push'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
-            HTML('<hr>'),
         )
 
         super().__init__(*args, **kwargs)
@@ -859,7 +857,6 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
             Field('pki_protocol_manual'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
-            HTML('<hr>'),
         )
 
         super().__init__(*args, **kwargs)
