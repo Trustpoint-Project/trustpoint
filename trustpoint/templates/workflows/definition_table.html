@@ -57,7 +57,7 @@
             <button
               type="button"
               class="btn btn-sm btn-outline-danger delete-btn"
-              data-delete-url="{% url 'workflows:definition_delete' wf.id %}"
+              data-wf-id="{{ wf.id }}"
               data-wf-name="{{ wf.name }}"
             >
               Delete
@@ -166,10 +166,12 @@
 
       document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-          const deleteUrl = btn.getAttribute('data-delete-url');
+          const wfId = btn.getAttribute('data-wf-id');
           const wfName = btn.getAttribute('data-wf-name');
           
-          if (deleteUrl && typeof deleteUrl === 'string' && deleteUrl.startsWith('/')) {
+          // Construct URL client-side to avoid DOM-based XSS
+          if (wfId && typeof wfId === 'string' && /^\d+$/.test(wfId)) {
+            const deleteUrl = `/workflows/definition/${wfId}/delete/`;
             form.setAttribute('action', deleteUrl);
           }
           
