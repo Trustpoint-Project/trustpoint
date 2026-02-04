@@ -5,10 +5,8 @@
     {% if scan_running %}<meta http-equiv="refresh" content="5">{% endif %}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* UI OPTIMIZATION: Removed hardcoded #2b2b2b background so it adapts to Light/Dark themes */
         .card { border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; border-radius: 10px; }
         .stat-card { border-left: 5px solid !important; }
-        /* Ensuring tables stay readable in both modes */
         .table-hover tbody tr:hover { background-color: rgba(0,0,0,0.05); }
         .card-header { border-bottom: 1px solid rgba(0,0,0,0.1) !important; padding: 15px 20px !important; }
     </style>
@@ -17,11 +15,18 @@
 {% block content %}
 <div class="container-fluid p-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <!-- Removed 'text-white' so it turns dark in Light mode -->
         <h1 class="h3 fw-bold mb-0">Trustpoint Device Discovery</h1>
-        <span class="badge {% if scan_running %}bg-warning text-dark{% else %}bg-success{% endif %} px-3 py-2">
-            {% if scan_running %}Scanning Active{% else %}System Ready{% endif %}
-        </span>
+        <div class="d-flex align-items-center">
+            {% if scan_running %}
+                <!-- HIGH CONTRAST STOP BUTTON: Matches the Scanning Active badge style -->
+                <a href="{% url 'discovery:stop_scan' %}" class="btn bg-warning text-dark btn-sm fw-bold me-2 border-0">
+                    <i class="fa-solid fa-circle-stop me-1"></i> Stop Scanning
+                </a>
+            {% endif %}
+            <span class="badge {% if scan_running %}bg-warning text-dark{% else %}bg-success{% endif %} px-3 py-2">
+                {% if scan_running %}Scanning Active{% else %}System Ready{% endif %}
+            </span>
+        </div>
     </div>
 
     <div class="row mb-4">
@@ -34,9 +39,13 @@
         <form action="{% url 'discovery:start_scan' %}" method="post" class="row g-3 align-items-center">
             {% csrf_token %}
             <div class="col-auto"><label class="fw-bold">Target Network (CIDR):</label></div>
-            <!-- Removed 'bg-dark' and 'text-white' so the input is usable in light theme -->
-            <div class="col-auto"><input type="text" name="cidr" class="form-control border-secondary" value="192.168.1.0/24"></div>
-            <div class="col-auto"><button type="submit" class="btn btn-primary">Run Scan</button></div>
+            <div class="col-auto">
+                <!-- PERSISTENT IP: Uses {{ cidr }} variable and disables during active scans -->
+                <input type="text" name="cidr" class="form-control border-secondary" value="{{ cidr|default:'192.168.1.0/24' }}" {% if scan_running %}disabled{% endif %}>
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-primary" {% if scan_running %}disabled{% endif %}>Run Scan</button>
+            </div>
         </form>
     </div>
 
@@ -50,7 +59,6 @@
             {% endif %}
         </div>
         <div class="table-responsive">
-            <!-- Changed 'table-dark' to a standard table that respects the Trustpoint theme -->
             <table class="table table-hover mb-0">
                 <thead><tr><th class="ps-4">IP Address</th><th>Hostname</th><th>Ports</th><th>SSL Status</th><th class="text-end pe-4">Actions</th></tr></thead>
                 <tbody>
@@ -59,7 +67,6 @@
                         <td class="ps-4">
                             <a href="{% url 'discovery:device_detail' d.id %}" class="text-info fw-bold">{{ d.ip_address }}</a>
                         </td>
-                        <!-- This hostname will now be filled by our improved scanner.py -->
                         <td>{{ d.hostname|default:"-" }}</td>
                         <td>
                             {% for p in d.open_ports %}
@@ -67,11 +74,12 @@
                             {% endfor %}
                         </td>
                         <td>
-                            <!-- LOGIC CHANGE: Check for both our scan info and the new formal PKI link -->
                             {% if d.ssl_info or d.certificate_record %}
                                 <span class="{% if d.ssl_info.is_self_signed %}text-warning{% else %}text-success{% endif %} small">
                                     <i class="fa-solid fa-certificate me-1"></i>
-                                    {% if d.certificate_record %}
+                                    {% if d.certificate_record.is_self_signed %}
+                                        Self-Signed
+                                    {% elif d.certificate_record %}
                                         PKI Linked
                                     {% elif d.ssl_info.is_self_signed %}
                                         Self-Signed
