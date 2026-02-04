@@ -35,6 +35,10 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
     def build_response(context: BaseRequestContext) -> None:
         """Respond to a CMP message."""
         responder: CmpMessageResponder
+        if context.error_details is not None or (context.http_response_status and context.http_response_status >= 400):
+            responder = CmpErrorMessageResponder()
+            return responder.build_response(context)
+
         if isinstance(context, CmpCertificateRequestContext) and context.issued_certificate:
             if context.operation == 'initialization':
                 responder = CmpInitializationResponder()

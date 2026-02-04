@@ -526,7 +526,7 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
     @staticmethod
     def get_credential_for_serial_number(
-        domain: DomainModel, device: DeviceModel, serial_number: int
+        domain: DomainModel, device: DeviceModel, serial_number: str
     ) -> IssuedCredentialModel:
         """Retrieve an IssuedCredentialModel instance for the given X.509 serial number within the specified domain.
 

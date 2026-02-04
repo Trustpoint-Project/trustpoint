@@ -1,5 +1,9 @@
 """Certificate revocation operation processor classes."""
 
+from cmp.util import PKIFailureInfo
+from cmp.util import PKIFailureInfo
+from pki.models.certificate import CertificateModel
+from pki.models.certificate import CertificateModel
 from request.request_context import (
     BaseRequestContext,
     BaseRevocationRequestContext,
@@ -45,5 +49,10 @@ class LocalCaCertificateRevocationProcessor(CertificateRevocationProcessor):
         
         ca = context.domain.get_issuing_ca_or_value_error()
         context.issuer_credential =  ca.get_credential()
+        cred_cert = context.credential_to_revoke.credential.certificate
 
+        if (cred_cert.certificate_status == CertificateModel.CertificateStatus.REVOKED):
+            exc_msg = 'The certificate is already revoked.'
+            context.error(exc_msg, http_status=422, cmp_code=PKIFailureInfo.CERT_REVOKED)
+            raise ValueError(exc_msg)
         context.credential_to_revoke.revoke()
