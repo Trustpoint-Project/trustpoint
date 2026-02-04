@@ -69,6 +69,10 @@ function redirectAddIssuingCa() {
                 return; 
             }
             
+            if (url.includes('<') || url.includes('>') || url.includes('&lt;') || url.includes('&gt;')) {
+                return;
+            }
+            
             const safeUrl = new URL(url, window.location.origin);
             
             if (safeUrl.origin === window.location.origin && 
