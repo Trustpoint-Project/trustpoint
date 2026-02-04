@@ -167,10 +167,26 @@
       document.querySelectorAll('.delete-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           const deleteUrl = btn.getAttribute('data-delete-url');
-          if (deleteUrl) {
+          const wfName = btn.getAttribute('data-wf-name');
+          
+          if (deleteUrl && typeof deleteUrl === 'string' && deleteUrl.startsWith('/')) {
             form.setAttribute('action', deleteUrl);
           }
-          nameField.textContent = btn.getAttribute('data-wf-name');
+          
+          if (wfName && typeof wfName === 'string') {
+            const escapedName = wfName.replace(/[&<>"']/g, (match) => {
+              const entityMap = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#x27;'
+              };
+              return entityMap[match];
+            });
+            nameField.textContent = escapedName;
+          }
+          
           modal.show();
         });
       });
