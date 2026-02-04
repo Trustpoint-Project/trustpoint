@@ -54,37 +54,6 @@ function resetIssuingCaRadios() {
     remoteIssuingCaCmpRadio.checked = false;
 }
 
-function redirectAddIssuingCa() {
-    let url;
-    if (localIssuingCaRadio.checked) {
-        const selectedLocal = document.querySelector('input[name="local-issuing-ca"]:checked');
-        url = selectedLocal ? selectedLocal.getAttribute('data-url') : null;
-    } else if (remoteIssuingCaRadio.checked) {
-        const selectedRemote = document.querySelector('input[name="remote-issuing-ca"]:checked');
-        url = selectedRemote ? selectedRemote.getAttribute('data-url') : null;
-    }
-    if (url && typeof url === 'string') {
-        try {
-            if (!url.startsWith('/')) {
-                return; 
-            }
-            
-            if (url.includes('<') || url.includes('>') || url.includes('&lt;') || url.includes('&gt;')) {
-                return;
-            }
-            
-            const safeUrl = new URL(url, window.location.origin);
-            
-            if (safeUrl.origin === window.location.origin && 
-                (safeUrl.protocol === 'http:' || safeUrl.protocol === 'https:')) {
-                window.location.href = safeUrl.pathname + safeUrl.search + safeUrl.hash;
-            }
-        } catch (e) {
-            // Ignore invalid URLs
-        }
-    }
-}
-
 const p12FileForm = document.getElementById('p12-file-form');
 const p12FileRadio = document.getElementById('p12-file-radio');
 if (p12FileRadio) {
