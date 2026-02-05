@@ -178,7 +178,10 @@ class Command(BaseCommand, LoggerMixin):
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Execute the command."""
-        call_command('create_multiple_test_issuing_cas')
+        if not CaModel.objects.filter(unique_name__startswith='issuing-ca').exists():
+            call_command('create_multiple_test_issuing_cas')
+        else:
+            self.log_and_stdout('Issuing CAs already exist, skipping creation.')
         call_command('import_idevid_truststores')
 
         data = {
@@ -308,6 +311,10 @@ class Command(BaseCommand, LoggerMixin):
             device_uses_onboarding = random.choice([True, False])  # noqa: S311
 
             for device_name in devices:
+
+                if DeviceModel.objects.filter(common_name=device_name).exists():
+                    self.log_and_stdout(f"Device '{device_name}' already exists, skipping.")
+                    continue
 
                 random_device_type = random.choice( # noqa: S311
                         [DeviceModel.DeviceType.GENERIC_DEVICE, DeviceModel.DeviceType.OPC_UA_GDS])
