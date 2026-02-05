@@ -1142,6 +1142,14 @@ class IssuingCaAddRequestEstForm(LoggerMixin, forms.ModelForm):
         help_text=_('Select the cryptographic key type and parameters'),
     )
 
+    trust_store = forms.ModelChoiceField(
+        label=_('Trust Store'),
+        queryset=TruststoreModel.objects.all(),
+        required=False,
+        empty_label=_('No trust store (insecure)'),
+        help_text=_('Trust store containing certificates to verify the remote EST server'),
+    )
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the form."""
         super().__init__(*args, **kwargs)
@@ -1158,6 +1166,7 @@ class IssuingCaAddRequestEstForm(LoggerMixin, forms.ModelForm):
         no_onboarding_config = NoOnboardingConfigModel.objects.create(
             pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
             est_password=self.cleaned_data['est_password'],
+            trust_store=self.cleaned_data.get('trust_store'),
         )
         instance.no_onboarding_config = no_onboarding_config
 
@@ -1238,6 +1247,14 @@ class IssuingCaAddRequestCmpForm(LoggerMixin, forms.ModelForm):
         help_text=_('Select the cryptographic key type and parameters'),
     )
 
+    trust_store = forms.ModelChoiceField(
+        label=_('Trust Store'),
+        queryset=TruststoreModel.objects.all(),
+        required=False,
+        empty_label=_('No trust store (insecure)'),
+        help_text=_('Trust store containing certificates to verify the remote CMP server'),
+    )
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the form."""
         super().__init__(*args, **kwargs)
@@ -1254,6 +1271,7 @@ class IssuingCaAddRequestCmpForm(LoggerMixin, forms.ModelForm):
         no_onboarding_config = NoOnboardingConfigModel.objects.create(
             pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
             cmp_shared_secret=self.cleaned_data['cmp_shared_secret'],
+            trust_store=self.cleaned_data.get('trust_store'),
         )
         instance.no_onboarding_config = no_onboarding_config
 

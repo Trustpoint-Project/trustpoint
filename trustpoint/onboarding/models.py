@@ -350,6 +350,16 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
     est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
     cmp_shared_secret = models.CharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
 
+    trust_store = models.ForeignKey(
+        TruststoreModel,
+        verbose_name=_('Trust Store'),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='no_onboarding_configs',
+        help_text=_('Trust store containing certificates to verify the remote server'),
+    )
+
     def __str__(self) -> str:
         """Gets the model instance as human-readable string."""
         return (

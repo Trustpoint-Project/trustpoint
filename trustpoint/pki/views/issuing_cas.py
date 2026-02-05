@@ -191,8 +191,6 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
 class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel]):
     """View to display the details of an Issuing CA."""
 
-    http_method_names = ('get',)
-
     model = CaModel
     success_url = reverse_lazy('pki:issuing_cas')
     ignore_url = reverse_lazy('pki:issuing_cas')
@@ -247,7 +245,7 @@ class IssuingCaRequestCertEstView(LoggerMixin, IssuingCaContextMixin, DetailView
         # 4. Receive the certificate response
         # 5. Update ca.credential with the new certificate
         messages.warning(request, _('EST certificate request not yet implemented.'))
-        return redirect('pki:issuing_cas-config', pk=ca.pk)
+        return redirect('pki:issuing_cas-request-cert-est', pk=ca.pk)
 
 
 class IssuingCaRequestCertCmpView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel]):
@@ -273,7 +271,7 @@ class IssuingCaRequestCertCmpView(LoggerMixin, IssuingCaContextMixin, DetailView
         # 4. Receive the certificate response
         # 5. Update ca.credential with the new certificate
         messages.warning(request, _('CMP certificate request not yet implemented.'))
-        return redirect('pki:issuing_cas-config', pk=ca.pk)
+        return redirect('pki:issuing_cas-request-cert-cmp', pk=ca.pk)
 
 
 class KeylessCaConfigView(LoggerMixin, KeylessCaContextMixin, DetailView[CaModel]):

@@ -7,10 +7,8 @@
             <h2>{{ issuing_ca.unique_name }} {% trans 'Configuration' %}</h2>
         </div>
 
-        <form method="POST" autocomplete="on" enctype="multipart/form-data">
-            {% csrf_token %}
-            <div class="card tp-card-centered">
-                <div class="card-body">
+        <div class="card tp-card-centered">
+            <div class="card-body">
                     <h3>{% trans 'Domains' %}</h3>
                     <hr class="hr-m">
                     {% if issuing_ca.domains.all %}
@@ -332,7 +330,6 @@
                     </div>
                 </div>
             </div>
-        </form>
     </div>
 
 {% endblock content %}
