@@ -3,7 +3,8 @@
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, Mock, patch
 
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingStatus
+from devices.models import DeviceModel, IssuedCredentialModel
+from onboarding.models import OnboardingProtocol, OnboardingStatus
 from django.contrib.messages import get_messages
 from django.core.management.base import CommandError
 from django.test import RequestFactory, TestCase

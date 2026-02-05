@@ -13,7 +13,8 @@ from cryptography.x509.oid import ExtensionOID, ObjectIdentifier
 from cryptography.x509.oid import ExtensionOID
 from django.core.exceptions import ValidationError
 
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
+from devices.models import DeviceModel, IssuedCredentialModel
+from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
 from pki.models import CaModel, TruststoreModel
 from pki.models.truststore import TruststoreOrderModel
 from pki.util.x509 import CertificateGenerator

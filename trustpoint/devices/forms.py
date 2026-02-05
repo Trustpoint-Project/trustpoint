@@ -17,13 +17,15 @@ from django.utils.translation import gettext_lazy as _
 from devices.models import (
     DeviceModel,
     IssuedCredentialModel,
+    RemoteDeviceCredentialDownloadModel,
+)
+from onboarding.models import (
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
     OnboardingConfigModel,
     OnboardingPkiProtocol,
     OnboardingProtocol,
     OnboardingStatus,
-    RemoteDeviceCredentialDownloadModel,
 )
 from devices.utils import validate_application_uri, validate_common_name_characters
 from pki.models.certificate import RevokedCertificateModel

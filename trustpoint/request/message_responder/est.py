@@ -3,7 +3,7 @@ import base64
 
 from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
 
-from devices.models import OnboardingStatus
+from onboarding.models import OnboardingStatus
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from workflows.models import State
 

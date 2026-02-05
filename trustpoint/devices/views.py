@@ -64,11 +64,13 @@ from devices.issuer import (
 from devices.models import (
     DeviceModel,
     IssuedCredentialModel,
+    RemoteDeviceCredentialDownloadModel,
+)
+from onboarding.models import (
     NoOnboardingPkiProtocol,
     OnboardingPkiProtocol,
     OnboardingProtocol,
     OnboardingStatus,
-    RemoteDeviceCredentialDownloadModel,
 )
 from devices.revocation import DeviceCredentialRevocation
 from devices.serializers import DeviceSerializer

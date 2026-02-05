@@ -20,7 +20,8 @@ from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
 
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingStatus
+from devices.models import DeviceModel, IssuedCredentialModel
+from onboarding.models import OnboardingProtocol, OnboardingStatus
 from notifications.models import NotificationModel, NotificationStatus
 from pki.models import CaModel, CertificateModel, CertificateProfileModel
 from trustpoint.logger import LoggerMixin
