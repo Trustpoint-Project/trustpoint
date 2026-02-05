@@ -12,6 +12,8 @@ on:
 jobs:
   ruff:
     runs-on: ubuntu-latest  # Use the latest Ubuntu runner for compatibility and performance.
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout Code

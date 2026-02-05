@@ -10,6 +10,17 @@
         "basic_constraints": {
             "ca": false
         },
+        "key_usage": {
+            "digital_signature": true,
+            "content_commitment": true,
+            "key_encipherment": true,
+            "data_encipherment": true,
+            "critical": true
+        },
+        "extended_key_usage": {
+            "usages": ["server_auth", "client_auth"],
+            "critical": false
+        },
         "subject_alternative_name": {
             "uris": {
                 "required": true,

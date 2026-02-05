@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 import abc
+import asyncio
 import datetime
 import io
+import zipfile
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
+from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
@@ -27,18 +33,24 @@ from trustpoint_core.serializer import CredentialFileFormat
 
 from devices.filters import DeviceFilter
 from devices.forms import (
+    BaseCredentialForm,
     BrowserLoginForm,
     ClmDeviceModelNoOnboardingForm,
     ClmDeviceModelOnboardingForm,
+    ClmDeviceModelOpcUaGdsPushOnboardingForm,
     CredentialDownloadForm,
     DeleteDevicesForm,
     IssueDomainCredentialForm,
     IssueOpcUaClientCredentialForm,
+    IssueOpcUaGdsPushDomainCredentialForm,
     IssueOpcUaServerCredentialForm,
     IssueTlsClientCredentialForm,
     IssueTlsServerCredentialForm,
     NoOnboardingCreateForm,
     OnboardingCreateForm,
+    OpcUaGdsPushCreateForm,
+    OpcUaGdsPushTruststoreAssociationForm,
+    OpcUaGdsPushTruststoreMethodSelectForm,
     RevokeDevicesForm,
     RevokeIssuedCredentialForm,
 )
@@ -60,8 +72,13 @@ from devices.models import (
 )
 from devices.revocation import DeviceCredentialRevocation
 from devices.serializers import DeviceSerializer
-from pki.models.certificate import CertificateModel
+from management.models import KeyStorageConfig
+from pki.models.ca import CaModel
+from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
+from pki.models.truststore import TruststoreModel, TruststoreOrderModel
+from request.gds_push import GdsPushService
+from request.gds_push.gds_push_service import GdsPushError
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -211,9 +228,12 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
         Returns:
             The HTML of the hyperlink for the CLM button.
         """
-        clm_url = reverse(
-            f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': record.pk}
-        )
+        if record.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH:
+            clm_url = reverse('devices:opc_ua_gds_push_certificate_lifecycle_management', kwargs={'pk': record.pk})
+        else:
+            clm_url = reverse(
+                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': record.pk}
+            )
 
         return format_html(
             '<a href="{}" class="btn btn-primary tp-table-btn w-100">{}</a>', clm_url, gettext_lazy('Manage')
@@ -237,13 +257,13 @@ class DeviceTableView(AbstractDeviceTableView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
     def get_queryset(self) -> QuerySet[DeviceModel]:
-        """Filter queryset to only include devices which are of generic type and filtered by filtered by UI filters.
+        """Filter queryset to include all device types (Generic, OPC UA GDS Push) and filtered by UI filters.
 
         Returns:
-            Returns a queryset of all DeviceModels, filtered by UI filters.
+            Returns a queryset of all DeviceModels (excluding OPC UA GDS), filtered by UI filters.
         """
-        base_qs = super(ListView, self).get_queryset().filter(
-            device_type=DeviceModel.DeviceType.GENERIC_DEVICE
+        base_qs = super(ListView, self).get_queryset().exclude(
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS
         )
         return self.apply_filters(base_qs)
 
@@ -265,6 +285,7 @@ class OpcUaGdsTableView(DeviceTableView):
             device_type=DeviceModel.DeviceType.OPC_UA_GDS
         )
         return self.apply_filters(base_qs)
+
 
 
 # ------------------------------------------------- Device Create View -------------------------------------------------
@@ -292,6 +313,8 @@ class AbstractCreateChooseOnboaringView(PageContextMixin, TemplateView):
         context['cancel_create_url'] = f'devices:{self.page_name}'
         context['use_onboarding_url'] = f'{self.page_category}:{self.page_name}_create_onboarding'
         context['use_no_onboarding_url'] = f'{self.page_category}:{self.page_name}_create_no_onboarding'
+        context['use_opc_ua_gds_push_url'] = f'{self.page_category}:{self.page_name}_create_opc_ua_gds_push'
+        context['show_opc_ua_gds_push_option'] = False  # Default: don't show GDS Push option
         return context
 
 
@@ -300,11 +323,46 @@ class DeviceCreateChooseOnboardingView(AbstractCreateChooseOnboaringView):
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the cancel url href according to the subcategory.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the devices page.
+        """
+        context = super().get_context_data(**kwargs)
+        # Enable OPC UA GDS Push option for standard devices
+        context['show_opc_ua_gds_push_option'] = True
+        return context
+
 
 class OpcUaGdsCreateChooseOnboardingView(AbstractCreateChooseOnboaringView):
     """View for choosing if the new OPC UA GDS shall be onboarded or not."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the cancel url href according to the subcategory.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the devices page.
+        """
+        context = super().get_context_data(**kwargs)
+        # Remove no-onboarding and OPC UA GDS Push options for OPC UA GDS
+        context.pop('use_no_onboarding_url', None)
+        context['show_opc_ua_gds_push_option'] = False
+        return context
+
+class OpcUaGdsPushCreateChooseOnboardingView(RedirectView):
+    """Deprecated: Redirects to standard devices create page."""
+
+    permanent = True
+    pattern_name = 'devices:devices_create'
 
 
 class AbstractCreateAddOnboardingTypeView(PageContextMixin, TemplateView):
@@ -404,12 +462,12 @@ class OpcUaGdsCreateNoOnboardingView(AbstractCreateNoOnboardingView):
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
-class AbstractCreateOnboardingView(PageContextMixin, FormView[OnboardingCreateForm]):
+class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
     """asdfds."""
 
     http_method_names = ('get', 'post')
 
-    form_class = OnboardingCreateForm
+    form_class: type[forms.Form] = OnboardingCreateForm
     template_name = 'devices/create.html'
 
     page_category = DEVICES_PAGE_CATEGORY
@@ -428,7 +486,7 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[OnboardingCreateFo
         context['cancel_create_url'] = f'{self.page_category}:{self.page_name}'
         return context
 
-    def form_valid(self, form: OnboardingCreateForm) -> HttpResponse:
+    def form_valid(self, form: forms.Form) -> HttpResponse:
         """Saves the form / creates the device model object.
 
         Args:
@@ -438,9 +496,11 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[OnboardingCreateFo
             The HTTP Response to be returned.
         """
         if self.page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY:
-            self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
-        else:
-            self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS)
+            self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)  # type: ignore[attr-defined]
+        elif self.page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY:
+            self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS)  # type: ignore[attr-defined]
+        else:  # DEVICES_PAGE_DEVICES_SUBCATEGORY
+            self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH)  # type: ignore[attr-defined]
         return super().form_valid(form)
 
     def get_success_url(self) -> str:
@@ -462,10 +522,65 @@ class DeviceCreateOnboardingView(AbstractCreateOnboardingView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
+class DeviceCreateOpcUaGdsPushView(AbstractCreateOnboardingView):
+    """Create form view for OPC UA GDS Push devices in the devices section."""
+
+    form_class = OpcUaGdsPushCreateForm
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Check if SOFTWARE storage is configured before allowing GDS Push creation.
+
+        Args:
+            request: The HTTP request object.
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+
+        Returns:
+            HttpResponseBase: The response object.
+        """
+        try:
+            config = KeyStorageConfig.get_config()
+            if config.storage_type != KeyStorageConfig.StorageType.SOFTWARE:
+                messages.error(
+                    request,
+                    f'OPC UA GDS Push is only available with SOFTWARE key storage. '
+                    f'Current storage type: {config.get_storage_type_display()}'
+                )
+                return redirect('devices:devices')
+        except KeyStorageConfig.DoesNotExist:
+            messages.error(
+                request,
+                'Key storage configuration not found. Please configure key storage first.'
+            )
+            return redirect('devices:devices')
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form: forms.Form) -> HttpResponse:
+        """Saves the form / creates the device model object as OPC UA GDS Push type.
+
+        Args:
+            form: The valid form.
+
+        Returns:
+            The HTTP Response to be returned.
+        """
+        self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH)  # type: ignore[attr-defined]
+        return FormView.form_valid(self, form)
+
+
 class OpcUaGdsCreateOnboardingView(AbstractCreateOnboardingView):
     """Create form view for the devices section."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class OpcUaGdsPushCreateOnboardingView(RedirectView):
+    """Deprecated: Redirects to standard devices OPC UA GDS Push create page."""
+
+    permanent = True
+    pattern_name = 'devices:devices_create_opc_ua_gds_push'
 
 
 # ------------------------------------------ Certificate Lifecycle Management ------------------------------------------
@@ -584,6 +699,10 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                     f'{self.page_category}:{self.page_name}'
                     '_certificate_lifecycle_management_issue_domain_credential_est_username_password'
                 )
+            elif self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.OPC_GDS_PUSH:
+                issue_domain_cred_onboarding_url = (
+                    f'{self.page_category}:{self.page_name}_onboarding_clm_issue_domain_credential'
+                )
 
         context['issue_app_cred_onboarding_url'] = ''
         if self.object.domain and self.object.onboarding_config and self.object.onboarding_config.get_pki_protocols():
@@ -606,6 +725,8 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['OnboardingStatus'] = OnboardingStatus
 
         context['device_form'] = self.get_device_form()
+        if self.object.onboarding_config:
+            context['onboarding_form'] = self.get_onboarding_form()
 
         return context
 
@@ -650,7 +771,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             'pki_protocol_manual': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.MANUAL),
         }
 
-    def get_onboarding_form(self) -> ClmDeviceModelOnboardingForm:
+    def get_onboarding_form(self) -> forms.Form:
         """Gets the form for onboarding.
 
         Returns:
@@ -668,7 +789,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             return ClmDeviceModelNoOnboardingForm(self.request.POST, instance=self.object)
         return ClmDeviceModelNoOnboardingForm(initial=self.get_no_onboarding_initial(), instance=self.object)
 
-    def get_device_form(self) -> ClmDeviceModelOnboardingForm | ClmDeviceModelNoOnboardingForm:
+    def get_device_form(self) -> forms.Form:
         """Gets the device Form for onboarding or no onboarding.
 
         Returns:
@@ -752,11 +873,105 @@ class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecyc
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Check device type and redirect OPC UA GDS Push devices to their specific view.
+
+        Args:
+            request: The HTTP request object.
+            *args: Variable length argument list.
+            **kwargs: Arbitrary keyword arguments.
+
+        Returns:
+            HttpResponseBase: The response object.
+        """
+        device = self.get_object()
+
+        if device.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH:
+            url = reverse('devices:opc_ua_gds_push_certificate_lifecycle_management', kwargs={'pk': device.pk})
+            return redirect(url)
+
+        return super().dispatch(request, *args, **kwargs)
+
 
 class OpcUaGdsCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):
     """Certificate Lifecycle Management Summary View for OPC UA Devcies."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class OpcUaGdsPushCertificateLifecycleManagementSummaryView(AbstractCertificateLifecycleManagementSummaryView):
+    """Certificate Lifecycle Management Summary View for OPC UA GDS Push devices."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add OPC UA GDS Push specific context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data(**kwargs).
+
+        Returns:
+            The context data for the view.
+        """
+        context = super().get_context_data(**kwargs)
+
+        context['truststore_method_select_url'] = 'devices:devices_truststore_method_select'
+
+        return context
+
+    def get_onboarding_initial(self) -> dict[str, Any]:
+        """Gets the initial values for onboarding for GDS Push.
+
+        Returns:
+            Initial values for onboarding.
+        """
+        if not self.object.onboarding_config:
+            err_msg = gettext_lazy('The device does not have onboarding configured.')
+            raise ValueError(err_msg)
+        return {
+            'common_name': self.object.common_name,
+            'serial_number': self.object.serial_number,
+            'domain': self.object.domain,
+            'ip_address': self.object.ip_address,
+            'opc_server_port': self.object.opc_server_port,
+            'onboarding_protocol': OnboardingProtocol.OPC_GDS_PUSH.label,
+            'onboarding_status': OnboardingStatus(self.object.onboarding_config.onboarding_status).label,
+            'pki_protocol_opc_gds_push': self.object.onboarding_config.has_pki_protocol(
+                OnboardingPkiProtocol.OPC_GDS_PUSH
+            ),
+        }
+
+    def get_onboarding_form(self) -> ClmDeviceModelOpcUaGdsPushOnboardingForm:
+        """Gets the form for GDS Push onboarding.
+
+        Returns:
+            The GDS Push onboarding form.
+        """
+        return ClmDeviceModelOpcUaGdsPushOnboardingForm(initial=self.get_onboarding_initial(), instance=self.object)
+
+    def post(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
+        """Handles the POST request used for device form submission.
+
+        Args:
+            request: The django request object.
+            _args: Positional arguments are discarded.
+            kwargs: Keyword arguments are passed to get_context_data.
+
+        Returns:
+            The HttpResponse.
+        """
+        self.object = self.get_object()
+
+        if self.object.onboarding_config:
+            form = ClmDeviceModelOpcUaGdsPushOnboardingForm(request.POST, instance=self.object)
+            if form.is_valid():
+                form.save()
+        else:
+            # This shouldn't happen for GDS Push
+            pass
+
+        context = self.get_context_data(object=self.object, **kwargs)
+        return self.render_to_response(context)
 
 
 #  ------------------------------ Certificate Lifecycle Management - Credential Issuance -------------------------------
@@ -1030,6 +1245,48 @@ class OpcUaGdsOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssu
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
+class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboardingIssueNewApplicationCredentialView):
+    """View for issuing application credentials for OPC UA GDS Push devices - redirects directly to help page."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Redirect directly to the GDS Push application certificate help page."""
+        self.object = self.get_object()
+
+        if not self.object.onboarding_config:
+            err_msg = gettext_lazy('Device is not configured for onboarding')
+            messages.warning(request, err_msg)
+            return redirect(
+                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
+                pk=self.object.pk
+            )
+
+        if not self.object.onboarding_config.get_pki_protocols():
+            err_msg = gettext_lazy(
+                'All PKI protocols for this device to request application certificates are disabled.'
+            )
+            messages.warning(request, err_msg)
+            return redirect(
+                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
+                pk=self.object.pk
+            )
+
+        if not self.object.domain:
+            err_msg = gettext_lazy('No domain is configured for this device.')
+            messages.warning(request, err_msg)
+            return redirect(
+                f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
+                pk=self.object.pk
+            )
+
+        # Redirect directly to the GDS Push application certificate help page
+        return redirect(
+            f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
+            pk=self.object.pk
+        )
+
+
 class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: BaseTlsCredentialIssuer](
     PageContextMixin, DetailView[DeviceModel]
 ):
@@ -1041,7 +1298,7 @@ class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: Ba
     context_object_name = 'device'
     template_name = 'devices/credentials/issue_application_credential.html'
 
-    form_class: type[FormClass]
+    form_class: type[BaseCredentialForm]
     issuer_class: type[IssuerClass]
     friendly_name: str
 
@@ -1129,7 +1386,7 @@ class AbstractIssueDomainCredentialView(
 ):
     """Base view for issuing domain credentials."""
 
-    form_class = IssueDomainCredentialForm
+    form_class: type[BaseCredentialForm] = IssueDomainCredentialForm
     template_name = 'devices/credentials/issue_domain_credential.html'
     issuer_class = LocalDomainCredentialIssuer
     friendly_name = 'Domain Credential'
@@ -1162,6 +1419,204 @@ class OpcUaGdsIssueDomainCredentialView(AbstractIssueDomainCredentialView):
     """View for issuing domain credentials for OPC-UA GDS devices."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
+    """View for issuing domain credentials for OPC-UA GDS Push devices."""
+
+    form_class = IssueOpcUaGdsPushDomainCredentialForm
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+        """Issues a domain credential for the device with OPC UA specific extensions.
+
+        Args:
+            device: The device to be associated with the new credential.
+            cleaned_data: The validated form data.
+
+        Returns:
+            The IssuedCredentialModel object that was created and saved.
+        """
+        if not device.domain:
+            raise Http404(DeviceWithoutDomainErrorMsg)
+
+        issuer = self.issuer_class(device=device, domain=device.domain)
+        application_uri = cast('str', cleaned_data.get('application_uri'))
+
+        opc_ua_extensions = [
+            (
+                x509.KeyUsage(
+                    digital_signature=True,
+                    content_commitment=True,
+                    key_encipherment=True,  # Required for OPC UA SignAndEncrypt security mode
+                    data_encipherment=True,  # Additional encryption capability
+                    key_agreement=False,
+                    key_cert_sign=False,
+                    crl_sign=False,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                True,
+            ),
+            (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
+        ]
+
+        if application_uri:
+            opc_ua_extensions.append(
+                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)]), False)
+            )
+
+        return issuer.issue_domain_credential(
+            application_uri=None,
+            extra_extensions=opc_ua_extensions
+        )
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle the POST request with custom redirect to truststore association."""
+        self.object = self.get_object()
+        form = self.form_class(**self.get_form_kwargs())
+
+        if form.is_valid():
+            credential = self.issue_credential(device=self.object, cleaned_data=form.cleaned_data)
+            messages.success(
+                request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
+            )
+            return HttpResponseRedirect(
+                reverse_lazy(
+                    f'devices:{self.page_name}_truststore_method_select', kwargs={'pk': self.get_object().id}
+                )
+            )
+
+        return self.render_to_response(self.get_context_data(form=form))
+
+
+class OpcUaGdsPushTruststoreMethodSelectView(PageContextMixin, FormView[OpcUaGdsPushTruststoreMethodSelectForm]):
+    """View for selecting the method to associate a truststore with an OPC UA GDS Push device."""
+
+    form_class = OpcUaGdsPushTruststoreMethodSelectForm
+    template_name = 'devices/truststore_method_select.html'
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def get_device(self) -> DeviceModel:
+        """Get the device from the URL parameters."""
+        pk = self.kwargs.get('pk')
+        try:
+            return DeviceModel.objects.get(pk=pk)
+        except DeviceModel.DoesNotExist as e:
+            exc_msg = f'Device with pk {pk} does not exist.'
+            raise Http404(exc_msg) from e
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the device to the context."""
+        context = super().get_context_data(**kwargs)
+        context['device'] = self.get_device()
+        return context
+
+    def form_valid(self, form: OpcUaGdsPushTruststoreMethodSelectForm) -> HttpResponseRedirect:
+        """Redirect to the view for the selected method."""
+        method_select = form.cleaned_data.get('method_select')
+        device_pk = self.kwargs.get('pk')
+
+        if method_select == 'upload_truststore':
+            # Redirect to truststore creation with device context
+            return HttpResponseRedirect(
+                reverse('pki:truststores-add-opc-ua-gds-push', kwargs={'device_pk': device_pk})
+            )
+
+        if method_select == 'select_truststore':
+            # Redirect to existing truststore selection
+            return HttpResponseRedirect(
+                reverse('devices:devices_truststore_association', kwargs={'pk': device_pk})
+            )
+
+        # Default fallback
+        return HttpResponseRedirect(
+            reverse('devices:devices_truststore_association', kwargs={'pk': device_pk})
+        )
+
+
+class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
+    """View to discover OPC UA server information without authentication."""
+
+    http_method_names = ('post',)
+    model = DeviceModel
+    context_object_name = 'device'
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle the POST request to discover server information."""
+        self.object = self.get_object()
+
+        try:
+            service = GdsPushService(device=self.object, insecure=True)
+
+            success, message, server_info = asyncio.run(service.discover_server())
+
+            if success and server_info:
+                messages.success(request, message)
+
+                request.session['opc_ua_server_info'] = server_info
+
+                if server_info.get('server_certificate_available'):
+                    messages.info(
+                        request,
+                        'Server certificate found. You can update the truststore with this certificate.'
+                    )
+            else:
+                messages.error(request, f'Failed to discover server: {message}')
+
+        except Exception as e:  # noqa: BLE001
+            messages.error(request, f'Unexpected error during discovery: {e}')
+
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'devices:{self.page_name}_onboarding_truststore_associated_help',
+                kwargs={'pk': self.object.pk}
+            )
+        )
+
+
+class OpcUaGdsPushTruststoreAssociationView(PageContextMixin, FormView[OpcUaGdsPushTruststoreAssociationForm]):
+    """View for associating a truststore with an OPC UA GDS Push device's onboarding configuration."""
+
+    form_class = OpcUaGdsPushTruststoreAssociationForm
+    template_name = 'devices/truststore_association.html'
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Add the device instance to the form kwargs."""
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = self.get_device()
+        return kwargs
+
+    def get_device(self) -> DeviceModel:
+        """Get the device from the URL parameters."""
+        pk = self.kwargs.get('pk')
+        try:
+            return DeviceModel.objects.get(pk=pk)
+        except DeviceModel.DoesNotExist as e:
+            exc_msg = f'Device with pk {pk} does not exist.'
+            raise Http404(exc_msg) from e
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the device to the context."""
+        context = super().get_context_data(**kwargs)
+        context['device'] = self.get_device()
+        return context
+
+    def form_valid(self, form: OpcUaGdsPushTruststoreAssociationForm) -> HttpResponseRedirect:
+        """Handle successful form submission."""
+        form.save()
+        messages.success(
+            self.request,
+            f'Successfully associated truststore with device {self.get_device().common_name}'
+        )
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'devices:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_onboarding_truststore_associated_help',
+                kwargs={'pk': self.get_device().pk}
+            )
+        )
 
 
 class AbstractIssueTlsClientCredentialView(
@@ -1446,6 +1901,12 @@ class OpcUaGdsDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
+class OpcUaGdsPushDownloadPageDispatcherView(AbstractDownloadPageDispatcherView):
+    """Download dispatcher view for the OPC UA GDS Push pages."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
 # --------------------------------------------- Certificate Download Help ----------------------------------------------
 
 
@@ -1485,6 +1946,287 @@ class OpcUaGdsCertificateDownloadView(AbstractCertificateDownloadView):
     """Certificate download view for the OPC UA GDS pages."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+
+
+class OpcUaGdsPushCertificateDownloadView(AbstractCertificateDownloadView):
+    """Certificate download view for the OPC UA GDS Push pages."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+
+# -------------------------------------------- OPC UA GDS Push Actions -------------------------------------------------
+
+
+class OpcUaGdsPushUpdateTrustlistView(PageContextMixin, DetailView[DeviceModel]):
+    """View to update the trustlist on an OPC UA GDS Push device."""
+
+    http_method_names = ('post',)
+    model = DeviceModel
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle the POST request to update the trustlist.
+
+        Args:
+            request: The Django request object.
+            _args: Positional arguments are discarded.
+            kwargs: Keyword arguments are passed to get_object().
+
+        Returns:
+            HttpResponse redirecting back to the help page.
+        """
+        self.object = self.get_object()
+
+        try:
+            service = GdsPushService(device=self.object)
+
+            success, message = asyncio.run(service.update_trustlist())
+
+            if success:
+                messages.success(request, f'Trustlist updated successfully: {message}')
+            else:
+                messages.error(request, f'Failed to update trustlist: {message}')
+
+        except GdsPushError as e:
+            messages.error(request, f'GDS Push error: {e}')
+        except Exception as e:  # noqa: BLE001
+            messages.error(request, f'Unexpected error: {e}')
+
+        return self._redirect_to_help_page()
+
+    def _redirect_to_help_page(self) -> HttpResponseRedirect:
+        """Redirect back to the help page.
+
+        Returns:
+            HttpResponseRedirect to the help page.
+        """
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
+                kwargs={'pk': self.object.pk}
+            )
+        )
+
+class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[DeviceModel]):
+    """View to update the server certificate on an OPC UA GDS Push device."""
+
+    http_method_names = ('post',)
+    model = DeviceModel
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle the POST request to update the server certificate.
+
+        Args:
+            request: The Django request object.
+            _args: Positional arguments are discarded.
+            kwargs: Keyword arguments are passed to get_object().
+
+        Returns:
+            HttpResponse redirecting back to the help page.
+        """
+        self.object = self.get_object()
+
+        try:
+
+            service = GdsPushService(device=self.object)
+
+            success, message, certificate_bytes = asyncio.run(service.update_server_certificate())
+
+            if success and certificate_bytes:
+                messages.success(request, f'Server certificate updated successfully: {message}')
+
+                if self.object.onboarding_config:
+                    self.object.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+                    self.object.onboarding_config.save()
+
+            else:
+                messages.error(request, f'Failed to update server certificate: {message}')
+
+        except GdsPushError as e:
+            messages.error(request, f'GDS Push error: {e}')
+        except Exception as e:  # noqa: BLE001
+            messages.error(request, f'Unexpected error: {e}')
+
+        return self._redirect_to_help_page()
+
+    def _update_truststore_with_certificate(self, certificate_bytes: bytes) -> None:
+        """Update or create truststore with the new server certificate.
+
+        This method adds the new server certificate to the truststore WITHOUT removing
+        the old one immediately. This ensures that if something goes wrong, the old
+        certificate is still available for recovery.
+
+        Args:
+            certificate_bytes: DER-encoded certificate bytes
+        """
+        if self.object.onboarding_config is None:
+            msg = 'Onboarding config must exist for GDS Push devices'
+            raise ValueError(msg)
+        try:
+
+            cert = x509.load_der_x509_certificate(certificate_bytes, default_backend())
+
+            truststore = self.object.onboarding_config.opc_trust_store
+            if not truststore:
+                truststore = TruststoreModel.objects.create(
+                    unique_name=f'opc_server_{self.object.common_name}',
+                    intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
+                )
+                self.object.onboarding_config.opc_trust_store = truststore
+                self.object.onboarding_config.save()
+
+            existing_certs = list(truststore.certificates.all())
+            cert_serial = cert.serial_number
+            cert_fingerprint = cert.fingerprint(hashes.SHA256())
+
+            cert_exists = False
+            for existing_cert_model in existing_certs:
+                existing_cert = existing_cert_model.get_certificate_serializer().as_crypto()
+                if (existing_cert.serial_number == cert_serial and
+                    existing_cert.fingerprint(hashes.SHA256()) == cert_fingerprint):
+                    cert_exists = True
+                    break
+
+            if not cert_exists:
+                for existing_cert_model in truststore.certificates.all():
+                    if not existing_cert_model.is_ca:
+                         RevokedCertificateModel.objects.create(
+                            certificate=existing_cert_model,
+                            revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION
+                        )
+
+                truststore.truststoreordermodel_set.all().delete()
+
+                cert_model = CertificateModel.save_certificate(cert)
+
+                TruststoreOrderModel.objects.create(
+                    trust_store=truststore,
+                    certificate=cert_model,
+                    order=0
+                )
+
+                messages.info(
+                    self._get_request(),
+                    f'Updated truststore "{truststore.unique_name}" with new server certificate '
+                    f'(total: {truststore.certificates.count()} cert(s))'
+                )
+            else:
+                messages.info(
+                    self._get_request(),
+                    f'Server certificate already exists in truststore "{truststore.unique_name}"'
+                )
+
+        except Exception as e:  # noqa: BLE001
+            messages.warning(
+                self._get_request(),
+                f'Server certificate updated but failed to update truststore: {e}'
+            )
+
+    def _get_request(self) -> HttpRequest:
+        """Get the current request from view context.
+
+        Returns:
+            The current HttpRequest
+        """
+        return self.request
+
+    def _redirect_to_help_page(self) -> HttpResponseRedirect:
+        """Redirect back to the help page.
+
+        Returns:
+            HttpResponseRedirect to the help page.
+        """
+        referer = self.request.META.get('HTTP_REFERER', '')
+        if referer and 'issue-application-credential' in referer:
+            return HttpResponseRedirect(
+                reverse_lazy(
+                    f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
+                    kwargs={'pk': self.object.pk}
+                )
+            )
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'{self.page_category}:{self.page_name}_onboarding_truststore_associated_help',
+                kwargs={'pk': self.object.pk}
+            )
+        )
+
+
+class TrustBundleDownloadView(PageContextMixin, DetailView[CaModel]):
+    """View to download the trust bundle (CA certificates and CRLs) for a given Issuing CA."""
+
+    http_method_names = ('get',)
+    model = CaModel
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:  # noqa: ARG002
+        """Handle the GET request to download the trust bundle.
+
+        Args:
+            request: The Django request object.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            FileResponse with the trust bundle zip file.
+        """
+        self.object = self.get_object()
+
+        issuing_ca = self.object
+
+        try:
+            ca_chain = issuing_ca.get_ca_chain_from_truststore()
+        except ValueError as e:
+            msg = f'Invalid truststore configuration: {e}'
+            raise Http404(msg) from e
+
+        data_to_archive = {}
+
+        for ca in ca_chain:
+            try:
+                cert_der = ca.ca_certificate_model.get_certificate_serializer().as_der()
+                if cert_der is None:
+                    continue
+
+                safe_name = ''.join(c if c.isalnum() or c in '._-' else '_' for c in ca.unique_name)
+                cert_filename = f'{safe_name}.der'
+                data_to_archive[cert_filename] = cert_der
+            except (ValueError, TypeError, AttributeError):
+                continue
+
+            if ca.crl_pem:
+                try:
+                    crl_crypto = x509.load_pem_x509_crl(ca.crl_pem.encode())
+                    crl_der = crl_crypto.public_bytes(serialization.Encoding.DER)
+                    crl_filename = f'{safe_name}.crl'
+                    data_to_archive[crl_filename] = crl_der
+                except (ValueError, TypeError):
+                    pass
+
+        if not data_to_archive:
+            msg = 'No certificates found in truststore.'
+            raise Http404(msg)
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for filename, data in data_to_archive.items():
+                zip_file.writestr(filename, data)
+        zip_data = zip_buffer.getvalue()
+
+        if not zip_data or len(zip_data) == 0:
+            msg = f'Failed to create ZIP file. Found {len(data_to_archive)} files to archive.'
+            raise Http404(msg)
+
+        response = FileResponse(
+            io.BytesIO(zip_data),
+            content_type='application/zip',
+            as_attachment=True,
+            filename=f'trustpoint-{self.object.unique_name}-trust-bundle.zip',
+        )
+
+        return cast('HttpResponse', response)
 
 
 # ---------------------------------------------- Credential Download Help ----------------------------------------------
@@ -1896,6 +2638,11 @@ class OpcUaGdsIssuedCredentialRevocationView(AbstractIssuedCredentialRevocationV
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
+class OpcUaGdsPushIssuedCredentialRevocationView(AbstractIssuedCredentialRevocationView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
 
 class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel]):
     """View to confirm the deletion of multiple Devices."""
@@ -2049,6 +2796,11 @@ class OpcUaGdsBulkRevokeView(AbstractBulkRevokeView):
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
+class OpcUaGdsPushBulkRevokeView(AbstractBulkRevokeView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
 
 class AbstractBulkDeleteView(LoggerMixin, PageContextMixin, ListView[DeviceModel]):
     """View to confirm the deletion of multiple Devices."""
@@ -2188,6 +2940,10 @@ class OpcUaGdsBulkDeleteView(AbstractBulkDeleteView):
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
+class OpcUaGdsPushBulkDeleteView(AbstractBulkDeleteView):
+    """abc."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 class DeviceViewSet(viewsets.ModelViewSet[DeviceModel]):
     """ViewSet for managing Device instances.

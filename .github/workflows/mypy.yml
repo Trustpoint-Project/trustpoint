@@ -12,6 +12,8 @@ on:
 jobs:
   mypy:
     runs-on: ubuntu-latest # Use the latest Ubuntu runner for compatibility and performance.
+    permissions:
+      contents: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6  # Ensures the repository code is available.

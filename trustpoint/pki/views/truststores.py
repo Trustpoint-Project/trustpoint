@@ -44,6 +44,12 @@ if TYPE_CHECKING:
 
     from django.forms import Form
 
+# Import DeviceModel for runtime use
+try:
+    from devices.models import DeviceModel
+except ImportError:
+    DeviceModel = None  # type: ignore[assignment,misc]
+
 
 class TruststoresRedirectView(RedirectView):
     """View that redirects to the index of the PKI Truststores application: Truststores."""
@@ -165,6 +171,58 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
         return context
 
 OID_MAP = {oid.dotted_string: oid.verbose_name for oid in NameOid}
+
+
+class OpcUaGdsPushTruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm]):
+    """View for creating a new Truststore specifically for OPC UA GDS Push device association."""
+
+    model = TruststoreModel
+    form_class = TruststoreAddForm
+    template_name = 'pki/truststores/add/file_import.html'
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Set the intended usage to OPC UA GDS Push."""
+        kwargs = super().get_form_kwargs()
+        # Pre-set the intended usage for OPC UA GDS Push
+        kwargs['initial'] = kwargs.get('initial', {})
+        kwargs['initial']['intended_usage'] = TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
+        return kwargs
+
+    def form_valid(self, form: TruststoreAddForm) -> HttpResponseRedirect:
+        """If the form is valid, redirect to device truststore association."""
+        truststore = form.cleaned_data['truststore']
+        device_pk = self.kwargs.get('device_pk')
+
+        n_certificates = truststore.number_of_certificates
+        msg_str = ngettext(
+            'Successfully created the Truststore %(name)s with %(count)i certificate.',
+            'Successfully created the Truststore %(name)s with %(count)i certificates.',
+            n_certificates,
+        ) % {
+            'name': truststore.unique_name,
+            'count': n_certificates,
+        }
+
+        messages.success(self.request, msg_str)
+
+        if device_pk:
+            # Redirect to truststore association for the device
+            return HttpResponseRedirect(
+                reverse('devices:devices_truststore_association', kwargs={'pk': device_pk})
+            )
+
+        # Fallback to truststore overview
+        return HttpResponseRedirect(reverse('pki:truststores'))
+
+    def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Include device in context if device_pk is present."""
+        context = super().get_context_data(**kwargs)
+        device_pk = self.kwargs.get('device_pk')
+        if device_pk:
+            context['device'] = get_object_or_404(DeviceModel, id=device_pk)
+        return context
+
+
 class TruststoreDetailView(TruststoresContextMixin, DetailView[TruststoreModel]):
     """The truststore detail view."""
 

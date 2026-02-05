@@ -59,6 +59,8 @@ def get_random_onboarding_pki_protocols(
         A list of PkiProtocols.
     """
     protocols = list(OnboardingPkiProtocol)
+    if OnboardingPkiProtocol.OPC_GDS_PUSH in protocols:
+        protocols.remove(OnboardingPkiProtocol.OPC_GDS_PUSH)
     if include_protocol:
         protocols.remove(include_protocol)
     num_choices = secrets.randbelow(len(protocols)) + 1
@@ -115,7 +117,7 @@ def create_signer_for_domain(
 
     signer_cert, signer_key = CertificateGenerator.create_ee(
         issuer_private_key=issuing_ca_private_key,
-        issuer_cn=issuing_ca_cn,
+        issuer_name=issuing_ca_cert.subject,
         subject_name=f'Signer-{domain_name}',
         private_key=signer_key,
         extensions=[(digital_signature_extension, True)],
@@ -248,6 +250,7 @@ class Command(BaseCommand, LoggerMixin):
         onboarding_protocols.remove(OnboardingProtocol.MANUAL)
         onboarding_protocols.remove(OnboardingProtocol.CMP_IDEVID)
         onboarding_protocols.remove(OnboardingProtocol.EST_IDEVID)
+        onboarding_protocols.remove(OnboardingProtocol.OPC_GDS_PUSH)
 
         self.log_and_stdout('Starting the process of adding domains and devices...\n')
 

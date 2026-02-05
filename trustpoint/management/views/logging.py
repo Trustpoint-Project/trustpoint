@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import datetime
 import io
+import os
 import re
 import tarfile
 import zipfile
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from django.http import Http404, HttpResponse
@@ -23,9 +23,76 @@ from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
 from trustpoint.views.base import SortableTableFromListMixin
 
 if TYPE_CHECKING:
+    from pathlib import Path
     from typing import Any
 
     from django.http import HttpRequest
+
+
+_LOG_FILENAME_RE = re.compile(r'^trustpoint\.log(?:\.\d+)?$')
+
+_CONTROL_CHAR_THRESHOLD = 32
+
+
+def _secure_log_filename(filename: str) -> str:
+    """Secure a log filename by removing any potentially dangerous characters.
+
+    Args:
+        filename: The filename to secure
+
+    Returns:
+        The secured filename with dangerous characters removed
+
+    Raises:
+        Http404: If the filename is invalid
+    """
+    if not isinstance(filename, str) or not filename:
+        exc_msg = f'Invalid filename: {filename}'
+        raise Http404(exc_msg)
+
+    if '\x00' in filename or any(ord(c) < _CONTROL_CHAR_THRESHOLD for c in filename):
+        exc_msg = f'Invalid filename: {filename}'
+        raise Http404(exc_msg)
+
+    for sep in (os.sep, os.path.altsep, '/', '\\'):
+        if sep:
+            filename = filename.replace(sep, '')
+
+    filename = filename.replace('..', '').replace('~', '').replace(':', '')
+
+    if not filename:
+        exc_msg = 'Invalid filename after sanitization'
+        raise Http404(exc_msg)
+
+    return filename
+
+
+def _validate_log_filename(filename: str) -> Path:
+    """Validate a log filename and return the resolved path if valid.
+
+    Args:
+        filename: The filename to validate
+
+    Returns:
+        The resolved Path object if valid
+
+    Raises:
+        Http404: If the filename is invalid or not found
+    """
+    secured_filename = _secure_log_filename(filename)
+
+    if not _LOG_FILENAME_RE.match(secured_filename):
+        exc_msg = 'Invalid filename.'
+        raise Http404(exc_msg)
+
+    resolved_log_dir = LOG_DIR_PATH.resolve()
+
+    for file_path in resolved_log_dir.iterdir():
+        if file_path.is_file() and file_path.name == secured_filename:
+            return file_path
+
+    exc_msg = 'Log file not found.'
+    raise Http404(exc_msg)
 
 
 class IndexView(RedirectView):
@@ -79,8 +146,9 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
 
     @classmethod
     def _get_log_file_data(cls, log_filename: str) -> dict[str, str]:
-        log_file_path = LOG_DIR_PATH / Path(log_filename)
-        if not log_file_path.exists() or not log_file_path.is_file():
+        try:
+            log_file_path = _validate_log_filename(log_filename)
+        except Http404:
             return {}
 
         first_date, last_date = cls._get_first_and_last_entry_date(log_file_path)
@@ -99,9 +167,10 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
     def get_queryset(self) -> list[dict[str, str]]:  # type: ignore[override]
         """Gets a queryset of all valid Trustpoint log files in the log directory."""
         all_files = [file.name for file in LOG_DIR_PATH.iterdir()]
-        valid_log_files = [f for f in all_files if re.compile(r'^trustpoint\.log(?:\.\d+)?$').match(f)]
 
-        self.queryset = [self._get_log_file_data(log_file_name) for log_file_name in valid_log_files]
+        file_data_list = [self._get_log_file_data(log_file_name) for log_file_name in all_files]
+
+        self.queryset = [data for data in file_data_list if data]
         return self.queryset
 
 
@@ -123,12 +192,11 @@ class LoggingFilesDetailsView(PageContextMixin, LoggerMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         log_filename = self.kwargs.get('filename')
 
-        log_file_path = LOG_DIR_PATH / Path(log_filename)
-
-        if not log_file_path.exists() or not log_file_path.is_file():
+        try:
+            resolved_path = _validate_log_filename(log_filename)
+            context['log_content'] = resolved_path.read_text(encoding='utf-8', errors='backslashreplace')
+        except Http404:
             context['log_content'] = 'Log-File not found.'
-        else:
-            context['log_content'] = log_file_path.read_text(encoding='utf-8', errors='backslashreplace')
 
         return context
 
@@ -147,16 +215,14 @@ class LoggingFilesDownloadView(PageContextMixin, LoggerMixin, TemplateView):
         if not filename:
             msg = 'Filename not provided.'
             raise Http404(msg)
-        log_file_path = LOG_DIR_PATH / Path(filename)
 
-        if not log_file_path.exists() or not log_file_path.is_file():
-            exc_msg = 'Log file not found.'
-            raise Http404(exc_msg)
+        resolved_path = _validate_log_filename(filename)
 
         response = HttpResponse(
-            log_file_path.read_text(encoding='utf-8', errors='backslashreplace'), content_type='text/plain'
+            resolved_path.read_text(encoding='utf-8', errors='backslashreplace'), content_type='text/plain'
         )
-        response['Content-Disposition'] = f'attachment; filename={filename}'
+        # Use the validated filename from the resolved path in the response header.
+        response['Content-Disposition'] = f'attachment; filename={resolved_path.name}'
         return response
 
 
@@ -185,7 +251,16 @@ class LoggingFilesDownloadMultipleView(PageContextMixin, LoggerMixin, View):
 
         filenames = [filename for filename in filenames.split('/') if filename]
 
-        file_collection = [(filename, (LOG_DIR_PATH / Path(filename)).read_bytes()) for filename in filenames]
+        valid_log_files: list[tuple[str, Path]] = []
+        for filename in filenames:
+            try:
+                resolved_path = _validate_log_filename(filename)
+                valid_log_files.append((filename, resolved_path))
+            except Http404 as exc:
+                exc_msg = f'Invalid filename: {filename}'
+                raise Http404(exc_msg) from exc
+
+        file_collection = [(filename, resolved_path.read_bytes()) for filename, resolved_path in valid_log_files]
 
         if archive_format.lower() == 'zip':
             bytes_io = io.BytesIO()

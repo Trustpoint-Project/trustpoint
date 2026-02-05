@@ -101,6 +101,42 @@ class TestOpcUaGdsTableView:
 
 
 @pytest.mark.django_db
+class TestOpcUaGdsPushTableView:
+    """Test OpcUaGdsPushTableView."""
+
+    def test_opcua_gds_push_table_view_get(self, admin_client: Client) -> None:
+        """Test GET request to OPC UA GDS Push table view."""
+        url = reverse('devices:devices')
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
+        assert 'devices/devices.html' in [t.name for t in response.templates]
+
+    def test_opcua_gds_push_table_view_filters_opcua_gds_push_devices(
+        self,
+        admin_client: Client,
+        device_instance: dict[str, Any]
+    ) -> None:
+        """Test that devices table shows OPC UA GDS Push devices."""
+        domain = device_instance['domain']
+
+        # Create an OPC UA GDS Push device
+        opcua_gds_push_device = DeviceModel.objects.create(
+            common_name='opcua-gds-push-device',
+            serial_number='SN67890',
+            domain=domain,
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        )
+
+        url = reverse('devices:devices')
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
+        devices = response.context['object_list']
+        assert opcua_gds_push_device in devices
+
+
+@pytest.mark.django_db
 class TestDeviceCreateChooseOnboardingView:
     """Test DeviceCreateChooseOnboardingView."""
 
@@ -136,6 +172,24 @@ class TestOpcUaGdsCreateChooseOnboardingView:
         """Test GET request to OPC UA GDS create choose onboarding view."""
         url = reverse('devices:opc_ua_gds_create')
         response = admin_client.get(url)
+
+        assert response.status_code == 200
+        assert 'devices/create_choose_onboarding.html' in [t.name for t in response.templates]
+
+
+@pytest.mark.django_db
+class TestOpcUaGdsPushCreateChooseOnboardingView:
+    """Test OpcUaGdsPushCreateChooseOnboardingView."""
+
+    def test_opcua_gds_push_create_choose_onboarding_get(self, admin_client: Client) -> None:
+        """Test GET request to OPC UA GDS Push create choose onboarding view."""
+        from management.models import KeyStorageConfig
+
+        # Ensure SOFTWARE storage is configured
+        KeyStorageConfig.get_or_create_default()
+
+        url = reverse('devices:opc_ua_gds_push_create_redirect')
+        response = admin_client.get(url, follow=True)
 
         assert response.status_code == 200
         assert 'devices/create_choose_onboarding.html' in [t.name for t in response.templates]
@@ -312,6 +366,55 @@ class TestOpcUaGdsCreateOnboardingView:
 
 
 @pytest.mark.django_db
+class TestOpcUaGdsPushCreateOnboardingView:
+    """Test OpcUaGdsPushCreateOnboardingView."""
+
+    def test_opcua_gds_push_create_onboarding_get(self, admin_client: Client) -> None:
+        """Test GET request to OPC UA GDS Push create onboarding view."""
+        from management.models import KeyStorageConfig
+        KeyStorageConfig.get_or_create_default()
+
+        url = reverse('devices:opc_ua_gds_push_create_onboarding_redirect')
+        response = admin_client.get(url, follow=True)
+
+        assert response.status_code == 200
+        assert 'devices/create.html' in [t.name for t in response.templates]
+
+    def test_opcua_gds_push_create_onboarding_creates_opcua_gds_push_device(
+        self,
+        admin_client: Client,
+        domain_instance: dict[str, Any]
+    ) -> None:
+        """Test that OPC UA GDS Push view creates OPC UA GDS Push device with onboarding."""
+        from management.models import KeyStorageConfig
+        KeyStorageConfig.get_or_create_default()
+
+        domain = domain_instance['domain']
+
+        post_data = {
+            'common_name': 'opcua-gds-push-onboarding-device',
+            'serial_number': 'SN88888',
+            'domain': domain.pk,
+            'ip_address': '192.168.1.100',
+            'opc_server_port': 4840,
+            'opc_user': 'admin',
+            'opc_password': 'password123',
+        }
+
+        url = reverse('devices:devices_create_opc_ua_gds_push')
+        response = admin_client.post(url, data=post_data, follow=True)
+
+        assert response.status_code == 200
+
+        device = DeviceModel.objects.get(common_name='opcua-gds-push-onboarding-device')
+        assert device.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        assert device.onboarding_config is not None
+        assert device.onboarding_config.onboarding_protocol == OnboardingProtocol.OPC_GDS_PUSH
+        assert device.ip_address == '192.168.1.100'
+        assert device.opc_server_port == 4840
+
+
+@pytest.mark.django_db
 class TestDeviceCertificateLifecycleManagementSummaryView:
     """Test DeviceCertificateLifecycleManagementSummaryView."""
 
@@ -410,3 +513,26 @@ class TestDeviceCreateAddOnboardingTypeView:
 
         assert 'use_no_onboarding_url' in context
         assert context['use_no_onboarding_url'] == 'devices:devices_create_no_onboarding'
+
+
+@pytest.mark.django_db
+class TestOpcUaGdsPushCertificateLifecycleManagementSummaryView:
+    """Test OpcUaGdsPushCertificateLifecycleManagementSummaryView."""
+
+    def test_opcua_gds_push_clm_summary_view_get(
+        self,
+        admin_client: Client,
+        device_instance_onboarding: dict[str, Any]
+    ) -> None:
+        """Test GET request to OPC UA GDS Push CLM summary view."""
+        device = device_instance_onboarding['device']
+        # Change device type to GDS Push
+        device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        device.save()
+
+        url = reverse('devices:opc_ua_gds_push_certificate_lifecycle_management', kwargs={'pk': device.pk})
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
+        assert 'devices/credentials/certificate_lifecycle_management.html' in [t.name for t in response.templates]
+        assert response.context['object'] == device
