@@ -85,10 +85,12 @@ class CryptographyUtils:
         if isinstance(private_key, rsa.RSAPrivateKey):
             return hashes.SHA256()
         if isinstance(private_key, ec.EllipticCurvePrivateKey):
-            if isinstance(private_key.curve, ec.SECP256R1):
+            if isinstance(private_key.curve, (ec.SECP192R1, ec.SECP224R1, ec.SECP256R1, ec.SECP256K1)):
                 return hashes.SHA256()
             if isinstance(private_key.curve, ec.SECP384R1):
                 return hashes.SHA384()
+            if isinstance(private_key.curve, ec.SECP521R1):
+                return hashes.SHA512()
 
         err_msg = 'A suitable hash algorithm is not yet specified for the given private key type.'
         raise ValueError(err_msg)

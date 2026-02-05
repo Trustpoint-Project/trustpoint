@@ -274,8 +274,9 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
             if not http_response:
                 http_response = LoggedHttpResponse('Something went wrong during EST getcacerts.', status=500)
 
-        except Exception as e:  # noqa:BLE001
-            return LoggedHttpResponse(f'Error retrieving CA certificates: {e!s}', status=500)
+        except Exception:
+            self.logger.exception('Error retrieving CA certificates')
+            return LoggedHttpResponse('Error retrieving CA certificates', status=500)
         else:
             return http_response
 

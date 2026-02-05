@@ -78,7 +78,7 @@ class LoggingFilesTableViewTest(TestCase):
 
     def test_default_sort_param(self):
         """Test default sort parameter."""
-        self.assertEqual(self.view.default_sort_param, 'filename')
+        self.assertEqual(self.view.default_sort_param, 'updated_at')
 
     def test_page_category_and_name(self):
         """Test page category and name are set correctly."""
@@ -107,7 +107,7 @@ class LoggingFilesTableViewTest(TestCase):
         def mock_get_log_file_data(filename):
             # Return data only for valid filenames
             if filename.startswith('trustpoint.log'):
-                return {'filename': filename}
+                return {'filename': filename, 'created_at': '2024-01-01 10:00:00 UTC', 'updated_at': '2024-01-02 15:30:00 UTC'}
             return {}  # Invalid filename
 
         with patch.object(LoggingFilesTableView, '_get_log_file_data', side_effect=mock_get_log_file_data):
