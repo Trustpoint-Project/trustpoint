@@ -784,7 +784,7 @@ select.form-control {
 }
 
 .tp-pb-title::before {
-  content: '⚡';
+  content: '';
   font-size: var(--font-size-lg);
 }
 

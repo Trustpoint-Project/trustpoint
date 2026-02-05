@@ -4,7 +4,7 @@ class CertificateProfileBuilder {
     this.sidebar = document.getElementById(sidebarElementId);
     this.searchInput = document.getElementById('profile-builder-search');
     this.fieldsContainer = document.getElementById('profile-builder-fields');
-    
+
     this.fieldCatalog = this.initializeFieldCatalog();
     this.allFields = this.flattenFieldCatalog();
 
@@ -15,290 +15,139 @@ class CertificateProfileBuilder {
     this.init();
   }
 
-initializeFieldCatalog() {
-  return {
-  'DISPLAY_NAME': {
-      label: 'Display Name',
-      description: 'Human readable profile name',
-      icon: '',
-      fields: [
-        {
-          name: 'display_name',
-          fullPath: 'display_name',
-          description: 'Profile display name',
-          templates: [
-            { label: 'Required', value: { required: true, default: 'TLS Client' } },
-            { label: 'Fixed string', value: 'TLS Client' }
-          ]
-        }
-      ]
-    },
-    'SUBJECT': {
-      label: 'Subject',
-      description: 'Certificate subject fields (DN)',
-      icon: '',
-      fields: [
-        {
-          name: 'CN',
-          fullPath: 'subject.CN',
-          description: 'Common Name',
-          templates: [
-            { label: 'Required, mutable', value: { required: true } },
-            { label: 'Required, default value', value: { required: true, default: 'Trustpoint Credential' } },
-            { label: 'Fixed value (immutable)', value: 'Trustpoint Credential' },
-            { label: 'Optional (empty)', value: {} },
-            { label: 'With regex validation', value: { required: true, re: '^[a-zA-Z0-9.-]+$' } },
-            { label: 'Prohibited', value: null }
-          ]
-        },
 
-        {
-          name: 'O',
-          fullPath: 'subject.O',
-          description: 'Organization Name',
-          templates: [
-            { label: 'Fixed value', value: 'My Organization' },
-            { label: 'Required', value: { required: true } },
-            { label: 'Optional', value: {} },
-            { label: 'Prohibited', value: null }
-          ]
-        },
-        {
-          name: 'OU',
-          fullPath: 'subject.OU',
-          description: 'Organizational Unit',
-          templates: [
-            { label: 'Fixed value', value: 'Security' },
-            { label: 'Mutable with default', value: { required: true, default: 'Engineering' } },
-            { label: 'Optional', value: {} },
-            { label: 'Prohibited', value: null }
-          ]
-        },
-        {
-          name: 'C',
-          fullPath: 'subject.C',
-          description: 'Country (2-letter code)',
-          templates: [
-            { label: 'Fixed value', value: 'DE' },
-            { label: 'With regex (2-letter)', value: { required: true, re: '^[A-Z]{2}$' } },
-            { label: 'Optional', value: {} }
-          ]
-        },
-        {
-          name: 'ST',
-          fullPath: 'subject.ST',
-          description: 'State/Province',
-          templates: [
-            { label: 'Fixed value', value: 'Rheinland-Pfalz' },
-            { label: 'Optional', value: {} }
-          ]
-        },
-        {
-          name: 'L',
-          fullPath: 'subject.L',
-          description: 'Locality/City',
-          templates: [
-            { label: 'Fixed value', value: 'Mayen' },
-            { label: 'Optional', value: {} }
-          ]
-        },
-        {
-          name: 'SN',
-          fullPath: 'subject.SN',
-          description: 'Surname',
-          templates: [
-            { label: 'Optional', value: {} }
-          ]
-        },
-        {
-          name: 'GN',
-          fullPath: 'subject.GN',
-          description: 'Given Name',
-          templates: [
-            { label: 'Optional', value: {} }
-          ]
-        }
-      ]
-    },
-    'EXTENSIONS': {
-      label: 'Extensions',
-      description: 'X.509 certificate extensions',
-      icon: '',
-      fields: [
-        {
-          name: 'subjectAltName',
-          fullPath: 'extensions.subjectAltName',
-          description: 'Subject Alternative Name extension',
-          templates: [
-            {
-              label: 'Required with DNS names',
-              value: {
-                required: true,
-                dnsNames: { required: true },
-                ipAddresses: { required: false }
-              }
-            },
-            {
-              label: 'Required, DNS + IP allowed',
-              value: {
-                required: true,
-                dnsNames: {},
-                ipAddresses: {}
-              }
-            },
-            { label: 'Optional', value: {} }
-          ]
-        },
-        {
-          name: 'keyUsage',
-          fullPath: 'extensions.keyUsage',
-          description: 'Key Usage extension',
-          templates: [
-            {
-              label: 'Digital Signature only',
-              value: {
-                digitalSignature: true,
-                keyEncipherment: null,
-                critical: {}
-              }
-            },
-            {
-              label: 'TLS Server (digitalSignature + keyEncipherment)',
-              value: {
-                digitalSignature: true,
-                keyEncipherment: true,
-                critical: {}
-              }
-            },
-            {
-              label: 'CA Certificate (keyCertSign + cRLsign)',
-              value: {
-                keyCertSign: true,
-                cRLsign: true,
-                critical: { value: true }
-              }
-            },
-            { label: 'Optional', value: {} }
-          ]
-        },
-        {
-          name: 'basicConstraints',
-          fullPath: 'extensions.basicConstraints',
-          description: 'Basic Constraints extension',
-          templates: [
-            {
-              label: 'End-entity (not CA)',
-              value: { ca: false, pathLenConstraint: null }
-            },
-            {
-              label: 'CA with path length 0',
-              value: { ca: true, pathLenConstraint: 0 }
-            },
-            { label: 'Optional', value: {} }
-          ]
-        },
-        {
-          name: 'extendedKeyUsage',
-          fullPath: 'extensions.extendedKeyUsage',
-          description: 'Extended Key Usage (EKU)',
-          templates: [
-            { label: 'TLS Server', value: { serverAuth: true } },
-            { label: 'TLS Client', value: { clientAuth: true } },
-            { label: 'Code Signing', value: { codeSigning: true } },
-            { label: 'Optional', value: {} }
-          ]
-        },
-        {
-          name: 'subjectKeyIdentifier',
-          fullPath: 'extensions.subjectKeyIdentifier',
-          description: 'Subject Key Identifier',
-          templates: [
-            { label: 'Auto-generated', value: { auto: true } },
-            { label: 'Optional', value: {} }
-          ]
-        },
-        {
-          name: 'authorityKeyIdentifier',
-          fullPath: 'extensions.authorityKeyIdentifier',
-          description: 'Authority Key Identifier',
-          templates: [
-            { label: 'Auto-generated', value: { auto: true } },
-            { label: 'Optional', value: {} }
-          ]
-        }
-      ]
-    },
-    'VALIDITY': {
-      label: 'Validity',
-      description: 'Certificate validity period settings',
-      icon: '',
-      fields: [
-        {
-          name: 'days',
-          fullPath: 'validity.days',
-          description: 'Validity period in days',
-          templates: [
-            { label: '90 days', value: 90 },
-            { label: '365 days (1 year)', value: 365 },
-            { label: '1826 days (5 years)', value: 1826 },
-            { label: '3650 days (10 years)', value: 3650 }
-          ]
-        },
-        {
-          name: 'duration',
-          fullPath: 'validity.duration',
-          description: 'ISO 8601 duration format (e.g., P365D)',
-          templates: [
-            { label: '90 days (P90D)', value: 'P90D' },
-            { label: '365 days (P365D)', value: 'P365D' },
-            { label: '1 year (P1Y)', value: 'P1Y' }
-          ]
-        },
-        {
-          name: 'notBefore',
-          fullPath: 'validity.notBefore',
-          description: 'Explicit ISO 8601 timestamp (notBefore)',
-          templates: [
-            { label: 'Now (ISO 8601)', value: new Date().toISOString() }
-          ]
-        },
-        {
-          name: 'notAfter',
-          fullPath: 'validity.notAfter',
-          description: 'Explicit ISO 8601 timestamp (notAfter)',
-          templates: [
-            { label: 'Far future', value: '99991231T235959Z' }
-          ]
-        }
-      ]
-    },
-    'CONSTRAINTS': {
-      label: 'Constraints',
-      description: 'Global constraint settings',
-      icon: '',
-      fields: [
-        {
-          name: 'reject_mods',
-          fullPath: 'reject_mods',
-          description: 'Reject request if any field cannot be modified',
-          templates: [
-            { label: 'true - Strict validation', value: true },
-            { label: 'false - Permissive', value: false }
-          ]
-        },
-        {
-          name: 'required',
-          fullPath: 'required',
-          description: 'Required fields',
-          templates: [
-            { label: 'List of required fields', value: ['CN', 'O'] }
-          ]
-        }
-      ]
-    }
-  };
-}
+  initializeFieldCatalog() {
+    return {
+      GENERAL: {
+        label: 'General',
+        description: 'Top-level fields',
+        icon: '',
+        fields: [
+          {
+            name: 'type',
+            fullPath: 'type',
+            description: 'Profile type (expected: "cert_profile")',
+            valueType: 'string',
+            expectedHint: 'Expected: string, e.g. "cert_profile".'
+          },
+          {
+            name: 'ver',
+            fullPath: 'ver',
+            description: 'Schema version (expected format: "1.0")',
+            valueType: 'string',
+            expectedHint: 'Expected: string version, e.g. "1.0".'
+          }
+        ]
+      },
+      DISPLAY_NAME: {
+        label: 'Display Name',
+        description: 'Human readable name',
+        icon: '',
+        fields: [
+          {
+            name: 'display_name',
+            fullPath: 'display_name',
+            description: 'Profile display name (string)',
+            valueType: 'string',
+            expectedHint: 'Expected: string, e.g. "Example Certificate Profile".'
+          }
+        ]
+      },
+      SUBJECT: {
+        label: 'Subject',
+        description: 'Subject DN',
+        icon: '',
+        fields: [
+          {
+            name: 'subject.allow',
+            fullPath: 'subject.allow',
+            description: 'Allowed subject attributes (e.g. "*" or ["CN","OU"])',
+            valueType: 'string',
+            expectedHint: 'Expected: "*" or JSON list like ["CN","OU"].'
+          },
+          {
 
+
+            name: 'subject.CN',
+            fullPath: 'subject.CN',
+            description: 'Common Name (value + required)',
+            valueType: 'composite_cn',
+            expectedHint: 'Value: string, e.g. "device.example.com"; Required: checkbox.'
+          },
+          {
+            name: 'subject.OU',
+            fullPath: 'subject.OU',
+            description: 'Organizational Unit (nullable, use null to prohibit)',
+            valueType: 'nullable',
+            expectedHint: 'Expected: null to prohibit, or a string value.'
+          }
+        ]
+      },
+      EXT: {
+        label: 'Extensions',
+        description: 'X.509 extensions',
+        icon: '',
+        fields: [
+          {
+            name: 'ext.allow',
+            fullPath: 'ext.allow',
+            description: 'Extensions allow mask (string or list, e.g. "*")',
+            valueType: 'string',
+            expectedHint: 'Expected: "*" or JSON list like ["key_usage","san"].'
+          },
+          {
+
+            name: 'ext.key_usage',
+            fullPath: 'ext.key_usage',
+            description: 'Key usage flags (digital_signature, key_encipherment, critical)',
+            valueType: 'composite_key_usage',
+            expectedHint: 'Produces: {"digital_signature":true/false,"key_encipherment":true/false,"critical":true/false}.'
+          },
+          {
+
+            name: 'ext.extended_key_usage',
+            fullPath: 'ext.extended_key_usage',
+            description: 'Extended key usages list (e.g. ["server_auth","client_auth"])',
+            valueType: 'composite_eku',
+            expectedHint: 'Value becomes: {"usages":["server_auth","client_auth"]}.'
+          },
+          {
+
+            name: 'ext.san',
+            fullPath: 'ext.san',
+            description: 'Subject Alternative Names (DNS + IP lists)',
+            valueType: 'composite_san',
+            expectedHint: 'Value becomes: {"dns":["device.example.com"],"ip":["192.0.2.1"]}.'
+          },
+          {
+
+
+            name: 'ext.basic_constraints',
+            fullPath: 'ext.basic_constraints',
+            description: 'Basic constraints (CA + critical)',
+            valueType: 'composite_basic_constraints',
+            expectedHint: 'Value becomes: {"ca":true/false,"critical":true/false}.'
+          }
+        ]
+      },
+      VALIDITY: {
+        label: 'Validity',
+        description: 'Validity period',
+        icon: '',
+        fields: [
+          {
+
+            name: 'validity.days',
+            fullPath: 'validity.days',
+            description: 'Validity in days (number, suggestions: 30 / 60 / 90)',
+            valueType: 'number',
+            suggestions: [30, 60, 90],
+            expectedHint: 'Expected: integer number of days, e.g. 42.'
+          }
+        ]
+      }
+    };
+  }
 
   flattenFieldCatalog() {
     const flattened = [];
@@ -311,7 +160,6 @@ initializeFieldCatalog() {
   }
 
   init() {
-    console.log('CertificateProfileBuilder init');
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -326,240 +174,443 @@ initializeFieldCatalog() {
       });
     }
 
+
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.sidebarOpen) this.closeSidebar();
-    });
-
-    // FIXED: Only close sidebar if clicking OUTSIDE the sidebar AND modal
-    document.addEventListener('click', (e) => {
-      const isClickInsideSidebar = this.sidebar && this.sidebar.contains(e.target);
-      const isClickInsideModal = document.querySelector('.profile-builder-modal')?.contains(e.target);
-
-      if (this.sidebarOpen && !isClickInsideSidebar && !isClickInsideModal) {
-        this.closeSidebar();
+      if (e.key === 'Escape') {
+        const modal = document.querySelector('.profile-builder-modal');
+        if (modal) modal.remove();
       }
     });
 
+
+    document.addEventListener('click', (e) => {
+      const modal = document.querySelector('.profile-builder-modal');
+      if (!modal) return;
+      const clickedInside = modal.contains(e.target);
+      if (!clickedInside) modal.remove();
+    });
+
     this.renderFields();
   }
 
-  toggleSidebar() { this.sidebarOpen ? this.closeSidebar() : this.openSidebar(); }
-
-  openSidebar() {
-    this.sidebarOpen = true;
-    this.sidebar?.classList.add('tp-pb-visible');
-    this.searchInput?.focus();
-    document.body.style.overflow = 'hidden';
+  toggleSidebar() {
+    this.sidebarOpen = !this.sidebarOpen;
+    if (this.sidebar) {
+      this.sidebar.classList.toggle('tp-pb-visible', this.sidebarOpen);
+    }
+    if (this.sidebarOpen) {
+      this.searchInput?.focus();
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+      if (this.searchInput) this.searchInput.value = '';
+      this.filteredFields = this.allFields;
+      this.renderFields();
+    }
   }
 
-  closeSidebar() {
-    this.sidebarOpen = false;
-    this.sidebar?.classList.remove('tp-pb-visible');
-    document.body.style.overflow = '';
-    this.searchInput.value = '';
-    this.filteredFields = this.allFields;
-    this.renderFields();
-  }
+  openSidebar() { if (!this.sidebarOpen) this.toggleSidebar(); }
+  closeSidebar() { if (this.sidebarOpen) this.toggleSidebar(); }
 
   filterFields(query) {
     const q = query.toLowerCase().trim();
     this.filteredFields = !q ? this.allFields : this.allFields.filter(field =>
-      field.name.toLowerCase().includes(q) || field.description.toLowerCase().includes(q) ||
-      field.fullPath.toLowerCase().includes(q) || field.sectionLabel.toLowerCase().includes(q)
+      field.name.toLowerCase().includes(q) ||
+      field.description.toLowerCase().includes(q) ||
+      field.fullPath.toLowerCase().includes(q) ||
+      field.sectionLabel.toLowerCase().includes(q)
     );
     this.renderFields();
   }
 
- renderFields() {
-  if (!this.fieldsContainer) return;
+  renderFields() {
+    if (!this.fieldsContainer) return;
 
-  if (!Array.isArray(this.filteredFields) || this.filteredFields.length === 0) {
-    this.fieldsContainer.innerHTML = '<div class="profile-builder-no-results">No fields found</div>';
-    return;
-  }
+    if (!Array.isArray(this.filteredFields) || this.filteredFields.length === 0) {
+      this.fieldsContainer.innerHTML = '<div class="profile-builder-no-results">No fields found</div>';
+      return;
+    }
 
-  this.fieldsContainer.innerHTML = '';
+    this.fieldsContainer.innerHTML = '';
+    const grouped = {};
+    this.filteredFields.forEach(field => {
+      if (!field || !field.section) return;
+      if (!grouped[field.section]) grouped[field.section] = [];
+      grouped[field.section].push(field);
+    });
 
-  const grouped = {};
-  this.filteredFields.forEach(field => {
-    if (!field || !field.section) return;
-    if (!grouped[field.section]) grouped[field.section] = [];
-    grouped[field.section].push(field);
-  });
+    Object.entries(grouped).forEach(([section, fields]) => {
+      const sectionData = this.fieldCatalog[section];
+      if (!sectionData) return;
 
-  Object.entries(grouped).forEach(([section, fields]) => {
-    const sectionData = this.fieldCatalog[section];
-    if (!sectionData) return;
-
-    const sectionEl = document.createElement('div');
-    sectionEl.className = 'profile-builder-section';
-
-    sectionEl.innerHTML = `
-      <div class="profile-builder-section-header">
-        <span class="profile-builder-section-icon">${sectionData.icon}</span>
-        <span class="profile-builder-section-label">${sectionData.label}</span>
-      </div>
-    `;
-
-    fields.forEach(field => {
-      const fieldEl = document.createElement('div');
-      fieldEl.className = 'profile-builder-field';
-      fieldEl.innerHTML = `
-        <div class="profile-builder-field-info">
-          <div class="profile-builder-field-name">${field.name}</div>
-          <div class="profile-builder-field-description">${field.description}</div>
-          <div class="profile-builder-field-path">${field.fullPath}</div>
-        </div>
-        <div class="profile-builder-field-actions">
-          <button class="profile-builder-btn-insert" title="Insert into JSON">Insert</button>
-          <button class="profile-builder-btn-copy" data-path="${field.fullPath}" title="Copy path">Copy</button>
+      const sectionEl = document.createElement('div');
+      sectionEl.className = 'profile-builder-section';
+      sectionEl.innerHTML = `
+        <div class="profile-builder-section-header">
+          <span class="profile-builder-section-icon">${sectionData.icon}</span>
+          <span class="profile-builder-section-label">${sectionData.label}</span>
         </div>
       `;
 
-      fieldEl.querySelector('.profile-builder-btn-insert')
-             .addEventListener('click', () => this.showTemplateSelector(field));
-      fieldEl.querySelector('.profile-builder-btn-copy')
-             .addEventListener('click', (e) => {
-               e.preventDefault();
-               this.copyToClipboard(field.fullPath, e.target);
-             });
+      fields.forEach(field => {
+        const fieldEl = document.createElement('div');
+        fieldEl.className = 'profile-builder-field';
+        fieldEl.innerHTML = `
+          <div class="profile-builder-field-info">
+            <div class="profile-builder-field-name">${field.name}</div>
+            <div class="profile-builder-field-description">${field.description}</div>
+            <div class="profile-builder-field-path">${field.fullPath}</div>
+          </div>
+          <div class="profile-builder-field-actions">
+            <button class="profile-builder-btn-insert" title="Insert into JSON">Insert</button>
+            <button class="profile-builder-btn-copy" data-path="${field.fullPath}" title="Copy path">Copy</button>
+          </div>
+        `;
 
-      sectionEl.appendChild(fieldEl);
+        fieldEl.querySelector('.profile-builder-btn-insert')
+          .addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.showValuePopup(field);
+          });
+
+        fieldEl.querySelector('.profile-builder-btn-copy')
+          .addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.copyToClipboard(field.fullPath, e.target);
+          });
+
+        fieldEl.addEventListener('click', () => this.showValuePopup(field));
+
+        sectionEl.appendChild(fieldEl);
+      });
+
+      this.fieldsContainer.appendChild(sectionEl);
     });
+  }
 
-    this.fieldsContainer.appendChild(sectionEl);
-  });
-}
-
-
-  showTemplateSelector(field) {
-    if (field.templates.length === 1) return this.insertField(field, field.templates[0]);
+  showValuePopup(field) {
+    const existing = document.querySelector('.profile-builder-modal');
+    if (existing) existing.remove();
 
     const modal = document.createElement('div');
     modal.className = 'profile-builder-modal';
+    const close = () => modal.remove();
+
+    const hint = field.expectedHint || 'Enter JSON or plain string. For null, type null.';
+
+    let bodyInner = '';
+
+
+    if (field.valueType === 'composite_cn') {
+      bodyInner = `
+        <div class="profile-builder-custom-section">
+          <div class="profile-builder-divider">Common Name</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+              <label class="form-label">Value (default)</label>
+              <input type="text" id="pb-cn-value" class="profile-builder-custom-input"
+                     placeholder='Example: "device.example.com"'>
+              <div style="margin-top:4px;font-size:11px;color:var(--color-text-secondary);">
+                ${hint}
+              </div>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="pb-cn-required" checked>
+              Required
+            </label>
+            <div style="display:flex;justify-content:flex-end;">
+              <button class="profile-builder-custom-btn">Apply</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+
+    else if (field.valueType === 'composite_key_usage') {
+      bodyInner = `
+        <div class="profile-builder-custom-section">
+          <div class="profile-builder-divider">Key Usage</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="pb-ku-ds" checked>
+              digital_signature
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="pb-ku-ke" checked>
+              key_encipherment
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="pb-ku-critical" checked>
+              critical
+            </label>
+            <div style="margin-top:4px;font-size:11px;color:var(--color-text-secondary);">
+              ${hint}
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+              <button class="profile-builder-custom-btn">Apply</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+
+    else if (field.valueType === 'composite_eku') {
+      bodyInner = `
+        <div class="profile-builder-custom-section">
+          <div class="profile-builder-divider">Extended Key Usage</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label class="form-label">Usages (comma separated)</label>
+            <input type="text" id="pb-eku-list" class="profile-builder-custom-input"
+                   value="server_auth, client_auth">
+            <div style="margin-top:4px;font-size:11px;color:var(--color-text-secondary);">
+              ${hint}
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+              <button class="profile-builder-custom-btn">Apply</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+
+    else if (field.valueType === 'composite_san') {
+      bodyInner = `
+        <div class="profile-builder-custom-section">
+          <div class="profile-builder-divider">Subject Alternative Names</div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+              <label class="form-label">DNS names (comma separated)</label>
+              <input type="text" id="pb-san-dns" class="profile-builder-custom-input"
+                     value="device.example.com">
+            </div>
+            <div>
+              <label class="form-label">IP addresses (comma separated)</label>
+              <input type="text" id="pb-san-ip" class="profile-builder-custom-input"
+                     value="192.0.2.1">
+            </div>
+            <div style="margin-top:4px;font-size:11px;color:var(--color-text-secondary);">
+              ${hint}
+            </div>
+            <div style="display:flex;justify-content:flex-end;">
+              <button class="profile-builder-custom-btn">Apply</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+
+    else if (field.valueType === 'composite_basic_constraints') {
+      bodyInner = `
+        <div class="profile-builder-custom-section">
+          <div class="profile-builder-divider">Basic Constraints</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="pb-bc-ca">
+              CA
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input type="checkbox" id="pb-bc-critical" checked>
+              Critical
+            </label>
+            <div style="margin-top:4px;font-size:11px;color:var(--color-text-secondary);">
+              ${hint}
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+              <button class="profile-builder-custom-btn">Apply</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+
+    else if (field.valueType === 'number') {
+      const suggestions = (field.suggestions || []).map(v => `
+        <button class="profile-builder-template-btn" data-number="${v}">
+          <div class="profile-builder-template-label">${v} days</div>
+        </button>
+      `).join('');
+      bodyInner = `
+        ${suggestions ? `
+          <div class="profile-builder-divider">Suggestions</div>
+          <div class="profile-builder-templates">
+            ${suggestions}
+          </div>
+        ` : ''}
+        <div class="profile-builder-custom-section">
+          <div class="profile-builder-divider">Custom value</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="number" id="pb-custom-number" class="profile-builder-custom-input"
+                     placeholder="e.g. 42">
+              <button class="profile-builder-custom-btn">Apply</button>
+            </div>
+            <div style="font-size:11px;color:var(--color-text-secondary);">
+              ${hint}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+
+    else {
+      bodyInner = `
+        <div class="profile-builder-custom-section">
+          <div class="profile-builder-divider">Value</div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;gap:8px;align-items:center;">
+              <textarea id="pb-custom-text" class="profile-builder-custom-input" rows="3"
+                placeholder='${hint}'></textarea>
+              <button class="profile-builder-custom-btn">Apply</button>
+            </div>
+            <div style="font-size:11px;color:var(--color-text-secondary);">
+              ${hint}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     modal.innerHTML = `
       <div class="profile-builder-modal-content">
         <div class="profile-builder-modal-header">
-          <h3>Select template for <code>${field.name}</code></h3>
+          <h3>Set value for <code>${field.fullPath}</code></h3>
           <button class="profile-builder-modal-close">&times;</button>
         </div>
-        <div class="profile-builder-modal-body"></div>
+        <div class="profile-builder-modal-body">
+          ${bodyInner}
+        </div>
       </div>
     `;
 
-    const bodyEl = modal.querySelector('.profile-builder-modal-body');
+    modal.querySelector('.profile-builder-modal-close').addEventListener('click', close);
 
-    // Add template buttons
-    field.templates.forEach((t, idx) => {
-      const btn = document.createElement('button');
-      btn.className = 'profile-builder-template-btn';
-      btn.innerHTML = `
-        <div class="profile-builder-template-label">${t.label}</div>
-        <code>${JSON.stringify(t.value).substring(0, 60)}${JSON.stringify(t.value).length > 60 ? '...' : ''}</code>
-      `;
-      btn.addEventListener('click', (e) => {
+    const applyBtn = modal.querySelector('.profile-builder-custom-btn');
+
+    if (field.valueType === 'composite_cn') {
+      applyBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        this.insertField(field, field.templates[idx]);
-        modal.remove();
+        const valueInput = modal.querySelector('#pb-cn-value').value.trim();
+        const value = valueInput || 'device.example.com';
+        const required = modal.querySelector('#pb-cn-required').checked;
+        this.insertField(field, { required, default: value });
+        close();
       });
-      bodyEl.appendChild(btn);
-    });
-
-    // Add custom input section
-    const customDiv = document.createElement('div');
-    customDiv.className = 'profile-builder-custom-section';
-    customDiv.innerHTML = `
-      <div class="profile-builder-divider">Or enter a custom value</div>
-      <div style="display: flex; gap: 8px; margin-top: 12px;">
-        <input type="text"
-               id="custom-value-input"
-               class="profile-builder-custom-input"
-               placeholder="Enter custom value (JSON format)" />
-        <button class="profile-builder-custom-btn">Add Custom</button>
-      </div>
-    `;
-
-    bodyEl.appendChild(customDiv);
-
-    const customInput = customDiv.querySelector('#custom-value-input');
-    const customBtn = customDiv.querySelector('.profile-builder-custom-btn');
-
-    const insertCustom = () => {
-      const inputValue = customInput.value.trim();
-      if (!inputValue) {
-        this.showNotification('Please enter a value', 'error');
-        return;
-      }
-
-      try {
+    } else if (field.valueType === 'composite_key_usage') {
+      applyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const ds = modal.querySelector('#pb-ku-ds').checked;
+        const ke = modal.querySelector('#pb-ku-ke').checked;
+        const critical = modal.querySelector('#pb-ku-critical').checked;
+        this.insertField(field, {
+          digital_signature: ds,
+          key_encipherment: ke,
+          critical: critical
+        });
+        close();
+      });
+    } else if (field.valueType === 'composite_eku') {
+      applyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const raw = modal.querySelector('#pb-eku-list').value.trim();
+        const usages = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : [];
+        this.insertField(field, { usages });
+        close();
+      });
+    } else if (field.valueType === 'composite_san') {
+      applyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const dnsRaw = modal.querySelector('#pb-san-dns').value.trim();
+        const ipRaw = modal.querySelector('#pb-san-ip').value.trim();
+        const dns = dnsRaw ? dnsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+        const ip = ipRaw ? ipRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+        this.insertField(field, { dns, ip });
+        close();
+      });
+    } else if (field.valueType === 'composite_basic_constraints') {
+      applyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const ca = modal.querySelector('#pb-bc-ca').checked;
+        const critical = modal.querySelector('#pb-bc-critical').checked;
+        this.insertField(field, { ca, critical });
+        close();
+      });
+    } else if (field.valueType === 'number') {
+      modal.querySelectorAll('.profile-builder-template-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          const v = Number(btn.getAttribute('data-number'));
+          this.insertField(field, v);
+          close();
+        });
+      });
+      applyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const v = Number(modal.querySelector('#pb-custom-number').value);
+        if (!Number.isFinite(v)) {
+          this.showNotification('Please enter a valid number', 'error');
+          return;
+        }
+        this.insertField(field, v);
+        close();
+      });
+    } else {
+      applyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const raw = modal.querySelector('#pb-custom-text').value.trim();
+        if (!raw) {
+          this.showNotification('Please enter a value', 'error');
+          return;
+        }
         let value;
         try {
-          value = JSON.parse(inputValue);
+          value = JSON.parse(raw);
         } catch {
-          value = inputValue;
+          value = raw;
         }
-
-        this.insertField(field, { label: 'Custom', value });
-        modal.remove();
-      } catch (error) {
-        this.showNotification(`Error: ${error.message}`, 'error');
-      }
-    };
-
-    customBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      insertCustom();
-    });
-
-    customInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        insertCustom();
-      }
-    });
-
-    modal.querySelector('.profile-builder-modal-close').addEventListener('click', () => modal.remove());
-    modal.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') modal.remove();
-    });
+        this.insertField(field, value);
+        close();
+      });
+    }
 
     document.body.appendChild(modal);
-    customInput.focus();
   }
 
-  /** FIXED: Safe nested insert + textarea-only .value */
-  insertField(field, template) {
+  insertField(field, value) {
     try {
       let json = this.parseEditorJson();
       const path = field.fullPath.split('.');
-
       let current = json;
+
       for (let i = 0; i < path.length - 1; i++) {
         const key = path[i];
         if (current[key] === undefined) current[key] = {};
         current = current[key];
       }
 
-      current[path.at(-1)] = template.value ?? null;
-
+      current[path.at(-1)] = value;
       this.updateEditor(json);
-      this.showNotification(`✓ Inserted ${field.name}`, 'success');
+      this.showNotification(`Inserted ${field.fullPath}`, 'success');
     } catch (error) {
       console.error('Insert error:', error);
-      this.showNotification(`✗ Insert failed: ${error.message}`, 'error');
+      this.showNotification(`Insert failed: ${error.message}`, 'error');
     }
   }
 
-  /** FIXED: Use ONLY .value for textarea */
   parseEditorJson() {
     try {
       return JSON.parse(this.editor.value);
     } catch {
-      return { type: 'cert_profile', version: '0.1' };
+      return { type: 'cert_profile', ver: '1.0' };
     }
   }
 
-  /** FIXED: .value only + focus/scroll */
   updateEditor(json) {
     this.editor.value = JSON.stringify(json, null, 2);
     this.editor.dispatchEvent(new Event('input', { bubbles: true }));
@@ -569,20 +620,19 @@ initializeFieldCatalog() {
     this.editor.scrollTop = this.editor.scrollHeight;
   }
 
-  /** FIXED: .value only */
   validateJson() {
     try {
       JSON.parse(this.editor.value);
       this.editor.classList.remove('is-invalid');
       this.editor.classList.add('is-valid');
       const errorEl = document.getElementById('profile_json_error');
-      errorEl && (errorEl.textContent = '');
+      if (errorEl) errorEl.textContent = '';
       return true;
     } catch (error) {
       this.editor.classList.remove('is-valid');
       this.editor.classList.add('is-invalid');
       const errorEl = document.getElementById('profile_json_error');
-      errorEl && (errorEl.textContent = `Invalid JSON: ${error.message}`);
+      if (errorEl) errorEl.textContent = `Invalid JSON: ${error.message}`;
       return false;
     }
   }
@@ -609,5 +659,7 @@ initializeFieldCatalog() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  if (document.getElementById('profile-builder-sidebar')) window.profileBuilder = new CertificateProfileBuilder();
+  if (document.getElementById('profile-builder-sidebar')) {
+    window.profileBuilder = new CertificateProfileBuilder();
+  }
 });

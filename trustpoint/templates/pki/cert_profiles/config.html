@@ -68,10 +68,9 @@
     </form>
 </div>
 
-<!-- Profile Builder Sidebar -->
+
+
 {% include "pki/cert_profiles/includes/profile-builder-sidebar.html" %}
-
-
 {% if json_valid %}
     {{ profile_json|json_script:"json-data" }}
     <script>
@@ -80,9 +79,7 @@
     </script>
 {% endif %}
 
-<!-- Include styles -->
 <link rel="stylesheet" href="{% static 'css/profile-builder-styles.css' %}">
-<!-- Include JavaScript -->
 <script src="{% static 'js/profile-builder.js' %}"></script>
 
 {% endblock content %}
