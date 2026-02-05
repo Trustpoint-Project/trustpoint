@@ -66,15 +66,15 @@ from devices.models import (
     IssuedCredentialModel,
     RemoteDeviceCredentialDownloadModel,
 )
+from devices.revocation import DeviceCredentialRevocation
+from devices.serializers import DeviceSerializer
+from management.models import KeyStorageConfig
 from onboarding.models import (
     NoOnboardingPkiProtocol,
     OnboardingPkiProtocol,
     OnboardingProtocol,
     OnboardingStatus,
 )
-from devices.revocation import DeviceCredentialRevocation
-from devices.serializers import DeviceSerializer
-from management.models import KeyStorageConfig
 from pki.models.ca import CaModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel

@@ -12,7 +12,6 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core import oid
 
-from onboarding.models import NoOnboardingConfigModel, OnboardingConfigModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.crl import CrlModel
@@ -149,7 +148,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
     )
 
     onboarding_config = models.ForeignKey(
-        OnboardingConfigModel,
+        'onboarding.OnboardingConfigModel',
         related_name='remote_cas',
         on_delete=models.PROTECT,
         null=True,
@@ -159,7 +158,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
     )
 
     no_onboarding_config = models.ForeignKey(
-        NoOnboardingConfigModel,
+        'onboarding.NoOnboardingConfigModel',
         related_name='remote_cas',
         on_delete=models.PROTECT,
         null=True,
@@ -329,30 +328,36 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """Validates that exactly one of certificate or credential is set."""
         super().clean()
         if self.ca_type in (self.CaTypeChoice.REMOTE_EST, self.CaTypeChoice.REMOTE_CMP):
-            # Remote CAs
-            if self.certificate is not None or self.credential is not None:
-                raise ValidationError(_('Remote CAs cannot have certificate or credential.'))
-            if not self.remote_host:
-                raise ValidationError(_('Remote host must be set for remote CAs.'))
-            if self.remote_port is None:
-                raise ValidationError(_('Remote port must be set for remote CAs.'))
-            if not (self.onboarding_config or self.no_onboarding_config):
-                raise ValidationError(_('Either onboarding or no-onboarding config must be set for remote CAs.'))
-            if self.onboarding_config and self.no_onboarding_config:
-                raise ValidationError(_('Only one of onboarding or no-onboarding config can be set for remote CAs.'))
+            self._clean_remote_ca()
         else:
-            # Local or keyless CAs
-            if self.certificate is None and self.credential is None:
-                raise ValidationError(_('Either certificate (keyless CA) or credential (issuing CA) must be set.'))
-            if self.certificate is not None and self.credential is not None:
-                raise ValidationError(_('Cannot set both certificate and credential.'))
-            if self.credential is not None and self.ca_type is None:
-                raise ValidationError(_('ca_type must be set for issuing CAs.'))
-            if self.certificate is not None and self.ca_type != self.CaTypeChoice.KEYLESS:
-                raise ValidationError(_('ca_type must be KEYLESS for keyless CAs.'))
-            # Remote fields should not be set for non-remote CAs
-            if self.remote_host or self.remote_port is not None or self.onboarding_config or self.no_onboarding_config:
-                raise ValidationError(_('Remote fields can only be set for remote CAs.'))
+            self._clean_local_or_keyless_ca()
+
+    def _clean_remote_ca(self) -> None:
+        """Validates remote CA fields."""
+        if self.certificate is not None or self.credential is not None:
+            raise ValidationError(_('Remote CAs cannot have certificate or credential.'))
+        if not self.remote_host:
+            raise ValidationError(_('Remote host must be set for remote CAs.'))
+        if self.remote_port is None:
+            raise ValidationError(_('Remote port must be set for remote CAs.'))
+        if not (self.onboarding_config or self.no_onboarding_config):
+            raise ValidationError(_('Either onboarding or no-onboarding config must be set for remote CAs.'))
+        if self.onboarding_config and self.no_onboarding_config:
+            raise ValidationError(_('Only one of onboarding or no-onboarding config can be set for remote CAs.'))
+
+    def _clean_local_or_keyless_ca(self) -> None:
+        """Validates local or keyless CA fields."""
+        if self.certificate is None and self.credential is None:
+            raise ValidationError(_('Either certificate (keyless CA) or credential (issuing CA) must be set.'))
+        if self.certificate is not None and self.credential is not None:
+            raise ValidationError(_('Cannot set both certificate and credential.'))
+        if self.credential is not None and self.ca_type is None:
+            raise ValidationError(_('ca_type must be set for issuing CAs.'))
+        if self.certificate is not None and self.ca_type != self.CaTypeChoice.KEYLESS:
+            raise ValidationError(_('ca_type must be KEYLESS for keyless CAs.'))
+        # Remote fields should not be set for non-remote CAs
+        if self.remote_host or self.remote_port is not None or self.onboarding_config or self.no_onboarding_config:
+            raise ValidationError(_('Remote fields can only be set for remote CAs.'))
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Override save to ensure validation."""

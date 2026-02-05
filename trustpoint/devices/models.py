@@ -14,10 +14,6 @@ from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 
-from pki.models.certificate import CertificateModel, RevokedCertificateModel
-from pki.models.credential import CredentialModel
-from pki.models.domain import DomainModel
-from pki.models.truststore import TruststoreModel
 from onboarding.models import (
     AbstractPkiProtocolModel,
     NoOnboardingConfigModel,
@@ -27,8 +23,10 @@ from onboarding.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
+from pki.models.certificate import CertificateModel, RevokedCertificateModel
+from pki.models.credential import CredentialModel
+from pki.models.domain import DomainModel
 from util.db import CustomDeleteActionModel
-from util.encrypted_fields import EncryptedCharField
 
 if TYPE_CHECKING:
     from typing import Any

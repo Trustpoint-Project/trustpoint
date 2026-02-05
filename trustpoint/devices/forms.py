@@ -19,6 +19,7 @@ from devices.models import (
     IssuedCredentialModel,
     RemoteDeviceCredentialDownloadModel,
 )
+from devices.utils import validate_application_uri, validate_common_name_characters
 from onboarding.models import (
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
@@ -27,7 +28,6 @@ from onboarding.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
-from devices.utils import validate_application_uri, validate_common_name_characters
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel

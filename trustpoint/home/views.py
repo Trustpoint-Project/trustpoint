@@ -21,8 +21,8 @@ from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
 
 from devices.models import DeviceModel, IssuedCredentialModel
-from onboarding.models import OnboardingProtocol, OnboardingStatus
 from notifications.models import NotificationModel, NotificationStatus
+from onboarding.models import OnboardingProtocol, OnboardingStatus
 from pki.models import CaModel, CertificateModel, CertificateProfileModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
