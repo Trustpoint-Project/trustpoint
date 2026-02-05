@@ -135,20 +135,27 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         help_text=_('The truststore containing the full certificate chain for this CA.')
     )
 
-    # For remote CAs: connection details and onboarding configuration
     remote_host = models.CharField(
         verbose_name=_('Remote Host'),
-        max_length=253,  # max FQDN length
+        max_length=253,
         blank=True,
         default='',
-        help_text=_('The hostname or IP address of the remote CA server')
+        help_text=_('The hostname or IP address of the remote PKI')
     )
 
     remote_port = models.PositiveIntegerField(
         verbose_name=_('Remote Port'),
         blank=True,
         null=True,
-        help_text=_('The port number of the remote CA server')
+        help_text=_('The port number of the remote PKI')
+    )
+
+    remote_path = models.CharField(
+        verbose_name=_('Remote Path'),
+        max_length=255,
+        blank=True,
+        default='',
+        help_text=_('The path on the remote PKI')
     )
 
     onboarding_config = models.ForeignKey(
@@ -347,6 +354,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(_('Remote host must be set for remote CAs.'))
         if self.remote_port is None:
             raise ValidationError(_('Remote port must be set for remote CAs.'))
+        if not self.remote_path:
+            raise ValidationError(_('Remote path must be set for remote CAs.'))
         if not (self.onboarding_config or self.no_onboarding_config):
             raise ValidationError(_('Either onboarding or no-onboarding config must be set for remote CAs.'))
         if self.onboarding_config and self.no_onboarding_config:
@@ -364,6 +373,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(_('Remote host must be set for remote issuing CAs.'))
         if self.remote_port is None:
             raise ValidationError(_('Remote port must be set for remote issuing CAs.'))
+        if not self.remote_path:
+            raise ValidationError(_('Remote path must be set for remote issuing CAs.'))
         if not (self.onboarding_config or self.no_onboarding_config):
             raise ValidationError(_('Either onboarding or no-onboarding config must be set for remote issuing CAs.'))
         if self.onboarding_config and self.no_onboarding_config:
@@ -380,7 +391,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.certificate is not None and self.ca_type != self.CaTypeChoice.KEYLESS:
             raise ValidationError(_('ca_type must be KEYLESS for keyless CAs.'))
         # Remote fields should not be set for local/keyless CAs
-        if self.remote_host or self.remote_port is not None or self.onboarding_config or self.no_onboarding_config:
+        if (self.remote_host or self.remote_port is not None or self.remote_path or
+            self.onboarding_config or self.no_onboarding_config):
             raise ValidationError(_('Remote fields can only be set for remote CAs.'))
 
     def save(self, *args: Any, **kwargs: Any) -> None:
