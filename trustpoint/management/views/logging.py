@@ -121,7 +121,7 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
 
     template_name = 'management/logging/logging_files.html'
     context_object_name = 'log_files'
-    default_sort_param = 'filename'
+    default_sort_param = 'updated_at'
     paginate_by = None
 
     page_category = 'management'
@@ -171,6 +171,14 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
         file_data_list = [self._get_log_file_data(log_file_name) for log_file_name in all_files]
 
         self.queryset = [data for data in file_data_list if data]
+
+        def sort_key(item: dict[str, str]) -> datetime.datetime:
+            if item['updated_at'] == _('None'):
+                return datetime.datetime.min.replace(tzinfo=datetime.UTC)
+            date_str = item['updated_at'][:-4]
+            return datetime.datetime.strptime(date_str, DATE_FORMAT).replace(tzinfo=datetime.UTC)
+
+        self.queryset.sort(key=sort_key, reverse=True)
         return self.queryset
 
 
