@@ -54,14 +54,6 @@ function resetIssuingCaRadios() {
     remoteIssuingCaCmpRadio.checked = false;
 }
 
-function redirectAddIssuingCa() {
-    if (localIssuingCaRadio.checked) {
-        window.location.href = document.querySelector('input[name="local-issuing-ca"]:checked').value;
-    } else if (remoteIssuingCaRadio.checked) {
-        window.location.href = document.querySelector('input[name="remote-issuing-ca"]:checked').value;
-    }
-}
-
 const p12FileForm = document.getElementById('p12-file-form');
 const p12FileRadio = document.getElementById('p12-file-radio');
 if (p12FileRadio) {
@@ -89,19 +81,50 @@ const checkboxColumn = document.querySelector('#checkbox-column > input');
 const checkboxes = document.querySelectorAll('.row_checkbox > input');
 const tableSelectButtons = document.querySelectorAll('.tp-table-select-btn');
 
+function isSafeRelativePath(path) {
+    if (typeof path !== 'string') {
+        return false;
+    }
+    // Only allow same-origin relative paths starting with a single "/"
+    if (!path.startsWith('/') || path.startsWith('//')) {
+        return false;
+    }
+    // Disallow schemes such as "javascript:", "http:", etc. before the first "/"
+    const firstSlashIndex = path.indexOf('/', 1);
+    const prefix = firstSlashIndex === -1 ? path : path.slice(0, firstSlashIndex);
+    if (prefix.includes(':')) {
+        return false;
+    }
+    return true;
+}
 
 checkboxColumn?.addEventListener('change', toggleAllCheckboxes);
 if (checkboxColumn) {
     tableSelectButtons.forEach(function(el) {
         el.addEventListener('click', function(event) {
-            let url_path = event.target.getAttribute('data-tp-url') + '/';
+            const rawUrl = event.target.getAttribute('data-tp-url');
+            if (!isSafeRelativePath(rawUrl)) {
+                return;
+            }
+            
+            const checkedIds = [];
             checkboxes.forEach(function(el) {
-                if (el.checked) {
-                    url_path += el.value + '/';
-                    at_least_one_checked = true;
+                if (el.checked && /^\d+$/.test(el.value)) {
+                    checkedIds.push(el.value);
                 }
             });
-            window.location.href = url_path;
+            
+            try {
+                const url = new URL(rawUrl + '/', window.location.origin);
+                checkedIds.forEach(function(id) {
+                    url.pathname = url.pathname.replace(/\/$/, '') + '/' + encodeURIComponent(id);
+                });
+                url.pathname += '/';
+                
+                window.location.assign(url.pathname);
+            } catch (e) {
+                console.error('Invalid URL construction:', e);
+            }
         })
     });
 }

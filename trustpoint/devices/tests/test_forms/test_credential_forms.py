@@ -209,6 +209,64 @@ class TestApplicationUriFormMixin:
         assert not form.is_valid()
         assert 'application_uri' in form.errors
 
+    def test_clean_application_uri_http_https_rejected(self, device_instance: dict[str, Any]) -> None:
+        """Test that HTTP and HTTPS application URIs are rejected."""
+        device = device_instance['device']
+        domain = device_instance['domain']
+        
+        initial_data = {
+            'pseudonym': 'opcua-client-pseudonym',
+            'domain_component': domain.unique_name,
+            'serial_number': device.serial_number,
+        }
+        
+        invalid_uris = [
+            'http://example.com/app',
+            'https://secure.example.com/api',
+        ]
+        
+        for invalid_uri in invalid_uris:
+            form_data = {
+                'common_name': 'opcua-client-cert',
+                'validity': 365,
+                'application_uri': invalid_uri,
+            }
+            
+            form = IssueOpcUaClientCredentialForm(data=form_data, initial=initial_data, device=device)
+            
+            assert not form.is_valid(), f'Form should reject HTTP/HTTPS URI: {invalid_uri}'
+            assert 'application_uri' in form.errors
+            assert 'not allowed' in str(form.errors['application_uri'][0]).lower()
+
+    def test_clean_application_uri_invalid_scheme(self, device_instance: dict[str, Any]) -> None:
+        """Test that application URIs without valid schemes are rejected."""
+        device = device_instance['device']
+        domain = device_instance['domain']
+        
+        initial_data = {
+            'pseudonym': 'opcua-client-pseudonym',
+            'domain_component': domain.unique_name,
+            'serial_number': device.serial_number,
+        }
+        
+        invalid_uris = [
+            'invalid-uri',
+            'no-scheme',
+            'urn:',  # Incomplete URN
+        ]
+        
+        for invalid_uri in invalid_uris:
+            form_data = {
+                'common_name': 'opcua-client-cert',
+                'validity': 365,
+                'application_uri': invalid_uri,
+            }
+            
+            form = IssueOpcUaClientCredentialForm(data=form_data, initial=initial_data, device=device)
+            
+            assert not form.is_valid(), f'Form should reject invalid URI: {invalid_uri}'
+            assert 'application_uri' in form.errors
+
 
 @pytest.mark.django_db
 class TestIssueOpcUaClientCredentialForm:

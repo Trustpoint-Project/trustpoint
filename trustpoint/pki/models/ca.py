@@ -56,7 +56,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         REMOTE_CMP = 5, _('Remote-CMP')
 
 
-    # Core CA attributes (from CaModel)
     unique_name = models.CharField(
         verbose_name=_('CA Name'),
         max_length=100,
@@ -156,15 +155,11 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             str: Human-readable string that represents this CaModel entry.
         """
-        if hasattr(self, 'ca') and self.ca:
-            return str(self.ca.unique_name)
-        pk_str = str(self.pk)
-        return f'CaModel(id={pk_str})'
+        return self.unique_name
 
     def __repr__(self) -> str:
         """Returns a string representation of the CaModel instance."""
-        unique_name = self.ca.unique_name if hasattr(self, 'ca') and self.ca else f'id={self.pk}'
-        return f'CaModel({unique_name})'
+        return f'CaModel({self.unique_name})'
 
     @property
     def is_issuing_ca(self) -> bool:
@@ -231,6 +226,37 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
         return self.credential
+
+    def get_ca_chain_from_truststore(self) -> list[CaModel]:
+        """Returns the CA chain from the associated chain_truststore.
+
+        This method validates that the chain_truststore contains certificates that correspond to CAs
+        in the hierarchy path, and returns the CA objects in issuing CA to root order.
+
+        Returns:
+            list[CaModel]: List of CA models from issuing CA to root CA.
+
+        Raises:
+            ValueError: If the chain_truststore is not properly configured or contains invalid certificates.
+        """
+        if not self.chain_truststore:
+            msg = f'CA "{self.unique_name}" has no chain_truststore configured'
+            raise ValueError(msg)
+
+        ca_chain = []
+        for truststore_order in self.chain_truststore.truststoreordermodel_set.order_by('order'):
+            cert = truststore_order.certificate
+            try:
+                ca = CaModel.objects.get(
+                    models.Q(credential__certificate=cert) | models.Q(certificate=cert)
+                )
+                ca_chain.append(ca)
+            except CaModel.DoesNotExist as e:
+                msg = f'Certificate in chain_truststore does not correspond to any CA: {cert.common_name}'
+                raise ValueError(msg) from e
+
+        ca_chain.reverse()
+        return ca_chain
 
     @property
     def last_crl_issued_at(self) -> datetime.datetime | None:

@@ -43,7 +43,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             validity_days = random_integer * sign
             ee, key = self.create_ee(
                 issuer_private_key=issuing_1_key,
-                issuer_cn='issuing_ca',
+                issuer_name=issuing_1.subject,
                 subject_name=f'EE {i}',
                 extensions=[(key_usage_extension, False)],
                 validity_days=validity_days,
