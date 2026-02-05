@@ -356,7 +356,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """Validates remote issuing CA fields."""
         if self.certificate is not None:
             raise ValidationError(_('Remote issuing CAs cannot have certificate set.'))
-        if self.credential is None:
+        # Allow credential to be None for unsaved instances (will be set in form save method)
+        if self.pk is not None and self.credential is None:
             raise ValidationError(_('Remote issuing CAs must have credential set.'))
         if self.ca_type is None:
             raise ValidationError(_('ca_type must be set for remote issuing CAs.'))
@@ -364,7 +365,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(_('Remote host must be set for remote issuing CAs.'))
         if self.remote_port is None:
             raise ValidationError(_('Remote port must be set for remote issuing CAs.'))
-        if not (self.onboarding_config or self.no_onboarding_config):
+        # Allow onboarding configs to be None for unsaved instances (will be set in form save method)
+        if self.pk is not None and not (self.onboarding_config or self.no_onboarding_config):
             raise ValidationError(_('Either onboarding or no-onboarding config must be set for remote issuing CAs.'))
         if self.onboarding_config and self.no_onboarding_config:
             raise ValidationError(_('Only one onboarding config can be set for remote issuing CAs.'))

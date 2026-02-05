@@ -1,0 +1,64 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% block content %}
+    <div class="card tp-card-centered">
+        <div class="card-header">
+            <h2>{% trans 'Request CA Certificate via EST' %}</h2>
+        </div>
+
+        <div class="card-body">
+            <h3>{{ issuing_ca.unique_name }}</h3>
+            <hr class="hr-m">
+
+            <div class="alert alert-info" role="alert">
+                <h4 class="alert-heading">{% trans 'Ready to Request Certificate' %}</h4>
+                <p>{% trans 'The CA has been created with a private key and temporary certificate. Click the button below to request the actual CA certificate from the remote EST server.' %}</p>
+            </div>
+
+            <div class="tp-kvp-list">
+                <div>
+                    <div>{% trans 'CA Name' %}</div>
+                    <div>{{ issuing_ca.unique_name }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'CA Type' %}</div>
+                    <div>{{ issuing_ca.get_ca_type_display }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Remote Host' %}</div>
+                    <div>{{ issuing_ca.remote_host }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Remote Port' %}</div>
+                    <div>{{ issuing_ca.remote_port }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Current Certificate' %}</div>
+                    <div>
+                        {% if issuing_ca.credential.certificate.common_name|slice:":5" == "Temp-" %}
+                            <span class="text-warning">{% trans 'Temporary Certificate' %}</span>
+                        {% else %}
+                            {{ issuing_ca.credential.certificate.common_name }}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="alert alert-warning mt-3" role="alert">
+                <strong>{% trans 'Note:' %}</strong> {% trans 'EST certificate request client implementation is pending. This will perform the actual certificate request.' %}
+            </div>
+        </div>
+
+        <div class="card-footer d-flex justify-content-between">
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+            </div>
+            <div class="tp-card-btn-footer m-1">
+                <form method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary">{% trans 'Request CA Certificate via EST' %}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock content %}

@@ -12,7 +12,7 @@ from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -32,6 +32,8 @@ from pki.forms import (
     IssuingCaAddFileImportPkcs12Form,
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddMethodSelectForm,
+    IssuingCaAddRequestEstForm,
+    IssuingCaAddRequestCmpForm,
 )
 from pki.models import CaModel, CertificateModel
 from pki.serializer import IssuingCaSerializer
@@ -150,6 +152,42 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView[Is
         return super().form_valid(form)
 
 
+class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddRequestEstForm]):
+    """View to request an Issuing CA certificate using EST."""
+
+    template_name = 'pki/issuing_cas/add/request_est.html'
+    form_class = IssuingCaAddRequestEstForm
+
+    def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        ca = form.save()
+        messages.success(
+            self.request,
+            _('Successfully created Issuing CA {name}. Please proceed to request the certificate.').format(
+                name=ca.unique_name
+            ),
+        )
+        return redirect('pki:issuing_cas-request-cert-est', pk=ca.pk)
+
+
+class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddRequestCmpForm]):
+    """View to request an Issuing CA certificate using CMP."""
+
+    template_name = 'pki/issuing_cas/add/request_cmp.html'
+    form_class = IssuingCaAddRequestCmpForm
+
+    def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        ca = form.save()
+        messages.success(
+            self.request,
+            _('Successfully created Issuing CA {name}. Please proceed to request the certificate.').format(
+                name=ca.unique_name
+            ),
+        )
+        return redirect('pki:issuing_cas-request-cert-cmp', pk=ca.pk)
+
+
 class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel]):
     """View to display the details of an Issuing CA."""
 
@@ -184,6 +222,58 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         context['issued_certificates'] = issued_certificates
         context['active_crl'] = issuing_ca.get_active_crl()
         return context
+
+
+class IssuingCaRequestCertEstView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel]):
+    """View to display the EST certificate request page."""
+
+    model = CaModel
+    template_name = 'pki/issuing_cas/request_cert_est.html'
+    context_object_name = 'issuing_ca'
+
+    def get_queryset(self) -> QuerySet[CaModel, CaModel]:
+        """Return only EST remote issuing CAs."""
+        return CaModel.objects.filter(ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_EST)
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle POST request to request certificate via EST."""
+        ca = self.get_object()
+
+        # TODO(FlorianHandke): Implement EST certificate request client
+        # This should:
+        # 1. Create a certificate signing request (CSR) from the private key
+        # 2. Send EST request to ca.remote_host:ca.remote_port
+        # 3. Using ca.no_onboarding_config.est_password for authentication
+        # 4. Receive the certificate response
+        # 5. Update ca.credential with the new certificate
+        messages.warning(request, _('EST certificate request not yet implemented.'))
+        return redirect('pki:issuing_cas-config', pk=ca.pk)
+
+
+class IssuingCaRequestCertCmpView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel]):
+    """View to display the CMP certificate request page."""
+
+    model = CaModel
+    template_name = 'pki/issuing_cas/request_cert_cmp.html'
+    context_object_name = 'issuing_ca'
+
+    def get_queryset(self) -> QuerySet[CaModel, CaModel]:
+        """Return only CMP remote issuing CAs."""
+        return CaModel.objects.filter(ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_CMP)
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle POST request to request certificate via CMP."""
+        ca = self.get_object()
+
+        # TODO(FlorianHandke): Implement CMP certificate request client
+        # This should:
+        # 1. Create a certificate signing request (CSR) from the private key
+        # 2. Send CMP request to ca.remote_host:ca.remote_port
+        # 3. Using ca.no_onboarding_config.cmp_shared_secret for authentication
+        # 4. Receive the certificate response
+        # 5. Update ca.credential with the new certificate
+        messages.warning(request, _('CMP certificate request not yet implemented.'))
+        return redirect('pki:issuing_cas-config', pk=ca.pk)
 
 
 class KeylessCaConfigView(LoggerMixin, KeylessCaContextMixin, DetailView[CaModel]):

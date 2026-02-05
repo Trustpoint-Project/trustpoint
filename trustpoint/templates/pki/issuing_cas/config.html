@@ -244,6 +244,37 @@
 
                         {% endif %}
 
+                        {% if issuing_ca.credential.certificate.common_name|slice:":5" == "Temp-" %}
+                        <h3>{% trans 'Certificate Request' %}</h3>
+                        <hr class="hr-m">
+                        <div class="tp-kvp-list">
+                            <div>
+                                <div>{% trans 'Status' %}</div>
+                                <div class="text-warning">{% trans 'Certificate not yet requested' %}</div>
+                            </div>
+                            <div>
+                                <div>{% trans 'Actions' %}</div>
+                                <div>
+                                    {% if issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_EST %}
+                                        <form method="post" action="{% url 'pki:issuing_cas-request-cert-est' pk=issuing_ca.pk %}" style="display: inline;">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-primary">
+                                                {% trans 'Request CA Certificate via EST' %}
+                                            </button>
+                                        </form>
+                                    {% elif issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_CMP %}
+                                        <form method="post" action="{% url 'pki:issuing_cas-request-cert-cmp' pk=issuing_ca.pk %}" style="display: inline;">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-sm btn-primary">
+                                                {% trans 'Request CA Certificate via CMP' %}
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
                         <h3>{% trans 'CRL' %}</h3>
                         <hr class="hr-m">
                         <div class="tp-kvp-list">
