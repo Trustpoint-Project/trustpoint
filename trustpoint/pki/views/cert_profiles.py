@@ -16,7 +16,7 @@ from django.utils.translation import gettext as _
 from django.views.generic.edit import FormView, UpdateView
 from django.views.generic.list import ListView
 
-from pki.forms import CertProfileConfigForm, CertificateIssuanceForm
+from pki.forms import CertificateIssuanceForm, CertProfileConfigForm
 from pki.models import CertificateProfileModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig

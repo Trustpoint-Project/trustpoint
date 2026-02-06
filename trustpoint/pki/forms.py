@@ -1117,13 +1117,13 @@ class CertificateIssuanceForm(forms.Form):
         """Add fields based on the profile."""
         subject = self.profile.get('subj', {})
         self._add_subj_fields(subject)
-        
+
         extensions = self.profile.get('ext', {})
         san = extensions.get('subject_alternative_name', extensions.get('san', {}))
         if not isinstance(san, dict):
             san = {}
         self._add_san_fields(san)
-        
+
         validity = self.profile.get('validity', {})
         self._add_validity_fields(validity)
 
@@ -1140,25 +1140,25 @@ class CertificateIssuanceForm(forms.Form):
             'email_address': 'emailAddress'
         }
         abbrev_to_full = {v: k for k, v in field_mapping.items()}
-        
+
         standard_fields = [
             'common_name', 'organization_name', 'organizational_unit_name',
             'country_name', 'state_or_province_name', 'locality_name', 'email_address'
         ]
         field_order = {field: i for i, field in enumerate(standard_fields)}
-        
+
         explicit_fields = {k: v for k, v in subject.items() if k != 'allow'}
         allow = subject.get('allow')
-        
+
         if allow == '*':
             allowed_additional = set(standard_fields)
         elif isinstance(allow, list):
             allowed_additional = {abbrev_to_full.get(item.lower(), item) for item in allow}
         else:
             allowed_additional = set()
-        
+
         all_allowed = set(explicit_fields.keys()) | allowed_additional
-        
+
         field_list = []
         for field_name in all_allowed:
             abbrev = field_mapping.get(field_name, field_name)
@@ -1179,10 +1179,10 @@ class CertificateIssuanceForm(forms.Form):
                 has_default = default is not None
             else:
                 initial = field_config or ''
-                mutable = True  # additional allowed fields are mutable
+                mutable = subject.get('allow') == '*'  # mutable only if allow: *
                 required = False
                 has_default = False
-            
+
             field_list.append({
                 'field_name': field_name,
                 'initial': initial,
@@ -1191,10 +1191,10 @@ class CertificateIssuanceForm(forms.Form):
                 'has_default': has_default,
                 'order': field_order.get(field_name, len(standard_fields))
             })
-        
+
         # Sort: required first, then has_default, then by order
         field_list.sort(key=lambda x: (not x['required'], not x['has_default'], x['order']))
-        
+
         for field_info in field_list:
             field_name = field_info['field_name']
             display_label = dict(zip(standard_fields, [
@@ -1214,22 +1214,22 @@ class CertificateIssuanceForm(forms.Form):
     def _add_san_fields(self, san: dict[str, Any]) -> None:
         """Add subject alternative name fields."""
         san_field_names = ['dns_names', 'ip_addresses', 'rfc822_names', 'uris']
-        san_labels = ['DNS Names (comma separated)', 'IP Addresses (comma separated)', 
+        san_labels = ['DNS Names (comma separated)', 'IP Addresses (comma separated)',
                       'Email Addresses (comma separated)', 'URIs (comma separated)']
         field_order = {field: i for i, field in enumerate(san_field_names)}
-        
+
         explicit_fields = {k: v for k, v in san.items() if k != 'allow'}
         allow = san.get('allow')
-        
+
         if allow == '*':
             allowed_additional = set(san_field_names)
         elif isinstance(allow, list):
             allowed_additional = set(allow)
         else:
             allowed_additional = set()
-        
+
         all_allowed = set(explicit_fields.keys()) | allowed_additional
-        
+
         field_list = []
         for field_name in all_allowed:
             if field_name in explicit_fields and explicit_fields[field_name] is None:
@@ -1250,10 +1250,10 @@ class CertificateIssuanceForm(forms.Form):
                 has_default = default is not None
             else:
                 initial = field_config or ''
-                mutable = True  # additional allowed fields are mutable
+                mutable = san.get('allow') == '*'  # mutable only if allow: *
                 required = False
                 has_default = False
-            
+
             field_list.append({
                 'field_name': field_name,
                 'initial': initial,
@@ -1262,10 +1262,10 @@ class CertificateIssuanceForm(forms.Form):
                 'has_default': has_default,
                 'order': field_order.get(field_name, len(san_field_names))
             })
-        
+
         # Sort: required first, then has_default, then by order
         field_list.sort(key=lambda x: (not x['required'], not x['has_default'], x['order']))
-        
+
         for field_info in field_list:
             field_name = field_info['field_name']
             display_label = dict(zip(san_field_names, san_labels, strict=True)).get(field_name, field_name)
@@ -1284,13 +1284,13 @@ class CertificateIssuanceForm(forms.Form):
         validity_field_names = ['days', 'hours', 'minutes', 'seconds']
         validity_labels = ['Days', 'Hours', 'Minutes', 'Seconds']
         field_order = {field: i for i, field in enumerate(validity_field_names)}
-        
+
         allowed_fields = validity.get('allow', [])
         if allowed_fields == '*':
             allowed_fields = validity_field_names
-        
+
         explicit_fields = {k: v for k, v in validity.items() if k != 'allow'}
-        
+
         field_list = []
         for field_name in explicit_fields:
             if field_name not in validity_field_names:
@@ -1312,10 +1312,10 @@ class CertificateIssuanceForm(forms.Form):
                 has_default = default is not None
             else:
                 initial = field_config or 0
-                mutable = False
+                mutable = validity.get('allow') == '*'  # mutable only if allow: *
                 required = False
                 has_default = False
-            
+
             field_list.append({
                 'field_name': field_name,
                 'initial': initial,
@@ -1324,7 +1324,7 @@ class CertificateIssuanceForm(forms.Form):
                 'has_default': has_default,
                 'order': field_order.get(field_name, len(validity_field_names))
             })
-        
+
         # Add additional allowed fields not explicitly configured
         for field_name in allowed_fields:
             if field_name in explicit_fields:
@@ -1333,7 +1333,7 @@ class CertificateIssuanceForm(forms.Form):
             mutable = True  # additional allowed fields are mutable
             required = False
             has_default = False
-            
+
             field_list.append({
                 'field_name': field_name,
                 'initial': initial,
@@ -1342,10 +1342,10 @@ class CertificateIssuanceForm(forms.Form):
                 'has_default': has_default,
                 'order': field_order.get(field_name, len(validity_field_names))
             })
-        
+
         # Sort: required first, then has_default, then by order
         field_list.sort(key=lambda x: (not x['required'], not x['has_default'], x['order']))
-        
+
         for field_info in field_list:
             field_name = field_info['field_name']
             display_label = dict(zip(validity_field_names, validity_labels, strict=True)).get(field_name, field_name)
