@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import binascii
+import json
 from base64 import b64decode
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
@@ -29,6 +30,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from pki.forms import (
+    CertificateIssuanceForm,
     IssuingCaAddFileImportPkcs12Form,
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddMethodSelectForm,
@@ -36,6 +38,7 @@ from pki.forms import (
     IssuingCaAddRequestEstForm,
 )
 from pki.models import CaModel, CertificateModel
+from pki.models.cert_profile import CertificateProfileModel
 from pki.serializer import IssuingCaSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
@@ -179,11 +182,84 @@ class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddReq
         ca = form.save()
         messages.success(
             self.request,
-            _('Successfully created Issuing CA {name}. Please proceed to request the certificate.').format(
+            _('Successfully created Issuing CA {name}. Please define the certificate content.').format(
                 name=ca.unique_name
             ),
         )
-        return redirect('pki:issuing_cas-request-cert-est', pk=ca.pk)
+        return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+
+
+class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
+    """Mixin for defining certificate content using the issuing_ca profile."""
+
+    form_class = CertificateIssuanceForm
+    ca_type_filter: CaModel.CaTypeChoice
+    redirect_url_name: str
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Dispatch the request, ensuring the CA and profile exist."""
+        self.ca = get_object_or_404(
+            CaModel.objects.filter(ca_type=self.ca_type_filter),
+            pk=kwargs['pk']
+        )
+        try:
+            self.cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
+        except CertificateProfileModel.DoesNotExist:
+            messages.error(
+                request,
+                _('Certificate profile "issuing_ca" not found. Please create it or contact your administrator.')
+            )
+            return redirect('pki:issuing_cas')
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Get form kwargs, including the profile."""
+        kwargs = super().get_form_kwargs()  # type: ignore[misc]
+        raw_profile = json.loads(self.cert_profile.profile_json)
+        kwargs['profile'] = raw_profile
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add additional context data."""
+        context = super().get_context_data(**kwargs)  # type: ignore[misc]
+        context['issuing_ca'] = self.ca
+        context['cert_profile'] = self.cert_profile
+        context['profile_dict'] = self.get_form_kwargs()['profile']
+        return context
+
+    def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
+        """Handle the case where the form is invalid."""
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f'{field}: {error}')
+        return super().form_invalid(form)  # type: ignore[misc]
+
+    def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        # Store the form data in session for use in the request-cert view
+        self.request.session[f'cert_content_data_{self.ca.pk}'] = form.cleaned_data
+        messages.success(
+            self.request,
+            self.get_success_message()
+        )
+        return redirect(self.redirect_url_name, pk=self.ca.pk)
+
+    def get_success_message(self) -> str:
+        """Get the success message for the form submission."""
+        msg = 'Subclasses must implement get_success_message()'
+        raise NotImplementedError(msg)
+
+
+class IssuingCaDefineCertContentEstView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
+    """View to define certificate content using the issuing_ca profile before requesting via EST."""
+
+    template_name = 'pki/issuing_cas/define_cert_content_est.html'
+    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
+    redirect_url_name = 'pki:issuing_cas-request-cert-est'
+
+    def get_success_message(self) -> str:
+        """Get the success message for the form submission."""
+        return _('Certificate content defined. Please proceed to request the certificate via EST.')
 
 
 class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddRequestCmpForm]):
@@ -213,11 +289,23 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
         ca = form.save()
         messages.success(
             self.request,
-            _('Successfully created Issuing CA {name}. Please proceed to request the certificate.').format(
+            _('Successfully created Issuing CA {name}. Please define the certificate content.').format(
                 name=ca.unique_name
             ),
         )
-        return redirect('pki:issuing_cas-request-cert-cmp', pk=ca.pk)
+        return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
+
+
+class IssuingCaDefineCertContentCmpView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
+    """View to define certificate content using the issuing_ca profile before requesting via CMP."""
+
+    template_name = 'pki/issuing_cas/define_cert_content_cmp.html'
+    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
+    redirect_url_name = 'pki:issuing_cas-request-cert-cmp'
+
+    def get_success_message(self) -> str:
+        """Get the success message for the form submission."""
+        return _('Certificate content defined. Please proceed to request the certificate via CMP.')
 
 
 class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel]):
@@ -254,44 +342,139 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         return context
 
 
-class IssuingCaRequestCertEstView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel]):
+class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
+    """Mixin for certificate request views for EST and CMP protocols."""
+
+    model = CaModel
+    context_object_name = 'issuing_ca'
+    ca_type_filter: CaModel.CaTypeChoice
+    redirect_url_name: str
+
+    def get_queryset(self) -> QuerySet[CaModel, CaModel]:
+        """Return only CAs matching the protocol-specific type filter."""
+        return CaModel.objects.filter(ca_type=self.ca_type_filter)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the issuing_ca certificate profile and cert content summary to the context."""
+        context = super().get_context_data(**kwargs)  # type: ignore[misc]
+
+        # Get certificate profile
+        try:
+            cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
+            context['cert_profile'] = cert_profile
+            context['profile_json'] = cert_profile.profile_json
+        except CertificateProfileModel.DoesNotExist:
+            self.logger.warning('issuing_ca certificate profile not found')
+            context['cert_profile'] = None
+            context['profile_json'] = None
+
+        # Get certificate content data from session
+        ca = self.get_object()  # type: ignore[attr-defined]
+        cert_content_key = f'cert_content_data_{ca.pk}'
+        cert_content_data = self.request.session.get(cert_content_key)  # type: ignore[attr-defined]
+
+        if cert_content_data:
+            context['cert_content_data'] = cert_content_data
+            context['has_cert_content'] = True
+
+            # Build a summary of the certificate content
+            summary = self._build_cert_content_summary(cert_content_data)
+            context['cert_content_summary'] = summary
+        else:
+            context['has_cert_content'] = False
+            context['cert_content_data'] = None
+            context['cert_content_summary'] = None
+
+        return context
+
+    def _build_cert_content_summary(self, cert_data: dict[str, Any]) -> dict[str, Any]:
+        """Build a human-readable summary of the certificate content."""
+        summary: dict[str, Any] = {
+            'subject': {},
+            'san': {},
+            'validity': {}
+        }
+
+        # Subject fields
+        subject_fields = [
+            ('common_name', 'Common Name (CN)'),
+            ('organization_name', 'Organization (O)'),
+            ('organizational_unit_name', 'Organizational Unit (OU)'),
+            ('country_name', 'Country (C)'),
+            ('state_or_province_name', 'State/Province (ST)'),
+            ('locality_name', 'Locality (L)'),
+            ('email_address', 'Email Address'),
+        ]
+
+        for field_name, label in subject_fields:
+            value = cert_data.get(field_name)
+            if value:
+                summary['subject'][label] = value
+
+        # SAN fields
+        san_fields = [
+            ('dns_names', 'DNS Names'),
+            ('ip_addresses', 'IP Addresses'),
+            ('rfc822_names', 'Email Addresses'),
+            ('uris', 'URIs'),
+        ]
+
+        for field_name, label in san_fields:
+            value = cert_data.get(field_name)
+            if value:
+                summary['san'][label] = value
+
+        # Validity
+        validity_parts = []
+        if cert_data.get('days'):
+            validity_parts.append(f"{cert_data['days']} days")
+        if cert_data.get('hours'):
+            validity_parts.append(f"{cert_data['hours']} hours")
+        if cert_data.get('minutes'):
+            validity_parts.append(f"{cert_data['minutes']} minutes")
+        if cert_data.get('seconds'):
+            validity_parts.append(f"{cert_data['seconds']} seconds")
+
+        summary['validity'] = ', '.join(validity_parts) if validity_parts else 'Not specified'
+
+        return summary
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle POST request to request certificate."""
+        ca = self.get_object()  # type: ignore[attr-defined]
+
+        # TODO(FlorianHandke): Implement certificate request client  # noqa: FIX002
+        messages.warning(request, self.get_not_implemented_message())
+        return redirect(self.redirect_url_name, pk=ca.pk)
+
+    def get_not_implemented_message(self) -> str:
+        """Get the not implemented message for the specific protocol."""
+        msg = 'Subclasses must implement get_not_implemented_message()'
+        raise NotImplementedError(msg)
+
+
+class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]):
     """View to display the EST certificate request page."""
 
-    model = CaModel
     template_name = 'pki/issuing_cas/request_cert_est.html'
-    context_object_name = 'issuing_ca'
+    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
+    redirect_url_name = 'pki:issuing_cas-request-cert-est'
 
-    def get_queryset(self) -> QuerySet[CaModel, CaModel]:
-        """Return only EST remote issuing CAs."""
-        return CaModel.objects.filter(ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_EST)
-
-    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Handle POST request to request certificate via EST."""
-        ca = self.get_object()
-
-        # TODO(FlorianHandke): Implement EST certificate request client  # noqa: FIX002
-        messages.warning(request, _('EST certificate request not yet implemented.'))
-        return redirect('pki:issuing_cas-request-cert-est', pk=ca.pk)
+    def get_not_implemented_message(self) -> str:
+        """Get the not implemented message for EST."""
+        return _('EST certificate request not yet implemented.')
 
 
-class IssuingCaRequestCertCmpView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel]):
+class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]):
     """View to display the CMP certificate request page."""
 
-    model = CaModel
     template_name = 'pki/issuing_cas/request_cert_cmp.html'
-    context_object_name = 'issuing_ca'
+    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
+    redirect_url_name = 'pki:issuing_cas-request-cert-cmp'
 
-    def get_queryset(self) -> QuerySet[CaModel, CaModel]:
-        """Return only CMP remote issuing CAs."""
-        return CaModel.objects.filter(ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_CMP)
-
-    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Handle POST request to request certificate via CMP."""
-        ca = self.get_object()
-
-        # TODO(FlorianHandke): Implement CMP certificate request client  # noqa: FIX002
-        messages.warning(request, _('CMP certificate request not yet implemented.'))
-        return redirect('pki:issuing_cas-request-cert-cmp', pk=ca.pk)
+    def get_not_implemented_message(self) -> str:
+        """Get the not implemented message for CMP."""
+        return _('CMP certificate request not yet implemented.')
 
 
 class KeylessCaConfigView(LoggerMixin, KeylessCaContextMixin, DetailView[CaModel]):

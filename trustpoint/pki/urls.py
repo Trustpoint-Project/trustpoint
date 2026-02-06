@@ -146,9 +146,19 @@ urlpatterns = [
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
     path(
+        'issuing-cas/define-cert-content-est/<int:pk>/',
+        issuing_cas.IssuingCaDefineCertContentEstView.as_view(),
+        name='issuing_cas-define-cert-content-est',
+    ),
+    path(
         'issuing-cas/request-cert-est/<int:pk>/',
         issuing_cas.IssuingCaRequestCertEstView.as_view(),
         name='issuing_cas-request-cert-est',
+    ),
+    path(
+        'issuing-cas/define-cert-content-cmp/<int:pk>/',
+        issuing_cas.IssuingCaDefineCertContentCmpView.as_view(),
+        name='issuing_cas-define-cert-content-cmp',
     ),
     path(
         'issuing-cas/request-cert-cmp/<int:pk>/',

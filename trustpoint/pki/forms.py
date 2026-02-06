@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import ipaddress
 import json
-from datetime import UTC, datetime, timedelta
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any, ClassVar, NoReturn, cast
 
 from cryptography import x509
@@ -1261,6 +1261,13 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
 
 class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
     """Form for requesting an Issuing CA certificate using CMP."""
+
+    class Meta:
+        """Meta class for IssuingCaAddRequestCmpForm."""
+        model = CaModel
+        fields: ClassVar[list[str]] = [
+            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type'
+        ]
 
     cmp_shared_secret = forms.CharField(
         label=_('CMP Shared Secret'),
