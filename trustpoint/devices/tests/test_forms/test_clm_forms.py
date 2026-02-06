@@ -321,7 +321,6 @@ class TestClmDeviceModelNoOnboardingForm:
         
         # Set a secret first
         device.no_onboarding_config.cmp_shared_secret = 'test_secret'
-        device.no_onboarding_config.save()
         
         form_data = {
             'common_name': device.common_name,
@@ -380,7 +379,6 @@ class TestClmDeviceModelNoOnboardingForm:
         
         # Set a password first
         device.no_onboarding_config.est_password = 'test_password'
-        device.no_onboarding_config.save()
         
         form_data = {
             'common_name': device.common_name,

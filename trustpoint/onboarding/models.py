@@ -384,11 +384,11 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
 
         if self.cmp_shared_secret != '' and not self.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
             error_messages['cmp_shared_secret'] = (
-                'CMP shared-secret must not be set if EST_USERNAME_PASSWORD is not enabled.'  # noqa: S105
+                'CMP shared-secret must not be set if CMP_SHARED_SECRET is not enabled.'  # noqa: S105
             )
 
         if self.cmp_shared_secret == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
-            error_messages['cmp_shared_secret'] = 'CMP shared-secret must be set if EST_USERNAME_PASSWORD is enabled.'  # noqa: S105
+            error_messages['cmp_shared_secret'] = 'CMP shared-secret must be set if CMP_SHARED_SECRET is enabled.'  # noqa: S105
 
         if self.est_password != '' and not self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
             error_messages['est_password'] = 'EST password must not be set if EST_USERNAME_PASSWORD is not enabled.'  # noqa: S105
