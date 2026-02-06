@@ -9,6 +9,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from pydantic import ValidationError as PydanticValidationError
 from trustpoint_core.serializer import (
@@ -1101,4 +1102,120 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
             raise forms.ValidationError(error_message) from e
         self.instance.display_name = json_dict.get('display_name', '')
         return json.dumps(json_dict)
+
+
+class CertificateIssuanceForm(forms.Form):
+    """Form for defining certificate content based on a profile."""
+
+    def __init__(self, profile: dict[str, Any], *args: Any, **kwargs: Any) -> None:
+        """Initialize the form with a profile."""
+        super().__init__(*args, **kwargs)
+        self.profile = profile
+        self._add_fields_from_profile()
+
+    def _add_fields_from_profile(self) -> None:
+        """Add fields based on the profile."""
+        subject = self.profile.get('subject', {})
+        if subject.get('allow') == '*':
+            self._add_subj_fields(subject)
+        
+        extensions = self.profile.get('extensions', {})
+        san = extensions.get('san') or extensions.get('subject_alternative_name') or {}
+        if not isinstance(san, dict):
+            san = {}
+        self._add_san_fields(san)
+        
+        validity = self.profile.get('validity', {})
+        self._add_validity_fields(validity)
+
+    def _add_subj_fields(self, subject: dict[str, Any]) -> None:
+        """Add subject fields."""
+        standard_fields = [
+            ('common_name', 'Common Name (CN)'),
+            ('organization_name', 'Organization (O)'),
+            ('organizational_unit_name', 'Organizational Unit (OU)'),
+            ('country_name', 'Country (C)'),
+            ('state_or_province_name', 'State or Province (ST)'),
+            ('locality_name', 'Locality (L)'),
+            ('email_address', 'Email Address'),
+        ]
+        for field_name, label in standard_fields:
+            field_config = subject.get(field_name, {})
+            if isinstance(field_config, dict):
+                required = field_config.get('required', False)
+                default = field_config.get('default', '')
+                mutable = field_config.get('mutable', True)
+            else:
+                required = False
+                default = field_config or ''
+                mutable = True
+            display_label = label
+            if required:
+                display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
+            self.fields[field_name] = forms.CharField(
+                required=required,
+                label=mark_safe(display_label),
+                initial=default,
+                disabled=not mutable,
+                widget=forms.TextInput(attrs={'class': 'form-control'})
+            )
+
+    def _add_san_fields(self, san: dict[str, Any]) -> None:
+        """Add subject alternative name fields."""
+        san_fields = [
+            ('dns_names', 'DNS Names (comma separated)'),
+            ('ip_addresses', 'IP Addresses (comma separated)'),
+            ('rfc822_names', 'Email Addresses (comma separated)'),
+            ('uris', 'URIs (comma separated)'),
+        ]
+        for field_name, label in san_fields:
+            field_config = san.get(field_name, {})
+            if isinstance(field_config, dict):
+                required = field_config.get('required', False)
+                default = field_config.get('default', [])
+                initial = ', '.join(default) if isinstance(default, list) else str(default)
+                mutable = field_config.get('mutable', True)
+            else:
+                required = False
+                initial = field_config or ''
+                mutable = True
+            display_label = label
+            if required:
+                display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
+            self.fields[field_name] = forms.CharField(
+                required=required,
+                label=mark_safe(display_label),
+                initial=initial,
+                disabled=not mutable,
+                widget=forms.TextInput(attrs={'class': 'form-control'})
+            )
+
+    def _add_validity_fields(self, validity: dict[str, Any]) -> None:
+        """Add validity fields."""
+        validity_fields = [
+            ('days', 'Days'),
+            ('hours', 'Hours'),
+            ('minutes', 'Minutes'),
+            ('seconds', 'Seconds'),
+        ]
+        for field_name, label in validity_fields:
+            field_config = validity.get(field_name, {})
+            if isinstance(field_config, dict):
+                default = field_config.get('default', 0)
+                mutable = field_config.get('mutable', True)
+                required = field_config.get('required', False)
+            else:
+                default = field_config or 0
+                mutable = True
+                required = False
+            display_label = label
+            if required:
+                display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
+            self.fields[field_name] = forms.IntegerField(
+                required=required,
+                label=mark_safe(display_label),
+                initial=default,
+                disabled=not mutable,
+                widget=forms.NumberInput(attrs={'class': 'form-control'})
+            )
 

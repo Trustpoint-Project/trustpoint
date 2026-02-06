@@ -13,11 +13,13 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
-from django.views.generic.edit import UpdateView
+from pydantic import ValidationError as PydanticValidationError
+from django.views.generic.edit import FormView, UpdateView
 from django.views.generic.list import ListView
 
-from pki.forms import CertProfileConfigForm
+from pki.forms import CertProfileConfigForm, CertificateIssuanceForm
 from pki.models import CertificateProfileModel
+from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -122,6 +124,48 @@ class CertProfileConfigView(LoggerMixin, CertProfileContextMixin,
             _('Successfully updated Certificate Profile {name}.').format(name=cert_profile.unique_name),
         )
         return super().form_valid(form)
+
+
+class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
+                              FormView[CertificateIssuanceForm]):
+    """View to display the issuance form for a Certificate Profile."""
+
+    http_method_names = ('get', 'post')
+    template_name = 'pki/cert_profiles/issuance.html'
+    form_class = CertificateIssuanceForm
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Dispatch the request, ensuring the profile exists."""
+        self.profile = get_object_or_404(CertificateProfileModel, pk=kwargs['pk'])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Get form kwargs, including the profile."""
+        kwargs = super().get_form_kwargs()
+        try:
+            raw_profile = json.loads(self.profile.profile_json)
+            validated_profile = CertProfilePydanticModel.model_validate(raw_profile)
+            profile_dict = validated_profile.model_dump(exclude_unset=False, exclude_defaults=False)
+        except (json.JSONDecodeError, TypeError, PydanticValidationError):
+            profile_dict = {}
+        kwargs['profile'] = profile_dict
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add additional context data."""
+        context = super().get_context_data(**kwargs)
+        context['profile'] = self.profile
+        context['profile_dict'] = self.get_form_kwargs()['profile']
+        return context
+
+    def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        # For now, just redirect back
+        messages.success(
+            self.request,
+            _('Certificate issuance data submitted successfully.'),
+        )
+        return HttpResponseRedirect(reverse_lazy('pki:cert_profiles'))
 
 
 class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
