@@ -252,6 +252,11 @@ urlpatterns = [
         name='cert_profiles-details',
     ),
     path(
+        'cert-profiles/issuance/<int:pk>/',
+        cert_profiles.CertProfileIssuanceView.as_view(),
+        name='cert_profiles-issuance',
+    ),
+    path(
         'cert-profiles/add/',
         cert_profiles.CertProfileConfigView.as_view(),
         name='cert_profiles-add',
