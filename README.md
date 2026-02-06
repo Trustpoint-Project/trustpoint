@@ -4,7 +4,7 @@
 
 **The open source trust anchor software for machines and factories to manage digital identities.**
 
-[![Landing Page](https://img.shields.io/badge/Landing_Page-014BAD)](https://trustpoint.campus-schwarzwald.de/en/)
+[![Landing Page](https://img.shields.io/badge/Landing_Page-014BAD)](https://industrial-security.io)
 [![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-014BAD)](https://github.com/orgs/Trustpoint-Project/discussions)
 [![Read the Docs](https://img.shields.io/readthedocs/trustpoint)](https://trustpoint.readthedocs.io)
 [![Docker Automated](https://img.shields.io/docker/automated/trustpointproject/trustpoint)](https://hub.docker.com/r/trustpointproject/trustpoint)
@@ -84,6 +84,19 @@ Capabilities:
 * Onboarding (LDevID issuance)
 * Application certificate enrollment
 * Automated renewal and rekeying
+
+---
+
+**[OPC UA GDS Push](https://reference.opcfoundation.org/GDS/v105/docs/7.4)**
+
+A protocol for secure and efficient distribution of certificates, trust anchors and CRLs to OPC UA servers.
+
+Authentication Methods:
+* Secure device registration
+* Certificate-based authentication for updates
+
+Capabilities:
+* Distribution of server certificates and trust anchors
 
 ---
 
