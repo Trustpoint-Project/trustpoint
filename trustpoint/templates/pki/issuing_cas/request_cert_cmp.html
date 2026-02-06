@@ -8,11 +8,6 @@
 
         <div class="card-body">
 
-            <div class="alert alert-info" role="alert">
-                <h4 class="alert-heading">{% trans 'Ready to Request Certificate' %}</h4>
-                <p>{% trans 'The CA has been created with a private key and temporary certificate. Click the button below to request the actual CA certificate from the remote CMP server.' %}</p>
-            </div>
-
             <div class="tp-kvp-list">
                 <div>
                     <div>{% trans 'CA Name' %}</div>
@@ -48,7 +43,7 @@
             </div>
 
             <div class="alert alert-warning mt-3" role="alert">
-                <strong>{% trans 'Note:' %}</strong> {% trans 'CMP certificate request client implementation is pending. This will perform the actual certificate request.' %}
+                <strong>{% trans 'Note:' %}</strong> {% trans 'CMP certificate request client implementation is pending.' %}
             </div>
         </div>
 
