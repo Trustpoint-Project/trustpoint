@@ -33,7 +33,8 @@ from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
 from pki.util.x509 import CertificateGenerator
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
-from util.validation import validate_remote_ca_connection, ValidationError as UtilValidationError
+from util.validation import ValidationError as UtilValidationError
+from util.validation import validate_remote_ca_connection
 
 
 def get_private_key_location_from_config() -> PrivateKeyLocation:
@@ -1109,20 +1110,13 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
         return json.dumps(json_dict)
 
 
-class IssuingCaAddRequestEstForm(LoggerMixin, forms.ModelForm):
-    """Form for requesting an Issuing CA certificate using EST."""
+class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm):
+    """Mixin for forms requesting an Issuing CA certificate from remote servers."""
 
     class Meta:
-        """Meta class for IssuingCaAddRequestEstForm."""
+        """Meta class for IssuingCaAddRequestMixin."""
         model = CaModel
         fields: ClassVar[list[str]] = ['unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type']
-
-    est_password = forms.CharField(
-        label=_('EST Password'),
-        widget=forms.PasswordInput,
-        required=True,
-        help_text=_('Password for EST authentication'),
-    )
 
     key_type = forms.ChoiceField(
         label=_('Key Type'),
@@ -1148,7 +1142,69 @@ class IssuingCaAddRequestEstForm(LoggerMixin, forms.ModelForm):
         queryset=TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS),
         required=False,
         empty_label=_('No trust store (insecure)'),
-        help_text=_('Trust store containing certificates to verify the remote EST server'),
+        help_text=_('Trust store containing certificates to verify the remote server'),
+    )
+
+    def clean(self) -> dict[str, Any]:
+        """Validate the form data."""
+        cleaned_data = super().clean()
+        remote_host = cleaned_data.get('remote_host')
+        remote_port = cleaned_data.get('remote_port')
+        remote_path = cleaned_data.get('remote_path')
+
+        if remote_host and remote_path:
+            try:
+                validate_remote_ca_connection(remote_host, remote_port, remote_path)
+            except UtilValidationError as e:
+                msg = f'Remote CA connection validation failed: {e}'
+                raise forms.ValidationError(msg) from e
+
+        return cleaned_data
+
+    def _create_credential(self) -> CredentialModel:
+        """Create and return a temporary credential for the CA."""
+        key_type = self.cleaned_data['key_type']
+        if key_type.startswith('RSA-'):
+            rsa_key_size = int(key_type.split('-')[1])
+            public_key_info = PublicKeyInfo(
+                public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA,
+                key_size=rsa_key_size
+            )
+        else:
+            curve_name = key_type.split('-')[1]
+            named_curve = NamedCurve[curve_name.upper()]
+            public_key_info = PublicKeyInfo(
+                public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC,
+                named_curve=named_curve
+            )
+
+        private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info)
+
+        temp_cert, _ = CertificateGenerator.create_root_ca(
+            cn=f'Temp-{uuid.uuid4()}',
+            validity_days=1,
+            private_key=private_key
+        )
+
+        cred_serializer = CredentialSerializer(
+            certificate=temp_cert,
+            private_key=private_key,
+            additional_certificates=[]
+        )
+
+        return CredentialModel.save_credential_serializer(
+            cred_serializer, CredentialModel.CredentialTypeChoice.ISSUING_CA
+        )
+
+
+class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
+    """Form for requesting an Issuing CA certificate using EST."""
+
+    est_password = forms.CharField(
+        label=_('EST Password'),
+        widget=forms.PasswordInput,
+        required=True,
+        help_text=_('Password for EST authentication'),
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -1159,85 +1215,25 @@ class IssuingCaAddRequestEstForm(LoggerMixin, forms.ModelForm):
         self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
         self.fields['ca_type'].widget = forms.HiddenInput()
 
-    def clean(self) -> dict[str, Any]:
-        """Validate the form data."""
-        cleaned_data = super().clean()
-        remote_host = cleaned_data.get('remote_host')
-        remote_port = cleaned_data.get('remote_port')
-        remote_path = cleaned_data.get('remote_path')
-
-        if remote_host and remote_path:
-            try:
-                validate_remote_ca_connection(remote_host, remote_port, remote_path)
-            except UtilValidationError as e:
-                msg = f'Remote CA connection validation failed: {e}'
-                raise forms.ValidationError(msg) from e
-
-        return cleaned_data
-
-    def save(self, commit: bool = True) -> CaModel:
+    def save(self, *, commit: bool = True) -> CaModel:
         """Save the form and create the CA model with configuration."""
         instance = super().save(commit=False)
-        # ca_type is already set by the form field
 
-        # Create NoOnboardingConfigModel
         no_onboarding_config = NoOnboardingConfigModel.objects.create(
             pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
             est_password=self.cleaned_data['est_password'],
             trust_store=self.cleaned_data.get('trust_store'),
         )
         instance.no_onboarding_config = no_onboarding_config
-
-        # Generate private key based on selected key type
-        key_type = self.cleaned_data['key_type']
-        if key_type.startswith('RSA-'):
-            rsa_key_size = int(key_type.split('-')[1])
-            public_key_info = PublicKeyInfo(
-                public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA,
-                key_size=rsa_key_size
-            )
-        else:  # ECC
-            curve_name = key_type.split('-')[1]
-            named_curve = NamedCurve[curve_name.upper()]
-            public_key_info = PublicKeyInfo(
-                public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC,
-                named_curve=named_curve
-            )
-
-        private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info)
-
-        # Generate credential (keypair) with self-signed certificate
-        # Generate a temporary self-signed certificate
-        temp_cert, _ = CertificateGenerator.create_root_ca(
-            cn=f'Temp-{uuid.uuid4()}',
-            validity_days=1,  # Short validity for temp cert
-            private_key=private_key
-        )
-
-        # Create credential serializer (pass the x509.Certificate object directly)
-        cred_serializer = CredentialSerializer(
-            certificate=temp_cert,
-            private_key=private_key,
-            additional_certificates=[]
-        )
-
-        credential_model = CredentialModel.save_credential_serializer(
-            cred_serializer, CredentialModel.CredentialTypeChoice.ISSUING_CA
-        )
-        instance.credential = credential_model
+        instance.credential = self._create_credential()
 
         if commit:
             instance.save()
         return instance
 
 
-class IssuingCaAddRequestCmpForm(LoggerMixin, forms.ModelForm):
+class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
     """Form for requesting an Issuing CA certificate using CMP."""
-
-    class Meta:
-        """Meta class for IssuingCaAddRequestCmpForm."""
-        model = CaModel
-        fields: ClassVar[list[str]] = ['unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type']
 
     cmp_shared_secret = forms.CharField(
         label=_('CMP Shared Secret'),
@@ -1246,107 +1242,25 @@ class IssuingCaAddRequestCmpForm(LoggerMixin, forms.ModelForm):
         help_text=_('Shared secret for CMP authentication'),
     )
 
-    key_type = forms.ChoiceField(
-        label=_('Key Type'),
-        choices=[
-            ('RSA-2048', 'RSA 2048'),
-            ('RSA-3072', 'RSA 3072'),
-            ('RSA-4096', 'RSA 4096'),
-            ('ECC-SECP256R1', 'ECC SECP256R1'),
-            ('ECC-SECP384R1', 'ECC SECP384R1'),
-            ('ECC-SECP521R1', 'ECC SECP521R1'),
-            ('ECC-SECP256K1', 'ECC SECP256K1'),
-            ('ECC-BRAINPOOLP256R1', 'ECC BRAINPOOLP256R1'),
-            ('ECC-BRAINPOOLP384R1', 'ECC BRAINPOOLP384R1'),
-            ('ECC-BRAINPOOLP512R1', 'ECC BRAINPOOLP512R1'),
-        ],
-        initial='RSA-2048',
-        required=True,
-        help_text=_('Select the cryptographic key type and parameters'),
-    )
-
-    trust_store = forms.ModelChoiceField(
-        label=_('Trust Store'),
-        queryset=TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS),
-        required=False,
-        empty_label=_('No trust store (insecure)'),
-        help_text=_('Trust store containing certificates to verify the remote CMP server'),
-    )
-
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the form."""
         super().__init__(*args, **kwargs)
-        self.fields['remote_port'].initial = 443  # Default HTTPS port
-        self.fields['remote_path'].initial = '/.well-known/cmp/p/certification'  # Default CMP path
+        self.fields['remote_port'].initial = 443
+        self.fields['remote_path'].initial = '/.well-known/cmp/p/certification'
         self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
         self.fields['ca_type'].widget = forms.HiddenInput()
 
-    def clean(self) -> dict[str, Any]:
-        """Validate the form data."""
-        cleaned_data = super().clean()
-        remote_host = cleaned_data.get('remote_host')
-        remote_port = cleaned_data.get('remote_port')
-        remote_path = cleaned_data.get('remote_path')
-
-        if remote_host and remote_path:
-            try:
-                validate_remote_ca_connection(remote_host, remote_port, remote_path)
-            except UtilValidationError as e:
-                msg = f'Remote CA connection validation failed: {e}'
-                raise forms.ValidationError(msg) from e
-
-        return cleaned_data
-
-    def save(self, commit: bool = True) -> CaModel:
+    def save(self, *, commit: bool = True) -> CaModel:
         """Save the form and create the CA model with configuration."""
         instance = super().save(commit=False)
-        # ca_type is already set by the form field
 
-        # Create NoOnboardingConfigModel
         no_onboarding_config = NoOnboardingConfigModel.objects.create(
             pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
             cmp_shared_secret=self.cleaned_data['cmp_shared_secret'],
             trust_store=self.cleaned_data.get('trust_store'),
         )
         instance.no_onboarding_config = no_onboarding_config
-
-        # Generate private key based on selected key type
-        key_type = self.cleaned_data['key_type']
-        if key_type.startswith('RSA-'):
-            rsa_key_size = int(key_type.split('-')[1])
-            public_key_info = PublicKeyInfo(
-                public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA,
-                key_size=rsa_key_size
-            )
-        else:  # ECC
-            curve_name = key_type.split('-')[1]
-            named_curve = NamedCurve[curve_name.upper()]
-            public_key_info = PublicKeyInfo(
-                public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC,
-                named_curve=named_curve
-            )
-
-        private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info)
-
-        # Generate credential (keypair) with self-signed certificate
-        # Generate a temporary self-signed certificate
-        temp_cert, _ = CertificateGenerator.create_root_ca(
-            cn=f'Temp-{uuid.uuid4()}',
-            validity_days=1,  # Short validity for temp cert
-            private_key=private_key
-        )
-
-        # Create credential serializer (pass the x509.Certificate object directly)
-        cred_serializer = CredentialSerializer(
-            certificate=temp_cert,
-            private_key=private_key,
-            additional_certificates=[]
-        )
-
-        credential_model = CredentialModel.save_credential_serializer(
-            cred_serializer, CredentialModel.CredentialTypeChoice.ISSUING_CA
-        )
-        instance.credential = credential_model
+        instance.credential = self._create_credential()
 
         if commit:
             instance.save()

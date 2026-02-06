@@ -146,7 +146,6 @@ def _validate_hostname_and_ip(
             ip_str = addr_info[4][0]
             ip = ipaddress.ip_address(ip_str)
 
-            # Skip localhost check if allowed
             if allow_localhost and ip.is_loopback:
                 continue
 
@@ -192,12 +191,10 @@ def _validate_remote_path(path: str) -> None:
         msg = 'Remote path must start with "/".'
         raise ValidationError(msg)
 
-    # Check for dangerous path constructs
     if '..' in path:
         msg = 'Remote path cannot contain ".." (directory traversal).'
         raise ValidationError(msg)
 
-    # Basic path validation - allow alphanumeric, common path characters
     if not re.match(r'^/[a-zA-Z0-9._/-]*$', path):
         msg = 'Remote path contains invalid characters.'
         raise ValidationError(msg)
@@ -212,10 +209,8 @@ def validate_remote_ca_connection(host: str, port: int | None, path: str, *, all
         path: The URL path for the CA endpoint.
         allow_localhost: Whether to allow localhost connections (default True for testing).
     """
-    # Validate hostname/IP (skip DNS resolution for form validation)
     _validate_hostname_and_ip(host, allow_localhost=allow_localhost, skip_dns_resolution=True)
-    
-    # Validate port if provided
+
     if port is not None:
         if port in DANGEROUS_PORTS:
             msg = f'Port {port} is not allowed for remote CA connections.'
@@ -223,6 +218,5 @@ def validate_remote_ca_connection(host: str, port: int | None, path: str, *, all
         if not (1 <= port <= MAX_PORT):
             msg = f'Port {port} is out of valid range (1-{MAX_PORT}).'
             raise ValidationError(msg)
-    
-    # Validate path
+
     _validate_remote_path(path)
