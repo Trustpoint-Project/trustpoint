@@ -13,8 +13,9 @@ if TYPE_CHECKING:
     from cryptography.x509 import CertificateSigningRequest
     from cryptography.x509.base import CertificateBuilder
     from django.http import HttpRequest
-    from pyasn1_modules.rfc4210 import PKIFailureInfo, PKIMessage  # type: ignore[import-untyped]
+    from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
+    from cmp.util import PKIFailureInfo
     from devices.models import DeviceModel, IssuedCredentialModel
     from pki.models import CertificateProfileModel, CredentialModel, DomainModel
     from workflows.events import Event

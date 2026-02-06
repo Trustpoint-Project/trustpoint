@@ -17,7 +17,12 @@ from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 from devices.models import OnboardingStatus
 from request.message_responder.base import AbstractMessageResponder
 from request.operation_processor import LocalCaCmpSignatureProcessor
-from request.request_context import CmpBaseRequestContext, CmpCertificateRequestContext, CmpRevocationRequestContext
+from request.request_context import (
+    CmpBaseRequestContext,
+    CmpCertificateRequestContext,
+    CmpRevocationRequestContext,
+    HttpBaseRequestContext,
+)
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -520,8 +525,7 @@ class CmpErrorMessageResponder(CmpMessageResponder):
             return 'cp',3  # CP
         if operation == 'revocation':
             return 'rp',12  # RP
-        exc_msg = f'Unsupported CMP operation: {operation}'
-        raise ValueError(exc_msg)
+        return 'error', 23  # ErrorMsgContent (default for unknown operations)
 
     @staticmethod
     def _build_base_err_message(
@@ -550,19 +554,21 @@ class CmpErrorMessageResponder(CmpMessageResponder):
             cp_extra_certs.append(asn1_certificate)
 
         err_body = rfc4210.PKIBody()
-        bt_str, _ = CmpErrorMessageResponder._get_response_type_for_operation(context.operation)
+        bt_str = 'error'
         err_body[bt_str] = rfc4210.ErrorMsgContent().subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 23)
         )
 
-
         pki_status_info = rfc4210.PKIStatusInfo()
         pki_status_info['status'] = 2  # rejection
-        #pki_status_info['statusString'] = univ.SequenceOf().subtype(
-        #    sizeSpec=rfc4210.constraint.ValueSizeConstraint(1, rfc4210.MAX)
-        #)
         pki_status_info['statusString'].append(context.error_details or 'An error occurred processing the CMP request.')
-        err_body[bt_str]['status'].append(pki_status_info)
+        if context.error_code is not None: # and context.error_code < 32:  # failInfo is a BIT STRING of size 32
+            CmpErrorMessageResponder.logger.warning(
+                f'Adding CMP error code {context.error_code} to response as failInfo BIT STRING.')
+            bit_str = '0' * context.error_code + '1'
+            CmpErrorMessageResponder.logger.warning(bit_str)
+            pki_status_info['failInfo'] = univ.BitString(bit_str)
+        err_body[bt_str]['pKIStatusInfo'] = pki_status_info
 
         err_message = rfc4210.PKIMessage()
         err_message['header'] = err_header
@@ -630,4 +636,5 @@ class CmpErrorMessageResponder(CmpMessageResponder):
             context.http_response_status = context.http_response_status or 500
             context.http_response_content = (context.http_response_content
                                              or 'An error occurred processing the CMP request.')
-            context.http_response_content_type = 'text/plain'
+            if isinstance(context, HttpBaseRequestContext):
+                context.http_response_content_type = 'text/plain'
