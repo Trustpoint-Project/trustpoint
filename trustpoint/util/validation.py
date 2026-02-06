@@ -120,26 +120,39 @@ def _validate_hostname_and_ip(
         allow_localhost: Whether to allow localhost/loopback addresses.
         skip_dns_resolution: Whether to skip DNS resolution and IP blocking checks.
     """
+    _check_localhost_forbidden(hostname, allow_localhost=allow_localhost)
+
+    if skip_dns_resolution:
+        _validate_hostname_format_only(hostname)
+        return
+
+    _resolve_and_check_ips(hostname, allow_localhost=allow_localhost)
+
+
+def _check_localhost_forbidden(hostname: str, *, allow_localhost: bool) -> None:
+    """Check if localhost is forbidden."""
     # ruff: noqa: S104
     localhost_names = ('localhost', '127.0.0.1', '::1', '0.0.0.0', '0:0:0:0:0:0:0:0')
     if not allow_localhost and hostname.lower() in localhost_names:
         msg = 'Hostname cannot target localhost or loopback addresses.'
         raise ValidationError(msg)
 
-    if skip_dns_resolution:
-        # Just validate that it's a reasonable hostname/IP format
-        try:
-            ipaddress.ip_address(hostname)
-        except ValueError:
-            # Not an IP, check if it's a valid hostname format
-            if not re.match(r'^[a-zA-Z0-9.-]+$', hostname):
-                msg = 'Invalid hostname format.'
-                raise ValidationError(msg) from None
-            if hostname.startswith('.') or hostname.endswith('.') or '..' in hostname:
-                msg = 'Invalid hostname format.'
-                raise ValidationError(msg) from None
-        return
 
+def _validate_hostname_format_only(hostname: str) -> None:
+    """Validate hostname format when skipping DNS resolution."""
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        if not re.match(r'^[a-zA-Z0-9.-]+$', hostname):
+            msg = 'Invalid hostname format.'
+            raise ValidationError(msg) from None
+        if hostname.startswith('.') or hostname.endswith('.') or '..' in hostname:
+            msg = 'Invalid hostname format.'
+            raise ValidationError(msg) from None
+
+
+def _resolve_and_check_ips(hostname: str, *, allow_localhost: bool) -> None:
+    """Resolve hostname and check resolved IPs for safety."""
     try:
         ip_addresses = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         for addr_info in ip_addresses:
