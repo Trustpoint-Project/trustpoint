@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
 from django.db.models import ProtectedError, QuerySet
@@ -135,7 +135,7 @@ class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Dispatch the request, ensuring the profile exists."""
         self.profile = get_object_or_404(CertificateProfileModel, pk=kwargs['pk'])
-        return super().dispatch(request, *args, **kwargs)
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get form kwargs, including the profile."""
@@ -170,7 +170,7 @@ class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
             self.request,
             _('Certificate builder generated successfully.'),
         )
-        return HttpResponseRedirect(reverse_lazy('pki:cert_profiles'))  # type: ignore[return-value]
+        return HttpResponseRedirect(reverse_lazy('pki:cert_profiles'))
 
 
 class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
