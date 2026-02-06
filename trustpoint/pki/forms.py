@@ -1393,7 +1393,7 @@ class CertificateIssuanceForm(forms.Form):
 
         return builder.not_valid_before(not_before).not_valid_after(not_after)
 
-    def _add_subj_fields(self, subject: dict[str, Any]) -> None:
+    def _add_subj_fields(self, subject: dict[str, Any]) -> None:  # noqa: C901
         """Add subject fields."""
         # Map full names to abbreviated names used in profiles
         field_mapping = {
@@ -1406,6 +1406,7 @@ class CertificateIssuanceForm(forms.Form):
             'email_address': 'emailAddress'
         }
         abbrev_to_full = {v: k for k, v in field_mapping.items()}
+        abbrev_to_full['emailaddress'] = 'email_address'
 
         standard_fields = [
             'common_name', 'organization_name', 'organizational_unit_name',
@@ -1413,25 +1414,32 @@ class CertificateIssuanceForm(forms.Form):
         ]
         field_order = {field: i for i, field in enumerate(standard_fields)}
 
-        explicit_fields = {k: v for k, v in subject.items() if k != 'allow'}
+        normalized_explicit_fields = {}
+        for k, v in subject.items():
+            if k == 'allow':
+                continue
+            full_name = abbrev_to_full.get(k.lower(), abbrev_to_full.get(k, k))
+            normalized_explicit_fields[full_name] = v
+
         allow = subject.get('allow')
 
         if allow == '*':
             allowed_additional = set(standard_fields)
         elif isinstance(allow, list):
-            allowed_additional = {abbrev_to_full.get(item.lower()) or item for item in allow}
+            allowed_additional = {abbrev_to_full.get(item.lower(), item) for item in allow}
         else:
             allowed_additional = set()
 
-        all_allowed = set(explicit_fields.keys()) | allowed_additional
+        all_allowed = set(normalized_explicit_fields.keys()) | allowed_additional
         allow_star = subject.get('allow') == '*'
 
         field_list = []
         for field_name in all_allowed:
-            abbrev = field_mapping.get(field_name, field_name)
-            if field_name in explicit_fields and explicit_fields[field_name] is None:
+            if field_name not in standard_fields:
                 continue
-            field_config = explicit_fields.get(field_name) or explicit_fields.get(abbrev)
+            if field_name in normalized_explicit_fields and normalized_explicit_fields[field_name] is None:
+                continue
+            field_config = normalized_explicit_fields.get(field_name)
             field_info = self._get_field_info(
                 field_name=field_name,
                 field_config=field_config,
@@ -1492,6 +1500,8 @@ class CertificateIssuanceForm(forms.Form):
 
         field_list = []
         for field_name in all_allowed:
+            if field_name not in san_field_names:
+                continue
             if field_name in explicit_fields and explicit_fields[field_name] is None:
                 continue  # explicitly set to null
             field_config = explicit_fields.get(field_name)
@@ -1528,14 +1538,24 @@ class CertificateIssuanceForm(forms.Form):
         if isinstance(field_config, dict):
             value = field_config.get('value')
             default = field_config.get('default')
+            required = field_config.get('required', False)
+
             if value is not None:
                 initial = value
             elif default is not None:
                 initial = default
             else:
                 initial = default_initial
-            mutable = field_config.get('mutable', bool('default' in field_config))
-            required = field_config.get('required', False)
+
+            if 'mutable' in field_config:
+                mutable = field_config.get('mutable')
+            elif value is not None:
+                mutable = False
+            elif required or default is not None:
+                mutable = True
+            else:
+                mutable = allow_star
+
             has_default = default is not None
         else:
             initial = field_config or default_initial
@@ -1579,6 +1599,8 @@ class CertificateIssuanceForm(forms.Form):
             field_list.append(field_info)
 
         for field_name in allowed_fields:
+            if field_name not in validity_field_names:
+                continue
             if field_name in explicit_fields:
                 continue
             field_info = {
