@@ -13,13 +13,11 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
-from pydantic import ValidationError as PydanticValidationError
 from django.views.generic.edit import FormView, UpdateView
 from django.views.generic.list import ListView
 
 from pki.forms import CertProfileConfigForm, CertificateIssuanceForm
 from pki.models import CertificateProfileModel
-from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -142,13 +140,8 @@ class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get form kwargs, including the profile."""
         kwargs = super().get_form_kwargs()
-        try:
-            raw_profile = json.loads(self.profile.profile_json)
-            validated_profile = CertProfilePydanticModel.model_validate(raw_profile)
-            profile_dict = validated_profile.model_dump(exclude_unset=False, exclude_defaults=False)
-        except (json.JSONDecodeError, TypeError, PydanticValidationError):
-            profile_dict = {}
-        kwargs['profile'] = profile_dict
+        raw_profile = json.loads(self.profile.profile_json)
+        kwargs['profile'] = raw_profile
         return kwargs
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
