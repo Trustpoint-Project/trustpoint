@@ -1110,13 +1110,15 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
         return json.dumps(json_dict)
 
 
-class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm):
+class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     """Mixin for forms requesting an Issuing CA certificate from remote servers."""
 
     class Meta:
         """Meta class for IssuingCaAddRequestMixin."""
         model = CaModel
-        fields: ClassVar[list[str]] = ['unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type']
+        fields: ClassVar[list[str]] = [
+            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'est_username', 'ca_type'
+        ]
 
     key_type = forms.ChoiceField(
         label=_('Key Type'),
@@ -1147,7 +1149,7 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm):
 
     def clean(self) -> dict[str, Any]:
         """Validate the form data."""
-        cleaned_data = super().clean()
+        cleaned_data = cast('dict[str, Any]', super().clean())
         remote_host = cleaned_data.get('remote_host')
         remote_port = cleaned_data.get('remote_port')
         remote_path = cleaned_data.get('remote_path')
@@ -1196,9 +1198,31 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm):
             cred_serializer, CredentialModel.CredentialTypeChoice.ISSUING_CA
         )
 
+    def save(self) -> CaModel:  # type: ignore[override]
+        """Save the form and create the CA model with configuration."""
+        instance = super().save(commit=False)
+
+        instance.credential = self._create_credential()
+
+        return instance
+
 
 class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
     """Form for requesting an Issuing CA certificate using EST."""
+
+    class Meta:
+        """Meta class for IssuingCaAddRequestEstForm."""
+        model = CaModel
+        fields: ClassVar[list[str]] = [
+            'unique_name', 'remote_host', 'remote_port', 'remote_path', 'est_username', 'est_password', 'ca_type'
+        ]
+
+    est_username = forms.CharField(
+        label=_('EST Username'),
+        max_length=128,
+        required=True,
+        help_text=_('Username for EST authentication'),
+    )
 
     est_password = forms.CharField(
         label=_('EST Password'),
@@ -1215,9 +1239,9 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
         self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
         self.fields['ca_type'].widget = forms.HiddenInput()
 
-    def save(self, *, commit: bool = True) -> CaModel:
+    def save(self) -> CaModel:  # type: ignore[override]
         """Save the form and create the CA model with configuration."""
-        instance = super().save(commit=False)
+        instance = super().save()
 
         no_onboarding_config = NoOnboardingConfigModel.objects.create(
             pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
@@ -1225,10 +1249,9 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
             trust_store=self.cleaned_data.get('trust_store'),
         )
         instance.no_onboarding_config = no_onboarding_config
-        instance.credential = self._create_credential()
+        instance.est_username = self.cleaned_data['est_username']
 
-        if commit:
-            instance.save()
+        instance.save()
         return instance
 
 
@@ -1250,9 +1273,9 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
         self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
         self.fields['ca_type'].widget = forms.HiddenInput()
 
-    def save(self, *, commit: bool = True) -> CaModel:
+    def save(self) -> CaModel:  # type: ignore[override]
         """Save the form and create the CA model with configuration."""
-        instance = super().save(commit=False)
+        instance = super().save()
 
         no_onboarding_config = NoOnboardingConfigModel.objects.create(
             pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
@@ -1260,9 +1283,7 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
             trust_store=self.cleaned_data.get('trust_store'),
         )
         instance.no_onboarding_config = no_onboarding_config
-        instance.credential = self._create_credential()
 
-        if commit:
-            instance.save()
+        instance.save()
         return instance
 

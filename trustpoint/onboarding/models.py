@@ -364,7 +364,7 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
         """Gets the model instance as human-readable string."""
         return (
             'NoOnboardingConfigModel('
-            f'cmp_shared_secret:{bool(self.cmp_shared_secret)}'
+            f'cmp_shared_secret:{bool(self.cmp_shared_secret)}, '
             f'est_password:{bool(self.est_password)})'
         )
 

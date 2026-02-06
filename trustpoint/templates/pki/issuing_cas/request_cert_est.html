@@ -35,6 +35,10 @@
                     <div>{{ issuing_ca.remote_path }}</div>
                 </div>
                 <div>
+                    <div>{% trans 'EST Username' %}</div>
+                    <div>{{ issuing_ca.est_username }}</div>
+                </div>
+                <div>
                     <div>{% trans 'Trust Store' %}</div>
                     <div>
                         {% if issuing_ca.no_onboarding_config.trust_store %}

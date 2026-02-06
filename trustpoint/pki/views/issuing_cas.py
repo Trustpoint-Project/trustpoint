@@ -162,7 +162,7 @@ class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddReq
         """Handle the case where the form is invalid."""
         for field, errors in form.errors.items():
             for error in errors:
-                messages.error(self.request, f'{field}: {error}' if field != '__all__' else error)
+                messages.error(self.request, f'{field}: {error!s}' if field != '__all__' else f'{error!s}')
         return redirect(self.request.META.get('HTTP_REFERER', 'pki:issuing_cas-add-request-est'))
 
     def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
@@ -187,7 +187,7 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
         """Handle the case where the form is invalid."""
         for field, errors in form.errors.items():
             for error in errors:
-                messages.error(self.request, f'{field}: {error}' if field != '__all__' else error)
+                messages.error(self.request, f'{field}: {error!s}' if field != '__all__' else f'{error!s}')
         return redirect(self.request.META.get('HTTP_REFERER', 'pki:issuing_cas-add-request-cmp'))
 
     def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
@@ -247,17 +247,11 @@ class IssuingCaRequestCertEstView(LoggerMixin, IssuingCaContextMixin, DetailView
         """Return only EST remote issuing CAs."""
         return CaModel.objects.filter(ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_EST)
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle POST request to request certificate via EST."""
         ca = self.get_object()
 
-        # TODO(FlorianHandke): Implement EST certificate request client
-        # This should:
-        # 1. Create a certificate signing request (CSR) from the private key
-        # 2. Send EST request to ca.remote_host:ca.remote_port
-        # 3. Using ca.no_onboarding_config.est_password for authentication
-        # 4. Receive the certificate response
-        # 5. Update ca.credential with the new certificate
+        # TODO(FlorianHandke): Implement EST certificate request client  # noqa: FIX002
         messages.warning(request, _('EST certificate request not yet implemented.'))
         return redirect('pki:issuing_cas-request-cert-est', pk=ca.pk)
 
@@ -273,17 +267,11 @@ class IssuingCaRequestCertCmpView(LoggerMixin, IssuingCaContextMixin, DetailView
         """Return only CMP remote issuing CAs."""
         return CaModel.objects.filter(ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_CMP)
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle POST request to request certificate via CMP."""
         ca = self.get_object()
 
-        # TODO(FlorianHandke): Implement CMP certificate request client
-        # This should:
-        # 1. Create a certificate signing request (CSR) from the private key
-        # 2. Send CMP request to ca.remote_host:ca.remote_port
-        # 3. Using ca.no_onboarding_config.cmp_shared_secret for authentication
-        # 4. Receive the certificate response
-        # 5. Update ca.credential with the new certificate
+        # TODO(FlorianHandke): Implement CMP certificate request client  # noqa: FIX002
         messages.warning(request, _('CMP certificate request not yet implemented.'))
         return redirect('pki:issuing_cas-request-cert-cmp', pk=ca.pk)
 
