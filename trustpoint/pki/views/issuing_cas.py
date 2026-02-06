@@ -163,7 +163,16 @@ class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddReq
         for field, errors in form.errors.items():
             for error in errors:
                 messages.error(self.request, f'{field}: {error!s}' if field != '__all__' else f'{error!s}')
-        return redirect(self.request.META.get('HTTP_REFERER', 'pki:issuing_cas-add-request-est'))
+        referer = self.request.META.get('HTTP_REFERER')
+        if referer and url_has_allowed_host_and_scheme(
+            referer,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            redirect_to = referer
+        else:
+            redirect_to = 'pki:issuing_cas-add-request-est'
+        return redirect(redirect_to)
 
     def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
         """Handle the case where the form is valid."""
@@ -188,7 +197,16 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
         for field, errors in form.errors.items():
             for error in errors:
                 messages.error(self.request, f'{field}: {error!s}' if field != '__all__' else f'{error!s}')
-        return redirect(self.request.META.get('HTTP_REFERER', 'pki:issuing_cas-add-request-cmp'))
+        referer = self.request.META.get('HTTP_REFERER')
+        if referer and url_has_allowed_host_and_scheme(
+            referer,
+            allowed_hosts={self.request.get_host()},
+            require_https=self.request.is_secure(),
+        ):
+            redirect_to = referer
+        else:
+            redirect_to = 'pki:issuing_cas-add-request-cmp'
+        return redirect(redirect_to)
 
     def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
         """Handle the case where the form is valid."""
