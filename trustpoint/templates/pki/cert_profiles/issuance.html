@@ -7,9 +7,7 @@
 
     <div class="card-header">
         <div class="">
-            <h1>{% trans 'Certificate Issuance for Profile' %} "{{ profile.display_name|default:profile.unique_name }}"</h1>
-            <pre>{{ profile_dict|json_script:"profile-data" }}</pre>
-        </div>
+            <h1>{% trans 'Certificate Issuance for Profile' %} "{{ profile.display_name|default:profile.unique_name }}"</h1>        </div>
     </div>
     <form method="post">
         <div class="card-body">

@@ -151,14 +151,26 @@ class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
         context['profile_dict'] = self.get_form_kwargs()['profile']
         return context
 
+    def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
+        """Handle the case where the form is invalid."""
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f'{field}: {error}')
+        return super().form_invalid(form)
+
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
         """Handle the case where the form is valid."""
-        # For now, just redirect back
+        try:
+            builder = form.get_certificate_builder()  # noqa: F841
+        except ValueError as e:
+            messages.error(self.request, _('Error generating certificate builder: {error}').format(error=str(e)))
+            return self.form_invalid(form)
+
         messages.success(
             self.request,
-            _('Certificate issuance data submitted successfully.'),
+            _('Certificate builder generated successfully.'),
         )
-        return HttpResponseRedirect(reverse_lazy('pki:cert_profiles'))
+        return HttpResponseRedirect(reverse_lazy('pki:cert_profiles'))  # type: ignore[return-value]
 
 
 class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
