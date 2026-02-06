@@ -106,7 +106,7 @@ class CmpAuthenticationBase(AuthenticationComponent, LoggerMixin):
         return cmp_signer_cert, intermediate_certs
 
     def _verify_protection_and_finalize(
-        self, context: CmpCertificateRequestContext, cmp_signer_cert: x509.Certificate, device: DeviceModel
+        self, context: CmpBaseRequestContext, cmp_signer_cert: x509.Certificate, device: DeviceModel
     ) -> None:
         """Verify protection signature and finalize authentication."""
         # Verify protection signature
