@@ -30,9 +30,10 @@ from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
-from trustpoint.logger import LoggerMixin
 from pki.util.x509 import CertificateGenerator
+from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
+from util.validation import validate_remote_ca_connection, ValidationError as UtilValidationError
 
 
 def get_private_key_location_from_config() -> PrivateKeyLocation:
@@ -1114,7 +1115,7 @@ class IssuingCaAddRequestEstForm(LoggerMixin, forms.ModelForm):
     class Meta:
         """Meta class for IssuingCaAddRequestEstForm."""
         model = CaModel
-        fields: ClassVar[list[str]] = ['unique_name', 'remote_host', 'remote_port', 'ca_type']
+        fields: ClassVar[list[str]] = ['unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type']
 
     est_password = forms.CharField(
         label=_('EST Password'),
@@ -1144,7 +1145,7 @@ class IssuingCaAddRequestEstForm(LoggerMixin, forms.ModelForm):
 
     trust_store = forms.ModelChoiceField(
         label=_('Trust Store'),
-        queryset=TruststoreModel.objects.all(),
+        queryset=TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS),
         required=False,
         empty_label=_('No trust store (insecure)'),
         help_text=_('Trust store containing certificates to verify the remote EST server'),
@@ -1153,9 +1154,26 @@ class IssuingCaAddRequestEstForm(LoggerMixin, forms.ModelForm):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the form."""
         super().__init__(*args, **kwargs)
-        self.fields['remote_port'].initial = 443  # Default HTTPS port
+        self.fields['remote_port'].initial = 443
+        self.fields['remote_path'].initial = '/.well-known/est/simpleenroll'
         self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
         self.fields['ca_type'].widget = forms.HiddenInput()
+
+    def clean(self) -> dict[str, Any]:
+        """Validate the form data."""
+        cleaned_data = super().clean()
+        remote_host = cleaned_data.get('remote_host')
+        remote_port = cleaned_data.get('remote_port')
+        remote_path = cleaned_data.get('remote_path')
+
+        if remote_host and remote_path:
+            try:
+                validate_remote_ca_connection(remote_host, remote_port, remote_path)
+            except UtilValidationError as e:
+                msg = f'Remote CA connection validation failed: {e}'
+                raise forms.ValidationError(msg) from e
+
+        return cleaned_data
 
     def save(self, commit: bool = True) -> CaModel:
         """Save the form and create the CA model with configuration."""
@@ -1219,7 +1237,7 @@ class IssuingCaAddRequestCmpForm(LoggerMixin, forms.ModelForm):
     class Meta:
         """Meta class for IssuingCaAddRequestCmpForm."""
         model = CaModel
-        fields: ClassVar[list[str]] = ['unique_name', 'remote_host', 'remote_port', 'ca_type']
+        fields: ClassVar[list[str]] = ['unique_name', 'remote_host', 'remote_port', 'remote_path', 'ca_type']
 
     cmp_shared_secret = forms.CharField(
         label=_('CMP Shared Secret'),
@@ -1249,7 +1267,7 @@ class IssuingCaAddRequestCmpForm(LoggerMixin, forms.ModelForm):
 
     trust_store = forms.ModelChoiceField(
         label=_('Trust Store'),
-        queryset=TruststoreModel.objects.all(),
+        queryset=TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS),
         required=False,
         empty_label=_('No trust store (insecure)'),
         help_text=_('Trust store containing certificates to verify the remote CMP server'),
@@ -1259,8 +1277,25 @@ class IssuingCaAddRequestCmpForm(LoggerMixin, forms.ModelForm):
         """Initialize the form."""
         super().__init__(*args, **kwargs)
         self.fields['remote_port'].initial = 443  # Default HTTPS port
+        self.fields['remote_path'].initial = '/.well-known/cmp/p/certification'  # Default CMP path
         self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
         self.fields['ca_type'].widget = forms.HiddenInput()
+
+    def clean(self) -> dict[str, Any]:
+        """Validate the form data."""
+        cleaned_data = super().clean()
+        remote_host = cleaned_data.get('remote_host')
+        remote_port = cleaned_data.get('remote_port')
+        remote_path = cleaned_data.get('remote_path')
+
+        if remote_host and remote_path:
+            try:
+                validate_remote_ca_connection(remote_host, remote_port, remote_path)
+            except UtilValidationError as e:
+                msg = f'Remote CA connection validation failed: {e}'
+                raise forms.ValidationError(msg) from e
+
+        return cleaned_data
 
     def save(self, commit: bool = True) -> CaModel:
         """Save the form and create the CA model with configuration."""

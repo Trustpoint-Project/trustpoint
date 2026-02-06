@@ -158,6 +158,13 @@ class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddReq
     template_name = 'pki/issuing_cas/add/request_est.html'
     form_class = IssuingCaAddRequestEstForm
 
+    def form_invalid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
+        """Handle the case where the form is invalid."""
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f'{field}: {error}' if field != '__all__' else error)
+        return redirect(self.request.META.get('HTTP_REFERER', 'pki:issuing_cas-add-request-est'))
+
     def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
         """Handle the case where the form is valid."""
         ca = form.save()
@@ -175,6 +182,13 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
 
     template_name = 'pki/issuing_cas/add/request_cmp.html'
     form_class = IssuingCaAddRequestCmpForm
+
+    def form_invalid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
+        """Handle the case where the form is invalid."""
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f'{field}: {error}' if field != '__all__' else error)
+        return redirect(self.request.META.get('HTTP_REFERER', 'pki:issuing_cas-add-request-cmp'))
 
     def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
         """Handle the case where the form is valid."""
