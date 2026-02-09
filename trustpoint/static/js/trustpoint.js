@@ -85,15 +85,22 @@ function isSafeRelativePath(path) {
     if (typeof path !== 'string') {
         return false;
     }
-    // Only allow same-origin relative paths starting with a single "/"
-    if (!path.startsWith('/') || path.startsWith('//')) {
+    if (path.startsWith('//')) {
         return false;
     }
-    // Disallow schemes such as "javascript:", "http:", etc. before the first "/"
-    const firstSlashIndex = path.indexOf('/', 1);
-    const prefix = firstSlashIndex === -1 ? path : path.slice(0, firstSlashIndex);
-    if (prefix.includes(':')) {
-        return false;
+    if (path.startsWith('/')) {
+        const firstSlashIndex = path.indexOf('/', 1);
+        const prefix = firstSlashIndex === -1 ? path : path.slice(0, firstSlashIndex);
+        if (prefix.includes(':')) {
+            return false;
+        }
+    }
+    if (path.includes(':')) {
+        const colonIndex = path.indexOf(':');
+        const beforeColon = path.slice(0, colonIndex);
+        if (!beforeColon.includes('/')) {
+            return false;
+        }
     }
     return true;
 }
@@ -115,11 +122,15 @@ if (checkboxColumn) {
             });
             
             try {
-                const url = new URL(rawUrl + '/', window.location.origin);
+                const url = new URL(rawUrl + '/', window.location.href);
+                
                 checkedIds.forEach(function(id) {
                     url.pathname = url.pathname.replace(/\/$/, '') + '/' + encodeURIComponent(id);
                 });
-                url.pathname += '/';
+                
+                if (!url.pathname.endsWith('/')) {
+                    url.pathname += '/';
+                }
                 
                 window.location.assign(url.pathname);
             } catch (e) {

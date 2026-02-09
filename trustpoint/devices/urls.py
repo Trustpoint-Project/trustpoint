@@ -253,11 +253,6 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_onboarding_clm_issue_domain_credential',
     ),
     path(
-        'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/truststore-method-select/',
-        views.OpcUaGdsPushTruststoreMethodSelectView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_truststore_method_select',
-    ),
-    path(
         'opc-ua-gds-push/certificate-lifecycle-management/<int:pk>/discover-server/',
         views.OpcUaGdsPushDiscoverServerView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_discover_server',
