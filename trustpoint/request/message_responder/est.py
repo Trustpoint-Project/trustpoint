@@ -91,11 +91,9 @@ class EstCertificateMessageResponder(EstMessageResponder):
         cert: str | bytes
 
         if context.est_encoding == 'der':
-            # Raw DER format (non-standard, for compatibility)
             cert = cert_bytes
             content_type = 'application/pkix-cert'
         elif context.est_encoding == 'pem':
-            # PEM format (non-standard, for compatibility)
             try:
                 cert = cert_bytes.decode('utf-8')
             except UnicodeDecodeError:
@@ -103,7 +101,6 @@ class EstCertificateMessageResponder(EstMessageResponder):
             content_type = 'application/x-pem-file'
         else:
             # Default to RFC 7030 compliant format: base64-encoded with line wrapping
-            # This includes 'base64_der', 'pkcs7', and any unspecified encoding
             b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
             cert = '\n'.join([b64_cert[i:i + 64] for i in range(0, len(b64_cert), 64)])
             if context.est_encoding == 'base64_der':
