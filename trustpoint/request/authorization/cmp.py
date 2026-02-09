@@ -55,7 +55,8 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
                 self.logger.debug('Revocation authorized: Self-revocation of credential %s',
                                   context.credential_to_revoke.common_name)
                 return
-            if signer_credential.is_valid_domain_credential():
+            valid, _reason = signer_credential.is_valid_domain_credential()
+            if valid:
                 signer_device = signer_credential.device
                 if signer_device != context.device:
                     error_message = (
