@@ -1,12 +1,11 @@
 """This module contains all views concerning the devices application."""
 
-from __future__ import annotations
-
 import abc
 import asyncio
 import datetime
 import io
 import zipfile
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from cryptography import x509
@@ -18,10 +17,12 @@ from django.contrib.auth.decorators import login_not_required
 from django.core.paginator import Paginator
 from django.db.models import Q, QuerySet
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase, HttpResponseRedirect
+from django.http.request import HttpRequest
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
 from django.utils.html import format_html
+from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy, ngettext
 from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
@@ -50,7 +51,6 @@ from devices.forms import (
     OnboardingCreateForm,
     OpcUaGdsPushCreateForm,
     OpcUaGdsPushTruststoreAssociationForm,
-    OpcUaGdsPushTruststoreMethodSelectForm,
     RevokeDevicesForm,
     RevokeIssuedCredentialForm,
 )
@@ -73,6 +73,7 @@ from devices.models import (
 from devices.revocation import DeviceCredentialRevocation
 from devices.serializers import DeviceSerializer
 from management.models import KeyStorageConfig
+from pki.forms import TruststoreAddForm
 from pki.models.ca import CaModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
@@ -91,16 +92,9 @@ from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
 
 if TYPE_CHECKING:
     import ipaddress
-    from collections.abc import Sequence
 
-    from django.http.request import HttpRequest
-    from django.utils.safestring import SafeString
-
-    # noinspection PyUnresolvedReferences
-    from devices.forms import BaseCredentialForm
-
-    # noinspection PyUnresolvedReferences
-    from devices.issuer import BaseTlsCredentialIssuer
+# noinspection PyUnresolvedReferences
+from devices.issuer import BaseTlsCredentialIssuer
 
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
 NamedCurveMissingForEccErrorMsg = gettext_lazy('Failed to retrieve named curve for ECC algorithm.')
@@ -913,11 +907,7 @@ class OpcUaGdsPushCertificateLifecycleManagementSummaryView(AbstractCertificateL
         Returns:
             The context data for the view.
         """
-        context = super().get_context_data(**kwargs)
-
-        context['truststore_method_select_url'] = 'devices:devices_truststore_method_select'
-
-        return context
+        return super().get_context_data(**kwargs)
 
     def get_onboarding_initial(self) -> dict[str, Any]:
         """Gets the initial values for onboarding for GDS Push.
@@ -1483,56 +1473,11 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
             )
             return HttpResponseRedirect(
                 reverse_lazy(
-                    f'devices:{self.page_name}_truststore_method_select', kwargs={'pk': self.get_object().id}
+                    f'devices:{self.page_name}_truststore_association', kwargs={'pk': self.get_object().id}
                 )
             )
 
         return self.render_to_response(self.get_context_data(form=form))
-
-
-class OpcUaGdsPushTruststoreMethodSelectView(PageContextMixin, FormView[OpcUaGdsPushTruststoreMethodSelectForm]):
-    """View for selecting the method to associate a truststore with an OPC UA GDS Push device."""
-
-    form_class = OpcUaGdsPushTruststoreMethodSelectForm
-    template_name = 'devices/truststore_method_select.html'
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-    def get_device(self) -> DeviceModel:
-        """Get the device from the URL parameters."""
-        pk = self.kwargs.get('pk')
-        try:
-            return DeviceModel.objects.get(pk=pk)
-        except DeviceModel.DoesNotExist as e:
-            exc_msg = f'Device with pk {pk} does not exist.'
-            raise Http404(exc_msg) from e
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the device to the context."""
-        context = super().get_context_data(**kwargs)
-        context['device'] = self.get_device()
-        return context
-
-    def form_valid(self, form: OpcUaGdsPushTruststoreMethodSelectForm) -> HttpResponseRedirect:
-        """Redirect to the view for the selected method."""
-        method_select = form.cleaned_data.get('method_select')
-        device_pk = self.kwargs.get('pk')
-
-        if method_select == 'upload_truststore':
-            # Redirect to truststore creation with device context
-            return HttpResponseRedirect(
-                reverse('pki:truststores-add-opc-ua-gds-push', kwargs={'device_pk': device_pk})
-            )
-
-        if method_select == 'select_truststore':
-            # Redirect to existing truststore selection
-            return HttpResponseRedirect(
-                reverse('devices:devices_truststore_association', kwargs={'pk': device_pk})
-            )
-
-        # Default fallback
-        return HttpResponseRedirect(
-            reverse('devices:devices_truststore_association', kwargs={'pk': device_pk})
-        )
 
 
 class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
@@ -1587,6 +1532,14 @@ class OpcUaGdsPushTruststoreAssociationView(PageContextMixin, FormView[OpcUaGdsP
         """Add the device instance to the form kwargs."""
         kwargs = super().get_form_kwargs()
         kwargs['instance'] = self.get_device()
+        truststore_id = self.request.GET.get('truststore_id')
+        if truststore_id:
+            try:
+                truststore = TruststoreModel.objects.get(pk=truststore_id)
+                kwargs['initial'] = kwargs.get('initial', {})
+                kwargs['initial']['opc_trust_store'] = truststore
+            except TruststoreModel.DoesNotExist:
+                pass
         return kwargs
 
     def get_device(self) -> DeviceModel:
@@ -1599,10 +1552,44 @@ class OpcUaGdsPushTruststoreAssociationView(PageContextMixin, FormView[OpcUaGdsP
             raise Http404(exc_msg) from e
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the device to the context."""
+        """Add the device and import form to the context."""
         context = super().get_context_data(**kwargs)
         context['device'] = self.get_device()
+        context['import_form'] = TruststoreAddForm()
         return context
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle both association and import form submissions."""
+        if 'trust_store_file' in request.FILES:
+            return self._handle_import(request)
+
+        return super().post(request, *args, **kwargs)
+
+    def _handle_import(self, request: HttpRequest) -> HttpResponse:
+        """Handle truststore import from modal."""
+        import_form = TruststoreAddForm(request.POST, request.FILES)
+
+        if import_form.is_valid():
+            truststore = import_form.cleaned_data['truststore']
+            n_certificates = truststore.number_of_certificates
+            msg_str = ngettext(
+                'Successfully created the Truststore %(name)s with %(count)i certificate.',
+                'Successfully created the Truststore %(name)s with %(count)i certificates.',
+                n_certificates,
+            ) % {
+                'name': truststore.unique_name,
+                'count': n_certificates,
+            }
+            messages.success(request, msg_str)
+
+            return HttpResponseRedirect(
+                reverse('devices:devices_truststore_association', kwargs={'pk': self.get_device().pk}) +
+                f'?truststore_id={truststore.id}'
+            )
+
+        context = self.get_context_data()
+        context['import_form'] = import_form
+        return self.render_to_response(context)
 
     def form_valid(self, form: OpcUaGdsPushTruststoreAssociationForm) -> HttpResponseRedirect:
         """Handle successful form submission."""

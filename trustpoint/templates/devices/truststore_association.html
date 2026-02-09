@@ -4,7 +4,7 @@
 
 {% block content %}
 
-    <form method="POST" autocomplete="off">
+    <form method="POST" autocomplete="off" id="associationForm">
         {% csrf_token %}
 
         <div class="card">
@@ -19,6 +19,9 @@
                     <p>{% trans 'Select a trust store to associate with this device\'s onboarding configuration.' %}</p>
                     <hr>
                     {{ form|crispy }}
+                    <button type="button" class="btn btn-secondary ms-2" data-bs-toggle="modal" data-bs-target="#truststoreImportModal">
+                        {% trans 'Import new Truststore' %}
+                    </button>
                 </div>
 
             </div>
@@ -30,5 +33,31 @@
             </div>
         </div>
     </form>
+
+    <!-- Truststore Import Modal -->
+    <div class="modal fade" id="truststoreImportModal" tabindex="-1" aria-labelledby="truststoreImportModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" enctype="multipart/form-data" id="importForm">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="truststoreImportModalLabel">{% trans 'Import Truststore' %}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="tp-card-centered-content">
+                            <h2>{% trans 'File Import' %}</h2>
+                            <hr>
+                            {{ import_form|crispy }}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans 'Cancel' %}</button>
+                        <button type="submit" class="btn btn-primary">{% trans 'Add new Truststore' %}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 
 {% endblock content %}
