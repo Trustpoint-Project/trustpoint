@@ -89,7 +89,7 @@
             <div class="tp-card-btn-footer m-1">
                 <form method="post" style="display: inline;">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-primary" {% if not has_cert_content %}disabled{% endif %}>{% trans 'Request CA Certificate via EST' %}</button>
+                    <button type="submit" class="btn btn-primary" {% if not has_cert_content %}disabled{% endif %}>{% trans 'Request CA Certificate' %}</button>
                 </form>
             </div>
         </div>
