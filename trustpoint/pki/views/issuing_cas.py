@@ -9,7 +9,16 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.x509 import (
+    CertificateSigningRequestBuilder,
+    Extension,
+    GeneralName,
+    Name,
+    NameAttribute,
+    NameOID,
+    SubjectAlternativeName,
+)
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
@@ -45,9 +54,8 @@ from pki.models.credential import PrimaryCredentialCertificate
 from pki.models.truststore import TruststoreModel
 from pki.serializer import IssuingCaSerializer
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
-from pki.util.cert_req_converter import JSONCertRequestConverter
 from request.clients import EstClient, EstClientError
-from request.operation_processor.csr_sign import EstCaCsrSignProcessor
+from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
 from request.request_context import EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
@@ -317,6 +325,7 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
 class IssuingCaDefineCertContentEstView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
     """View to define certificate content using the issuing_ca profile before requesting via EST."""
 
+    form_class = CertificateIssuanceForm
     template_name = 'pki/issuing_cas/define_cert_content_est.html'
     ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
     redirect_url_name = 'pki:issuing_cas-request-cert-est'
@@ -347,6 +356,7 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
 class IssuingCaDefineCertContentCmpView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
     """View to define certificate content using the issuing_ca profile before requesting via CMP."""
 
+    form_class = CertificateIssuanceForm
     template_name = 'pki/issuing_cas/define_cert_content_cmp.html'
     ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
     redirect_url_name = 'pki:issuing_cas-request-cert-cmp'
@@ -516,10 +526,108 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
         cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
         profile_json = json.loads(cert_profile.profile_json)
 
-        cert_builder = JSONCertRequestConverter.from_json(cert_content_data)
+        # Restructure form data to match profile JSON format
+        request_data = {
+            'subj': {},
+            'ext': {
+                'subject_alternative_name': {}
+            },
+            'validity': {}
+        }
+        
+        # Subject fields
+        subject_fields = {
+            'common_name': 'common_name',
+            'organization_name': 'organization_name',
+            'organizational_unit_name': 'organizational_unit_name',
+            'country_name': 'country_name',
+            'state_or_province_name': 'state_or_province_name',
+            'locality_name': 'locality_name',
+            'email_address': 'email_address'
+        }
+        
+        for profile_key, form_key in subject_fields.items():
+            if cert_content_data.get(form_key):
+                request_data['subj'][profile_key] = cert_content_data[form_key]
+        
+        # SAN fields
+        san_fields = {
+            'dns_names': 'dns_names',
+            'ip_addresses': 'ip_addresses',
+            'rfc822_names': 'rfc822_names',
+            'uris': 'uris'
+        }
+        
+        for profile_key, form_key in san_fields.items():
+            if cert_content_data.get(form_key):
+                request_data['ext']['subject_alternative_name'][profile_key] = cert_content_data[form_key]
+        
+        # Validity fields
+        validity_fields = ['days', 'hours', 'minutes', 'seconds']
+        for field in validity_fields:
+            if cert_content_data.get(field):
+                request_data['validity'][field] = int(cert_content_data[field])
 
         profile_verifier = JSONProfileVerifier(profile_json)
-        profile_verifier.apply_profile_to_request(cert_content_data)
+        profile_verifier.apply_profile_to_request(request_data)
+
+        # Create CSR from request_data
+        # Build subject
+        subject_attributes = []
+        subj = request_data.get('subj', {})
+        if subj.get('common_name'):
+            subject_attributes.append(NameAttribute(NameOID.COMMON_NAME, subj['common_name']))
+        if subj.get('organization_name'):
+            subject_attributes.append(NameAttribute(NameOID.ORGANIZATION_NAME, subj['organization_name']))
+        if subj.get('organizational_unit_name'):
+            subject_attributes.append(NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, subj['organizational_unit_name']))
+        if subj.get('country_name'):
+            subject_attributes.append(NameAttribute(NameOID.COUNTRY_NAME, subj['country_name']))
+        if subj.get('state_or_province_name'):
+            subject_attributes.append(NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, subj['state_or_province_name']))
+        if subj.get('locality_name'):
+            subject_attributes.append(NameAttribute(NameOID.LOCALITY_NAME, subj['locality_name']))
+        if subj.get('email_address'):
+            subject_attributes.append(NameAttribute(NameOID.EMAIL_ADDRESS, subj['email_address']))
+        
+        subject = Name(subject_attributes)
+        
+        # Build extensions
+        extensions = []
+        ext = request_data.get('ext', {})
+        san = ext.get('subject_alternative_name', {})
+        san_names = []
+        if san.get('dns_names'):
+            for dns_name in san['dns_names'].split(','):
+                dns_name = dns_name.strip()
+                if dns_name:
+                    san_names.append(GeneralName.dns_name(dns_name))
+        if san.get('ip_addresses'):
+            for ip_addr in san['ip_addresses'].split(','):
+                ip_addr = ip_addr.strip()
+                if ip_addr:
+                    san_names.append(GeneralName.ip_address(ip_addr))
+        if san.get('rfc822_names'):
+            for email_addr in san['rfc822_names'].split(','):
+                email_addr = email_addr.strip()
+                if email_addr:
+                    san_names.append(GeneralName.rfc822_name(email_addr))
+        if san.get('uris'):
+            for uri_addr in san['uris'].split(','):
+                uri_addr = uri_addr.strip()
+                if uri_addr:
+                    san_names.append(GeneralName.uniform_resource_identifier(uri_addr))
+        
+        if san_names:
+            extensions.append(Extension(SubjectAlternativeName(san_names), critical=False))
+        
+        # Build CSR
+        csr_builder = CertificateSigningRequestBuilder().subject_name(subject)
+        for ext in extensions:
+            csr_builder = csr_builder.add_extension(ext.value, critical=ext.critical)
+        
+        private_key = ca.credential.get_private_key()
+        csr = csr_builder.sign(private_key, hashes.SHA256())
 
         context = EstCertificateRequestContext(
             operation='simpleenroll',
@@ -541,12 +649,16 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
             ),
         )
 
-        context.cert_requested = cert_builder
+        # Set the CSR and owner credential for re-signing with proper signature algorithm
+        context.cert_requested = csr
+        context.owner_credential = ca.credential
 
-        csr_signer = EstCaCsrSignProcessor()
+        # Use EstDeviceCsrSignProcessor to re-sign the CSR with the proper signature algorithm
+        csr_signer = EstDeviceCsrSignProcessor()
         csr_signer.process_operation(context)
         signed_csr = csr_signer.get_signed_csr()
 
+        # Send the re-signed CSR to the remote EST server
         est_client = EstClient(context)
         issued_cert = est_client.simple_enroll(signed_csr)
 
