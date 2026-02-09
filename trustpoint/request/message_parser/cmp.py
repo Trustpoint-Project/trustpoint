@@ -1,13 +1,12 @@
 """Provides classes for parsing CMP PKI messages."""
 
 import ipaddress
-from json import decoder
 from typing import Any, Never, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
 from cryptography.hazmat.primitives.serialization import load_der_public_key
-from cryptography.x509.oid import ExtensionOID, CRLEntryExtensionOID
+from cryptography.x509.oid import CRLEntryExtensionOID, ExtensionOID
 from pyasn1.codec.ber import decoder as ber_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import decoder as der_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import encoder as der_encoder
@@ -21,7 +20,6 @@ from request.request_context import (
     CmpRevocationRequestContext,
 )
 from trustpoint.logger import LoggerMixin
-from workflows.services import context
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
 
@@ -552,7 +550,8 @@ class CmpRevocationBodyValidation(LoggerMixin):
 
         if rev_req_msg['crlEntryDetails'].hasValue():
             crl_entry_details = rev_req_msg['crlEntryDetails']
-            if crl_entry_details[0].hasValue() and crl_entry_details[0]['extnID'] == CRLEntryExtensionOID.CRL_REASON.dotted_string:
+            if (crl_entry_details[0].hasValue()
+                and crl_entry_details[0]['extnID'] == CRLEntryExtensionOID.CRL_REASON.dotted_string):
                 inner_bytes = crl_entry_details[0]['extnValue'].asOctets()
                 reason_code, _ = der_decoder.decode(inner_bytes, asn1Spec=rfc5280.CRLReason())
                 context.revocation_reason = x509.ReasonFlags(int(reason_code))

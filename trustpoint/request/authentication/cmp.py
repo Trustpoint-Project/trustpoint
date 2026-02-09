@@ -18,7 +18,12 @@ from devices.models import (
     OnboardingProtocol,
 )
 from pki.util.idevid import IDevIDAuthenticator
-from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext, CmpRevocationRequestContext
+from request.request_context import (
+    BaseRequestContext,
+    CmpBaseRequestContext,
+    CmpCertificateRequestContext,
+    CmpRevocationRequestContext,
+)
 from trustpoint.logger import LoggerMixin
 
 from .base import AuthenticationComponent, ClientCertificateAuthentication, CompositeAuthentication
