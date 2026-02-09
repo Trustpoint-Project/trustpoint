@@ -36,11 +36,7 @@
                 <div>
                     <div>{% trans 'Trust Store' %}</div>
                     <div>
-                        {% if issuing_ca.no_onboarding_config.trust_store %}
-                            <a href="{% url 'pki:truststore-detail' pk=issuing_ca.no_onboarding_config.trust_store.pk %}">{{ issuing_ca.no_onboarding_config.trust_store.unique_name }}</a>
-                        {% else %}
-                            <span class="text-warning">{% trans 'No trust store configured (insecure)' %}</span>
-                        {% endif %}
+                        <a href="{% url 'pki:truststore-detail' pk=issuing_ca.no_onboarding_config.trust_store.pk %}">{{ issuing_ca.no_onboarding_config.trust_store.unique_name }}</a>
                     </div>
                 </div>
 

@@ -1146,8 +1146,7 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     trust_store = forms.ModelChoiceField(
         label=_('Trust Store'),
         queryset=TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS),
-        required=False,
-        empty_label=_('No trust store (insecure)'),
+        required=True,
         help_text=_('Trust store containing certificates to verify the remote server'),
     )
 
@@ -1283,6 +1282,7 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
         self.fields['remote_path'].initial = '/.well-known/cmp/p/certification'
         self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
         self.fields['ca_type'].widget = forms.HiddenInput()
+        self.fields['trust_store'].required = False
 
     def save(self) -> CaModel:  # type: ignore[override]
         """Save the form and create the CA model with configuration."""
