@@ -100,6 +100,10 @@ class BaseCertificateRequestContext(BaseRequestContext):
     # Flag to allow CA certificate requests (e.g., for Issuing CA certificate enrollment)
     allow_ca_certificate_request: bool = False
 
+    # Request data for building CSR
+    request_data: dict[str, Any] | None = None
+    validated_request_data: dict[str, Any] | None = None
+
     # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
     enrollment_request: EnrollmentRequest | None = None
     event: Event | None = None

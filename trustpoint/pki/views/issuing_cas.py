@@ -9,16 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.x509 import (
-    CertificateSigningRequestBuilder,
-    Extension,
-    GeneralName,
-    Name,
-    NameAttribute,
-    NameOID,
-    SubjectAlternativeName,
-)
+from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
@@ -53,8 +44,9 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import PrimaryCredentialCertificate
 from pki.models.truststore import TruststoreModel
 from pki.serializer import IssuingCaSerializer
-from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
+from pki.util.cert_profile import ProfileValidationError
 from request.clients import EstClient, EstClientError
+from request.operation_processor.csr_build import ProfileAwareCsrBuilder
 from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
 from request.request_context import EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
@@ -524,110 +516,8 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
     def _perform_est_enrollment(self, ca: CaModel, cert_content_data: dict[str, Any], request: HttpRequest) -> None:
         """Perform the EST enrollment process."""
         cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
-        profile_json = json.loads(cert_profile.profile_json)
 
-        # Restructure form data to match profile JSON format
-        request_data = {
-            'subj': {},
-            'ext': {
-                'subject_alternative_name': {}
-            },
-            'validity': {}
-        }
-        
-        # Subject fields
-        subject_fields = {
-            'common_name': 'common_name',
-            'organization_name': 'organization_name',
-            'organizational_unit_name': 'organizational_unit_name',
-            'country_name': 'country_name',
-            'state_or_province_name': 'state_or_province_name',
-            'locality_name': 'locality_name',
-            'email_address': 'email_address'
-        }
-        
-        for profile_key, form_key in subject_fields.items():
-            if cert_content_data.get(form_key):
-                request_data['subj'][profile_key] = cert_content_data[form_key]
-        
-        # SAN fields
-        san_fields = {
-            'dns_names': 'dns_names',
-            'ip_addresses': 'ip_addresses',
-            'rfc822_names': 'rfc822_names',
-            'uris': 'uris'
-        }
-        
-        for profile_key, form_key in san_fields.items():
-            if cert_content_data.get(form_key):
-                request_data['ext']['subject_alternative_name'][profile_key] = cert_content_data[form_key]
-        
-        # Validity fields
-        validity_fields = ['days', 'hours', 'minutes', 'seconds']
-        for field in validity_fields:
-            if cert_content_data.get(field):
-                request_data['validity'][field] = int(cert_content_data[field])
-
-        profile_verifier = JSONProfileVerifier(profile_json)
-        profile_verifier.apply_profile_to_request(request_data)
-
-        # Create CSR from request_data
-        # Build subject
-        subject_attributes = []
-        subj = request_data.get('subj', {})
-        if subj.get('common_name'):
-            subject_attributes.append(NameAttribute(NameOID.COMMON_NAME, subj['common_name']))
-        if subj.get('organization_name'):
-            subject_attributes.append(NameAttribute(NameOID.ORGANIZATION_NAME, subj['organization_name']))
-        if subj.get('organizational_unit_name'):
-            subject_attributes.append(NameAttribute(NameOID.ORGANIZATIONAL_UNIT_NAME, subj['organizational_unit_name']))
-        if subj.get('country_name'):
-            subject_attributes.append(NameAttribute(NameOID.COUNTRY_NAME, subj['country_name']))
-        if subj.get('state_or_province_name'):
-            subject_attributes.append(NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, subj['state_or_province_name']))
-        if subj.get('locality_name'):
-            subject_attributes.append(NameAttribute(NameOID.LOCALITY_NAME, subj['locality_name']))
-        if subj.get('email_address'):
-            subject_attributes.append(NameAttribute(NameOID.EMAIL_ADDRESS, subj['email_address']))
-        
-        subject = Name(subject_attributes)
-        
-        # Build extensions
-        extensions = []
-        ext = request_data.get('ext', {})
-        san = ext.get('subject_alternative_name', {})
-        san_names = []
-        if san.get('dns_names'):
-            for dns_name in san['dns_names'].split(','):
-                dns_name = dns_name.strip()
-                if dns_name:
-                    san_names.append(GeneralName.dns_name(dns_name))
-        if san.get('ip_addresses'):
-            for ip_addr in san['ip_addresses'].split(','):
-                ip_addr = ip_addr.strip()
-                if ip_addr:
-                    san_names.append(GeneralName.ip_address(ip_addr))
-        if san.get('rfc822_names'):
-            for email_addr in san['rfc822_names'].split(','):
-                email_addr = email_addr.strip()
-                if email_addr:
-                    san_names.append(GeneralName.rfc822_name(email_addr))
-        if san.get('uris'):
-            for uri_addr in san['uris'].split(','):
-                uri_addr = uri_addr.strip()
-                if uri_addr:
-                    san_names.append(GeneralName.uniform_resource_identifier(uri_addr))
-        
-        if san_names:
-            extensions.append(Extension(SubjectAlternativeName(san_names), critical=False))
-        
-        # Build CSR
-        csr_builder = CertificateSigningRequestBuilder().subject_name(subject)
-        for ext in extensions:
-            csr_builder = csr_builder.add_extension(ext.value, critical=ext.critical)
-        
-        private_key = ca.credential.get_private_key()
-        csr = csr_builder.sign(private_key, hashes.SHA256())
+        request_data = self._build_request_data_from_form(cert_content_data)
 
         context = EstCertificateRequestContext(
             operation='simpleenroll',
@@ -650,9 +540,14 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
             ),
         )
 
-        # Set the CSR and owner credential for re-signing with proper signature algorithm
-        context.cert_requested = csr
+        context.request_data = request_data
         context.owner_credential = ca.credential
+
+        csr_builder = ProfileAwareCsrBuilder()
+        csr_builder.process_operation(context)
+        csr = csr_builder.get_csr()
+
+        context.cert_requested = csr
 
         # Use EstDeviceCsrSignProcessor to re-sign the CSR with the proper signature algorithm
         csr_signer = EstDeviceCsrSignProcessor()
@@ -664,7 +559,6 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
         issued_cert = est_client.simple_enroll(signed_csr)
 
         cert_pem = issued_cert.public_bytes(encoding=serialization.Encoding.PEM).decode('utf-8')
-
         cert_obj = x509.load_pem_x509_certificate(cert_pem.encode())
         cert_model = CertificateModel.save_certificate(cert_obj)
 
@@ -688,6 +582,58 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
             ca.save()
 
         del request.session[f'cert_content_data_{ca.pk}']
+
+    def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
+        """Build request data structure from form data.
+
+        Args:
+            cert_content_data: Form data containing certificate fields.
+
+        Returns:
+            Request data in the format expected by the profile verifier.
+        """
+        request_data: dict[str, Any] = {
+            'subj': {},
+            'ext': {
+                'subject_alternative_name': {}
+            },
+            'validity': {}
+        }
+
+        # Subject fields
+        subject_fields = {
+            'common_name': 'common_name',
+            'organization_name': 'organization_name',
+            'organizational_unit_name': 'organizational_unit_name',
+            'country_name': 'country_name',
+            'state_or_province_name': 'state_or_province_name',
+            'locality_name': 'locality_name',
+            'email_address': 'email_address'
+        }
+
+        for profile_key, form_key in subject_fields.items():
+            if cert_content_data.get(form_key):
+                request_data['subj'][profile_key] = cert_content_data[form_key]
+
+        # SAN fields
+        san_fields = {
+            'dns_names': 'dns_names',
+            'ip_addresses': 'ip_addresses',
+            'rfc822_names': 'rfc822_names',
+            'uris': 'uris'
+        }
+
+        for profile_key, form_key in san_fields.items():
+            if cert_content_data.get(form_key):
+                request_data['ext']['subject_alternative_name'][profile_key] = cert_content_data[form_key]
+
+        # Validity fields
+        validity_fields = ['days', 'hours', 'minutes', 'seconds']
+        for field in validity_fields:
+            if cert_content_data.get(field):
+                request_data['validity'][field] = int(cert_content_data[field])
+
+        return request_data
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle POST request to request certificate via EST."""
