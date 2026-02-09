@@ -90,24 +90,28 @@ class EstCertificateMessageResponder(EstMessageResponder):
 
         cert: str | bytes
 
-        if context.est_encoding == 'base64_der':
-            b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
-            cert = '\n'.join([b64_cert[i:i + 64] for i in range(0, len(b64_cert), 64)])
-            content_type = 'application/pkix-cert'
-        elif context.est_encoding == 'der':
+        if context.est_encoding == 'der':
+            # Raw DER format (non-standard, for compatibility)
             cert = cert_bytes
             content_type = 'application/pkix-cert'
-        elif context.est_encoding == 'pkcs7':
-            # this is the only type compliant with RFC 7030
-            # others are only provided for compatibility with practical implementations
-            cert = cert_bytes
-            content_type = 'application/pkcs7-mime; smime-type=certs-only'
-        else:
+        elif context.est_encoding == 'pem':
+            # PEM format (non-standard, for compatibility)
             try:
                 cert = cert_bytes.decode('utf-8')
             except UnicodeDecodeError:
                 cert = cert_bytes
             content_type = 'application/x-pem-file'
+        else:
+            # Default to RFC 7030 compliant format: base64-encoded with line wrapping
+            # This includes 'base64_der', 'pkcs7', and any unspecified encoding
+            b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
+            cert = '\n'.join([b64_cert[i:i + 64] for i in range(0, len(b64_cert), 64)])
+            if context.est_encoding == 'base64_der':
+                # base64_der is provided for compatibility with practical implementations
+                content_type = 'application/pkix-cert'
+            else:
+                # PKCS#7 is the RFC 7030 compliant format (default)
+                content_type = 'application/pkcs7-mime; smime-type=certs-only'
 
         if context.device and context.device.onboarding_config:
             context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED

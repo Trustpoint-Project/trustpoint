@@ -102,12 +102,17 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
 
         try:
+            # TODO (FHK): Implement a more robust way to allow the issuance of Issuing CA certificates  # noqa: FIX002
+            # Allow CA certificate requests if using the issuing_ca profile
+            allow_ca_cert = cert_profile == 'issuing_ca'
+
             ctx = EstCertificateRequestContext(
                 raw_message=request,
                 protocol='est',
                 operation='simpleenroll',
                 domain_str=domain_name,
                 cert_profile_str=cert_profile,
+                allow_ca_certificate_request=allow_ca_cert,
                 event=self.EVENT
             )
 

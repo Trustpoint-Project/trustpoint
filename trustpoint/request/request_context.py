@@ -97,6 +97,9 @@ class BaseCertificateRequestContext(BaseRequestContext):
 
     certificate_profile_model: CertificateProfileModel | None = None
 
+    # Flag to allow CA certificate requests (e.g., for Issuing CA certificate enrollment)
+    allow_ca_certificate_request: bool = False
+
     # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
     enrollment_request: EnrollmentRequest | None = None
     event: Event | None = None

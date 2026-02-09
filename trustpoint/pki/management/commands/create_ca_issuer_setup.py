@@ -7,8 +7,6 @@ from pathlib import Path
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
-import datetime
 from pki.models import CertificateModel, CredentialModel
 from devices.models import DeviceModel
 from django.core.management import call_command
@@ -17,10 +15,11 @@ from django.db import models
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import CaModel, DomainModel
 from pki.models.cert_profile import CertificateProfileModel
+from pki.models.domain import DomainAllowedCertificateProfileModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TruststoreModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
-from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
+from trustpoint_core.oid import KeyPairGenerator, PublicKeyAlgorithmOid, PublicKeyInfo
 from trustpoint_core.serializer import CredentialSerializer
 from pki.util.x509 import CertificateGenerator
 

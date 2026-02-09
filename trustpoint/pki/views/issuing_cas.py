@@ -635,6 +635,7 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
             domain=None,
             cert_profile_str='issuing_ca',
             certificate_profile_model=cert_profile,
+            allow_ca_certificate_request=True,  # Allow CA cert requests for Issuing CA enrollment
             est_server_host=ca.remote_host,
             est_server_port=ca.remote_port,
             est_server_path=ca.remote_path,

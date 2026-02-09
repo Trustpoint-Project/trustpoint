@@ -53,4 +53,7 @@ class ProfileValidator(LoggerMixin):
 
         cls.logger.info('Validated Cert Request JSON: %s', validated_request)
 
-        context.cert_requested_profile_validated = JSONCertRequestConverter.from_json(validated_request)
+        context.cert_requested_profile_validated = JSONCertRequestConverter.from_json(
+            validated_request,
+            allow_ca_cert=context.allow_ca_certificate_request
+        )
