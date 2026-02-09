@@ -15,7 +15,7 @@ from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
@@ -36,10 +36,13 @@ from pki.forms import (
     IssuingCaAddMethodSelectForm,
     IssuingCaAddRequestCmpForm,
     IssuingCaAddRequestEstForm,
+    IssuingCaTruststoreAssociationForm,
+    TruststoreAddForm,
 )
 from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import PrimaryCredentialCertificate
+from pki.models.truststore import TruststoreModel
 from pki.serializer import IssuingCaSerializer
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from pki.util.cert_req_converter import JSONCertRequestConverter
@@ -163,35 +166,92 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView[Is
 class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddRequestEstForm]):
     """View to request an Issuing CA certificate using EST."""
 
-    template_name = 'pki/issuing_cas/add/request_est.html'
     form_class = IssuingCaAddRequestEstForm
-
-    def form_invalid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
-        """Handle the case where the form is invalid."""
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f'{field}: {error!s}' if field != '__all__' else f'{error!s}')
-        referer = self.request.META.get('HTTP_REFERER')
-        if referer and url_has_allowed_host_and_scheme(
-            referer,
-            allowed_hosts={self.request.get_host()},
-            require_https=self.request.is_secure(),
-        ):
-            redirect_to = referer
-        else:
-            redirect_to = 'pki:issuing_cas-add-request-est'
-        return redirect(redirect_to)
+    template_name = 'pki/issuing_cas/add/request_est.html'
 
     def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
-        """Handle the case where the form is valid."""
+        """Handle successful form submission."""
         ca = form.save()
         messages.success(
             self.request,
-            _('Successfully created Issuing CA {name}. Please define the certificate content.').format(
+            _('Successfully created Issuing CA {name}. Please associate a trust store.').format(
                 name=ca.unique_name
             ),
         )
-        return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+        return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+
+
+class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[IssuingCaTruststoreAssociationForm]):
+    """View for associating a truststore with an Issuing CA."""
+
+    form_class = IssuingCaTruststoreAssociationForm
+    template_name = 'pki/issuing_cas/truststore_association.html'
+
+    def get_ca(self) -> CaModel:
+        """Get the CA from the URL parameters."""
+        pk = self.kwargs.get('pk')
+        return get_object_or_404(
+            CaModel.objects.exclude(ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]),
+            pk=pk
+        )
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Add the CA instance to the form kwargs."""
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = self.get_ca()
+        truststore_id = self.request.GET.get('truststore_id')
+        if truststore_id:
+            try:
+                truststore = TruststoreModel.objects.get(pk=truststore_id)
+                kwargs['initial'] = kwargs.get('initial', {})
+                kwargs['initial']['trust_store'] = truststore
+            except TruststoreModel.DoesNotExist:
+                pass
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the CA and import form to the context."""
+        context = super().get_context_data(**kwargs)
+        context['ca'] = self.get_ca()
+        context['import_form'] = TruststoreAddForm()
+        return context
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle both association and import form submissions."""
+        if 'trust_store_file' in request.FILES:
+            return self._handle_import(request)
+        return super().post(request, *args, **kwargs)
+
+    def _handle_import(self, request: HttpRequest) -> HttpResponse:
+        """Handle truststore import from modal."""
+        import_form = TruststoreAddForm(request.POST, request.FILES)
+
+        if import_form.is_valid():
+            truststore = import_form.cleaned_data['truststore']
+            messages.success(
+                request,
+                _('Successfully imported truststore {name}.').format(name=truststore.unique_name),
+            )
+            return HttpResponseRedirect(
+                reverse('pki:issuing_cas-truststore-association', kwargs={'pk': self.get_ca().pk}) +
+                f'?truststore_id={truststore.id}'
+            )
+
+        context = self.get_context_data()
+        context['import_form'] = import_form
+        return self.render_to_response(context)
+
+    def form_valid(self, form: IssuingCaTruststoreAssociationForm) -> HttpResponse:
+        """Handle successful form submission."""
+        form.save()
+        ca = self.get_ca()
+        messages.success(
+            self.request,
+            _('Successfully associated truststore with Issuing CA {name}.').format(name=ca.unique_name)
+        )
+        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
+            return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+        return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
 
 
 class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
@@ -241,9 +301,9 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
         """Handle the case where the form is valid."""
         # Store the form data in session for use in the request-cert view
-        self.request.session[f'cert_content_data_{self.ca.pk}'] = form.cleaned_data  # type: ignore[attr-defined]
+        self.request.session[f'cert_content_data_{self.ca.pk}'] = form.cleaned_data # type: ignore[attr-defined]
         messages.success(
-            self.request,  # type: ignore[attr-defined]
+            self.request, # type: ignore[attr-defined]
             self.get_success_message()
         )
         return redirect(self.redirect_url_name, pk=self.ca.pk)
@@ -269,35 +329,19 @@ class IssuingCaDefineCertContentEstView(IssuingCaDefineCertContentMixin, FormVie
 class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddRequestCmpForm]):
     """View to request an Issuing CA certificate using CMP."""
 
-    template_name = 'pki/issuing_cas/add/request_cmp.html'
     form_class = IssuingCaAddRequestCmpForm
-
-    def form_invalid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
-        """Handle the case where the form is invalid."""
-        for field, errors in form.errors.items():
-            for error in errors:
-                messages.error(self.request, f'{field}: {error!s}' if field != '__all__' else f'{error!s}')
-        referer = self.request.META.get('HTTP_REFERER')
-        if referer and url_has_allowed_host_and_scheme(
-            referer,
-            allowed_hosts={self.request.get_host()},
-            require_https=self.request.is_secure(),
-        ):
-            redirect_to = referer
-        else:
-            redirect_to = 'pki:issuing_cas-add-request-cmp'
-        return redirect(redirect_to)
+    template_name = 'pki/issuing_cas/add/request_cmp.html'
 
     def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
-        """Handle the case where the form is valid."""
+        """Handle successful form submission."""
         ca = form.save()
         messages.success(
             self.request,
-            _('Successfully created Issuing CA {name}. Please define the certificate content.').format(
+            _('Successfully created Issuing CA {name}. Please associate a trust store.').format(
                 name=ca.unique_name
             ),
         )
-        return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
+        return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
 
 class IssuingCaDefineCertContentCmpView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
@@ -349,7 +393,6 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
 class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
     """Mixin for certificate request views for EST and CMP protocols."""
 
-    model = CaModel
     context_object_name = 'issuing_ca'
     ca_type_filter: CaModel.CaTypeChoice
     redirect_url_name: str
@@ -362,6 +405,7 @@ class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
         """Add the issuing_ca certificate profile and cert content summary to the context."""
         context = super().get_context_data(**kwargs)
 
+        # Get certificate profile
         try:
             cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
             context['cert_profile'] = cert_profile
@@ -371,6 +415,7 @@ class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
             context['cert_profile'] = None
             context['profile_json'] = None
 
+        # Get certificate content data from session
         ca = self.get_object()  # type: ignore[attr-defined]
         cert_content_key = f'cert_content_data_{ca.pk}'
         cert_content_data = self.request.session.get(cert_content_key)  # type: ignore[attr-defined]
@@ -379,6 +424,7 @@ class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
             context['cert_content_data'] = cert_content_data
             context['has_cert_content'] = True
 
+            # Build a summary of the certificate content
             summary = self._build_cert_content_summary(cert_content_data)
             context['cert_content_summary'] = summary
         else:
@@ -576,7 +622,7 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
             return redirect(self.redirect_url_name, pk=ca.pk)
 
 
-class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]):  # type: ignore[misc]
+class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]):   # type: ignore[misc]
     """View to display the CMP certificate request page."""
 
     template_name = 'pki/issuing_cas/request_cert_cmp.html'

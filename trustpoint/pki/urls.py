@@ -20,11 +20,6 @@ urlpatterns = [
             truststores.TruststoreCreateView.as_view(),
             name='truststores-add-with-pk'),
     path('truststores/add/<int:pk>/', truststores.TruststoreCreateView.as_view(), name='truststores-add-with-pk'),
-    path(
-        'truststores/add/opc-ua-gds-push/<int:device_pk>/',
-        truststores.OpcUaGdsPushTruststoreCreateView.as_view(),
-        name='truststores-add-opc-ua-gds-push'
-    ),
     re_path(
         r'^truststores/download/(?P<pk>[0-9]+)/?$',
         truststores.TruststoreDownloadView.as_view(),
@@ -142,6 +137,11 @@ urlpatterns = [
         'issuing-cas/add/request-cmp/',
         issuing_cas.IssuingCaAddRequestCmpView.as_view(),
         name='issuing_cas-add-request-cmp',
+    ),
+    path(
+        'issuing-cas/truststore-association/<int:pk>/',
+        issuing_cas.IssuingCaTruststoreAssociationView.as_view(),
+        name='issuing_cas-truststore-association',
     ),
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),

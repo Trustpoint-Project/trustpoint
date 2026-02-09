@@ -16,7 +16,7 @@
             <div class="card-body">
                 <div class="tp-card-centered-content">
                     <h2>{% trans 'Trust Store Association' %}</h2>
-                    <p>{% trans 'Select a trust store to associate with this device\'s onboarding configuration.' %}</p>
+                    <p>{% trans 'Select a trust store to associate with this Issuing CA.' %}</p>
                     <hr>
                     {{ form|crispy }}
                     <button type="button" class="btn btn-secondary ms-2" data-bs-toggle="modal" data-bs-target="#truststoreImportModal">
@@ -27,7 +27,7 @@
             </div>
             <div class="card-footer d-flex justify-content-between align-items-center">
                 <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'devices:opc_ua_gds_push_certificate_lifecycle_management' pk=device.pk %}" class="btn btn-secondary">{% trans "Skip" %}</a>
+                    <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
                     <button type="submit" class="btn btn-primary">{% trans "Associate Trust Store" %}</button>
                 </div>
             </div>
