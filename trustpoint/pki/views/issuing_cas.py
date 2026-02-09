@@ -37,9 +37,15 @@ from pki.forms import (
     IssuingCaAddRequestCmpForm,
     IssuingCaAddRequestEstForm,
 )
-from pki.models import CaModel, CertificateModel
+from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
+from pki.models.credential import PrimaryCredentialCertificate
 from pki.serializer import IssuingCaSerializer
+from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
+from pki.util.cert_req_converter import JSONCertRequestConverter
+from request.clients import EstClient, EstClientError
+from request.operation_processor.csr_sign import EstCaCsrSignProcessor
+from request.request_context import EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -53,7 +59,6 @@ if TYPE_CHECKING:
     from django.forms import Form
     from django.http import HttpRequest
 
-    from pki.models.credential import CredentialModel
 
 
 class IssuingCaContextMixin(ContextDataMixin):
@@ -192,7 +197,6 @@ class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddReq
 class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
     """Mixin for defining certificate content using the issuing_ca profile."""
 
-    form_class = CertificateIssuanceForm
     ca_type_filter: CaModel.CaTypeChoice
     redirect_url_name: str
 
@@ -210,18 +214,18 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
                 _('Certificate profile "issuing_ca" not found. Please create it or contact your administrator.')
             )
             return redirect('pki:issuing_cas')
-        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))  # type: ignore[misc]
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get form kwargs, including the profile."""
         kwargs = super().get_form_kwargs()  # type: ignore[misc]
         raw_profile = json.loads(self.cert_profile.profile_json)
         kwargs['profile'] = raw_profile
-        return kwargs
+        return kwargs  # type: ignore[no-any-return]
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data."""
-        context = super().get_context_data(**kwargs)  # type: ignore[misc]
+        context = super().get_context_data(**kwargs)
         context['issuing_ca'] = self.ca
         context['cert_profile'] = self.cert_profile
         context['profile_dict'] = self.get_form_kwargs()['profile']
@@ -231,15 +235,15 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
         """Handle the case where the form is invalid."""
         for field, errors in form.errors.items():
             for error in errors:
-                messages.error(self.request, f'{field}: {error}')
-        return super().form_invalid(form)  # type: ignore[misc]
+                messages.error(self.request, f'{field}: {error}')  # type: ignore[attr-defined]
+        return super().form_invalid(form)  # type: ignore[misc,no-any-return]
 
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
         """Handle the case where the form is valid."""
         # Store the form data in session for use in the request-cert view
-        self.request.session[f'cert_content_data_{self.ca.pk}'] = form.cleaned_data
+        self.request.session[f'cert_content_data_{self.ca.pk}'] = form.cleaned_data  # type: ignore[attr-defined]
         messages.success(
-            self.request,
+            self.request,  # type: ignore[attr-defined]
             self.get_success_message()
         )
         return redirect(self.redirect_url_name, pk=self.ca.pk)
@@ -356,9 +360,8 @@ class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add the issuing_ca certificate profile and cert content summary to the context."""
-        context = super().get_context_data(**kwargs)  # type: ignore[misc]
+        context = super().get_context_data(**kwargs)
 
-        # Get certificate profile
         try:
             cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
             context['cert_profile'] = cert_profile
@@ -368,7 +371,6 @@ class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
             context['cert_profile'] = None
             context['profile_json'] = None
 
-        # Get certificate content data from session
         ca = self.get_object()  # type: ignore[attr-defined]
         cert_content_key = f'cert_content_data_{ca.pk}'
         cert_content_data = self.request.session.get(cert_content_key)  # type: ignore[attr-defined]
@@ -377,7 +379,6 @@ class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
             context['cert_content_data'] = cert_content_data
             context['has_cert_content'] = True
 
-            # Build a summary of the certificate content
             summary = self._build_cert_content_summary(cert_content_data)
             context['cert_content_summary'] = summary
         else:
@@ -453,7 +454,7 @@ class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
         raise NotImplementedError(msg)
 
 
-class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]):
+class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]):  # type: ignore[misc]
     """View to display the EST certificate request page."""
 
     template_name = 'pki/issuing_cas/request_cert_est.html'
@@ -464,8 +465,118 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
         """Get the not implemented message for EST."""
         return _('EST certificate request not yet implemented.')
 
+    def _perform_est_enrollment(self, ca: CaModel, cert_content_data: dict[str, Any], request: HttpRequest) -> None:
+        """Perform the EST enrollment process."""
+        cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
+        profile_json = json.loads(cert_profile.profile_json)
 
-class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]):
+        cert_builder = JSONCertRequestConverter.from_json(cert_content_data)
+
+        profile_verifier = JSONProfileVerifier(profile_json)
+        profile_verifier.apply_profile_to_request(cert_content_data)
+
+        context = EstCertificateRequestContext(
+            operation='simpleenroll',
+            protocol='est',
+            domain=None,
+            cert_profile_str='issuing_ca',
+            certificate_profile_model=cert_profile,
+            est_server_host=ca.remote_host,
+            est_server_port=ca.remote_port,
+            est_server_path=ca.remote_path,
+            est_username=ca.est_username,
+            est_password=(
+                ca.no_onboarding_config.est_password
+                if ca.no_onboarding_config else None
+            ),
+            est_server_truststore=(
+                ca.no_onboarding_config.trust_store
+                if ca.no_onboarding_config else None
+            ),
+        )
+
+        context.cert_requested = cert_builder
+
+        csr_signer = EstCaCsrSignProcessor()
+        csr_signer.process_operation(context)
+        signed_csr = csr_signer.get_signed_csr()
+
+        est_client = EstClient(context)
+        issued_cert = est_client.simple_enroll(signed_csr)
+
+        cert_pem = issued_cert.public_bytes(encoding=serialization.Encoding.PEM).decode('utf-8')
+
+        cert_obj = x509.load_pem_x509_certificate(cert_pem.encode())
+        cert_model = CertificateModel.save_certificate(cert_obj)
+
+        if ca.credential:
+            ca.credential.certificate = cert_model
+            ca.credential.save()
+        else:
+            credential = CredentialModel(
+                credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+                certificate=cert_model,
+                private_key=ca.credential.private_key if ca.credential else '',
+            )
+            credential.save()
+            credential.certificates.add(cert_model)
+            PrimaryCredentialCertificate.objects.create(
+                credential=credential,
+                certificate=cert_model,
+                is_primary=True
+            )
+            ca.credential = credential
+            ca.save()
+
+        del request.session[f'cert_content_data_{ca.pk}']
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle POST request to request certificate via EST."""
+        ca = self.get_object()
+
+        cert_content_key = f'cert_content_data_{ca.pk}'
+        cert_content_data = request.session.get(cert_content_key)
+
+        if not cert_content_data:
+            messages.error(
+                request,
+                _(
+                    'Certificate content data not found. '
+                    'Please define the certificate content first.'
+                )
+            )
+            return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+
+        try:
+            self._perform_est_enrollment(ca, cert_content_data, request)
+            messages.success(
+                request,
+                _('Successfully enrolled certificate for Issuing CA {name} via EST.').format(name=ca.unique_name)
+            )
+            return redirect('pki:issuing_cas-config', pk=ca.pk)
+        except (ValueError, KeyError, ProfileValidationError) as exc:
+            messages.error(request, _('Failed to build certificate request: {error}').format(error=str(exc)))
+            return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+        except CertificateProfileModel.DoesNotExist:
+            messages.error(request, _('Certificate profile "issuing_ca" not found.'))
+            return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+        except EstClientError as exc:
+            self.logger.exception('EST client error during certificate enrollment')
+            messages.error(
+                request,
+                _('Failed to enroll certificate via EST: {error}').format(error=str(exc))
+            )
+            return redirect(self.redirect_url_name, pk=ca.pk)
+        except Exception as exc:
+            self.logger.exception('Unexpected error during EST certificate enrollment')
+            messages.error(
+                request,
+                _('Unexpected error during certificate enrollment: {error}').format(error=str(exc))
+            )
+            return redirect(self.redirect_url_name, pk=ca.pk)
+
+
+class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]):  # type: ignore[misc]
     """View to display the CMP certificate request page."""
 
     template_name = 'pki/issuing_cas/request_cert_cmp.html'

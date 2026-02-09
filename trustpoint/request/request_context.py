@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from pyasn1_modules.rfc4210 import PKIFailureInfo, PKIMessage  # type: ignore[import-untyped]
 
     from devices.models import DeviceModel, IssuedCredentialModel
-    from pki.models import CertificateProfileModel, CredentialModel, DomainModel
+    from pki.models import CertificateProfileModel, CredentialModel, DomainModel, TruststoreModel
     from workflows.events import Event
     from workflows.models import EnrollmentRequest
 
@@ -121,12 +121,22 @@ class HttpBaseRequestContext(BaseRequestContext):
 
 @dataclass(kw_only=True)
 class EstBaseRequestContext(HttpBaseRequestContext):
-    """Shared context for all EST requests."""
+    """Shared context for all EST requests.
+
+    Supports both EST server functionality (receiving requests) and EST client
+    functionality (sending requests to external EST servers).
+    """
+    # Server-side fields
     parsed_message: CertificateSigningRequest | None = None
     est_encoding: str | None = None
     est_username: str | None = None
     est_password: str | None = None
 
+    # Client-side fields
+    est_server_host: str | None = None
+    est_server_port: int | None = None
+    est_server_path: str | None = None
+    est_server_truststore: TruststoreModel | None = None
 
 @dataclass(kw_only=True)
 class CmpBaseRequestContext(HttpBaseRequestContext):
