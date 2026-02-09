@@ -206,7 +206,11 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
                 kwargs['initial'] = kwargs.get('initial', {})
                 kwargs['initial']['trust_store'] = truststore
             except TruststoreModel.DoesNotExist:
-                pass
+                messages.warning(
+                    self.request,
+                    'Truststore with id %s does not exist. Ignoring truststore_id parameter.',
+                    truststore_id
+                )
         return kwargs
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:

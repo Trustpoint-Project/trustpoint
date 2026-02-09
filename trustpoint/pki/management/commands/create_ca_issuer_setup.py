@@ -15,7 +15,6 @@ from django.db import models
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import CaModel, DomainModel
 from pki.models.cert_profile import CertificateProfileModel
-from pki.models.domain import DomainAllowedCertificateProfileModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel, TruststoreModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
@@ -155,7 +154,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                         with key_path.open('rb') as f:
                             key_data = f.read()
                         tls_certificate = x509.load_pem_x509_certificate(cert_data)
-                        tls_private_key = serialization.load_pem_private_key(key_data, password=None)
+                        serialization.load_pem_private_key(key_data, password=None)
                         tls_cert = CertificateModel.save_certificate(tls_certificate)
                         self.log_and_stdout('Loaded TLS certificate from test files.')
                     else:
@@ -199,7 +198,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                     with key_path.open('rb') as f:
                         key_data = f.read()
                     tls_certificate = x509.load_pem_x509_certificate(cert_data)
-                    tls_private_key = serialization.load_pem_private_key(key_data, password=None)
+                    serialization.load_pem_private_key(key_data, password=None)
                     tls_cert = CertificateModel.save_certificate(tls_certificate)
                     self.log_and_stdout('Loaded TLS certificate from test files.')
                 else:

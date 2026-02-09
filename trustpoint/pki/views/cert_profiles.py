@@ -161,7 +161,7 @@ class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
         """Handle the case where the form is valid."""
         try:
-            builder = form.get_certificate_builder()  # noqa: F841
+            form.get_certificate_builder()
         except ValueError as e:
             messages.error(self.request, _('Error generating certificate builder: {error}').format(error=str(e)))
             return self.form_invalid(form)

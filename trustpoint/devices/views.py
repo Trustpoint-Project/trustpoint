@@ -1523,7 +1523,9 @@ class OpcUaGdsPushDiscoverServerView(PageContextMixin, DetailView[DeviceModel]):
         )
 
 
-class OpcUaGdsPushTruststoreAssociationView(PageContextMixin, FormView[OpcUaGdsPushTruststoreAssociationForm]):
+class OpcUaGdsPushTruststoreAssociationView(
+    LoggerMixin, PageContextMixin, FormView[OpcUaGdsPushTruststoreAssociationForm]
+):
     """View for associating a truststore with an OPC UA GDS Push device's onboarding configuration."""
 
     form_class = OpcUaGdsPushTruststoreAssociationForm
@@ -1541,7 +1543,9 @@ class OpcUaGdsPushTruststoreAssociationView(PageContextMixin, FormView[OpcUaGdsP
                 kwargs['initial'] = kwargs.get('initial', {})
                 kwargs['initial']['opc_trust_store'] = truststore
             except TruststoreModel.DoesNotExist:
-                pass
+                self.logger.warning(
+                    'Truststore with id %s does not exist. Ignoring truststore_id parameter.', truststore_id
+                )
         return kwargs
 
     def get_device(self) -> DeviceModel:
