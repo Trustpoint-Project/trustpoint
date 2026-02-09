@@ -1143,13 +1143,6 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         help_text=_('Select the cryptographic key type and parameters'),
     )
 
-    trust_store = forms.ModelChoiceField(
-        label=_('Trust Store'),
-        queryset=TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS),
-        required=True,
-        help_text=_('Trust store containing certificates to verify the remote server'),
-    )
-
     def clean(self) -> dict[str, Any]:
         """Validate the form data."""
         cleaned_data = cast('dict[str, Any]', super().clean())
@@ -1249,7 +1242,7 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
         no_onboarding_config = NoOnboardingConfigModel.objects.create(
             pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
             est_password=self.cleaned_data['est_password'],
-            trust_store=self.cleaned_data.get('trust_store'),
+            trust_store=None,  # Will be set later via truststore association
         )
         instance.no_onboarding_config = no_onboarding_config
         instance.est_username = self.cleaned_data['est_username']
@@ -1282,7 +1275,6 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
         self.fields['remote_path'].initial = '/.well-known/cmp/p/certification'
         self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
         self.fields['ca_type'].widget = forms.HiddenInput()
-        self.fields['trust_store'].required = False
 
     def save(self) -> CaModel:  # type: ignore[override]
         """Save the form and create the CA model with configuration."""
@@ -1291,7 +1283,7 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
         no_onboarding_config = NoOnboardingConfigModel.objects.create(
             pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
             cmp_shared_secret=self.cleaned_data['cmp_shared_secret'],
-            trust_store=self.cleaned_data.get('trust_store'),
+            trust_store=None,  # Will be set later via truststore association
         )
         instance.no_onboarding_config = no_onboarding_config
 
@@ -1433,7 +1425,7 @@ class CertificateIssuanceForm(forms.Form):
         if allow == '*':
             allowed_additional = set(standard_fields)
         elif isinstance(allow, list):
-            allowed_additional = {abbrev_to_full.get(item.lower(), item) for item in allow}
+            allowed_additional = {abbrev_to_full.get(item.lower(), item) for item in allow if isinstance(item, str)}
         else:
             allowed_additional = set()
 
@@ -1634,3 +1626,33 @@ class CertificateIssuanceForm(forms.Form):
                 disabled=not field_info['mutable'],
                 widget=forms.NumberInput(attrs={'class': 'form-control'})
             )
+
+
+class IssuingCaTruststoreAssociationForm(forms.Form):
+    """Form for associating a truststore with an Issuing CA."""
+
+    trust_store = forms.ModelChoiceField(
+        queryset=TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS),
+        empty_label='----------',
+        required=True,
+        label=_('Trust Store'),
+        help_text=_('Select a trust store to associate with this Issuing CA'),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form."""
+        self.instance: CaModel = kwargs.pop('instance')
+        super().__init__(*args, **kwargs)
+
+        if self.instance.no_onboarding_config and self.instance.no_onboarding_config.trust_store:
+            self.fields['trust_store'].initial = self.instance.no_onboarding_config.trust_store
+
+    def save(self) -> None:
+        """Save the truststore association to the CA's onboarding config."""
+        if not self.instance.no_onboarding_config:
+            err_msg = _('Expected CaModel that has a no_onboarding_config.')
+            raise forms.ValidationError(err_msg)
+
+        self.instance.no_onboarding_config.trust_store = self.cleaned_data['trust_store']
+        self.instance.no_onboarding_config.full_clean()
+        self.instance.no_onboarding_config.save()

@@ -138,6 +138,11 @@ urlpatterns = [
         issuing_cas.IssuingCaAddRequestCmpView.as_view(),
         name='issuing_cas-add-request-cmp',
     ),
+    path(
+        'issuing-cas/truststore-association/<int:pk>/',
+        issuing_cas.IssuingCaTruststoreAssociationView.as_view(),
+        name='issuing_cas-truststore-association',
+    ),
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
     path(
