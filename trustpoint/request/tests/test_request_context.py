@@ -199,7 +199,9 @@ class TestRequestContext:
             'owner_credential', 'issuer_credential',
             'http_response_status', 'http_response_content',
             'http_response_content_type',
-            'enrollment_request', 'event' # These two should be refactored into the overall Req Context
+            'enrollment_request', 'event',  # These two should be refactored into the overall Req Context
+            'allow_ca_certificate_request', 'request_data', 'validated_request_data',
+            'est_server_host', 'est_server_port', 'est_server_path', 'est_server_truststore'
         ]
 
         assert len(field_names) == len(expected_fields)
