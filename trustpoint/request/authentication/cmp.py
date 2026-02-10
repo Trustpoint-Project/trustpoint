@@ -635,22 +635,27 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             raise ValueError(err_msg)
 
         public_key = cmp_signer_cert.public_key()
-        if isinstance(public_key, rsa.RSAPublicKey):
-            public_key.verify(
-                signature=protection_value,
-                data=encoded_protected_part,
-                padding=padding.PKCS1v15(),
-                algorithm=hash_algorithm.hash_algorithm(),
-            )
-        elif isinstance(public_key, ec.EllipticCurvePublicKey):
-            public_key.verify(
-                signature=protection_value,
-                data=encoded_protected_part,
-                signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
-            )
-        else:
-            err_msg = 'Cannot verify signature due to unsupported public key type.'
-            raise TypeError(err_msg)
+        try:
+            if isinstance(public_key, rsa.RSAPublicKey):
+                public_key.verify(
+                    signature=protection_value,
+                    data=encoded_protected_part,
+                    padding=padding.PKCS1v15(),
+                    algorithm=hash_algorithm.hash_algorithm(),
+                )
+            elif isinstance(public_key, ec.EllipticCurvePublicKey):
+                public_key.verify(
+                    signature=protection_value,
+                    data=encoded_protected_part,
+                    signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
+                )
+            else:
+                err_msg = 'Cannot verify signature due to unsupported public key type.'
+                raise TypeError(err_msg)
+        except InvalidSignature as e:
+            err_msg = 'CMP message protection signature verification failed.'
+            self.logger.warning(err_msg, exc_info=True)
+            raise ValueError(err_msg) from e
 
 
 class CmpAuthentication(CompositeAuthentication):
