@@ -69,7 +69,6 @@ from devices.models import (
 from devices.revocation import DeviceCredentialRevocation
 from devices.serializers import DeviceSerializer
 from management.models import KeyStorageConfig
-from pki.forms import TruststoreAddForm
 from onboarding.models import (
     NoOnboardingPkiProtocol,
     OnboardingPkiProtocol,
