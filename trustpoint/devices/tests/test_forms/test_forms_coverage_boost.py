@@ -142,7 +142,7 @@ class TestOnboardingCreateFormExceptionHandling:
         domain = device_instance['domain']
         
         # Import OnboardingPkiProtocol for the correct enum
-        from devices.models import OnboardingPkiProtocol
+        from onboarding.models import OnboardingPkiProtocol
         
         form_data = {
             'common_name': 'test-invalid-protocol',

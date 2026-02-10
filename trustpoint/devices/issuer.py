@@ -12,7 +12,8 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
 
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingStatus
+from devices.models import DeviceModel, IssuedCredentialModel
+from onboarding.models import OnboardingProtocol, OnboardingStatus
 from pki.models.credential import CredentialModel
 from pki.util.keys import KeyGenerator
 from trustpoint.logger import LoggerMixin

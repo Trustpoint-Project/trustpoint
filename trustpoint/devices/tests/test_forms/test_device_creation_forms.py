@@ -190,7 +190,7 @@ class TestOnboardingCreateForm:
         domain = device_instance['domain']
         
         # Import OnboardingPkiProtocol for the correct enum
-        from devices.models import OnboardingPkiProtocol
+        from onboarding.models import OnboardingPkiProtocol
         
         form_data = {
             'common_name': 'onboarding-device',
@@ -210,7 +210,7 @@ class TestOnboardingCreateForm:
         domain = device_instance['domain']
         
         # Import OnboardingPkiProtocol for the correct enum
-        from devices.models import OnboardingPkiProtocol
+        from onboarding.models import OnboardingPkiProtocol
         
         form_data = {
             'common_name': device.common_name,  # Duplicate name
@@ -230,7 +230,7 @@ class TestOnboardingCreateForm:
         domain = device_instance['domain']
         
         # Import OnboardingPkiProtocol for the correct enum
-        from devices.models import OnboardingPkiProtocol
+        from onboarding.models import OnboardingPkiProtocol
         
         form_data = {
             'common_name': 'onboard-saved-device',
@@ -255,7 +255,7 @@ class TestOnboardingCreateForm:
         domain = device_instance['domain']
         
         # Import OnboardingPkiProtocol for the correct enum
-        from devices.models import OnboardingPkiProtocol
+        from onboarding.models import OnboardingPkiProtocol
         
         form_data = {
             'common_name': 'cmp-onboard-device',
@@ -278,7 +278,7 @@ class TestOnboardingCreateForm:
         domain = device_instance['domain']
         
         # Import OnboardingPkiProtocol for the correct enum
-        from devices.models import OnboardingPkiProtocol
+        from onboarding.models import OnboardingPkiProtocol
         
         form_data = {
             'common_name': 'est-onboard-device',
