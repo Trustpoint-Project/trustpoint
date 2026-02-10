@@ -76,7 +76,7 @@ class CsrBuilder(LoggerMixin, AbstractOperationProcessor):
             The X.509 Name object for the CSR subject.
         """
         subject_attributes = []
-        subj = validated_request_data.get('subj', {})
+        subj = validated_request_data.get('subject', validated_request_data.get('subj', {}))
 
         subject_field_map = {
             'common_name': NameOID.COMMON_NAME,
@@ -105,7 +105,7 @@ class CsrBuilder(LoggerMixin, AbstractOperationProcessor):
             List of tuples (extension_value, critical) for X.509 extensions.
         """
         extensions: list[tuple[Any, bool]] = []
-        ext = validated_request_data.get('ext', {})
+        ext = validated_request_data.get('ext', validated_request_data.get('extensions', {}))
 
         san = ext.get('subject_alternative_name', {})
         san_names = self._build_san_names(san)
@@ -262,7 +262,7 @@ class ProfileAwareCsrBuilder(CsrBuilder):
             exc_msg = 'Request data must be set in the context.'
             raise ValueError(exc_msg)
 
-        profile_json = context.certificate_profile_model.profile_json
+        profile_json = context.certificate_profile_model.profile
         profile_verifier = JSONProfileVerifier(profile_json)
         context.validated_request_data = profile_verifier.apply_profile_to_request(context.request_data)
 

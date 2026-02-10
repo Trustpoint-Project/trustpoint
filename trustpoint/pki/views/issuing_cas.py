@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import binascii
-import json
 from base64 import b64decode
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
@@ -283,7 +282,7 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get form kwargs, including the profile."""
         kwargs = super().get_form_kwargs()  # type: ignore[misc]
-        raw_profile = json.loads(self.cert_profile.profile_json)
+        raw_profile = self.cert_profile.profile
         kwargs['profile'] = raw_profile
         return kwargs  # type: ignore[no-any-return]
 
@@ -304,7 +303,7 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
 
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
         """Handle the case where the form is valid."""
-        # Store the form data in session for use in the request-cert view
+        self.logger.info('Form cleaned_data: %s', form.cleaned_data)
         self.request.session[f'cert_content_data_{self.ca.pk}'] = form.cleaned_data # type: ignore[attr-defined]
         messages.success(
             self.request, # type: ignore[attr-defined]
@@ -522,6 +521,7 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
         cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
 
         request_data = self._build_request_data_from_form(cert_content_data)
+        self.logger.info('Built request data: %s', request_data)
 
         context = EstCertificateRequestContext(
             operation='simpleenroll',
@@ -596,6 +596,7 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
         Returns:
             Request data in the format expected by the profile verifier.
         """
+        self.logger.info('Building request data from: %s', cert_content_data)
         request_data: dict[str, Any] = {
             'subj': {},
             'ext': {
@@ -605,19 +606,11 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
         }
 
         # Subject fields
-        subject_fields = {
-            'common_name': 'common_name',
-            'organization_name': 'organization_name',
-            'organizational_unit_name': 'organizational_unit_name',
-            'country_name': 'country_name',
-            'state_or_province_name': 'state_or_province_name',
-            'locality_name': 'locality_name',
-            'email_address': 'email_address'
-        }
-
-        for profile_key, form_key in subject_fields.items():
-            if cert_content_data.get(form_key):
-                request_data['subj'][profile_key] = cert_content_data[form_key]
+        required_subject_fields = ['common_name', 'organization_name', 'country_name', 'state_or_province_name']
+        for field_name in required_subject_fields:
+            value = cert_content_data.get(field_name)
+            if value:
+                request_data['subj'][field_name] = value
 
         # SAN fields
         san_fields = {
@@ -628,14 +621,16 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
         }
 
         for profile_key, form_key in san_fields.items():
-            if cert_content_data.get(form_key):
-                request_data['ext']['subject_alternative_name'][profile_key] = cert_content_data[form_key]
+            value = cert_content_data.get(form_key)
+            if value is not None:
+                request_data['ext']['subject_alternative_name'][profile_key] = value
 
         # Validity fields
         validity_fields = ['days', 'hours', 'minutes', 'seconds']
         for field in validity_fields:
-            if cert_content_data.get(field):
-                request_data['validity'][field] = int(cert_content_data[field])
+            value = cert_content_data.get(field)
+            if value is not None:
+                request_data['validity'][field] = int(value)
 
         return request_data
 
@@ -645,6 +640,8 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
         cert_content_key = f'cert_content_data_{ca.pk}'
         cert_content_data = request.session.get(cert_content_key)
+
+        self.logger.info('Cert content data for CA %s: %s', ca.pk, cert_content_data)
 
         if not cert_content_data:
             messages.error(

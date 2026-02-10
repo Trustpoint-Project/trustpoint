@@ -36,7 +36,7 @@ class ProfileValidator(LoggerMixin):
             raise ValueError(exc_msg)
 
         try:
-            cert_profile = json.loads(context.certificate_profile_model.profile_json)
+            cert_profile = context.certificate_profile_model.profile
         except json.JSONDecodeError as e:
             exc_msg = f'Error decoding certificate profile JSON: {e}'
             context.error('Certificate profile data is corrupted.',
