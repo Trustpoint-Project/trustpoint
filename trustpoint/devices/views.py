@@ -1546,6 +1546,7 @@ class OpcUaGdsPushTruststoreAssociationView(
                 self.logger.warning(
                     'Truststore with id %s does not exist. Ignoring truststore_id parameter.', truststore_id
                 )
+
         return kwargs
 
     def get_device(self) -> DeviceModel:
