@@ -6,7 +6,8 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
-from devices.models import DeviceModel, NoOnboardingConfigModel, NoOnboardingPkiProtocol
+from devices.models import DeviceModel
+from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 
 
 @pytest.mark.django_db
@@ -92,7 +93,7 @@ class TestCLMContextUrls:
         domain_instance: dict[str, Any]
     ) -> None:
         """Test CLM view with EST onboarding provides domain credential URL."""
-        from devices.models import OnboardingConfigModel, OnboardingProtocol, OnboardingPkiProtocol
+        from onboarding.models import OnboardingConfigModel, OnboardingProtocol, OnboardingPkiProtocol
         
         domain = domain_instance['domain']
         
@@ -278,7 +279,7 @@ class TestDeviceCreateOnboardingProtocols:
         """Test creating device with MANUAL onboarding protocol."""
         domain = domain_instance['domain']
         
-        from devices.models import OnboardingProtocol
+        from onboarding.models import OnboardingProtocol
         
         post_data = {
             'common_name': 'manual-onboarding-device',

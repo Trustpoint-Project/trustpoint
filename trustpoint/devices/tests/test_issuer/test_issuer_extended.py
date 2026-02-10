@@ -19,7 +19,8 @@ from devices.issuer import (
     OpcUaClientCredentialIssuer,
     OpcUaServerCredentialIssuer,
 )
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus
+from devices.models import DeviceModel, IssuedCredentialModel
+from onboarding.models import OnboardingStatus
 
 
 @pytest.mark.django_db
