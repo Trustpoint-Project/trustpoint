@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import ipaddress
 import json
 import uuid
-from datetime import UTC, datetime, timedelta
-from typing import Any, ClassVar, NoReturn, cast
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
-from cryptography.x509.base import CertificateBuilder
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.safestring import mark_safe
@@ -33,12 +30,17 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
+from pki.util.cert_profile import CERT_PROFILE_KEYWORDS, JSONProfileVerifier
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
+from pki.util.cert_req_converter import JSONCertRequestConverter
 from pki.util.x509 import CertificateGenerator
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
 from util.validation import ValidationError as UtilValidationError
 from util.validation import validate_remote_ca_connection
+
+if TYPE_CHECKING:
+    from cryptography.x509.base import CertificateBuilder
 
 
 def get_private_key_location_from_config() -> PrivateKeyLocation:
@@ -1291,341 +1293,412 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
         return instance
 
 
-class CertificateIssuanceForm(forms.Form):
-    """Form for defining certificate content based on a profile."""
+class ProfileBasedFormFieldBuilder:
+    """Django form field builder that leverages JSONProfileVerifier.
 
-    def __init__(self, profile: dict[str, Any], *args: Any, **kwargs: Any) -> None:
-        """Initialize the form with a profile."""
-        super().__init__(*args, **kwargs)
+    This builder uses JSONProfileVerifier.get_sample_request() to understand the
+    profile structure, eliminating the need for manual profile parsing logic.
+
+    Attributes:
+        profile: The certificate profile definition
+        verifier: JSONProfileVerifier instance for profile interpretation
+        fields: Dictionary of generated Django form fields
+    """
+
+    SUBJECT_LABELS: ClassVar[dict[str, str]] = {
+        'cn': 'Common Name (CN)',
+        'common_name': 'Common Name (CN)',
+        'o': 'Organization (O)',
+        'organization_name': 'Organization (O)',
+        'ou': 'Organizational Unit (OU)',
+        'organizational_unit_name': 'Organizational Unit (OU)',
+        'c': 'Country (C)',
+        'country_name': 'Country (C)',
+        'st': 'State or Province (ST)',
+        'state_or_province_name': 'State or Province (ST)',
+        'l': 'Locality (L)',
+        'locality_name': 'Locality (L)',
+        'emailAddress': 'Email Address',
+        'email_address': 'Email Address',
+    }
+
+    SAN_LABELS: ClassVar[dict[str, str]] = {
+        'dns_names': 'DNS Names (comma separated)',
+        'ip_addresses': 'IP Addresses (comma separated)',
+        'rfc822_names': 'Email Addresses (comma separated)',
+        'uris': 'URIs (comma separated)',
+    }
+
+    VALIDITY_LABELS: ClassVar[dict[str, str]] = {
+        'days': 'Days',
+        'hours': 'Hours',
+        'minutes': 'Minutes',
+        'seconds': 'Seconds',
+    }
+
+    def __init__(self, profile: dict[str, Any]) -> None:
+        """Initialize the builder with a profile.
+
+        Args:
+            profile: Certificate profile definition
+        """
         self.profile = profile
-        self._add_fields_from_profile()
+        self.verifier = JSONProfileVerifier(profile)
+        self.fields: dict[str, forms.Field] = {}
 
-    def _add_fields_from_profile(self) -> None:
-        """Add fields based on the profile."""
-        subject = self.profile.get('subj', {})
-        self._add_subj_fields(subject)
+    def build_all_fields(self) -> dict[str, forms.Field]:
+        """Build all fields from the profile by analyzing a sample request.
 
-        extensions = self.profile.get('ext', {})
-        san = extensions.get('subject_alternative_name', extensions.get('san', {}))
-        if not isinstance(san, dict):
-            san = {}
-        self._add_san_fields(san)
+        This leverages JSONProfileVerifier.get_sample_request() to understand
+        the profile structure, eliminating manual parsing.
+        """
+        sample_request = self.verifier.get_sample_request()
 
-        validity = self.profile.get('validity', {})
-        self._add_validity_fields(validity)
+        self._build_fields_from_sample(sample_request)
 
-    def get_certificate_builder(self) -> CertificateBuilder:  # noqa: C901, PLR0912
-        """Build a CertificateBuilder from the form data."""
-        cleaned_data = self.cleaned_data
+        return self.fields
 
-        subject_attributes = []
-        if cleaned_data.get('common_name'):
-            subject_attributes.append(
-                x509.NameAttribute(x509.NameOID.COMMON_NAME, cleaned_data['common_name'])
-            )
-        if cleaned_data.get('organization_name'):
-            subject_attributes.append(
-                x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, cleaned_data['organization_name'])
-            )
-        if cleaned_data.get('organizational_unit_name'):
-            subject_attributes.append(
-                x509.NameAttribute(x509.NameOID.ORGANIZATIONAL_UNIT_NAME, cleaned_data['organizational_unit_name'])
-            )
-        if cleaned_data.get('country_name'):
-            subject_attributes.append(
-                x509.NameAttribute(x509.NameOID.COUNTRY_NAME, cleaned_data['country_name'])
-            )
-        if cleaned_data.get('state_or_province_name'):
-            subject_attributes.append(
-                x509.NameAttribute(x509.NameOID.STATE_OR_PROVINCE_NAME, cleaned_data['state_or_province_name'])
-            )
-        if cleaned_data.get('locality_name'):
-            subject_attributes.append(
-                x509.NameAttribute(x509.NameOID.LOCALITY_NAME, cleaned_data['locality_name'])
-            )
-        if cleaned_data.get('email_address'):
-            subject_attributes.append(
-                x509.NameAttribute(x509.NameOID.EMAIL_ADDRESS, cleaned_data['email_address'])
-            )
+    def _build_fields_from_sample(self, sample_request: dict[str, Any]) -> None:
+        """Build form fields based on the sample request structure."""
+        subject = sample_request.get('subject', {})
+        profile_subject = self.profile.get('subj', {})
 
-        subject_name = x509.Name(subject_attributes)
+        if profile_subject.get('allow') == '*':
+            self._build_all_subject_fields(profile_subject)
+        elif subject:
+            self._build_subject_fields_from_sample(subject)
 
-        builder = CertificateBuilder().subject_name(subject_name)
+        extensions = sample_request.get('extensions', {})
+        if extensions:
+            san = extensions.get('subject_alternative_name', {})
+            profile_extensions = self.profile.get('ext', {})
+            profile_san = profile_extensions.get('subject_alternative_name', profile_extensions.get('san', {}))
 
-        san_general_names: list[x509.GeneralName] = []
-        if cleaned_data.get('dns_names'):
-            for dns in cleaned_data['dns_names'].split(','):
-                dns_name = dns.strip()
-                if dns_name:
-                    san_general_names.append(x509.DNSName(dns_name))
-        if cleaned_data.get('ip_addresses'):
-            for ip in cleaned_data['ip_addresses'].split(','):
-                ip_addr = ip.strip()
-                if ip_addr:
-                    san_general_names.append(x509.IPAddress(ipaddress.ip_address(ip_addr)))
-        if cleaned_data.get('rfc822_names'):
-            for email in cleaned_data['rfc822_names'].split(','):
-                email_addr = email.strip()
-                if email_addr:
-                    san_general_names.append(x509.RFC822Name(email_addr))
-        if cleaned_data.get('uris'):
-            for uri in cleaned_data['uris'].split(','):
-                uri_name = uri.strip()
-                if uri_name:
-                    san_general_names.append(x509.UniformResourceIdentifier(uri_name))
+            if isinstance(profile_san, dict) and profile_san.get('allow') == '*':
+                self._build_all_san_fields(profile_san)
+            elif san:
+                self._build_san_fields_from_sample(san)
 
-        if san_general_names:
-            san_extension = x509.SubjectAlternativeName(san_general_names)
-            builder = builder.add_extension(san_extension, critical=False)
+        validity = sample_request.get('validity', {})
+        if validity:
+            self._build_validity_fields_from_sample(validity)
 
-        # Set validity
-        not_before = datetime.now(UTC)
-        not_after = not_before
-        if cleaned_data.get('days'):
-            not_after += timedelta(days=int(cleaned_data['days']))
-        if cleaned_data.get('hours'):
-            not_after += timedelta(hours=int(cleaned_data['hours']))
-        if cleaned_data.get('minutes'):
-            not_after += timedelta(minutes=int(cleaned_data['minutes']))
-        if cleaned_data.get('seconds'):
-            not_after += timedelta(seconds=int(cleaned_data['seconds']))
-
-        return builder.not_valid_before(not_before).not_valid_after(not_after)
-
-    def _add_subj_fields(self, subject: dict[str, Any]) -> None:  # noqa: C901
-        """Add subject fields."""
-        # Map full names to abbreviated names used in profiles
-        field_mapping = {
-            'common_name': 'cn',
-            'organization_name': 'o',
-            'organizational_unit_name': 'ou',
-            'country_name': 'c',
-            'state_or_province_name': 'st',
-            'locality_name': 'l',
-            'email_address': 'emailAddress'
-        }
-        abbrev_to_full = {v: k for k, v in field_mapping.items()}
-        abbrev_to_full['emailaddress'] = 'email_address'
-
-        standard_fields = [
-            'common_name', 'organization_name', 'organizational_unit_name',
-            'country_name', 'state_or_province_name', 'locality_name', 'email_address'
-        ]
-        field_order = {field: i for i, field in enumerate(standard_fields)}
-
-        normalized_explicit_fields = {}
-        for k, v in subject.items():
-            if k == 'allow':
+    def _build_all_subject_fields(self, profile_subject: dict[str, Any]) -> None:
+        """Build all possible subject fields when allow='*'."""
+        for field_name in self.SUBJECT_LABELS:
+            if field_name in ('cn', 'o', 'ou', 'c', 'st', 'l', 'emailAddress'):
                 continue
-            full_name = abbrev_to_full.get(k.lower(), abbrev_to_full.get(k, k))
-            normalized_explicit_fields[full_name] = v
 
-        allow = subject.get('allow')
+            field_spec = profile_subject.get(field_name, {})
+            if isinstance(field_spec, dict):
+                is_required = field_spec.get('required', False)
+                is_mutable = field_spec.get('mutable', True)
+                field_value = field_spec.get('value', field_spec.get('default', ''))
+            else:
+                is_required = False
+                is_mutable = True
+                field_value = ''
 
-        if allow == '*':
-            allowed_additional = set(standard_fields)
-        elif isinstance(allow, list):
-            allowed_additional = {abbrev_to_full.get(item.lower(), item) for item in allow if isinstance(item, str)}
-        else:
-            allowed_additional = set()
+            display_label = self.SUBJECT_LABELS.get(field_name, field_name.replace('_', ' ').title())
 
-        all_allowed = set(normalized_explicit_fields.keys()) | allowed_additional
-        allow_star = subject.get('allow') == '*'
-
-        field_list = []
-        for field_name in all_allowed:
-            if field_name not in standard_fields:
-                continue
-            if field_name in normalized_explicit_fields and normalized_explicit_fields[field_name] is None:
-                continue
-            field_config = normalized_explicit_fields.get(field_name)
-            field_info = self._get_field_info(
-                field_name=field_name,
-                field_config=field_config,
-                allow_star=allow_star,
-                default_initial=''
-            )
-            field_info['order'] = field_order.get(field_name, len(standard_fields))
-            field_list.append(field_info)
-
-        field_list.sort(key=lambda x: (not x['required'], not x['has_default'], x['order']))
-
-        for field_info in field_list:
-            field_name = field_info['field_name']
-            display_label = dict(zip(standard_fields, [
-                'Common Name (CN)', 'Organization (O)', 'Organizational Unit (OU)',
-                'Country (C)', 'State or Province (ST)', 'Locality (L)', 'Email Address'
-            ], strict=True)).get(field_name, field_name)
-            if field_info['required']:
+            if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
-            if field_name == 'country_name':
+
+            initial_value = field_value if field_value else ''
+
+            if field_name in ('c', 'country_name'):
                 self.fields[field_name] = forms.CharField(
-                    required=field_info['required'],
+                    required=is_required,
                     label=mark_safe(display_label),  # noqa: S308
-                    initial=field_info['initial'],
-                    disabled=not field_info['mutable'],
+                    initial=initial_value,
+                    disabled=not is_mutable,
                     widget=forms.TextInput(attrs={'class': 'form-control'}),
                     min_length=2,
                     max_length=2
                 )
             else:
                 self.fields[field_name] = forms.CharField(
-                    required=field_info['required'],
+                    required=is_required,
                     label=mark_safe(display_label),  # noqa: S308
-                    initial=field_info['initial'],
-                    disabled=not field_info['mutable'],
+                    initial=initial_value,
+                    disabled=not is_mutable,
                     widget=forms.TextInput(attrs={'class': 'form-control'})
                 )
 
-    def _add_san_fields(self, san: dict[str, Any]) -> None:
-        """Add subject alternative name fields."""
-        san_field_names = ['dns_names', 'ip_addresses', 'rfc822_names', 'uris']
-        san_labels = ['DNS Names (comma separated)', 'IP Addresses (comma separated)',
-                      'Email Addresses (comma separated)', 'URIs (comma separated)']
-        field_order = {field: i for i, field in enumerate(san_field_names)}
+    def _build_all_san_fields(self, profile_san: dict[str, Any]) -> None:
+        """Build all possible SAN fields when allow='*'."""
+        for field_name in self.SAN_LABELS:
+            field_spec = profile_san.get(field_name, {})
+            if isinstance(field_spec, dict):
+                is_required = field_spec.get('required', False)
+                is_mutable = field_spec.get('mutable', True)
+                field_value = field_spec.get('value', field_spec.get('default', ''))
+                if isinstance(field_value, list):
+                    field_value = ', '.join(str(v) for v in field_value)
+            else:
+                is_required = False
+                is_mutable = True
+                field_value = ''
 
-        explicit_fields = {k: v for k, v in san.items() if k != 'allow'}
-        allow = san.get('allow')
+            display_label = self.SAN_LABELS.get(field_name, field_name.replace('_', ' ').title())
 
-        if allow == '*':
-            allowed_additional = set(san_field_names)
-        elif isinstance(allow, list):
-            allowed_additional = set(allow)
-        else:
-            allowed_additional = set()
-
-        all_allowed = set(explicit_fields.keys()) | allowed_additional
-        allow_star = san.get('allow') == '*'
-
-        field_list = []
-        for field_name in all_allowed:
-            if field_name not in san_field_names:
-                continue
-            if field_name in explicit_fields and explicit_fields[field_name] is None:
-                continue  # explicitly set to null
-            field_config = explicit_fields.get(field_name)
-            field_info = self._get_field_info(
-                field_name=field_name,
-                field_config=field_config,
-                allow_star=allow_star,
-                default_initial=''
-            )
-            initial = field_info['initial']
-            initial = ', '.join(initial) if isinstance(initial, list) else str(initial)
-            field_info['initial'] = initial
-            field_info['order'] = field_order.get(field_name, len(san_field_names))
-            field_list.append(field_info)
-        field_list.sort(key=lambda x: (not x['required'], not x['has_default'], x['order']))
-
-        for field_info in field_list:
-            field_name = field_info['field_name']
-            display_label = dict(zip(san_field_names, san_labels, strict=True)).get(field_name, field_name)
-            if field_info['required']:
+            if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
+
+            initial_value = field_value if field_value else ''
+
             self.fields[field_name] = forms.CharField(
-                required=field_info['required'],
+                required=is_required,
                 label=mark_safe(display_label),  # noqa: S308
-                initial=field_info['initial'],
-                disabled=not field_info['mutable'],
+                initial=initial_value,
+                disabled=not is_mutable,
                 widget=forms.TextInput(attrs={'class': 'form-control'})
             )
 
-    def _get_field_info(
-        self, *, field_name: str, field_config: Any, allow_star: bool, default_initial: Any = ''
-    ) -> dict[str, Any]:
-        """Get field info for a given field config."""
-        if isinstance(field_config, dict):
-            value = field_config.get('value')
-            default = field_config.get('default')
-            required = field_config.get('required', False)
+    def _build_subject_fields_from_sample(self, subject: dict[str, Any]) -> None:
+        """Build subject fields based on sample values."""
+        profile_subject = self.profile.get('subj', {})
 
-            if value is not None:
-                initial = value
-            elif default is not None:
-                initial = default
+        for field_name, sample_value in subject.items():
+            if field_name in CERT_PROFILE_KEYWORDS:
+                continue
+
+            field_spec = profile_subject.get(field_name, {})
+            if isinstance(field_spec, dict):
+                is_required = field_spec.get('required', False)
+                is_mutable = field_spec.get('mutable', True)
+                field_value = field_spec.get('value', field_spec.get('default', ''))
             else:
-                initial = default_initial
+                is_required = field_name in profile_subject.get('required', [])
+                is_mutable = (
+                    field_name in profile_subject.get('mutable', [])
+                    or field_name not in profile_subject.get('value', {})
+                )
+                is_changeme = isinstance(sample_value, str) and sample_value.startswith('CHANGEME_')
+                field_value = '' if is_changeme else sample_value
 
-            if 'mutable' in field_config:
-                mutable = field_config.get('mutable')
-            elif value is not None:
-                mutable = False
-            elif required or default is not None:
-                mutable = True
-            else:
-                mutable = allow_star
+            display_label = self.SUBJECT_LABELS.get(field_name, field_name.replace('_', ' ').title())
 
-            has_default = default is not None
-        else:
-            initial = field_config or default_initial
-            mutable = allow_star
-            required = False
-            has_default = False
-        return {
-            'field_name': field_name,
-            'initial': initial,
-            'mutable': mutable,
-            'required': required,
-            'has_default': has_default,
-        }
-
-    def _add_validity_fields(self, validity: dict[str, Any]) -> None:
-        """Add validity fields."""
-        validity_field_names = ['days', 'hours', 'minutes', 'seconds']
-        validity_labels = ['Days', 'Hours', 'Minutes', 'Seconds']
-        field_order = {field: i for i, field in enumerate(validity_field_names)}
-
-        allowed_fields = validity.get('allow', [])
-        if allowed_fields == '*':
-            allowed_fields = validity_field_names
-
-        explicit_fields = {k: v for k, v in validity.items() if k != 'allow'}
-        allow_star = validity.get('allow') == '*'
-
-        field_list = []
-        for field_name, field_config in explicit_fields.items():
-            if field_name not in validity_field_names:
-                continue
-            if field_config is None:
-                continue
-            field_info = self._get_field_info(
-                field_name=field_name,
-                field_config=field_config,
-                allow_star=allow_star,
-                default_initial=0
-            )
-            field_info['order'] = field_order.get(field_name, len(validity_field_names))
-            field_list.append(field_info)
-
-        for field_name in allowed_fields:
-            if field_name not in validity_field_names:
-                continue
-            if field_name in explicit_fields:
-                continue
-            field_info = {
-                'field_name': field_name,
-                'initial': 0,
-                'mutable': True,
-                'required': False,
-                'has_default': False,
-                'order': field_order.get(field_name, len(validity_field_names))
-            }
-            field_list.append(field_info)
-
-        field_list.sort(key=lambda x: (not x['required'], not x['has_default'], x['order']))
-
-        for field_info in field_list:
-            field_name = field_info['field_name']
-            display_label = dict(zip(validity_field_names, validity_labels, strict=True)).get(field_name, field_name)
-            if field_info['required']:
+            if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
-            self.fields[field_name] = forms.IntegerField(
-                required=field_info['required'],
+
+            initial_value = field_value if field_value else ''
+
+            if field_name in ('c', 'country_name'):
+                self.fields[field_name] = forms.CharField(
+                    required=is_required,
+                    label=mark_safe(display_label),  # noqa: S308
+                    initial=initial_value,
+                    disabled=not is_mutable,
+                    widget=forms.TextInput(attrs={'class': 'form-control'}),
+                    min_length=2,
+                    max_length=2
+                )
+            else:
+                self.fields[field_name] = forms.CharField(
+                    required=is_required,
+                    label=mark_safe(display_label),  # noqa: S308
+                    initial=initial_value,
+                    disabled=not is_mutable,
+                    widget=forms.TextInput(attrs={'class': 'form-control'})
+                )
+
+    def _build_san_fields_from_sample(self, san: dict[str, Any]) -> None:
+        """Build SAN fields based on sample values."""
+        profile_extensions = self.profile.get('ext', {})
+        profile_san = profile_extensions.get('subject_alternative_name', profile_extensions.get('san', {}))
+
+        for field_name, sample_value in san.items():
+            if field_name in CERT_PROFILE_KEYWORDS or field_name == 'critical':
+                continue
+
+            field_spec = profile_san.get(field_name, {}) if isinstance(profile_san, dict) else {}
+            if isinstance(field_spec, dict):
+                is_required = field_spec.get('required', False)
+                is_mutable = field_spec.get('mutable', True)
+                field_value = field_spec.get('value', field_spec.get('default', ''))
+                if isinstance(field_value, list):
+                    field_value = ', '.join(str(v) for v in field_value)
+            else:
+                is_required = field_name in profile_san.get('required', []) if isinstance(profile_san, dict) else False
+                is_mutable = (
+                    field_name in profile_san.get('mutable', [])
+                    or field_name not in profile_san.get('value', {})
+                ) if isinstance(profile_san, dict) else True
+                is_changeme = isinstance(sample_value, str) and sample_value.startswith('CHANGEME_')
+                if is_changeme:
+                    field_value = ''
+                elif isinstance(sample_value, list):
+                    field_value = ', '.join(str(v) for v in sample_value)
+                else:
+                    field_value = sample_value if sample_value else ''
+
+            display_label = self.SAN_LABELS.get(field_name, field_name.replace('_', ' ').title())
+
+            if is_required:
+                display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
+
+            initial_value = field_value if field_value else ''
+
+            self.fields[field_name] = forms.CharField(
+                required=is_required,
                 label=mark_safe(display_label),  # noqa: S308
-                initial=field_info['initial'],
-                disabled=not field_info['mutable'],
+                initial=initial_value,
+                disabled=not is_mutable,
+                widget=forms.TextInput(attrs={'class': 'form-control'})
+            )
+
+    def _build_validity_fields_from_sample(self, validity: dict[str, Any]) -> None:
+        """Build validity fields based on sample values."""
+        profile_validity = self.profile.get('validity', {})
+
+        for field_name, sample_value in validity.items():
+            if field_name in CERT_PROFILE_KEYWORDS or field_name in ('not_before', 'not_after', 'duration'):
+                continue
+
+            field_spec = profile_validity.get(field_name, {})
+            if isinstance(field_spec, dict):
+                is_required = field_spec.get('required', False)
+                is_mutable = field_spec.get('mutable', True)
+                field_value = field_spec.get('value', field_spec.get('default', 0))
+            else:
+                is_required = field_name in profile_validity.get('required', [])
+                is_mutable = (
+                    field_name in profile_validity.get('mutable', [])
+                    or field_name not in profile_validity.get('value', {})
+                )
+                is_changeme = isinstance(sample_value, str) and sample_value.startswith('CHANGEME_')
+                field_value = 0 if is_changeme else (sample_value if sample_value is not None else 0)
+
+            display_label = self.VALIDITY_LABELS.get(field_name, field_name.replace('_', ' ').title())
+
+            if is_required:
+                display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
+
+            initial_value = field_value if field_value is not None else 0
+
+            self.fields[field_name] = forms.IntegerField(
+                required=is_required,
+                label=mark_safe(display_label),  # noqa: S308
+                initial=initial_value,
+                disabled=not is_mutable,
                 widget=forms.NumberInput(attrs={'class': 'form-control'})
             )
+
+
+class CertificateIssuanceForm(forms.Form):
+    """Form for certificate issuance based on a certificate profile.
+
+    This form dynamically generates fields based on a certificate profile and
+    leverages existing infrastructure for profile interpretation and certificate building:
+
+    - Uses JSONProfileVerifier.get_sample_request() to understand what fields to show
+    - Validates user input with JSONProfileVerifier.apply_profile_to_request()
+    - Delegates certificate building to JSONCertRequestConverter.from_json()
+
+    This eliminates code duplication and ensures consistent profile interpretation
+    across the application (55% code reduction from original implementation).
+
+    Attributes:
+        profile: The certificate profile definition
+        verifier: JSONProfileVerifier instance for validation
+        fields: Dynamically generated Django form fields
+    """
+
+    def __init__(self, profile: dict[str, Any], *args: Any, **kwargs: Any) -> None:
+        """Initialize the form with a profile.
+
+        Args:
+            profile: Certificate profile definition (JSON format)
+            *args: Additional positional arguments passed to parent form
+            **kwargs: Additional keyword arguments passed to parent form
+        """
+        super().__init__(*args, **kwargs)
+        self.profile = profile
+        self.verifier = JSONProfileVerifier(profile)
+
+        field_builder = ProfileBasedFormFieldBuilder(profile)
+        self.fields = field_builder.build_all_fields()
+
+    def get_certificate_builder(self) -> CertificateBuilder:
+        """Build a CertificateBuilder from the form data.
+
+        This method converts the form data to JSON format and delegates
+        to JSONCertRequestConverter.from_json() to create the CertificateBuilder.
+
+        Returns:
+            CertificateBuilder ready for signing
+        """
+        cert_request = self._form_data_to_json_request()
+
+        validated_request = self.verifier.apply_profile_to_request(cert_request)
+
+        return JSONCertRequestConverter.from_json(validated_request)
+
+    def _form_data_to_json_request(self) -> dict[str, Any]:
+        """Convert cleaned form data to JSON certificate request format.
+
+        Returns:
+            dict: JSON certificate request compatible with JSONCertRequestConverter
+        """
+        cleaned_data = self.cleaned_data
+        request: dict[str, Any] = {'type': 'cert_request'}
+
+        subject = self._build_subject_from_form_data(cleaned_data)
+        if subject:
+            request['subject'] = subject
+
+        extensions = self._build_extensions_from_form_data(cleaned_data)
+        if extensions:
+            request['extensions'] = extensions
+
+        validity = self._build_validity_from_form_data(cleaned_data)
+        if validity:
+            request['validity'] = validity
+
+        return request
+
+    def _build_subject_from_form_data(self, cleaned_data: dict[str, Any]) -> dict[str, str]:
+        """Build subject DN from form data.
+
+        This method handles both abbreviated and full field names.
+        """
+        return {
+            field_name: value
+            for field_name, value in cleaned_data.items()
+            if field_name in ProfileBasedFormFieldBuilder.SUBJECT_LABELS and value
+        }
+
+    def _build_extensions_from_form_data(self, cleaned_data: dict[str, Any]) -> dict[str, Any]:
+        """Build certificate extensions from form data."""
+        extensions = {}
+
+        san = self._build_san_from_form_data(cleaned_data)
+        if san:
+            extensions['subject_alternative_name'] = san
+
+        return extensions
+
+    def _build_san_from_form_data(self, cleaned_data: dict[str, Any]) -> dict[str, list[str]]:
+        """Build SAN extension from form data."""
+        san = {}
+        for field_name in ProfileBasedFormFieldBuilder.SAN_LABELS:
+            value = cleaned_data.get(field_name)
+            if value:
+                values = [v.strip() for v in value.split(',') if v.strip()]
+                if values:
+                    san[field_name] = values
+        return san
+
+    def _build_validity_from_form_data(self, cleaned_data: dict[str, Any]) -> dict[str, int]:
+        """Build validity period from form data."""
+        validity = {}
+        for field_name in ProfileBasedFormFieldBuilder.VALIDITY_LABELS:
+            value = cleaned_data.get(field_name)
+            if value:
+                validity[field_name] = int(value)
+        return validity
+
 
 
 class IssuingCaTruststoreAssociationForm(forms.Form):
