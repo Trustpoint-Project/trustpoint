@@ -312,6 +312,7 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
 class IssuingCaDefineCertContentEstView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
     """View to define certificate content using the issuing_ca profile before requesting via EST."""
 
+    form_class = CertificateIssuanceForm
     template_name = 'pki/issuing_cas/define_cert_content_est.html'
     ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
     redirect_url_name = 'pki:issuing_cas-request-cert-est'
@@ -342,6 +343,7 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
 class IssuingCaDefineCertContentCmpView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
     """View to define certificate content using the issuing_ca profile before requesting via CMP."""
 
+    form_class = CertificateIssuanceForm
     template_name = 'pki/issuing_cas/define_cert_content_cmp.html'
     ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
     redirect_url_name = 'pki:issuing_cas-request-cert-cmp'
