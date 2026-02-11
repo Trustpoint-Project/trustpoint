@@ -17,7 +17,6 @@ from est.views import (
     EstCACertsView,
     EstCsrAttrsView,
     EstRequestedDomainExtractorMixin,
-    EstSimpleEnrollmentDefaultView,
     EstSimpleEnrollmentMixin,
     EstSimpleEnrollmentView,
     EstSimpleReEnrollmentView,
@@ -156,9 +155,8 @@ def test_est_simple_enrollment_mixin_event():
 
 @patch('est.views.EstErrorMessageResponder')
 @patch('est.views.EstMessageResponder')
-@patch('est.views.CertificateIssueProcessor')
+@patch('est.views.OperationProcessor')
 @patch('est.views.WorkflowHandler')
-@patch('est.views.ProfileValidator')
 @patch('est.views.EstAuthorization')
 @patch('est.views.EstAuthentication')
 @patch('est.views.EstMessageParser')
@@ -170,7 +168,6 @@ def test_process_enrollment_success(
     mock_parser,
     mock_auth,
     mock_authz,
-    mock_profile_validator,
     mock_workflow,
     mock_processor,
     mock_responder,
@@ -215,7 +212,6 @@ def test_process_enrollment_success(
     mock_parser.return_value.parse.assert_called_once_with(mock_ctx)
     mock_auth.return_value.authenticate.assert_called_once_with(mock_ctx)
     mock_authz.return_value.authorize.assert_called_once_with(mock_ctx)
-    mock_profile_validator.validate.assert_called_once_with(mock_ctx)
     mock_workflow.return_value.handle.assert_called_once_with(mock_ctx)
     mock_processor.return_value.process_operation.assert_called_once_with(mock_ctx)
     mock_responder.build_response.assert_called_once_with(mock_ctx)
@@ -302,70 +298,13 @@ def test_est_simple_enrollment_view_post(mock_process, request_factory):
         content_type='application/pkcs10'
     )
     
-    response = view(request, domain='test_domain', certtemplate='tls_client')
+    response = view(request, domain='test_domain', cert_profile='tls_client')
     
     assert response.status_code == 200
     mock_process.assert_called_once()
     call_args = mock_process.call_args
     assert call_args[0][1] == 'test_domain'
     assert call_args[0][2] == 'tls_client'
-
-
-# ============================================================================
-# Tests for EstSimpleEnrollmentDefaultView
-# ============================================================================
-
-
-def test_est_simple_enrollment_default_view_csrf_exempt():
-    """Test that EstSimpleEnrollmentDefaultView has CSRF exemption."""
-    view = EstSimpleEnrollmentDefaultView()
-    assert hasattr(EstSimpleEnrollmentDefaultView, 'dispatch')
-
-
-@patch('est.views.DomainModel.objects.get')
-@patch.object(EstSimpleEnrollmentMixin, 'process_enrollment')
-def test_est_simple_enrollment_default_view_post_success(mock_process, mock_get_domain, request_factory):
-    """Test POST request to EstSimpleEnrollmentDefaultView with existing default domain."""
-    mock_domain = Mock(spec=DomainModel)
-    mock_domain.unique_name = 'arburg'
-    mock_get_domain.return_value = mock_domain
-    
-    mock_response = LoggedHttpResponse('Success', status=200)
-    mock_process.return_value = mock_response
-    
-    view = EstSimpleEnrollmentDefaultView.as_view()
-    request = request_factory.post(
-        '/est/simpleenroll',
-        data=b'CSR',
-        content_type='application/pkcs10'
-    )
-    
-    response = view(request)
-    
-    assert response.status_code == 200
-    mock_get_domain.assert_called_once_with(unique_name='arburg')
-    mock_process.assert_called_once()
-    call_args = mock_process.call_args
-    assert call_args[0][1] == 'arburg'
-    assert call_args[0][2] == 'tls_client'
-
-
-@patch('est.views.DomainModel.objects.get')
-def test_est_simple_enrollment_default_view_post_domain_not_exist(mock_get_domain, request_factory):
-    """Test POST request to EstSimpleEnrollmentDefaultView when default domain doesn't exist."""
-    mock_get_domain.side_effect = DomainModel.DoesNotExist
-    
-    view = EstSimpleEnrollmentDefaultView.as_view()
-    request = request_factory.post(
-        '/est/simpleenroll',
-        data=b'CSR',
-        content_type='application/pkcs10'
-    )
-    
-    response = view(request)
-    
-    assert response.status_code == 404
-    assert b'Default domain "arburg" does not exist' in response.content
 
 
 # ============================================================================
@@ -387,9 +326,8 @@ def test_est_simple_reenrollment_view_csrf_exempt():
 
 @patch('est.views.EstErrorMessageResponder')
 @patch('est.views.EstMessageResponder')
-@patch('est.views.CertificateIssueProcessor')
+@patch('est.views.OperationProcessor')
 @patch('est.views.WorkflowHandler')
-@patch('est.views.ProfileValidator')
 @patch('est.views.EstAuthorization')
 @patch('est.views.EstAuthentication')
 @patch('est.views.EstMessageParser')
@@ -401,7 +339,6 @@ def test_est_simple_reenrollment_view_post_success(
     mock_parser,
     mock_auth,
     mock_authz,
-    mock_profile_validator,
     mock_workflow,
     mock_processor,
     mock_responder,
@@ -437,7 +374,7 @@ def test_est_simple_reenrollment_view_post_success(
     )
     
     # Execute
-    response = view(request, domain='test_domain', certtemplate='tls_client')
+    response = view(request, domain='test_domain', cert_profile='tls_client')
     
     # Verify
     assert response.status_code == 200
@@ -447,7 +384,6 @@ def test_est_simple_reenrollment_view_post_success(
     mock_auth.return_value.authenticate.assert_called_once_with(mock_ctx)
     mock_authz.return_value.authorize.assert_called_once()
     assert mock_authz.call_args[1]['allowed_operations'] == ['simplereenroll']
-    mock_profile_validator.validate.assert_called_once_with(mock_ctx)
     mock_workflow.return_value.handle.assert_called_once_with(mock_ctx)
     mock_processor.return_value.process_operation.assert_called_once_with(mock_ctx)
     mock_responder.build_response.assert_called_once_with(mock_ctx)
@@ -466,7 +402,7 @@ def test_est_simple_reenrollment_view_post_context_failure(mock_request_context,
         content_type='application/pkcs10'
     )
     
-    response = view(request, domain='test_domain', certtemplate='tls_client')
+    response = view(request, domain='test_domain', cert_profile='tls_client')
     
     assert response.status_code == 500
     assert b'Failed to set up request context' in response.content
@@ -504,7 +440,7 @@ def test_est_simple_reenrollment_view_post_authentication_failure(
         content_type='application/pkcs10'
     )
     
-    response = view(request, domain='test_domain', certtemplate='tls_client')
+    response = view(request, domain='test_domain', cert_profile='tls_client')
     
     assert response.status_code == 401
     mock_error_responder.build_response.assert_called_once_with(mock_ctx)
