@@ -4,15 +4,18 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from cryptography import x509
 from django.http import HttpResponse
 
+from trustpoint.logger import LoggerMixin
+
 if TYPE_CHECKING:
-    from cryptography import x509
     from cryptography.x509 import CertificateSigningRequest
     from cryptography.x509.base import CertificateBuilder
     from django.http import HttpRequest
-    from pyasn1_modules.rfc4210 import PKIFailureInfo, PKIMessage  # type: ignore[import-untyped]
+    from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
+    from cmp.util import PKIFailureInfo
     from devices.models import DeviceModel, IssuedCredentialModel
     from pki.models import CertificateProfileModel, CredentialModel, DomainModel, TruststoreModel
     from workflows.events import Event
@@ -23,7 +26,7 @@ if TYPE_CHECKING:
 RCT = TypeVar('RCT', bound='BaseRequestContext')
 
 @dataclass(kw_only=True)
-class BaseRequestContext:
+class BaseRequestContext(LoggerMixin):
     """Base class for all specific request context classes."""
     operation: str | None = None
     protocol: str | None = None
@@ -70,6 +73,7 @@ class BaseRequestContext:
     def narrow(self, child_cls: type[RCT], **extra: Any) -> RCT:
         """Create a new request context of a more specific subclass, copying existing attributes."""
         data = self.to_dict()
+        data = {k: v for k, v in data.items() if hasattr(child_cls, k)}
         return child_cls(**data, **extra)
 
     def clear(self) -> None:
@@ -112,7 +116,9 @@ class BaseCertificateRequestContext(BaseRequestContext):
 @dataclass(kw_only=True)
 class BaseRevocationRequestContext(BaseRequestContext):
     """Shared context for all revocation request operations."""
+    cert_serial_number: str | None = None
     credential_to_revoke: IssuedCredentialModel | None = None
+    revocation_reason: x509.ReasonFlags = x509.ReasonFlags.unspecified
 
 
 @dataclass(kw_only=True)

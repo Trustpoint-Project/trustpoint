@@ -238,7 +238,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.credential is None:
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
-        return self.credential.certificate.common_name
+        if self.credential.certificate is None:
+            return '(Certificate pending)'
+        return self.credential.certificate_or_error.common_name
 
     @property
     def subject_public_bytes(self) -> bytes:
@@ -251,7 +253,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.credential is None:
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
-        return bytes.fromhex(self.credential.certificate.subject_public_bytes)
+        # Handle case where credential exists but certificate is pending (e.g., remote CA)
+        if self.credential.certificate is None:
+            return b''
+        return bytes.fromhex(self.credential.certificate_or_error.subject_public_bytes)
 
     @property
     def ca_certificate_model(self) -> CertificateModel:
@@ -260,7 +265,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             if self.credential is None:
                 msg = 'Credential is None for issuing CA'
                 raise ValueError(msg)
-            return self.credential.certificate
+            return self.credential.certificate_or_error
         if self.is_keyless_ca:
             if self.certificate is None:
                 msg = 'Certificate is None for keyless CA'
@@ -603,21 +608,31 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return True
 
     @property
-    def signature_suite(self) -> oid.SignatureSuite:
-        """The signature suite for the CA public key certificate."""
+    def signature_suite(self) -> oid.SignatureSuite | None:
+        """The signature suite for the CA public key certificate.
+
+        Returns None if the CA doesn't have a certificate yet (e.g., remote CA pending).
+        """
         if self.is_keyless_ca:
             if self.certificate is None:
-                msg = 'Certificate is None for keyless CA'
-                raise ValueError(msg)
+                return None
             return oid.SignatureSuite.from_certificate(self.certificate.get_certificate_serializer().as_crypto())
         if self.credential is None:
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
+        # Handle case where credential exists but certificate is pending (e.g., remote CA)
+        if self.credential.certificate is None:
+            return None
         return oid.SignatureSuite.from_certificate(self.credential.get_certificate_serializer().as_crypto())
 
     @property
-    def public_key_info(self) -> oid.PublicKeyInfo:
-        """The public key info for the CA certificate's public key."""
+    def public_key_info(self) -> oid.PublicKeyInfo | None:
+        """The public key info for the CA certificate's public key.
+
+        Returns None if the CA doesn't have a certificate yet (e.g., remote CA pending).
+        """
+        if self.signature_suite is None:
+            return None
         return self.signature_suite.public_key_info
 
     def get_issued_certificates(self) -> QuerySet[CertificateModel, CertificateModel]:
@@ -636,7 +651,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.credential is None:
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
-        ca_subject_public_bytes = self.credential.certificate.subject_public_bytes
+        if self.credential.certificate is None:
+            return CertificateModel.objects.none()
+        ca_subject_public_bytes = self.credential.certificate_or_error.subject_public_bytes
 
         # do not return self-signed CA certificate
         return CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude(

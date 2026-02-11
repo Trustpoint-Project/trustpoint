@@ -1,17 +1,4 @@
-"""Django management command for creat            # Set is_default based on profile name
-            is_default = unique_name != 'issuing_ca'
-
-            obj, created = CertificateProfileModel.objects.get_or_create(
-                unique_name=unique_name,
-                defaults={'profile_json': profile_json, 'is_default': is_default, 'display_name': display_name},
-            )
-
-            if not created:
-                # Update existing profile
-                obj.profile_json = profile_json
-                obj.is_default = is_default
-                obj.display_name = display_name
-                obj.save()ault certificate profiles."""
+"""Django management command for creating default certificate profiles."""
 
 from __future__ import annotations
 

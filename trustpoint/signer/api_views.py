@@ -141,7 +141,7 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
             signer = self.get_object()
 
             # Get certificate in PEM format
-            certificate_pem = signer.credential.certificate.get_certificate_serializer().as_pem().decode()
+            certificate_pem = signer.credential.certificate_or_error.get_certificate_serializer().as_pem().decode()
 
             self.logger.info(
                 'Certificate retrieved for signer %s (ID: %d)',

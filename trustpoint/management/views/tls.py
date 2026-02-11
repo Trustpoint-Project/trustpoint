@@ -288,6 +288,10 @@ class ActivateTlsServerView(View, LoggerMixin):
             active_tls.credential = tls_certificate
             active_tls.save()
             UpdateTlsCommand().handle()  # Apply new NGINX TLS configuration
+            if tls_certificate.certificate is None:
+                self.logger.error('TLS certificate has no certificate model')
+                messages.error(request, 'TLS certificate has no certificate model')
+                return redirect(reverse('management:tls'))
             self.logger.info(
                 'Activated TLS credential: %s, certificate: %s',
                 tls_certificate.id, tls_certificate.certificate.id

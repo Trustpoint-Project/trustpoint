@@ -218,7 +218,7 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
         :param cert: x509.Certificate to search for.
         :return: The corresponding IssuedCredentialModel instance.
-        :raises ClientCertificateAuthenticationError: if no matching issued credential is found.
+        :raises DoesNotExist: if no matching issued credential is found.
         """
         cert_fingerprint = cert.fingerprint(hashes.SHA256()).hex().upper()
         credential = CredentialModel.objects.filter(certificates__sha256_fingerprint=cert_fingerprint).first()
@@ -230,6 +230,27 @@ class IssuedCredentialModel(CustomDeleteActionModel):
             issued_credential = IssuedCredentialModel.objects.get(credential=credential)
         except IssuedCredentialModel.DoesNotExist:
             error_message = f'No issued credential found for certificate with fingerprint {cert_fingerprint}'
+            raise IssuedCredentialModel.DoesNotExist(error_message) from None
+
+        return issued_credential
+
+    @staticmethod
+    def get_credential_for_serial_number(
+        domain: DomainModel, device: DeviceModel, serial_number: str
+    ) -> IssuedCredentialModel:
+        """Retrieve an IssuedCredentialModel instance for the given X.509 serial number within the specified domain.
+
+        Raises: DoesNotExist if no matching issued credential is found.
+        """
+        credential = CredentialModel.objects.filter(certificates__serial_number=serial_number).first()
+        if not credential:
+            error_message = f'No credential found for certificate with serial {serial_number}'
+            raise IssuedCredentialModel.DoesNotExist(error_message)
+
+        try:
+            issued_credential = IssuedCredentialModel.objects.get(credential=credential, domain=domain, device=device)
+        except IssuedCredentialModel.DoesNotExist:
+            error_message = f'No issued credential found for certificate with serial {serial_number}'
             raise IssuedCredentialModel.DoesNotExist(error_message) from None
 
         return issued_credential

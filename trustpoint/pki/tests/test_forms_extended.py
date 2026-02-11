@@ -39,7 +39,7 @@ class TestGetPrivateKeyLocationFromConfig:
 
     def test_returns_hsm_provided_for_softhsm(self):
         """Test that HSM_PROVIDED is returned for SOFTHSM storage type."""
-        with patch('pki.forms.KeyStorageConfig.get_config') as mock_get_config:
+        with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
             mock_config = Mock()
             mock_config.storage_type = KeyStorageConfig.StorageType.SOFTHSM
             mock_get_config.return_value = mock_config
@@ -49,7 +49,7 @@ class TestGetPrivateKeyLocationFromConfig:
 
     def test_returns_hsm_provided_for_physical_hsm(self):
         """Test that HSM_PROVIDED is returned for PHYSICAL_HSM storage type."""
-        with patch('pki.forms.KeyStorageConfig.get_config') as mock_get_config:
+        with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
             mock_config = Mock()
             mock_config.storage_type = KeyStorageConfig.StorageType.PHYSICAL_HSM
             mock_get_config.return_value = mock_config
@@ -59,7 +59,7 @@ class TestGetPrivateKeyLocationFromConfig:
 
     def test_returns_software_when_config_does_not_exist(self):
         """Test that SOFTWARE is returned when KeyStorageConfig does not exist."""
-        with patch('pki.forms.KeyStorageConfig.get_config') as mock_get_config:
+        with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
             mock_get_config.side_effect = KeyStorageConfig.DoesNotExist()
             
             result = get_private_key_location_from_config()
@@ -598,7 +598,7 @@ class TestFormFieldAttributes:
 class TestProfileBasedFormFieldBuilder:
     """Test the ProfileBasedFormFieldBuilder class."""
 
-    @patch('pki.forms.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
     def test_initialization(self, mock_verifier_class):
         """Test that ProfileBasedFormFieldBuilder initializes correctly."""
         mock_verifier = Mock()
@@ -616,7 +616,7 @@ class TestProfileBasedFormFieldBuilder:
         assert builder.fields == {}
         mock_verifier_class.assert_called_once_with(profile)
 
-    @patch('pki.forms.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
     def test_build_all_fields_basic_profile(self, mock_verifier_class):
         """Test building fields from a basic profile."""
         mock_verifier = Mock()
@@ -658,7 +658,7 @@ class TestProfileBasedFormFieldBuilder:
         # Check initial values
         assert fields['days'].initial == 365
 
-    @patch('pki.forms.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
     def test_build_all_subject_fields_allow_star(self, mock_verifier_class):
         """Test building all subject fields when allow='*'."""
         mock_verifier = Mock()
@@ -687,7 +687,7 @@ class TestProfileBasedFormFieldBuilder:
         assert builder.fields['organization_name'].required is False
         assert builder.fields['organization_name'].disabled is False  # mutable=True
 
-    @patch('pki.forms.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
     def test_build_all_san_fields_allow_star(self, mock_verifier_class):
         """Test building all SAN fields when allow='*'."""
         mock_verifier = Mock()
@@ -717,7 +717,7 @@ class TestProfileBasedFormFieldBuilder:
         assert builder.fields['ip_addresses'].required is False
         assert builder.fields['ip_addresses'].disabled is True  # mutable=False
 
-    @patch('pki.forms.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
     def test_build_subject_fields_from_sample(self, mock_verifier_class):
         """Test building subject fields from sample request."""
         mock_verifier = Mock()
@@ -750,7 +750,7 @@ class TestProfileBasedFormFieldBuilder:
         assert builder.fields['o'].initial == 'TestOrg'
         assert builder.fields['o'].disabled is True  # mutable=False
 
-    @patch('pki.forms.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
     def test_build_san_fields_from_sample(self, mock_verifier_class):
         """Test building SAN fields from sample request."""
         mock_verifier = Mock()
@@ -784,7 +784,7 @@ class TestProfileBasedFormFieldBuilder:
         assert builder.fields['ip_addresses'].disabled is True  # mutable=False
         assert builder.fields['ip_addresses'].initial == '192.168.1.1'
 
-    @patch('pki.forms.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
     def test_build_validity_fields_from_sample(self, mock_verifier_class):
         """Test building validity fields from sample request."""
         mock_verifier = Mock()
@@ -817,7 +817,7 @@ class TestProfileBasedFormFieldBuilder:
         assert builder.fields['hours'].disabled is True  # mutable=False
         assert builder.fields['minutes'].initial == 0  # CHANGEME becomes 0
 
-    @patch('pki.forms.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
     def test_country_field_validation(self, mock_verifier_class):
         """Test that country fields have proper validation."""
         mock_verifier = Mock()
@@ -842,8 +842,8 @@ class TestProfileBasedFormFieldBuilder:
 class TestCertificateIssuanceForm:
     """Test the CertificateIssuanceForm class."""
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
     def test_form_initialization(self, mock_builder_class, mock_verifier_class):
         """Test that CertificateIssuanceForm initializes correctly."""
         mock_verifier = Mock()
@@ -866,8 +866,8 @@ class TestCertificateIssuanceForm:
         mock_builder_class.assert_called_once_with(profile)
         assert form.verifier == mock_verifier
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
     def test_form_with_subject_fields(self, mock_builder_class, mock_verifier_class):
         """Test form with subject fields from profile."""
         mock_verifier = Mock()
@@ -903,8 +903,8 @@ class TestCertificateIssuanceForm:
         assert form.fields['c'].disabled is True  # mutable=False
         assert form.fields['c'].initial == 'US'
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
     def test_form_with_san_fields(self, mock_builder_class, mock_verifier_class):
         """Test form with SAN fields from profile."""
         mock_verifier = Mock()
@@ -935,8 +935,8 @@ class TestCertificateIssuanceForm:
         assert 'ip_addresses' in form.fields
         assert form.fields['dns_names'].required is True
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
     def test_form_with_validity_fields(self, mock_builder_class, mock_verifier_class):
         """Test form with validity fields from profile."""
         mock_verifier = Mock()
@@ -967,8 +967,8 @@ class TestCertificateIssuanceForm:
         assert form.fields['days'].required is True
         assert form.fields['days'].initial == 365
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
     def test_form_validation_valid_data(self, mock_builder_class, mock_verifier_class):
         """Test form validation with valid data."""
         mock_verifier = Mock()
@@ -1013,8 +1013,8 @@ class TestCertificateIssuanceForm:
         assert form.cleaned_data['dns_names'] == 'www.example.com, api.example.com'
         assert form.cleaned_data['days'] == 365
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
     def test_form_validation_missing_required_field(self, mock_builder_class, mock_verifier_class):
         """Test form validation fails when required field is missing."""
         mock_verifier = Mock()
@@ -1041,8 +1041,8 @@ class TestCertificateIssuanceForm:
         assert not form.is_valid()
         assert 'cn' in form.errors
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
     def test_form_data_to_json_request(self, mock_builder_class, mock_verifier_class):
         """Test conversion of form data to JSON request format."""
         mock_verifier = Mock()
@@ -1079,8 +1079,8 @@ class TestCertificateIssuanceForm:
         assert request['validity'] == {'days': 365}
         assert 'extensions' not in request  # No extensions in this case
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
     def test_build_subject_from_form_data(self, mock_builder_class, mock_verifier_class):
         """Test building subject DN from form data."""
         mock_verifier = Mock()
@@ -1116,8 +1116,8 @@ class TestCertificateIssuanceForm:
             'c': 'US'
         }
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
     def test_build_san_from_form_data(self, mock_builder_class, mock_verifier_class):
         """Test building SAN extension from form data."""
         mock_verifier = Mock()
@@ -1149,8 +1149,8 @@ class TestCertificateIssuanceForm:
             'ip_addresses': ['192.168.1.1', '10.0.0.1']
         }
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
     def test_build_validity_from_form_data(self, mock_builder_class, mock_verifier_class):
         """Test building validity period from form data."""
         mock_verifier = Mock()
@@ -1179,9 +1179,9 @@ class TestCertificateIssuanceForm:
 
         assert validity == {'days': 365}  # hours: 0 is falsy, so not included
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
-    @patch('pki.forms.JSONCertRequestConverter.from_json')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONCertRequestConverter.from_json')
     def test_get_certificate_builder(self, mock_converter, mock_builder_class, mock_verifier_class):
         """Test get_certificate_builder method."""
         mock_verifier = Mock()
@@ -1220,8 +1220,8 @@ class TestCertificateIssuanceForm:
         assert result == mock_builder_instance
         mock_converter.assert_called_once()
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
     def test_form_with_allow_star_subject(self, mock_builder_class, mock_verifier_class):
         """Test form handles allow='*' for subject fields."""
         mock_verifier = Mock()
@@ -1254,8 +1254,8 @@ class TestCertificateIssuanceForm:
         assert form.fields['common_name'].required is True
         assert form.fields['common_name'].initial == 'test'
 
-    @patch('pki.forms.JSONProfileVerifier')
-    @patch('pki.forms.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
     def test_form_with_allow_star_san(self, mock_builder_class, mock_verifier_class):
         """Test form handles allow='*' for SAN fields."""
         mock_verifier = Mock()

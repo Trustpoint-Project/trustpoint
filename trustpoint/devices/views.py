@@ -665,12 +665,12 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
 
         for cred in context['domain_credentials']:
             cred.expires_in = self._get_expires_in(cred)
-            cred.expiration_date = cast('datetime.datetime', cred.credential.certificate.not_valid_after)
+            cred.expiration_date = cast('datetime.datetime', cred.credential.certificate_or_error.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred)
 
         for cred in context['application_credentials']:
             cred.expires_in = self._get_expires_in(cred)
-            cred.expiration_date = cast('datetime.datetime', cred.credential.certificate.not_valid_after)
+            cred.expiration_date = cast('datetime.datetime', cred.credential.certificate_or_error.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred)
 
         context['main_url'] = f'{self.page_category}:{self.page_name}'
@@ -805,10 +805,11 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         Returns:
             The remaining time until the credential expires as human-readable string.
         """
-        if record.credential.certificate.certificate_status != CertificateModel.CertificateStatus.OK:
-            return str(record.credential.certificate.certificate_status.label)
+        cert = record.credential.certificate_or_error
+        if cert.certificate_status != CertificateModel.CertificateStatus.OK:
+            return str(cert.certificate_status.label)
         now = datetime.datetime.now(datetime.UTC)
-        expire_timedelta = record.credential.certificate.not_valid_after - now
+        expire_timedelta = cert.not_valid_after - now
         days = expire_timedelta.days
         hours, remainder = divmod(expire_timedelta.seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
@@ -823,7 +824,8 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         Returns:
             The HTML of the hyperlink for the revoke button.
         """
-        if record.credential.certificate.certificate_status == CertificateModel.CertificateStatus.REVOKED:
+        cert = record.credential.certificate_or_error
+        if cert.certificate_status == CertificateModel.CertificateStatus.REVOKED:
             return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', gettext_lazy('Revoked'))
         url = reverse(f'{self.page_category}:{self.page_name}_credential_revoke', kwargs={'pk': record.pk})
         return format_html('<a href="{}" class="btn btn-danger tp-table-btn w-100">{}</a>', url, gettext_lazy('Revoke'))
@@ -870,19 +872,17 @@ class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecyc
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Check device type and redirect OPC UA GDS Push devices to their specific view.
-
-        Args:
-            request: The HTTP request object.
-            *args: Variable length argument list.
-            **kwargs: Arbitrary keyword arguments.
-
-        Returns:
-            HttpResponseBase: The response object.
-        """
+        """Redirect OPC UA GDS Push devices to their specific view if GDS Push is the only protocol."""
         device = self.get_object()
 
-        if device.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH:
+        if (
+            device.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+            and device.onboarding_config
+            and not (
+                device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP)
+                or device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST)
+            )
+        ):
             url = reverse('devices:opc_ua_gds_push_certificate_lifecycle_management', kwargs={'pk': device.pk})
             return redirect(url)
 
@@ -1243,7 +1243,7 @@ class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboarding
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
     def get(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Redirect directly to the GDS Push application certificate help page."""
+        """Redirect directly to the GDS Push application certificate help page if GDS Push is the only protocol."""
         self.object = self.get_object()
 
         if not self.object.onboarding_config:
@@ -1272,7 +1272,14 @@ class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboarding
                 pk=self.object.pk
             )
 
-        # Redirect directly to the GDS Push application certificate help page
+        # If CMP or EST are enabled, show the protocol selection page
+        if (
+            self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP)
+            or self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST)
+        ):
+            return super().get(request, *_args, **_kwargs)
+
+        # Otherwise, redirect directly to the GDS Push application certificate help page
         return redirect(
             f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
             pk=self.object.pk
@@ -2601,7 +2608,8 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
         if revoke_form.is_valid():
             revocation_reason = revoke_form.cleaned_data['revocation_reason']
 
-            status = self.object.credential.certificate.certificate_status
+            cert = self.object.credential.certificate_or_error
+            status = cert.certificate_status
             if status == CertificateModel.CertificateStatus.EXPIRED:
                 msg = gettext_lazy('Credential is already expired. Cannot revoke expired certificates.')
                 messages.error(self.request, msg)

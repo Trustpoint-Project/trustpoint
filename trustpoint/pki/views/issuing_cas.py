@@ -62,7 +62,6 @@ if TYPE_CHECKING:
     from django.http import HttpRequest
 
 
-
 class IssuingCaContextMixin(ContextDataMixin):
     """Mixin which adds context_data for the PKI -> Issuing CAs pages."""
 
@@ -387,9 +386,12 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         """
         context = super().get_context_data(**kwargs)
         issuing_ca = self.get_object()
-        issued_certificates = CertificateModel.objects.filter(
-            issuer_public_bytes=cast('CredentialModel', issuing_ca.credential).certificate.subject_public_bytes
-        )
+        if issuing_ca.credential and issuing_ca.credential.certificate:
+            credential = issuing_ca.credential
+            issuer_public_bytes = credential.certificate_or_error.subject_public_bytes
+            issued_certificates = CertificateModel.objects.filter(issuer_public_bytes=issuer_public_bytes)
+        else:
+            issued_certificates = CertificateModel.objects.none()
         context['issued_certificates'] = issued_certificates
         context['active_crl'] = issuing_ca.get_active_crl()
         return context

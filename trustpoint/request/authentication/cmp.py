@@ -18,7 +18,12 @@ from onboarding.models import (
     OnboardingProtocol,
 )
 from pki.util.idevid import IDevIDAuthenticator
-from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext
+from request.request_context import (
+    BaseRequestContext,
+    CmpBaseRequestContext,
+    CmpCertificateRequestContext,
+    CmpRevocationRequestContext,
+)
 from trustpoint.logger import LoggerMixin
 
 from .base import AuthenticationComponent, ClientCertificateAuthentication, CompositeAuthentication
@@ -36,6 +41,106 @@ class CmpAuthenticationBase(AuthenticationComponent, LoggerMixin):
             request_path = context.raw_message.path
 
         return bool(domain_name == '.aoki' and request_path and '/p/.aoki/initialization' in request_path)
+
+    def _verify_protection_signature(self, parsed_message: rfc4210.PKIMessage,
+                                     cmp_signer_cert: x509.Certificate) -> None:
+        """Verifies the message signature of a CMP message using signature-based protection."""
+        protected_part = rfc4210.ProtectedPart()
+        protected_part['header'] = parsed_message['header']
+        protected_part['infoValue'] = parsed_message['body']
+        encoded_protected_part = encoder.encode(protected_part)
+
+        protection_value = parsed_message['protection'].asOctets()
+        signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
+
+        hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
+        if hash_algorithm is None:
+            err_msg = 'Failed to get the corresponding hash algorithm.'
+            raise ValueError(err_msg)
+
+        public_key = cmp_signer_cert.public_key()
+        if isinstance(public_key, rsa.RSAPublicKey):
+            public_key.verify(
+                signature=protection_value,
+                data=encoded_protected_part,
+                padding=padding.PKCS1v15(),
+                algorithm=hash_algorithm.hash_algorithm(),
+            )
+        elif isinstance(public_key, ec.EllipticCurvePublicKey):
+            public_key.verify(
+                signature=protection_value,
+                data=encoded_protected_part,
+                signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
+            )
+        else:
+            err_msg = 'Cannot verify signature due to unsupported public key type.'
+            raise TypeError(err_msg)
+
+    def _extract_extra_certs(
+            self, context: CmpBaseRequestContext) -> tuple[x509.Certificate, list[x509.Certificate]]:
+        """Extract and validate extra certificates from the CMP message.
+
+        The first certificate is considered the CMP signer certificate, and the rest are intermediates.
+        """
+        if not context or not context.parsed_message:
+            err_msg = 'Missing parsed message in context.'
+            self._raise_value_error(err_msg)
+
+        if not isinstance(context.parsed_message, rfc4210.PKIMessage):
+            err_msg = 'Invalid parsed message type.'
+            self._raise_value_error(err_msg)
+
+        extra_certs = context.parsed_message['extraCerts']
+        if extra_certs is None or len(extra_certs) == 0:
+            err_msg = 'No extra certificates found in the PKIMessage.'
+            self._raise_value_error(err_msg)
+
+        cmp_signer_extra_cert = extra_certs[0]
+        cmp_signer_cert = x509.load_der_x509_certificate(encoder.encode(cmp_signer_extra_cert))
+
+        intermediate_certs = []
+        loaded_cert = None
+        for cert in extra_certs[1:]:
+            loaded_cert = x509.load_der_x509_certificate(encoder.encode(cert))
+            if loaded_cert.subject.public_bytes() != loaded_cert.issuer.public_bytes():
+                intermediate_certs.append(loaded_cert)
+
+        if not cmp_signer_cert:
+            self._raise_value_error('CMP signer certificate missing in extra certs.')
+
+        return cmp_signer_cert, intermediate_certs
+
+    def _verify_protection_and_finalize(
+        self, context: CmpBaseRequestContext, cmp_signer_cert: x509.Certificate, device: DeviceModel
+    ) -> None:
+        """Verify protection signature and finalize authentication."""
+        # Verify protection signature
+        self._verify_protection_signature(
+            parsed_message=context.parsed_message,
+            cmp_signer_cert=cmp_signer_cert
+        )
+
+        if not device.domain:
+            self._raise_value_error('Device is not part of any domain.')
+
+        if not context.domain:
+            context.domain = device.domain
+
+        self.logger.info(
+            'Successfully authenticated device via CMP signature-based certification',
+            extra={'device_common_name': device.common_name})
+        context.device = device
+        context.client_certificate = cmp_signer_cert
+
+    def _raise_value_error(self, message: str) -> Never:
+        """Helper method to log and raise a ValueError."""
+        self.logger.warning(message)
+        raise ValueError(message)
+
+    def _raise_type_error(self, message: str) -> Never:
+        """Helper method to log and raise a TypeError."""
+        self.logger.warning(message)
+        raise TypeError(message)
 
 
 class CmpSharedSecretAuthentication(CmpAuthenticationBase):
@@ -142,6 +247,8 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
         self.logger.info(
             'Successfully authenticated device %s (ID: %s) via CMP shared secret', device.common_name, sender_kid)
         context.device = device
+        if not context.domain:
+            context.domain = device.domain
 
     def _handle_authentication_error(self, error: Exception) -> None:
         """Handle known authentication errors."""
@@ -230,10 +337,11 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
             exc_msg = 'CmpSignatureBasedInitializationAuthentication requires a CmpCertificateRequestContext.'
             raise TypeError(exc_msg)
 
-        if not self._validate_context(context):
+        if not self._should_authenticate(context):
             return
 
-        cmp_signer_cert, intermediate_certs = self._extract_certificates(context)
+        cmp_signer_cert, intermediate_certs = self._extract_extra_certs(context)
+        context.client_certificate = cmp_signer_cert
         device = self._authenticate_and_verify_device(context, cmp_signer_cert, intermediate_certs)
         self.logger.info(
             'Successfully authenticated device via CMP signature-based initialization',
@@ -268,51 +376,21 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
         self.logger.warning(error_message)
         raise ValueError(error_message) from error
 
-    def _validate_context(self, context: CmpCertificateRequestContext) -> bool:
-        """Validate the context for CMP authentication."""
+    def _should_authenticate(self, context: CmpCertificateRequestContext) -> bool:
+        """Validate the context for CMP IR authentication."""
         if context.protocol != 'cmp':
-            self._raise_value_error('CMP shared secret authentication requires CMP protocol.')
+            self._raise_value_error('CMP sig-based authentication requires CMP protocol.')
 
         if context.operation != 'initialization':
             return False
 
         if not context.parsed_message:
-            self._raise_value_error('CMP shared secret authentication requires a parsed message.')
+            self._raise_value_error('CMP sig-based authentication requires a parsed message.')
 
         if not isinstance(context.parsed_message, rfc4210.PKIMessage):
-            self._raise_value_error('CMP shared secret authentication requires a PKIMessage.')
+            self._raise_value_error('CMP sig-based authentication requires a PKIMessage.')
 
         return True
-
-    def _extract_certificates(
-            self, context: CmpCertificateRequestContext) -> tuple[x509.Certificate, list[x509.Certificate]]:
-        """Extract and validate certificates from the CMP message."""
-        if not context or not context.parsed_message:
-            err_msg = 'Missing parsed message in context.'
-            self._raise_value_error(err_msg)
-
-        if not isinstance(context.parsed_message, rfc4210.PKIMessage):
-            err_msg = 'Invalid parsed message type.'
-            self._raise_value_error(err_msg)
-
-        extra_certs = context.parsed_message['extraCerts']
-        if not extra_certs:
-            self._raise_value_error('No extra certificates found in the PKIMessage.')
-
-        cmp_signer_extra_cert = extra_certs[0]
-        cmp_signer_cert = x509.load_der_x509_certificate(encoder.encode(cmp_signer_extra_cert))
-
-        intermediate_certs = []
-        loaded_cert = None
-        for cert in extra_certs[1:]:
-            loaded_cert = x509.load_der_x509_certificate(encoder.encode(cert))
-            if loaded_cert.subject.public_bytes() != loaded_cert.issuer.public_bytes():
-                intermediate_certs.append(loaded_cert)
-
-        if not cmp_signer_cert:
-            self._raise_value_error('CMP signer certificate missing in extra certs.')
-
-        return cmp_signer_cert, intermediate_certs
 
     def _authenticate_device(self, context: CmpCertificateRequestContext, cmp_signer_cert: x509.Certificate,
                              intermediate_certs: list[x509.Certificate]) -> DeviceModel:
@@ -345,47 +423,8 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
         if not device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP):
             self._raise_value_error('PKI protocol CMP expected, but got something else.')
 
-    def _raise_value_error(self, message: str) -> Never:
-        """Helper method to log and raise a ValueError."""
-        self.logger.warning(message)
-        raise ValueError(message)
 
-    def _verify_protection_signature(self, parsed_message: rfc4210.PKIMessage,
-                                     cmp_signer_cert: x509.Certificate) -> None:
-        """Verifies the message signature of a CMP message using signature-based protection."""
-        protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = parsed_message['header']
-        protected_part['infoValue'] = parsed_message['body']
-        encoded_protected_part = encoder.encode(protected_part)
-
-        protection_value = parsed_message['protection'].asOctets()
-        signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
-
-        hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
-        if hash_algorithm is None:
-            err_msg = 'Failed to get the corresponding hash algorithm.'
-            raise ValueError(err_msg)
-
-        public_key = cmp_signer_cert.public_key()
-        if isinstance(public_key, rsa.RSAPublicKey):
-            public_key.verify(
-                signature=protection_value,
-                data=encoded_protected_part,
-                padding=padding.PKCS1v15(),
-                algorithm=hash_algorithm.hash_algorithm(),
-            )
-        elif isinstance(public_key, ec.EllipticCurvePublicKey):
-            public_key.verify(
-                signature=protection_value,
-                data=encoded_protected_part,
-                signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
-            )
-        else:
-            err_msg = 'Cannot verify signature due to unsupported public key type.'
-            raise TypeError(err_msg)
-
-
-class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, LoggerMixin):
+class CmpSignatureBasedCertificationAuthentication(CmpAuthenticationBase):
     """Handles CMP signature-based authentication for certification requests using domain credentials."""
 
     def authenticate(self, context: BaseRequestContext) -> None:
@@ -398,7 +437,8 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             return
 
         try:
-            cmp_signer_cert = self._extract_and_validate_certificate(context)
+            cmp_signer_cert, _ = self._extract_extra_certs(context)
+            context.client_certificate = cmp_signer_cert
             device = self._authenticate_device(context)
             self._verify_protection_and_finalize(context, cmp_signer_cert, device)
 
@@ -442,28 +482,6 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             self._raise_value_error(error_message)
 
         return True
-
-    def _extract_and_validate_certificate(self, context: CmpCertificateRequestContext) -> x509.Certificate:
-        """Extract and validate the CMP signer certificate from the message."""
-        if not context or not context.parsed_message:
-            err_msg = 'Missing parsed message in context.'
-            self._raise_value_error(err_msg)
-
-        if not isinstance(context.parsed_message, rfc4210.PKIMessage):
-            err_msg = 'Invalid parsed message type.'
-            self._raise_value_error(err_msg)
-
-        extra_certs = context.parsed_message['extraCerts']
-
-        if extra_certs is None or len(extra_certs) == 0:
-            err_msg = 'No extra certificates found in the PKIMessage.'
-            self._raise_value_error(err_msg)
-
-        # Extract CMP signer certificate (first extra cert)
-        cmp_signer_extra_cert = extra_certs[0]
-        der_cmp_signer_cert = encoder.encode(cmp_signer_extra_cert)
-        context.client_certificate = x509.load_der_x509_certificate(der_cmp_signer_cert)
-        return context.client_certificate
 
     def _authenticate_device(self, context: CmpCertificateRequestContext) -> DeviceModel:
         """Authenticate the device using the CMP signer certificate."""
@@ -589,68 +607,57 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
             )
             self._raise_value_error(error_message)
 
-    def _verify_protection_and_finalize(
-        self, context: CmpCertificateRequestContext, cmp_signer_cert: x509.Certificate, device: DeviceModel
-    ) -> None:
-        """Verify protection signature and finalize authentication."""
-        # Verify protection signature
-        self._verify_protection_signature(
-            parsed_message=context.parsed_message,
-            cmp_signer_cert=cmp_signer_cert
-        )
 
-        if not device.domain:
-            self._raise_value_error('Device is not part of any domain.')
+class CmpSignatureBasedRevocationAuthentication(CmpAuthenticationBase):
+    """Handles CMP signature-based authentication for revocation requests using domain credentials."""
 
-        device.domain.get_issuing_ca_or_value_error() #.credential # ???
+    def authenticate(self, context: BaseRequestContext) -> None:
+        """Authenticate using CMP signature-based protection for revocation requests."""
+        if not isinstance(context, CmpRevocationRequestContext):
+            exc_msg = 'CmpSignatureBasedRevocationAuthentication requires a CmpRevocationRequestContext.'
+            raise TypeError(exc_msg)
 
-        self.logger.info(
-            'Successfully authenticated device via CMP signature-based certification',
-            extra={'device_common_name': device.common_name})
-        context.device = device
+        if not self._should_authenticate(context):
+            return
+
+        cmp_signer_cert, _ = self._extract_extra_certs(context)
         context.client_certificate = cmp_signer_cert
+        device = self._authenticate_device(context)
+        self._verify_protection_and_finalize(context, cmp_signer_cert, device)
 
-    def _raise_value_error(self, message: str) -> Never:
-        """Helper method to log and raise a ValueError."""
-        raise ValueError(message)
+    def _should_authenticate(self, context: CmpRevocationRequestContext) -> bool:
+        """Check if this authentication method should be applied."""
+        if context.protocol != 'cmp':
+            return False
 
-    def _raise_type_error(self, message: str) -> Never:
-        """Helper method to log and raise a TypeError."""
-        raise TypeError(message)
+        if context.operation != 'revocation':
+            return False
 
-    def _verify_protection_signature(self, parsed_message: rfc4210.PKIMessage,
-                                     cmp_signer_cert: x509.Certificate) -> None:
-        """Verifies the message signature of a CMP message using signature-based protection."""
-        protected_part = rfc4210.ProtectedPart()
-        protected_part['header'] = parsed_message['header']
-        protected_part['infoValue'] = parsed_message['body']
-        encoded_protected_part = encoder.encode(protected_part)
+        if not context.parsed_message:
+            error_message = 'CMP signature-based revocation authentication requires a parsed message.'
+            self.logger.warning('No parsed message available for CMP authentication')
+            self._raise_value_error(error_message)
 
-        protection_value = parsed_message['protection'].asOctets()
-        signature_suite = SignatureSuite.from_certificate(cmp_signer_cert)
+        if not isinstance(context.parsed_message, rfc4210.PKIMessage):
+            error_message = 'CMP signature-based revocation authentication requires a PKIMessage.'
+            self.logger.warning("Invalid message type '%s' for CMP authentication", type(context.parsed_message))
+            self._raise_value_error(error_message)
 
-        hash_algorithm = signature_suite.algorithm_identifier.hash_algorithm
-        if hash_algorithm is None:
-            err_msg = 'Failed to get the corresponding hash algorithm.'
-            raise ValueError(err_msg)
+        return True
 
-        public_key = cmp_signer_cert.public_key()
-        if isinstance(public_key, rsa.RSAPublicKey):
-            public_key.verify(
-                signature=protection_value,
-                data=encoded_protected_part,
-                padding=padding.PKCS1v15(),
-                algorithm=hash_algorithm.hash_algorithm(),
-            )
-        elif isinstance(public_key, ec.EllipticCurvePublicKey):
-            public_key.verify(
-                signature=protection_value,
-                data=encoded_protected_part,
-                signature_algorithm=ec.ECDSA(hash_algorithm.hash_algorithm()),
-            )
-        else:
-            err_msg = 'Cannot verify signature due to unsupported public key type.'
-            raise TypeError(err_msg)
+    def _authenticate_device(self, context: CmpRevocationRequestContext) -> DeviceModel:
+        """Authenticate the device using the CMP signer certificate."""
+        cmp_signer_cert = context.client_certificate
+        if not cmp_signer_cert:
+            err_msg = 'CMP signer certificate is missing in context client_certificate.'
+            self._raise_value_error(err_msg)
+
+        ClientCertificateAuthentication(domain_credential_only=False).authenticate(context)
+
+        if not context.device:
+            err_msg = 'Device authentication failed using CMP signer certificate.'
+            self._raise_value_error(err_msg)
+        return context.device
 
 
 class CmpAuthentication(CompositeAuthentication):
@@ -662,3 +669,4 @@ class CmpAuthentication(CompositeAuthentication):
         self.add(CmpSharedSecretAuthentication())
         self.add(CmpSignatureBasedInitializationAuthentication())
         self.add(CmpSignatureBasedCertificationAuthentication())
+        self.add(CmpSignatureBasedRevocationAuthentication())
