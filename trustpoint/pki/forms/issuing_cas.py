@@ -580,14 +580,8 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
 
         private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info)
 
-        temp_cert, _ = CertificateGenerator.create_root_ca(
-            cn=f'Temp-{uuid.uuid4()}',
-            validity_days=1,
-            private_key=private_key
-        )
 
         cred_serializer = CredentialSerializer(
-            certificate=temp_cert,
             private_key=private_key,
             additional_certificates=[]
         )

@@ -466,7 +466,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     @staticmethod
     def _validate_and_save_certificate(
         normalized_credential_serializer: CredentialSerializer
-    ) -> CertificateModel:
+    ) -> CertificateModel | None:
         """Validates and saves the certificate from the provided serializer.
 
         Args:
@@ -477,12 +477,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             ValueError: If the certificate in the serializer is None.
 
         Returns:
-            CertificateModel: The saved certificate model instance.
+            CertificateModel | None: The saved certificate model instance, or None if no certificate is present.
         """
         # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!  # noqa: FIX002
         if normalized_credential_serializer.certificate is None:
-            msg = 'Certificate cannot be None'
-            raise ValueError(msg)
+            return None
         return CertificateModel.save_certificate(normalized_credential_serializer.certificate)
 
     @classmethod
@@ -555,7 +554,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     @classmethod
     def _create_credential_model(
         cls,
-        certificate: CertificateModel,
+        certificate: CertificateModel | None,
         credential_type: CredentialModel.CredentialTypeChoice,
         private_key_pem: str,
         pkcs11_private_key: PKCS11Key | None,
@@ -567,9 +566,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             private_key=private_key_pem,
             pkcs11_private_key=pkcs11_private_key
         )
-        PrimaryCredentialCertificate.objects.create(
-            certificate=certificate, credential=credential_model, is_primary=True
-        )
+        if certificate is not None:
+            PrimaryCredentialCertificate.objects.create(
+                certificate=certificate, credential=credential_model, is_primary=True
+            )
         return credential_model
 
     @staticmethod
@@ -577,6 +577,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         credential_model: CredentialModel, additional_certificates: list[x509.Certificate]
     ) -> None:
         """Saves additional certificates in the certificate chain."""
+        if credential_model.certificate is None:
+            return
         primary_cert = credential_model.certificate_or_error
         for order, certificate in enumerate(additional_certificates):
             certificate_model = CertificateModel.save_certificate(certificate)
