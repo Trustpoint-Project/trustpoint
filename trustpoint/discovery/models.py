@@ -1,28 +1,38 @@
+"""Models for the network discovery module."""
+
 from django.db import models
-# We import the existing CertificateModel so we can link to it
-from pki.models.certificate import CertificateModel 
+
+from pki.models.certificate import CertificateModel
+
+
+class DiscoveryPort(models.Model):
+    """Stores ports to be included in network scans."""
+
+    port_number = models.PositiveIntegerField(unique=True)
+    description = models.CharField(max_length=255)
+
+    def __str__(self) -> str:
+        """Return string representation of the port."""
+        return f'{self.port_number} ({self.description})'
+
 
 class DiscoveredDevice(models.Model):
+    """Inventory of discovered network assets."""
+
     ip_address = models.GenericIPAddressField(unique=True)
-    hostname = models.CharField(max_length=255, blank=True, null=True)
-    
-    # Stores ports as a list: [80, 443, 4840, 8883]
+    hostname = models.CharField(max_length=255, blank=True, default='')
     open_ports = models.JSONField(default=list, blank=True)
-    
-    # Stores basic SSL text info for the table view
     ssl_info = models.JSONField(default=dict, blank=True, null=True)
-    
-    # NEW: This links the discovery entry to the formal PKI Certificate record
     certificate_record = models.ForeignKey(
-        CertificateModel, 
-        on_delete=models.SET_NULL, 
-        null=True, 
+        CertificateModel,
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
-        related_name='discovered_on_devices'
+        related_name='discovered_on_devices',
     )
-    
     last_seen = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
+        """Return string representation of the device."""
         return f"{self.ip_address} ({self.hostname or 'Unknown'})"
