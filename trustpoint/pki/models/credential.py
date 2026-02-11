@@ -205,6 +205,21 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
             raise ValidationError(exc_msg)
 
+    @property
+    def certificate_or_error(self) -> CertificateModel:
+        """Returns the certificate, raising an error if it is None.
+
+        Returns:
+            CertificateModel: The non-null certificate.
+
+        Raises:
+            ValueError: If certificate is None.
+        """
+        if self.certificate is None:
+            msg = f'Certificate is None for credential (type: {self.credential_type})'
+            raise ValueError(msg)
+        return self.certificate
+
     @classmethod
     def save_credential_serializer(
         cls, credential_serializer: CredentialSerializer, credential_type: CredentialModel.CredentialTypeChoice
@@ -562,13 +577,14 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         credential_model: CredentialModel, additional_certificates: list[x509.Certificate]
     ) -> None:
         """Saves additional certificates in the certificate chain."""
+        primary_cert = credential_model.certificate_or_error
         for order, certificate in enumerate(additional_certificates):
             certificate_model = CertificateModel.save_certificate(certificate)
             CertificateChainOrderModel.objects.create(
                 certificate=certificate_model,
                 credential=credential_model,
                 order=order,
-                primary_certificate=credential_model.certificate
+                primary_certificate=primary_cert
             )
 
     @classmethod
@@ -590,13 +606,15 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             certificate=certificate_model, credential=credential_model, is_primary=True
         )
 
+        primary_cert = credential_model.certificate_or_error
+
         for order, certificate_in_chain in enumerate(certificate_chain):
             certificate_model = CertificateModel.save_certificate(certificate_in_chain)
             CertificateChainOrderModel.objects.create(
                 certificate=certificate_model,
                 credential=credential_model,
                 order=order,
-                primary_certificate=credential_model.certificate
+                primary_certificate=primary_cert
             )
 
         return credential_model

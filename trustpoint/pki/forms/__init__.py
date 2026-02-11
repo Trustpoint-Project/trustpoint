@@ -22,7 +22,6 @@ __all__ = [
     'CertificateIssuanceForm',
     'DevIdAddMethodSelectForm',
     'DevIdRegistrationForm',
-    'get_private_key_location_from_config',
     'IssuingCaAddFileImportPkcs12Form',
     'IssuingCaAddFileImportSeparateFilesForm',
     'IssuingCaAddMethodSelectForm',
@@ -34,4 +33,5 @@ __all__ = [
     'ProfileBasedFormFieldBuilder',
     'TruststoreAddForm',
     'TruststoreDownloadForm',
+    'get_private_key_location_from_config',
 ]

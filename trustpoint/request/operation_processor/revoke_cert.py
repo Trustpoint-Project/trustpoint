@@ -47,7 +47,7 @@ class LocalCaCertificateRevocationProcessor(CertificateRevocationProcessor):
 
         ca = context.domain.get_issuing_ca_or_value_error()
         context.issuer_credential =  ca.get_credential()
-        cred_cert = context.credential_to_revoke.credential.certificate
+        cred_cert = context.credential_to_revoke.credential.certificate_or_error
 
         if (cred_cert.certificate_status == CertificateModel.CertificateStatus.REVOKED):
             exc_msg = 'The certificate is already revoked.'

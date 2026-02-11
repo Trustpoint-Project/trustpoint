@@ -380,7 +380,7 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         context = super().get_context_data(**kwargs)
         issuing_ca = self.get_object()
         issued_certificates = CertificateModel.objects.filter(
-            issuer_public_bytes=cast('CredentialModel', issuing_ca.credential).certificate.subject_public_bytes
+            issuer_public_bytes=cast('CredentialModel', issuing_ca.credential).certificate_or_error.subject_public_bytes
         )
         context['issued_certificates'] = issued_certificates
         context['active_crl'] = issuing_ca.get_active_crl()

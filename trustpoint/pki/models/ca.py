@@ -238,7 +238,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.credential is None:
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
-        return self.credential.certificate.common_name
+        return self.credential.certificate_or_error.common_name
 
     @property
     def subject_public_bytes(self) -> bytes:
@@ -251,7 +251,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.credential is None:
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
-        return bytes.fromhex(self.credential.certificate.subject_public_bytes)
+        return bytes.fromhex(self.credential.certificate_or_error.subject_public_bytes)
 
     @property
     def ca_certificate_model(self) -> CertificateModel:
@@ -260,7 +260,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             if self.credential is None:
                 msg = 'Credential is None for issuing CA'
                 raise ValueError(msg)
-            return self.credential.certificate
+            return self.credential.certificate_or_error
         if self.is_keyless_ca:
             if self.certificate is None:
                 msg = 'Certificate is None for keyless CA'
@@ -636,7 +636,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.credential is None:
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
-        ca_subject_public_bytes = self.credential.certificate.subject_public_bytes
+        ca_subject_public_bytes = self.credential.certificate_or_error.subject_public_bytes
 
         # do not return self-signed CA certificate
         return CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude(

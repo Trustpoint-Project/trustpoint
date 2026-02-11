@@ -89,7 +89,7 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
                 'No DevOwnerID present for this IDevID.', status = 422
             )
         owner_pk = owner_cred.get_private_key()
-        owner_id_cert = owner_cred.certificate
+        owner_id_cert = owner_cred.certificate_or_error
 
         aoki_init_response = {
             'aoki-init': {
@@ -103,7 +103,9 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
                     ]
                 },
                 'owner-id-cert': owner_id_cert.get_certificate_serializer().as_pem().decode(),
-                'tls-truststore': tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode()
+                'tls-truststore': (
+                    tls_cert.credential.certificate_or_error.get_certificate_serializer().as_pem().decode()
+                )
             },
         }
         resp = JsonResponse(aoki_init_response)

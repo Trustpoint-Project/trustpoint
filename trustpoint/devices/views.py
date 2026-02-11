@@ -665,12 +665,12 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
 
         for cred in context['domain_credentials']:
             cred.expires_in = self._get_expires_in(cred)
-            cred.expiration_date = cast('datetime.datetime', cred.credential.certificate.not_valid_after)
+            cred.expiration_date = cast('datetime.datetime', cred.credential.certificate_or_error.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred)
 
         for cred in context['application_credentials']:
             cred.expires_in = self._get_expires_in(cred)
-            cred.expiration_date = cast('datetime.datetime', cred.credential.certificate.not_valid_after)
+            cred.expiration_date = cast('datetime.datetime', cred.credential.certificate_or_error.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred)
 
         context['main_url'] = f'{self.page_category}:{self.page_name}'
@@ -805,10 +805,11 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         Returns:
             The remaining time until the credential expires as human-readable string.
         """
-        if record.credential.certificate.certificate_status != CertificateModel.CertificateStatus.OK:
-            return str(record.credential.certificate.certificate_status.label)
+        cert = record.credential.certificate_or_error
+        if cert.certificate_status != CertificateModel.CertificateStatus.OK:
+            return str(cert.certificate_status.label)
         now = datetime.datetime.now(datetime.UTC)
-        expire_timedelta = record.credential.certificate.not_valid_after - now
+        expire_timedelta = cert.not_valid_after - now
         days = expire_timedelta.days
         hours, remainder = divmod(expire_timedelta.seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
@@ -823,7 +824,8 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         Returns:
             The HTML of the hyperlink for the revoke button.
         """
-        if record.credential.certificate.certificate_status == CertificateModel.CertificateStatus.REVOKED:
+        cert = record.credential.certificate_or_error
+        if cert.certificate_status == CertificateModel.CertificateStatus.REVOKED:
             return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', gettext_lazy('Revoked'))
         url = reverse(f'{self.page_category}:{self.page_name}_credential_revoke', kwargs={'pk': record.pk})
         return format_html('<a href="{}" class="btn btn-danger tp-table-btn w-100">{}</a>', url, gettext_lazy('Revoke'))
@@ -2601,7 +2603,8 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
         if revoke_form.is_valid():
             revocation_reason = revoke_form.cleaned_data['revocation_reason']
 
-            status = self.object.credential.certificate.certificate_status
+            cert = self.object.credential.certificate_or_error
+            status = cert.certificate_status
             if status == CertificateModel.CertificateStatus.EXPIRED:
                 msg = gettext_lazy('Credential is already expired. Cannot revoke expired certificates.')
                 messages.error(self.request, msg)
