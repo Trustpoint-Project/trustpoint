@@ -470,13 +470,13 @@ class TestCmpRequestViewPathParamExtraction:
         """Test extraction fails with (second) profile given instead of operation."""
         url = resolve('/.well-known/cmp/p/test_domain~tls_client/tls_server/')
         with pytest.raises(Http404):
-            domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+            CmpRequestView()._extract_path_params(url.kwargs)
 
     def test_extract_path_invalid_operation(self, request_factory):
         """Test extraction with invalid operation."""
         url = resolve('/.well-known/cmp/p/test_domain/tls_client/popcorn_gun!!!/')
         with pytest.raises(Http404):
-            domain, profile, operation = CmpRequestView()._extract_path_params(url.kwargs)
+            CmpRequestView()._extract_path_params(url.kwargs)
 
 
 class TestCmpRevocationRequestView:
