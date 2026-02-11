@@ -1,6 +1,6 @@
 """Django forms for PKI management in Trustpoint."""
 
-from .cert_profiles import CertificateIssuanceForm, CertProfileConfigForm
+from .cert_profiles import CertificateIssuanceForm, CertProfileConfigForm, ProfileBasedFormFieldBuilder
 from .certificates import CertificateDownloadForm
 from .devids import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from .issuing_cas import (
@@ -11,6 +11,7 @@ from .issuing_cas import (
     IssuingCaAddRequestEstForm,
     IssuingCaFileTypeSelectForm,
     IssuingCaTruststoreAssociationForm,
+    get_private_key_location_from_config,
 )
 from .owner_credential import OwnerCredentialFileImportForm
 from .truststores import TruststoreAddForm, TruststoreDownloadForm
@@ -21,6 +22,7 @@ __all__ = [
     'CertificateIssuanceForm',
     'DevIdAddMethodSelectForm',
     'DevIdRegistrationForm',
+    'get_private_key_location_from_config',
     'IssuingCaAddFileImportPkcs12Form',
     'IssuingCaAddFileImportSeparateFilesForm',
     'IssuingCaAddMethodSelectForm',
@@ -29,6 +31,7 @@ __all__ = [
     'IssuingCaFileTypeSelectForm',
     'IssuingCaTruststoreAssociationForm',
     'OwnerCredentialFileImportForm',
+    'ProfileBasedFormFieldBuilder',
     'TruststoreAddForm',
     'TruststoreDownloadForm',
 ]

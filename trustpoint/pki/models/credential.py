@@ -159,11 +159,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     )
 
     certificate = models.ForeignKey(
-        CertificateModel, on_delete=models.PROTECT, related_name='credential_set', blank=False
+        CertificateModel, on_delete=models.PROTECT, related_name='credential_set', blank=True, null=True
     )
 
     certificates = models.ManyToManyField[CertificateModel, 'PrimaryCredentialCertificate'](
-        CertificateModel, through='PrimaryCredentialCertificate', blank=False, related_name='credential'
+        CertificateModel, through='PrimaryCredentialCertificate', blank=True, related_name='credential'
     )
     certificate_chain: models.ManyToManyField[CertificateModel, CertificateChainOrderModel] = models.ManyToManyField(
         CertificateModel, blank=True,
@@ -192,6 +192,12 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         if qs.count() > 1:
             exc_msg = 'A credential can only have one primary certificate.'
             raise ValidationError(exc_msg)
+
+        if self.certificate is None:
+            if qs.exists():
+                exc_msg = 'Cannot have primary certificates when certificate is not set.'
+                raise ValidationError(exc_msg)
+            return  # No further validation if certificate is None
 
         if qs.get().certificate != self.certificate:
             exc_msg = ('The ForeignKey certificate must be identical to the one '
@@ -625,6 +631,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         """Deletes related models, only allow deletion if there are no more active certificates."""
         # only allow deletion if all certificates are either expired or revoked
         qs = self.certificates.all()
+        if self.certificate is None:
+            if qs.exists():
+                exc_msg = f'Cannot delete credential {self.pk} with certificates but no primary certificate.'
+                raise ValidationError(exc_msg)
+            return  # Nothing to check
         if self.certificate not in qs:
             exc_msg = f'Primary certificate not in certificate list of credential {self.pk}.'
             raise ValidationError(exc_msg)
@@ -729,7 +740,13 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
         Returns:
             CertificateSerializer: The credential certificate.
+
+        Raises:
+            ValueError: If the certificate is not set.
         """
+        if self.certificate is None:
+            msg = 'Certificate is not set for this credential'
+            raise ValueError(msg)
         return self.certificate.get_certificate_serializer()
 
     def get_certificate_chain_serializer(self) -> CertificateCollectionSerializer:
@@ -764,6 +781,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         """Gets the root CA certificate serializer."""
         last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
         if last_certificate_in_chain is None:
+            if self.certificate is None:
+                return None
             return self.certificate.get_certificate_serializer()
         if last_certificate_in_chain.certificate.is_root_ca:
             return last_certificate_in_chain.certificate.get_certificate_serializer()
