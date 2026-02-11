@@ -56,8 +56,6 @@ if TYPE_CHECKING:
     from django.forms import Form
     from django.http import HttpRequest
 
-    from pki.models.credential import CredentialModel
-
 
 class IssuingCaContextMixin(ContextDataMixin):
     """Mixin which adds context_data for the PKI -> Issuing CAs pages."""
