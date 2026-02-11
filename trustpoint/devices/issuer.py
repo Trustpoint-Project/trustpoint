@@ -12,7 +12,8 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
 
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus
+from devices.models import DeviceModel, IssuedCredentialModel
+from onboarding.models import OnboardingProtocol, OnboardingStatus
 from pki.models.credential import CredentialModel
 from pki.util.keys import KeyGenerator
 from trustpoint.logger import LoggerMixin
@@ -120,20 +121,23 @@ class SaveCredentialToDbMixin(LoggerMixin):
         )
 
         try:
-            # check for existing issued credentials
-            existing_credentials = IssuedCredentialModel.objects.filter(
+
+            existing_issued_credential = IssuedCredentialModel.objects.filter(
                 device=self.device,
                 domain=self.domain,
                 issued_credential_type=issued_credential_type,
                 common_name=common_name,
-            )
-            for issued_credential in existing_credentials:
-                cred_model: CredentialModel = issued_credential.credential
-                if cred_model.certificate.subjects_match(certificate.subject):
-                    # if the certificate already exists, we need to update the certificate (e.g. reenroll)
-                    cred_model.update_keyless_credential(certificate, certificate_chain)
-                    cred_model.save()
-                    return issued_credential
+            ).first()
+
+            if existing_issued_credential:
+                cred_model = existing_issued_credential.credential
+                cred_model.update_keyless_credential(certificate, certificate_chain)
+                cred_model.save()
+
+                existing_issued_credential.issued_using_cert_profile = issued_using_cert_profile
+                existing_issued_credential.save()
+
+                return existing_issued_credential
 
             credential_model = CredentialModel.save_keyless_credential(
                 certificate=certificate,
@@ -654,8 +658,17 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
 
     _pseudonym = DOMAIN_CREDENTIAL_CN
 
-    def issue_domain_credential(self) -> IssuedCredentialModel:
+    def issue_domain_credential(
+        self,
+        application_uri: str | None = None,
+        extra_extensions: list[tuple[x509.ExtensionType, bool]] | None = None,
+    ) -> IssuedCredentialModel:
         """Issues a domain credential for a device.
+
+        Args:
+            application_uri: Optional application URI to include in the certificate.
+            extra_extensions: Optional list of additional certificate extensions to include.
+                If provided, these will override the default extensions (except BasicConstraints).
 
         Returns:
             The issued domain credential model.
@@ -663,11 +676,28 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
 
+        extensions: list[tuple[x509.ExtensionType, bool]] = [
+            (x509.BasicConstraints(ca=False, path_length=None), True)
+        ]
+        if extra_extensions is None:
+            if application_uri:
+                extensions.append(
+                    (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)]), False)
+                )
+        else:
+            extensions.extend(extra_extensions)
+            if application_uri:
+                has_san = any(isinstance(ext, x509.SubjectAlternativeName) for ext, _ in extra_extensions)
+                if not has_san:
+                    extensions.append(
+                        (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(application_uri)]), False)
+                    )
+
         certificate = self._build_certificate(
             common_name=self._pseudonym,
             public_key=private_key.public_key_serializer.as_crypto(),
             validity_days=365,
-            extra_extensions=[(x509.BasicConstraints(ca=False, path_length=None), True)],
+            extra_extensions=extensions,
         )
 
         cert_chain = (
@@ -685,7 +715,13 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             issued_using_cert_profile='Trustpoint Domain Credential',
         )
 
-        if self.device.onboarding_config:
+        # Only mark as onboarded if NOT OPC UA GDS Push
+        # For GDS Push, onboarding is complete only after server certificate is updated
+        if (
+            self.device.onboarding_config
+            and self.device.onboarding_config.onboarding_protocol
+            != OnboardingProtocol.OPC_GDS_PUSH
+        ):
             self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             self.device.onboarding_config.save()
 
@@ -693,16 +729,28 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
 
         return issued_domain_credential
 
-    def issue_domain_credential_certificate(self, public_key: PublicKey) -> IssuedCredentialModel:
+    def issue_domain_credential_certificate(
+        self,
+        public_key: PublicKey,
+        extra_extensions: list[tuple[x509.ExtensionType, bool]] | None = None,
+    ) -> IssuedCredentialModel:
         """Issues a domain credential certificate.
 
         Args:
             public_key: The public key associated with the issued certificate.
+            extra_extensions: Optional list of additional certificate extensions to include.
+                If provided, these will override the default extensions (except BasicConstraints).
 
         Returns:
             The issued domain credential certificate model.
         """
         # TODO(AlexHx8472): Check matching public_key and signature suite.  # noqa: FIX002
+
+        extensions: list[tuple[x509.ExtensionType, bool]] = [
+            (x509.BasicConstraints(ca=False, path_length=None), True)
+        ]
+        if extra_extensions is not None:
+            extensions.extend(extra_extensions)
 
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
 
@@ -710,7 +758,7 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             common_name=self._pseudonym,
             public_key=public_key,
             validity_days=365,
-            extra_extensions=[(x509.BasicConstraints(ca=False, path_length=None), True)],
+            extra_extensions=extensions,
         )
 
         issued_domain_credential = self._save_keyless_credential(
@@ -724,7 +772,13 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             issued_using_cert_profile='Trustpoint Domain Credential'
         )
 
-        if self.device.onboarding_config:
+        # Only mark as onboarded if NOT OPC UA GDS Push
+        # For GDS Push, onboarding is complete only after server certificate is updated
+        if (
+            self.device.onboarding_config
+            and self.device.onboarding_config.onboarding_protocol
+            != OnboardingProtocol.OPC_GDS_PUSH
+        ):
             self.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             self.device.onboarding_config.save()
 

@@ -16,6 +16,9 @@ urlpatterns = [
         name='truststores',
     ),
     path('truststores/add/', truststores.TruststoreCreateView.as_view(), name='truststores-add'),
+    re_path(r'^truststores/add/(?P<pk>\d+)?/?$',
+            truststores.TruststoreCreateView.as_view(),
+            name='truststores-add-with-pk'),
     path('truststores/add/<int:pk>/', truststores.TruststoreCreateView.as_view(), name='truststores-add-with-pk'),
     re_path(
         r'^truststores/download/(?P<pk>[0-9]+)/?$',
@@ -173,21 +176,29 @@ urlpatterns = [
         domains.IssuedCertificatesView.as_view(),
         name='domain-issued_certificates',
     ),
-    path(
-        'devid-registration/method_select/<int:pk>/',
+    re_path(
+        r'^devid-registration/method_select/(?P<pk>\d+)?/?$',
         DevIdMethodSelectView.as_view(),
         name='devid_registration-method_select',
     ),
-    path(
-        'devid-registration/create/<int:pk>/',
+
+    re_path(
+        r'devid-registration/create/(?P<pk>\d+)?/?$',
         DevIdRegistrationCreateView.as_view(),
         name='devid_registration_create',
     ),
+
     path(
         'devid-registration/create/<int:pk>/<int:truststore_id>/',
         DevIdRegistrationCreateView.as_view(),
         name='devid_registration_create-with_truststore_id',
     ),
+    path(
+        'truststores/add/from-device/',
+        truststores.TruststoreCreateView.as_view(),
+        name='truststores-add-from-device',
+    ),
+
     path(
         'devid-registration/delete/<int:pk>/', DevIdRegistrationDeleteView.as_view(), name='devid_registration_delete'
     ),

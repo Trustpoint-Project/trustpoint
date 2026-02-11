@@ -8,7 +8,8 @@ from management.models import KeyStorageConfig
 from pki.util.x509 import CertificateGenerator
 
 from devices.issuer import LocalDomainCredentialIssuer
-from devices.models import DeviceModel, NoOnboardingConfigModel, NoOnboardingPkiProtocol, RemoteDeviceCredentialDownloadModel
+from devices.models import DeviceModel, RemoteDeviceCredentialDownloadModel
+from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 
 
 @pytest.fixture(autouse=True)

@@ -6,7 +6,8 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
-from devices.models import DeviceModel, NoOnboardingConfigModel, NoOnboardingPkiProtocol
+from devices.models import DeviceModel
+from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 
 
 @pytest.mark.django_db
@@ -92,7 +93,7 @@ class TestCLMContextUrls:
         domain_instance: dict[str, Any]
     ) -> None:
         """Test CLM view with EST onboarding provides domain credential URL."""
-        from devices.models import OnboardingConfigModel, OnboardingProtocol, OnboardingPkiProtocol
+        from onboarding.models import OnboardingConfigModel, OnboardingProtocol, OnboardingPkiProtocol
         
         domain = domain_instance['domain']
         
@@ -176,6 +177,29 @@ class TestOpcUaGdsCLMView:
 
 
 @pytest.mark.django_db
+class TestOpcUaGdsPushCLMView:
+    """Test OPC UA GDS Push CLM view specific functionality."""
+    
+    def test_opcua_gds_push_clm_view_provides_correct_main_url(
+        self,
+        admin_client: Client,
+        device_instance_onboarding: dict[str, Any]
+    ) -> None:
+        """Test that OPC UA GDS Push CLM view provides correct main_url."""
+        device = device_instance_onboarding['device']
+        # Change device type to GDS Push
+        device.device_type = DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        device.save()
+        
+        url = reverse('devices:opc_ua_gds_push_certificate_lifecycle_management', kwargs={'pk': device.pk})
+        response = admin_client.get(url)
+        
+        assert response.status_code == 200
+        assert 'main_url' in response.context
+        assert response.context['main_url'] == 'devices:devices'
+
+
+@pytest.mark.django_db
 class TestDeviceTableFiltering:
     """Test device table filtering functionality."""
     
@@ -255,7 +279,7 @@ class TestDeviceCreateOnboardingProtocols:
         """Test creating device with MANUAL onboarding protocol."""
         domain = domain_instance['domain']
         
-        from devices.models import OnboardingProtocol
+        from onboarding.models import OnboardingProtocol
         
         post_data = {
             'common_name': 'manual-onboarding-device',

@@ -118,11 +118,10 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                 {'error': f'Signer with ID {signer_id} does not exist'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        except Exception as e:
+        except Exception:
             self.logger.exception('Failed to sign hash with signer %s', signer_id)
-            error_msg = f'Failed to sign hash: {e!s}'
             return Response(
-                {'error': error_msg},
+                {'error': 'Failed to sign hash'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
@@ -168,11 +167,10 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                 {'error': f'Signer with ID {pk} does not exist'},
                 status=status.HTTP_404_NOT_FOUND
             )
-        except Exception as e:
+        except Exception:
             self.logger.exception('Failed to retrieve certificate for signer %s', pk)
-            error_msg = f'Failed to retrieve certificate: {e!s}'
             return Response(
-                {'error': error_msg},
+                {'error': 'Failed to retrieve certificate'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 

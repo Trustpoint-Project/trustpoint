@@ -1,12 +1,11 @@
 """This module contains all views concerning the PKI -> Truststore section."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, ClassVar, cast
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError, QuerySet
+from django.forms import Form
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
@@ -20,6 +19,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
 from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.oid import NameOid
@@ -39,11 +39,11 @@ from trustpoint.views.base import (
     SortableTableMixin,
 )
 
-if TYPE_CHECKING:
-    from typing import Any, ClassVar
-
-    from django.forms import Form
-    from rest_framework.request import Request
+# Import DeviceModel for runtime use
+try:
+    from devices.models import DeviceModel
+except ImportError:
+    DeviceModel = None  # type: ignore[assignment,misc]
 
 
 class TruststoresRedirectView(RedirectView):
@@ -113,6 +113,14 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
     template_name = 'pki/truststores/add/file_import.html'
     ignore_url = reverse_lazy('pki:truststores')
 
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Set context flags based on URL."""
+        if 'from-device' in request.path:
+            self.for_devid = True
+        else:
+            self.for_devid = False
+        return cast('HttpResponse',super().dispatch(request, *args, **kwargs))
+
     def form_valid(self, form: TruststoreAddForm) -> HttpResponseRedirect:
         """If the form is valid, redirect to Truststore overview."""
         truststore = form.cleaned_data['truststore']
@@ -125,6 +133,11 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
                     kwargs={'pk': domain_id, 'truststore_id': truststore.id},
                 )
             )
+
+        if getattr(self, 'for_devid', False):
+            # Use query parameter for truststore_id
+            url = reverse('pki:devid_registration_create')
+            return HttpResponseRedirect(f'{url}?truststore_id={truststore.id}')
 
         n_certificates = truststore.number_of_certificates
         msg_str = ngettext(

@@ -258,6 +258,7 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'home.apps.HomeConfig',
     'devices.apps.DevicesConfig',
+    'onboarding.apps.OnboardingConfig',
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',

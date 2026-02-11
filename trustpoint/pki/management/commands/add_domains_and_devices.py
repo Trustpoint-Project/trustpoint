@@ -8,13 +8,14 @@ import string
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
-from devices.models import DeviceModel, OnboardingConfigModel, NoOnboardingConfigModel
+from devices.models import DeviceModel
+from onboarding.models import OnboardingConfigModel, NoOnboardingConfigModel
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from management.models import KeyStorageConfig
 from pki.models import CaModel, DevIdRegistration, DomainModel, CaModel, TruststoreModel
 from pki.util.x509 import CertificateGenerator
-from devices.models import OnboardingPkiProtocol, NoOnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
+from onboarding.models import OnboardingPkiProtocol, NoOnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
 from signer.models import SignerModel
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
@@ -59,6 +60,8 @@ def get_random_onboarding_pki_protocols(
         A list of PkiProtocols.
     """
     protocols = list(OnboardingPkiProtocol)
+    if OnboardingPkiProtocol.OPC_GDS_PUSH in protocols:
+        protocols.remove(OnboardingPkiProtocol.OPC_GDS_PUSH)
     if include_protocol:
         protocols.remove(include_protocol)
     num_choices = secrets.randbelow(len(protocols)) + 1
@@ -115,7 +118,7 @@ def create_signer_for_domain(
 
     signer_cert, signer_key = CertificateGenerator.create_ee(
         issuer_private_key=issuing_ca_private_key,
-        issuer_cn=issuing_ca_cn,
+        issuer_name=issuing_ca_cert.subject,
         subject_name=f'Signer-{domain_name}',
         private_key=signer_key,
         extensions=[(digital_signature_extension, True)],
@@ -175,7 +178,10 @@ class Command(BaseCommand, LoggerMixin):
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Execute the command."""
-        call_command('create_multiple_test_issuing_cas')
+        if not CaModel.objects.filter(unique_name__startswith='issuing-ca').exists():
+            call_command('create_multiple_test_issuing_cas')
+        else:
+            self.log_and_stdout('Issuing CAs already exist, skipping creation.')
         call_command('import_idevid_truststores')
 
         data = {
@@ -248,6 +254,7 @@ class Command(BaseCommand, LoggerMixin):
         onboarding_protocols.remove(OnboardingProtocol.MANUAL)
         onboarding_protocols.remove(OnboardingProtocol.CMP_IDEVID)
         onboarding_protocols.remove(OnboardingProtocol.EST_IDEVID)
+        onboarding_protocols.remove(OnboardingProtocol.OPC_GDS_PUSH)
 
         self.log_and_stdout('Starting the process of adding domains and devices...\n')
 
@@ -304,6 +311,10 @@ class Command(BaseCommand, LoggerMixin):
             device_uses_onboarding = random.choice([True, False])  # noqa: S311
 
             for device_name in devices:
+
+                if DeviceModel.objects.filter(common_name=device_name).exists():
+                    self.log_and_stdout(f"Device '{device_name}' already exists, skipping.")
+                    continue
 
                 random_device_type = random.choice( # noqa: S311
                         [DeviceModel.DeviceType.GENERIC_DEVICE, DeviceModel.DeviceType.OPC_UA_GDS])

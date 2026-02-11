@@ -27,7 +27,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
         issuing_4, issuing_4_key = self.create_issuing_ca(issuing_3_key, 'Intermediate CA C', 'Intermediate CA D')
         issuing_5, issuing_5_key = self.create_issuing_ca(issuing_4_key, 'Intermediate CA D', 'Issuing CA')
 
-        ee_1, _ee_key = self.create_ee(issuing_5_key, 'Issuing CA', 'EE A1')
+        ee_1, _ee_key = self.create_ee(issuing_5_key, issuing_5.subject, 'EE A1')
 
         p12 = pkcs12.serialize_key_and_certificates(
             b'my p12',

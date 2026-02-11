@@ -37,9 +37,24 @@ class CertificateGenerator:
         validity_days: int = 7300,
         private_key: None | PrivateKey = None,
         hash_algorithm: None | HashAlgorithm = None,
+        path_length: int | None = None,
     ) -> tuple[x509.Certificate, PrivateKey]:
-        """Creates a root CA certificate for testing and AutoGenPKI."""
-        return CertificateGenerator.create_issuing_ca(None, cn, cn, private_key, validity_days, hash_algorithm)
+        """Creates a root CA certificate for testing and AutoGenPKI.
+
+        Args:
+            cn: Common name for the root CA.
+            validity_days: Validity period in days.
+            private_key: Private key to use. If None, generates new RSA-2048 key.
+            hash_algorithm: Hash algorithm to use for signing.
+            path_length: Maximum number of CA certificates that may follow this
+                        certificate. If None, defaults to 1.
+
+        Returns:
+            Tuple of (certificate, private_key).
+        """
+        return CertificateGenerator.create_issuing_ca(
+            None, cn, cn, private_key, validity_days, hash_algorithm, path_length
+        )
 
     @staticmethod
     def create_issuing_ca(  # noqa: PLR0913
@@ -49,8 +64,24 @@ class CertificateGenerator:
         private_key: None | PrivateKey = None,
         validity_days: int = 3650,
         hash_algorithm: None | HashAlgorithm = None,
+        path_length: int | None = None,
     ) -> tuple[x509.Certificate, PrivateKey]:
-        """Creates an issuing CA certificate + key pair."""
+        """Creates an issuing CA certificate + key pair.
+
+        Args:
+            issuer_private_key: Private key of the issuing CA. None for root CA.
+            issuer_cn: Common name of the issuer.
+            subject_cn: Common name of the subject.
+            private_key: Private key to use. If None, generates new RSA-2048 key.
+            validity_days: Validity period in days.
+            hash_algorithm: Hash algorithm to use for signing.
+            path_length: Maximum number of CA certificates that may follow this
+                        certificate in a valid certification path. If None, defaults
+                        to 1 for root CAs and 0 for intermediate CAs.
+
+        Returns:
+            Tuple of (certificate, private_key).
+        """
         one_day = datetime.timedelta(1, 0, 0)
         if private_key is None:
             private_key = rsa.generate_private_key(
@@ -74,6 +105,9 @@ class CertificateGenerator:
             x509.Name(
                 [
                     x509.NameAttribute(NameOID.COMMON_NAME, subject_cn),
+                    x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Trustpoint'),
+                    x509.NameAttribute(NameOID.COUNTRY_NAME, 'DE'),
+                    x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, 'Baden-Wuerttemberg'),
                 ]
             )
         )
@@ -81,6 +115,9 @@ class CertificateGenerator:
             x509.Name(
                 [
                     x509.NameAttribute(NameOID.COMMON_NAME, issuer_cn),
+                    x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Trustpoint'),
+                    x509.NameAttribute(NameOID.COUNTRY_NAME, 'DE'),
+                    x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, 'Baden-Wuerttemberg'),
                 ]
             )
         )
@@ -89,11 +126,14 @@ class CertificateGenerator:
         builder = builder.serial_number(x509.random_serial_number())
         builder = builder.public_key(public_key)
         is_root_ca = issuer_private_key == private_key
-        path_length = 1 if is_root_ca else 0
+
+        if path_length is None:
+            path_length = 1 if is_root_ca else 0
+
         builder = builder.add_extension(x509.BasicConstraints(ca=True, path_length=path_length), critical=True)
         builder = builder.add_extension(
             x509.KeyUsage(
-                digital_signature=False,
+                digital_signature=True,
                 content_commitment=False,
                 key_encipherment=False,
                 data_encipherment=False,
@@ -119,13 +159,25 @@ class CertificateGenerator:
     @staticmethod
     def create_ee(  # noqa: PLR0913
         issuer_private_key: PrivateKey,
-        issuer_cn: str,
+        issuer_name: x509.Name,
         subject_name: str | x509.Name,
         private_key: None | PrivateKey = None,
         extensions: list[tuple[x509.ExtensionType, bool]] | None = None,
         validity_days: int = 365,
     ) -> tuple[x509.Certificate, PrivateKey]:
-        """Creates a generic end entity certificate + key pair."""
+        """Creates a generic end entity certificate + key pair.
+
+        Args:
+            issuer_private_key: The private key of the issuer.
+            issuer_name: The full issuer Name (must be x509.Name to ensure proper certificate chain matching).
+            subject_name: The subject common name (str) or full subject Name.
+            private_key: The private key for the EE. If None, generates new RSA-2048 key.
+            extensions: List of (extension, critical) tuples to add.
+            validity_days: Validity period in days.
+
+        Returns:
+            Tuple of (certificate, private_key).
+        """
         one_day = datetime.timedelta(1, 0, 0)
         if private_key is None:
             private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -149,13 +201,7 @@ class CertificateGenerator:
             exc_msg = 'subject_name must be a string or x509.Name'
             raise TypeError(exc_msg)
 
-        builder = builder.issuer_name(
-            x509.Name(
-                [
-                    x509.NameAttribute(NameOID.COMMON_NAME, issuer_cn),
-                ]
-            )
-        )
+        builder = builder.issuer_name(issuer_name)
 
         builder = builder.not_valid_before(not_valid_before)
         builder = builder.not_valid_after(not_valid_after)
@@ -203,8 +249,9 @@ class CertificateGenerator:
         if (chain_depth == 0):
             # Create a self-signed EE
             ee_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            ee_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Test End Entity')])
             cert, _key = CertificateGenerator.create_ee(
-                ee_key, 'Test End Entity', 'Test End Entity', ee_key, ee_extensions)
+                ee_key, ee_name, 'Test End Entity', ee_key, ee_extensions)
             return ([cert], [ee_key])
 
         certs = []
@@ -213,19 +260,20 @@ class CertificateGenerator:
         certs.append(root_cert)
         keys.append(root_key)
         parent_key = root_key
-        parent_cn = 'Test Root CA'
+        parent_cert = root_cert
         for i in range(chain_depth - 1):
             ca_cn = f'Test Intermediate CA {i + 1}'
+            parent_cn = str(parent_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value)
             (cert, key) = CertificateGenerator.create_issuing_ca(
                 parent_key, parent_cn, ca_cn
             )
             parent_key = key
-            parent_cn = ca_cn
+            parent_cert = cert
             certs.append(cert)
             keys.append(key)
 
         (cert, key) = CertificateGenerator.create_ee(
-            parent_key, parent_cn, 'Test End Entity', None, ee_extensions
+            parent_key, parent_cert.subject, 'Test End Entity', None, ee_extensions
         )
         certs.append(cert)
         keys.append(key)
