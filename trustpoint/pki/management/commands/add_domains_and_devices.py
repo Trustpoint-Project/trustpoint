@@ -8,13 +8,14 @@ import string
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
-from devices.models import DeviceModel, OnboardingConfigModel, NoOnboardingConfigModel
+from devices.models import DeviceModel
+from onboarding.models import OnboardingConfigModel, NoOnboardingConfigModel
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 from management.models import KeyStorageConfig
 from pki.models import CaModel, DevIdRegistration, DomainModel, CaModel, TruststoreModel
 from pki.util.x509 import CertificateGenerator
-from devices.models import OnboardingPkiProtocol, NoOnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
+from onboarding.models import OnboardingPkiProtocol, NoOnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
 from signer.models import SignerModel
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 

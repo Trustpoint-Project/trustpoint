@@ -10,7 +10,6 @@ from devices.forms import (
     OnboardingCreateForm,
     OpcUaGdsPushCreateForm,
     OpcUaGdsPushTruststoreAssociationForm,
-    OpcUaGdsPushTruststoreMethodSelectForm,
     RevokeIssuedCredentialForm,
     RevokeDevicesForm,
     DeleteDevicesForm,
@@ -190,7 +189,7 @@ class TestOnboardingCreateForm:
         domain = device_instance['domain']
         
         # Import OnboardingPkiProtocol for the correct enum
-        from devices.models import OnboardingPkiProtocol
+        from onboarding.models import OnboardingPkiProtocol
         
         form_data = {
             'common_name': 'onboarding-device',
@@ -210,7 +209,7 @@ class TestOnboardingCreateForm:
         domain = device_instance['domain']
         
         # Import OnboardingPkiProtocol for the correct enum
-        from devices.models import OnboardingPkiProtocol
+        from onboarding.models import OnboardingPkiProtocol
         
         form_data = {
             'common_name': device.common_name,  # Duplicate name
@@ -230,7 +229,7 @@ class TestOnboardingCreateForm:
         domain = device_instance['domain']
         
         # Import OnboardingPkiProtocol for the correct enum
-        from devices.models import OnboardingPkiProtocol
+        from onboarding.models import OnboardingPkiProtocol
         
         form_data = {
             'common_name': 'onboard-saved-device',
@@ -255,7 +254,7 @@ class TestOnboardingCreateForm:
         domain = device_instance['domain']
         
         # Import OnboardingPkiProtocol for the correct enum
-        from devices.models import OnboardingPkiProtocol
+        from onboarding.models import OnboardingPkiProtocol
         
         form_data = {
             'common_name': 'cmp-onboard-device',
@@ -278,7 +277,7 @@ class TestOnboardingCreateForm:
         domain = device_instance['domain']
         
         # Import OnboardingPkiProtocol for the correct enum
-        from devices.models import OnboardingPkiProtocol
+        from onboarding.models import OnboardingPkiProtocol
         
         form_data = {
             'common_name': 'est-onboard-device',
@@ -494,46 +493,3 @@ class TestOpcUaGdsPushTruststoreAssociationForm:
 
         device.refresh_from_db()
         assert device.onboarding_config.opc_trust_store == truststore
-
-
-class TestOpcUaGdsPushTruststoreMethodSelectForm:
-    """Tests for OpcUaGdsPushTruststoreMethodSelectForm."""
-
-    def test_form_initialization(self) -> None:
-        """Test form initialization."""
-        form = OpcUaGdsPushTruststoreMethodSelectForm()
-
-        assert 'method_select' in form.fields
-        assert form.fields['method_select'].required is True
-        assert form.fields['method_select'].initial == 'select_truststore'
-
-    def test_form_choices(self) -> None:
-        """Test that form has correct choices."""
-        form = OpcUaGdsPushTruststoreMethodSelectForm()
-
-        expected_choices = [
-            ('upload_truststore', 'Upload a new truststore prior to association'),
-            ('select_truststore', 'Use an existing truststore for association'),
-        ]
-
-        assert list(form.fields['method_select'].choices) == expected_choices
-
-    def test_valid_form_data(self) -> None:
-        """Test form with valid data."""
-        form_data = {
-            'method_select': 'upload_truststore',
-        }
-
-        form = OpcUaGdsPushTruststoreMethodSelectForm(data=form_data)
-        assert form.is_valid()
-        assert form.cleaned_data['method_select'] == 'upload_truststore'
-
-    def test_invalid_choice(self) -> None:
-        """Test form with invalid choice."""
-        form_data = {
-            'method_select': 'invalid_choice',
-        }
-
-        form = OpcUaGdsPushTruststoreMethodSelectForm(data=form_data)
-        assert not form.is_valid()
-        assert 'method_select' in form.errors

@@ -5,7 +5,8 @@ from typing import Any
 import pytest
 
 from devices.forms import NoOnboardingCreateForm
-from devices.models import DeviceModel, OnboardingStatus
+from devices.models import DeviceModel
+from onboarding.models import OnboardingStatus
 
 
 @pytest.mark.django_db
