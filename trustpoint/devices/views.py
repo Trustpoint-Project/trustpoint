@@ -28,7 +28,7 @@ from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
-from drf_spectacular.utils import extend_schema  # type: ignore[import-untyped]
+from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
 from trustpoint_core.archiver import Archiver
 from trustpoint_core.serializer import CredentialFileFormat
