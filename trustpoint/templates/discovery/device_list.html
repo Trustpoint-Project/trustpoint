@@ -13,60 +13,83 @@
         <h1 class="h3 fw-bold mb-0">Network Discovery</h1>
         <div class="d-flex gap-2 align-items-center">
             {% if scan_running %}
-                <a href="{% url 'discovery:stop_scan' %}" class="btn btn-danger btn-sm">
-                    <i class="fa-solid fa-stop me-1"></i> Stop Scanning
-                </a>
-                <span class="badge bg-warning text-dark px-3 py-2">
-                    Scanning Active
+                <span class="badge bg-warning text-dark px-3 py-2 shadow-sm">
+                    <i class="fa-solid fa-spinner fa-spin me-1"></i> Scanning Active
                 </span>
             {% else %}
-                <span class="badge bg-success px-3 py-2">
-                    System Ready
+                <span class="badge bg-success px-3 py-2 shadow-sm">
+                    <i class="fa-solid fa-check-circle me-1"></i> System Ready
                 </span>
             {% endif %}
         </div>
     </div> 
 
-    <!-- Stats Section -->
+    <!-- Stats Section (Card-based ✅) -->
     <div class="row mb-4">
         <div class="col-md-4">
-            <div class="card p-3 border-start border-4 border-primary shadow-sm">
-                <h6>Total Assets</h6>
-                <h2 class="fw-bold">{{ stats.total }}</h2>
+            <div class="card p-3 border-0 border-start border-4 border-primary shadow-sm" style="background: rgba(255,255,255,0.05);">
+                <h6 class="text-muted small fw-bold">Total Assets</h6>
+                <h2 class="fw-bold mb-0">{{ stats.total }}</h2>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card p-3 border-start border-4 border-info shadow-sm">
-                <h6>Industrial / OT</h6>
-                <h2 class="fw-bold">{{ stats.industrial }}</h2>
+            <div class="card p-3 border-0 border-start border-4 border-info shadow-sm" style="background: rgba(255,255,255,0.05);">
+                <h6 class="text-muted small fw-bold">Industrial / OT</h6>
+                <h2 class="fw-bold mb-0">{{ stats.industrial }}</h2>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card p-3 border-start border-4 border-warning shadow-sm">
-                <h6>Security Risks</h6>
-                <h2 class="fw-bold">{{ stats.risks }}</h2>
+            <div class="card p-3 border-0 border-start border-4 border-warning shadow-sm" style="background: rgba(255,255,255,0.05);">
+                <h6 class="text-muted small fw-bold">Security Risks</h6>
+                <h2 class="fw-bold mb-0">{{ stats.risks }}</h2>
             </div>
         </div>
     </div>
 
-    <!-- Search/Scan Bar -->
-    <div class="card p-4 mb-4 shadow-sm border-0">
-        <form action="{% url 'discovery:start_scan' %}" method="post" class="row g-3 align-items-center">
+    <!-- SCAN CONTROL CARD (Fixed for IP Range 🔴 and IP Persistence ✅) -->
+    <div class="card p-4 mb-4 shadow-sm border-0" style="background: rgba(255,255,255,0.05);">
+        <form action="{% url 'discovery:start_scan' %}" method="post" class="row g-3 align-items-end">
             {% csrf_token %}
-            <div class="col-auto"><label class="fw-bold">Target Network:</label></div>
-            <div class="col-auto">
-                <input type="text" name="cidr" class="form-control" value="{{ cidr }}" {% if scan_running %}disabled{% endif %}>
+            
+            <div class="col-md-3">
+                <label class="form-label text-muted small fw-bold">Start IP Address</label>
+                <input type="text" name="start_ip" class="form-control border-secondary bg-transparent text-white" 
+                       value="{{ start_ip|default:'192.168.1.1' }}" {% if scan_running %}disabled{% endif %}>
             </div>
-            <div class="col-auto">
-                <button type="submit" class="btn btn-primary" {% if scan_running %}disabled{% endif %}>
-                    <i class="fa-solid fa-play me-1"></i> Run Scan
-                </button>
+
+            <div class="col-md-3">
+                <label class="form-label text-muted small fw-bold">End IP Address</label>
+                <input type="text" name="end_ip" class="form-control border-secondary bg-transparent text-white" 
+                       value="{{ end_ip|default:'192.168.1.254' }}" {% if scan_running %}disabled{% endif %}>
+            </div>
+
+            <div class="col-md-6">
+                <div class="d-flex gap-2">
+                    {% if scan_running %}
+                        <!-- STOP SCAN BUTTON (Requirement ✅) -->
+                        <button class="btn btn-warning w-100 fw-bold" disabled>
+                            <i class="fa-solid fa-sync fa-spin me-2"></i>Scanning...
+                        </button>
+                        <a href="{% url 'discovery:stop_scan' %}" class="btn btn-danger px-4" title="Stop Scan">
+                            <i class="fa-solid fa-stop"></i>
+                        </a>
+                    {% else %}
+                        <!-- RUN SCAN BUTTON -->
+                        <button type="submit" class="btn btn-primary w-100 fw-bold">
+                            <i class="fa-solid fa-play me-2"></i>Run Scan
+                        </button>
+                        <!-- CLEAN BUTTON (Requirement 🔴) -->
+                        <a href="{% url 'discovery:clear_devices' %}" class="btn btn-outline-danger px-4" title="Clean Inventory">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </a>
+                    {% endif %}
+                </div>
             </div>
         </form>
     </div>
 
-    <!-- Results Table -->
-    <div class="card shadow-sm border-0">
+    <!-- Results Table (Card-based 🔴) -->
+    <div class="card shadow-sm border-0" style="background: rgba(255,255,255,0.05);">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center border-0 pt-4">
             <h5 class="mb-0 fw-bold">Discovered Assets</h5>
             {% if devices %}
@@ -80,11 +103,11 @@
             <table class="table table-hover mb-0">
                 <thead>
                     <tr>
-                        <th class="ps-4">IP Address</th>
-                        <th>Hostname</th>
-                        <th>Ports</th>
-                        <th>SSL Status</th>
-                        <th class="text-end pe-4">Actions</th>
+                        <th class="ps-4 text-muted small text-uppercase">IP Address</th>
+                        <th class="text-muted small text-uppercase">Hostname</th>
+                        <th class="text-muted small text-uppercase">Ports</th>
+                        <th class="text-muted small text-uppercase">SSL Status</th>
+                        <th class="text-end pe-4 text-muted small text-uppercase">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -95,15 +118,19 @@
                         </td>
                         <td>{{ d.hostname|default:"-" }}</td>
                         <td>
-                            {% for p in d.open_ports %}
-                                <span class="badge bg-secondary me-1">{{ p }}</span>
+                            {% for port in d.open_ports %}
+                                <span class="badge bg-secondary me-1">{{ port }}</span>
                             {% endfor %}
                         </td>
                         <td>
                             {% if d.certificate_record.is_self_signed %}
-                                <span class="text-warning small"><i class="fa-solid fa-triangle-exclamation me-1"></i>Self-Signed</span>
+                                <span class="text-warning small fw-bold">
+                                    <i class="fa-solid fa-triangle-exclamation me-1"></i>Self-Signed
+                                </span>
                             {% elif d.certificate_record %}
-                                <span class="text-success small"><i class="fa-solid fa-certificate me-1"></i>PKI Linked</span>
+                                <span class="text-success small fw-bold">
+                                    <i class="fa-solid fa-certificate me-1"></i>PKI Linked
+                                </span>
                             {% else %}
                                 <span class="text-muted small">None</span>
                             {% endif %}
@@ -114,7 +141,10 @@
                     </tr>
                     {% empty %}
                         <tr>
-                            <td colspan="5" class="text-center p-4 text-muted">No assets discovered yet. Run a scan to begin.</td>
+                            <td colspan="5" class="text-center p-5">
+                                <i class="fa-solid fa-network-wired fs-1 text-muted mb-3 d-block"></i>
+                                <p class="text-muted">No assets discovered yet. Define a range and run a scan to begin.</p>
+                            </td>
                         </tr>
                     {% endfor %}
                 </tbody>
@@ -122,4 +152,4 @@
         </div>
     </div>
 </div>
-{% endblock %} 
+{% endblock %}
