@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import Any, ClassVar, NoReturn, cast
 
 from cryptography import x509
@@ -26,7 +25,6 @@ from pki.models import CaModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.truststore import TruststoreModel
-from pki.util.x509 import CertificateGenerator
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
 from util.validation import ValidationError as UtilValidationError

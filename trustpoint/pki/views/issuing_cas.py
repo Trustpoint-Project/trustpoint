@@ -380,7 +380,7 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         context = super().get_context_data(**kwargs)
         issuing_ca = self.get_object()
         if issuing_ca.credential and issuing_ca.credential.certificate:
-            credential = cast('CredentialModel', issuing_ca.credential)
+            credential = issuing_ca.credential
             issuer_public_bytes = credential.certificate_or_error.subject_public_bytes
             issued_certificates = CertificateModel.objects.filter(issuer_public_bytes=issuer_public_bytes)
         else:
