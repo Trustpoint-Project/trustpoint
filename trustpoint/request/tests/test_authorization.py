@@ -1,5 +1,5 @@
 """Tests for authorization components."""
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 from devices.models import DeviceModel
@@ -167,7 +167,7 @@ class TestCertificateProfileAuthorization:
         """Test successful certificate template authorization."""
         auth = CertificateProfileAuthorization()
 
-        context = Mock(spec=BaseCertificateRequestContext)
+        context = MagicMock(spec=BaseCertificateRequestContext)
         context.cert_profile_str = 'domain_credential'
         context.domain = domain_instance['domain']
 
@@ -178,7 +178,7 @@ class TestCertificateProfileAuthorization:
         """Test certificate profile authorization failure with invalid profile."""
         auth = CertificateProfileAuthorization()
 
-        context = Mock(spec=BaseCertificateRequestContext)
+        context = MagicMock(spec=BaseCertificateRequestContext)
         context.cert_profile_str = 'invalid_profile'
         context.domain = domain_instance['domain']
 
@@ -204,7 +204,7 @@ class TestCertificateProfileAuthorization:
         """Test certificate profile authorization failure with empty profile string."""
         auth = CertificateProfileAuthorization()
 
-        context = Mock(spec=BaseCertificateRequestContext)
+        context = MagicMock(spec=BaseCertificateRequestContext)
         context.cert_profile_str = ''
 
         with pytest.raises(ValueError) as exc_info:
@@ -215,7 +215,7 @@ class TestCertificateProfileAuthorization:
     def test_cert_profile_str_authorization_alias(self, domain_instance, cert_profile_instance) -> None:
         """Test certificate profile authorization with single allowed profile."""
         auth = CertificateProfileAuthorization()
-        context = Mock(spec=BaseCertificateRequestContext)
+        context = MagicMock(spec=BaseCertificateRequestContext)
         context.cert_profile_str = 'test_profile_alias' # Using alias for profile 'domain_credential'
         context.domain = domain_instance['domain']
 
@@ -501,7 +501,7 @@ class TestEstAuthorization:
         auth = EstAuthorization()
 
         # Create a context that should pass all authorization checks
-        context = Mock(spec=EstCertificateRequestContext)
+        context = MagicMock(spec=EstCertificateRequestContext)
         context.protocol = 'est'
         context.operation = 'simpleenroll'
         context.cert_profile_str = 'tls_server'
@@ -517,7 +517,7 @@ class TestEstAuthorization:
         """Test EST authorization failure due to wrong protocol."""
         auth = EstAuthorization()
 
-        context = Mock(spec=EstCertificateRequestContext)
+        context = MagicMock(spec=EstCertificateRequestContext)
         context.protocol = 'cmp'  # Wrong protocol
         context.operation = 'simpleenroll'
         context.cert_profile_str = 'tls_server'
@@ -534,7 +534,7 @@ class TestEstAuthorization:
         """Test EST authorization failure due to wrong operation."""
         auth = EstAuthorization()
 
-        context = Mock(spec=EstCertificateRequestContext)
+        context = MagicMock(spec=EstCertificateRequestContext)
         context.protocol = 'est'
         context.operation = 'invalid_operation'  # Wrong operation
         context.cert_profile_str = 'tls_server'
