@@ -326,7 +326,7 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
             msg = 'No TLS server certificate available. Are you on the development server?'
             raise Http404(msg)
 
-        tls_server_certificate = tls_cert.credential.certificate.get_certificate_serializer()
+        tls_server_certificate = tls_cert.credential.certificate_or_error.get_certificate_serializer()
 
         file_bytes = tls_server_certificate.as_pem()
 

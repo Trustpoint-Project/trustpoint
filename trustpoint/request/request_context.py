@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 
     from cmp.util import PKIFailureInfo
     from devices.models import DeviceModel, IssuedCredentialModel
-    from pki.models import CertificateProfileModel, CredentialModel, DomainModel
+    from pki.models import CertificateProfileModel, CredentialModel, DomainModel, TruststoreModel
     from workflows.events import Event
     from workflows.models import EnrollmentRequest
 
@@ -101,6 +101,13 @@ class BaseCertificateRequestContext(BaseRequestContext):
 
     certificate_profile_model: CertificateProfileModel | None = None
 
+    # Flag to allow CA certificate requests (e.g., for Issuing CA certificate enrollment)
+    allow_ca_certificate_request: bool = False
+
+    # Request data for building CSR
+    request_data: dict[str, Any] | None = None
+    validated_request_data: dict[str, Any] | None = None
+
     # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
     enrollment_request: EnrollmentRequest | None = None
     event: Event | None = None
@@ -127,12 +134,22 @@ class HttpBaseRequestContext(BaseRequestContext):
 
 @dataclass(kw_only=True)
 class EstBaseRequestContext(HttpBaseRequestContext):
-    """Shared context for all EST requests."""
+    """Shared context for all EST requests.
+
+    Supports both EST server functionality (receiving requests) and EST client
+    functionality (sending requests to external EST servers).
+    """
+    # Server-side fields
     parsed_message: CertificateSigningRequest | None = None
     est_encoding: str | None = None
     est_username: str | None = None
     est_password: str | None = None
 
+    # Client-side fields
+    est_server_host: str | None = None
+    est_server_port: int | None = None
+    est_server_path: str | None = None
+    est_server_truststore: TruststoreModel | None = None
 
 @dataclass(kw_only=True)
 class CmpBaseRequestContext(HttpBaseRequestContext):

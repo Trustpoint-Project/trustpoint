@@ -1,0 +1,96 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% block content %}
+    <div class="card tp-card-centered">
+        <div class="card-header">
+            <h2>{% trans 'Request CA Certificate via CMP' %}</h2>
+        </div>
+
+        <div class="card-body">
+
+            <div class="tp-kvp-list">
+                <div>
+                    <div>{% trans 'CA Name' %}</div>
+                    <div>{{ issuing_ca.unique_name }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'CA Type' %}</div>
+                    <div>{{ issuing_ca.get_ca_type_display }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Remote Host' %}</div>
+                    <div>{{ issuing_ca.remote_host }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Remote Port' %}</div>
+                    <div>{{ issuing_ca.remote_port }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Remote Path' %}</div>
+                    <div>{{ issuing_ca.remote_path }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Trust Store' %}</div>
+                    <div>
+                        {% if issuing_ca.no_onboarding_config.trust_store %}
+                            <a href="{% url 'pki:truststore-detail' pk=issuing_ca.no_onboarding_config.trust_store.pk %}">{{ issuing_ca.no_onboarding_config.trust_store.unique_name }}</a>
+                        {% else %}
+                            <span class="text-muted">{% trans 'Not configured' %}</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+            </div>
+
+            {% if has_cert_content %}
+            <div class="alert alert-info mt-3" role="alert">
+                <h5>{% trans 'Certificate Content Summary' %}</h5>
+
+                {% if cert_content_summary.subject %}
+                <h6 class="mt-2">{% trans 'Subject:' %}</h6>
+                <ul>
+                    {% for label, value in cert_content_summary.subject.items %}
+                        <li><strong>{{ label }}:</strong> {{ value }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                {% if cert_content_summary.san %}
+                <h6 class="mt-2">{% trans 'Subject Alternative Names:' %}</h6>
+                <ul>
+                    {% for label, value in cert_content_summary.san.items %}
+                        <li><strong>{{ label }}:</strong> {{ value }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+
+                <h6 class="mt-2">{% trans 'Validity Period:' %}</h6>
+                <p>{{ cert_content_summary.validity }}</p>
+            </div>
+            {% else %}
+            <div class="alert alert-warning mt-3" role="alert">
+                <strong>{% trans 'Note:' %}</strong> {% trans 'No certificate content has been defined yet. Please go back and define the certificate content first.' %}
+            </div>
+            {% endif %}
+
+            <div class="alert alert-warning mt-3" role="alert">
+                <strong>{% trans 'Note:' %}</strong> {% trans 'CMP certificate request client implementation is pending.' %}
+            </div>
+        </div>
+
+        <div class="card-footer d-flex justify-content-between">
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                {% if has_cert_content %}
+                <a href="{% url 'pki:issuing_cas-define-cert-content-cmp' pk=issuing_ca.pk %}" class="btn btn-outline-secondary">{% trans 'Edit Certificate Content' %}</a>
+                {% endif %}
+            </div>
+            <div class="tp-card-btn-footer m-1">
+                <form method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary" {% if not has_cert_content %}disabled{% endif %}>{% trans 'Request CA Certificate' %}</button>
+                </form>
+            </div>
+        </div>
+    </div>
+{% endblock content %}

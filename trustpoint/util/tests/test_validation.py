@@ -8,8 +8,8 @@ from unittest.mock import patch
 from util.validation import (
     ValidationError,
     _is_ip_blocked,
-    _validate_webhook_hostname_and_ip,
-    _validate_webhook_port,
+    _validate_hostname_and_ip,
+    _validate_port,
     _validate_webhook_scheme_and_host,
     validate_application_uri,
     validate_common_name_characters,
@@ -237,7 +237,7 @@ class TestValidateWebhookPort:
         ]
         for url in valid_urls:
             parsed = urlparse(url)
-            _validate_webhook_port(parsed)
+            _validate_port(parsed)
 
     def test_dangerous_ports(self):
         """Test that dangerous ports are blocked."""
@@ -247,7 +247,7 @@ class TestValidateWebhookPort:
             url = f'https://example.com:{port}/webhook'
             parsed = urlparse(url)
             with pytest.raises(ValidationError):
-                _validate_webhook_port(parsed)
+                _validate_port(parsed)
 
     def test_invalid_ports(self):
         """Test that invalid port numbers fail validation."""
@@ -259,7 +259,7 @@ class TestValidateWebhookPort:
         for url in invalid_urls:
             parsed = urlparse(url)
             with pytest.raises(ValidationError):
-                _validate_webhook_port(parsed)
+                _validate_port(parsed)
 
 
 class TestValidateWebhookHostnameAndIp:
@@ -276,7 +276,7 @@ class TestValidateWebhookHostnameAndIp:
         ]
         for host in blocked_hosts:
             with pytest.raises(ValidationError):
-                _validate_webhook_hostname_and_ip(host)
+                _validate_hostname_and_ip(host)
 
     @patch('socket.getaddrinfo')
     def test_blocked_ip_resolution(self, mock_getaddrinfo):
@@ -290,14 +290,14 @@ class TestValidateWebhookHostnameAndIp:
                 (socket.AF_INET, socket.SOCK_STREAM, 6, '', (ip_str, 443))
             ]
             with pytest.raises(ValidationError):
-                _validate_webhook_hostname_and_ip('example.com')
+                _validate_hostname_and_ip('example.com')
 
     @patch('socket.getaddrinfo')
     def test_dns_resolution_error(self, mock_getaddrinfo):
         """Test that DNS resolution failures are handled."""
         mock_getaddrinfo.side_effect = socket.gaierror("Name resolution failure")
         with pytest.raises(ValidationError):
-            _validate_webhook_hostname_and_ip('nonexistent.example.com')
+            _validate_hostname_and_ip('nonexistent.example.com')
 
     @patch('socket.getaddrinfo')
     def test_valid_hostname(self, mock_getaddrinfo):
@@ -306,4 +306,4 @@ class TestValidateWebhookHostnameAndIp:
             (socket.AF_INET, socket.SOCK_STREAM, 6, '', ('8.8.8.8', 443))
         ]
         # Should not raise
-        _validate_webhook_hostname_and_ip('example.com')
+        _validate_hostname_and_ip('example.com')
