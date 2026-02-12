@@ -239,7 +239,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
         if self.credential.certificate is None:
-            return '(Certificate pending)'
+            return f'{self.unique_name} (Certificate pending)'
         return self.credential.certificate_or_error.common_name
 
     @property

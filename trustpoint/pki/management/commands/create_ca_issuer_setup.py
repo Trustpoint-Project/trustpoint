@@ -26,9 +26,9 @@ from .base_commands import CertificateCreationCommandMixin
 
 
 class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
-    """Creates an issuing CA, domain, and device for CA issuer."""
+    """Creates an issuing CA, domain, and devices for CA issuer."""
 
-    help = 'Creates RSA 2048 issuing CA "ca_issuer", domain, and device "CA Issuer - no onboarding" with CMP and EST enabled.'
+    help = 'Creates RSA 2048 issuing CA "ca_issuer", domain, and separate devices for EST and CMP protocols.'
 
     def _create_temp_credential(self) -> CredentialModel:
         """Create and return a temporary credential for the remote CA."""
@@ -40,14 +40,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
 
         private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info)
 
-        temp_cert, _ = CertificateGenerator.create_root_ca(
-            cn=f'Temp-{uuid.uuid4()}',
-            validity_days=1,
-            private_key=private_key
-        )
-
         cred_serializer = CredentialSerializer(
-            certificate=temp_cert,
             private_key=private_key,
             additional_certificates=[]
         )
@@ -104,36 +97,58 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             domain.save()
             self.log_and_stdout('Updated domain "ca_issuer".')
 
-        # Create device
-        device = None
-        if DeviceModel.objects.filter(common_name='CA Issuer - no onboarding').exists():
-            self.log_and_stdout('Device "CA Issuer - no onboarding" already exists.')
-            device = DeviceModel.objects.get(common_name='CA Issuer - no onboarding')
+        # Create EST device
+        est_device = None
+        if DeviceModel.objects.filter(common_name='CA Issuer - EST').exists():
+            self.log_and_stdout('Device "CA Issuer - EST" already exists.')
+            est_device = DeviceModel.objects.get(common_name='CA Issuer - EST')
         else:
-            no_onboarding_config = NoOnboardingConfigModel()
-            no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.CMP_SHARED_SECRET, NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD])
-            no_onboarding_config.cmp_shared_secret = 'foo123'
-            no_onboarding_config.est_password = 'foo123'
-            no_onboarding_config.full_clean()
-            no_onboarding_config.save()
+            est_no_onboarding_config = NoOnboardingConfigModel()
+            est_no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD])
+            est_no_onboarding_config.est_password = 'foo123'
+            est_no_onboarding_config.full_clean()
+            est_no_onboarding_config.save()
 
-            device = DeviceModel(
-                common_name='CA Issuer - no onboarding',
-                serial_number='CAISSUER001',
+            est_device = DeviceModel(
+                common_name='CA Issuer - EST',
+                serial_number='CAISSUER-EST-001',
                 domain=domain,
                 device_type=DeviceModel.DeviceType.GENERIC_DEVICE,
-                no_onboarding_config=no_onboarding_config
+                no_onboarding_config=est_no_onboarding_config
             )
-            device.full_clean()
-            device.save()
-            self.log_and_stdout('Created device "CA Issuer - no onboarding".')
+            est_device.full_clean()
+            est_device.save()
+            self.log_and_stdout('Created device "CA Issuer - EST".')
 
-        # Create remote issuing CA
-        if CaModel.objects.filter(unique_name='Remote issued CA - EST').exists():
-            self.log_and_stdout('Remote issuing CA "Remote issued CA - EST" already exists.')
-            remote_ca = CaModel.objects.get(unique_name='Remote issued CA - EST')
+        # Create CMP device
+        cmp_device = None
+        if DeviceModel.objects.filter(common_name='CA Issuer - CMP').exists():
+            self.log_and_stdout('Device "CA Issuer - CMP" already exists.')
+            cmp_device = DeviceModel.objects.get(common_name='CA Issuer - CMP')
+        else:
+            cmp_no_onboarding_config = NoOnboardingConfigModel()
+            cmp_no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.CMP_SHARED_SECRET])
+            cmp_no_onboarding_config.cmp_shared_secret = 'foo123'
+            cmp_no_onboarding_config.full_clean()
+            cmp_no_onboarding_config.save()
+
+            cmp_device = DeviceModel(
+                common_name='CA Issuer - CMP',
+                serial_number='CAISSUER-CMP-001',
+                domain=domain,
+                device_type=DeviceModel.DeviceType.GENERIC_DEVICE,
+                no_onboarding_config=cmp_no_onboarding_config
+            )
+            cmp_device.full_clean()
+            cmp_device.save()
+            self.log_and_stdout('Created device "CA Issuer - CMP".')
+
+        # Create remote issuing CA for EST
+        if CaModel.objects.filter(unique_name='EST-issued-CA').exists():
+            self.log_and_stdout('Remote issuing CA "EST-issued-CA" already exists.')
+            remote_ca_est = CaModel.objects.get(unique_name='EST-issued-CA')
             # Update trust_store if not set
-            if remote_ca.no_onboarding_config and not remote_ca.no_onboarding_config.trust_store:
+            if remote_ca_est.no_onboarding_config and not remote_ca_est.no_onboarding_config.trust_store:
                 # Get or create truststore
                 tls_cert = None
                 if DOCKER_CONTAINER:
@@ -174,8 +189,8 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                         truststore.certificates.add(tls_cert, through_defaults={'order': max_order + 1})
                         self.log_and_stdout('Updated TLS truststore.')
 
-                remote_ca.no_onboarding_config.trust_store = truststore
-                remote_ca.no_onboarding_config.save()
+                remote_ca_est.no_onboarding_config.trust_store = truststore
+                remote_ca_est.no_onboarding_config.save()
                 self.log_and_stdout('Updated no-onboarding config with TLS truststore.')
         else:
             # Get TLS certificate
@@ -218,27 +233,95 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                     truststore.certificates.add(tls_cert, through_defaults={'order': max_order + 1})
                     self.log_and_stdout('Updated TLS truststore.')
 
-            # Update the no_onboarding_config to use the truststore for server verification
-            device.no_onboarding_config.trust_store = truststore
-            device.no_onboarding_config.save()
-            self.log_and_stdout('Updated no-onboarding config with TLS truststore.')
+            # Update the EST device's no_onboarding_config to use the truststore for server verification
+            est_device.no_onboarding_config.trust_store = truststore
+            est_device.no_onboarding_config.save()
+            self.log_and_stdout('Updated EST device no-onboarding config with TLS truststore.')
 
-            remote_ca = CaModel(
-                unique_name='Remote issued CA - EST',
+            remote_ca_est = CaModel(
+                unique_name='EST-issued-CA',
                 ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_EST,
                 remote_host='localhost',
                 remote_port=443,
                 remote_path='/.well-known/est/ca_issuer/issuing_ca/simpleenroll',
-                est_username=device.common_name,
-                no_onboarding_config=device.no_onboarding_config,
+                est_username=est_device.common_name,
+                no_onboarding_config=est_device.no_onboarding_config,
                 chain_truststore=truststore,
             )
             # Create a temporary credential for the remote CA
-            temp_credential = self._create_temp_credential()
-            remote_ca.credential = temp_credential
-            remote_ca.full_clean()
-            remote_ca.save()
-            self.log_and_stdout('Created remote issuing CA "Remote issued CA - EST".')
+            temp_credential_est = self._create_temp_credential()
+            remote_ca_est.credential = temp_credential_est
+            remote_ca_est.full_clean()
+            remote_ca_est.save()
+            self.log_and_stdout('Created remote issuing CA "EST-issued-CA".')
+
+        # Create remote issuing CA for CMP
+        if CaModel.objects.filter(unique_name='CMP-issued-CA').exists():
+            self.log_and_stdout('Remote issuing CA "CMP-issued-CA" already exists.')
+            remote_ca_cmp = CaModel.objects.get(unique_name='CMP-issued-CA')
+            # Update trust_store if not set
+            if remote_ca_cmp.no_onboarding_config and not remote_ca_cmp.no_onboarding_config.trust_store:
+                # For CMP, we need the Issuing CA certificate, not TLS cert
+                ca_issuer_cert = issuing_ca.credential.certificate if issuing_ca.credential else None
+                if ca_issuer_cert:
+                    cmp_truststore, created = TruststoreModel.objects.get_or_create(
+                        unique_name='cmp-ca-truststore',
+                        defaults={'intended_usage': TruststoreModel.IntendedUsage.TLS}
+                    )
+                    if created:
+                        cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': 0})
+                        self.log_and_stdout('Created CMP CA truststore.')
+                    else:
+                        if not cmp_truststore.certificates.filter(pk=ca_issuer_cert.pk).exists():
+                            max_order = cmp_truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
+                            cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': max_order + 1})
+                            self.log_and_stdout('Updated CMP CA truststore.')
+
+                    remote_ca_cmp.no_onboarding_config.trust_store = cmp_truststore
+                    remote_ca_cmp.no_onboarding_config.save()
+                    self.log_and_stdout('Updated CMP no-onboarding config with CA truststore.')
+                else:
+                    self.log_and_stdout('Issuing CA certificate not found for CMP truststore.', level='error')
+        else:
+            # Get the Issuing CA certificate for CMP truststore
+            ca_issuer_cert = issuing_ca.credential.certificate if issuing_ca.credential else None
+            if not ca_issuer_cert:
+                self.log_and_stdout('Issuing CA certificate not found for CMP truststore.', level='error')
+                return
+
+            cmp_truststore, created = TruststoreModel.objects.get_or_create(
+                unique_name='cmp-ca-truststore',
+                defaults={'intended_usage': TruststoreModel.IntendedUsage.TLS}
+            )
+            if created:
+                cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': 0})
+                self.log_and_stdout('Created CMP CA truststore.')
+            else:
+                if not cmp_truststore.certificates.filter(pk=ca_issuer_cert.pk).exists():
+                    max_order = cmp_truststore.truststoreordermodel_set.aggregate(models.Max('order'))['order__max'] or -1
+                    cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': max_order + 1})
+                    self.log_and_stdout('Updated CMP CA truststore.')
+
+            # Update the CMP device's no_onboarding_config to use the CA truststore
+            cmp_device.no_onboarding_config.trust_store = cmp_truststore
+            cmp_device.no_onboarding_config.save()
+            self.log_and_stdout('Updated CMP device no-onboarding config with CA truststore.')
+
+            remote_ca_cmp = CaModel(
+                unique_name='CMP-issued-CA',
+                ca_type=CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
+                remote_host='localhost',
+                remote_port=443,
+                remote_path='/.well-known/cmp/p/ca_issuer/issuing_ca/certification',
+                no_onboarding_config=cmp_device.no_onboarding_config,
+                chain_truststore=cmp_truststore,
+            )
+            # Create a temporary credential for the remote CMP CA
+            temp_credential_cmp = self._create_temp_credential()
+            remote_ca_cmp.credential = temp_credential_cmp
+            remote_ca_cmp.full_clean()
+            remote_ca_cmp.save()
+            self.log_and_stdout('Created remote issuing CA "CMP-issued-CA".')
 
     def log_and_stdout(self, message: str, level: str = 'info') -> None:
         """Log a message and write it to stdout."""
