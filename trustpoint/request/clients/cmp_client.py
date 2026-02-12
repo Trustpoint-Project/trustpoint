@@ -136,7 +136,7 @@ class CmpClient(LoggerMixin):
         # Get HMAC algorithm
         hmac_algorithm_oid = decoded_pbm['mac']['algorithm'].prettyPrint()
         try:
-            hmac_algorithm = HmacAlgorithm.from_oid(hmac_algorithm_oid)
+            hmac_algorithm = HmacAlgorithm.from_dotted_string(hmac_algorithm_oid)
         except Exception as exception:
             msg = f'Unsupported HMAC algorithm: {hmac_algorithm_oid}'
             raise CmpClientError(msg) from exception

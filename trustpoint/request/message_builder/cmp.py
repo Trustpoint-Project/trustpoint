@@ -501,18 +501,12 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
             + salt_der + owf_der + iteration_count_der + mac_der
         )
 
-        prot_alg = rfc5280.AlgorithmIdentifier()
+        prot_alg_idx = header.componentType.getPositionByName('protectionAlg')
+        prot_alg = header.componentType.getTypeByPosition(prot_alg_idx).clone()
         prot_alg['algorithm'] = univ.ObjectIdentifier(PBM_OID)
         prot_alg['parameters'] = univ.Any(value=pbm_der)
 
-        tagged_alg = rfc5280.AlgorithmIdentifier()
-        tagged_alg['algorithm'] = prot_alg['algorithm']
-        tagged_alg['parameters'] = prot_alg['parameters']
-        tagged_alg = tagged_alg.subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 1),
-        )
-
-        header['protectionAlg'] = tagged_alg
+        header['protectionAlg'] = prot_alg
 
         return header
 
