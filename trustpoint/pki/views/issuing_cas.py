@@ -46,7 +46,7 @@ from pki.serializer import IssuingCaSerializer
 from pki.util.cert_profile import ProfileValidationError
 from request.clients import EstClient, EstClientError
 from request.clients.cmp_client import CmpClient, CmpClientError
-from request.clients.cmp_message_builder import CmpCertificationRequest
+from request.message_builder.cmp import CmpMessageBuilder
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
 from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
 from request.request_context import CmpCertificateRequestContext, EstCertificateRequestContext
@@ -777,13 +777,6 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             raise ValueError(msg) from e
 
         # Build the CMP Certification Request message (CR) for Issuing CA certificate
-        cmp_request_builder = CmpCertificationRequest(
-            subject=csr_subject,
-            public_key=csr_public_key,
-            recipient_name=recipient_name,
-            extensions=csr_extensions,
-        )
-
         # Get the private key from the credential
         if not ca.credential or not ca.credential.private_key:
             msg = 'No private key available for CA credential'
@@ -794,12 +787,38 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             password=None,
         )
 
-        # Build the PKI message with POP and prepare for shared secret protection
-        pki_message = cmp_request_builder.build(
-            private_key=private_key,
-            add_pop=True,
-            prepare_shared_secret_protection=True,
+        # Build context for the CMP message builder
+        context = CmpCertificateRequestContext(
+            protocol='cmp',
+            operation='certification',
+            cmp_server_host=ca.remote_host,
+            cmp_server_port=ca.remote_port,
+            cmp_server_path=ca.remote_path,
+            cmp_shared_secret=(
+                ca.no_onboarding_config.cmp_shared_secret
+                if ca.no_onboarding_config else None
+            ),
+            cmp_server_truststore=(
+                ca.no_onboarding_config.trust_store
+                if ca.no_onboarding_config else None
+            ),
+            request_data={
+                'subject': csr_subject,
+                'public_key': csr_public_key,
+                'private_key': private_key,
+                'recipient_name': recipient_name,
+                'extensions': csr_extensions,
+                'use_initialization_request': False,
+                'add_pop': True,
+                'prepare_shared_secret_protection': True,
+            },
         )
+
+        # Build the PKI message using the composite builder
+        cmp_builder = CmpMessageBuilder()
+        cmp_builder.build(context)
+
+        pki_message = context.parsed_message
 
         # Send the CMP request
         cmp_client = CmpClient(context)
