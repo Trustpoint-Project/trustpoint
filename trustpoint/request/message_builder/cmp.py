@@ -427,17 +427,28 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
         that no certConf/PKIConfirm exchange is needed.  Its value is ASN.1 NULL
         (DER ``0x0500``).
 
+        We must obtain the ``generalInfo`` SequenceOf *schema* from the header's own
+        ``componentType`` so that the inner ``InfoTypeAndValue`` carries the correct
+        ``subtypeSpec`` constraints.  Using a standalone ``rfc4210.InfoTypeAndValue()``
+        would fail pyasn1's tag-compatibility check because the SequenceOf's
+        ``componentType`` has an additional ``ValueSizeConstraint(1, inf)``.
+
         Args:
             header: The PKI header to modify.
 
         Returns:
             The modified header with implicit confirm set.
         """
-        implicit_confirm = rfc4210.InfoTypeAndValue()
+        # Get the generalInfo SequenceOf schema from the header definition
+        general_info_idx = header.componentType.getPositionByName('generalInfo')
+        general_info = header.componentType.getTypeByPosition(general_info_idx).clone()
+
+        # Create the InfoTypeAndValue from the SequenceOf's own componentType
+        # so it inherits the correct subtypeSpec constraints.
+        implicit_confirm = general_info.componentType.clone()
         implicit_confirm['infoType'] = univ.ObjectIdentifier(IMPLICIT_CONFIRM_OID)
         implicit_confirm['infoValue'] = univ.Any(hexValue='0500')  # ASN.1 NULL
 
-        general_info = rfc4210.PKIHeader()['generalInfo'].clone()
         general_info.setComponentByPosition(0, implicit_confirm)
         header['generalInfo'] = general_info
 
