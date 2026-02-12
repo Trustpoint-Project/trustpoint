@@ -151,9 +151,9 @@ DOCKER_CONTAINER = False
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = not DOCKER_CONTAINER
 ADMIN_ENABLED = bool(DEBUG)
-DEVELOPMENT_ENV = True
+DEVELOPMENT_ENV = DEBUG
 
 
 
