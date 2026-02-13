@@ -1,129 +1,83 @@
-// static/js/fields-catalog.js
-
 function initializeFieldCatalog() {
   return {
-    GENERAL: {
-      label: 'General',
-      description: 'Top-level fields',
+    DATA: {
+      label: 'Profile DATA',
+      description: 'Global profile settings',
       icon: '',
       fields: [
-        {
-          name: 'type',
-          fullPath: 'type',
-          description: 'Profile type (expected: "cert_profile")',
-          valueType: 'string',
-          expectedHint: 'Expected: string, e.g. "cert_profile".'
-        },
-        {
-          name: 'ver',
-          fullPath: 'ver',
-          description: 'Schema version (expected format: "1.0")',
-          valueType: 'string',
-          expectedHint: 'Expected: string version, e.g. "1.0".'
-        }
+
+        { name: 'display_name', fullPath: 'display_name', valueType: 'string', description: 'Friendly name' }
       ]
     },
-    DISPLAY_NAME: {
-      label: 'Display Name',
-      description: 'Human readable name',
-      icon: '',
-      fields: [
-        {
-          name: 'display_name',
-          fullPath: 'display_name',
-          description: 'Profile display name (string)',
-          valueType: 'string',
-          expectedHint: 'Expected: string, e.g. "Example Certificate Profile".'
-        }
-      ]
-    },
+
     SUBJECT: {
-      label: 'Subject',
-      description: 'Subject DN',
+      label: 'Subject DN',
+      description: 'Distinguished Name attributes',
       icon: '',
       fields: [
-        {
-          name: 'subject.allow',
-          fullPath: 'subject.allow',
-          description: 'Allowed subject attributes (e.g. "*" or ["CN","OU"])',
-          valueType: 'string',
-          expectedHint: 'Expected: "*" or JSON list like ["CN","OU"].'
-        },
-        {
-          name: 'subject.CN',
-          fullPath: 'subject.CN',
-          description: 'Common Name (value + required)',
-          valueType: 'composite_cn',
-          expectedHint: 'Value: string, e.g. "device.example.com"; Required: checkbox.'
-        },
-        {
-          name: 'subject.OU',
-          fullPath: 'subject.OU',
-          description: 'Organizational Unit (nullable, use null to prohibit)',
-          valueType: 'nullable',
-          expectedHint: 'Expected: null to prohibit, or a string value.'
-        }
+
+        { name: 'Common Name', fullPath: 'subj.common_name', valueType: 'profile_property', description: 'CN (e.g. domain.com)' },
+        { name: 'Organization', fullPath: 'subj.organization_name', valueType: 'profile_property', description: 'O (e.g. Company Ltd)' },
+        { name: 'Org. Unit', fullPath: 'subj.organizational_unit_name', valueType: 'profile_property', description: 'OU (e.g. IT Dept)' },
+        { name: 'Country', fullPath: 'subj.country_name', valueType: 'profile_property', description: 'C (2-letter code)' },
+        { name: 'State/Province', fullPath: 'subj.state_or_province_name', valueType: 'profile_property', description: 'ST' },
+        { name: 'Locality', fullPath: 'subj.locality_name', valueType: 'profile_property', description: 'L' },
+        { name: 'Street Address', fullPath: 'subj.street_address', valueType: 'profile_property', description: 'Street' },
+        { name: 'Email', fullPath: 'subj.email_address', valueType: 'profile_property', description: 'Email Address' },
+        { name: 'Serial Number', fullPath: 'subj.serial_number', valueType: 'profile_property', description: 'Serial Number' },
+        { name: 'Domain Component', fullPath: 'subj.domain_component', valueType: 'profile_property', description: 'DC' },
+        { name: 'UID', fullPath: 'subj.uid', valueType: 'profile_property', description: 'User ID' },
+        { name: 'Title', fullPath: 'subj.title', valueType: 'profile_property', description: 'Job Title' }
       ]
     },
-    EXT: {
+
+    EXTENSIONS: {
       label: 'Extensions',
-      description: 'X.509 extensions',
+      description: 'X.509 Extensions',
       icon: '',
       fields: [
-        {
-          name: 'ext.allow',
-          fullPath: 'ext.allow',
-          description: 'Extensions allow mask (string or list, e.g. "*")',
-          valueType: 'string',
-          expectedHint: 'Expected: "*" or JSON list like ["key_usage","san"].'
-        },
-        {
-          name: 'ext.key_usage',
-          fullPath: 'ext.key_usage',
-          description: 'Key usage flags (digital_signature, key_encipherment, critical)',
-          valueType: 'composite_key_usage',
-          expectedHint: 'Produces: {"digital_signature":true/false,"key_encipherment":true/false,"critical":true/false}.'
-        },
-        {
-          name: 'ext.extended_key_usage',
-          fullPath: 'ext.extended_key_usage',
-          description: 'Extended key usages list (e.g. ["server_auth","client_auth"])',
-          valueType: 'composite_eku',
-          expectedHint: 'Value becomes: {"usages":["server_auth","client_auth"]}.'
-        },
-        {
-          name: 'ext.san',
-          fullPath: 'ext.san',
-          description: 'Subject Alternative Names (DNS + IP lists)',
-          valueType: 'composite_san',
-          expectedHint: 'Value becomes: {"dns":["device.example.com"],"ip":["192.0.2.1"]}.'
-        },
-        {
-          name: 'ext.basic_constraints',
-          fullPath: 'ext.basic_constraints',
-          description: 'Basic constraints (CA + critical)',
-          valueType: 'composite_basic_constraints',
-          expectedHint: 'Value becomes: {"ca":true/false,"critical":true/false}.'
-        }
+
+        { name: 'Key Usage', fullPath: 'ext.key_usage', valueType: 'object', description: 'Key Usage Constraints' },
+
+        { name: 'Digital Signature', fullPath: 'ext.key_usage.digital_signature', valueType: 'boolean', description: 'Auth' },
+        { name: 'Content Commitment', fullPath: 'ext.key_usage.content_commitment', valueType: 'boolean', description: 'Non-repudiation' },
+        { name: 'Key Encipherment', fullPath: 'ext.key_usage.key_encipherment', valueType: 'boolean', description: 'Encipher keys' },
+        { name: 'Data Encipherment', fullPath: 'ext.key_usage.data_encipherment', valueType: 'boolean', description: 'Encipher data' },
+        { name: 'Key Agreement', fullPath: 'ext.key_usage.key_agreement', valueType: 'boolean', description: 'Key exchange' },
+        { name: 'Key Cert Sign', fullPath: 'ext.key_usage.key_cert_sign', valueType: 'boolean', description: 'Sign certs' },
+        { name: 'CRL Sign', fullPath: 'ext.key_usage.crl_sign', valueType: 'boolean', description: 'Sign CRLs' },
+        { name: 'Encipher Only', fullPath: 'ext.key_usage.encipher_only', valueType: 'boolean', description: 'Encipher only' },
+        { name: 'Decipher Only', fullPath: 'ext.key_usage.decipher_only', valueType: 'boolean', description: 'Decipher only' },
+        { name: 'Critical', fullPath: 'ext.key_usage.critical', valueType: 'boolean', description: 'Critical' },
+
+        { name: 'Basic Constraints', fullPath: 'ext.basic_constraints', valueType: 'object', description: 'CA/Path constraints' },
+        { name: 'Is CA?', fullPath: 'ext.basic_constraints.ca', valueType: 'boolean', description: 'CA Cert' },
+        { name: 'Path Length', fullPath: 'ext.basic_constraints.path_length', valueType: 'number', description: 'Path Depth' },
+        { name: 'Critical', fullPath: 'ext.basic_constraints.critical', valueType: 'boolean', description: 'Critical' },
+
+        { name: 'Extended Key Usage', fullPath: 'ext.extended_key_usage', valueType: 'object', description: 'EKU' },
+        { name: 'Usages', fullPath: 'ext.extended_key_usage.usages', valueType: 'list', description: 'server_auth, client_auth' },
+        { name: 'Critical', fullPath: 'ext.extended_key_usage.critical', valueType: 'boolean', description: 'Critical' },
+
+        { name: 'Subject Alt Name', fullPath: 'ext.subject_alternative_name', valueType: 'object', description: 'SAN' },
+        { name: 'DNS', fullPath: 'ext.subject_alternative_name.dns_names', valueType: 'list', description: 'DNS Names' },
+        { name: 'IPs', fullPath: 'ext.subject_alternative_name.ip_addresses', valueType: 'list', description: 'IP Addresses' },
+        { name: 'Emails', fullPath: 'ext.subject_alternative_name.rfc822_names', valueType: 'list', description: 'Emails' },
+        { name: 'URIs', fullPath: 'ext.subject_alternative_name.uris', valueType: 'list', description: 'URIs' },
+
+        { name: 'CRL Dist Points', fullPath: 'ext.crl_distribution_points', valueType: 'object', description: 'CDP' },
+        { name: 'URIs', fullPath: 'ext.crl_distribution_points.uris', valueType: 'list', description: 'CRL URLs' }
       ]
     },
+
     VALIDITY: {
       label: 'Validity',
-      description: 'Validity period',
+      description: 'Time constraints',
       icon: '',
       fields: [
-        {
-          name: 'validity.days',
-          fullPath: 'validity.days',
-          description: 'Validity in days (number, suggestions: 30 / 60 / 90)',
-          valueType: 'number',
-          suggestions: [30, 60, 90],
-          expectedHint: 'Expected: integer number of days, e.g. 42.'
-        }
-      ]
+        { name: 'Days', fullPath: 'validity.days', valueType: 'number', description: 'Validity in days', suggestions: [30, 90, 365] }      ]
     }
   };
 }
 
-// expose globally for non-module usage
 window.initializeFieldCatalog = initializeFieldCatalog;

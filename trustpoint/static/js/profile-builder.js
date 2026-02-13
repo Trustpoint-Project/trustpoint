@@ -5,11 +5,8 @@ class CertificateProfileBuilder {
     this.searchInput = document.getElementById('profile-builder-search');
     this.fieldsContainer = document.getElementById('profile-builder-fields');
 
-    // use global function from fields-catalog.js
     this.fieldCatalog = window.initializeFieldCatalog();
     this.allFields = this.flattenFieldCatalog();
-
-    this.currentJson = this.parseEditorJson();
     this.filteredFields = this.allFields;
     this.sidebarOpen = false;
 
@@ -26,480 +23,351 @@ class CertificateProfileBuilder {
     return flattened;
   }
 
-  init() {
-  document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-      e.preventDefault();
-      this.toggleSidebar();
-    }
-  });
+ init() {
 
-  if (this.searchInput) {
-    this.searchInput.addEventListener('input', (e) => this.filterFields(e.target.value));
-    this.searchInput.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') e.preventDefault();
-    });
-  }
-
-  // ESC: close modal if present, otherwise close sidebar
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      const modal = document.querySelector('.profile-builder-modal');
-      if (modal) {
-        modal.remove();
-      } else if (this.sidebarOpen) {
-        this.closeSidebar();
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        this.toggleSidebar();
       }
-    }
-  });
-
-  // Click outside modal: close modal
-  document.addEventListener('click', (e) => {
-    const modal = document.querySelector('.profile-builder-modal');
-    if (!modal) return;
-    const clickedInside = modal.contains(e.target);
-    if (!clickedInside) modal.remove();
-  });
-
-  // NEW: X button in sidebar
-  const sidebarCloseBtn = this.sidebar?.querySelector('.tp-pb-close');
-  if (sidebarCloseBtn) {
-    sidebarCloseBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      this.closeSidebar();
     });
+
+
+    const closeBtn = this.sidebar?.querySelector('.tp-pb-close');
+    if (closeBtn) closeBtn.addEventListener('click', () => this.closeSidebar());
+
+
+    const triggerBtn = document.getElementById('profile-builder-trigger-btn');
+    if (triggerBtn) {
+      triggerBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.toggleSidebar();
+      });
+    }
+
+
+    if (this.searchInput) {
+      this.searchInput.addEventListener('input', (e) => this.filterFields(e.target.value));
+      this.searchInput.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') e.preventDefault();
+      });
+    }
+
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const modal = document.querySelector('.profile-builder-modal');
+        if (modal) modal.remove();
+        else if (this.sidebarOpen) this.closeSidebar();
+      }
+    });
+
+    this.renderFields();
   }
-
-  this.renderFields();
-}
-
   toggleSidebar() {
     this.sidebarOpen = !this.sidebarOpen;
     if (this.sidebar) {
       this.sidebar.classList.toggle('tp-pb-visible', this.sidebarOpen);
-    }
-    if (this.sidebarOpen) {
-      this.searchInput?.focus();
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-      if (this.searchInput) this.searchInput.value = '';
-      this.filteredFields = this.allFields;
-      this.renderFields();
+      if (this.sidebarOpen) {
+        if (this.searchInput) this.searchInput.focus();
+        document.body.style.overflow = 'hidden';
+      } else {
+        document.body.style.overflow = '';
+      }
     }
   }
 
-  openSidebar() { if (!this.sidebarOpen) this.toggleSidebar(); }
-  closeSidebar() { if (this.sidebarOpen) this.toggleSidebar(); }
+  closeSidebar() {
+    if (this.sidebarOpen) this.toggleSidebar();
+  }
 
   filterFields(query) {
-    const q = query.toLowerCase().trim();
-    this.filteredFields = !q ? this.allFields : this.allFields.filter(field =>
-      field.name.toLowerCase().includes(q) ||
-      field.description.toLowerCase().includes(q) ||
-      field.fullPath.toLowerCase().includes(q) ||
-      field.sectionLabel.toLowerCase().includes(q)
-    );
+    if (!query) {
+      this.filteredFields = this.allFields;
+    } else {
+      const q = query.toLowerCase();
+      this.filteredFields = this.allFields.filter(f =>
+        f.name.toLowerCase().includes(q) ||
+        f.fullPath.toLowerCase().includes(q)
+      );
+    }
     this.renderFields();
   }
 
   renderFields() {
     if (!this.fieldsContainer) return;
+    this.fieldsContainer.innerHTML = '';
 
-    if (!Array.isArray(this.filteredFields) || this.filteredFields.length === 0) {
-      this.fieldsContainer.innerHTML = '<div class="profile-builder-no-results">No fields found</div>';
+    if (this.filteredFields.length === 0) {
+      this.fieldsContainer.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">No fields found</div>';
       return;
     }
 
-    this.fieldsContainer.innerHTML = '';
     const grouped = {};
     this.filteredFields.forEach(field => {
-      if (!field || !field.section) return;
+
+      const parts = field.fullPath.split('.');
+      let isHiddenChild = false;
+      if (parts.length > 1) {
+        const parentPath = parts.slice(0, -1).join('.');
+        const parentExists = this.allFields.some(f => f.fullPath === parentPath);
+        if (parentExists) isHiddenChild = true;
+      }
+      if (isHiddenChild) return;
+
       if (!grouped[field.section]) grouped[field.section] = [];
       grouped[field.section].push(field);
     });
 
     Object.entries(grouped).forEach(([section, fields]) => {
-      const sectionData = this.fieldCatalog[section];
-      if (!sectionData) return;
+      if (fields.length === 0) return;
 
-      const sectionEl = document.createElement('div');
-      sectionEl.className = 'profile-builder-section';
-      sectionEl.innerHTML = `
-        <div class="profile-builder-section-header">
-          <span class="profile-builder-section-icon">${sectionData.icon}</span>
-          <span class="profile-builder-section-label">${sectionData.label}</span>
-        </div>
+      const sectionHeader = document.createElement('div');
+      sectionHeader.className = 'profile-builder-section-header';
+      sectionHeader.innerHTML = `
+        <span class="profile-builder-section-icon">${fields[0].sectionIcon}</span>
+        <span class="profile-builder-section-label">${fields[0].sectionLabel}</span>
       `;
+      this.fieldsContainer.appendChild(sectionHeader);
 
       fields.forEach(field => {
-        const fieldEl = document.createElement('div');
-        fieldEl.className = 'profile-builder-field';
-        fieldEl.innerHTML = `
+        const btn = document.createElement('div');
+        btn.className = 'profile-builder-field';
+        btn.innerHTML = `
           <div class="profile-builder-field-info">
             <div class="profile-builder-field-name">${field.name}</div>
-            <div class="profile-builder-field-description">${field.description}</div>
             <div class="profile-builder-field-path">${field.fullPath}</div>
           </div>
-          <div class="profile-builder-field-actions">
-            <button class="profile-builder-btn-insert" title="Insert into JSON">Insert</button>
-          </div>
         `;
-
-        fieldEl.querySelector('.profile-builder-btn-insert')
-          .addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.showValuePopup(field);
-          });
-
-        fieldEl.addEventListener('click', () => this.showValuePopup(field));
-
-        sectionEl.appendChild(fieldEl);
+        btn.addEventListener('click', () => this.showValuePopup(field));
+        this.fieldsContainer.appendChild(btn);
       });
-
-      this.fieldsContainer.appendChild(sectionEl);
     });
+  }
+
+  getValueAt(obj, pathStr) {
+    if (!obj) return undefined;
+    const path = pathStr.split('.');
+    let current = obj;
+    for (const key of path) {
+      if (current === undefined || current === null) return undefined;
+      current = current[key];
+    }
+    return current;
   }
 
   showValuePopup(field) {
     const existing = document.querySelector('.profile-builder-modal');
     if (existing) existing.remove();
 
-    const modal = document.createElement('div');
-    modal.className = 'profile-builder-modal';
-    const close = () => modal.remove();
+    let currentJson = {};
+    try { currentJson = JSON.parse(this.editor.value); } catch (e) {}
 
-    const hint = field.expectedHint || 'Enter JSON or plain string. For null, type null.';
+    let formContent = '';
+    const isProfileProperty = field.valueType === 'profile_property';
 
-    let bodyInner = '';
+    const childFields = this.allFields.filter(f => f.fullPath.startsWith(field.fullPath + '.'));
+    const hasChildren = childFields.length > 0;
 
-    if (field.valueType === 'composite_cn') {
-      bodyInner = `
-        <div class="profile-builder-custom-section">
-          <div class="profile-builder-divider">Common Name</div>
-          <div style="display:flex;flex-direction:column;gap:12px;">
-            <div>
-              <label class="form-label">Value (default)</label>
-              <input type="text" id="pb-cn-value" class="profile-builder-custom-input"
-                     placeholder='Example: "device.example.com"'>
-              <div style="margin-top:4px;font-size:11px;color:var(--color-text-secondary);">
-                ${hint}
-              </div>
-            </div>
-            <label style="display:flex;align-items:center;gap:8px;">
-              <input type="checkbox" id="pb-cn-required" checked>
-              Required
+
+    if (isProfileProperty) {
+      const existingData = this.getValueAt(currentJson, field.fullPath);
+
+      let val = '';
+      let req = false;
+      let mut = false;
+
+      if (existingData && typeof existingData === 'object' && !Array.isArray(existingData)) {
+
+        if (existingData.value !== undefined) val = existingData.value;
+        if (existingData.required === true) req = true;
+        if (existingData.mutable === true) mut = true;
+      } else if (existingData !== undefined && existingData !== null) {
+
+        val = existingData;
+      }
+
+      formContent = `
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div class="pb-input-wrapper">
+            <label>Value</label>
+            <input type="text" id="pp-value" class="pb-input-child" value="${val}" placeholder="e.g. Trustpoint Domain Credential">
+            <div class="pb-input-desc">The specific value for this field.</div>
+          </div>
+
+          <div style="display:flex; gap:24px; padding:4px 0;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="pp-mutable" ${mut ? 'checked' : ''}>
+              <span style="font-weight:500;">Mutable</span>
             </label>
-            <div style="display:flex;justify-content:flex-end;">
-              <button class="profile-builder-custom-btn">Apply</button>
-            </div>
-          </div>
-        </div>
-      `;
-    } else if (field.valueType === 'composite_key_usage') {
-      bodyInner = `
-        <div class="profile-builder-custom-section">
-          <div class="profile-builder-divider">Key Usage</div>
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <label style="display:flex;align-items:center;gap:8px;">
-              <input type="checkbox" id="pb-ku-ds" checked>
-              digital_signature
+
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="pp-required" ${req ? 'checked' : ''}>
+              <span style="font-weight:500;">Required</span>
             </label>
-            <label style="display:flex;align-items:center;gap:8px;">
-              <input type="checkbox" id="pb-ku-ke" checked>
-              key_encipherment
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;">
-              <input type="checkbox" id="pb-ku-critical" checked>
-              critical
-            </label>
-            <div style="margin-top:4px;font-size:11px;color:var(--color-text-secondary);">
-              ${hint}
-            </div>
-            <div style="display:flex;justify-content:flex-end;margin-top:8px;">
-              <button class="profile-builder-custom-btn">Apply</button>
-            </div>
-          </div>
-        </div>
-      `;
-    } else if (field.valueType === 'composite_eku') {
-      bodyInner = `
-        <div class="profile-builder-custom-section">
-          <div class="profile-builder-divider">Extended Key Usage</div>
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <label class="form-label">Usages (comma separated)</label>
-            <input type="text" id="pb-eku-list" class="profile-builder-custom-input"
-                   value="server_auth, client_auth">
-            <div style="margin-top:4px;font-size:11px;color:var(--color-text-secondary);">
-              ${hint}
-            </div>
-            <div style="display:flex;justify-content:flex-end;margin-top:8px;">
-              <button class="profile-builder-custom-btn">Apply</button>
-            </div>
-          </div>
-        </div>
-      `;
-    } else if (field.valueType === 'composite_san') {
-      bodyInner = `
-        <div class="profile-builder-custom-section">
-          <div class="profile-builder-divider">Subject Alternative Names</div>
-          <div style="display:flex;flex-direction:column;gap:12px;">
-            <div>
-              <label class="form-label">DNS names (comma separated)</label>
-              <input type="text" id="pb-san-dns" class="profile-builder-custom-input"
-                     value="device.example.com">
-            </div>
-            <div>
-              <label class="form-label">IP addresses (comma separated)</label>
-              <input type="text" id="pb-san-ip" class="profile-builder-custom-input"
-                     value="192.0.2.1">
-            </div>
-            <div style="margin-top:4px;font-size:11px;color:var(--color-text-secondary);">
-              ${hint}
-            </div>
-            <div style="display:flex;justify-content:flex-end;">
-              <button class="profile-builder-custom-btn">Apply</button>
-            </div>
-          </div>
-        </div>
-      `;
-    } else if (field.valueType === 'composite_basic_constraints') {
-      bodyInner = `
-        <div class="profile-builder-custom-section">
-          <div class="profile-builder-divider">Basic Constraints</div>
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <label style="display:flex;align-items:center;gap:8px;">
-              <input type="checkbox" id="pb-bc-ca">
-              CA
-            </label>
-            <label style="display:flex;align-items:center;gap:8px;">
-              <input type="checkbox" id="pb-bc-critical" checked>
-              Critical
-            </label>
-            <div style="margin-top:4px;font-size:11px;color:var(--color-text-secondary);">
-              ${hint}
-            </div>
-            <div style="display:flex;justify-content:flex-end;margin-top:8px;">
-              <button class="profile-builder-custom-btn">Apply</button>
-            </div>
-          </div>
-        </div>
-      `;
-    } else if (field.valueType === 'number') {
-      const suggestions = (field.suggestions || []).map(v => `
-        <button class="profile-builder-template-btn" data-number="${v}">
-          <div class="profile-builder-template-label">${v} days</div>
-        </button>
-      `).join('');
-      bodyInner = `
-        ${suggestions ? `
-          <div class="profile-builder-divider">Suggestions</div>
-          <div class="profile-builder-templates">
-            ${suggestions}
-          </div>
-        ` : ''}
-        <div class="profile-builder-custom-section">
-          <div class="profile-builder-divider">Custom value</div>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            <div style="display:flex;gap:8px;align-items:center;">
-              <input type="number" id="pb-custom-number" class="profile-builder-custom-input"
-                     placeholder="e.g. 42">
-              <button class="profile-builder-custom-btn">Apply</button>
-            </div>
-            <div style="font-size:11px;color:var(--color-text-secondary);">
-              ${hint}
-            </div>
-          </div>
-        </div>
-      `;
-    } else {
-      bodyInner = `
-        <div class="profile-builder-custom-section">
-          <div class="profile-builder-divider">Value</div>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            <div style="display:flex;gap:8px;align-items:center;">
-              <textarea id="pb-custom-text" class="profile-builder-custom-input" rows="3"
-                placeholder='${hint}'></textarea>
-              <button class="profile-builder-custom-btn">Apply</button>
-            </div>
-            <div style="font-size:11px;color:var(--color-text-secondary);">
-              ${hint}
-            </div>
           </div>
         </div>
       `;
     }
 
+    else if (hasChildren) {
+      formContent = `<div style="max-height:400px; overflow-y:auto; padding-right:5px;">`;
+      childFields.forEach(child => {
+        const shortKey = child.fullPath.replace(field.fullPath + '.', '');
+        const existingValue = this.getValueAt(currentJson, child.fullPath);
+
+        if (child.valueType === 'boolean') {
+          const isChecked = existingValue === true ? 'checked' : '';
+          formContent += `
+            <div class="pb-checkbox-wrapper">
+              <label>
+                <input type="checkbox" class="pb-input-child" data-key="${shortKey}" data-type="boolean" ${isChecked}>
+                <span class="pb-checkbox-label">
+                  <span class="pb-label-title">${child.name}</span>
+                  <span class="pb-label-desc">${child.description}</span>
+                </span>
+              </label>
+            </div>`;
+        } else if (child.valueType === 'list') {
+          const valStr = Array.isArray(existingValue) ? existingValue.join(', ') : '';
+          formContent += `
+            <div class="pb-input-wrapper">
+              <label>${child.name}</label>
+              <input type="text" class="pb-input-child" data-key="${shortKey}" data-type="list" value="${valStr}" placeholder="a, b, c">
+            </div>`;
+        } else {
+          const valStr = (existingValue !== undefined && existingValue !== null) ? existingValue : '';
+          const inputType = child.valueType === 'number' ? 'number' : 'text';
+          formContent += `
+            <div class="pb-input-wrapper">
+              <label>${child.name}</label>
+              <input type="${inputType}" class="pb-input-child" data-key="${shortKey}" data-type="${child.valueType}" value="${valStr}">
+            </div>`;
+        }
+      });
+      formContent += `</div>`;
+    }
+
+    else {
+      const existingValue = this.getValueAt(currentJson, field.fullPath);
+      const valStr = (existingValue !== undefined && existingValue !== null) ? existingValue : '';
+      const inputType = field.valueType === 'number' ? 'number' : 'text';
+
+      let suggestions = '';
+      if(field.suggestions) {
+         suggestions = `<div class="pb-suggestions">` + field.suggestions.map(s =>
+           `<button type="button" class="pb-suggestion-btn" data-val="${s}">${s}</button>`
+         ).join('') + `</div>`;
+      }
+
+      formContent = `
+        <div class="pb-input-wrapper">
+          <label>Value for <strong>${field.name}</strong></label>
+          ${suggestions}
+          <input type="${inputType}" id="pb-single-input" value="${valStr}" placeholder="${field.expectedHint || ''}">
+        </div>`;
+    }
+
+    const modal = document.createElement('div');
+    modal.className = 'profile-builder-modal';
     modal.innerHTML = `
       <div class="profile-builder-modal-content">
         <div class="profile-builder-modal-header">
-          <h3>Set value for <code>${field.fullPath}</code></h3>
-          <button class="profile-builder-modal-close">&times;</button>
+          <h3>${field.name}</h3>
+          <button class="close-btn">&times;</button>
         </div>
-        <div class="profile-builder-modal-body">
-          ${bodyInner}
+        <div class="profile-builder-modal-body">${formContent}</div>
+        <div class="profile-builder-modal-footer">
+          <button class="cancel-btn">Cancel</button>
+          <button class="apply-btn">Insert</button>
         </div>
       </div>
     `;
 
-    modal.querySelector('.profile-builder-modal-close').addEventListener('click', close);
-
-    const applyBtn = modal.querySelector('.profile-builder-custom-btn');
-
-    if (field.valueType === 'composite_cn') {
-      applyBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const valueInput = modal.querySelector('#pb-cn-value').value.trim();
-        const value = valueInput || 'device.example.com';
-        const required = modal.querySelector('#pb-cn-required').checked;
-        this.insertField(field, { required, default: value });
-        close();
-      });
-    } else if (field.valueType === 'composite_key_usage') {
-      applyBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const ds = modal.querySelector('#pb-ku-ds').checked;
-        const ke = modal.querySelector('#pb-ku-ke').checked;
-        const critical = modal.querySelector('#pb-ku-critical').checked;
-        this.insertField(field, {
-          digital_signature: ds,
-          key_encipherment: ke,
-          critical: critical
-        });
-        close();
-      });
-    } else if (field.valueType === 'composite_eku') {
-      applyBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const raw = modal.querySelector('#pb-eku-list').value.trim();
-        const usages = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : [];
-        this.insertField(field, { usages });
-        close();
-      });
-    } else if (field.valueType === 'composite_san') {
-      applyBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const dnsRaw = modal.querySelector('#pb-san-dns').value.trim();
-        const ipRaw = modal.querySelector('#pb-san-ip').value.trim();
-        const dns = dnsRaw ? dnsRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
-        const ip = ipRaw ? ipRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
-        this.insertField(field, { dns, ip });
-        close();
-      });
-    } else if (field.valueType === 'composite_basic_constraints') {
-      applyBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const ca = modal.querySelector('#pb-bc-ca').checked;
-        const critical = modal.querySelector('#pb-bc-critical').checked;
-        this.insertField(field, { ca, critical });
-        close();
-      });
-    } else if (field.valueType === 'number') {
-      modal.querySelectorAll('.profile-builder-template-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const v = Number(btn.getAttribute('data-number'));
-          this.insertField(field, v);
-          close();
-        });
-      });
-      applyBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const v = Number(modal.querySelector('#pb-custom-number').value);
-        if (!Number.isFinite(v)) {
-          this.showNotification('Please enter a valid number', 'error');
-          return;
-        }
-        this.insertField(field, v);
-        close();
-      });
-    } else {
-      applyBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        const raw = modal.querySelector('#pb-custom-text').value.trim();
-        if (!raw) {
-          this.showNotification('Please enter a value', 'error');
-          return;
-        }
-        let value;
-        try {
-          value = JSON.parse(raw);
-        } catch {
-          value = raw;
-        }
-        this.insertField(field, value);
-        close();
-      });
-    }
-
     document.body.appendChild(modal);
-  }
 
-  insertField(field, value) {
-    try {
-      let json = this.parseEditorJson();
-      const path = field.fullPath.split('.');
-      let current = json;
+    const closeModal = () => modal.remove();
+    modal.querySelector('.close-btn').addEventListener('click', closeModal);
+    modal.querySelector('.cancel-btn').addEventListener('click', closeModal);
+    modal.querySelectorAll('.pb-suggestion-btn').forEach(b => {
+        b.addEventListener('click', () => { modal.querySelector('#pb-single-input').value = b.dataset.val; });
+    });
 
-      for (let i = 0; i < path.length - 1; i++) {
-        const key = path[i];
-        if (current[key] === undefined) current[key] = {};
-        current = current[key];
+
+    modal.querySelector('.apply-btn').addEventListener('click', () => {
+      let finalValue;
+
+      if (isProfileProperty) {
+        const val = modal.querySelector('#pp-value').value;
+        const req = modal.querySelector('#pp-required').checked;
+        const mut = modal.querySelector('#pp-mutable').checked;
+
+
+        if (req || mut) {
+            finalValue = {};
+            if (val) finalValue.value = val;
+            if (mut) finalValue.mutable = true;
+            if (req) finalValue.required = true;
+        } else {
+
+            if (val) {
+                 finalValue = { value: val };
+
+            } else {
+
+                finalValue = undefined;
+            }
+        }
+      } else if (hasChildren) {
+        finalValue = {};
+        modal.querySelectorAll('.pb-input-child').forEach(input => {
+          const key = input.dataset.key;
+          const type = input.dataset.type;
+
+          if (type === 'boolean') {
+            if (input.checked) finalValue[key] = true;
+            else {
+              const childPath = field.fullPath + '.' + key;
+              const orig = this.getValueAt(currentJson, childPath);
+              if (orig !== undefined) finalValue[key] = false;
+            }
+          } else if (type === 'list') {
+            if (input.value.trim()) finalValue[key] = input.value.split(',').map(s => s.trim()).filter(Boolean);
+          } else {
+            if (input.value) finalValue[key] = type === 'number' ? Number(input.value) : input.value;
+          }
+        });
+      } else {
+        const raw = modal.querySelector('#pb-single-input').value;
+        finalValue = field.valueType === 'number' ? Number(raw) : raw;
       }
 
-      current[path.at(-1)] = value;
-      this.updateEditor(json);
-      this.showNotification(`Inserted ${field.fullPath}`, 'success');
-    } catch (error) {
-      console.error('Insert error:', error);
-      this.showNotification(`Insert failed: ${error.message}`, 'error');
-    }
+      if (finalValue !== undefined) {
+        this.insertFieldIntoJson(field.fullPath, finalValue);
+      }
+      closeModal();
+    });
   }
 
-  parseEditorJson() {
+  insertFieldIntoJson(pathStr, value) {
     try {
-      return JSON.parse(this.editor.value);
-    } catch {
-      return { type: 'cert_profile', ver: '1.0' };
+      let json = {};
+      try { json = JSON.parse(this.editor.value); } catch(e) {}
+
+      const keys = pathStr.split('.');
+      let current = json;
+      for (let i = 0; i < keys.length - 1; i++) {
+        const key = keys[i];
+        if (!current[key]) current[key] = {};
+        current = current[key];
+      }
+      current[keys[keys.length - 1]] = value;
+
+      this.editor.value = JSON.stringify(json, null, 2);
+      this.editor.dispatchEvent(new Event('input', { bubbles: true }));
+    } catch (e) {
+      alert("Invalid JSON in editor. Cannot insert.");
     }
-  }
-
-  updateEditor(json) {
-    this.editor.value = JSON.stringify(json, null, 2);
-    this.editor.dispatchEvent(new Event('input', { bubbles: true }));
-    this.editor.dispatchEvent(new Event('change', { bubbles: true }));
-    this.validateJson();
-    this.editor.focus();
-    this.editor.scrollTop = this.editor.scrollHeight;
-  }
-
-  validateJson() {
-    try {
-      JSON.parse(this.editor.value);
-      this.editor.classList.remove('is-invalid');
-      this.editor.classList.add('is-valid');
-      const errorEl = document.getElementById('profile_json_error');
-      if (errorEl) errorEl.textContent = '';
-      return true;
-    } catch (error) {
-      this.editor.classList.remove('is-valid');
-      this.editor.classList.add('is-invalid');
-      const errorEl = document.getElementById('profile_json_error');
-      if (errorEl) errorEl.textContent = `Invalid JSON: ${error.message}`;
-      return false;
-    }
-  }
-
-  showNotification(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `profile-builder-toast profile-builder-toast-${type}`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.classList.add('visible'), 10);
-    setTimeout(() => {
-      toast.classList.remove('visible');
-      setTimeout(() => toast.remove(), 300);
-    }, 3000);
   }
 }
 
