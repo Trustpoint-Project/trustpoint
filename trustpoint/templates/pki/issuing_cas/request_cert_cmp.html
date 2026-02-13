@@ -81,11 +81,11 @@
             <form method="post" id="cmp-request-form">
                 {% csrf_token %}
                 <div class="mb-3">
-                    <label for="sender_kid" class="form-label">{% trans 'Sender KID (Device ID)' %}</label>
+                    <label for="sender_kid" class="form-label">{% trans 'Sender KID' %}</label>
                     <input type="number" class="form-control" id="sender_kid" name="sender_kid"
                            placeholder="{% trans 'e.g. 2' %}"
                            min="1" step="1">
-                    <div class="form-text">{% trans 'Optional. The device primary key used for shared secret authentication on the CMP server. Required if the server uses senderKID-based device lookup.' %}</div>
+                    <div class="form-text">{% trans 'Optional. The device primary key used for shared secret authentication on the CMP server.' %}</div>
                 </div>
             </form>
         </div>

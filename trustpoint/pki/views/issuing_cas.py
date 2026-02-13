@@ -41,7 +41,7 @@ from pki.forms import (
 )
 from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
-from pki.models.credential import PrimaryCredentialCertificate
+from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.truststore import TruststoreModel
 from pki.serializer import IssuingCaSerializer
 from pki.util.cert_profile import ProfileValidationError
@@ -790,7 +790,7 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             add_shared_secret_protection=True,
         )
 
-        self._save_cmp_certificates(ca, issued_cert, chain_certs)
+        self._save_cmp_certificates(ca, issued_cert, chain_certs, csr.subject)
 
         del request.session[f'cert_content_data_{ca.pk}']
 
@@ -961,15 +961,84 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             },
         )
 
+    def _validate_and_correct_issued_cert(
+        self,
+        issued_cert: x509.Certificate,
+        chain_certs: list[x509.Certificate],
+        expected_subject: x509.Name,
+    ) -> x509.Certificate:
+        """Validate that the issued cert has the expected subject, and correct if necessary."""
+        if issued_cert.subject == expected_subject and issued_cert.subject != issued_cert.issuer:
+            return issued_cert
+
+        # If issued_cert is self-signed, try to use a non-self-signed from chain as issued_cert
+        if issued_cert.subject == issued_cert.issuer:
+            for i, chain_cert in enumerate(chain_certs):
+                if chain_cert.subject != chain_cert.issuer:
+                    # Found non-self-signed cert in chain
+                    correct_issued = chain_cert
+                    chain_certs[i] = issued_cert
+                    self.logger.info('Issued cert is self-signed, swapped with non-self-signed from chain.')
+                    return correct_issued
+
+        # Fallback: check if issued_cert matches expected subject
+        if issued_cert.subject == expected_subject:
+            return issued_cert
+
+        # Try to find in chain
+        for i, chain_cert in enumerate(chain_certs):
+            if chain_cert.subject == expected_subject:
+                correct_issued = chain_cert
+                chain_certs[i] = issued_cert
+                self.logger.info('Found correct issued certificate in chain, swapped.')
+                return correct_issued
+
+        self.logger.error(
+            'Could not find certificate with expected subject %s in response.',
+            expected_subject.rfc4514_string(),
+        )
+        return issued_cert
+
     def _save_cmp_certificates(
         self,
         ca: CaModel,
         issued_cert: x509.Certificate,
         chain_certs: list[x509.Certificate],
+        expected_subject: x509.Name,
     ) -> None:
         """Save the issued certificate and chain certificates."""
+        issued_cert = self._validate_and_correct_issued_cert(issued_cert, chain_certs, expected_subject)
         cert_model = CertificateModel.save_certificate(issued_cert)
         chain_cert_models = [CertificateModel.save_certificate(c) for c in chain_certs]
+
+        chain_ca_models = []
+        for i, chain_cert in enumerate(chain_certs):
+            cert_model = chain_cert_models[i]
+            existing_ca = self._find_existing_ca_for_certificate(chain_cert)
+            if existing_ca:
+                chain_ca_models.append(existing_ca)
+            else:
+                cn_attrs = chain_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+                cn = cn_attrs[0].value if cn_attrs else 'unknown'
+                keyless_ca = CaModel.create_keyless_ca(
+                    unique_name=str(cn),
+                    certificate_obj=chain_cert,
+                    parent_ca=None,
+                )
+                chain_ca_models.append(keyless_ca)
+                self.logger.info('Created keyless CA %s for chain certificate', keyless_ca.unique_name)
+
+        self._build_ca_hierarchy(chain_ca_models)
+
+        issuer_ca = self._find_issuer_ca(issued_cert, chain_ca_models)
+        if issuer_ca:
+            ca.parent_ca = issuer_ca
+            ca.save()
+            self.logger.info('Set parent CA %s for issuing CA %s', issuer_ca.unique_name, ca.unique_name)
+
+        # Build the certificate chain for the credential
+        if ca.credential:
+            self._build_certificate_chain_for_credential(ca.credential, ca.parent_ca)
 
         if ca.credential:
             ca.credential.certificate = cert_model
@@ -995,6 +1064,78 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             )
             ca.credential = credential
             ca.save()
+
+    def _build_ca_hierarchy(
+        self,
+        chain_ca_models: list[CaModel],
+    ) -> None:
+        """Build the CA hierarchy by setting parent-child relationships."""
+        ca_by_subject = {ca.get_certificate().subject.public_bytes().hex(): ca for ca in chain_ca_models}
+
+        for ca in chain_ca_models:
+            cert = ca.get_certificate()
+            issuer_subject_bytes = cert.issuer.public_bytes().hex()
+            if issuer_subject_bytes in ca_by_subject:
+                parent_ca = ca_by_subject[issuer_subject_bytes]
+                if parent_ca not in (ca, ca.parent_ca):
+                    ca.parent_ca = parent_ca
+                    ca.save()
+                    self.logger.info('Set parent CA %s for CA %s', parent_ca.unique_name, ca.unique_name)
+
+    def _find_issuer_ca(
+        self,
+        issued_cert: x509.Certificate,
+        chain_ca_models: list[CaModel],
+    ) -> CaModel | None:
+        """Find the CA that issued the certificate."""
+        issuer_subject_bytes = issued_cert.issuer.public_bytes().hex()
+        for ca in chain_ca_models:
+            if ca.get_certificate().subject.public_bytes().hex() == issuer_subject_bytes:
+                return ca
+        return None
+
+    def _build_certificate_chain_for_credential(self, credential: CredentialModel, parent_ca: CaModel | None) -> None:
+        """Build the certificate chain for the credential."""
+        if not parent_ca or not credential.certificate:
+            return
+        chain = []
+        current = parent_ca
+        while current:
+            chain.append(current.certificate)
+            current = current.parent_ca
+        # Clear existing chain
+        credential.certificatechainordermodel_set.all().delete()
+        # Add in order
+        primary_cert = credential.certificate
+        for i, cert in enumerate(chain):
+            CertificateChainOrderModel.objects.create(
+                credential=credential, certificate=cert, order=i, primary_certificate=primary_cert
+            )
+
+    def _find_existing_ca_for_certificate(self, cert: x509.Certificate) -> CaModel | None:
+        """Find an existing CA that has the given certificate."""
+        # TODO(FHK): comparing the subject public bytes is not sufficient  # noqa: FIX002
+        for existing_ca in CaModel.objects.filter(certificate__isnull=False):
+            try:
+                ca_cert = existing_ca.get_certificate()
+                if (ca_cert.subject.public_bytes() == cert.subject.public_bytes() and
+                    ca_cert.issuer.public_bytes() == cert.issuer.public_bytes()):
+                    return existing_ca
+            except (AttributeError, ValueError) as e:
+                self.logger.debug('Error checking existing keyless CA certificate: %s', e)
+                continue
+
+        for existing_ca in CaModel.objects.filter(credential__isnull=False):
+            try:
+                ca_cert = existing_ca.get_certificate()
+                if (ca_cert.subject.public_bytes() == cert.subject.public_bytes() and
+                    ca_cert.issuer.public_bytes() == cert.issuer.public_bytes()):
+                    return existing_ca
+            except (AttributeError, ValueError) as e:
+                self.logger.debug('Error checking existing issuing CA certificate: %s', e)
+                continue
+
+        return None
 
 
 class KeylessCaConfigView(LoggerMixin, KeylessCaContextMixin, DetailView[CaModel]):

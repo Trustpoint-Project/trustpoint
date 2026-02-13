@@ -64,9 +64,9 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             self.log_and_stdout('issuing_ca certificate profile not found.', level='warning')
 
         # Create issuing CA
-        if CaModel.objects.filter(unique_name='ca_issuer').exists():
-            self.log_and_stdout('Issuing CA "ca_issuer" already exists.')
-            issuing_ca = CaModel.objects.get(unique_name='ca_issuer')
+        if CaModel.objects.filter(unique_name='Intermediate-CA RSA-2048-SHA256 - CA Issuer').exists():
+            self.log_and_stdout('Issuing CA "Intermediate-CA RSA-2048-SHA256 - CA Issuer" already exists.')
+            issuing_ca = CaModel.objects.get(unique_name='Intermediate-CA RSA-2048-SHA256 - CA Issuer')
         else:
             rsa_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
             rsa_issuing_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -84,9 +84,9 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                 issuing_ca_cert=rsa_issuing_ca,
                 private_key=rsa_issuing_ca_key,
                 chain=[rsa_root],
-                unique_name='ca_issuer',
+                unique_name='Intermediate-CA RSA-2048-SHA256 - CA Issuer',
             )
-            self.log_and_stdout('Created issuing CA "ca_issuer".')
+            self.log_and_stdout('Created issuing CA "Intermediate-CA RSA-2048-SHA256 - CA Issuer".')
 
         # Create domain
         domain, created = DomainModel.objects.get_or_create(unique_name='ca_issuer', defaults={'issuing_ca': issuing_ca})
