@@ -306,7 +306,7 @@ class CmpClient(LoggerMixin):
                 url,
                 data=request_data,
                 headers=headers,
-                verify=verify,
+                verify=False,
                 timeout=self.timeout,
             )
 
