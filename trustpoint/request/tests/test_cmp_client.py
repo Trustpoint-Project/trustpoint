@@ -4,7 +4,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 from cryptography import x509
-from pyasn1.codec.der import encoder
 from pyasn1.type import tag, univ
 from pyasn1_modules import rfc4210
 
