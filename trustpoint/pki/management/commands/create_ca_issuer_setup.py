@@ -204,7 +204,6 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                     self.log_and_stdout('No active TLS server credential found in Docker.', level='error')
                     return
             else:
-                # Load from test files
                 cert_path = Path(__file__).parent.parent.parent.parent.parent / 'tests/data/x509/https_server.crt'
                 key_path = Path(__file__).parent.parent.parent.parent.parent / 'tests/data/x509/https_server.pem'
                 if cert_path.exists() and key_path.exists():
@@ -233,7 +232,6 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                     truststore.certificates.add(tls_cert, through_defaults={'order': max_order + 1})
                     self.log_and_stdout('Updated TLS truststore.')
 
-            # Update the EST device's no_onboarding_config to use the truststore for server verification
             est_device.no_onboarding_config.trust_store = truststore
             est_device.no_onboarding_config.save()
             self.log_and_stdout('Updated EST device no-onboarding config with TLS truststore.')
@@ -248,20 +246,16 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                 no_onboarding_config=est_device.no_onboarding_config,
                 chain_truststore=truststore,
             )
-            # Create a temporary credential for the remote CA
             temp_credential_est = self._create_temp_credential()
             remote_ca_est.credential = temp_credential_est
             remote_ca_est.full_clean()
             remote_ca_est.save()
             self.log_and_stdout('Created remote issuing CA "EST-issued-CA".')
 
-        # Create remote issuing CA for CMP
         if CaModel.objects.filter(unique_name='CMP-issued-CA').exists():
             self.log_and_stdout('Remote issuing CA "CMP-issued-CA" already exists.')
             remote_ca_cmp = CaModel.objects.get(unique_name='CMP-issued-CA')
-            # Update trust_store if not set
             if remote_ca_cmp.no_onboarding_config and not remote_ca_cmp.no_onboarding_config.trust_store:
-                # For CMP, we need the Issuing CA certificate, not TLS cert
                 ca_issuer_cert = issuing_ca.credential.certificate if issuing_ca.credential else None
                 if ca_issuer_cert:
                     cmp_truststore, created = TruststoreModel.objects.get_or_create(
@@ -283,7 +277,6 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                 else:
                     self.log_and_stdout('Issuing CA certificate not found for CMP truststore.', level='error')
         else:
-            # Get the Issuing CA certificate for CMP truststore
             ca_issuer_cert = issuing_ca.credential.certificate if issuing_ca.credential else None
             if not ca_issuer_cert:
                 self.log_and_stdout('Issuing CA certificate not found for CMP truststore.', level='error')
@@ -302,7 +295,6 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
                     cmp_truststore.certificates.add(ca_issuer_cert, through_defaults={'order': max_order + 1})
                     self.log_and_stdout('Updated CMP CA truststore.')
 
-            # Update the CMP device's no_onboarding_config to use the CA truststore
             cmp_device.no_onboarding_config.trust_store = cmp_truststore
             cmp_device.no_onboarding_config.save()
             self.log_and_stdout('Updated CMP device no-onboarding config with CA truststore.')

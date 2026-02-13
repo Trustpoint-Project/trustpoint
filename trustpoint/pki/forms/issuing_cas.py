@@ -701,7 +701,6 @@ class IssuingCaTruststoreAssociationForm(forms.Form):
         self.instance: CaModel = kwargs.pop('instance')
         super().__init__(*args, **kwargs)
 
-        # Update help text based on CA type to clarify truststore purpose
         if self.instance.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
             self.fields['trust_store'].help_text = _(
                 'EST: Import the TLS server certificate of the remote PKI '

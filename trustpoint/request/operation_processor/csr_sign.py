@@ -63,8 +63,6 @@ class EstCsrSignProcessor(LoggerMixin, AbstractOperationProcessor):
         csr = context.cert_requested
 
         # Determine hash algorithm
-        # If credential has a certificate, use its signature suite
-        # Otherwise, use SHA256 as default for initial CA enrollment
         if signing_credential.certificate:
             signature_suite = SignatureSuite.from_certificate(signing_credential.get_certificate())
             hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm
@@ -73,7 +71,6 @@ class EstCsrSignProcessor(LoggerMixin, AbstractOperationProcessor):
                 raise ValueError(err_msg)
             hash_algorithm = hash_algorithm_enum.hash_algorithm()
         else:
-            # Use SHA256 as default for initial CA enrollment when no certificate exists yet
             hash_algorithm = hashes.SHA256()
 
         if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
@@ -92,7 +89,6 @@ class EstCsrSignProcessor(LoggerMixin, AbstractOperationProcessor):
         private_key = signing_credential.get_private_key_serializer().as_crypto()
         self._signed_csr = csr_builder.sign(private_key=private_key, algorithm=hash_algorithm)
 
-        # Log certificate info only if certificate is present
         if signing_credential.certificate:
             self.logger.info(
                 'Signed CSR for EST with credential: %s',
