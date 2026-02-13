@@ -23,8 +23,7 @@ class CertificateProfileBuilder {
     return flattened;
   }
 
- init() {
-
+  init() {
     document.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
@@ -32,10 +31,8 @@ class CertificateProfileBuilder {
       }
     });
 
-
     const closeBtn = this.sidebar?.querySelector('.tp-pb-close');
     if (closeBtn) closeBtn.addEventListener('click', () => this.closeSidebar());
-
 
     const triggerBtn = document.getElementById('profile-builder-trigger-btn');
     if (triggerBtn) {
@@ -45,14 +42,12 @@ class CertificateProfileBuilder {
       });
     }
 
-
     if (this.searchInput) {
       this.searchInput.addEventListener('input', (e) => this.filterFields(e.target.value));
       this.searchInput.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') e.preventDefault();
       });
     }
-
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
@@ -64,6 +59,7 @@ class CertificateProfileBuilder {
 
     this.renderFields();
   }
+
   toggleSidebar() {
     this.sidebarOpen = !this.sidebarOpen;
     if (this.sidebar) {
@@ -105,7 +101,6 @@ class CertificateProfileBuilder {
 
     const grouped = {};
     this.filteredFields.forEach(field => {
-
       const parts = field.fullPath.split('.');
       let isHiddenChild = false;
       if (parts.length > 1) {
@@ -156,6 +151,16 @@ class CertificateProfileBuilder {
     return current;
   }
 
+  escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
   showValuePopup(field) {
     const existing = document.querySelector('.profile-builder-modal');
     if (existing) existing.remove();
@@ -163,44 +168,50 @@ class CertificateProfileBuilder {
     let currentJson = {};
     try { currentJson = JSON.parse(this.editor.value); } catch (e) {}
 
+
+    let descriptionHtml = '';
+    if (field.description) {
+      descriptionHtml = `
+        <div style="background:#f8f9fa; padding:10px; border-radius:6px; margin-bottom:16px; border:1px solid #e9ecef; color:#555; font-size:13px; line-height:1.4;">
+          <strong>Description:</strong> ${this.escapeHtml(field.description)}
+        </div>
+      `;
+    }
+
     let formContent = '';
     const isProfileProperty = field.valueType === 'profile_property';
-
     const childFields = this.allFields.filter(f => f.fullPath.startsWith(field.fullPath + '.'));
     const hasChildren = childFields.length > 0;
 
 
     if (isProfileProperty) {
       const existingData = this.getValueAt(currentJson, field.fullPath);
-
       let val = '';
       let req = false;
       let mut = false;
 
       if (existingData && typeof existingData === 'object' && !Array.isArray(existingData)) {
-
         if (existingData.value !== undefined) val = existingData.value;
         if (existingData.required === true) req = true;
         if (existingData.mutable === true) mut = true;
       } else if (existingData !== undefined && existingData !== null) {
-
         val = existingData;
       }
 
       formContent = `
+        ${descriptionHtml}
         <div style="display:flex; flex-direction:column; gap:16px;">
           <div class="pb-input-wrapper">
             <label>Value</label>
-            <input type="text" id="pp-value" class="pb-input-child" value="${val}" placeholder="e.g. Trustpoint Domain Credential">
-            <div class="pb-input-desc">The specific value for this field.</div>
+            <input type="text" id="pp-value" class="pb-input-child"
+                   value="${this.escapeHtml(val)}" placeholder="Fixed value constraint...">
+            <div class="pb-input-desc">Enter a specific value.</div>
           </div>
-
           <div style="display:flex; gap:24px; padding:4px 0;">
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
               <input type="checkbox" id="pp-mutable" ${mut ? 'checked' : ''}>
               <span style="font-weight:500;">Mutable</span>
             </label>
-
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
               <input type="checkbox" id="pp-required" ${req ? 'checked' : ''}>
               <span style="font-weight:500;">Required</span>
@@ -211,7 +222,7 @@ class CertificateProfileBuilder {
     }
 
     else if (hasChildren) {
-      formContent = `<div style="max-height:400px; overflow-y:auto; padding-right:5px;">`;
+      formContent = `${descriptionHtml}<div style="max-height:400px; overflow-y:auto; padding-right:5px;">`;
       childFields.forEach(child => {
         const shortKey = child.fullPath.replace(field.fullPath + '.', '');
         const existingValue = this.getValueAt(currentJson, child.fullPath);
@@ -221,10 +232,10 @@ class CertificateProfileBuilder {
           formContent += `
             <div class="pb-checkbox-wrapper">
               <label>
-                <input type="checkbox" class="pb-input-child" data-key="${shortKey}" data-type="boolean" ${isChecked}>
+                <input type="checkbox" class="pb-input-child" data-key="${this.escapeHtml(shortKey)}" data-type="boolean" ${isChecked}>
                 <span class="pb-checkbox-label">
-                  <span class="pb-label-title">${child.name}</span>
-                  <span class="pb-label-desc">${child.description}</span>
+                  <span class="pb-label-title">${this.escapeHtml(child.name)}</span>
+                  <span class="pb-label-desc">${this.escapeHtml(child.description)}</span>
                 </span>
               </label>
             </div>`;
@@ -232,16 +243,20 @@ class CertificateProfileBuilder {
           const valStr = Array.isArray(existingValue) ? existingValue.join(', ') : '';
           formContent += `
             <div class="pb-input-wrapper">
-              <label>${child.name}</label>
-              <input type="text" class="pb-input-child" data-key="${shortKey}" data-type="list" value="${valStr}" placeholder="a, b, c">
+              <label>${this.escapeHtml(child.name)}</label>
+              <input type="text" class="pb-input-child" data-key="${this.escapeHtml(shortKey)}" data-type="list"
+                     value="${this.escapeHtml(valStr)}" placeholder="a, b, c">
+              <div class="pb-input-desc">${this.escapeHtml(child.description)}</div>
             </div>`;
         } else {
           const valStr = (existingValue !== undefined && existingValue !== null) ? existingValue : '';
           const inputType = child.valueType === 'number' ? 'number' : 'text';
           formContent += `
             <div class="pb-input-wrapper">
-              <label>${child.name}</label>
-              <input type="${inputType}" class="pb-input-child" data-key="${shortKey}" data-type="${child.valueType}" value="${valStr}">
+              <label>${this.escapeHtml(child.name)}</label>
+              <input type="${inputType}" class="pb-input-child" data-key="${this.escapeHtml(shortKey)}" data-type="${child.valueType}"
+                     value="${this.escapeHtml(valStr)}">
+              <div class="pb-input-desc">${this.escapeHtml(child.description)}</div>
             </div>`;
         }
       });
@@ -254,47 +269,77 @@ class CertificateProfileBuilder {
       const inputType = field.valueType === 'number' ? 'number' : 'text';
 
       let suggestions = '';
-      if(field.suggestions) {
-         suggestions = `<div class="pb-suggestions">` + field.suggestions.map(s =>
-           `<button type="button" class="pb-suggestion-btn" data-val="${s}">${s}</button>`
-         ).join('') + `</div>`;
+      if (field.suggestions) {
+        suggestions = `<div class="pb-suggestions">` + field.suggestions.map(s =>
+          `<button type="button" class="pb-suggestion-btn" data-val="${this.escapeHtml(s)}">${this.escapeHtml(s)}</button>`
+        ).join('') + `</div>`;
       }
 
       formContent = `
+        ${descriptionHtml}
         <div class="pb-input-wrapper">
-          <label>Value for <strong>${field.name}</strong></label>
+          <label>Value</label>
           ${suggestions}
-          <input type="${inputType}" id="pb-single-input" value="${valStr}" placeholder="${field.expectedHint || ''}">
+          <input type="${inputType}" id="pb-single-input" value="${this.escapeHtml(valStr)}" placeholder="${this.escapeHtml(field.expectedHint || '')}">
         </div>`;
     }
 
+
     const modal = document.createElement('div');
     modal.className = 'profile-builder-modal';
-    modal.innerHTML = `
-      <div class="profile-builder-modal-content">
-        <div class="profile-builder-modal-header">
-          <h3>${field.name}</h3>
-          <button class="close-btn">&times;</button>
-        </div>
-        <div class="profile-builder-modal-body">${formContent}</div>
-        <div class="profile-builder-modal-footer">
-          <button class="cancel-btn">Cancel</button>
-          <button class="apply-btn">Insert</button>
-        </div>
-      </div>
-    `;
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'profile-builder-modal-content';
+
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'profile-builder-modal-header';
+
+    const titleH3 = document.createElement('h3');
+    titleH3.textContent = field.name;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'close-btn';
+    closeBtn.innerHTML = '&times;';
+
+    headerDiv.appendChild(titleH3);
+    headerDiv.appendChild(closeBtn);
+
+    const bodyDiv = document.createElement('div');
+    bodyDiv.className = 'profile-builder-modal-body';
+    bodyDiv.innerHTML = formContent;
+
+    const footerDiv = document.createElement('div');
+    footerDiv.className = 'profile-builder-modal-footer';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'cancel-btn';
+    cancelBtn.textContent = 'Cancel';
+
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 'apply-btn';
+    applyBtn.textContent = 'Insert';
+
+    footerDiv.appendChild(cancelBtn);
+    footerDiv.appendChild(applyBtn);
+
+    contentDiv.appendChild(headerDiv);
+    contentDiv.appendChild(bodyDiv);
+    contentDiv.appendChild(footerDiv);
+    modal.appendChild(contentDiv);
 
     document.body.appendChild(modal);
 
     const closeModal = () => modal.remove();
-    modal.querySelector('.close-btn').addEventListener('click', closeModal);
-    modal.querySelector('.cancel-btn').addEventListener('click', closeModal);
+    closeBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+
     modal.querySelectorAll('.pb-suggestion-btn').forEach(b => {
-        b.addEventListener('click', () => { modal.querySelector('#pb-single-input').value = b.dataset.val; });
+      b.addEventListener('click', () => {
+        modal.querySelector('#pb-single-input').value = b.dataset.val;
+      });
     });
 
-
-    modal.querySelector('.apply-btn').addEventListener('click', () => {
+    applyBtn.addEventListener('click', () => {
       let finalValue;
 
       if (isProfileProperty) {
@@ -302,21 +347,14 @@ class CertificateProfileBuilder {
         const req = modal.querySelector('#pp-required').checked;
         const mut = modal.querySelector('#pp-mutable').checked;
 
-
         if (req || mut) {
-            finalValue = {};
-            if (val) finalValue.value = val;
-            if (mut) finalValue.mutable = true;
-            if (req) finalValue.required = true;
+          finalValue = {};
+          if (val) finalValue.value = val;
+          if (mut) finalValue.mutable = true;
+          if (req) finalValue.required = true;
         } else {
-
-            if (val) {
-                 finalValue = { value: val };
-
-            } else {
-
-                finalValue = undefined;
-            }
+          if (val) finalValue = { value: val }; // Default to object structure as requested
+          else finalValue = undefined;
         }
       } else if (hasChildren) {
         finalValue = {};

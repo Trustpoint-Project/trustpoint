@@ -1,12 +1,12 @@
 function initializeFieldCatalog() {
   return {
     DATA: {
-      label: 'Profile DATA',
+      label: 'Profile Meta',
       description: 'Global profile settings',
       icon: '',
       fields: [
-
-        { name: 'display_name', fullPath: 'display_name', valueType: 'string', description: 'Friendly name' }
+        { name: 'Display Name', fullPath: 'display_name', valueType: 'string', description: 'Friendly name' },
+        { name: 'Global Reject Mods', fullPath: 'reject_mods', valueType: 'boolean', description: 'Reject unknown top-level fields' }
       ]
     },
 
@@ -15,6 +15,10 @@ function initializeFieldCatalog() {
       description: 'Distinguished Name attributes',
       icon: '',
       fields: [
+
+        { name: 'Subj Allow', fullPath: 'subj.allow', valueType: 'list', description: 'Allowed Subject fields (* or list)' },
+        { name: 'Subj Reject Mods', fullPath: 'subj.reject_mods', valueType: 'boolean', description: 'Reject unknown Subject fields' },
+
 
         { name: 'Common Name', fullPath: 'subj.common_name', valueType: 'profile_property', description: 'CN (e.g. domain.com)' },
         { name: 'Organization', fullPath: 'subj.organization_name', valueType: 'profile_property', description: 'O (e.g. Company Ltd)' },
@@ -37,8 +41,11 @@ function initializeFieldCatalog() {
       icon: '',
       fields: [
 
-        { name: 'Key Usage', fullPath: 'ext.key_usage', valueType: 'object', description: 'Key Usage Constraints' },
+        { name: 'Ext Allow', fullPath: 'ext.allow', valueType: 'list', description: 'Allowed Extensions (* or list)' },
+        { name: 'Ext Reject Mods', fullPath: 'ext.reject_mods', valueType: 'boolean', description: 'Reject unknown Extensions, Expected true or false' },
 
+
+        { name: 'Key Usage', fullPath: 'ext.key_usage', valueType: 'object', description: 'Key Usage Constraints' },
         { name: 'Digital Signature', fullPath: 'ext.key_usage.digital_signature', valueType: 'boolean', description: 'Auth' },
         { name: 'Content Commitment', fullPath: 'ext.key_usage.content_commitment', valueType: 'boolean', description: 'Non-repudiation' },
         { name: 'Key Encipherment', fullPath: 'ext.key_usage.key_encipherment', valueType: 'boolean', description: 'Encipher keys' },
@@ -59,7 +66,9 @@ function initializeFieldCatalog() {
         { name: 'Usages', fullPath: 'ext.extended_key_usage.usages', valueType: 'list', description: 'server_auth, client_auth' },
         { name: 'Critical', fullPath: 'ext.extended_key_usage.critical', valueType: 'boolean', description: 'Critical' },
 
+
         { name: 'Subject Alt Name', fullPath: 'ext.subject_alternative_name', valueType: 'object', description: 'SAN' },
+        { name: 'SAN Allow', fullPath: 'ext.subject_alternative_name.allow', valueType: 'list', description: 'Allowed SAN types' },
         { name: 'DNS', fullPath: 'ext.subject_alternative_name.dns_names', valueType: 'list', description: 'DNS Names' },
         { name: 'IPs', fullPath: 'ext.subject_alternative_name.ip_addresses', valueType: 'list', description: 'IP Addresses' },
         { name: 'Emails', fullPath: 'ext.subject_alternative_name.rfc822_names', valueType: 'list', description: 'Emails' },
@@ -75,7 +84,8 @@ function initializeFieldCatalog() {
       description: 'Time constraints',
       icon: '',
       fields: [
-        { name: 'Days', fullPath: 'validity.days', valueType: 'number', description: 'Validity in days', suggestions: [30, 90, 365] }      ]
+        { name: 'Days', fullPath: 'validity.days', valueType: 'number', description: 'Validity in days', suggestions: [30, 90, 365] }
+      ]
     }
   };
 }
