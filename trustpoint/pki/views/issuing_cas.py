@@ -790,7 +790,7 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             add_shared_secret_protection=True,
         )
 
-        self._save_cmp_certificates(ca, issued_cert, chain_certs, csr.subject)
+        self._save_cmp_certificates(ca, issued_cert, chain_certs)
 
         del request.session[f'cert_content_data_{ca.pk}']
 
@@ -961,59 +961,17 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             },
         )
 
-    def _validate_and_correct_issued_cert(
-        self,
-        issued_cert: x509.Certificate,
-        chain_certs: list[x509.Certificate],
-        expected_subject: x509.Name,
-    ) -> x509.Certificate:
-        """Validate that the issued cert has the expected subject, and correct if necessary."""
-        if issued_cert.subject == expected_subject and issued_cert.subject != issued_cert.issuer:
-            return issued_cert
-
-        # If issued_cert is self-signed, try to use a non-self-signed from chain as issued_cert
-        if issued_cert.subject == issued_cert.issuer:
-            for i, chain_cert in enumerate(chain_certs):
-                if chain_cert.subject != chain_cert.issuer:
-                    # Found non-self-signed cert in chain
-                    correct_issued = chain_cert
-                    chain_certs[i] = issued_cert
-                    self.logger.info('Issued cert is self-signed, swapped with non-self-signed from chain.')
-                    return correct_issued
-
-        # Fallback: check if issued_cert matches expected subject
-        if issued_cert.subject == expected_subject:
-            return issued_cert
-
-        # Try to find in chain
-        for i, chain_cert in enumerate(chain_certs):
-            if chain_cert.subject == expected_subject:
-                correct_issued = chain_cert
-                chain_certs[i] = issued_cert
-                self.logger.info('Found correct issued certificate in chain, swapped.')
-                return correct_issued
-
-        self.logger.error(
-            'Could not find certificate with expected subject %s in response.',
-            expected_subject.rfc4514_string(),
-        )
-        return issued_cert
-
     def _save_cmp_certificates(
         self,
         ca: CaModel,
         issued_cert: x509.Certificate,
         chain_certs: list[x509.Certificate],
-        expected_subject: x509.Name,
     ) -> None:
         """Save the issued certificate and chain certificates."""
-        issued_cert = self._validate_and_correct_issued_cert(issued_cert, chain_certs, expected_subject)
         cert_model = CertificateModel.save_certificate(issued_cert)
-        chain_cert_models = [CertificateModel.save_certificate(c) for c in chain_certs]
 
         chain_ca_models = []
-        for i, chain_cert in enumerate(chain_certs):
-            cert_model = chain_cert_models[i]
+        for chain_cert in chain_certs:
             existing_ca = self._find_existing_ca_for_certificate(chain_cert)
             if existing_ca:
                 chain_ca_models.append(existing_ca)
@@ -1036,16 +994,10 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             ca.save()
             self.logger.info('Set parent CA %s for issuing CA %s', issuer_ca.unique_name, ca.unique_name)
 
-        # Build the certificate chain for the credential
-        if ca.credential:
-            self._build_certificate_chain_for_credential(ca.credential, ca.parent_ca)
-
         if ca.credential:
             ca.credential.certificate = cert_model
             ca.credential.save()
-            for chain_cert_model in chain_cert_models:
-                if not PrimaryCredentialCertificate.objects.filter(certificate=chain_cert_model).exists():
-                    ca.credential.certificates.add(chain_cert_model)
+            self._build_certificate_chain_for_credential(ca.credential, ca.parent_ca)
         else:
             credential = CredentialModel(
                 credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
@@ -1054,9 +1006,6 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             )
             credential.save()
             credential.certificates.add(cert_model)
-            for chain_cert_model in chain_cert_models:
-                if not PrimaryCredentialCertificate.objects.filter(certificate=chain_cert_model).exists():
-                    credential.certificates.add(chain_cert_model)
             PrimaryCredentialCertificate.objects.create(
                 credential=credential,
                 certificate=cert_model,
@@ -1064,6 +1013,7 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             )
             ca.credential = credential
             ca.save()
+            self._build_certificate_chain_for_credential(credential, ca.parent_ca)
 
     def _build_ca_hierarchy(
         self,
@@ -1099,13 +1049,12 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         if not parent_ca or not credential.certificate:
             return
         chain = []
-        current = parent_ca
+        current: CaModel | None = parent_ca
         while current:
-            chain.append(current.certificate)
+            if current.certificate:
+                chain.append(current.certificate)
             current = current.parent_ca
-        # Clear existing chain
         credential.certificatechainordermodel_set.all().delete()
-        # Add in order
         primary_cert = credential.certificate
         for i, cert in enumerate(chain):
             CertificateChainOrderModel.objects.create(
