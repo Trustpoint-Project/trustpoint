@@ -72,14 +72,27 @@ class DomainModel(models.Model):
 
 
     @property
-    def signature_suite(self) -> oid.SignatureSuite:
-        """Get the signature suite for the domain (based on its Issuing CA)."""
-        return oid.SignatureSuite.from_certificate(
-            self.get_issuing_ca_or_value_error().get_certificate())
+    def signature_suite(self) -> oid.SignatureSuite | None:
+        """Get the signature suite for the domain (based on its Issuing CA).
+
+        Returns None if the issuing CA doesn't have a certificate yet.
+        """
+        issuing_ca = self.get_issuing_ca_or_value_error()
+        if issuing_ca.credential and not issuing_ca.credential.certificate:
+            return None
+        try:
+            return oid.SignatureSuite.from_certificate(issuing_ca.get_certificate())
+        except ValueError:
+            return None
 
     @property
-    def public_key_info(self) -> oid.PublicKeyInfo:
-        """Get the public key info for the domain (based on its Issuing CA)."""
+    def public_key_info(self) -> oid.PublicKeyInfo | None:
+        """Get the public key info for the domain (based on its Issuing CA).
+
+        Returns None if the issuing CA doesn't have a certificate yet.
+        """
+        if self.signature_suite is None:
+            return None
         return self.signature_suite.public_key_info
 
     def clean(self) -> None:

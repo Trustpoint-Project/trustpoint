@@ -7,7 +7,8 @@ from django.contrib.messages import get_messages
 from django.test import Client
 from django.urls import reverse
 
-from devices.models import DeviceModel, NoOnboardingConfigModel, NoOnboardingPkiProtocol, OnboardingProtocol
+from devices.models import DeviceModel
+from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol, OnboardingProtocol
 
 
 @pytest.mark.django_db

@@ -17,15 +17,17 @@ from django.utils.translation import gettext_lazy as _
 from devices.models import (
     DeviceModel,
     IssuedCredentialModel,
+    RemoteDeviceCredentialDownloadModel,
+)
+from devices.utils import validate_application_uri, validate_common_name_characters
+from onboarding.models import (
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
     OnboardingConfigModel,
     OnboardingPkiProtocol,
     OnboardingProtocol,
     OnboardingStatus,
-    RemoteDeviceCredentialDownloadModel,
 )
-from devices.utils import validate_application_uri, validate_common_name_characters
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
@@ -973,23 +975,3 @@ class OpcUaGdsPushTruststoreAssociationForm(forms.Form):
             self.instance.onboarding_config.opc_trust_store = self.cleaned_data['opc_trust_store']
             self.instance.onboarding_config.full_clean()
             self.instance.onboarding_config.save()
-
-
-class OpcUaGdsPushTruststoreMethodSelectForm(forms.Form):
-    """Form for selecting the method to associate a truststore with an OPC UA GDS Push device.
-
-    Attributes:
-        method_select (ChoiceField): A dropdown to select the method for truststore association.
-            - `upload_truststore`: Upload a new truststore prior to association.
-            - `select_truststore`: Use an existing truststore for association.
-    """
-
-    method_select = forms.ChoiceField(
-        label=_('Select Method'),
-        choices=[
-            ('upload_truststore', _('Upload a new truststore prior to association')),
-            ('select_truststore', _('Use an existing truststore for association')),
-        ],
-        initial='select_truststore',
-        required=True,
-    )

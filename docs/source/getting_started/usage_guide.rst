@@ -51,7 +51,7 @@ Trustpoint can be configured to operate in different modes in relation to the Is
     - **Steps to Configure:**
         - In PKI > Issuing CAs > Add new Issuing CA
         - You can Import a new Issuing CA from a file by importing an PKCS#12 file oder by importing the key and certificate separately
-        - or you can generate a keypair and request an issuing CA Certificate by rerquesting it via EST (WIP), CMP or SCEP
+        - or you can generate a keypair and request an issuing CA Certificate by rerquesting it via EST or CMP
     - **Use Case:** Issuing certificates in air-gapped environments
 
 2. **Operating as a Registration Authority (RA)**

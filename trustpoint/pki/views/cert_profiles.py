@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from django.contrib import messages
 from django.db.models import ProtectedError, QuerySet
@@ -13,10 +13,10 @@ from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
-from django.views.generic.edit import UpdateView
+from django.views.generic.edit import FormView, UpdateView
 from django.views.generic.list import ListView
 
-from pki.forms import CertProfileConfigForm
+from pki.forms import CertificateIssuanceForm, CertProfileConfigForm
 from pki.models import CertificateProfileModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
@@ -122,6 +122,55 @@ class CertProfileConfigView(LoggerMixin, CertProfileContextMixin,
             _('Successfully updated Certificate Profile {name}.').format(name=cert_profile.unique_name),
         )
         return super().form_valid(form)
+
+
+class CertProfileIssuanceView(LoggerMixin, CertProfileContextMixin,
+                              FormView[CertificateIssuanceForm]):
+    """View to display the issuance form for a Certificate Profile."""
+
+    http_method_names = ('get', 'post')
+    template_name = 'pki/cert_profiles/issuance.html'
+    form_class = CertificateIssuanceForm
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Dispatch the request, ensuring the profile exists."""
+        self.profile = get_object_or_404(CertificateProfileModel, pk=kwargs['pk'])
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Get form kwargs, including the profile."""
+        kwargs = super().get_form_kwargs()
+        raw_profile = json.loads(self.profile.profile_json)
+        kwargs['profile'] = raw_profile
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add additional context data."""
+        context = super().get_context_data(**kwargs)
+        context['profile'] = self.profile
+        context['profile_dict'] = self.get_form_kwargs()['profile']
+        return context
+
+    def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
+        """Handle the case where the form is invalid."""
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f'{field}: {error}')
+        return super().form_invalid(form)
+
+    def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        try:
+            form.get_certificate_builder()
+        except ValueError as e:
+            messages.error(self.request, _('Error generating certificate builder: {error}').format(error=str(e)))
+            return self.form_invalid(form)
+
+        messages.success(
+            self.request,
+            _('Certificate builder generated successfully.'),
+        )
+        return HttpResponseRedirect(reverse_lazy('pki:cert_profiles'))
 
 
 class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):

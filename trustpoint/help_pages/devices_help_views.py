@@ -170,7 +170,7 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
             title = profile.certificate_profile.display_name or name
 
             try:
-                cert_profile = json.loads(profile.certificate_profile.profile_json)
+                cert_profile = profile.certificate_profile.profile
                 sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
 
                 cmd = CmpSharedSecretCommandBuilder.get_dynamic_cert_profile_command(
@@ -295,7 +295,7 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
             title = profile.certificate_profile.display_name or name
 
             try:
-                cert_profile = json.loads(profile.certificate_profile.profile_json)
+                cert_profile = profile.certificate_profile.profile
                 sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
 
                 cmd = EstUsernamePasswordCommandBuilder.get_dynamic_cert_profile_command(
@@ -582,7 +582,7 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
             title = profile.certificate_profile.display_name or name
 
             try:
-                cert_profile = json.loads(profile.certificate_profile.profile_json)
+                cert_profile = profile.certificate_profile.profile
                 sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
 
                 cmd = CmpClientCertificateCommandBuilder.get_dynamic_cert_profile_command(
@@ -691,7 +691,7 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
             title = profile.certificate_profile.display_name or name
 
             try:
-                cert_profile = json.loads(profile.certificate_profile.profile_json)
+                cert_profile = profile.certificate_profile.profile
                 sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
 
                 cmd = EstUsernamePasswordCommandBuilder.get_dynamic_cert_profile_command(
