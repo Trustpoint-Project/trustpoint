@@ -279,7 +279,7 @@ INSTALLED_APPS = [
     'dbbackup',
     'workflows.apps.WorkflowsConfig',
     'rest_framework',
-    'drf_yasg',
+    'drf_spectacular'
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
@@ -427,18 +427,13 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-SWAGGER_SETTINGS = {
-    'SECURITY_DEFINITIONS': {
-        'Bearer': {
-            'type': 'apiKey',
-            'description': 'Enter JWT token as: Bearer {token}',
-            'name': 'Authorization',
-            'in': 'header',
-        }
-    },
-    'USE_SESSION_AUTH': False,  # disables Django login in Swagger UI
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Trustpoint APIs',
+    'DESCRIPTION': 'API documentation for Trustpoint project',
+    'VERSION': 'v0.0.5',
 }
 
 SWAGGER_USE_COMPAT_RENDERERS = False

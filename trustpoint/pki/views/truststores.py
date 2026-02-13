@@ -16,9 +16,10 @@ from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
 from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.oid import NameOid
@@ -164,6 +165,7 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
             context['domain'] = get_object_or_404(DomainModel, id=pk)
         return context
 
+
 OID_MAP = {oid.dotted_string: oid.verbose_name for oid in NameOid}
 
 
@@ -200,7 +202,6 @@ class TruststoreDetailView(TruststoresContextMixin, DetailView[TruststoreModel])
                 for entry in cert.subject.all()
             ]
 
-
             issuer_entries = [
                 {
                     'oid': entry.oid,
@@ -219,6 +220,7 @@ class TruststoreDetailView(TruststoresContextMixin, DetailView[TruststoreModel])
 
         context['cert_context'] = cert_context
         return context
+
 
 class TruststoreDownloadView(TruststoresContextMixin, DetailView[TruststoreModel]):
     """View for downloading a single truststore."""
@@ -413,7 +415,13 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
 
         return response
 
-
+@extend_schema(tags=['Truststore'])
+@extend_schema_view(
+    retrieve=extend_schema(description='Retrieve a single Truststore by id.'),
+    update=extend_schema(description='Update an existing Truststore.'),
+    partial_update=extend_schema(description='Partially update an existing Truststore.'),
+    destroy=extend_schema(description='Delete a Truststore.')
+)
 class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
     """ViewSet for managing Truststore instances.
 
@@ -424,25 +432,18 @@ class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
     queryset = TruststoreModel.objects.all().order_by('-created_at')
     serializer_class = TruststoreSerializer
     permission_classes = (IsAuthenticated,)
-    filter_backends = (
-        DjangoFilterBackend,
-        filters.SearchFilter,
-        filters.OrderingFilter
-    )
+    filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
     filterset_fields: ClassVar = ['intended_usage']
     search_fields: ClassVar = ['unique_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at']
 
-    # ignoring untyped decorator (drf-yasg not typed)
-    @swagger_auto_schema(
-        operation_summary='Create a new truststore',
-        operation_description='Add a new truststore by providing its unique_name, intended_usage and trust_store_file.',
-        tags=['truststores'],
-    )  # type: ignore[misc]
-    def create(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+    @extend_schema(
+        summary='Create a new truststore',
+        description='Add a new truststore by providing its unique_name, intended_usage and trust_store_file.',
+    )
+    def create(self, request: Request) -> Response:
         """API endpoint to create truststore."""
-        del args, _kwargs
-        serializer = self.get_serializer(data=request.data)  # type: ignore[attr-defined]
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         truststore = TruststoreService().create(
@@ -451,19 +452,14 @@ class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
             trust_store_file=serializer.validated_data['trust_store_file'],
         )
 
-        return Response(
-            TruststoreSerializer(truststore).data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response(TruststoreSerializer(truststore).data, status=status.HTTP_201_CREATED)
 
-    @swagger_auto_schema(
-        operation_summary='List Truststores',
-        operation_description='Retrieve truststore from the database.',
-        tags=['truststores'],
-    )  # type: ignore[misc]
-    def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+    @extend_schema(
+        summary='List Truststores',
+        description='Retrieve truststore from the database.',
+    )
+    def list(self, _request: Request) -> Response:
         """API endpoint to get all truststores."""
-        del request, args, _kwargs
         queryset = self.get_queryset()
 
         for backend in list(self.filter_backends):
