@@ -241,9 +241,8 @@ class DeviceTableView(AbstractDeviceTableView):
         Returns:
             Returns a queryset of all DeviceModels, filtered by UI filters.
         """
-        base_qs = super(ListView, self).get_queryset().filter(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
+        base_qs = super().get_queryset().filter(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)  # type: ignore[safe-super]
         return self.apply_filters(base_qs)
-
 
 class OpcUaGdsTableView(DeviceTableView):
     """Table View for devices where opc_ua_gds is True."""
@@ -258,7 +257,7 @@ class OpcUaGdsTableView(DeviceTableView):
         Returns:
             Returns a queryset of all DeviceModels which are of OPC-UA GDS type, filtered by UI filters.
         """
-        base_qs = super(ListView, self).get_queryset().filter(device_type=DeviceModel.DeviceType.OPC_UA_GDS)
+        base_qs = super().get_queryset().filter(device_type=DeviceModel.DeviceType.OPC_UA_GDS)
         return self.apply_filters(base_qs)
 
 
