@@ -36,9 +36,12 @@ class Command(BaseCommand):
                 print(f'Invalid JSON certificate profile in {profile_file}: {e}')
                 continue
 
+            # Set is_default based on profile name
+            is_default = unique_name != 'issuing_ca'
+
             _obj, created = CertificateProfileModel.objects.get_or_create(
                 unique_name=unique_name,
-                defaults={'profile_json': profile_json, 'is_default': True, 'display_name': display_name},
+                defaults={'profile_json': profile_json, 'is_default': is_default, 'display_name': display_name},
             )
 
             if created:

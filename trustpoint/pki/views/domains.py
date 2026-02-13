@@ -24,7 +24,6 @@ from pki.models import (
     CaModel,
     CertificateModel,
     CertificateProfileModel,
-    CredentialModel,
     DevIdRegistration,
     DomainModel,
 )
@@ -379,11 +378,12 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
         if domain.issuing_ca is None:
             msg = 'Domain has no issuing CA configured.'
             raise Http404(msg)
-        # PyCharm TypeChecker issue - this passes mypy
-        # noinspection PyTypeChecker
+        if domain.issuing_ca.credential is None:
+            msg = 'Issuing CA has no credential configured.'
+            raise Http404(msg)
         # TODO(AlexHx8472): This must be limited to the actual domain.  # noqa: FIX002
         return CertificateModel.objects.filter(
-            issuer_public_bytes=cast('CredentialModel', domain.issuing_ca.credential).certificate.subject_public_bytes
+            issuer_public_bytes=domain.issuing_ca.credential.certificate_or_error.subject_public_bytes
         )
 
     def get_domain(self) -> DomainModel:

@@ -158,6 +158,14 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         help_text=_('The path on the remote PKI')
     )
 
+    est_username = models.CharField(
+        verbose_name=_('EST Username'),
+        max_length=128,
+        blank=True,
+        default='',
+        help_text=_('Username for EST authentication')
+    )
+
     onboarding_config = models.ForeignKey(
         'onboarding.OnboardingConfigModel',
         related_name='remote_cas',
@@ -230,7 +238,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.credential is None:
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
-        return self.credential.certificate.common_name
+        if self.credential.certificate is None:
+            return '(Certificate pending)'
+        return self.credential.certificate_or_error.common_name
 
     @property
     def subject_public_bytes(self) -> bytes:
@@ -243,7 +253,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.credential is None:
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
-        return bytes.fromhex(self.credential.certificate.subject_public_bytes)
+        # Handle case where credential exists but certificate is pending (e.g., remote CA)
+        if self.credential.certificate is None:
+            return b''
+        return bytes.fromhex(self.credential.certificate_or_error.subject_public_bytes)
 
     @property
     def ca_certificate_model(self) -> CertificateModel:
@@ -252,7 +265,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             if self.credential is None:
                 msg = 'Credential is None for issuing CA'
                 raise ValueError(msg)
-            return self.credential.certificate
+            return self.credential.certificate_or_error
         if self.is_keyless_ca:
             if self.certificate is None:
                 msg = 'Certificate is None for keyless CA'
@@ -365,7 +378,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """Validates remote issuing CA fields."""
         if self.certificate is not None:
             raise ValidationError(_('Remote issuing CAs cannot have certificate set.'))
-        if self.credential is None:
+        # Allow credential to be None for unsaved instances (will be set in form save method)
+        if self.pk is not None and self.credential is None:
             raise ValidationError(_('Remote issuing CAs must have credential set.'))
         if self.ca_type is None:
             raise ValidationError(_('ca_type must be set for remote issuing CAs.'))
@@ -375,7 +389,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(_('Remote port must be set for remote issuing CAs.'))
         if not self.remote_path:
             raise ValidationError(_('Remote path must be set for remote issuing CAs.'))
-        if not (self.onboarding_config or self.no_onboarding_config):
+        if self.ca_type == self.CaTypeChoice.REMOTE_ISSUING_EST and not self.est_username:
+            raise ValidationError(_('EST username must be set for remote EST issuing CAs.'))
+        if self.pk is not None and not (self.onboarding_config or self.no_onboarding_config):
             raise ValidationError(_('Either onboarding or no-onboarding config must be set for remote issuing CAs.'))
         if self.onboarding_config and self.no_onboarding_config:
             raise ValidationError(_('Only one onboarding config can be set for remote issuing CAs.'))
@@ -391,7 +407,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.certificate is not None and self.ca_type != self.CaTypeChoice.KEYLESS:
             raise ValidationError(_('ca_type must be KEYLESS for keyless CAs.'))
         # Remote fields should not be set for local/keyless CAs
-        if (self.remote_host or self.remote_port is not None or self.remote_path or
+        if (self.remote_host or self.remote_port is not None or self.remote_path or self.est_username or
             self.onboarding_config or self.no_onboarding_config):
             raise ValidationError(_('Remote fields can only be set for remote CAs.'))
 
@@ -592,21 +608,31 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return True
 
     @property
-    def signature_suite(self) -> oid.SignatureSuite:
-        """The signature suite for the CA public key certificate."""
+    def signature_suite(self) -> oid.SignatureSuite | None:
+        """The signature suite for the CA public key certificate.
+
+        Returns None if the CA doesn't have a certificate yet (e.g., remote CA pending).
+        """
         if self.is_keyless_ca:
             if self.certificate is None:
-                msg = 'Certificate is None for keyless CA'
-                raise ValueError(msg)
+                return None
             return oid.SignatureSuite.from_certificate(self.certificate.get_certificate_serializer().as_crypto())
         if self.credential is None:
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
+        # Handle case where credential exists but certificate is pending (e.g., remote CA)
+        if self.credential.certificate is None:
+            return None
         return oid.SignatureSuite.from_certificate(self.credential.get_certificate_serializer().as_crypto())
 
     @property
-    def public_key_info(self) -> oid.PublicKeyInfo:
-        """The public key info for the CA certificate's public key."""
+    def public_key_info(self) -> oid.PublicKeyInfo | None:
+        """The public key info for the CA certificate's public key.
+
+        Returns None if the CA doesn't have a certificate yet (e.g., remote CA pending).
+        """
+        if self.signature_suite is None:
+            return None
         return self.signature_suite.public_key_info
 
     def get_issued_certificates(self) -> QuerySet[CertificateModel, CertificateModel]:
@@ -625,7 +651,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.credential is None:
             msg = 'Credential is None for issuing CA'
             raise ValueError(msg)
-        ca_subject_public_bytes = self.credential.certificate.subject_public_bytes
+        if self.credential.certificate is None:
+            return CertificateModel.objects.none()
+        ca_subject_public_bytes = self.credential.certificate_or_error.subject_public_bytes
 
         # do not return self-signed CA certificate
         return CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude(

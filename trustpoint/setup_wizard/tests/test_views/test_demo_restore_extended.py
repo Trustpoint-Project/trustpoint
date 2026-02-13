@@ -128,6 +128,7 @@ class TestTrustStoreDownload:
         
         mock_credential = Mock(spec=CredentialModel)
         mock_credential.certificate = mock_certificate
+        mock_credential.certificate_or_error = mock_certificate
         
         mock_active = Mock(spec=ActiveTrustpointTlsServerCredentialModel)
         mock_active.credential = mock_credential
@@ -164,6 +165,7 @@ class TestTrustStoreDownload:
         
         mock_credential = Mock(spec=CredentialModel)
         mock_credential.certificate = mock_certificate
+        mock_credential.certificate_or_error = mock_certificate
         
         mock_active = Mock(spec=ActiveTrustpointTlsServerCredentialModel)
         mock_active.credential = mock_credential
@@ -197,6 +199,7 @@ class TestTrustStoreDownload:
         
         mock_credential = Mock(spec=CredentialModel)
         mock_credential.certificate = mock_certificate
+        mock_credential.certificate_or_error = mock_certificate
         
         mock_active = Mock(spec=ActiveTrustpointTlsServerCredentialModel)
         mock_active.credential = mock_credential

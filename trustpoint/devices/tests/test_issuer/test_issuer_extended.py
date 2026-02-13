@@ -19,7 +19,7 @@ from devices.issuer import (
     OpcUaClientCredentialIssuer,
     OpcUaServerCredentialIssuer,
 )
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import IssuedCredentialModel
 from onboarding.models import OnboardingStatus
 
 

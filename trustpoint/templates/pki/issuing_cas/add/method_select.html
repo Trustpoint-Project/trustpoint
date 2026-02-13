@@ -21,19 +21,17 @@
 
                     <h2>{% trans 'Generate a keypair and request an Issuing CA Certificate' %}</h2>
                     <hr class="mb-4">
-                    <a href="#" class="btn btn-primary min-width-30 mb-3 disabled" tabindex="-1" aria-disabled="true">{% trans 'Request Issuing CA Certificate Using EST' %}</a>
+                    <a href="{% url 'pki:issuing_cas-add-request-est' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Request Issuing CA Certificate Using EST' %}</a>
                     <br>
-                    <a href="#" class="btn btn-primary min-width-30 mb-3 disabled" tabindex="-1" aria-disabled="true">{% trans 'Request Issuing CA Certificate Using CMP' %}</a>
-                    <br>
-                    <a href="#" class="btn btn-primary min-width-30 mb-5 disabled" tabindex="-1" aria-disabled="true">{% trans 'Request Issuing CA Certificate Using SCEP' %}</a>
+                    <a href="{% url 'pki:issuing_cas-add-request-cmp' %}" class="btn btn-primary min-width-30 mb-3 disabled" aria-disabled="true">{% trans 'Request Issuing CA Certificate Using CMP' %}</a>
+
 
                     <h2>{% trans 'Configure a Remote Issuing CA' %}</h2>
                     <hr class="mb-4">
                     <a href="#" class="btn btn-primary min-width-30 mb-3 disabled" tabindex="-1" aria-disabled="true">{% trans 'Configure A Remote Issuing CA Using EST' %}</a>
                     <br>
                     <a href="#" class="btn btn-primary min-width-30 mb-3 disabled" tabindex="-1" aria-disabled="true">{% trans 'Configure A Remote Issuing CA Using CMP' %}</a>
-                    <br>
-                    <a href="#" class="btn btn-primary min-width-30 mb-3 disabled" tabindex="-1" aria-disabled="true">{% trans 'Configure A Remote Issuing CA Using SCEP' %}</a>
+
                 </div>
             </div>
             <div class="card-footer d-flex">
