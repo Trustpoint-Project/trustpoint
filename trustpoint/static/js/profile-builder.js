@@ -192,6 +192,8 @@ class CertificateProfileBuilder {
 
       if (existingData && typeof existingData === 'object' && !Array.isArray(existingData)) {
         if (existingData.value !== undefined) val = existingData.value;
+        else if (existingData.default !== undefined) val = existingData.default;
+
         if (existingData.required === true) req = true;
         if (existingData.mutable === true) mut = true;
       } else if (existingData !== undefined && existingData !== null) {
@@ -202,10 +204,10 @@ class CertificateProfileBuilder {
         ${descriptionHtml}
         <div style="display:flex; flex-direction:column; gap:16px;">
           <div class="pb-input-wrapper">
-            <label>Value</label>
+            <label>Value / Default</label>
             <input type="text" id="pp-value" class="pb-input-child"
-                   value="${this.escapeHtml(val)}" placeholder="Fixed value constraint...">
-            <div class="pb-input-desc">Enter a specific value.</div>
+                   value="${this.escapeHtml(val)}" placeholder="Value or Default...">
+            <div class="pb-input-desc">The specific value for this field.</div>
           </div>
           <div style="display:flex; gap:24px; padding:4px 0;">
             <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
@@ -217,18 +219,30 @@ class CertificateProfileBuilder {
               <span style="font-weight:500;">Required</span>
             </label>
           </div>
-        </div>
-      `;
+        </div>`;
     }
 
     else if (hasChildren) {
       formContent = `${descriptionHtml}<div style="max-height:400px; overflow-y:auto; padding-right:5px;">`;
       childFields.forEach(child => {
         const shortKey = child.fullPath.replace(field.fullPath + '.', '');
-        const existingValue = this.getValueAt(currentJson, child.fullPath);
+        const existingData = this.getValueAt(currentJson, child.fullPath);
+
+
+        let effectiveValue = existingData;
+        let isMutable = false;
+
+        if (existingData && typeof existingData === 'object' && !Array.isArray(existingData)) {
+            if (existingData.value !== undefined) effectiveValue = existingData.value;
+            else if (existingData.default !== undefined) effectiveValue = existingData.default;
+            else effectiveValue = undefined;
+
+            if (existingData.mutable === true) isMutable = true;
+        }
+
 
         if (child.valueType === 'boolean') {
-          const isChecked = existingValue === true ? 'checked' : '';
+          const isChecked = effectiveValue === true ? 'checked' : '';
           formContent += `
             <div class="pb-checkbox-wrapper">
               <label>
@@ -239,23 +253,38 @@ class CertificateProfileBuilder {
                 </span>
               </label>
             </div>`;
-        } else if (child.valueType === 'list') {
-          const valStr = Array.isArray(existingValue) ? existingValue.join(', ') : '';
-          formContent += `
-            <div class="pb-input-wrapper">
-              <label>${this.escapeHtml(child.name)}</label>
-              <input type="text" class="pb-input-child" data-key="${this.escapeHtml(shortKey)}" data-type="list"
-                     value="${this.escapeHtml(valStr)}" placeholder="a, b, c">
-              <div class="pb-input-desc">${this.escapeHtml(child.description)}</div>
-            </div>`;
+
+
         } else {
-          const valStr = (existingValue !== undefined && existingValue !== null) ? existingValue : '';
-          const inputType = child.valueType === 'number' ? 'number' : 'text';
+
+          let typeAttr = 'text';
+          let placeholder = 'Value...';
+          let valStr = '';
+
+          if (child.valueType === 'list') {
+             valStr = Array.isArray(effectiveValue) ? effectiveValue.join(', ') : '';
+             placeholder = 'a, b, c';
+          } else if (child.valueType === 'number') {
+             typeAttr = 'number';
+             valStr = (effectiveValue !== undefined && effectiveValue !== null) ? effectiveValue : '';
+          } else {
+             valStr = (effectiveValue !== undefined && effectiveValue !== null) ? effectiveValue : '';
+          }
+
+          const mutChecked = isMutable ? 'checked' : '';
+
+
           formContent += `
             <div class="pb-input-wrapper">
-              <label>${this.escapeHtml(child.name)}</label>
-              <input type="${inputType}" class="pb-input-child" data-key="${this.escapeHtml(shortKey)}" data-type="${child.valueType}"
-                     value="${this.escapeHtml(valStr)}">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <label style="margin:0;">${this.escapeHtml(child.name)}</label>
+                <label style="font-weight:normal; font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+                  <input type="checkbox" class="pb-child-mutable" data-key="${this.escapeHtml(shortKey)}" ${mutChecked}>
+                  Mutable
+                </label>
+              </div>
+              <input type="${typeAttr}" class="pb-input-child" data-key="${this.escapeHtml(shortKey)}" data-type="${child.valueType}"
+                     value="${this.escapeHtml(valStr)}" placeholder="${placeholder}">
               <div class="pb-input-desc">${this.escapeHtml(child.description)}</div>
             </div>`;
         }
@@ -284,7 +313,6 @@ class CertificateProfileBuilder {
         </div>`;
     }
 
-
     const modal = document.createElement('div');
     modal.className = 'profile-builder-modal';
 
@@ -293,10 +321,8 @@ class CertificateProfileBuilder {
 
     const headerDiv = document.createElement('div');
     headerDiv.className = 'profile-builder-modal-header';
-
     const titleH3 = document.createElement('h3');
     titleH3.textContent = field.name;
-
     const closeBtn = document.createElement('button');
     closeBtn.className = 'close-btn';
     closeBtn.innerHTML = '&times;';
@@ -310,11 +336,9 @@ class CertificateProfileBuilder {
 
     const footerDiv = document.createElement('div');
     footerDiv.className = 'profile-builder-modal-footer';
-
     const cancelBtn = document.createElement('button');
     cancelBtn.className = 'cancel-btn';
     cancelBtn.textContent = 'Cancel';
-
     const applyBtn = document.createElement('button');
     applyBtn.className = 'apply-btn';
     applyBtn.textContent = 'Insert';
@@ -328,6 +352,7 @@ class CertificateProfileBuilder {
     modal.appendChild(contentDiv);
 
     document.body.appendChild(modal);
+
 
     const closeModal = () => modal.remove();
     closeBtn.addEventListener('click', closeModal);
@@ -349,30 +374,49 @@ class CertificateProfileBuilder {
 
         if (req || mut) {
           finalValue = {};
-          if (val) finalValue.value = val;
+          if (val) {
+
+             if (mut) finalValue.default = val;
+             else finalValue.value = val;
+          }
           if (mut) finalValue.mutable = true;
           if (req) finalValue.required = true;
         } else {
-          if (val) finalValue = { value: val }; // Default to object structure as requested
+          if (val) finalValue = { value: val };
           else finalValue = undefined;
         }
       } else if (hasChildren) {
         finalValue = {};
+
+
         modal.querySelectorAll('.pb-input-child').forEach(input => {
           const key = input.dataset.key;
           const type = input.dataset.type;
+          let val = null;
 
           if (type === 'boolean') {
             if (input.checked) finalValue[key] = true;
-            else {
-              const childPath = field.fullPath + '.' + key;
-              const orig = this.getValueAt(currentJson, childPath);
-              if (orig !== undefined) finalValue[key] = false;
-            }
-          } else if (type === 'list') {
-            if (input.value.trim()) finalValue[key] = input.value.split(',').map(s => s.trim()).filter(Boolean);
+
           } else {
-            if (input.value) finalValue[key] = type === 'number' ? Number(input.value) : input.value;
+
+            if (type === 'list') {
+                if (input.value.trim()) val = input.value.split(',').map(s => s.trim()).filter(Boolean);
+            } else {
+                if (input.value) val = type === 'number' ? Number(input.value) : input.value;
+            }
+
+            if (val !== null) {
+
+                const mutBox = modal.querySelector(`.pb-child-mutable[data-key="${key}"]`);
+                const isMutable = mutBox ? mutBox.checked : false;
+
+                if (isMutable) {
+                    finalValue[key] = { default: val, mutable: true };
+                } else {
+
+                    finalValue[key] = { value: val, mutable: false };
+                }
+            }
           }
         });
       } else {
