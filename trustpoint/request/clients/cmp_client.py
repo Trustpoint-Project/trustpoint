@@ -182,7 +182,6 @@ class CmpClient(LoggerMixin):
         try:
             pki_message, _ = decoder.decode(response_data, asn1Spec=rfc4210.PKIMessage())
 
-            # Check for error response
             body = pki_message['body']
             body_name = body.getName()
 
@@ -405,11 +404,9 @@ class CmpClient(LoggerMixin):
                 inner_start = scan_pos + scan_hdr
                 inner_tag, inner_hdr, _, inner_total = tlv(raw_data, inner_start)
                 if inner_tag == _DER_TAG_SEQUENCE:
-                    # Dive into the inner SEQUENCE OF wrapper
                     ec_pos = inner_start + inner_hdr
                     ec_end = inner_start + inner_total
                 else:
-                    # Unexpected — treat the [1] content as flat cert list
                     ec_pos = inner_start
                     ec_end = scan_pos + scan_total
                 while ec_pos < ec_end:
