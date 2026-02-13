@@ -151,6 +151,25 @@ class CertificateProfileBuilder {
     return current;
   }
 
+
+  resolveFieldPath(json, field) {
+
+    let val = this.getValueAt(json, field.fullPath);
+    if (val !== undefined) return { value: val, path: field.fullPath };
+
+
+    if (field.aliases && Array.isArray(field.aliases)) {
+      for (const alias of field.aliases) {
+        val = this.getValueAt(json, alias);
+        if (val !== undefined) return { value: val, path: alias };
+      }
+    }
+
+
+    return { value: undefined, path: field.fullPath };
+  }
+
+
   escapeHtml(str) {
     if (str === null || str === undefined) return '';
     return String(str)
@@ -169,6 +188,11 @@ class CertificateProfileBuilder {
     try { currentJson = JSON.parse(this.editor.value); } catch (e) {}
 
 
+    const resolved = this.resolveFieldPath(currentJson, field);
+    const existingData = resolved.value;
+    const targetPath = resolved.path;
+
+
     let descriptionHtml = '';
     if (field.description) {
       descriptionHtml = `
@@ -185,7 +209,6 @@ class CertificateProfileBuilder {
 
 
     if (isProfileProperty) {
-      const existingData = this.getValueAt(currentJson, field.fullPath);
       let val = '';
       let req = false;
       let mut = false;
@@ -206,6 +229,7 @@ class CertificateProfileBuilder {
           <div class="pb-input-wrapper">
             <label>Value / Default</label>
             <input type="text" id="pp-value" class="pb-input-child"
+                   data-path="${this.escapeHtml(targetPath)}"
                    value="${this.escapeHtml(val)}" placeholder="Value or Default...">
             <div class="pb-input-desc">The specific value for this field.</div>
           </div>
@@ -225,36 +249,37 @@ class CertificateProfileBuilder {
     else if (hasChildren) {
       formContent = `${descriptionHtml}<div style="max-height:400px; overflow-y:auto; padding-right:5px;">`;
       childFields.forEach(child => {
-        const shortKey = child.fullPath.replace(field.fullPath + '.', '');
-        const existingData = this.getValueAt(currentJson, child.fullPath);
 
+        const childResolved = this.resolveFieldPath(currentJson, child);
+        const childVal = childResolved.value;
+        const childPath = childResolved.path;
 
-        let effectiveValue = existingData;
+        let effectiveValue = childVal;
         let isMutable = false;
 
-        if (existingData && typeof existingData === 'object' && !Array.isArray(existingData)) {
-            if (existingData.value !== undefined) effectiveValue = existingData.value;
-            else if (existingData.default !== undefined) effectiveValue = existingData.default;
+
+        if (childVal && typeof childVal === 'object' && !Array.isArray(childVal)) {
+            if (childVal.value !== undefined) effectiveValue = childVal.value;
+            else if (childVal.default !== undefined) effectiveValue = childVal.default;
             else effectiveValue = undefined;
 
-            if (existingData.mutable === true) isMutable = true;
+            if (childVal.mutable === true) isMutable = true;
         }
-
 
         if (child.valueType === 'boolean') {
           const isChecked = effectiveValue === true ? 'checked' : '';
           formContent += `
             <div class="pb-checkbox-wrapper">
               <label>
-                <input type="checkbox" class="pb-input-child" data-key="${this.escapeHtml(shortKey)}" data-type="boolean" ${isChecked}>
+                <input type="checkbox" class="pb-input-child"
+                       data-path="${this.escapeHtml(childPath)}"
+                       data-type="boolean" ${isChecked}>
                 <span class="pb-checkbox-label">
                   <span class="pb-label-title">${this.escapeHtml(child.name)}</span>
                   <span class="pb-label-desc">${this.escapeHtml(child.description)}</span>
                 </span>
               </label>
             </div>`;
-
-
         } else {
 
           let typeAttr = 'text';
@@ -273,17 +298,19 @@ class CertificateProfileBuilder {
 
           const mutChecked = isMutable ? 'checked' : '';
 
-
           formContent += `
             <div class="pb-input-wrapper">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
                 <label style="margin:0;">${this.escapeHtml(child.name)}</label>
                 <label style="font-weight:normal; font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-                  <input type="checkbox" class="pb-child-mutable" data-key="${this.escapeHtml(shortKey)}" ${mutChecked}>
+                  <input type="checkbox" class="pb-child-mutable"
+                         data-path="${this.escapeHtml(childPath)}" ${mutChecked}>
                   Mutable
                 </label>
               </div>
-              <input type="${typeAttr}" class="pb-input-child" data-key="${this.escapeHtml(shortKey)}" data-type="${child.valueType}"
+              <input type="${typeAttr}" class="pb-input-child"
+                     data-path="${this.escapeHtml(childPath)}"
+                     data-type="${child.valueType}"
                      value="${this.escapeHtml(valStr)}" placeholder="${placeholder}">
               <div class="pb-input-desc">${this.escapeHtml(child.description)}</div>
             </div>`;
@@ -293,8 +320,7 @@ class CertificateProfileBuilder {
     }
 
     else {
-      const existingValue = this.getValueAt(currentJson, field.fullPath);
-      const valStr = (existingValue !== undefined && existingValue !== null) ? existingValue : '';
+      const valStr = (existingData !== undefined && existingData !== null) ? existingData : '';
       const inputType = field.valueType === 'number' ? 'number' : 'text';
 
       let suggestions = '';
@@ -309,9 +335,13 @@ class CertificateProfileBuilder {
         <div class="pb-input-wrapper">
           <label>Value</label>
           ${suggestions}
-          <input type="${inputType}" id="pb-single-input" value="${this.escapeHtml(valStr)}" placeholder="${this.escapeHtml(field.expectedHint || '')}">
+          <input type="${inputType}" id="pb-single-input"
+                 data-path="${this.escapeHtml(targetPath)}"
+                 value="${this.escapeHtml(valStr)}"
+                 placeholder="${this.escapeHtml(field.expectedHint || '')}">
         </div>`;
     }
+
 
     const modal = document.createElement('div');
     modal.className = 'profile-builder-modal';
@@ -365,40 +395,39 @@ class CertificateProfileBuilder {
     });
 
     applyBtn.addEventListener('click', () => {
-      let finalValue;
+      const updates = {};
 
       if (isProfileProperty) {
         const val = modal.querySelector('#pp-value').value;
         const req = modal.querySelector('#pp-required').checked;
         const mut = modal.querySelector('#pp-mutable').checked;
 
+
+        const path = modal.querySelector('#pp-value').getAttribute('data-path');
+
         if (req || mut) {
-          finalValue = {};
+          const obj = {};
           if (val) {
-
-             if (mut) finalValue.default = val;
-             else finalValue.value = val;
+             if (mut) obj.default = val;
+             else obj.value = val;
           }
-          if (mut) finalValue.mutable = true;
-          if (req) finalValue.required = true;
+          if (mut) obj.mutable = true;
+          if (req) obj.required = true;
+          updates[path] = obj;
         } else {
-          if (val) finalValue = { value: val };
-          else finalValue = undefined;
+          if (val) updates[path] = { value: val };
+          else updates[path] = undefined;
         }
-      } else if (hasChildren) {
-        finalValue = {};
-
-
+      }
+      else if (hasChildren) {
         modal.querySelectorAll('.pb-input-child').forEach(input => {
-          const key = input.dataset.key;
-          const type = input.dataset.type;
+          const path = input.getAttribute('data-path');
+          const type = input.getAttribute('data-type');
           let val = null;
 
           if (type === 'boolean') {
-            if (input.checked) finalValue[key] = true;
-
+            if (input.checked) updates[path] = true;
           } else {
-
             if (type === 'list') {
                 if (input.value.trim()) val = input.value.split(',').map(s => s.trim()).filter(Boolean);
             } else {
@@ -407,43 +436,49 @@ class CertificateProfileBuilder {
 
             if (val !== null) {
 
-                const mutBox = modal.querySelector(`.pb-child-mutable[data-key="${key}"]`);
+                const mutBox = modal.querySelector(`.pb-child-mutable[data-path="${path}"]`);
                 const isMutable = mutBox ? mutBox.checked : false;
 
                 if (isMutable) {
-                    finalValue[key] = { default: val, mutable: true };
+                    updates[path] = { default: val, mutable: true };
                 } else {
-
-                    finalValue[key] = { value: val, mutable: false };
+                    updates[path] = { value: val, mutable: false };
                 }
             }
           }
         });
-      } else {
-        const raw = modal.querySelector('#pb-single-input').value;
-        finalValue = field.valueType === 'number' ? Number(raw) : raw;
+      }
+      else {
+
+        const input = modal.querySelector('#pb-single-input');
+        const path = input.getAttribute('data-path');
+        const raw = input.value;
+        const val = field.valueType === 'number' ? Number(raw) : raw;
+        if (raw) updates[path] = val;
       }
 
-      if (finalValue !== undefined) {
-        this.insertFieldIntoJson(field.fullPath, finalValue);
-      }
+      this.batchUpdateJson(updates);
       closeModal();
     });
   }
 
-  insertFieldIntoJson(pathStr, value) {
+  batchUpdateJson(updates) {
     try {
       let json = {};
       try { json = JSON.parse(this.editor.value); } catch(e) {}
 
-      const keys = pathStr.split('.');
-      let current = json;
-      for (let i = 0; i < keys.length - 1; i++) {
-        const key = keys[i];
-        if (!current[key]) current[key] = {};
-        current = current[key];
+      for (const [pathStr, value] of Object.entries(updates)) {
+          if (value === undefined) continue;
+
+          const keys = pathStr.split('.');
+          let current = json;
+          for (let i = 0; i < keys.length - 1; i++) {
+            const key = keys[i];
+            if (!current[key]) current[key] = {};
+            current = current[key];
+          }
+          current[keys[keys.length - 1]] = value;
       }
-      current[keys[keys.length - 1]] = value;
 
       this.editor.value = JSON.stringify(json, null, 2);
       this.editor.dispatchEvent(new Event('input', { bubbles: true }));
