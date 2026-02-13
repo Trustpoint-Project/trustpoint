@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.contrib import messages
 from django.db.models import ProtectedError, QuerySet
@@ -15,9 +15,14 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.edit import FormView, UpdateView
 from django.views.generic.list import ListView
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import filters, viewsets
+from rest_framework.permissions import IsAuthenticated
 
 from pki.forms import CertificateIssuanceForm, CertProfileConfigForm
 from pki.models import CertificateProfileModel
+from pki.serializer.cert_profile import CertProfileSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -212,3 +217,31 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
                 .format(count=deleted_count))
 
         return response
+
+@extend_schema(tags=['Certificate Profile'])
+@extend_schema_view(
+    retrieve=extend_schema(description='Retrieve a single certificate profile by id.'),
+    create=extend_schema(description='Create a certificate profile.'),
+    update=extend_schema(description='Update an existing certificate profile.'),
+    partial_update=extend_schema(description='Partially update an existing certificate profile.'),
+    destroy=extend_schema(description='Delete a certificate profile.')
+)
+class CertProfileViewSet(viewsets.ModelViewSet[CertificateProfileModel]):
+    """ViewSet for managing Certificate Profile instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+    queryset = CertificateProfileModel.objects.all().order_by('-created_at')
+    serializer_class = CertProfileSerializer
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    )
+    filterset_fields: ClassVar = ['unique_name', 'created_at']
+    search_fields: ClassVar = ['unique_name', 'display_name']
+    ordering_fields: ClassVar = ['unique_name', 'created_at']
+
+
