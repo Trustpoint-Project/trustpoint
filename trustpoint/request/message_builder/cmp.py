@@ -56,6 +56,28 @@ IMPLICIT_CONFIRM_OID = '1.3.6.1.5.5.7.4.13'
 PBM_OID = '1.2.840.113533.7.66.13'  # id-PasswordBasedMac
 SHA256_OID = '2.16.840.1.101.3.4.2.1'
 
+# Threshold below which DER length fits in a single byte (short form).
+_DER_LENGTH_SHORT_FORM_MAX = 0x7F
+
+
+def _der_tlv(tag_byte: int, value: bytes) -> bytes:
+    """Construct a DER Tag-Length-Value triplet.
+
+    Handles both short-form (length < 128) and long-form DER lengths.
+
+    Args:
+        tag_byte: Single-byte ASN.1 tag (e.g. ``0xA4`` for ``[4] CONSTRUCTED``).
+        value: The encoded value octets.
+
+    Returns:
+        The complete TLV as ``bytes``.
+    """
+    length = len(value)
+    if length <= _DER_LENGTH_SHORT_FORM_MAX:
+        return bytes([tag_byte, length]) + value
+    length_payload = length.to_bytes((length.bit_length() + 7) // 8, 'big')
+    return bytes([tag_byte, 0x80 | len(length_payload)]) + length_payload + value
+
 
 # ---------------------------------------------------------------------------
 # 1. CertTemplate building
@@ -233,11 +255,20 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
                 cert_req_msg.setComponentByName('popo', pop, verifyConstraints=False)
 
             # PKI body
+            # PKIBody is a CHOICE type whose alternatives carry implicit context
+            # tags (e.g. ``cr`` → ``[2] IMPLICIT CertReqMessages``).  A plain
+            # ``rfc4211.CertReqMessages()`` only has the base ``SEQUENCE`` tag and
+            # will be encoded without the required context tag - causing the BER
+            # decoder on the server side to fail.
+            # We therefore obtain the correctly-tagged schema from the PKIBody's
+            # own ``componentType`` and populate *that* instance.
             pki_body = rfc4210.PKIBody()
             body_choice = 'ir' if use_ir else 'cr'
-            cert_req_messages = rfc4211.CertReqMessages()
+
+            body_idx = pki_body.componentType.getPositionByName(body_choice)
+            cert_req_messages = pki_body.componentType.getTypeByPosition(body_idx).clone()
             cert_req_messages.setComponentByPosition(0, cert_req_msg)
-            pki_body.setComponentByName(body_choice, cert_req_messages, verifyConstraints=False)
+            pki_body[body_choice] = cert_req_messages
 
             validated['_pki_body'] = pki_body
             context.validated_request_data = validated
@@ -296,8 +327,18 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
         binary_signature = f'{int.from_bytes(signature, byteorder="big"):b}'.zfill(len(signature) * 8)
         popo_signing_key['signature'] = univ.BitString(binary_signature)
 
+        # ProofOfPossession is a CHOICE whose ``signature`` alternative has an
+        # implicit context tag ``[1] CONSTRUCTED``.  A plain POPOSigningKey
+        # carries only the base SEQUENCE tag, so we must re-tag it with the
+        # schema's tagSet before assigning.
         pop = rfc4211.ProofOfPossession()
-        pop.setComponentByName('signature', popo_signing_key, verifyConstraints=False)
+        sig_idx = pop.componentType.getPositionByName('signature')
+        sig_schema = pop.componentType.getTypeByPosition(sig_idx)
+        tagged_signing_key = popo_signing_key.clone(
+            tagSet=sig_schema.tagSet,
+            cloneValueFlag=True,
+        )
+        pop['signature'] = tagged_signing_key
 
         return pop
 
@@ -380,6 +421,14 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
                 explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
             )
 
+            # Sender KID (optional, used for shared-secret device lookup)
+            sender_kid: int | None = request_data.get('sender_kid')
+            if sender_kid is not None:
+                kid_idx = header.componentType.getPositionByName('senderKID')
+                kid_schema = header.componentType.getTypeByPosition(kid_idx).clone()
+                kid_value = kid_schema.clone(value=str(sender_kid).encode())
+                header['senderKID'] = kid_value
+
             # Implicit confirm (generalInfo)
             header = self._add_implicit_confirm(header)
 
@@ -406,6 +455,10 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
     def _build_general_name_from_dn(dn_string: str) -> rfc5280.GeneralName:
         """Build a ``GeneralName`` from a distinguished name string.
 
+        Wraps the DER-encoded ``Name`` in a context-specific ``[4]`` tag
+        (``directoryName``) and decodes the result against the ``GeneralName``
+        ASN.1 spec so that pyasn1 produces a properly-tagged value.
+
         Args:
             dn_string: DN string in RFC 4514 format (e.g., ``CN=Device,O=Company``).
 
@@ -414,8 +467,7 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
         """
         name = x509.Name.from_rfc4514_string(dn_string)
         name_der = name.public_bytes(serialization.Encoding.DER)
-        # Wrap in context-specific [4] tag for directoryName
-        tagged_der = bytes([0xA4]) + bytes([len(name_der)]) + name_der
+        tagged_der = _der_tlv(0xA4, name_der)
         general_name, _ = decoder.decode(tagged_der, asn1Spec=rfc5280.GeneralName())
         return general_name
 

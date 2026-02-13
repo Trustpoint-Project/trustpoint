@@ -182,7 +182,11 @@ class CmpClient(LoggerMixin):
                 error_msg_content = body['error']
                 pki_status = error_msg_content['pKIStatusInfo']
                 status_value = int(pki_status['status'])
-                status_string = pki_status.get('statusString', 'No details provided')
+                status_string_field = pki_status['statusString']
+                if status_string_field.hasValue() and len(status_string_field) > 0:
+                    status_string = str(status_string_field.getComponentByPosition(0))
+                else:
+                    status_string = 'No details provided'
                 msg = f'CMP server returned error status {status_value}: {status_string}'
                 raise CmpClientError(msg)
 
@@ -236,8 +240,11 @@ class CmpClient(LoggerMixin):
             cert_or_enc_cert = certified_key_pair['certOrEncCert']
             cmp_cert = cert_or_enc_cert['certificate']
 
-            # Convert to cryptography certificate
-            encoded_cert = encoder.encode(cmp_cert)
+            # The certificate inside CertOrEncCert carries an implicit [0] context tag
+            # from the CHOICE schema.  x509.load_der_x509_certificate expects a plain
+            # SEQUENCE tag, so we re-encode via a bare CMPCertificate schema.
+            plain_cert = rfc4210.CMPCertificate().clone(value=cmp_cert)
+            encoded_cert = encoder.encode(plain_cert)
             issued_cert = x509.load_der_x509_certificate(encoded_cert)
 
             self.logger.info(

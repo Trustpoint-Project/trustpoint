@@ -700,7 +700,14 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         """Get the not implemented message for CMP."""
         return _('CMP certificate request not yet implemented.')
 
-    def _perform_cmp_enrollment(self, ca: CaModel, cert_content_data: dict[str, Any], request: HttpRequest) -> None:
+    def _perform_cmp_enrollment(
+        self,
+        ca: CaModel,
+        cert_content_data: dict[str, Any],
+        request: HttpRequest,
+        *,
+        sender_kid: int | None = None,
+    ) -> None:
         """Perform the CMP enrollment process."""
         cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
 
@@ -811,6 +818,7 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
                 'use_initialization_request': False,
                 'add_pop': True,
                 'prepare_shared_secret_protection': True,
+                'sender_kid': sender_kid,
             },
         )
 
@@ -917,8 +925,12 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             )
             return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
 
+        # Extract optional sender_kid from the form
+        sender_kid_raw = request.POST.get('sender_kid', '').strip()
+        sender_kid: int | None = int(sender_kid_raw) if sender_kid_raw else None
+
         try:
-            self._perform_cmp_enrollment(ca, cert_content_data, request)
+            self._perform_cmp_enrollment(ca, cert_content_data, request, sender_kid=sender_kid)
             messages.success(
                 request,
                 _('Successfully enrolled certificate for Issuing CA {name} via CMP.').format(name=ca.unique_name)
