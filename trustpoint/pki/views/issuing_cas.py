@@ -830,7 +830,7 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
         # Send the CMP request
         cmp_client = CmpClient(context)
-        issued_cert = cmp_client.send_and_extract_certificate(
+        issued_cert, chain_certs = cmp_client.send_and_extract_certificate(
             pki_message,
             add_shared_secret_protection=True,
         )
@@ -838,9 +838,16 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         # Save the issued certificate
         cert_model = CertificateModel.save_certificate(issued_cert)
 
+        # Save chain certificates (extraCerts from CMP response)
+        chain_cert_models = [CertificateModel.save_certificate(c) for c in chain_certs]
+
         if ca.credential:
             ca.credential.certificate = cert_model
             ca.credential.save()
+            # Add chain certificates to the credential (skip if already linked to any credential)
+            for chain_cert_model in chain_cert_models:
+                if not PrimaryCredentialCertificate.objects.filter(certificate=chain_cert_model).exists():
+                    ca.credential.certificates.add(chain_cert_model)
         else:
             credential = CredentialModel(
                 credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
@@ -849,6 +856,9 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             )
             credential.save()
             credential.certificates.add(cert_model)
+            for chain_cert_model in chain_cert_models:
+                if not PrimaryCredentialCertificate.objects.filter(certificate=chain_cert_model).exists():
+                    credential.certificates.add(chain_cert_model)
             PrimaryCredentialCertificate.objects.create(
                 credential=credential,
                 certificate=cert_model,

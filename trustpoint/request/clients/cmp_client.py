@@ -31,6 +31,11 @@ if TYPE_CHECKING:
 DEFAULT_CMP_PORT = 443
 DEFAULT_CMP_TIMEOUT = 30
 
+# DER tag bytes used in CMP response parsing
+_DER_TAG_SEQUENCE = 0x30
+_DER_TAG_CONTEXT_0 = 0xA0  # implicit [0] used by CertOrEncCert.certificate
+_DER_TAG_CONTEXT_1 = 0xA1  # implicit [1] used by PKIMessage.extraCerts / caPubs
+
 
 class CmpClientError(Exception):
     """Base exception for CMP client errors."""
@@ -197,14 +202,241 @@ class CmpClient(LoggerMixin):
             msg = f'Failed to parse CMP server response: {e!s}'
             raise CmpClientError(msg) from e
 
-    def _extract_issued_certificate(self, response_message: PKIMessage) -> x509.Certificate:
-        """Extract the issued certificate from a CP/IP response.
+    @staticmethod
+    def _parse_der_tlv(data: bytes, offset: int) -> tuple[int, int, int, int]:
+        """Parse a DER TLV (Tag-Length-Value) element at the given byte offset.
+
+        Args:
+            data: The raw DER byte string.
+            offset: The byte position to start parsing.
+
+        Returns:
+            A tuple of (tag_byte, header_length, value_length, total_length).
+
+        Raises:
+            ValueError: If the offset is beyond the data length.
+        """
+        if offset >= len(data):
+            msg = f'DER parse error: offset {offset} beyond data length {len(data)}'
+            raise ValueError(msg)
+        tag_byte = data[offset]
+        pos = offset + 1
+        if data[pos] & 0x80:
+            num_bytes = data[pos] & 0x7F
+            val_len = int.from_bytes(data[pos + 1 : pos + 1 + num_bytes], 'big')
+            header_len = 1 + 1 + num_bytes
+        else:
+            val_len = data[pos]
+            header_len = 2
+        total_len = header_len + val_len
+        return tag_byte, header_len, val_len, total_len
+
+    def _extract_certs_from_raw_response(self, raw_data: bytes) -> tuple[bytes, list[bytes]]:
+        """Extract the issued certificate and extra certificates from the raw DER response.
+
+        pyasn1 cannot reliably encode a CMPCertificate extracted from a CertOrEncCert
+        CHOICE type because the implicit ``[0]`` context tag creates a broken hybrid
+        object.  Instead we navigate the raw DER byte structure of the PKIMessage to
+        locate the certificate and swap the ``0xa0`` implicit CHOICE tag back to the
+        standard SEQUENCE tag ``0x30`` that ``x509.load_der_x509_certificate`` expects.
+
+        The PKIMessage DER structure navigated here is::
+
+            PKIMessage = SEQUENCE {
+                header    PKIHeader,           -- SEQUENCE
+                body      PKIBody,             -- context-tagged CHOICE
+                protection [0] OPTIONAL,       -- context-tagged
+                extraCerts [1] OPTIONAL         -- context-tagged SEQUENCE OF
+            }
+
+        Inside the body (CP [3] or IP [1])::
+
+            CertRepMessage = SEQUENCE {
+                caPubs     [1] OPTIONAL,
+                response   SEQUENCE OF CertResponse
+            }
+            CertResponse = SEQUENCE {
+                certReqId       INTEGER,
+                status          PKIStatusInfo,
+                certifiedKeyPair CertifiedKeyPair OPTIONAL
+            }
+            CertifiedKeyPair = SEQUENCE {
+                certOrEncCert CertOrEncCert     -- certificate [0] IMPLICIT
+            }
+
+        Args:
+            raw_data: The raw DER bytes of the complete PKIMessage response.
+
+        Returns:
+            A tuple of (issued_cert_der, list_of_extra_cert_ders).
+
+        Raises:
+            CmpClientError: If the DER structure cannot be navigated.
+        """
+        try:
+            tlv = self._parse_der_tlv
+
+            # PKIMessage outer SEQUENCE
+            msg_tag, msg_hdr, msg_vlen, _ = tlv(raw_data, 0)
+            msg_val_start = msg_hdr
+            msg_val_end = msg_hdr + msg_vlen
+            self.logger.debug(
+                'PKIMessage: tag=0x%02x, hdr=%d, vlen=%d, total=%d',
+                msg_tag, msg_hdr, msg_vlen, msg_hdr + msg_vlen,
+            )
+
+            pos = msg_val_start
+
+            # Skip header (SEQUENCE)
+            h_tag, _, _, h_total = tlv(raw_data, pos)
+            self.logger.debug('Header: tag=0x%02x, total=%d at offset %d', h_tag, h_total, pos)
+            pos += h_total
+
+            # body = context-tagged CHOICE element (cp=[3] or ip=[1])
+            b_tag, b_hdr, b_vlen, b_total = tlv(raw_data, pos)
+            body_val_start = pos + b_hdr
+            self.logger.debug(
+                'Body: tag=0x%02x, hdr=%d, vlen=%d, total=%d at offset %d',
+                b_tag, b_hdr, b_vlen, b_total, pos,
+            )
+            pos += b_total
+
+            # CertRepMessage inside body
+            crm_tag, crm_hdr, crm_vlen, _ = tlv(raw_data, body_val_start)
+            crm_val_start = body_val_start + crm_hdr
+            crm_val_end = body_val_start + crm_hdr + crm_vlen
+            crm_pos = crm_val_start
+            self.logger.debug(
+                'CertRepMessage: tag=0x%02x, hdr=%d, vlen=%d at offset %d',
+                crm_tag, crm_hdr, crm_vlen, body_val_start,
+            )
+
+            # Skip caPubs [1] if present
+            if crm_pos < crm_val_end and raw_data[crm_pos] == _DER_TAG_CONTEXT_1:
+                _, _, _, skip = tlv(raw_data, crm_pos)
+                self.logger.debug('Skipping caPubs [1]: %d bytes at offset %d', skip, crm_pos)
+                crm_pos += skip
+
+            # response SEQUENCE OF CertResponse
+            resp_tag, resp_hdr, resp_vlen, _ = tlv(raw_data, crm_pos)
+            resp_val_start = crm_pos + resp_hdr
+            self.logger.debug(
+                'Response SEQUENCE OF: tag=0x%02x, hdr=%d, vlen=%d at offset %d',
+                resp_tag, resp_hdr, resp_vlen, crm_pos,
+            )
+
+            # First CertResponse SEQUENCE { certReqId, status, certifiedKeyPair }
+            cr_tag, cr_hdr, _, cr_total = tlv(raw_data, resp_val_start)
+            cr_val_start = resp_val_start + cr_hdr
+            cr_val_end = resp_val_start + cr_total
+            cr_pos = cr_val_start
+            self.logger.debug(
+                'CertResponse: tag=0x%02x, hdr=%d, total=%d at offset %d',
+                cr_tag, cr_hdr, cr_total, resp_val_start,
+            )
+
+            # Skip certReqId (INTEGER)
+            id_tag, _, _, skip = tlv(raw_data, cr_pos)
+            self.logger.debug('certReqId: tag=0x%02x, total=%d at offset %d', id_tag, skip, cr_pos)
+            cr_pos += skip
+
+            # Skip status (PKIStatusInfo SEQUENCE)
+            st_tag, _, _, skip = tlv(raw_data, cr_pos)
+            self.logger.debug('status: tag=0x%02x, total=%d at offset %d', st_tag, skip, cr_pos)
+            cr_pos += skip
+
+            if cr_pos >= cr_val_end:
+                msg = 'No certifiedKeyPair found in CertResponse'
+                raise CmpClientError(msg)
+
+            # certifiedKeyPair SEQUENCE
+            ckp_tag, ckp_hdr, ckp_vlen, _ = tlv(raw_data, cr_pos)
+            ckp_val_start = cr_pos + ckp_hdr
+            self.logger.debug(
+                'certifiedKeyPair: tag=0x%02x, hdr=%d, vlen=%d at offset %d',
+                ckp_tag, ckp_hdr, ckp_vlen, cr_pos,
+            )
+
+            # CertOrEncCert: certificate [0]
+            # pyasn1 encodes this with an EXPLICIT [0] wrapper around the
+            # Certificate SEQUENCE, so the DER looks like:
+            #   A0 <len> 30 <len> <certificate contents>
+            # We need to strip the outer [0] wrapper and return just the
+            # inner SEQUENCE (the actual Certificate).
+            coec_tag, coec_hdr, _, coec_total = tlv(raw_data, ckp_val_start)
+            self.logger.debug(
+                'CertOrEncCert: tag=0x%02x, total=%d at offset %d, first 20 bytes: %s',
+                coec_tag, coec_total, ckp_val_start,
+                raw_data[ckp_val_start : ckp_val_start + 20].hex(),
+            )
+            if coec_tag == _DER_TAG_CONTEXT_0:
+                # EXPLICIT [0] wrapper — the actual certificate SEQUENCE is inside
+                inner_start = ckp_val_start + coec_hdr
+                inner_tag, _, _, inner_total = tlv(raw_data, inner_start)
+                self.logger.debug(
+                    'Inner cert: tag=0x%02x, total=%d at offset %d',
+                    inner_tag, inner_total, inner_start,
+                )
+                issued_cert_der = bytes(raw_data[inner_start : inner_start + inner_total])
+            else:
+                # Unexpected tag — try using the raw bytes as-is
+                issued_cert_der = bytes(raw_data[ckp_val_start : ckp_val_start + coec_total])
+            self.logger.debug(
+                'Issued cert DER: %d bytes, first 20: %s',
+                len(issued_cert_der), issued_cert_der[:20].hex(),
+            )
+
+            # Extract extraCerts [1] from PKIMessage level (after body)
+            extra_certs: list[bytes] = []
+            scan_pos = pos  # position after body
+            while scan_pos < msg_val_end:
+                scan_tag, scan_hdr, _, scan_total = tlv(raw_data, scan_pos)
+                if scan_tag == _DER_TAG_CONTEXT_1:
+                    # extraCerts [1] EXPLICIT wraps a SEQUENCE OF CMPCertificate.
+                    # pyasn1 encodes this as: [1] { SEQUENCE { cert1, cert2, ... } }
+                    # We need to enter the inner SEQUENCE to iterate the certs.
+                    inner_start = scan_pos + scan_hdr
+                    inner_tag, inner_hdr, _, inner_total = tlv(raw_data, inner_start)
+                    if inner_tag == _DER_TAG_SEQUENCE:
+                        # Dive into the inner SEQUENCE OF wrapper
+                        ec_pos = inner_start + inner_hdr
+                        ec_end = inner_start + inner_total
+                    else:
+                        # Unexpected — treat the [1] content as flat cert list
+                        ec_pos = inner_start
+                        ec_end = scan_pos + scan_total
+                    while ec_pos < ec_end:
+                        _, _, _, ec_total = tlv(raw_data, ec_pos)
+                        extra_certs.append(raw_data[ec_pos : ec_pos + ec_total])
+                        ec_pos += ec_total
+                scan_pos += scan_total
+
+            return issued_cert_der, extra_certs
+
+        except CmpClientError:
+            raise
+        except Exception as e:
+            msg = f'Failed to extract certificates from raw CMP response DER: {e!s}'
+            raise CmpClientError(msg) from e
+
+    def _extract_issued_certificate(
+        self,
+        response_message: PKIMessage,
+        raw_response: bytes,
+    ) -> tuple[x509.Certificate, list[x509.Certificate]]:
+        """Extract the issued certificate and chain from a CP/IP response.
+
+        Uses pyasn1 for status checking and validation, then extracts the actual
+        certificate bytes from the raw DER response to work around a pyasn1 bug
+        where ``encoder.encode()`` fails on CMPCertificate objects extracted from
+        a CertOrEncCert CHOICE type.
 
         Args:
             response_message: The parsed PKI response message (CP or IP).
+            raw_response: The raw DER bytes of the complete response.
 
         Returns:
-            The issued certificate.
+            A tuple of (issued_certificate, list_of_chain_certificates).
 
         Raises:
             CmpClientError: If certificate extraction fails.
@@ -227,7 +459,7 @@ class CmpClient(LoggerMixin):
 
             cert_response = cert_responses[0]
 
-            # Check status
+            # Check status using pyasn1
             pki_status_info = cert_response['status']
             status = int(pki_status_info['status'])
             if status != 0:
@@ -235,24 +467,21 @@ class CmpClient(LoggerMixin):
                 msg = f'Certificate issuance failed with status {status}: {status_string}'
                 raise CmpClientError(msg)
 
-            # Extract certificate
-            certified_key_pair = cert_response['certifiedKeyPair']
-            cert_or_enc_cert = certified_key_pair['certOrEncCert']
-            cmp_cert = cert_or_enc_cert['certificate']
+            # Extract certificates from raw DER bytes (bypasses pyasn1 encoding bug)
+            issued_cert_der, extra_cert_ders = self._extract_certs_from_raw_response(raw_response)
 
-            # The certificate inside CertOrEncCert carries an implicit [0] context tag
-            # from the CHOICE schema.  x509.load_der_x509_certificate expects a plain
-            # SEQUENCE tag, so we re-encode via a bare CMPCertificate schema.
-            plain_cert = rfc4210.CMPCertificate().clone(value=cmp_cert)
-            encoded_cert = encoder.encode(plain_cert)
-            issued_cert = x509.load_der_x509_certificate(encoded_cert)
+            issued_cert = x509.load_der_x509_certificate(issued_cert_der)
+            chain_certs = [x509.load_der_x509_certificate(ec) for ec in extra_cert_ders]
 
             self.logger.info(
-                'Successfully extracted issued certificate: %s',
-                issued_cert.subject.rfc4514_string()
+                'Successfully extracted issued certificate: %s (+ %d chain certs)',
+                issued_cert.subject.rfc4514_string(),
+                len(chain_certs),
             )
-            return issued_cert
+            return issued_cert, chain_certs
 
+        except CmpClientError:
+            raise
         except (ValueError, TypeError, KeyError) as e:
             msg = f'Failed to extract certificate from response: {e!s}'
             raise CmpClientError(msg) from e
@@ -261,7 +490,7 @@ class CmpClient(LoggerMixin):
         self,
         pki_message: PKIMessage,
         add_shared_secret_protection: bool = False,
-    ) -> PKIMessage:
+    ) -> tuple[PKIMessage, bytes]:
         """Send a PKI message to the CMP server and return the response.
 
         This is the main method for both use cases:
@@ -276,7 +505,8 @@ class CmpClient(LoggerMixin):
                                          the message must already be protected.
 
         Returns:
-            The parsed PKI response message from the server.
+            A tuple of (parsed_response_message, raw_response_bytes).
+            The raw bytes are preserved for DER-level certificate extraction.
 
         Raises:
             CmpClientError: If the request fails or response is invalid.
@@ -323,14 +553,15 @@ class CmpClient(LoggerMixin):
                 )
                 raise CmpClientError(msg)
 
-            response_message = self._parse_response(response.content)
+            raw_response = response.content
+            response_message = self._parse_response(raw_response)
 
         except requests.exceptions.RequestException as e:
             msg = f'Failed to communicate with CMP server: {e!s}'
             raise CmpClientError(msg) from e
         else:
             self.logger.info('Successfully received CMP response')
-            return response_message
+            return response_message, raw_response
         finally:
             if temp_ca_bundle_path is not None:
                 Path(temp_ca_bundle_path).unlink()
@@ -339,7 +570,7 @@ class CmpClient(LoggerMixin):
         self,
         pki_message: PKIMessage,
         add_shared_secret_protection: bool = False,
-    ) -> x509.Certificate:
+    ) -> tuple[x509.Certificate, list[x509.Certificate]]:
         """Send a certification/initialization request and extract the issued certificate.
 
         Convenience method that combines send_pki_message() and certificate extraction
@@ -350,14 +581,15 @@ class CmpClient(LoggerMixin):
             add_shared_secret_protection: Whether to add HMAC protection.
 
         Returns:
-            The issued certificate.
+            A tuple of (issued_certificate, chain_certificates).
+            The chain certificates are from the ``extraCerts`` field of the response.
 
         Raises:
             CmpClientError: If the request fails or certificate extraction fails.
         """
-        response_message = self.send_pki_message(
+        response_message, raw_response = self.send_pki_message(
             pki_message,
             add_shared_secret_protection=add_shared_secret_protection,
         )
 
-        return self._extract_issued_certificate(response_message)
+        return self._extract_issued_certificate(response_message, raw_response)
