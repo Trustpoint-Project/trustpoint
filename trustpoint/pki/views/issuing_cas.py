@@ -714,15 +714,13 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         request_data = self._build_request_data_from_form(cert_content_data)
         self.logger.info('Built request data: %s', request_data)
 
-        # Build CMP context for the certificate request
-        # Note: Using 'certification' operation for Issuing CA certificate request
         context = CmpCertificateRequestContext(
             operation='certification',
             protocol='cmp',
             domain=None,
             cert_profile_str='issuing_ca',
             certificate_profile_model=cert_profile,
-            allow_ca_certificate_request=True,  # Allow CA cert requests for Issuing CA enrollment
+            allow_ca_certificate_request=True,
             cmp_server_host=ca.remote_host,
             cmp_server_port=ca.remote_port,
             cmp_server_path=ca.remote_path,
@@ -739,42 +737,32 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         context.request_data = request_data
         context.owner_credential = ca.credential
 
-        # Build the certificate using ProfileAwareCsrBuilder (reusing EST logic)
         csr_builder = ProfileAwareCsrBuilder()
         csr_builder.process_operation(context)
         csr = csr_builder.get_csr()
 
-        # Verify the CSR has a subject
         if not csr.subject or len(csr.subject) == 0:
             msg = 'CSR does not have a subject - cannot build CMP request'
             raise ValueError(msg)
 
         self.logger.info('CSR subject: %s', csr.subject.rfc4514_string())
 
-        # Extract components from the CSR for CMP
         csr_subject = csr.subject
         csr_public_key = csr.public_key()
         csr_extensions = list(csr.extensions) if csr.extensions else None
 
-        # Verify the CSR has a subject (debugging)
         self.logger.info('CSR has %d extensions', len(csr.extensions) if csr.extensions else 0)
 
-        # Get recipient name from the CA's truststore
-        # For CMP, the recipient is the DN of the CA that will issue the certificate
-        # The truststore should contain the Issuing CA certificate of the remote PKI
         if not ca.no_onboarding_config or not ca.no_onboarding_config.trust_store:
             msg = 'No truststore configured for CMP CA - recipient name cannot be determined'
             raise ValueError(msg)
 
         try:
-            # Get certificates through the many-to-many relationship, ordered
             truststore_certs = ca.no_onboarding_config.trust_store.truststoreordermodel_set.order_by('order')
             if not truststore_certs.exists():
                 msg = 'Truststore contains no certificates - cannot determine recipient name'
                 raise ValueError(msg)
 
-            # Use the first certificate's subject as the recipient name
-            # This should be the Issuing CA certificate of the remote PKI
             first_cert_model = truststore_certs.first().certificate
             ca_cert = first_cert_model.get_certificate_serializer().as_crypto()
             recipient_name = ca_cert.subject.rfc4514_string()
@@ -783,8 +771,7 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             msg = f'Failed to extract recipient name from truststore: {e}'
             raise ValueError(msg) from e
 
-        # Build the CMP Certification Request message (CR) for Issuing CA certificate
-        # Get the private key from the credential
+
         if not ca.credential or not ca.credential.private_key:
             msg = 'No private key available for CA credential'
             raise ValueError(msg)
@@ -794,7 +781,6 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             password=None,
         )
 
-        # Build context for the CMP message builder
         context = CmpCertificateRequestContext(
             protocol='cmp',
             operation='certification',
@@ -822,29 +808,24 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             },
         )
 
-        # Build the PKI message using the composite builder
         cmp_builder = CmpMessageBuilder()
         cmp_builder.build(context)
 
         pki_message = context.parsed_message
 
-        # Send the CMP request
         cmp_client = CmpClient(context)
         issued_cert, chain_certs = cmp_client.send_and_extract_certificate(
             pki_message,
             add_shared_secret_protection=True,
         )
 
-        # Save the issued certificate
         cert_model = CertificateModel.save_certificate(issued_cert)
 
-        # Save chain certificates (extraCerts from CMP response)
         chain_cert_models = [CertificateModel.save_certificate(c) for c in chain_certs]
 
         if ca.credential:
             ca.credential.certificate = cert_model
             ca.credential.save()
-            # Add chain certificates to the credential (skip if already linked to any credential)
             for chain_cert_model in chain_cert_models:
                 if not PrimaryCredentialCertificate.objects.filter(certificate=chain_cert_model).exists():
                     ca.credential.certificates.add(chain_cert_model)

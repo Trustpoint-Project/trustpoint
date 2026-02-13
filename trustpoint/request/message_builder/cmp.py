@@ -1,24 +1,4 @@
-"""Provides classes for building CMP PKI messages.
-
-This module mirrors the structure of ``message_parser/cmp.py`` but for the *building*
-direction.  Where ``CmpPkiMessageParsing`` takes raw bytes → ``PKIMessage`` in the
-context, the builders here take request context data → ``PKIMessage`` ready to be
-sent by ``CmpClient``.
-
-Building components
--------------------
-* ``CmpCertTemplateBuilding`` - builds a ``CertTemplate`` from the context's
-  certificate request data (subject, public key, extensions).
-* ``CmpCertRequestBodyBuilding`` - wraps the template in a ``CertReqMsg``/``CertReqMessages``
-  and sets the PKI body (IR or CR), optionally adding Proof-of-Possession.
-* ``CmpPkiHeaderBuilding`` - constructs the PKI header (pvno, sender, recipient,
-  transactionID, senderNonce, messageTime, implicit confirm, protection algorithm).
-* ``CmpPkiMessageAssembly`` - assembles header + body into the final ``PKIMessage``.
-
-Composite
----------
-* ``CmpMessageBuilder`` - composite that chains all components in order.
-"""
+"""Provides classes for building CMP PKI messages."""
 
 from __future__ import annotations
 
@@ -31,7 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from pyasn1.codec.der import decoder, encoder  # type: ignore[import-untyped]
 from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc3280, rfc4210, rfc4211, rfc5280  # type: ignore[import-untyped]
-from trustpoint_core.oid import HmacAlgorithm
+from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm
 
 from request.request_context import (
     BaseRequestContext,
@@ -46,15 +26,13 @@ class CmpMessageBuilderError(Exception):
     """Base exception for CMP message builder errors."""
 
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
+
 CMP_MESSAGE_VERSION = 2
 TRANSACTION_ID_LENGTH = 16
 SENDER_NONCE_LENGTH = 16
 IMPLICIT_CONFIRM_OID = '1.3.6.1.5.5.7.4.13'
-PBM_OID = '1.2.840.113533.7.66.13'  # id-PasswordBasedMac
-SHA256_OID = '2.16.840.1.101.3.4.2.1'
+PBM_OID = '1.2.840.113533.7.66.13'
+SHA256_OID = HashAlgorithm.SHA256.dotted_string
 
 # Threshold below which DER length fits in a single byte (short form).
 _DER_LENGTH_SHORT_FORM_MAX = 0x7F
@@ -79,20 +57,8 @@ def _der_tlv(tag_byte: int, value: bytes) -> bytes:
     return bytes([tag_byte, 0x80 | len(length_payload)]) + length_payload + value
 
 
-# ---------------------------------------------------------------------------
-# 1. CertTemplate building
-# ---------------------------------------------------------------------------
 class CmpCertTemplateBuilding(BuildingComponent, LoggerMixin):
-    """Build a ``CertTemplate`` from the context's certificate request data.
-
-    Reads from ``context``:
-    * ``subject`` - ``x509.Name``
-    * ``public_key`` - ``rsa.RSAPublicKey | ec.EllipticCurvePublicKey``
-    * ``extensions`` - optional list of ``x509.Extension``
-
-    Stores into ``context``:
-    * ``_cert_template`` - the constructed ``rfc4211.CertTemplate``
-    """
+    """Build a ``CertTemplate`` from the context's certificate request data."""
 
     def build(self, context: BaseRequestContext) -> None:
         """Build the CertTemplate and store it in the context."""
@@ -124,14 +90,7 @@ class CmpCertTemplateBuilding(BuildingComponent, LoggerMixin):
 
     @staticmethod
     def _get_cert_template_field_schema(field_name: str) -> univ.Asn1Type:
-        """Return the schema type (with correct implicit tag) for a ``CertTemplate`` field.
-
-        ``rfc4211.CertTemplate`` uses implicit context tags on every optional field.
-        When we decode a value with a *plain* ASN.1 spec (e.g. ``rfc3280.Name()``),
-        the decoded object carries no implicit tag.  pyasn1 refuses to assign such a
-        value to the tagged slot.  We need the *schema* object so that we can
-        ``clone`` the decoded value with the correct ``tagSet``.
-        """
+        """Return the schema type (with correct implicit tag) for a ``CertTemplate`` field."""
         ct = rfc4211.CertTemplate()
         for i in range(len(ct.componentType)):
             if ct.componentType.getNameByPosition(i) == field_name:
@@ -147,16 +106,6 @@ class CmpCertTemplateBuilding(BuildingComponent, LoggerMixin):
     ) -> rfc4211.CertTemplate:
         """Build a ``CertTemplate`` from certificate components.
 
-        Uses ``rfc4211.CertTemplate`` which carries implicit context tags on all
-        fields (e.g. ``[5] IMPLICIT Name`` for *subject*).  After decoding from
-        DER with a plain spec we must ``clone`` the result with the schema's
-        ``tagSet`` so that pyasn1 accepts the assignment.
-
-        For **CHOICE** types (``Name``), we additionally need to re-set the
-        inner chosen component because ``clone`` only copies the outer tag.
-        For **SEQUENCE** types (``SubjectPublicKeyInfo``, ``Extensions``),
-        ``clone(..., cloneValueFlag=True)`` suffices.
-
         Args:
             subject: The subject name for the certificate.
             public_key: The public key for the certificate request.
@@ -167,7 +116,6 @@ class CmpCertTemplateBuilding(BuildingComponent, LoggerMixin):
         """
         cert_template = rfc4211.CertTemplate()
 
-        # --- Subject (Name is a CHOICE → special handling) ----------------
         subject_der = subject.public_bytes(serialization.Encoding.DER)
         subject_asn1, _ = decoder.decode(subject_der, asn1Spec=rfc3280.Name())
         subject_schema = CmpCertTemplateBuilding._get_cert_template_field_schema('subject')
@@ -175,7 +123,6 @@ class CmpCertTemplateBuilding(BuildingComponent, LoggerMixin):
         tagged_subject['rdnSequence'] = subject_asn1.getComponent()
         cert_template['subject'] = tagged_subject
 
-        # --- Public key (SubjectPublicKeyInfo is a SEQUENCE) --------------
         public_key_der = public_key.public_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
@@ -185,7 +132,6 @@ class CmpCertTemplateBuilding(BuildingComponent, LoggerMixin):
         tagged_pubkey = public_key_asn1.clone(tagSet=pubkey_schema.tagSet, cloneValueFlag=True)
         cert_template['publicKey'] = tagged_pubkey
 
-        # --- Extensions (SEQUENCE OF Extension) ---------------------------
         if extensions:
             extensions_asn1 = rfc3280.Extensions()
             for idx, ext in enumerate(extensions):
@@ -201,21 +147,8 @@ class CmpCertTemplateBuilding(BuildingComponent, LoggerMixin):
         return cert_template
 
 
-# ---------------------------------------------------------------------------
-# 2. CertRequest body building (CertReqMsg + PKIBody + optional PoP)
-# ---------------------------------------------------------------------------
 class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
-    """Build the PKI body from the ``CertTemplate``.
-
-    Reads from ``context``:
-    * ``validated_request_data['_cert_template']`` - the CertTemplate
-    * ``request_data['private_key']`` - private key (for PoP signature)
-    * ``request_data['use_initialization_request']`` - bool, IR vs CR
-    * ``request_data.get('add_pop', True)`` - whether to add Proof-of-Possession
-
-    Stores into ``context``:
-    * ``validated_request_data['_pki_body']`` - the constructed ``rfc4210.PKIBody``
-    """
+    """Build the PKI body from the ``CertTemplate``."""
 
     def build(self, context: BaseRequestContext) -> None:
         """Build the PKI body and store it in the context."""
@@ -240,28 +173,17 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
         add_pop: bool = request_data.get('add_pop', True)
 
         try:
-            # CertRequest
             cert_request = rfc4211.CertRequest()
             cert_request['certReqId'] = 0
             cert_request['certTemplate'] = cert_template
 
-            # CertReqMsg
             cert_req_msg = rfc4211.CertReqMsg()
             cert_req_msg['certReq'] = cert_request
 
-            # Proof-of-Possession
             if add_pop:
                 pop = self._build_pop_signature(cert_request, private_key)
                 cert_req_msg.setComponentByName('popo', pop, verifyConstraints=False)
 
-            # PKI body
-            # PKIBody is a CHOICE type whose alternatives carry implicit context
-            # tags (e.g. ``cr`` → ``[2] IMPLICIT CertReqMessages``).  A plain
-            # ``rfc4211.CertReqMessages()`` only has the base ``SEQUENCE`` tag and
-            # will be encoded without the required context tag - causing the BER
-            # decoder on the server side to fail.
-            # We therefore obtain the correctly-tagged schema from the PKIBody's
-            # own ``componentType`` and populate *that* instance.
             pki_body = rfc4210.PKIBody()
             body_choice = 'ir' if use_ir else 'cr'
 
@@ -307,13 +229,13 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
                 padding.PKCS1v15(),
                 hashes.SHA256(),
             )
-            algorithm_oid = '1.2.840.113549.1.1.11'  # sha256WithRSAEncryption
+            algorithm_oid = AlgorithmIdentifier.RSA_SHA256.dotted_string
         elif isinstance(private_key, ec.EllipticCurvePrivateKey):
             signature = private_key.sign(
                 encoded_cert_request,
                 ec.ECDSA(hashes.SHA256()),
             )
-            algorithm_oid = '1.2.840.10045.4.3.2'  # ecdsa-with-SHA256
+            algorithm_oid = AlgorithmIdentifier.ECDSA_SHA256.dotted_string
         else:
             msg = f'Unsupported private key type: {type(private_key)}'
             raise CmpMessageBuilderError(msg)
@@ -327,10 +249,7 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
         binary_signature = f'{int.from_bytes(signature, byteorder="big"):b}'.zfill(len(signature) * 8)
         popo_signing_key['signature'] = univ.BitString(binary_signature)
 
-        # ProofOfPossession is a CHOICE whose ``signature`` alternative has an
-        # implicit context tag ``[1] CONSTRUCTED``.  A plain POPOSigningKey
-        # carries only the base SEQUENCE tag, so we must re-tag it with the
-        # schema's tagSet before assigning.
+
         pop = rfc4211.ProofOfPossession()
         sig_idx = pop.componentType.getPositionByName('signature')
         sig_schema = pop.componentType.getTypeByPosition(sig_idx)
@@ -343,30 +262,9 @@ class CmpCertRequestBodyBuilding(BuildingComponent, LoggerMixin):
         return pop
 
 
-# ---------------------------------------------------------------------------
-# 3. PKI header building
-# ---------------------------------------------------------------------------
+
 class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
-    """Build the PKI header for the CMP message.
-
-    Constructs the header with:
-    * pvno = 2  (cmp2000)
-    * sender / recipient as ``GeneralName`` (directoryName)
-    * messageTime
-    * transactionID  (16 random bytes)
-    * senderNonce    (16 random bytes)
-    * generalInfo    with implicit confirm entry
-    * protectionAlg  (PBM) if ``prepare_shared_secret_protection`` is requested
-
-    Reads from ``context``:
-    * ``request_data['subject']``        - ``x509.Name`` (sender)
-    * ``request_data['recipient_name']`` - str DN (recipient)
-    * ``request_data.get('prepare_shared_secret_protection', False)``
-    * ``request_data.get('hmac_algorithm', HmacAlgorithm.HMAC_SHA256)``
-
-    Stores into ``context``:
-    * ``validated_request_data['_pki_header']``
-    """
+    """Build the PKI header for the CMP message."""
 
     def build(self, context: BaseRequestContext) -> None:
         """Build the PKI header and store it in the context."""
@@ -395,33 +293,25 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
 
             header = rfc4210.PKIHeader()
 
-            # Protocol version
             header['pvno'] = CMP_MESSAGE_VERSION
 
-            # Sender
             header['sender'] = self._build_general_name_from_dn(sender_name)
-
-            # Recipient
             header['recipient'] = self._build_general_name_from_dn(recipient_name)
 
-            # Message time
             now = datetime.now(UTC)
             current_time = now.strftime('%Y%m%d%H%M%SZ')
             header['messageTime'] = useful.GeneralizedTime(current_time).subtype(
                 explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
             )
 
-            # Transaction ID
             header['transactionID'] = univ.OctetString(value=transaction_id).subtype(
                 explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 4)
             )
 
-            # Sender nonce
             header['senderNonce'] = univ.OctetString(value=sender_nonce).subtype(
                 explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 5)
             )
 
-            # Sender KID (optional, used for shared-secret device lookup)
             sender_kid: int | None = request_data.get('sender_kid')
             if sender_kid is not None:
                 kid_idx = header.componentType.getPositionByName('senderKID')
@@ -429,10 +319,8 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
                 kid_value = kid_schema.clone(value=str(sender_kid).encode())
                 header['senderKID'] = kid_value
 
-            # Implicit confirm (generalInfo)
             header = self._add_implicit_confirm(header)
 
-            # Protection algorithm (PBM) if requested
             prepare_protection: bool = request_data.get('prepare_shared_secret_protection', False)
             if prepare_protection:
                 hmac_algorithm: HmacAlgorithm = request_data.get(
@@ -453,18 +341,7 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
 
     @staticmethod
     def _build_general_name_from_dn(dn_string: str) -> rfc5280.GeneralName:
-        """Build a ``GeneralName`` from a distinguished name string.
-
-        Wraps the DER-encoded ``Name`` in a context-specific ``[4]`` tag
-        (``directoryName``) and decodes the result against the ``GeneralName``
-        ASN.1 spec so that pyasn1 produces a properly-tagged value.
-
-        Args:
-            dn_string: DN string in RFC 4514 format (e.g., ``CN=Device,O=Company``).
-
-        Returns:
-            ``GeneralName`` with ``directoryName`` choice.
-        """
+        """Build a ``GeneralName`` from a distinguished name string."""
         name = x509.Name.from_rfc4514_string(dn_string)
         name_der = name.public_bytes(serialization.Encoding.DER)
         tagged_der = _der_tlv(0xA4, name_der)
@@ -475,31 +352,18 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
     def _add_implicit_confirm(header: rfc4210.PKIHeader) -> rfc4210.PKIHeader:
         """Add the implicit confirm ``InfoTypeAndValue`` entry to ``generalInfo``.
 
-        The implicit confirm extension (OID 1.3.6.1.5.5.7.4.13) signals to the CA
-        that no certConf/PKIConfirm exchange is needed.  Its value is ASN.1 NULL
-        (DER ``0x0500``).
-
-        We must obtain the ``generalInfo`` SequenceOf *schema* from the header's own
-        ``componentType`` so that the inner ``InfoTypeAndValue`` carries the correct
-        ``subtypeSpec`` constraints.  Using a standalone ``rfc4210.InfoTypeAndValue()``
-        would fail pyasn1's tag-compatibility check because the SequenceOf's
-        ``componentType`` has an additional ``ValueSizeConstraint(1, inf)``.
-
         Args:
             header: The PKI header to modify.
 
         Returns:
             The modified header with implicit confirm set.
         """
-        # Get the generalInfo SequenceOf schema from the header definition
         general_info_idx = header.componentType.getPositionByName('generalInfo')
         general_info = header.componentType.getTypeByPosition(general_info_idx).clone()
 
-        # Create the InfoTypeAndValue from the SequenceOf's own componentType
-        # so it inherits the correct subtypeSpec constraints.
         implicit_confirm = general_info.componentType.clone()
         implicit_confirm['infoType'] = univ.ObjectIdentifier(IMPLICIT_CONFIRM_OID)
-        implicit_confirm['infoValue'] = univ.Any(hexValue='0500')  # ASN.1 NULL
+        implicit_confirm['infoValue'] = univ.Any(hexValue='0500')
 
         general_info.setComponentByPosition(0, implicit_confirm)
         header['generalInfo'] = general_info
@@ -563,19 +427,9 @@ class CmpPkiHeaderBuilding(BuildingComponent, LoggerMixin):
         return header
 
 
-# ---------------------------------------------------------------------------
-# 4. Final PKIMessage assembly
-# ---------------------------------------------------------------------------
+
 class CmpPkiMessageAssembly(BuildingComponent, LoggerMixin):
-    """Assemble the final ``PKIMessage`` from header and body.
-
-    Reads from ``context``:
-    * ``validated_request_data['_pki_header']``
-    * ``validated_request_data['_pki_body']``
-
-    Stores into ``context``:
-    * ``parsed_message`` - the final ``rfc4210.PKIMessage`` (ready for ``CmpClient``)
-    """
+    """Assemble the final ``PKIMessage`` from header and body."""
 
     def build(self, context: BaseRequestContext) -> None:
         """Assemble the PKI message and store it in the context."""
@@ -604,47 +458,8 @@ class CmpPkiMessageAssembly(BuildingComponent, LoggerMixin):
         self.logger.info('CMP PKI message assembled successfully')
 
 
-# ---------------------------------------------------------------------------
-# 5. Composite builder  (mirrors CmpMessageParser)
-# ---------------------------------------------------------------------------
 class CmpMessageBuilder(CompositeBuilding):
-    """Composite builder for CMP certification/initialization request messages.
-
-    Mirrors ``CmpMessageParser`` from ``message_parser/cmp.py``:
-
-    * ``CmpMessageParser``  chains:  PkiMessageParsing → BodyValidation → HeaderValidation → Domain → Profile
-    * ``CmpMessageBuilder`` chains:  CertTemplateBuilding → CertRequestBodyBuilding → PkiHeaderBuilding → Assembly
-
-    Usage::
-
-        context = CmpCertificateRequestContext(
-            protocol='cmp',
-            operation='certification',  # or 'initialization'
-            request_data={
-                'subject': x509.Name([...]),
-                'public_key': public_key,
-                'private_key': private_key,
-                'recipient_name': 'CN=CA,O=Company',
-                'extensions': [...],                      # optional
-                'use_initialization_request': False,       # True for IR
-                'add_pop': True,                           # default
-                'prepare_shared_secret_protection': True,  # optional
-                'hmac_algorithm': HmacAlgorithm.HMAC_SHA256,  # optional
-            },
-            cmp_server_host='cmp.example.com',
-            cmp_shared_secret='secret',
-        )
-
-        builder = CmpMessageBuilder()
-        builder.build(context)
-
-        # context.parsed_message is now the rfc4210.PKIMessage
-        cmp_client = CmpClient(context)
-        cert = cmp_client.send_and_extract_certificate(
-            context.parsed_message,
-            add_shared_secret_protection=True,
-        )
-    """
+    """Composite builder for CMP certification/initialization request messages."""
 
     def __init__(self) -> None:
         """Initialize the composite builder with the default set of building components."""

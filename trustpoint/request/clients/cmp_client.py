@@ -7,8 +7,6 @@ This client enables Trustpoint to communicate with external CMP servers in two m
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import requests
@@ -74,6 +72,11 @@ class CmpClient(LoggerMixin):
 
         self.context = context
         self.timeout = timeout
+
+    def _raise_cmp_client_error(self, message: str) -> None:
+        """Raise a CMP client error with the given message."""
+        self.logger.error(message)
+        raise CmpClientError(message)
 
     def _build_url(self) -> str:
         """Build the full CMP server URL.
@@ -195,12 +198,12 @@ class CmpClient(LoggerMixin):
                 msg = f'CMP server returned error status {status_value}: {status_string}'
                 raise CmpClientError(msg)
 
-            self.logger.info('Successfully received CMP response: %s', body_name)
-            return pki_message
-
         except (ValueError, TypeError, KeyError) as e:
             msg = f'Failed to parse CMP server response: {e!s}'
             raise CmpClientError(msg) from e
+        else:
+            self.logger.info('Successfully received CMP response: %s', body_name)
+            return pki_message
 
     @staticmethod
     def _parse_der_tlv(data: bytes, offset: int) -> tuple[int, int, int, int]:
@@ -347,7 +350,7 @@ class CmpClient(LoggerMixin):
 
             if cr_pos >= cr_val_end:
                 msg = 'No certifiedKeyPair found in CertResponse'
-                raise CmpClientError(msg)
+                self._raise_cmp_client_error(msg)
 
             # certifiedKeyPair SEQUENCE
             ckp_tag, ckp_hdr, ckp_vlen, _ = tlv(raw_data, cr_pos)
@@ -357,7 +360,6 @@ class CmpClient(LoggerMixin):
                 ckp_tag, ckp_hdr, ckp_vlen, cr_pos,
             )
 
-            # CertOrEncCert: certificate [0]
             # pyasn1 encodes this with an EXPLICIT [0] wrapper around the
             # Certificate SEQUENCE, so the DER looks like:
             #   A0 <len> 30 <len> <certificate contents>
@@ -411,13 +413,13 @@ class CmpClient(LoggerMixin):
                         ec_pos += ec_total
                 scan_pos += scan_total
 
-            return issued_cert_der, extra_certs
-
         except CmpClientError:
             raise
         except Exception as e:
             msg = f'Failed to extract certificates from raw CMP response DER: {e!s}'
             raise CmpClientError(msg) from e
+        else:
+            return issued_cert_der, extra_certs
 
     def _extract_issued_certificate(
         self,
@@ -445,46 +447,43 @@ class CmpClient(LoggerMixin):
             body = response_message['body']
             body_name = body.getName()
 
-            # Handle both CP and IP responses
             if body_name not in ['cp', 'ip']:
                 msg = f'Expected CP or IP response, got: {body_name}'
-                raise CmpClientError(msg)
+                self._raise_cmp_client_error(msg)
 
             cert_response_msg = body[body_name]
             cert_responses = cert_response_msg['response']
 
             if len(cert_responses) < 1:
                 msg = 'No certificate responses in CMP message'
-                raise CmpClientError(msg)
+                self._raise_cmp_client_error(msg)
 
             cert_response = cert_responses[0]
 
-            # Check status using pyasn1
             pki_status_info = cert_response['status']
             status = int(pki_status_info['status'])
             if status != 0:
                 status_string = pki_status_info.get('statusString', 'No details provided')
                 msg = f'Certificate issuance failed with status {status}: {status_string}'
-                raise CmpClientError(msg)
+                self._raise_cmp_client_error(msg)
 
-            # Extract certificates from raw DER bytes (bypasses pyasn1 encoding bug)
             issued_cert_der, extra_cert_ders = self._extract_certs_from_raw_response(raw_response)
 
             issued_cert = x509.load_der_x509_certificate(issued_cert_der)
             chain_certs = [x509.load_der_x509_certificate(ec) for ec in extra_cert_ders]
-
-            self.logger.info(
-                'Successfully extracted issued certificate: %s (+ %d chain certs)',
-                issued_cert.subject.rfc4514_string(),
-                len(chain_certs),
-            )
-            return issued_cert, chain_certs
 
         except CmpClientError:
             raise
         except (ValueError, TypeError, KeyError) as e:
             msg = f'Failed to extract certificate from response: {e!s}'
             raise CmpClientError(msg) from e
+        else:
+            self.logger.info(
+                'Successfully extracted issued certificate: %s (+ %d chain certs)',
+                issued_cert.subject.rfc4514_string(),
+                len(chain_certs),
+            )
+            return issued_cert, chain_certs
 
     def send_pki_message(
         self,
@@ -514,11 +513,9 @@ class CmpClient(LoggerMixin):
         url = self._build_url()
         self.logger.info('Sending CMP PKI message to: %s', url)
 
-        # Add protection if requested
         if add_shared_secret_protection:
             pki_message = self._add_protection_shared_secret(pki_message)
 
-        # Encode message
         request_data = encoder.encode(pki_message)
 
         headers = {
@@ -526,24 +523,14 @@ class CmpClient(LoggerMixin):
             'Accept': 'application/pkixcmp',
         }
 
-        # Handle TLS verification
-        verify: str | bool = True
-        temp_ca_bundle_path: str | None = None
-
-        if hasattr(self.context, 'cmp_server_truststore') and self.context.cmp_server_truststore is not None:
-            # Use custom truststore
-            ca_bundle_pem = self.context.cmp_server_truststore.get_certificate_collection_serializer().as_pem()
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False) as temp_file:
-                temp_file.write(ca_bundle_pem.decode('utf-8'))
-                temp_ca_bundle_path = temp_file.name
-                verify = temp_ca_bundle_path
-
+        # TODO (FHK): We may want to allow TLS server validation in the future  # noqa: FIX002
+        # although we verify the Issuing CA cert with CMP
         try:
             response = requests.post(
                 url,
                 data=request_data,
                 headers=headers,
-                verify=False,
+                verify=False,  # noqa: S501
                 timeout=self.timeout,
             )
 
@@ -562,9 +549,7 @@ class CmpClient(LoggerMixin):
         else:
             self.logger.info('Successfully received CMP response')
             return response_message, raw_response
-        finally:
-            if temp_ca_bundle_path is not None:
-                Path(temp_ca_bundle_path).unlink()
+
 
     def send_and_extract_certificate(
         self,
