@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import json
-from typing import TYPE_CHECKING, Any, cast, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.contrib import messages
 from django.db.models import ProtectedError, QuerySet
