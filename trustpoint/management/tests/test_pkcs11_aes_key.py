@@ -181,7 +181,9 @@ class TestPkcs11AESKey:
             # Session should be the same instance
             assert aes_key_with_session._session == mock_session
 
-        def test_concurrent_operations_same_instance(self, aes_key_with_session: Pkcs11AESKey, mock_session: Mock) -> None:
+        def test_concurrent_operations_same_instance(
+            self, aes_key_with_session: Pkcs11AESKey, mock_session: Mock
+        ) -> None:
             """Test multiple operations on same instance work correctly."""
             mock_key1 = Mock()
             mock_key2 = Mock()
@@ -323,6 +325,7 @@ class TestPkcs11AESKey:
             # Set session after initialization
             def set_session() -> None:
                 object.__setattr__(aes_key, '_session', mock_session)
+
             mock_init.side_effect = set_session
 
             aes_key.load_key()
@@ -339,10 +342,7 @@ class TestPkcs11AESKey:
 
         assert aes_key_with_session._key == mock_key
         mock_session.generate_key.assert_called_once_with(
-            pkcs11.KeyType.AES,
-            key_length=256,
-            label='test_aes_key',
-            store=True
+            pkcs11.KeyType.AES, key_length=256, label='test_aes_key', store=True
         )
 
     def test_generate_key_custom_length(self, aes_key_with_session: Pkcs11AESKey, mock_session: Mock) -> None:
@@ -354,10 +354,7 @@ class TestPkcs11AESKey:
 
         assert aes_key_with_session._key == mock_key
         mock_session.generate_key.assert_called_once_with(
-            pkcs11.KeyType.AES,
-            key_length=128,
-            label='test_aes_key',
-            store=True
+            pkcs11.KeyType.AES, key_length=128, label='test_aes_key', store=True
         )
 
     def test_generate_key_192_length(self, aes_key_with_session: Pkcs11AESKey, mock_session: Mock) -> None:
@@ -368,10 +365,7 @@ class TestPkcs11AESKey:
         aes_key_with_session.generate_key(192)
 
         mock_session.generate_key.assert_called_once_with(
-            pkcs11.KeyType.AES,
-            key_length=192,
-            label='test_aes_key',
-            store=True
+            pkcs11.KeyType.AES, key_length=192, label='test_aes_key', store=True
         )
 
     def test_generate_key_unsupported_length(self, aes_key_with_session: Pkcs11AESKey) -> None:
@@ -394,6 +388,7 @@ class TestPkcs11AESKey:
             # Set session after initialization
             def set_session() -> None:
                 object.__setattr__(aes_key, '_session', mock_session)
+
             mock_init.side_effect = set_session
 
             aes_key.generate_key()
@@ -468,10 +463,7 @@ class TestPkcs11AESKey:
             # Verify key was generated and stored
             assert aes_key._key == mock_generated_key
             mock_session.generate_key.assert_called_once_with(
-                pkcs11.KeyType.AES,
-                key_length=256,
-                label='test_aes_key',
-                store=True
+                pkcs11.KeyType.AES, key_length=256, label='test_aes_key', store=True
             )
 
             # Close the session
@@ -506,18 +498,23 @@ class TestPkcs11AESKey:
             aes_key_with_session.generate_key(length)
 
             mock_session.generate_key.assert_called_once_with(
-                pkcs11.KeyType.AES,
-                key_length=length,
-                label='test_aes_key',
-                store=True
+                pkcs11.KeyType.AES, key_length=length, label='test_aes_key', store=True
             )
 
     def test_string_representation_attributes(self, aes_key: Pkcs11AESKey) -> None:
         """Test that all expected attributes are present."""
         # Verify all expected private attributes exist
         expected_attrs = [
-            '_lib_path', '_token_label', '_user_pin', '_key_label',
-            '_lib', '_slot_id', '_token', '_session', '_key', '_key_length'
+            '_lib_path',
+            '_token_label',
+            '_user_pin',
+            '_key_label',
+            '_lib',
+            '_slot_id',
+            '_token',
+            '_session',
+            '_key',
+            '_key_length',
         ]
 
         for attr in expected_attrs:

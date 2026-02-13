@@ -23,6 +23,7 @@ from trustpoint.logger import LoggerMixin
 if TYPE_CHECKING:
     from typing import Any
 
+
 class Command(LoggerMixin, BaseCommand):
     """A Django management command to restore the Trustpoint container.
 

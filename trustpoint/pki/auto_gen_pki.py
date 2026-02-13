@@ -36,9 +36,7 @@ class AutoGenPki(LoggerMixin):
         else:
             try:
                 ca = CaModel.objects.filter(
-                    unique_name__startswith=UNIQUE_NAME_PREFIX,
-                    ca_type=CaModel.CaTypeChoice.AUTOGEN,
-                    is_active=True
+                    unique_name__startswith=UNIQUE_NAME_PREFIX, ca_type=CaModel.CaTypeChoice.AUTOGEN, is_active=True
                 ).first()
             except CaModel.DoesNotExist:
                 return None
@@ -60,7 +58,7 @@ class AutoGenPki(LoggerMixin):
                 cls.logger.error(
                     'Issuing CA for auto-generated PKI already exists: %s - '
                     'auto-generated PKI was possibly not correctly disabled',
-                    existing_issuing_ca.unique_name
+                    existing_issuing_ca.unique_name,
                 )
                 return
 
@@ -70,17 +68,14 @@ class AutoGenPki(LoggerMixin):
 
             # Re-use any existing root CA for the auto-generated PKI and current key type
             try:
-                root_ca = CaModel.objects.get(
-                    unique_name=root_ca_name, ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT
-                )
+                root_ca = CaModel.objects.get(unique_name=root_ca_name, ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT)
                 root_cert = cast('CredentialModel', root_ca.credential).get_certificate()
                 root_1_key = cast('CredentialModel', root_ca.credential).get_private_key()
                 cls.logger.info('Reusing existing Root CA: %s', root_ca_name)
             except CaModel.DoesNotExist:
                 cls.logger.info('Creating new Root CA: %s', root_ca_name)
                 root_cert, root_1_key = CertificateGenerator.create_root_ca(
-                    root_ca_name,
-                    private_key=key_gen.generate_private_key_for_public_key_info(public_key_info)
+                    root_ca_name, private_key=key_gen.generate_private_key_for_public_key_info(public_key_info)
                 )
                 root_ca = CertificateGenerator.save_issuing_ca(
                     issuing_ca_cert=root_cert,
@@ -105,7 +100,7 @@ class AutoGenPki(LoggerMixin):
                 chain=[root_cert],
                 unique_name=issuing_ca_unique_name,
                 ca_type=CaModel.CaTypeChoice.AUTOGEN,
-                parent_ca=root_ca
+                parent_ca=root_ca,
             )
             cls.logger.info('Saved new Issuing CA: %s', issuing_ca_unique_name)
 

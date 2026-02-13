@@ -150,7 +150,7 @@ urlpatterns = [
     path(
         'domains/config/<int:pk>/help/onboarding-method-select-idevid/',
         domains.OnboardingMethodSelectIdevidHelpView.as_view(),
-        name='help_onboarding_method_select_idevid'
+        name='help_onboarding_method_select_idevid',
     ),
     path(
         'domains/config/<int:pk>/help/cmp-idevid-registration/',

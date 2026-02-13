@@ -36,7 +36,7 @@ def get_private_key_location_from_config() -> PrivateKeyLocation:
         storage_config = KeyStorageConfig.get_config()
         if storage_config.storage_type in [
             KeyStorageConfig.StorageType.SOFTHSM,
-            KeyStorageConfig.StorageType.PHYSICAL_HSM
+            KeyStorageConfig.StorageType.PHYSICAL_HSM,
         ]:
             return PrivateKeyLocation.HSM_PROVIDED
     except KeyStorageConfig.DoesNotExist:
@@ -51,7 +51,7 @@ def get_ca_type_from_config() -> CaModel.CaTypeChoice:
         storage_config = KeyStorageConfig.get_config()
         if storage_config.storage_type in [
             KeyStorageConfig.StorageType.SOFTHSM,
-            KeyStorageConfig.StorageType.PHYSICAL_HSM
+            KeyStorageConfig.StorageType.PHYSICAL_HSM,
         ]:
             return CaModel.CaTypeChoice.LOCAL_PKCS11
     except KeyStorageConfig.DoesNotExist:
@@ -97,8 +97,7 @@ class IssuingCaImportMixin:
             if issuing_ca_qs.exists():
                 ca_in_db = issuing_ca_qs[0]
                 err_msg = (
-                    f'Issuing CA {ca_in_db.unique_name} is already configured '
-                    'with the same Issuing CA certificate.'
+                    f'Issuing CA {ca_in_db.unique_name} is already configured with the same Issuing CA certificate.'
                 )
                 self._raise_validation_error(err_msg)
 
@@ -265,7 +264,6 @@ class TruststoreAddForm(forms.Form):
         cleaned_data = cast('dict[str, Any]', super().clean())
         unique_name = cleaned_data.get('unique_name')
         intended_usage = str(cleaned_data.get('intended_usage'))
-
 
         trust_store_file = cleaned_data.get('trust_store_file')
         if trust_store_file is None:
@@ -558,12 +556,8 @@ class IssuingCaAddFileImportPkcs12Form(IssuingCaImportMixin, LoggerMixin, forms.
             if credential_serializer.private_key is None:
                 self._raise_validation_error('Private key is missing from credential serializer.')
             private_key_location = get_private_key_location_from_config()
-            credential_serializer.private_key_reference = (
-                PrivateKeyReference.from_private_key(
-                    private_key=credential_serializer.private_key,
-                    key_label=unique_name,
-                    location=private_key_location
-                )
+            credential_serializer.private_key_reference = PrivateKeyReference.from_private_key(
+                private_key=credential_serializer.private_key, key_label=unique_name, location=private_key_location
             )
         except Exception as exception:
             err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
@@ -792,12 +786,8 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
             self._raise_validation_error('Private key is missing from credential serializer.')
 
         private_key_location = get_private_key_location_from_config()
-        credential_serializer.private_key_reference = (
-            PrivateKeyReference.from_private_key(
-                private_key=pk,
-                key_label=unique_name,
-                location=private_key_location
-            )
+        credential_serializer.private_key_reference = PrivateKeyReference.from_private_key(
+            private_key=pk, key_label=unique_name, location=private_key_location
         )
 
     def clean(self) -> None:
@@ -946,8 +936,7 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             if credential_qs.exists():
                 credential_in_db = credential_qs[0]
                 err_msg = (
-                    f'Owner Credential {credential_in_db.unique_name} is already configured '
-                    'with the same DevOwnerID.'
+                    f'Owner Credential {credential_in_db.unique_name} is already configured with the same DevOwnerID.'
                 )
                 raise ValidationError(err_msg)
 
@@ -1031,7 +1020,7 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             credential_serializer = CredentialSerializer.from_serializers(
                 private_key_serializer=private_key_serializer,
                 certificate_serializer=certificate_serializer,
-                certificate_collection_serializer=certificate_chain_serializer
+                certificate_collection_serializer=certificate_chain_serializer,
             )
 
             OwnerCredentialModel.create_new_owner_credential(
@@ -1061,7 +1050,7 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
         """Meta information for the CertProfileConfigForm."""
 
         model = CertificateProfileModel
-        fields: ClassVar[list[str]] = ['unique_name', 'profile_json','is_default']
+        fields: ClassVar[list[str]] = ['unique_name', 'profile_json', 'is_default']
 
     def clean_unique_name(self) -> str:
         """Validates the unique name to ensure it is not already in use.
@@ -1100,4 +1089,3 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
             raise forms.ValidationError(error_message) from e
         self.instance.display_name = json_dict.get('display_name', '')
         return json.dumps(json_dict)
-

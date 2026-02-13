@@ -31,7 +31,6 @@ class Command(RunServerPlusCommand):
             key_pem = key_file.read()
         key_serializer = PrivateKeySerializer.from_pem(key_pem)
 
-
         tls_server_credential_serializer = CredentialSerializer.from_serializers(
             private_key_serializer=key_serializer,
             certificate_serializer=certificate_serializer,

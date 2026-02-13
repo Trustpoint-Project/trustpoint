@@ -29,7 +29,7 @@ def get_private_key_location_from_config() -> PrivateKeyLocation:
         storage_config = KeyStorageConfig.get_config()
         if storage_config.storage_type in [
             KeyStorageConfig.StorageType.SOFTHSM,
-            KeyStorageConfig.StorageType.PHYSICAL_HSM
+            KeyStorageConfig.StorageType.PHYSICAL_HSM,
         ]:
             return PrivateKeyLocation.HSM_PROVIDED
     except KeyStorageConfig.DoesNotExist:
@@ -50,6 +50,7 @@ class SignerAddMethodSelectForm(forms.Form):
         required=True,
     )
 
+
 class SignerAddFileTypeSelectForm(forms.Form):
     """Form for selecting the file type when importing a Signer."""
 
@@ -62,6 +63,7 @@ class SignerAddFileTypeSelectForm(forms.Form):
         initial='pkcs_12',
         required=True,
     )
+
 
 class SignerAddFileImportPkcs12Form(LoggerMixin, forms.Form):
     """Form for importing an Signer using a PKCS#12 file."""
@@ -124,10 +126,7 @@ class SignerAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         return pkcs12_raw, pkcs12_password
 
     def _process_pkcs12_file(
-        self,
-        pkcs12_raw: bytes,
-        pkcs12_password: bytes | None,
-        unique_name: str | None
+        self, pkcs12_raw: bytes, pkcs12_password: bytes | None, unique_name: str | None
     ) -> CredentialSerializer:
         """Processes the PKCS#12 file and returns a credential serializer."""
         try:
@@ -261,8 +260,7 @@ class SignerAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             key_usage_ext = cert_crypto.extensions.get_extension_for_class(x509.KeyUsage)
             if not key_usage_ext.value.digital_signature:
                 err_msg = (
-                    'The provided certificate does not have digitalSignature key usage '
-                    'and cannot be used for signing.'
+                    'The provided certificate does not have digitalSignature key usage and cannot be used for signing.'
                 )
                 self._raise_validation_error(err_msg)
         except x509.ExtensionNotFound:
@@ -277,8 +275,7 @@ class SignerAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             if issuing_ca_qs.exists():
                 issuing_ca_in_db = issuing_ca_qs[0]
                 err_msg = (
-                    f'Signer {issuing_ca_in_db.unique_name} is already configured '
-                    'with the same Signer certificate.'
+                    f'Signer {issuing_ca_in_db.unique_name} is already configured with the same Signer certificate.'
                 )
                 raise ValidationError(err_msg)
 
@@ -405,29 +402,30 @@ class SignHashForm(LoggerMixin, forms.Form):
         try:
             bytes.fromhex(hash_value)
         except ValueError as e:
-            raise ValidationError({
-                'hash_value': _('Invalid hash format. Please provide a valid hexadecimal string.')
-            }) from e
+            raise ValidationError(
+                {'hash_value': _('Invalid hash format. Please provide a valid hexadecimal string.')}
+            ) from e
 
         hash_algorithm = signer.hash_algorithm
         expected_lengths = {
-            'SHA1': 40,      # 160 bits = 20 bytes = 40 hex chars
-            'SHA224': 56,    # 224 bits = 28 bytes = 56 hex chars
-            'SHA256': 64,    # 256 bits = 32 bytes = 64 hex chars
-            'SHA384': 96,    # 384 bits = 48 bytes = 96 hex chars
-            'SHA512': 128,   # 512 bits = 64 bytes = 128 hex chars
+            'SHA1': 40,  # 160 bits = 20 bytes = 40 hex chars
+            'SHA224': 56,  # 224 bits = 28 bytes = 56 hex chars
+            'SHA256': 64,  # 256 bits = 32 bytes = 64 hex chars
+            'SHA384': 96,  # 384 bits = 48 bytes = 96 hex chars
+            'SHA512': 128,  # 512 bits = 64 bytes = 128 hex chars
         }
 
         expected_length = expected_lengths.get(hash_algorithm)
         if expected_length and len(hash_value) != expected_length:
-            raise ValidationError({
-                'hash_value': _('Hash value length mismatch. The selected signer uses %(algorithm)s '
-                               'which expects %(expected)d hexadecimal characters, but got %(actual)d.') % {
-                    'algorithm': hash_algorithm,
-                    'expected': expected_length,
-                    'actual': len(hash_value)
+            raise ValidationError(
+                {
+                    'hash_value': _(
+                        'Hash value length mismatch. The selected signer uses %(algorithm)s '
+                        'which expects %(expected)d hexadecimal characters, but got %(actual)d.'
+                    )
+                    % {'algorithm': hash_algorithm, 'expected': expected_length, 'actual': len(hash_value)}
                 }
-            })
+            )
 
         cleaned_data['hash_value'] = hash_value.lower()
         return cleaned_data

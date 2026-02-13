@@ -1,7 +1,5 @@
 """Contains Models For Signers App."""
 
-
-
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core import oid
@@ -13,6 +11,7 @@ from util.db import CustomDeleteActionModel
 
 class SignerModel(CustomDeleteActionModel):
     """Contains fields for signer model."""
+
     unique_name = models.CharField(max_length=30, unique=True)
 
     credential = models.OneToOneField(
@@ -79,6 +78,7 @@ class SignerModel(CustomDeleteActionModel):
 
 class SignedMessageModel(models.Model):
     """Model to store signed messages, its signature and certificate(with public key)."""
+
     signer = models.ForeignKey(SignerModel, on_delete=models.CASCADE, related_name='signed_messages')
     hash_value = models.CharField(max_length=256)
     signature = models.TextField()

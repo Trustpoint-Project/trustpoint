@@ -76,7 +76,7 @@ class PKCS11ConfigFormTestCase(TestCase):
                 'hsm_type': 'softhsm',
                 'slot': 0,
                 'module_path': '/usr/local/lib/libpkcs11-proxy.so',
-            }
+            },
         )
         self.assertEqual(result, new_token)
 
@@ -113,5 +113,5 @@ class PKCS11ConfigFormTestCase(TestCase):
                 'hsm_type': 'softhsm',
                 'slot': 0,
                 'module_path': '/usr/local/lib/libpkcs11-proxy.so',
-            }
+            },
         )

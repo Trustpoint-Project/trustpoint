@@ -53,17 +53,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         """
         try:
             config = KeyStorageConfig.get_config()
-            if config.storage_type in [
-                KeyStorageConfig.StorageType.SOFTHSM,
-                KeyStorageConfig.StorageType.PHYSICAL_HSM
-            ]:
+            if config.storage_type in [KeyStorageConfig.StorageType.SOFTHSM, KeyStorageConfig.StorageType.PHYSICAL_HSM]:
                 return CaModel.CaTypeChoice.LOCAL_PKCS11
             return CaModel.CaTypeChoice.LOCAL_UNPROTECTED
         except KeyStorageConfig.DoesNotExist:
-            self.log_and_stdout(
-                'KeyStorageConfig not found, defaulting to LOCAL_UNPROTECTED',
-                level='warning'
-            )
+            self.log_and_stdout('KeyStorageConfig not found, defaulting to LOCAL_UNPROTECTED', level='warning')
             return CaModel.CaTypeChoice.LOCAL_UNPROTECTED
 
     def generate_empty_crl(
@@ -85,6 +79,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             str: The CRL in PEM format.
         """
         from pki.util.crl import generate_empty_crl  # noqa: PLC0415
+
         return generate_empty_crl(ca_cert, private_key, hash_algorithm, crl_validity_hours)
 
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
@@ -103,9 +98,14 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         intermediate_validity_days: int = 5475
         issuing_validity_days: int = 3650
         rsa2_root, _ = self.create_root_ca(
-            'Root-CA RSA-2048-SHA256', private_key=rsa2_root_ca_key, hash_algorithm=hashes.SHA256(), validity_days=root_validity_days
+            'Root-CA RSA-2048-SHA256',
+            private_key=rsa2_root_ca_key,
+            hash_algorithm=hashes.SHA256(),
+            validity_days=root_validity_days,
         )
-        rsa2_root_crl = self.generate_empty_crl(rsa2_root, rsa2_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24)
+        rsa2_root_crl = self.generate_empty_crl(
+            rsa2_root, rsa2_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24
+        )
         rsa2_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa2_root,
             unique_name='root-ca-rsa-2048-sha256',
@@ -120,7 +120,9 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             hash_algorithm=hashes.SHA256(),
             validity_days=intermediate_validity_days,
         )
-        rsa2_int_ca_crl = self.generate_empty_crl(rsa2_int_ca_1, rsa2_int_ca_key_1, hashes.SHA256(), crl_validity_hours=intermediate_validity_days * 24)
+        rsa2_int_ca_crl = self.generate_empty_crl(
+            rsa2_int_ca_1, rsa2_int_ca_key_1, hashes.SHA256(), crl_validity_hours=intermediate_validity_days * 24
+        )
         rsa2_int_ca_model_1 = self.save_keyless_ca(
             root_ca_cert=rsa2_int_ca_1,
             unique_name='intermediate-ca-a-1',
@@ -137,7 +139,9 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             hash_algorithm=hashes.SHA256(),
             validity_days=intermediate_validity_days,
         )
-        rsa2_int_ca_crl_2 = self.generate_empty_crl(rsa2_int_ca_2, rsa2_int_ca_key_2, hashes.SHA256(), crl_validity_hours=intermediate_validity_days * 24)
+        rsa2_int_ca_crl_2 = self.generate_empty_crl(
+            rsa2_int_ca_2, rsa2_int_ca_key_2, hashes.SHA256(), crl_validity_hours=intermediate_validity_days * 24
+        )
         rsa2_int_ca_model_2 = self.save_keyless_ca(
             root_ca_cert=rsa2_int_ca_2,
             unique_name='intermediate-ca-a-2',
@@ -184,9 +188,14 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         rsa3_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
         rsa3_issuing_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
         rsa3_root, _ = self.create_root_ca(
-            'Root-CA RSA-3072-SHA256', private_key=rsa3_root_ca_key, hash_algorithm=hashes.SHA256(), validity_days=root_validity_days
+            'Root-CA RSA-3072-SHA256',
+            private_key=rsa3_root_ca_key,
+            hash_algorithm=hashes.SHA256(),
+            validity_days=root_validity_days,
         )
-        rsa3_root_crl = self.generate_empty_crl(rsa3_root, rsa3_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24)
+        rsa3_root_crl = self.generate_empty_crl(
+            rsa3_root, rsa3_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24
+        )
         rsa3_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa3_root,
             unique_name='root-ca-rsa-3072-sha256',
@@ -213,9 +222,14 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         rsa4_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
         rsa4_issuing_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
         rsa4_root, _ = self.create_root_ca(
-            'Root-CA RSA-4096-SHA256', private_key=rsa4_root_ca_key, hash_algorithm=hashes.SHA512(), validity_days=root_validity_days
+            'Root-CA RSA-4096-SHA256',
+            private_key=rsa4_root_ca_key,
+            hash_algorithm=hashes.SHA512(),
+            validity_days=root_validity_days,
         )
-        rsa4_root_crl = self.generate_empty_crl(rsa4_root, rsa4_root_ca_key, hashes.SHA512(), crl_validity_hours=root_validity_days * 24)
+        rsa4_root_crl = self.generate_empty_crl(
+            rsa4_root, rsa4_root_ca_key, hashes.SHA512(), crl_validity_hours=root_validity_days * 24
+        )
         rsa4_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa4_root,
             unique_name='root-ca-rsa-4096-sha256',
@@ -242,9 +256,14 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ecc1_root_ca_key = ec.generate_private_key(curve=ec.SECP256R1())
         ecc1_issuing_ca_key = ec.generate_private_key(curve=ec.SECP256R1())
         ecc1_root, _ = self.create_root_ca(
-            'Root-CA SECP256R1-SHA256', private_key=ecc1_root_ca_key, hash_algorithm=hashes.SHA256(), validity_days=root_validity_days
+            'Root-CA SECP256R1-SHA256',
+            private_key=ecc1_root_ca_key,
+            hash_algorithm=hashes.SHA256(),
+            validity_days=root_validity_days,
         )
-        ecc1_root_crl = self.generate_empty_crl(ecc1_root, ecc1_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24)
+        ecc1_root_crl = self.generate_empty_crl(
+            ecc1_root, ecc1_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24
+        )
         ecc1_root_ca = self.save_keyless_ca(
             root_ca_cert=ecc1_root,
             unique_name='root-ca-secp256r1-sha256',
@@ -271,9 +290,14 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ecc2_root_ca_key = ec.generate_private_key(curve=ec.SECP384R1())
         ecc2_issuing_ca_key = ec.generate_private_key(curve=ec.SECP384R1())
         ecc2_root, _ = self.create_root_ca(
-            'Root-CA SECP384R1-SHA256', private_key=ecc2_root_ca_key, hash_algorithm=hashes.SHA256(), validity_days=root_validity_days
+            'Root-CA SECP384R1-SHA256',
+            private_key=ecc2_root_ca_key,
+            hash_algorithm=hashes.SHA256(),
+            validity_days=root_validity_days,
         )
-        ecc2_root_crl = self.generate_empty_crl(ecc2_root, ecc2_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24)
+        ecc2_root_crl = self.generate_empty_crl(
+            ecc2_root, ecc2_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24
+        )
         ecc2_root_ca = self.save_keyless_ca(
             root_ca_cert=ecc2_root,
             unique_name='root-ca-secp384r1-sha256',
@@ -300,9 +324,14 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ecc3_root_ca_key = ec.generate_private_key(curve=ec.SECP521R1())
         ecc3_issuing_ca_key = ec.generate_private_key(curve=ec.SECP521R1())
         ecc3_root, _ = self.create_root_ca(
-            'Root-CA SECP521R1-SHA256', private_key=ecc3_root_ca_key, hash_algorithm=hashes.SHA3_512(), validity_days=root_validity_days
+            'Root-CA SECP521R1-SHA256',
+            private_key=ecc3_root_ca_key,
+            hash_algorithm=hashes.SHA3_512(),
+            validity_days=root_validity_days,
         )
-        ecc3_root_crl = self.generate_empty_crl(ecc3_root, ecc3_root_ca_key, hashes.SHA3_512(), crl_validity_hours=root_validity_days * 24)
+        ecc3_root_crl = self.generate_empty_crl(
+            ecc3_root, ecc3_root_ca_key, hashes.SHA3_512(), crl_validity_hours=root_validity_days * 24
+        )
         ecc3_root_ca = self.save_keyless_ca(
             root_ca_cert=ecc3_root,
             unique_name='root-ca-secp521r1-sha256',

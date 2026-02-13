@@ -17,7 +17,7 @@ def test_create_device_form_valid_data(domain_instance: dict[str, Any]) -> None:
         'common_name': 'TestDevice',
         'serial_number': '12345',
         'domain': domain.pk,
-        'no_onboarding_pki_protocols': [1], # 1 is CMP Shared Secret
+        'no_onboarding_pki_protocols': [1],  # 1 is CMP Shared Secret
     }
 
     form = NoOnboardingCreateForm(data=form_data)

@@ -1,4 +1,5 @@
 """Test suite for key_storage views."""
+
 from unittest.mock import Mock, patch
 
 from django.contrib.messages import get_messages
@@ -15,9 +16,10 @@ class KeyStorageConfigViewTest(TestCase):
         self.factory = RequestFactory()
         self.view = KeyStorageConfigView()
         self.view.request = self.factory.get('/key-storage/')
-        
+
         # Enable message storage for the request
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(self.view.request, 'session', 'session')
         messages_storage = FallbackStorage(self.view.request)
         setattr(self.view.request, '_messages', messages_storage)
@@ -36,10 +38,7 @@ class KeyStorageConfigViewTest(TestCase):
 
     def test_get_context_data_with_software_config(self):
         """Test get_context_data with KeyStorageConfig in software storage mode."""
-        config = KeyStorageConfig.objects.create(
-            pk=1,
-            storage_type=KeyStorageConfig.StorageType.SOFTWARE
-        )
+        config = KeyStorageConfig.objects.create(pk=1, storage_type=KeyStorageConfig.StorageType.SOFTWARE)
 
         context = self.view.get_context_data()
 
@@ -128,10 +127,7 @@ class KeyStorageConfigViewTest(TestCase):
 
     def test_get_context_data_preserves_parent_context(self):
         """Test get_context_data preserves context from parent class."""
-        KeyStorageConfig.objects.create(
-            pk=1,
-            storage_type=KeyStorageConfig.StorageType.SOFTWARE
-        )
+        KeyStorageConfig.objects.create(pk=1, storage_type=KeyStorageConfig.StorageType.SOFTWARE)
 
         context = self.view.get_context_data(custom_key='custom_value')
 
@@ -141,4 +137,5 @@ class KeyStorageConfigViewTest(TestCase):
     def test_key_storage_config_view_inherits_from_template_view(self):
         """Test KeyStorageConfigView is a TemplateView."""
         from django.views.generic import TemplateView
+
         self.assertTrue(issubclass(KeyStorageConfigView, TemplateView))

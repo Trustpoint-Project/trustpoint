@@ -1,4 +1,5 @@
 """Test suite for KeyStorageConfigForm and IPv4AddressForm."""
+
 from django.test import TestCase
 from management.forms import IPv4AddressForm, KeyStorageConfigForm
 from management.models import KeyStorageConfig
@@ -21,10 +22,7 @@ class IPv4AddressFormTest(TestCase):
         san_ips = ['192.168.1.1', '10.0.0.1']
         saved_ip = '172.16.0.1'
 
-        form = IPv4AddressForm(
-            san_ips=san_ips,
-            initial={'ipv4_address': saved_ip}
-        )
+        form = IPv4AddressForm(san_ips=san_ips, initial={'ipv4_address': saved_ip})
 
         choices = form.fields['ipv4_address'].choices
         # Should have 3 choices: saved IP + 2 SAN IPs
@@ -37,10 +35,7 @@ class IPv4AddressFormTest(TestCase):
         san_ips = ['192.168.1.1', '10.0.0.1', '172.16.0.1']
         saved_ip = '192.168.1.1'
 
-        form = IPv4AddressForm(
-            san_ips=san_ips,
-            initial={'ipv4_address': saved_ip}
-        )
+        form = IPv4AddressForm(san_ips=san_ips, initial={'ipv4_address': saved_ip})
 
         choices = form.fields['ipv4_address'].choices
         # Should still have 3 choices, no duplication
@@ -75,6 +70,7 @@ class KeyStorageConfigFormTest(TestCase):
         """Test that storage_type uses RadioSelect widget."""
         form = KeyStorageConfigForm()
         from django.forms import RadioSelect
+
         self.assertIsInstance(form.fields['storage_type'].widget, RadioSelect)
 
     def test_storage_type_choices(self):

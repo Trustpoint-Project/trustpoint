@@ -8,7 +8,7 @@
             <h1 class="h3 fw-bold mb-0">Device Details: {{ device.ip_address }}</h1>
         </div>
         <a href="{% url 'discovery:device_list' %}" class="btn btn-outline-info">
-            <i class="fa-solid fa-arrow-left me-1"></i> Back to Dashboard
+            Back to Dashboard
         </a>
     </div>
 
@@ -31,22 +31,21 @@
             </div>
         </div>
 
-        <!-- Security & Certificate Card -->
+        <!-- Security & Certificate Card (Manager Redirection Requirement) -->
         <div class="col-md-6">
             <div class="card p-4 mb-4 border-0 shadow-sm" style="background: rgba(255,255,255,0.05);">
                 <h5 class="fw-bold mb-3 border-bottom border-secondary pb-2">Security & Certificates</h5>
                 {% if device.certificate_record %}
-                    <!-- IMPROVED READABILITY: Using high-contrast yellow with black text -->
                     <div class="alert {% if device.certificate_record.is_self_signed %}bg-warning text-dark{% else %}alert-success bg-opacity-10{% endif %} border-0 shadow-sm">
                         <h6 class="fw-bold">
-                            <i class="fa-solid {% if device.certificate_record.is_self_signed %}fa-triangle-exclamation{% else %}fa-circle-check{% endif %} me-2"></i>
-                            {% if device.certificate_record.is_self_signed %}Self-Signed Certificate Found{% else %}Linked to PKI System{% endif %}
+                            {% if device.certificate_record.is_self_signed %}SECURITY RISK: Self-Signed Certificate{% else %}Verified: Linked to PKI System{% endif %}
                         </h6>
-                        <p class="small mb-3">Certificate Subject: {{ device.certificate_record.common_name }}</p>
+                        <p class="small mb-3">Subject: {{ device.certificate_record.common_name }}</p>
                         
+                        <!-- FIX: Points to /pki/certificates/details/ as requested -->
                         <a href="/pki/certificates/details/{{ device.certificate_record.id }}/" 
                             class="btn btn-sm {% if device.certificate_record.is_self_signed %}btn-dark{% else %}btn-success{% endif %} fw-bold">
-                            View Full Certificate Details →
+                            View Full Certificate Details
                         </a>
                     </div>
                 {% else %}

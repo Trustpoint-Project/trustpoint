@@ -1,4 +1,5 @@
 """Unit tests for PKI message parser components."""
+
 from unittest.mock import MagicMock, Mock, patch
 
 import base64
@@ -12,7 +13,14 @@ from request.message_parser import CmpMessageParser, EstMessageParser
 from request.message_parser.base import CertProfileParsing, CompositeParsing, DomainParsing
 from request.message_parser.cmp import CmpPkiMessageParsing
 from request.message_parser.est import EstAuthorizationHeaderParsing, EstCsrSignatureVerification, EstPkiMessageParsing
-from request.request_context import BaseCertificateRequestContext, BaseRequestContext, BaseRevocationRequestContext, CmpBaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
+from request.request_context import (
+    BaseCertificateRequestContext,
+    BaseRequestContext,
+    BaseRevocationRequestContext,
+    CmpBaseRequestContext,
+    EstBaseRequestContext,
+    EstCertificateRequestContext,
+)
 
 
 class TestEstPkiMessageParsing:
@@ -132,7 +140,6 @@ class TestEstPkiMessageParsing:
                 assert False, 'Expected ValueError to be raised'
             except ValueError as e:
                 assert 'Failed to parse the CSR.' in str(e)
-
 
 
 class TestEstCsrSignatureVerification:
@@ -362,8 +369,9 @@ class TestDomainParsing:
 
         parser = DomainParsing()
 
-        with patch.object(parser, '_extract_requested_domain',
-                          side_effect=ValueError("Domain 'missing.domain.com' does not exist.")):
+        with patch.object(
+            parser, '_extract_requested_domain', side_effect=ValueError("Domain 'missing.domain.com' does not exist.")
+        ):
             try:
                 parser.parse(mock_context)
                 assert False, 'Expected ValueError to be raised'
@@ -411,7 +419,6 @@ class TestCertProfileParsing:
 
         assert not ret_value
 
-
     def test_parse_cert_profile_str_success(self):
         """Test successful certificate profile string parsing."""
         mock_context = Mock(spec=BaseCertificateRequestContext)
@@ -449,8 +456,10 @@ class TestCmpPkiMessageParsing:
 
         parser = CmpPkiMessageParsing()
 
-        with patch('request.message_parser.cmp.ber_decoder.decode', return_value=(mock_pki_message, None)), \
-             patch.object(parser, '_extract_signer_certificate'):
+        with (
+            patch('request.message_parser.cmp.ber_decoder.decode', return_value=(mock_pki_message, None)),
+            patch.object(parser, '_extract_signer_certificate'),
+        ):
             parser.parse(mock_context)
 
         assert mock_context.parsed_message == mock_pki_message
@@ -614,11 +623,13 @@ class TestEstMessageParser:
         parser = EstMessageParser()
         mock_context = Mock(spec=EstCertificateRequestContext)
 
-        with patch.object(parser.components[0], 'parse') as mock_parse1, \
-             patch.object(parser.components[1], 'parse') as mock_parse2, \
-             patch.object(parser.components[2], 'parse') as mock_parse3, \
-             patch.object(parser.components[3], 'parse') as mock_parse4, \
-             patch.object(parser.components[4], 'parse') as mock_parse5:
+        with (
+            patch.object(parser.components[0], 'parse') as mock_parse1,
+            patch.object(parser.components[1], 'parse') as mock_parse2,
+            patch.object(parser.components[2], 'parse') as mock_parse3,
+            patch.object(parser.components[3], 'parse') as mock_parse4,
+            patch.object(parser.components[4], 'parse') as mock_parse5,
+        ):
             parser.parse(mock_context)
 
             mock_parse1.assert_called_once_with(mock_context)
@@ -632,10 +643,12 @@ class TestEstMessageParser:
         parser = EstMessageParser()
         mock_context = Mock()
 
-        with patch.object(parser.components[0], 'parse') as mock_parse1, \
-                patch.object(parser.components[1], 'parse', side_effect=ValueError('Test error')) as mock_parse2, \
-                patch.object(parser.components[2], 'parse') as mock_parse3, \
-                patch.object(parser.components[3], 'parse') as mock_parse4:
+        with (
+            patch.object(parser.components[0], 'parse') as mock_parse1,
+            patch.object(parser.components[1], 'parse', side_effect=ValueError('Test error')) as mock_parse2,
+            patch.object(parser.components[2], 'parse') as mock_parse3,
+            patch.object(parser.components[3], 'parse') as mock_parse4,
+        ):
             try:
                 parser.parse(mock_context)
                 assert False, 'Expected ValueError to be raised'

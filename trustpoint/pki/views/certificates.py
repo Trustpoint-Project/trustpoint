@@ -42,12 +42,12 @@ class CertificatesRedirectView(RedirectView):
 
 class CertificatesContextMixin(PageContextMixin):
     """Mixin which adds data to the context for the PKI -> Certificates application."""
+
     page_category = PKI_PAGE_CATEGORY
     page_name = PKI_PAGE_CERTIFICATES_SUBCATEGORY
 
 
-class CertificateTableView(
-    CertificatesContextMixin, SortableTableMixin[CertificateModel], ListView[CertificateModel]):
+class CertificateTableView(CertificatesContextMixin, SortableTableMixin[CertificateModel], ListView[CertificateModel]):
     """Certificate Table View."""
 
     model = CertificateModel
@@ -56,7 +56,9 @@ class CertificateTableView(
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
 
+
 OID_MAP = {oid.dotted_string: oid.verbose_name for oid in NameOid}
+
 
 class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateModel]):
     """The certificate detail view."""
@@ -82,31 +84,35 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
         subject_entries = []
         for entry in cert.subject.all():
             name = OID_MAP.get(entry.oid)
-            subject_entries.append({
-                'oid': entry.oid,
-                'name': name,
-                'value': entry.value,
-            })
+            subject_entries.append(
+                {
+                    'oid': entry.oid,
+                    'name': name,
+                    'value': entry.value,
+                }
+            )
         context['subject_entries'] = subject_entries
         issuer_entries = []
         for entry in cert.issuer.all():
             name = OID_MAP.get(entry.oid)
-            issuer_entries.append({
-                'oid': entry.oid,
-                'name': name,
-                'value': entry.value,
-            })
+            issuer_entries.append(
+                {
+                    'oid': entry.oid,
+                    'name': name,
+                    'value': entry.value,
+                }
+            )
         context['issuer_entries'] = issuer_entries
         ip_addresses = []
         san_ext = getattr(cert, 'subject_alternative_name_extension', None)
         if san_ext and getattr(san_ext, 'subject_alt_name', None):
             ip_addresses = [
-                str(entry).split(':', 1)[-1].strip()
-                for entry in san_ext.subject_alt_name.ip_addresses.all()
+                str(entry).split(':', 1)[-1].strip() for entry in san_ext.subject_alt_name.ip_addresses.all()
             ]
         context['ip_addresses'] = ip_addresses
 
         return context
+
 
 class IssuingCaCertificateDownloadView(CertificatesContextMixin, DetailView[CertificateModel]):
     """View for downloading a single certificate."""
@@ -335,20 +341,18 @@ class TlsServerCertificateDownloadView(CertificatesContextMixin, DetailView[Cert
 
         return response
 
+
 class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
     """ViewSet for managing Certificate instances.
 
     Supports standard CRUD operations such as list, retrieve,
     create, update, and delete.
     """
+
     queryset = CertificateModel.objects.all().order_by('-created_at')
     serializer_class = CertificateSerializer
     permission_classes = (IsAuthenticated,)
-    filter_backends = (
-        DjangoFilterBackend,
-        filters.SearchFilter,
-        filters.OrderingFilter
-    )
+    filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
     filterset_fields: ClassVar = ['serial_number', 'not_valid_before']
     search_fields: ClassVar = ['common_name', 'sha256_fingerprint']
     ordering_fields: ClassVar = ['common_name', 'created_at']
@@ -357,8 +361,8 @@ class CertificateViewSet(viewsets.ModelViewSet[CertificateModel]):
     @swagger_auto_schema(
         operation_summary='List certificates',
         operation_description='Retrieve certificates from the database.',
-        tags=['certificates']
-    ) # type: ignore[misc]
+        tags=['certificates'],
+    )  # type: ignore[misc]
     def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
         """API endpoint to get all certificates."""
         del request, args, _kwargs

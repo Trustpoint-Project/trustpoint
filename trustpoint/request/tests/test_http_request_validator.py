@@ -1,5 +1,5 @@
-
 """Unit tests for the HTTP request validation module."""
+
 import base64
 from unittest.mock import MagicMock
 
@@ -295,6 +295,7 @@ class TestClientCertificateValidation:
 
         validator.validate(context)
 
+
 class TestIntermediateCertificatesValidation:
     """Test IntermediateCertificatesValidation class."""
 
@@ -558,10 +559,7 @@ class TestEstHttpRequestValidator:
         context = EstCertificateRequestContext()
         context.raw_message = MagicMock()
         context.raw_message.body = b'test est payload'
-        context.raw_message.headers = {
-            'Content-Type': 'application/pkcs10',
-            'Accept': 'application/pkcs7-mime'
-        }
+        context.raw_message.headers = {'Content-Type': 'application/pkcs10', 'Accept': 'application/pkcs7-mime'}
         context.raw_message.META = {}
 
         validator.validate(context)

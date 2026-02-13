@@ -30,27 +30,24 @@ class TestSetupWizardBackupPasswordViewFormValid:
         """Test form_valid when no PKCS11Token exists."""
         mock_get_state.return_value = SetupWizardState.WIZARD_BACKUP_PASSWORD
         mock_first.return_value = None
-        
-        request = self.factory.post('/setup_wizard/backup_password/', {
-            'password': 'ValidPassword123!',
-            'confirm_password': 'ValidPassword123!'
-        })
+
+        request = self.factory.post(
+            '/setup_wizard/backup_password/', {'password': 'ValidPassword123!', 'confirm_password': 'ValidPassword123!'}
+        )
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.setup(request)
-        
-        form = BackupPasswordForm(data={
-            'password': 'ValidPassword123!',
-            'confirm_password': 'ValidPassword123!'
-        })
+
+        form = BackupPasswordForm(data={'password': 'ValidPassword123!', 'confirm_password': 'ValidPassword123!'})
         form.is_valid()
-        
+
         response = self.view.form_valid(form)
-        
+
         assert response.status_code == 302
         assert 'demo-data' in response.url
         messages_list = list(get_messages(request))
@@ -64,21 +61,22 @@ class TestSetupWizardBackupPasswordViewFormValid:
         mock_get_state.return_value = SetupWizardState.WIZARD_BACKUP_PASSWORD
         mock_token = Mock(spec=PKCS11Token)
         mock_first.return_value = mock_token
-        
+
         request = self.factory.post('/setup_wizard/backup_password/', {})
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.setup(request)
-        
+
         form = BackupPasswordForm()
         form.cleaned_data = {'password': None}  # Simulate invalid password type
-        
+
         response = self.view.form_valid(form)
-        
+
         assert response.status_code == 200  # form_invalid returns render
         messages_list = list(get_messages(request))
         assert any('Invalid password' in str(m) for m in messages_list)
@@ -93,29 +91,26 @@ class TestSetupWizardBackupPasswordViewFormValid:
         mock_token = Mock(spec=PKCS11Token)
         mock_token.set_backup_password = Mock()
         mock_first.return_value = mock_token
-        
+
         mock_execute.side_effect = subprocess.CalledProcessError(1, 'cmd')
-        
-        request = self.factory.post('/setup_wizard/backup_password/', {
-            'password': 'ValidPassword123!',
-            'confirm_password': 'ValidPassword123!'
-        })
+
+        request = self.factory.post(
+            '/setup_wizard/backup_password/', {'password': 'ValidPassword123!', 'confirm_password': 'ValidPassword123!'}
+        )
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.setup(request)
-        
-        form = BackupPasswordForm(data={
-            'password': 'ValidPassword123!',
-            'confirm_password': 'ValidPassword123!'
-        })
+
+        form = BackupPasswordForm(data={'password': 'ValidPassword123!', 'confirm_password': 'ValidPassword123!'})
         form.is_valid()
-        
+
         response = self.view.form_valid(form)
-        
+
         assert response.status_code == 302
         assert 'backup-password' in response.url
         messages_list = list(get_messages(request))
@@ -131,29 +126,26 @@ class TestSetupWizardBackupPasswordViewFormValid:
         mock_token = Mock(spec=PKCS11Token)
         mock_token.set_backup_password = Mock()
         mock_first.return_value = mock_token
-        
+
         mock_execute.side_effect = FileNotFoundError('Script not found')
-        
-        request = self.factory.post('/setup_wizard/backup_password/', {
-            'password': 'ValidPassword123!',
-            'confirm_password': 'ValidPassword123!'
-        })
+
+        request = self.factory.post(
+            '/setup_wizard/backup_password/', {'password': 'ValidPassword123!', 'confirm_password': 'ValidPassword123!'}
+        )
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.setup(request)
-        
-        form = BackupPasswordForm(data={
-            'password': 'ValidPassword123!',
-            'confirm_password': 'ValidPassword123!'
-        })
+
+        form = BackupPasswordForm(data={'password': 'ValidPassword123!', 'confirm_password': 'ValidPassword123!'})
         form.is_valid()
-        
+
         response = self.view.form_valid(form)
-        
+
         assert response.status_code == 302
         messages_list = list(get_messages(request))
         assert any('script not found' in str(m).lower() for m in messages_list)
@@ -167,27 +159,24 @@ class TestSetupWizardBackupPasswordViewFormValid:
         mock_token = Mock(spec=PKCS11Token)
         mock_token.set_backup_password.side_effect = ValueError('Invalid input')
         mock_first.return_value = mock_token
-        
-        request = self.factory.post('/setup_wizard/backup_password/', {
-            'password': 'ValidPassword123!',
-            'confirm_password': 'ValidPassword123!'
-        })
+
+        request = self.factory.post(
+            '/setup_wizard/backup_password/', {'password': 'ValidPassword123!', 'confirm_password': 'ValidPassword123!'}
+        )
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.setup(request)
-        
-        form = BackupPasswordForm(data={
-            'password': 'ValidPassword123!',
-            'confirm_password': 'ValidPassword123!'
-        })
+
+        form = BackupPasswordForm(data={'password': 'ValidPassword123!', 'confirm_password': 'ValidPassword123!'})
         form.is_valid()
-        
+
         response = self.view.form_valid(form)
-        
+
         assert response.status_code == 200  # form_invalid
         messages_list = list(get_messages(request))
         assert any('Invalid input' in str(m) for m in messages_list)
@@ -201,27 +190,24 @@ class TestSetupWizardBackupPasswordViewFormValid:
         mock_token = Mock(spec=PKCS11Token)
         mock_token.set_backup_password.side_effect = RuntimeError('Failed to set password')
         mock_first.return_value = mock_token
-        
-        request = self.factory.post('/setup_wizard/backup_password/', {
-            'password': 'ValidPassword123!',
-            'confirm_password': 'ValidPassword123!'
-        })
+
+        request = self.factory.post(
+            '/setup_wizard/backup_password/', {'password': 'ValidPassword123!', 'confirm_password': 'ValidPassword123!'}
+        )
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.setup(request)
-        
-        form = BackupPasswordForm(data={
-            'password': 'ValidPassword123!',
-            'confirm_password': 'ValidPassword123!'
-        })
+
+        form = BackupPasswordForm(data={'password': 'ValidPassword123!', 'confirm_password': 'ValidPassword123!'})
         form.is_valid()
-        
+
         response = self.view.form_valid(form)
-        
+
         assert response.status_code == 200
         messages_list = list(get_messages(request))
         assert any('Failed to set backup password' in str(m) for m in messages_list)
@@ -235,27 +221,24 @@ class TestSetupWizardBackupPasswordViewFormValid:
         mock_token = Mock(spec=PKCS11Token)
         mock_token.set_backup_password.side_effect = Exception('Unexpected error')
         mock_first.return_value = mock_token
-        
-        request = self.factory.post('/setup_wizard/backup_password/', {
-            'password': 'ValidPassword123!',
-            'confirm_password': 'ValidPassword123!'
-        })
+
+        request = self.factory.post(
+            '/setup_wizard/backup_password/', {'password': 'ValidPassword123!', 'confirm_password': 'ValidPassword123!'}
+        )
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.setup(request)
-        
-        form = BackupPasswordForm(data={
-            'password': 'ValidPassword123!',
-            'confirm_password': 'ValidPassword123!'
-        })
+
+        form = BackupPasswordForm(data={'password': 'ValidPassword123!', 'confirm_password': 'ValidPassword123!'})
         form.is_valid()
-        
+
         response = self.view.form_valid(form)
-        
+
         assert response.status_code == 200
         messages_list = list(get_messages(request))
         assert any('unexpected error' in str(m).lower() for m in messages_list)
@@ -278,20 +261,21 @@ class TestSetupWizardBackupPasswordViewFormValid:
     def test_form_invalid_adds_error_message(self, mock_get_state):
         """Test form_invalid adds appropriate error message."""
         mock_get_state.return_value = SetupWizardState.WIZARD_BACKUP_PASSWORD
-        
+
         request = self.factory.post('/setup_wizard/backup_password/', {})
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.setup(request)
-        
+
         form = BackupPasswordForm(data={})
         form.is_valid()  # Will be invalid due to missing data
-        
+
         response = self.view.form_invalid(form)
-        
+
         messages_list = list(get_messages(request))
         assert any('correct the errors' in str(m).lower() for m in messages_list)

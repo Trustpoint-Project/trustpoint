@@ -20,16 +20,19 @@ log = logging.getLogger('aoki.client')
 CURRENT_DIR = Path(__file__).parent.resolve()
 CERTS_DIR = (CURRENT_DIR / './certs/').resolve()
 
+
 class AokiClientOwnerIdCertVerificationError(Exception):
     """Exception raised when the provided Owner ID certificate is invalid or not corresponding to the IDevID."""
+
 
 class AokiClientCertLoadError(Exception):
     """Exception raised when a certificate could not be loaded from the provided path."""
 
+
 class AokiCmpClient:
     """AOKI-CMP Client for testing purposes."""
 
-    idevid_subj_sn : str = '_'
+    idevid_subj_sn: str = '_'
 
     @staticmethod
     def _load_certificate(cert_path: Path) -> x509.Certificate:
@@ -83,14 +86,15 @@ class AokiCmpClient:
         raise AokiClientOwnerIdCertVerificationError(exc_msg)
 
     def __init__(
-            self,
-            server_url: str,
-            cert_file: str,
-            key_file: str,
-            owner_truststore_file: str,
-            idevid_truststore_file: str,
-            *args: str, **kwargs: str
-        ) -> None:
+        self,
+        server_url: str,
+        cert_file: str,
+        key_file: str,
+        owner_truststore_file: str,
+        idevid_truststore_file: str,
+        *args: str,
+        **kwargs: str,
+    ) -> None:
         """Initialize the AokiCmpClient."""
         self.server_url = server_url
         self.cert_file = cert_file
@@ -106,7 +110,8 @@ class AokiCmpClient:
         cmd = (
             'openssl',
             'genrsa',
-            '-out', f'{CERTS_DIR}/domain_credential_key.pem',
+            '-out',
+            f'{CERTS_DIR}/domain_credential_key.pem',
             '2048',
         )
         subprocess.run(cmd, check=True)  # noqa: S603
@@ -115,18 +120,29 @@ class AokiCmpClient:
         cmd = (
             'openssl',
             'cmp',
-            '-cmd', 'ir',
+            '-cmd',
+            'ir',
             '-implicit_confirm',
-            '-server', self.server_url + '/.well-known/cmp/p/.aoki/initialization',
-            '-cert', f'{CERTS_DIR}/{self.cert_file}',
-            '-key', f'{CERTS_DIR}/{self.key_file}',
-            '-extracerts', f'{CERTS_DIR}/{self.idevid_truststore_file}',
-            '-subject', '/CN=Trustpoint Domain Credential',
-            '-newkey', f'{CERTS_DIR}/domain_credential_key.pem',
-            '-certout', f'{CERTS_DIR}/dc_cert.pem',
-            '-chainout', f'{CERTS_DIR}/chain_without_root.pem',
-            '-extracertsout', f'{CERTS_DIR}/full_chain.pem',
-            '-trusted', f'{CERTS_DIR}/{self.owner_truststore_file}',
+            '-server',
+            self.server_url + '/.well-known/cmp/p/.aoki/initialization',
+            '-cert',
+            f'{CERTS_DIR}/{self.cert_file}',
+            '-key',
+            f'{CERTS_DIR}/{self.key_file}',
+            '-extracerts',
+            f'{CERTS_DIR}/{self.idevid_truststore_file}',
+            '-subject',
+            '/CN=Trustpoint Domain Credential',
+            '-newkey',
+            f'{CERTS_DIR}/domain_credential_key.pem',
+            '-certout',
+            f'{CERTS_DIR}/dc_cert.pem',
+            '-chainout',
+            f'{CERTS_DIR}/chain_without_root.pem',
+            '-extracertsout',
+            f'{CERTS_DIR}/full_chain.pem',
+            '-trusted',
+            f'{CERTS_DIR}/{self.owner_truststore_file}',
             #'-tls_used'
         )
         try:
@@ -146,11 +162,11 @@ class AokiCmpClient:
 
 if __name__ == '__main__':
     client = AokiCmpClient(
-        server_url='http://localhost:8000', # or 'http://localhost:8000' for dev
+        server_url='http://localhost:8000',  # or 'http://localhost:8000' for dev
         cert_file='idevid.pem',
         key_file='idevid_pk.pem',
         idevid_truststore_file='idevid_ca.pem',
         owner_truststore_file='ownerid_ca.pem',
-        mdns = False, # not yet implemented
+        mdns=False,  # not yet implemented
     )
     client.onboard()

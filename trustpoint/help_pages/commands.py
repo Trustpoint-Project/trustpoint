@@ -47,7 +47,8 @@ class CmpSharedSecretCommandBuilder:
 
     @staticmethod
     def get_dynamic_cert_profile_command(
-        host: str, pk: int, shared_secret: str, cred_number: int, sample_request: dict[str, Any]) -> str:
+        host: str, pk: int, shared_secret: str, cred_number: int, sample_request: dict[str, Any]
+    ) -> str:
         """Gets the dynamic certificate profile command.
 
         Args:
@@ -116,8 +117,7 @@ class EstUsernamePasswordCommandBuilder:
     """Builds EST username-password commands for different certificate profiles."""
 
     @staticmethod
-    def get_dynamic_cert_profile_command(
-        cred_number: int, sample_request: dict[str, Any]) -> str:
+    def get_dynamic_cert_profile_command(cred_number: int, sample_request: dict[str, Any]) -> str:
         """Gets the dynamic certificate profile command.
 
         Args:
@@ -235,8 +235,7 @@ class CmpClientCertificateCommandBuilder:
     """Builds CMP client-certificate (domain credential auth) commands for different certificate profiles."""
 
     @staticmethod
-    def get_dynamic_cert_profile_command(
-        host: str, cred_number: int, sample_request: dict[str, Any]) -> str:
+    def get_dynamic_cert_profile_command(host: str, cred_number: int, sample_request: dict[str, Any]) -> str:
         """Gets the dynamic certificate profile command.
 
         Args:

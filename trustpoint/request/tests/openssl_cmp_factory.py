@@ -80,9 +80,10 @@ class SharedSecretAuth(CMPCommandComponent):
 class CertificateAuth(CMPCommandComponent):
     """Certificate authentication component."""
 
-    def __init__(self, cert_content: str = None, key_content: str = None,
-                 cert_file: str = None, key_file: str = None):
-        self.cert_content = cert_content or '-----BEGIN CERTIFICATE-----\nMOCK_CERTIFICATE_DATA\n-----END CERTIFICATE-----\n'
+    def __init__(self, cert_content: str = None, key_content: str = None, cert_file: str = None, key_file: str = None):
+        self.cert_content = (
+            cert_content or '-----BEGIN CERTIFICATE-----\nMOCK_CERTIFICATE_DATA\n-----END CERTIFICATE-----\n'
+        )
         self.key_content = key_content or '-----BEGIN PRIVATE KEY-----\nMOCK_KEY_DATA\n-----END PRIVATE KEY-----\n'
         self.cert_file = cert_file or '/tmp/domain_credential_cert.pem'
         self.key_file = key_file or '/tmp/domain_credential_key.pem'
@@ -113,8 +114,15 @@ class CertificateAuth(CMPCommandComponent):
 class CertificateRequest(CMPCommandComponent):
     """Certificate request parameters component."""
 
-    def __init__(self, subject: str, days: int = 10, sans: str = None,
-                 policy_oids: str = None, key_file: str = None, cert_out_file: str = None):
+    def __init__(
+        self,
+        subject: str,
+        days: int = 10,
+        sans: str = None,
+        policy_oids: str = None,
+        key_file: str = None,
+        cert_out_file: str = None,
+    ):
         self.subject = subject
         self.days = days
         self.sans = sans
@@ -126,12 +134,7 @@ class CertificateRequest(CMPCommandComponent):
         key_file = context.get('key_file', self.key_file)
         cert_out_file = context.get('cert_out_file', self.cert_out_file)
 
-        args = [
-            '-subject', self.subject,
-            '-days', str(self.days),
-            '-newkey', key_file,
-            '-certout', cert_out_file
-        ]
+        args = ['-subject', self.subject, '-days', str(self.days), '-newkey', key_file, '-certout', cert_out_file]
         if self.sans:
             args.extend(['-sans', self.sans])
         if self.policy_oids:
@@ -157,7 +160,9 @@ class ServerCertificate(CMPCommandComponent):
     """Server certificate component."""
 
     def __init__(self, cert_content: str = None, srvcert_file: str = None):
-        self.cert_content = cert_content or '-----BEGIN CERTIFICATE-----\nMOCK_SRVCERT_DATA\n-----END CERTIFICATE-----\n'
+        self.cert_content = (
+            cert_content or '-----BEGIN CERTIFICATE-----\nMOCK_SRVCERT_DATA\n-----END CERTIFICATE-----\n'
+        )
         self.srvcert_file = srvcert_file or '/tmp/issuing_ca_cert.pem'
 
     def build_args(self, context: dict[str, Any]) -> list[str]:
@@ -177,12 +182,16 @@ class ServerCertificate(CMPCommandComponent):
         return 'Server certificate validation'
 
 
-
 class CertificateOutput(CMPCommandComponent):
     """Certificate output options component."""
 
-    def __init__(self, chain_out: bool = False, extra_certs_out: bool = False,
-                 chain_out_file: str = None, extra_certs_out_file: str = None):
+    def __init__(
+        self,
+        chain_out: bool = False,
+        extra_certs_out: bool = False,
+        chain_out_file: str = None,
+        extra_certs_out_file: str = None,
+    ):
         self.chain_out = chain_out
         self.extra_certs_out = extra_certs_out
         self.chain_out_file = chain_out_file or '/tmp/chain_without_root.pem'
@@ -216,8 +225,7 @@ class CertificateOutput(CMPCommandComponent):
             outputs.append('chain output')
         if self.extra_certs_out:
             outputs.append('full chain output')
-        return f"Certificate outputs: {', '.join(outputs)}" if outputs else 'Basic certificate output'
-
+        return f'Certificate outputs: {", ".join(outputs)}' if outputs else 'Basic certificate output'
 
 
 class CompositeCMPCommand(CMPCommandComponent):
@@ -254,7 +262,7 @@ class CompositeCMPCommand(CMPCommandComponent):
     def get_description(self) -> str:
         """Get complete description of this composite command."""
         component_descriptions = [comp.get_description() for comp in self.components]
-        return f"{self.description}: {'; '.join(component_descriptions)}"
+        return f'{self.description}: {"; ".join(component_descriptions)}'
 
     def __str__(self) -> str:
         """String representation of the composite command."""
@@ -266,18 +274,19 @@ class CompositeCMPCommand(CMPCommandComponent):
 
 
 if __name__ == '__main__':
-    command = (CompositeCMPCommand('tls_cert_auth', 'TLS CMP with certificate authentication')
-               .add_component(BasicCMPArgs(cmd='cr'))
-               .add_component(ServerConfig('https://127.0.0.1:443/.well-known/cmp/certification/schmalz/tls-server/',
-                                           tls_used=True))
-               .add_component(CertificateAuth())
-               .add_component(CertificateRequest('/CN=Trustpoint-TlsServer-Credential-1',
-                                                 10,
-                                                 'critical 127.0.0.1 ::1 localhost'))
-               .add_component(ServerCertificate())
-               .add_component(CertificateOutput(chain_out=True, extra_certs_out=True)))
+    command = (
+        CompositeCMPCommand('tls_cert_auth', 'TLS CMP with certificate authentication')
+        .add_component(BasicCMPArgs(cmd='cr'))
+        .add_component(
+            ServerConfig('https://127.0.0.1:443/.well-known/cmp/certification/schmalz/tls-server/', tls_used=True)
+        )
+        .add_component(CertificateAuth())
+        .add_component(
+            CertificateRequest('/CN=Trustpoint-TlsServer-Credential-1', 10, 'critical 127.0.0.1 ::1 localhost')
+        )
+        .add_component(ServerCertificate())
+        .add_component(CertificateOutput(chain_out=True, extra_certs_out=True))
+    )
 
     cmd_args = command.build_args()
     print(' '.join(cmd_args))
-
-

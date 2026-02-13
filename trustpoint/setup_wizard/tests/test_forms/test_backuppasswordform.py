@@ -47,10 +47,7 @@ class BackupPasswordFormTestCase(TestCase):
 
     def test_form_valid_data(self):
         """Test form validation with valid matching passwords."""
-        form_data = {
-            'password': 'StrongPassword123!',
-            'confirm_password': 'StrongPassword123!'
-        }
+        form_data = {'password': 'StrongPassword123!', 'confirm_password': 'StrongPassword123!'}
 
         form = BackupPasswordForm(data=form_data)
         self.assertTrue(form.is_valid())
@@ -68,9 +65,7 @@ class BackupPasswordFormTestCase(TestCase):
 
     def test_form_missing_password(self):
         """Test form validation with missing password."""
-        form_data = {
-            'confirm_password': 'StrongPassword123!'
-        }
+        form_data = {'confirm_password': 'StrongPassword123!'}
 
         form = BackupPasswordForm(data=form_data)
         self.assertFalse(form.is_valid())
@@ -78,9 +73,7 @@ class BackupPasswordFormTestCase(TestCase):
 
     def test_form_missing_confirm_password(self):
         """Test form validation with missing confirm password."""
-        form_data = {
-            'password': 'StrongPassword123!'
-        }
+        form_data = {'password': 'StrongPassword123!'}
 
         form = BackupPasswordForm(data=form_data)
         self.assertFalse(form.is_valid())
@@ -88,10 +81,7 @@ class BackupPasswordFormTestCase(TestCase):
 
     def test_clean_password_empty_value(self):
         """Test clean_password method with empty value."""
-        form_data = {
-            'password': '',
-            'confirm_password': 'test'
-        }
+        form_data = {'password': '', 'confirm_password': 'test'}
 
         form = BackupPasswordForm(data=form_data)
         self.assertFalse(form.is_valid())
@@ -114,10 +104,7 @@ class BackupPasswordFormTestCase(TestCase):
         """Test clean_password method with successful Django validation."""
         mock_validate.return_value = None  # No validation errors
 
-        form_data = {
-            'password': 'StrongPassword123!',
-            'confirm_password': 'StrongPassword123!'
-        }
+        form_data = {'password': 'StrongPassword123!', 'confirm_password': 'StrongPassword123!'}
 
         form = BackupPasswordForm(data=form_data)
         self.assertTrue(form.is_valid())
@@ -131,10 +118,7 @@ class BackupPasswordFormTestCase(TestCase):
         validation_error = DjangoValidationError(['Password is too common.', 'Password must contain numbers.'])
         mock_validate.side_effect = validation_error
 
-        form_data = {
-            'password': 'password',
-            'confirm_password': 'password'
-        }
+        form_data = {'password': 'password', 'confirm_password': 'password'}
 
         form = BackupPasswordForm(data=form_data)
         self.assertFalse(form.is_valid())
@@ -146,10 +130,7 @@ class BackupPasswordFormTestCase(TestCase):
 
     def test_clean_passwords_match(self):
         """Test form validation when passwords match."""
-        form_data = {
-            'password': 'StrongPassword123!',
-            'confirm_password': 'StrongPassword123!'
-        }
+        form_data = {'password': 'StrongPassword123!', 'confirm_password': 'StrongPassword123!'}
 
         form = BackupPasswordForm(data=form_data)
         self.assertTrue(form.is_valid())
@@ -159,10 +140,7 @@ class BackupPasswordFormTestCase(TestCase):
 
     def test_clean_passwords_do_not_match(self):
         """Test form validation when passwords do not match."""
-        form_data = {
-            'password': 'StrongPassword123!',
-            'confirm_password': 'DifferentPassword456!'
-        }
+        form_data = {'password': 'StrongPassword123!', 'confirm_password': 'DifferentPassword456!'}
 
         form = BackupPasswordForm(data=form_data)
         self.assertFalse(form.is_valid())
@@ -182,8 +160,7 @@ class BackupPasswordFormTestCase(TestCase):
                 form.clean()
 
             expected_error = (
-                'Unexpected error occurred. Failed to get the cleaned_data '
-                'of the BackupPasswordForm instance.'
+                'Unexpected error occurred. Failed to get the cleaned_data of the BackupPasswordForm instance.'
             )
             self.assertIn(expected_error, str(context.exception.messages))
 
@@ -248,19 +225,13 @@ class BackupPasswordFormTestCase(TestCase):
     def test_form_integration_with_real_validation(self):
         """Test form with real Django password validation (no mocking)."""
         # Test with a password that should pass validation
-        strong_password_data = {
-            'password': 'VeryStrongPassword123!@#',
-            'confirm_password': 'VeryStrongPassword123!@#'
-        }
+        strong_password_data = {'password': 'VeryStrongPassword123!@#', 'confirm_password': 'VeryStrongPassword123!@#'}
 
         form = BackupPasswordForm(data=strong_password_data)
         self.assertTrue(form.is_valid())
 
         # Test with a password that should fail validation
-        weak_password_data = {
-            'password': '123',
-            'confirm_password': '123'
-        }
+        weak_password_data = {'password': '123', 'confirm_password': '123'}
 
         form = BackupPasswordForm(data=weak_password_data)
         self.assertFalse(form.is_valid())
@@ -298,10 +269,7 @@ class BackupPasswordFormTestCase(TestCase):
     def test_password_mismatch_error_behavior(self):
         """Test the password mismatch error behavior in detail."""
         # Test password mismatch error
-        form_data = {
-            'password': 'password1',
-            'confirm_password': 'password2'
-        }
+        form_data = {'password': 'password1', 'confirm_password': 'password2'}
 
         form = BackupPasswordForm(data=form_data)
         is_valid = form.is_valid()
@@ -314,8 +282,8 @@ class BackupPasswordFormTestCase(TestCase):
 
         # The form should have validation errors - either non-field or in cleaned_data handling
         has_password_mismatch_error = (
-            any(_('Passwords do not match.') in str(error) for error in non_field_errors) or
-            not is_valid  # Form is invalid, which is what we expect
+            any(_('Passwords do not match.') in str(error) for error in non_field_errors)
+            or not is_valid  # Form is invalid, which is what we expect
         )
 
         self.assertTrue(has_password_mismatch_error)
@@ -325,20 +293,14 @@ class BackupPasswordFormTestCase(TestCase):
         form = BackupPasswordForm()
 
         # Test with valid cleaned_data structure
-        form.cleaned_data = {
-            'password': 'test123',
-            'confirm_password': 'test123'
-        }
+        form.cleaned_data = {'password': 'test123', 'confirm_password': 'test123'}
 
         cleaned_data = form.clean()
         self.assertEqual(cleaned_data['password'], 'test123')
         self.assertEqual(cleaned_data['confirm_password'], 'test123')
 
         # Test with mismatched passwords
-        form.cleaned_data = {
-            'password': 'test123',
-            'confirm_password': 'different'
-        }
+        form.cleaned_data = {'password': 'test123', 'confirm_password': 'different'}
 
         with self.assertRaises(ValidationError) as context:
             form.clean()
@@ -350,7 +312,7 @@ class BackupPasswordFormTestCase(TestCase):
         # Test with password that should trigger Django's common password validator
         common_password_data = {
             'password': 'password',  # Very common password
-            'confirm_password': 'password'
+            'confirm_password': 'password',
         }
 
         form = BackupPasswordForm(data=common_password_data)
@@ -363,9 +325,7 @@ class BackupPasswordFormTestCase(TestCase):
 
         # Error should be related to password validation
         password_errors = ' '.join(form.errors['password'])
-        self.assertTrue(
-            any(keyword in password_errors.lower() for keyword in ['common', 'simple', 'short', 'numeric'])
-        )
+        self.assertTrue(any(keyword in password_errors.lower() for keyword in ['common', 'simple', 'short', 'numeric']))
 
     def test_bootstrap_form_control_classes(self):
         """Test that form uses Bootstrap form-control classes following Trustpoint patterns."""

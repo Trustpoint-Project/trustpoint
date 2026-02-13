@@ -94,8 +94,10 @@ class Command(BaseCommand):
         Skips notification creation if one already exists for the given event and certificate.
         """
         if not NotificationModel.objects.filter(event=event, certificate=certificate).exists():
-            message_data = {'common_name': certificate.common_name,
-                            'not_valid_after': certificate.not_valid_after.isoformat()}
+            message_data = {
+                'common_name': certificate.common_name,
+                'not_valid_after': certificate.not_valid_after.isoformat(),
+            }
             notification = NotificationModel.objects.create(
                 certificate=certificate,
                 created_at=timezone.now(),

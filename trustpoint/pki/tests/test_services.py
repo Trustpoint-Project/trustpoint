@@ -38,7 +38,7 @@ class TestCertificateService:
     def test_get_certificates_ordering(self):
         """Test that get_certificates returns certificates ordered by created_at descending."""
         service = CertificateService()
-        
+
         # Create certificates with different timestamps
         # Note: We can't directly manipulate created_at, so we'll check the queryset behavior
         queryset = service.get_certificates()
@@ -48,6 +48,7 @@ class TestCertificateService:
         """Test that get_certificates returns a QuerySet."""
         service = CertificateService()
         from django.db.models.query import QuerySet
+
         certificates = service.get_certificates()
         assert isinstance(certificates, QuerySet)
 
@@ -63,34 +64,31 @@ class TestTruststoreService:
     def create_test_certificate_pem(self) -> bytes:
         """Create a test certificate in PEM format."""
         # Generate a private key
-        private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048
-        )
-        
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
         # Create a self-signed certificate
-        subject = issuer = x509.Name([
-            x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'test-ca.example.com'),
-            x509.NameAttribute(x509.oid.NameOID.ORGANIZATION_NAME, 'Test Org'),
-        ])
-        
-        cert = x509.CertificateBuilder().subject_name(
-            subject
-        ).issuer_name(
-            issuer
-        ).public_key(
-            private_key.public_key()
-        ).serial_number(
-            x509.random_serial_number()
-        ).not_valid_before(
-            datetime.now(UTC)
-        ).not_valid_after(
-            datetime.now(UTC) + timedelta(days=365)
-        ).add_extension(
-            x509.BasicConstraints(ca=True, path_length=None),
-            critical=True,
-        ).sign(private_key, hashes.SHA256())
-        
+        subject = issuer = x509.Name(
+            [
+                x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'test-ca.example.com'),
+                x509.NameAttribute(x509.oid.NameOID.ORGANIZATION_NAME, 'Test Org'),
+            ]
+        )
+
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(private_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.now(UTC))
+            .not_valid_after(datetime.now(UTC) + timedelta(days=365))
+            .add_extension(
+                x509.BasicConstraints(ca=True, path_length=None),
+                critical=True,
+            )
+            .sign(private_key, hashes.SHA256())
+        )
+
         # Return PEM-encoded certificate
         return cert.public_bytes(serialization.Encoding.PEM)
 
@@ -107,6 +105,7 @@ class TestTruststoreService:
     def test_get_all_returns_queryset(self):
         """Test that get_all returns a QuerySet."""
         from django.db.models.query import QuerySet
+
         truststores = self.service.get_all()
         assert isinstance(truststores, QuerySet)
 
@@ -119,10 +118,9 @@ class TestTruststoreService:
         """Test get_all returns existing truststores."""
         # Create a truststore
         TruststoreModel.objects.create(
-            unique_name='test-truststore',
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
+            unique_name='test-truststore', intended_usage=TruststoreModel.IntendedUsage.IDEVID
         )
-        
+
         truststores = self.service.get_all()
         assert truststores.count() == 1
 
@@ -130,9 +128,7 @@ class TestTruststoreService:
         """Test create raises ValidationError with invalid certificate data."""
         with pytest.raises(ValidationError) as exc_info:
             self.service.create(
-                unique_name='test-truststore',
-                intended_usage='0',
-                trust_store_file=b'invalid certificate data'
+                unique_name='test-truststore', intended_usage='0', trust_store_file=b'invalid certificate data'
             )
         assert 'Unable to process the Truststore' in str(exc_info.value)
 
@@ -140,31 +136,22 @@ class TestTruststoreService:
         """Test create raises ValidationError with duplicate unique_name."""
         # Create existing truststore
         TruststoreModel.objects.create(
-            unique_name='duplicate-name',
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
+            unique_name='duplicate-name', intended_usage=TruststoreModel.IntendedUsage.IDEVID
         )
-        
+
         cert_pem = self.create_test_certificate_pem()
-        
+
         with pytest.raises(ValidationError) as exc_info:
-            self.service.create(
-                unique_name='duplicate-name',
-                intended_usage='0',
-                trust_store_file=cert_pem
-            )
+            self.service.create(unique_name='duplicate-name', intended_usage='0', trust_store_file=cert_pem)
         assert 'already exists' in str(exc_info.value)
 
     def test_create_with_empty_unique_name_generates_name(self):
         """Test create generates name from certificate when unique_name is empty."""
         cert_pem = self.create_test_certificate_pem()
-        
+
         # Empty unique_name should auto-generate from certificate
-        truststore = self.service.create(
-            unique_name='',
-            intended_usage='0',
-            trust_store_file=cert_pem
-        )
-        
+        truststore = self.service.create(unique_name='', intended_usage='0', trust_store_file=cert_pem)
+
         # Name should be generated from certificate subject
         assert truststore.unique_name != ''
         assert 'test-ca.example.com' in truststore.unique_name.lower()
@@ -172,13 +159,13 @@ class TestTruststoreService:
     def test_create_with_valid_data(self):
         """Test successful truststore creation."""
         cert_pem = self.create_test_certificate_pem()
-        
+
         truststore = self.service.create(
             unique_name='new-truststore',
             intended_usage='0',  # IDEVID
-            trust_store_file=cert_pem
+            trust_store_file=cert_pem,
         )
-        
+
         assert truststore is not None
         assert truststore.unique_name == 'new-truststore'
         assert truststore.intended_usage == TruststoreModel.IntendedUsage.IDEVID
@@ -188,16 +175,16 @@ class TestTruststoreService:
         # Create two certificates
         cert1_pem = self.create_test_certificate_pem()
         cert2_pem = self.create_test_certificate_pem()
-        
+
         # Combine them
         combined_pem = cert1_pem + cert2_pem
-        
+
         truststore = self.service.create(
             unique_name='multi-cert-truststore',
             intended_usage='2',  # GENERIC
-            trust_store_file=combined_pem
+            trust_store_file=combined_pem,
         )
-        
+
         assert truststore is not None
         # Should have imported multiple certificates
         assert truststore.certificates.count() >= 1
@@ -213,73 +200,60 @@ class TestTruststoreServiceIntendedUsage:
     def create_test_certificate_pem(self) -> bytes:
         """Create a test certificate in PEM format."""
         private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        subject = issuer = x509.Name([
-            x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'test.example.com'),
-        ])
-        cert = x509.CertificateBuilder().subject_name(
-            subject
-        ).issuer_name(
-            issuer
-        ).public_key(
-            private_key.public_key()
-        ).serial_number(
-            x509.random_serial_number()
-        ).not_valid_before(
-            datetime.now(UTC)
-        ).not_valid_after(
-            datetime.now(UTC) + timedelta(days=365)
-        ).sign(private_key, hashes.SHA256())
-        
+        subject = issuer = x509.Name(
+            [
+                x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, 'test.example.com'),
+            ]
+        )
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(issuer)
+            .public_key(private_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.now(UTC))
+            .not_valid_after(datetime.now(UTC) + timedelta(days=365))
+            .sign(private_key, hashes.SHA256())
+        )
+
         return cert.public_bytes(serialization.Encoding.PEM)
 
     @pytest.mark.django_db
     def test_create_with_idevid_usage(self):
         """Test create with IDEVID intended usage."""
         cert_pem = self.create_test_certificate_pem()
-        
-        truststore = self.service.create(
-            unique_name='idevid-truststore',
-            intended_usage='0',
-            trust_store_file=cert_pem
-        )
-        
+
+        truststore = self.service.create(unique_name='idevid-truststore', intended_usage='0', trust_store_file=cert_pem)
+
         assert truststore.intended_usage == TruststoreModel.IntendedUsage.IDEVID
 
     @pytest.mark.django_db
     def test_create_with_tls_usage(self):
         """Test create with TLS intended usage."""
         cert_pem = self.create_test_certificate_pem()
-        
-        truststore = self.service.create(
-            unique_name='tls-truststore',
-            intended_usage='1',
-            trust_store_file=cert_pem
-        )
-        
+
+        truststore = self.service.create(unique_name='tls-truststore', intended_usage='1', trust_store_file=cert_pem)
+
         assert truststore.intended_usage == TruststoreModel.IntendedUsage.TLS
 
     @pytest.mark.django_db
     def test_create_with_generic_usage(self):
         """Test create with GENERIC intended usage."""
         cert_pem = self.create_test_certificate_pem()
-        
+
         truststore = self.service.create(
-            unique_name='generic-truststore',
-            intended_usage='2',
-            trust_store_file=cert_pem
+            unique_name='generic-truststore', intended_usage='2', trust_store_file=cert_pem
         )
-        
+
         assert truststore.intended_usage == TruststoreModel.IntendedUsage.GENERIC
 
     @pytest.mark.django_db
     def test_create_with_device_owner_id_usage(self):
         """Test create with DEVICE_OWNER_ID intended usage."""
         cert_pem = self.create_test_certificate_pem()
-        
+
         truststore = self.service.create(
-            unique_name='device-owner-truststore',
-            intended_usage='3',
-            trust_store_file=cert_pem
+            unique_name='device-owner-truststore', intended_usage='3', trust_store_file=cert_pem
         )
-        
+
         assert truststore.intended_usage == TruststoreModel.IntendedUsage.DEVICE_OWNER_ID

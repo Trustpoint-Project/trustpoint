@@ -26,15 +26,16 @@ class TestHsmSetupMixinValidation:
         """Test _validate_hsm_inputs with invalid module path characters."""
         request = self.factory.post('/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
-        
+
         # Module path with invalid characters (e.g., spaces, special chars)
         result = self.view._validate_hsm_inputs('invalid path with spaces', '0', 'label')
-        
+
         assert result is False
         messages_list = list(get_messages(request))
         assert any('Invalid module path' in str(m) for m in messages_list)
@@ -43,14 +44,15 @@ class TestHsmSetupMixinValidation:
         """Test _validate_hsm_inputs with non-digit slot."""
         request = self.factory.post('/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
-        
+
         result = self.view._validate_hsm_inputs('/usr/lib/valid.so', 'abc', 'label')
-        
+
         assert result is False
         messages_list = list(get_messages(request))
         assert any('Invalid slot value' in str(m) for m in messages_list)
@@ -59,14 +61,15 @@ class TestHsmSetupMixinValidation:
         """Test _validate_hsm_inputs with invalid label characters."""
         request = self.factory.post('/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
-        
+
         result = self.view._validate_hsm_inputs('/usr/lib/valid.so', '0', 'label with spaces')
-        
+
         assert result is False
         messages_list = list(get_messages(request))
         assert any('Invalid label' in str(m) for m in messages_list)
@@ -75,15 +78,16 @@ class TestHsmSetupMixinValidation:
         """Test _validate_hsm_inputs detects potential command injection."""
         request = self.factory.post('/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
-        
+
         # Try injection with semicolon - will be caught by module path validation first
         result = self.view._validate_hsm_inputs('/usr/lib/valid.so; rm -rf /', '0', 'label')
-        
+
         assert result is False
         messages_list = list(get_messages(request))
         # Will be caught as invalid module path due to semicolon and spaces
@@ -93,14 +97,15 @@ class TestHsmSetupMixinValidation:
         """Test _validate_hsm_inputs with all valid inputs."""
         request = self.factory.post('/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
-        
+
         result = self.view._validate_hsm_inputs('/usr/lib/libpkcs11.so', '0', 'TestLabel')
-        
+
         assert result is True
 
 
@@ -118,17 +123,17 @@ class TestHsmSetupMixinTokenOperations:
         """Test _assign_token_to_crypto_storage with matching SoftHSM."""
         request = self.factory.post('/')
         self.view.request = request
-        
+
         mock_config = Mock(spec=KeyStorageConfig)
         mock_config.storage_type = KeyStorageConfig.StorageType.SOFTHSM
         mock_config.save = Mock()
         mock_get_config.return_value = mock_config
-        
+
         mock_token = Mock(spec=PKCS11Token)
         mock_token.label = 'TestToken'
-        
+
         self.view._assign_token_to_crypto_storage(mock_token, 'softhsm')
-        
+
         assert mock_config.hsm_config == mock_token
         mock_config.save.assert_called_once_with(update_fields=['hsm_config'])
 
@@ -137,17 +142,17 @@ class TestHsmSetupMixinTokenOperations:
         """Test _assign_token_to_crypto_storage with matching Physical HSM."""
         request = self.factory.post('/')
         self.view.request = request
-        
+
         mock_config = Mock(spec=KeyStorageConfig)
         mock_config.storage_type = KeyStorageConfig.StorageType.PHYSICAL_HSM
         mock_config.save = Mock()
         mock_get_config.return_value = mock_config
-        
+
         mock_token = Mock(spec=PKCS11Token)
         mock_token.label = 'PhysicalToken'
-        
+
         self.view._assign_token_to_crypto_storage(mock_token, 'physical')
-        
+
         assert mock_config.hsm_config == mock_token
         mock_config.save.assert_called_once()
 
@@ -156,18 +161,18 @@ class TestHsmSetupMixinTokenOperations:
         """Test _assign_token_to_crypto_storage with mismatched types."""
         request = self.factory.post('/')
         self.view.request = request
-        
+
         mock_config = Mock(spec=KeyStorageConfig)
         mock_config.storage_type = KeyStorageConfig.StorageType.SOFTWARE
         mock_config.save = Mock()
         mock_get_config.return_value = mock_config
-        
+
         mock_token = Mock(spec=PKCS11Token)
         mock_token.label = 'TestToken'
-        
+
         # Should log warning but not crash
         self.view._assign_token_to_crypto_storage(mock_token, 'softhsm')
-        
+
         # Config should not be updated due to mismatch
         mock_config.save.assert_not_called()
 
@@ -176,12 +181,12 @@ class TestHsmSetupMixinTokenOperations:
         """Test _assign_token_to_crypto_storage handles exceptions."""
         request = self.factory.post('/')
         self.view.request = request
-        
+
         mock_get_config.side_effect = RuntimeError('Config error')
-        
+
         mock_token = Mock(spec=PKCS11Token)
         mock_token.label = 'TestToken'
-        
+
         # Should handle exception gracefully
         self.view._assign_token_to_crypto_storage(mock_token, 'softhsm')
         # Should not crash
@@ -190,19 +195,20 @@ class TestHsmSetupMixinTokenOperations:
         """Test _generate_kek_and_dek when KEK generation fails."""
         request = self.factory.post('/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
-        
+
         mock_token = Mock(spec=PKCS11Token)
         mock_token.label = 'TestToken'
         mock_token.generate_kek.side_effect = subprocess.CalledProcessError(1, 'cmd')
         mock_token.generate_and_wrap_dek = Mock()
-        
+
         self.view._generate_kek_and_dek(mock_token)
-        
+
         messages_list = list(get_messages(request))
         assert any('KEK' in str(m) and 'failed' in str(m) for m in messages_list)
         # DEK generation should still be attempted
@@ -212,19 +218,20 @@ class TestHsmSetupMixinTokenOperations:
         """Test _generate_kek_and_dek when DEK generation fails."""
         request = self.factory.post('/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
-        
+
         mock_token = Mock(spec=PKCS11Token)
         mock_token.label = 'TestToken'
         mock_token.generate_kek = Mock()
         mock_token.generate_and_wrap_dek.side_effect = RuntimeError('DEK failed')
-        
+
         self.view._generate_kek_and_dek(mock_token)
-        
+
         messages_list = list(get_messages(request))
         assert any('DEK' in str(m) and 'failed' in str(m) for m in messages_list)
 
@@ -232,19 +239,20 @@ class TestHsmSetupMixinTokenOperations:
         """Test _generate_kek_and_dek when both succeed."""
         request = self.factory.post('/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
-        
+
         mock_token = Mock(spec=PKCS11Token)
         mock_token.label = 'TestToken'
         mock_token.generate_kek = Mock()
         mock_token.generate_and_wrap_dek = Mock()
-        
+
         self.view._generate_kek_and_dek(mock_token)
-        
+
         # No error messages should be added
         messages_list = list(get_messages(request))
         assert len([m for m in messages_list if 'failed' in str(m).lower()]) == 0
@@ -263,28 +271,29 @@ class TestHsmSetupMixinErrorHandling:
         """Test _raise_called_process_error raises correct exception."""
         request = self.factory.post('/')
         self.view.request = request
-        
+
         with pytest.raises(subprocess.CalledProcessError) as exc_info:
             self.view._raise_called_process_error(5)
-        
+
         assert exc_info.value.returncode == 5
 
     def test_add_success_message_created(self):
         """Test _add_success_message with created token."""
         request = self.factory.post('/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.get_success_context = Mock(return_value='for testing')
-        
+
         mock_token = Mock(spec=PKCS11Token)
         mock_token.label = 'TestToken'
-        
+
         self.view._add_success_message('softhsm', created=True, token=mock_token)
-        
+
         messages_list = list(get_messages(request))
         assert any('created' in str(m) and 'SOFTHSM' in str(m) for m in messages_list)
 
@@ -292,18 +301,19 @@ class TestHsmSetupMixinErrorHandling:
         """Test _add_success_message with updated token."""
         request = self.factory.post('/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.get_success_context = Mock(return_value='for testing')
-        
+
         mock_token = Mock(spec=PKCS11Token)
         mock_token.label = 'TestToken'
-        
+
         self.view._add_success_message('physical', created=False, token=mock_token)
-        
+
         messages_list = list(get_messages(request))
         assert any('updated' in str(m) and 'PHYSICAL' in str(m) for m in messages_list)
 
@@ -311,16 +321,17 @@ class TestHsmSetupMixinErrorHandling:
         """Test _handle_hsm_setup_exception with CalledProcessError."""
         request = self.factory.post('/', {'hsm_type': 'softhsm'})
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.get_error_redirect_url = Mock(return_value='setup_wizard:hsm_setup')
-        
+
         exc = subprocess.CalledProcessError(2, 'cmd')
         response = self.view._handle_hsm_setup_exception(exc)
-        
+
         assert response.status_code == 302
         messages_list = list(get_messages(request))
         assert any('HSM setup failed' in str(m) for m in messages_list)
@@ -329,16 +340,17 @@ class TestHsmSetupMixinErrorHandling:
         """Test _handle_hsm_setup_exception with FileNotFoundError."""
         request = self.factory.post('/', {'hsm_type': 'softhsm'})
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.get_error_redirect_url = Mock(return_value='setup_wizard:hsm_setup')
-        
+
         exc = FileNotFoundError('Script not found')
         response = self.view._handle_hsm_setup_exception(exc)
-        
+
         assert response.status_code == 302
         messages_list = list(get_messages(request))
         assert any('script not found' in str(m).lower() for m in messages_list)
@@ -347,16 +359,17 @@ class TestHsmSetupMixinErrorHandling:
         """Test _handle_hsm_setup_exception with unexpected exception."""
         request = self.factory.post('/', {'hsm_type': 'physical'})
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         self.view.get_error_redirect_url = Mock(return_value='setup_wizard:hsm_setup')
-        
+
         exc = RuntimeError('Unexpected error')
         response = self.view._handle_hsm_setup_exception(exc)
-        
+
         assert response.status_code == 302
         messages_list = list(get_messages(request))
         assert any('unexpected error' in str(m).lower() for m in messages_list)
@@ -378,7 +391,7 @@ class TestHsmSetupMixinErrorHandling:
             19: 'Failed to access HSM slot',
             20: 'Failed to create the WIZARD_AUTO_RESTORE_PASSWORD',
         }
-        
+
         for code, expected_substr in known_codes.items():
             message = self.view._map_exit_code_to_message(code)
             assert expected_substr in message, f"Exit code {code} message should contain '{expected_substr}'"

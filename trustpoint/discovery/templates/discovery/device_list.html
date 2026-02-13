@@ -2,56 +2,74 @@
 {% load i18n static %}
 
 {% block head %}
-    {% if scan_running %}<meta http-equiv="refresh" content="5">{% endif %}
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {% if scan_running or stop_pending %}<meta http-equiv="refresh" content="5">{% endif %}
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid p-4">
-    <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 fw-bold mb-0">Network Discovery</h1>
         <div class="d-flex gap-2">
+            <a href="/admin/discovery/discoveryport/" class="btn btn-outline-secondary btn-sm">Configure Ports</a>
             {% if stop_pending %}
-                <span class="badge bg-secondary px-3 py-2">Stopping...</span>
+                <span class="badge bg-secondary text-light px-3 py-2">Stopping...</span>
             {% elif scan_running %}
-                <a href="{% url 'discovery:stop_scan' %}" class="btn btn-danger btn-sm">Stop Scanning</a>
+                <span class="badge bg-warning text-dark px-3 py-2">Scanning Active</span>
+            {% else %}
+                <span class="badge bg-success px-3 py-2">System Ready</span>
             {% endif %}
-            <span class="badge {% if scan_running %}bg-warning text-dark{% else %}bg-success{% endif %} px-3 py-2">
-                {% if scan_running %}Scanning Active{% else %}System Ready{% endif %}
-            </span>
+        </div>
+    </div> 
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card p-3 border-0 border-start border-4 border-primary shadow-sm" style="background: rgba(255,255,255,0.05);">
+                <h6 class="text-muted small fw-bold">Total Assets</h6>
+                <h2 class="fw-bold mb-0">{{ stats.total }}</h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3 border-0 border-start border-4 border-info shadow-sm" style="background: rgba(255,255,255,0.05);">
+                <h6 class="text-muted small fw-bold">Industrial / OT</h6>
+                <h2 class="fw-bold mb-0">{{ stats.industrial }}</h2>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3 border-0 border-start border-4 border-warning shadow-sm" style="background: rgba(255,255,255,0.05);">
+                <h6 class="text-muted small fw-bold">Security Risks</h6>
+                <h2 class="fw-bold mb-0">{{ stats.risks }}</h2>
+            </div>
         </div>
     </div>
 
-    <!-- Stats -->
-    <div class="row mb-4">
-        <div class="col-md-4"><div class="card p-3 border-start border-4 border-primary"><h6>Total Assets</h6><h2 class="fw-bold">{{ stats.total }}</h2></div></div>
-        <div class="col-md-4"><div class="card p-3 border-start border-4 border-info"><h6>Industrial / OT</h6><h2 class="fw-bold">{{ stats.industrial }}</h2></div></div>
-        <div class="col-md-4"><div class="card p-3 border-start border-4 border-warning"><h6>Security Risks</h6><h2 class="fw-bold">{{ stats.risks }}</h2></div></div>
-    </div>
-
-    <!-- IP Range Form and Clean Button -->
-    <div class="card p-4 mb-4 border-0 shadow-sm">
-        <form action="{% url 'discovery:start_scan' %}" method="post" class="row g-3 align-items-center">
+    <!-- Scan Bar (Cleaned Buttons) -->
+    <div class="card p-4 mb-4 shadow-sm border-0" style="background: rgba(255,255,255,0.05);">
+        <form action="{% url 'discovery:start_scan' %}" method="post" class="row g-3 align-items-end">
             {% csrf_token %}
-            <div class="col-auto"><label class="fw-bold">Range:</label></div>
-            <div class="col-auto">
-                <input type="text" name="start_ip" class="form-control" value="{{ start_ip }}" {% if scan_running %}disabled{% endif %}>
+            <div class="col-md-3">
+                <label class="form-label text-muted small fw-bold">Start IP Address</label>
+                <input type="text" name="start_ip" class="form-control border-secondary bg-transparent text-white" value="{{ start_ip }}">
             </div>
-            <div class="col-auto">to</div>
-            <div class="col-auto">
-                <input type="text" name="end_ip" class="form-control" value="{{ end_ip }}" {% if scan_running %}disabled{% endif %}>
+            <div class="col-md-3">
+                <label class="form-label text-muted small fw-bold">End IP Address</label>
+                <input type="text" name="end_ip" class="form-control border-secondary bg-transparent text-white" value="{{ end_ip }}">
             </div>
-            <div class="col-auto">
-                <button type="submit" class="btn btn-primary" {% if scan_running %}disabled{% endif %}>Run Scan</button>
-                <a href="{% url 'discovery:clear_devices' %}" class="btn btn-outline-danger ms-2" 
-                   onclick="return confirm('Clear all discovered devices?')">Clean Inventory</a>
+            <div class="col-md-6 d-flex gap-2">
+                {% if stop_pending %}
+                    <button class="btn btn-secondary w-100 fw-bold" disabled>Stopping...</button>
+                {% elif scan_running %}
+                    <a href="{% url 'discovery:stop_scan' %}" class="btn btn-danger w-100 fw-bold">Stop Scan</a>
+                {% else %}
+                    <button type="submit" class="btn btn-primary w-100 fw-bold">Run Scan</button>
+                    <a href="{% url 'discovery:clear_devices' %}" class="btn btn-outline-danger px-4">Clean</a>
+                {% endif %}
             </div>
         </form>
     </div>
 
-    <!-- Assets Table -->
-    <div class="card shadow-sm border-0">
+    <!-- Table (Cleaned Badges) -->
+    <div class="card shadow-sm border-0" style="background: rgba(255,255,255,0.05);">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center border-0 pt-4">
             <h5 class="mb-0 fw-bold">Discovered Assets</h5>
             {% if devices %}
@@ -61,27 +79,33 @@
         <div class="table-responsive">
             <table class="table table-hover mb-0">
                 <thead>
-                    <tr><th class="ps-4">IP Address</th><th>Hostname</th><th>Ports</th><th>SSL Status</th><th class="text-end pe-4">Actions</th></tr>
+                    <tr>
+                        <th class="ps-4 text-muted small text-uppercase">IP Address</th>
+                        <th class="text-muted small text-uppercase">Hostname</th>
+                        <th class="text-muted small text-uppercase">Ports</th>
+                        <th class="text-muted small text-uppercase">SSL Status</th>
+                        <th class="text-end pe-4 text-muted small text-uppercase">Actions</th>
+                    </tr>
                 </thead>
                 <tbody>
                     {% for d in devices %}
                     <tr>
                         <td class="ps-4"><a href="{% url 'discovery:device_detail' d.id %}" class="text-info fw-bold">{{ d.ip_address }}</a></td>
-                        <td>{{ d.hostname|default:"-" }}</td>
-                        <td>{% for p in d.open_ports %}<span class="badge bg-secondary me-1">{{ p }}</span>{% endfor %}</td>
+                        <td>{{ d.hostname|default:"Unknown" }}</td>
+                        <td>{{ d.open_ports|join:", " }}</td>
                         <td>
                             {% if d.certificate_record.is_self_signed %}
-                                <span class="text-warning small">Self-Signed</span>
+                                <span class="badge bg-warning text-dark">Self-Signed</span>
                             {% elif d.certificate_record %}
-                                <span class="text-success small">PKI Linked</span>
+                                <span class="badge bg-success">PKI Linked</span>
                             {% else %}
                                 <span class="text-muted small">None</span>
                             {% endif %}
                         </td>
-                        <td class="text-end pe-4"><a href="{% url 'discovery:device_detail' d.id %}" class="btn btn-sm btn-outline-info">View Details</a></td>
+                        <td class="text-end pe-4">
+                            <a href="{% url 'discovery:device_detail' d.id %}" class="btn btn-sm btn-outline-info">View Details</a>
+                        </td>
                     </tr>
-                    {% empty %}
-                        <tr><td colspan="5" class="text-center p-4 text-muted">Empty inventory. Run a scan.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

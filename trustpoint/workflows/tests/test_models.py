@@ -52,7 +52,7 @@ class TestBadgeMap:
     def test_badge_map_has_all_states(self):
         """Test that BADGE_MAP contains all State enum values."""
         for state in State:
-            assert state in BADGE_MAP, f"State {state} not in BADGE_MAP"
+            assert state in BADGE_MAP, f'State {state} not in BADGE_MAP'
 
     def test_badge_map_structure(self):
         """Test that each badge entry is a tuple of (label, css_class)."""
@@ -168,10 +168,7 @@ class TestWorkflowDefinition:
     def test_create_workflow_definition(self):
         """Test creating a workflow definition."""
         workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            version=1,
-            published=False,
-            definition={'events': [], 'steps': []}
+            name='Test Workflow', version=1, published=False, definition={'events': [], 'steps': []}
         )
         assert workflow.id is not None
         assert isinstance(workflow.id, uuid.UUID)
@@ -182,61 +179,36 @@ class TestWorkflowDefinition:
 
     def test_workflow_definition_str(self):
         """Test string representation of workflow definition."""
-        workflow = WorkflowDefinition.objects.create(
-            name='My Workflow',
-            version=2,
-            definition={}
-        )
+        workflow = WorkflowDefinition.objects.create(name='My Workflow', version=2, definition={})
         assert str(workflow) == 'My Workflow v2'
 
     def test_workflow_definition_default_version(self):
         """Test that version defaults to 1."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
         assert workflow.version == 1
 
     def test_workflow_definition_default_published(self):
         """Test that published defaults to False."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
         assert workflow.published is False
 
     def test_workflow_definition_auto_timestamps(self):
         """Test that timestamps are automatically set."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
         assert workflow.created_at is not None
         assert workflow.updated_at is not None
 
     def test_workflow_definition_unique_name(self):
         """Test that workflow names must be unique."""
-        WorkflowDefinition.objects.create(
-            name='Unique Workflow',
-            definition={}
-        )
+        WorkflowDefinition.objects.create(name='Unique Workflow', definition={})
         with pytest.raises(Exception):  # IntegrityError or similar
-            WorkflowDefinition.objects.create(
-                name='Unique Workflow',
-                definition={}
-            )
+            WorkflowDefinition.objects.create(name='Unique Workflow', definition={})
 
     def test_workflow_definition_ordering(self):
         """Test that workflows are ordered by created_at descending."""
-        workflow1 = WorkflowDefinition.objects.create(
-            name='First Workflow',
-            definition={}
-        )
-        workflow2 = WorkflowDefinition.objects.create(
-            name='Second Workflow',
-            definition={}
-        )
-        
+        workflow1 = WorkflowDefinition.objects.create(name='First Workflow', definition={})
+        workflow2 = WorkflowDefinition.objects.create(name='Second Workflow', definition={})
+
         workflows = list(WorkflowDefinition.objects.all())
         assert workflows[0].id == workflow2.id  # Most recent first
         assert workflows[1].id == workflow1.id
@@ -248,13 +220,10 @@ class TestWorkflowDefinition:
             'steps': [
                 {'type': 'approval', 'name': 'Manager Approval'},
                 {'type': 'webhook', 'url': 'https://example.com'},
-                {'type': 'email', 'to': 'admin@example.com'}
-            ]
+                {'type': 'email', 'to': 'admin@example.com'},
+            ],
         }
-        workflow = WorkflowDefinition.objects.create(
-            name='Complex Workflow',
-            definition=complex_def
-        )
+        workflow = WorkflowDefinition.objects.create(name='Complex Workflow', definition=complex_def)
         assert workflow.definition == complex_def
         assert len(workflow.definition['steps']) == 3
 
@@ -265,16 +234,8 @@ class TestWorkflowScope:
 
     def test_create_workflow_scope(self):
         """Test creating a workflow scope."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
-        scope = WorkflowScope.objects.create(
-            workflow=workflow,
-            ca_id=1,
-            domain_id=2,
-            device_id=3
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
+        scope = WorkflowScope.objects.create(workflow=workflow, ca_id=1, domain_id=2, device_id=3)
         assert scope.id is not None
         assert isinstance(scope.id, uuid.UUID)
         assert scope.workflow == workflow
@@ -284,45 +245,28 @@ class TestWorkflowScope:
 
     def test_workflow_scope_with_null_values(self):
         """Test creating scope with NULL values (meaning any)."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
-        scope = WorkflowScope.objects.create(
-            workflow=workflow,
-            ca_id=None,
-            domain_id=None,
-            device_id=None
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
+        scope = WorkflowScope.objects.create(workflow=workflow, ca_id=None, domain_id=None, device_id=None)
         assert scope.ca_id is None
         assert scope.domain_id is None
         assert scope.device_id is None
 
     def test_workflow_scope_cascade_delete(self):
         """Test that scope is deleted when workflow is deleted."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
-        scope = WorkflowScope.objects.create(
-            workflow=workflow,
-            ca_id=1
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
+        scope = WorkflowScope.objects.create(workflow=workflow, ca_id=1)
         scope_id = scope.id
-        
+
         workflow.delete()
-        
+
         assert not WorkflowScope.objects.filter(id=scope_id).exists()
 
     def test_workflow_scope_related_name(self):
         """Test accessing scopes through workflow's related name."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
         scope1 = WorkflowScope.objects.create(workflow=workflow, ca_id=1)
         scope2 = WorkflowScope.objects.create(workflow=workflow, ca_id=2)
-        
+
         scopes = list(workflow.scopes.all())
         assert len(scopes) == 2
         assert scope1 in scopes
@@ -330,128 +274,74 @@ class TestWorkflowScope:
 
     def test_workflow_scope_with_only_ca(self):
         """Test scope with only CA specified."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
-        scope = WorkflowScope.objects.create(
-            workflow=workflow,
-            ca_id=1
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
+        scope = WorkflowScope.objects.create(workflow=workflow, ca_id=1)
         assert scope.ca_id == 1
         assert scope.domain_id is None
         assert scope.device_id is None
 
     def test_workflow_scope_with_only_domain(self):
         """Test scope with only domain specified."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
-        scope = WorkflowScope.objects.create(
-            workflow=workflow,
-            domain_id=5
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
+        scope = WorkflowScope.objects.create(workflow=workflow, domain_id=5)
         assert scope.ca_id is None
         assert scope.domain_id == 5
         assert scope.device_id is None
 
     def test_workflow_scope_with_only_device(self):
         """Test scope with only device specified."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
-        scope = WorkflowScope.objects.create(
-            workflow=workflow,
-            device_id=10
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
+        scope = WorkflowScope.objects.create(workflow=workflow, device_id=10)
         assert scope.ca_id is None
         assert scope.domain_id is None
         assert scope.device_id == 10
 
     def test_multiple_scopes_for_workflow(self):
         """Test that a workflow can have multiple scopes."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Multi-Scope Workflow',
-            definition={}
-        )
-        
+        workflow = WorkflowDefinition.objects.create(name='Multi-Scope Workflow', definition={})
+
         # Create scopes for different CAs
         scope1 = WorkflowScope.objects.create(workflow=workflow, ca_id=1)
         scope2 = WorkflowScope.objects.create(workflow=workflow, ca_id=2)
         scope3 = WorkflowScope.objects.create(workflow=workflow, ca_id=3)
-        
+
         assert workflow.scopes.count() == 3
 
     def test_workflow_scope_str_with_ca(self):
         """Test string representation with CA only."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
         scope = WorkflowScope.objects.create(workflow=workflow, ca_id=5)
         assert str(scope) == 'Test Workflow [CA=5]'
 
     def test_workflow_scope_str_with_domain(self):
         """Test string representation with domain only."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
         scope = WorkflowScope.objects.create(workflow=workflow, domain_id=10)
         assert str(scope) == 'Test Workflow [Domain=10]'
 
     def test_workflow_scope_str_with_device(self):
         """Test string representation with device only."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
         scope = WorkflowScope.objects.create(workflow=workflow, device_id=15)
         assert str(scope) == 'Test Workflow [Device=15]'
 
     def test_workflow_scope_str_with_all(self):
         """Test string representation with all IDs."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
-        scope = WorkflowScope.objects.create(
-            workflow=workflow,
-            ca_id=1,
-            domain_id=2,
-            device_id=3
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
+        scope = WorkflowScope.objects.create(workflow=workflow, ca_id=1, domain_id=2, device_id=3)
         assert str(scope) == 'Test Workflow [CA=1, Domain=2, Device=3]'
 
     def test_workflow_scope_str_with_none(self):
         """Test string representation with no IDs (any)."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
         scope = WorkflowScope.objects.create(workflow=workflow)
         assert str(scope) == 'Test Workflow [any]'
 
     def test_workflow_scope_unique_together(self):
         """Test that unique_together constraint works."""
-        workflow = WorkflowDefinition.objects.create(
-            name='Test Workflow',
-            definition={}
-        )
-        WorkflowScope.objects.create(
-            workflow=workflow,
-            ca_id=1,
-            domain_id=2,
-            device_id=3
-        )
-        
+        workflow = WorkflowDefinition.objects.create(name='Test Workflow', definition={})
+        WorkflowScope.objects.create(workflow=workflow, ca_id=1, domain_id=2, device_id=3)
+
         # Try to create duplicate scope
         with pytest.raises(Exception):  # IntegrityError
-            WorkflowScope.objects.create(
-                workflow=workflow,
-                ca_id=1,
-                domain_id=2,
-                device_id=3
-            )
+            WorkflowScope.objects.create(workflow=workflow, ca_id=1, domain_id=2, device_id=3)

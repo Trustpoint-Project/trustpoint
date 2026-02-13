@@ -19,6 +19,7 @@ class ExecutorResult:
         vars: Optional nested dict to merge into the instance-global ctx.vars
               (stored under step_contexts["$vars"]).
     """
+
     status: State
     context: dict[str, Any] | None = None
     vars: dict[str, Any] | None = None

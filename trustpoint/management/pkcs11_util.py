@@ -1,4 +1,5 @@
 """PKCS#11 Utility Functions."""
+
 import contextlib
 import types
 from abc import ABC, abstractmethod
@@ -503,10 +504,7 @@ class Pkcs11AESKey:
             raise RuntimeError(msg)
 
         try:
-            self._key = session.get_key(
-                label=self._key_label,
-                key_type=pkcs11.KeyType.AES
-            )
+            self._key = session.get_key(label=self._key_label, key_type=pkcs11.KeyType.AES)
         except pkcs11.NoSuchKey as e:
             msg = f"AES key with label '{self._key_label}' not found in token '{self._token_label}'."
             raise pkcs11.NoSuchKey(msg) from e
@@ -515,37 +513,34 @@ class Pkcs11AESKey:
             raise RuntimeError(msg) from e
 
     def generate_key(self, key_length: int = 256) -> None:
-            """Generate an AES key in the PKCS#11 token.
+        """Generate an AES key in the PKCS#11 token.
 
-            Args:
-                key_length (int): Length of the AES key in bits (default: 256).
+        Args:
+            key_length (int): Length of the AES key in bits (default: 256).
 
-            Raises:
-                ValueError: If the key length is not supported.
-                RuntimeError: If key generation fails.
-            """
-            if key_length not in self.SUPPORTED_KEY_LENGTHS:
-                msg = f'Unsupported key length: {key_length}. Must be one of {self.SUPPORTED_KEY_LENGTHS}.'
-                raise ValueError(msg)
+        Raises:
+            ValueError: If the key length is not supported.
+            RuntimeError: If key generation fails.
+        """
+        if key_length not in self.SUPPORTED_KEY_LENGTHS:
+            msg = f'Unsupported key length: {key_length}. Must be one of {self.SUPPORTED_KEY_LENGTHS}.'
+            raise ValueError(msg)
 
-            if self._session is None:
-                self._initialize()
+        if self._session is None:
+            self._initialize()
 
-            session = self._session
-            if session is None:
-                msg = 'PKCS#11 session is not initialized.'
-                raise RuntimeError(msg)
+        session = self._session
+        if session is None:
+            msg = 'PKCS#11 session is not initialized.'
+            raise RuntimeError(msg)
 
-            try:
-                self._key = session.generate_key(
-                    pkcs11.KeyType.AES,
-                    key_length=key_length,
-                    label=self._key_label,
-                    store=True
-                )
-            except Exception as e:
-                msg = f'Failed to generate AES key: {e}'
-                raise RuntimeError(msg) from e
+        try:
+            self._key = session.generate_key(
+                pkcs11.KeyType.AES, key_length=key_length, label=self._key_label, store=True
+            )
+        except Exception as e:
+            msg = f'Failed to generate AES key: {e}'
+            raise RuntimeError(msg) from e
 
     def close(self) -> None:
         """Close PKCS#11 session."""
@@ -563,6 +558,7 @@ class Pkcs11AESKey:
     ) -> None:
         """Context manager exit."""
         self.close()
+
 
 class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
     """PKCS#11-backed RSA private key implementation.
@@ -780,6 +776,7 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
             NotImplementedError: If padding is not PKCS1v15.
             ValueError: If Prehashed digest is used.
         """
+
         def _raise_unsupported_padding() -> Never:
             msg = 'Only PKCS#1 v1.5 supported.'
             raise NotImplementedError(msg)
@@ -1071,10 +1068,8 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         self._public_key = None
 
     def sign(
-    self,
-    data: bytes | bytearray | memoryview,
-    signature_algorithm: ec.EllipticCurveSignatureAlgorithm
-) -> bytes:
+        self, data: bytes | bytearray | memoryview, signature_algorithm: ec.EllipticCurveSignatureAlgorithm
+    ) -> bytes:
         """Sign the provided data using the EC private key with ECDSA.
 
         Args:
@@ -1204,6 +1199,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         Returns:
             tuple: (private_template, public_template)
         """
+
         def int_to_bytes(value: int, byte_length: int) -> bytes:
             """Convert integer to bytes in big-endian format with specified length."""
             return value.to_bytes(byte_length, byteorder='big')
@@ -1214,9 +1210,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         private_value_size = coord_size
 
         # Encode public key point as uncompressed format (0x04 + x + y)
-        public_point = (
-            b'\x04' + int_to_bytes(public_numbers.x, coord_size) + int_to_bytes(public_numbers.y, coord_size)
-        )
+        public_point = b'\x04' + int_to_bytes(public_numbers.x, coord_size) + int_to_bytes(public_numbers.y, coord_size)
 
         private_template = {
             Attribute.CLASS: ObjectClass.PRIVATE_KEY,

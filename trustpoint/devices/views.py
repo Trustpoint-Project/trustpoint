@@ -241,9 +241,7 @@ class DeviceTableView(AbstractDeviceTableView):
         Returns:
             Returns a queryset of all DeviceModels, filtered by UI filters.
         """
-        base_qs = super(ListView, self).get_queryset().filter(
-            device_type=DeviceModel.DeviceType.GENERIC_DEVICE
-        )
+        base_qs = super(ListView, self).get_queryset().filter(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
         return self.apply_filters(base_qs)
 
 
@@ -260,9 +258,7 @@ class OpcUaGdsTableView(DeviceTableView):
         Returns:
             Returns a queryset of all DeviceModels which are of OPC-UA GDS type, filtered by UI filters.
         """
-        base_qs = super(ListView, self).get_queryset().filter(
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS
-        )
+        base_qs = super(ListView, self).get_queryset().filter(device_type=DeviceModel.DeviceType.OPC_UA_GDS)
         return self.apply_filters(base_qs)
 
 
@@ -800,8 +796,6 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
                 'url': f'{self.page_category}:{self.page_name}_no_onboarding_select_certificate_profile',
             }
         )
-
-
 
         context['sections'] = sections
 
@@ -1540,7 +1534,6 @@ class AbstractDeviceBaseCredentialDownloadView(PageContextMixin, DetailView[Issu
         form = self.form_class(self.request.POST)
 
         if form.is_valid():
-
             password = form.cleaned_data['password'].encode()
 
             try:

@@ -35,4 +35,4 @@ class DiscoveredDevice(models.Model):
 
     def __str__(self) -> str:
         """Return string representation of the device."""
-        return f"{self.ip_address} ({self.hostname or 'Unknown'})"
+        return f'{self.ip_address} ({self.hostname or "Unknown"})'

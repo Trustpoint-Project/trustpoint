@@ -4,7 +4,6 @@ Usage:
     python manage.py unwrap_dek [--token-label <label>]
 """
 
-
 import argparse
 from typing import TYPE_CHECKING
 
@@ -18,6 +17,7 @@ if TYPE_CHECKING:
 
 DEK_EXPECTED_LENGTH = 32
 
+
 class Command(BaseCommand, LoggerMixin):
     """A Django management command to test KEK loading and DEK unwrapping for PKCS11Token.
 
@@ -25,6 +25,7 @@ class Command(BaseCommand, LoggerMixin):
     unwrapping for a specified PKCS11 token. It supports specifying a token label or defaults to
     the first available token.
     """
+
     help = 'Test KEK loading and DEK unwrapping for PKCS11Token'
 
     def add_arguments(self, parser: argparse.ArgumentParser) -> None:
@@ -72,7 +73,7 @@ class Command(BaseCommand, LoggerMixin):
                     self.log_and_stdout(
                         f'Token with label "{token_label}" not found. '
                         f'This may be expected behavior if the token is not yet created.',
-                        level='error'
+                        level='error',
                     )
                     return
             else:
@@ -80,7 +81,7 @@ class Command(BaseCommand, LoggerMixin):
                 if not token:
                     self.log_and_stdout(
                         'No PKCS11 tokens found. This may be expected behavior if no tokens are created yet.',
-                        level='error'
+                        level='error',
                     )
                     return
 
@@ -138,17 +139,14 @@ class Command(BaseCommand, LoggerMixin):
                     kek_record = PKCS11Key.objects.get(
                         token_label=token.label,
                         key_label=token.KEK_ENCRYPTION_KEY_LABEL,
-                        key_type=PKCS11Key.KeyType.AES
+                        key_type=PKCS11Key.KeyType.AES,
                     )
                 except ObjectDoesNotExist:
                     self.log_and_stdout(f'KEK "{token.KEK_ENCRYPTION_KEY_LABEL}" not found in database', level='error')
                     return
 
             # Get the AES key instance
-            aes_key = kek_record.get_pkcs11_key_instance(
-                lib_path=token.module_path,
-                user_pin=token.get_pin()
-            )
+            aes_key = kek_record.get_pkcs11_key_instance(lib_path=token.module_path, user_pin=token.get_pin())
 
             try:
                 aes_key.load_key()
@@ -175,11 +173,11 @@ class Command(BaseCommand, LoggerMixin):
 
             # Unwrap the DEK
             if dek and len(dek) == DEK_EXPECTED_LENGTH:
-
                 self.log_and_stdout(f'DEK unwrapped successfully ({len(dek)} bytes)')
             else:
-                self.log_and_stdout(f'Invalid DEK (expected {DEK_EXPECTED_LENGTH} bytes, '
-                                     f'got {len(dek) if dek else 0})', level='error')
+                self.log_and_stdout(
+                    f'Invalid DEK (expected {DEK_EXPECTED_LENGTH} bytes, got {len(dek) if dek else 0})', level='error'
+                )
 
         except Exception:
             self.log_and_stdout('DEK unwrapping failed', level='error')

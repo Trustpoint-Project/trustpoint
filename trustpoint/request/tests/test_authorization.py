@@ -1,4 +1,5 @@
 """Tests for authorization components."""
+
 from unittest.mock import Mock
 
 import pytest
@@ -13,7 +14,12 @@ from request.authorization.base import (
     ProtocolAuthorization,
 )
 from request.authorization.est import EstAuthorization, EstOperationAuthorization
-from request.request_context import BaseRequestContext, BaseCertificateRequestContext, EstBaseRequestContext, EstCertificateRequestContext
+from request.request_context import (
+    BaseRequestContext,
+    BaseCertificateRequestContext,
+    EstBaseRequestContext,
+    EstCertificateRequestContext,
+)
 
 
 class TestProtocolAuthorization:
@@ -189,7 +195,9 @@ class TestCertificateProfileAuthorization:
         assert 'Allowed profiles:' in str(exc_info.value)
         assert 'domain_credential' in str(exc_info.value)
 
-    def test_cert_profile_str_authorization_failure_missing_profile(self, domain_instance, cert_profile_instance) -> None:
+    def test_cert_profile_str_authorization_failure_missing_profile(
+        self, domain_instance, cert_profile_instance
+    ) -> None:
         """Test certificate profile authorization failure with missing profile string."""
         auth = CertificateProfileAuthorization()
         context = Mock(spec=BaseCertificateRequestContext)
@@ -216,7 +224,7 @@ class TestCertificateProfileAuthorization:
         """Test certificate profile authorization with single allowed profile."""
         auth = CertificateProfileAuthorization()
         context = Mock(spec=BaseCertificateRequestContext)
-        context.cert_profile_str = 'test_profile_alias' # Using alias for profile 'domain_credential'
+        context.cert_profile_str = 'test_profile_alias'  # Using alias for profile 'domain_credential'
         context.domain = domain_instance['domain']
 
         # Should not raise an exception
@@ -448,10 +456,10 @@ class TestEstAuthorization:
         # Check component types
         component_types = [type(comp).__name__ for comp in auth.components]
         expected_types = [
-            'DomainScopeValidation', 
+            'DomainScopeValidation',
             'CertificateProfileAuthorization',
             'ProtocolAuthorization',
-            'EstOperationAuthorization'
+            'EstOperationAuthorization',
         ]
         assert component_types == expected_types
 

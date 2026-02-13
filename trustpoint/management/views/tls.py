@@ -40,6 +40,7 @@ class TlsSettingsContextMixin:
 
 class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
     """View to display certificate details, including Subject Alternative Name (SAN) and associated IP addresses."""
+
     template_name = 'management/tls.html'
     form_class = IPv4AddressForm
     success_url = reverse_lazy('management:tls')
@@ -102,20 +103,23 @@ class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
                     issuer_details[field] = attribute.value
 
         tls_certificates = CertificateModel.objects.filter(
-            credential__credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER)
+            credential__credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER
+        )
 
         self.logger.info('TLS certificates count: %s', tls_certificates.count())
         for cert in tls_certificates:
             self.logger.info('TLS cert: %s, pk: %s', cert.common_name, cert.pk)
 
-        context.update({
-            'certificate': certificate,
-            'san_ips': san_ips,
-            'san_dns_names': san_dns_names,
-            'issuer_details': issuer_details,
-            'tls_certificates': tls_certificates,
-            'tls_form': StartupWizardTlsCertificateForm()
-        })
+        context.update(
+            {
+                'certificate': certificate,
+                'san_ips': san_ips,
+                'san_dns_names': san_dns_names,
+                'issuer_details': issuer_details,
+                'tls_certificates': tls_certificates,
+                'tls_form': StartupWizardTlsCertificateForm(),
+            }
+        )
 
         return context
 
@@ -143,7 +147,8 @@ class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
         try:
             try:
                 active_credential = ActiveTrustpointTlsServerCredentialModel.objects.select_related('credential').get(
-                    id=1)
+                    id=1
+                )
             except ActiveTrustpointTlsServerCredentialModel.DoesNotExist:
                 active_credential = None
 
@@ -167,11 +172,13 @@ class TlsView(LoggerMixin, TlsSettingsContextMixin, FormView[IPv4AddressForm]):
         except ObjectDoesNotExist:
             return []
 
+
 class TlsAddMethodSelectView(TemplateView):
     """View to select the method to add a TLS Certificate."""
 
     template_name = 'management/tls/method_select.html'
     success_url = reverse_lazy('management:tls-add-method-select')
+
 
 class GenerateTlsCertificateView(LoggerMixin, FormView[StartupWizardTlsCertificateForm]):
     """View for generating TLS Server Credentials in the setup wizard.
@@ -191,7 +198,6 @@ class GenerateTlsCertificateView(LoggerMixin, FormView[StartupWizardTlsCertifica
     template_name = 'management/tls/generate_tls.html'
     form_class = StartupWizardTlsCertificateForm
     success_url = reverse_lazy('management:tls')
-
 
     def form_valid(self, form: StartupWizardTlsCertificateForm) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential generation.
@@ -237,6 +243,7 @@ class GenerateTlsCertificateView(LoggerMixin, FormView[StartupWizardTlsCertifica
             self.logger.exception(err_msg)
             return redirect('management:tls', permanent=False)
 
+
 class TlsAddFileImportPkcs12View(TlsSettingsContextMixin, FormView[TlsAddFileImportPkcs12Form], LoggerMixin):
     """View to import an TLS-Server Credential from a PKCS12 file."""
 
@@ -252,6 +259,7 @@ class TlsAddFileImportPkcs12View(TlsSettingsContextMixin, FormView[TlsAddFileImp
             _('Successfully added TLS-Server Credential.'),
         )
         return super().form_valid(form)
+
 
 class TlsAddFileImportSeparateFilesView(
     TlsSettingsContextMixin, FormView[TlsAddFileImportSeparateFilesForm], LoggerMixin
@@ -271,6 +279,7 @@ class TlsAddFileImportSeparateFilesView(
         )
         return super().form_valid(form)
 
+
 class ActivateTlsServerView(View, LoggerMixin):
     """Activate a TLS server certificate."""
 
@@ -280,8 +289,7 @@ class ActivateTlsServerView(View, LoggerMixin):
         cert_id: int = kwargs['pk']  # type: ignore[assignment]
         self.logger.info('Activating TLS certificate with ID: %s', cert_id)
         try:
-            tls_certificate = CredentialModel.objects.get(
-                certificate__id=cert_id)
+            tls_certificate = CredentialModel.objects.get(certificate__id=cert_id)
             self.logger.info('Found TLS credential: %s', tls_certificate.id)
 
             active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
@@ -289,8 +297,7 @@ class ActivateTlsServerView(View, LoggerMixin):
             active_tls.save()
             UpdateTlsCommand().handle()  # Apply new NGINX TLS configuration
             self.logger.info(
-                'Activated TLS credential: %s, certificate: %s',
-                tls_certificate.id, tls_certificate.certificate.id
+                'Activated TLS credential: %s, certificate: %s', tls_certificate.id, tls_certificate.certificate.id
             )
             messages.success(request, 'TLS Server certificate activated successfully')
         except (CredentialModel.DoesNotExist, ValidationError):

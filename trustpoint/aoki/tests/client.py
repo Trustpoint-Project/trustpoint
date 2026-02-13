@@ -27,25 +27,31 @@ CERTS_DIR = (CURRENT_DIR / './certs/').resolve()
 
 HTTP_STATUS_OK = 200
 
+
 class AokiClientInitResponseError(Exception):
     """Exception raised when the AOKI client initialization response is invalid."""
+
 
 class AokiClientNoSupportedProtocolError(Exception):
     """Exception raised when no PKI protocol supported by this client is found in the AOKI client init response."""
 
+
 class AokiClientOwnerIdCertVerificationError(Exception):
     """Exception raised when the provided Owner ID certificate is invalid or not corresponding to the IDevID."""
+
 
 class AokiClientSignatureError(Exception):
     """Exception raised when signature by the Owner ID private key provided by the server could not be verified."""
 
+
 class AokiClientCertLoadError(Exception):
     """Exception raised when a certificate could not be loaded from the provided path."""
+
 
 class AokiClient:
     """AOKI Client for testing purposes."""
 
-    idevid_subj_sn : str = '_'
+    idevid_subj_sn: str = '_'
 
     @staticmethod
     def _load_certificate(cert_path: Path) -> x509.Certificate:
@@ -109,8 +115,8 @@ class AokiClient:
         raise AokiClientOwnerIdCertVerificationError(exc_msg)
 
     def _verify_owner_id_cert(
-            self, owner_id_cert: x509.Certificate, truststore: list[x509.Certificate], idevid_cert: x509.Certificate
-        ) -> None:
+        self, owner_id_cert: x509.Certificate, truststore: list[x509.Certificate], idevid_cert: x509.Certificate
+    ) -> None:
         """Verify the Owner ID certificate against the provided truststore."""
         log.info('Verifying Owner ID certificate against truststore certificate')
 
@@ -119,12 +125,10 @@ class AokiClient:
         builder = PolicyBuilder().store(store)
         builder = builder.max_chain_depth(2)
         devownerid_ca_policy = ExtensionPolicy.permit_all()
-        devownerid_ca_policy = devownerid_ca_policy.require_present(
-            x509.BasicConstraints, Criticality.CRITICAL, None
-        )
+        devownerid_ca_policy = devownerid_ca_policy.require_present(x509.BasicConstraints, Criticality.CRITICAL, None)
         builder = builder.extension_policies(
-           ca_policy=devownerid_ca_policy,
-           ee_policy=ExtensionPolicy.permit_all(),
+            ca_policy=devownerid_ca_policy,
+            ee_policy=ExtensionPolicy.permit_all(),
         )
         verifier = builder.build_client_verifier()
         try:
@@ -135,8 +139,8 @@ class AokiClient:
         return self._verify_matches_idevid_cert(owner_id_cert, idevid_cert)
 
     def _verify_owner_signature(
-            self, signature: bytes, owner_key: rsa.RSAPublicKey | ec.EllipticCurvePublicKey, data: bytes
-        ) -> None:
+        self, signature: bytes, owner_key: rsa.RSAPublicKey | ec.EllipticCurvePublicKey, data: bytes
+    ) -> None:
         """Verify the signature using the Owner ID public key."""
         if not isinstance(owner_key, rsa.RSAPublicKey | ec.EllipticCurvePublicKey):
             error_message = 'Unsupported public key type for CSR signature verification.'
@@ -201,15 +205,9 @@ class AokiClient:
             exc_msg = 'No valid EST protocol definition found in AOKI initialization response.'
             raise AokiClientInitResponseError(exc_msg)
 
-
     def __init__(
-            self,
-            server_url: str,
-            cert_file: str,
-            key_file: str,
-            owner_truststore_file: str,
-            *args: str, **kwargs: str
-        ) -> None:
+        self, server_url: str, cert_file: str, key_file: str, owner_truststore_file: str, *args: str, **kwargs: str
+    ) -> None:
         """Initialize the AokiClient."""
         self.server_url = server_url
         self.cert_file = cert_file
@@ -227,7 +225,7 @@ class AokiClient:
         response = requests.get(
             self.server_url + '/aoki/init',
             cert=(CERTS_DIR / self.cert_file, CERTS_DIR / self.key_file),
-            verify=False, # intentionally provisionally trusted  # noqa: S501
+            verify=False,  # intentionally provisionally trusted  # noqa: S501
             timeout=5,
         )
         # Step 2: Check server response, we are expecting a 200 OK response
@@ -281,16 +279,16 @@ class AokiClient:
         log.info('AOKI init response verified successfully, requesting domain credential via EST...')
         est_client = ESTClient(
             est_url=self.est_url,
-            auth_type='mutual_tls',#'both',
+            auth_type='mutual_tls',  #'both',
             domain=None,
             cert_template=None,
-            username=None,#'admin',
-            password=None,#'testing321',
+            username=None,  #'admin',
+            password=None,  #'testing321',
             cert_path=CERTS_DIR / 'idevid.pem',
             key_path=CERTS_DIR / 'idevid_pk.pem',
             ca_cert_path=tls_truststore_path,
             out_cert_path=CERTS_DIR / 'dc_cert.pem',
-            out_key_path=CERTS_DIR /'dc_private_key.pem',
+            out_key_path=CERTS_DIR / 'dc_private_key.pem',
         )
         est_client.enroll(common_name='aokitest.example.com', serial_number=self.idevid_subj_sn, save_key=True)
 
@@ -301,6 +299,6 @@ if __name__ == '__main__':
         cert_file='idevid.pem',
         key_file='idevid_pk.pem',
         owner_truststore_file='ownerid_ca.pem',
-        mdns = False, # not yet implemented
+        mdns=False,  # not yet implemented
     )
     client.onboard()

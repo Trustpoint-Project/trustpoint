@@ -2,29 +2,25 @@
 {% load i18n static %}
 
 {% block head %}
-    {% if scan_running %}<meta http-equiv="refresh" content="5">{% endif %}
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    {% if scan_running or stop_pending %}<meta http-equiv="refresh" content="5">{% endif %}
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid p-4">
-    <!-- Header Section -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h3 fw-bold mb-0">Network Discovery</h1>
-        <div class="d-flex gap-2 align-items-center">
-            {% if scan_running %}
-                <span class="badge bg-warning text-dark px-3 py-2 shadow-sm">
-                    <i class="fa-solid fa-spinner fa-spin me-1"></i> Scanning Active
-                </span>
+        <div class="d-flex gap-2">
+            <a href="/admin/discovery/discoveryport/" class="btn btn-outline-secondary btn-sm">Configure Ports</a>
+            {% if stop_pending %}
+                <span class="badge bg-secondary text-light px-3 py-2">Stopping...</span>
+            {% elif scan_running %}
+                <span class="badge bg-warning text-dark px-3 py-2">Scanning Active</span>
             {% else %}
-                <span class="badge bg-success px-3 py-2 shadow-sm">
-                    <i class="fa-solid fa-check-circle me-1"></i> System Ready
-                </span>
+                <span class="badge bg-success px-3 py-2">System Ready</span>
             {% endif %}
         </div>
     </div> 
 
-    <!-- Stats Section (Card-based ✅) -->
     <div class="row mb-4">
         <div class="col-md-4">
             <div class="card p-3 border-0 border-start border-4 border-primary shadow-sm" style="background: rgba(255,255,255,0.05);">
@@ -46,59 +42,37 @@
         </div>
     </div>
 
-    <!-- SCAN CONTROL CARD (Fixed for IP Range 🔴 and IP Persistence ✅) -->
     <div class="card p-4 mb-4 shadow-sm border-0" style="background: rgba(255,255,255,0.05);">
         <form action="{% url 'discovery:start_scan' %}" method="post" class="row g-3 align-items-end">
             {% csrf_token %}
-            
             <div class="col-md-3">
                 <label class="form-label text-muted small fw-bold">Start IP Address</label>
-                <input type="text" name="start_ip" class="form-control border-secondary bg-transparent text-white" 
-                       value="{{ start_ip|default:'192.168.1.1' }}" {% if scan_running %}disabled{% endif %}>
+                <input type="text" name="start_ip" class="form-control border-secondary bg-transparent text-white" value="{{ start_ip }}">
             </div>
-
             <div class="col-md-3">
                 <label class="form-label text-muted small fw-bold">End IP Address</label>
-                <input type="text" name="end_ip" class="form-control border-secondary bg-transparent text-white" 
-                       value="{{ end_ip|default:'192.168.1.254' }}" {% if scan_running %}disabled{% endif %}>
+                <input type="text" name="end_ip" class="form-control border-secondary bg-transparent text-white" value="{{ end_ip }}">
             </div>
-
-            <div class="col-md-6">
-                <div class="d-flex gap-2">
-                    {% if scan_running %}
-                        <!-- STOP SCAN BUTTON (Requirement ✅) -->
-                        <button class="btn btn-warning w-100 fw-bold" disabled>
-                            <i class="fa-solid fa-sync fa-spin me-2"></i>Scanning...
-                        </button>
-                        <a href="{% url 'discovery:stop_scan' %}" class="btn btn-danger px-4" title="Stop Scan">
-                            <i class="fa-solid fa-stop"></i>
-                        </a>
-                    {% else %}
-                        <!-- RUN SCAN BUTTON -->
-                        <button type="submit" class="btn btn-primary w-100 fw-bold">
-                            <i class="fa-solid fa-play me-2"></i>Run Scan
-                        </button>
-                        <!-- CLEAN BUTTON (Requirement 🔴) -->
-                        <a href="{% url 'discovery:clear_devices' %}" class="btn btn-outline-danger px-4" title="Clean Inventory">
-                            <i class="fa-solid fa-trash-can"></i>
-                        </a>
-                    {% endif %}
-                </div>
+            <div class="col-md-6 d-flex gap-2">
+                {% if stop_pending %}
+                    <button class="btn btn-secondary w-100 fw-bold" disabled>Stopping...</button>
+                {% elif scan_running %}
+                    <a href="{% url 'discovery:stop_scan' %}" class="btn btn-danger w-100 fw-bold">Stop Scan</a>
+                {% else %}
+                    <button type="submit" class="btn btn-primary w-100 fw-bold">Run Scan</button>
+                    <a href="{% url 'discovery:clear_devices' %}" class="btn btn-outline-danger px-4">Clean</a>
+                {% endif %}
             </div>
         </form>
     </div>
 
-    <!-- Results Table (Card-based 🔴) -->
     <div class="card shadow-sm border-0" style="background: rgba(255,255,255,0.05);">
         <div class="card-header bg-transparent d-flex justify-content-between align-items-center border-0 pt-4">
             <h5 class="mb-0 fw-bold">Discovered Assets</h5>
             {% if devices %}
-                <a href="{% url 'discovery:export_csv' %}" class="btn btn-sm btn-success">
-                    <i class="fa-solid fa-file-csv me-1"></i> Download CSV
-                </a>
+                <a href="{% url 'discovery:export_csv' %}" class="btn btn-sm btn-success">Download CSV</a>
             {% endif %}
         </div>
-        
         <div class="table-responsive">
             <table class="table table-hover mb-0">
                 <thead>
@@ -113,24 +87,14 @@
                 <tbody>
                     {% for d in devices %}
                     <tr>
-                        <td class="ps-4">
-                            <a href="{% url 'discovery:device_detail' d.id %}" class="text-info fw-bold">{{ d.ip_address }}</a>
-                        </td>
-                        <td>{{ d.hostname|default:"-" }}</td>
-                        <td>
-                            {% for port in d.open_ports %}
-                                <span class="badge bg-secondary me-1">{{ port }}</span>
-                            {% endfor %}
-                        </td>
+                        <td class="ps-4"><a href="{% url 'discovery:device_detail' d.id %}" class="text-info fw-bold">{{ d.ip_address }}</a></td>
+                        <td>{{ d.hostname|default:"Unknown" }}</td>
+                        <td>{{ d.open_ports|join:", " }}</td>
                         <td>
                             {% if d.certificate_record.is_self_signed %}
-                                <span class="text-warning small fw-bold">
-                                    <i class="fa-solid fa-triangle-exclamation me-1"></i>Self-Signed
-                                </span>
+                                <span class="badge bg-warning text-dark">Self-Signed</span>
                             {% elif d.certificate_record %}
-                                <span class="text-success small fw-bold">
-                                    <i class="fa-solid fa-certificate me-1"></i>PKI Linked
-                                </span>
+                                <span class="badge bg-success">PKI Linked</span>
                             {% else %}
                                 <span class="text-muted small">None</span>
                             {% endif %}
@@ -139,13 +103,6 @@
                             <a href="{% url 'discovery:device_detail' d.id %}" class="btn btn-sm btn-outline-info">View Details</a>
                         </td>
                     </tr>
-                    {% empty %}
-                        <tr>
-                            <td colspan="5" class="text-center p-5">
-                                <i class="fa-solid fa-network-wired fs-1 text-muted mb-3 d-block"></i>
-                                <p class="text-muted">No assets discovered yet. Define a range and run a scan to begin.</p>
-                            </td>
-                        </tr>
                     {% endfor %}
                 </tbody>
             </table>

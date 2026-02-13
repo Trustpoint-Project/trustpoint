@@ -1,4 +1,5 @@
 """Approval step executor."""
+
 from __future__ import annotations
 
 from workflows.models import State, WorkflowInstance

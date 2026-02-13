@@ -1,4 +1,5 @@
 """Test suite for help_support views."""
+
 from django.test import RequestFactory, TestCase
 from management.views.help_support import HelpView
 
@@ -58,4 +59,5 @@ class HelpViewTest(TestCase):
     def test_help_view_inherits_from_template_view(self):
         """Test HelpView is a TemplateView."""
         from django.views.generic import TemplateView
+
         self.assertTrue(issubclass(HelpView, TemplateView))

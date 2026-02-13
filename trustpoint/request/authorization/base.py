@@ -1,4 +1,5 @@
 """Provides the `AuthorizationComponent` class for authorization logic."""
+
 from abc import ABC, abstractmethod
 
 from aoki.views import AokiServiceMixin
@@ -12,6 +13,7 @@ class AuthorizationComponent(ABC):
     @abstractmethod
     def authorize(self, context: BaseRequestContext) -> None:
         """Execute authorization logic."""
+
 
 class ProtocolAuthorization(AuthorizationComponent, LoggerMixin):
     """Ensures the request is under the correct protocol: CMP or EST."""
@@ -31,16 +33,15 @@ class ProtocolAuthorization(AuthorizationComponent, LoggerMixin):
 
         if protocol not in self.allowed_protocols:
             error_message = (
-                f"Unauthorized protocol: '{protocol}'. "
-                f"Allowed protocols: {', '.join(self.allowed_protocols)}."
+                f"Unauthorized protocol: '{protocol}'. Allowed protocols: {', '.join(self.allowed_protocols)}."
             )
             self.logger.warning(
                 'Protocol authorization failed: %(protocol)s not in allowed protocols %(allowed_protocols)s',
-                extra={'protocol': protocol, 'allowed_protocols': self.allowed_protocols})
+                extra={'protocol': protocol, 'allowed_protocols': self.allowed_protocols},
+            )
             raise ValueError(error_message)
 
-        self.logger.debug('Protocol authorization successful for protocol: %(protocol)s',
-                          extra={'protocol': protocol})
+        self.logger.debug('Protocol authorization successful for protocol: %(protocol)s', extra={'protocol': protocol})
 
 
 class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
@@ -71,15 +72,12 @@ class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
             context.http_response_status = 403
             error_message = (
                 f"Unauthorized certificate profile: '{requested_profile}'. "
-                f"Allowed profiles: {', '.join(context.domain.get_allowed_cert_profile_names())}."
+                f'Allowed profiles: {", ".join(context.domain.get_allowed_cert_profile_names())}.'
             )
             self.logger.warning(error_message)
             raise ValueError(error_message) from e
 
-        self.logger.debug(
-            'Certificate profile authorization successful for profile: %s',
-            requested_profile
-        )
+        self.logger.debug('Certificate profile authorization successful for profile: %s', requested_profile)
 
 
 class DomainScopeValidation(AuthorizationComponent, LoggerMixin):
@@ -103,19 +101,18 @@ class DomainScopeValidation(AuthorizationComponent, LoggerMixin):
         device_domain = authenticated_device.domain
 
         if not device_domain or device_domain != requested_domain:
-            error_message = (
-                f"Unauthorized requested domain: '{requested_domain}'. "
-                f"Device domain: '{device_domain}'."
-            )
+            error_message = f"Unauthorized requested domain: '{requested_domain}'. Device domain: '{device_domain}'."
             self.logger.warning(
                 "Domain scope validation failed: Device domain %s doesn't match requested domain %s",
-                device_domain, requested_domain
+                device_domain,
+                requested_domain,
             )
             raise ValueError(error_message)
 
         self.logger.debug(
             'Domain scope validation successful: Device %s authorized for domain %s',
-            authenticated_device.common_name, requested_domain
+            authenticated_device.common_name,
+            requested_domain,
         )
 
 
@@ -175,25 +172,31 @@ class CompositeAuthorization(AuthorizationComponent, LoggerMixin):
         for i, component in enumerate(self.components):
             try:
                 component.authorize(context)
-                self.logger.debug('Authorization component passed',
-                                  extra={'component_name': component.__class__.__name__})
+                self.logger.debug(
+                    'Authorization component passed', extra={'component_name': component.__class__.__name__}
+                )
             except ValueError as e:
                 error_message = f'{component.__class__.__name__}: {e}'
-                self.logger.warning('Authorization component failed',
-                                    extra={'component_name': component.__class__.__name__, 'error_message': str(e)})
-                self.logger.exception(
-                    'Composite authorization failed at component %d/%d: %s',
-                    i + 1, len(self.components), component.__class__.__name__)
-                raise ValueError(error_message) from e
-            except Exception as e:
-                error_message = f'Unexpected error in {component.__class__.__name__}: {e}'
-                self.logger.exception(
-                    'Unexpected error in authorization component %s',
-                    component.__class__.__name__
+                self.logger.warning(
+                    'Authorization component failed',
+                    extra={'component_name': component.__class__.__name__, 'error_message': str(e)},
                 )
                 self.logger.exception(
                     'Composite authorization failed at component %d/%d: %s',
-                    i + 1, len(self.components), component.__class__.__name__)
+                    i + 1,
+                    len(self.components),
+                    component.__class__.__name__,
+                )
+                raise ValueError(error_message) from e
+            except Exception as e:
+                error_message = f'Unexpected error in {component.__class__.__name__}: {e}'
+                self.logger.exception('Unexpected error in authorization component %s', component.__class__.__name__)
+                self.logger.exception(
+                    'Composite authorization failed at component %d/%d: %s',
+                    i + 1,
+                    len(self.components),
+                    component.__class__.__name__,
+                )
                 raise ValueError(error_message) from e
 
         self.logger.info('Composite authorization successful. All %d components passed', len(self.components))

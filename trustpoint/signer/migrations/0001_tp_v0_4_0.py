@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -21,7 +20,12 @@ class Migration(migrations.Migration):
                 ('is_active', models.BooleanField(default=True, verbose_name='Active')),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
                 ('updated_at', models.DateTimeField(auto_now=True, verbose_name='Updated')),
-                ('credential', models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='signer', to='pki.credentialmodel')),
+                (
+                    'credential',
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.PROTECT, related_name='signer', to='pki.credentialmodel'
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -34,7 +38,14 @@ class Migration(migrations.Migration):
                 ('hash_value', models.CharField(max_length=256)),
                 ('signature', models.TextField()),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
-                ('signer', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='signed_messages', to='signer.signermodel')),
+                (
+                    'signer',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='signed_messages',
+                        to='signer.signermodel',
+                    ),
+                ),
             ],
         ),
     ]

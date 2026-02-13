@@ -115,7 +115,10 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
             context['domain'] = get_object_or_404(DomainModel, id=pk)
         return context
 
+
 OID_MAP = {oid.dotted_string: oid.verbose_name for oid in NameOid}
+
+
 class TruststoreDetailView(TruststoresContextMixin, DetailView[TruststoreModel]):
     """The truststore detail view."""
 
@@ -141,33 +144,21 @@ class TruststoreDetailView(TruststoresContextMixin, DetailView[TruststoreModel])
         cert_context = []
         for cert in truststore.certificates.all():
             subject_entries = [
-                {
-                    'oid': entry.oid,
-                    'name': OID_MAP.get(entry.oid),
-                    'value': entry.value
-                }
-                for entry in cert.subject.all()
+                {'oid': entry.oid, 'name': OID_MAP.get(entry.oid), 'value': entry.value} for entry in cert.subject.all()
             ]
 
-
             issuer_entries = [
-                {
-                    'oid': entry.oid,
-                    'name': OID_MAP.get(entry.oid),
-                    'value': entry.value,
-                    'id': entry.id
-                }
+                {'oid': entry.oid, 'name': OID_MAP.get(entry.oid), 'value': entry.value, 'id': entry.id}
                 for entry in cert.issuer.all()
             ]
 
-            cert_context.append({
-                'certificate': cert,
-                'subject_entries': subject_entries,
-                'issuer_entries': issuer_entries
-            })
+            cert_context.append(
+                {'certificate': cert, 'subject_entries': subject_entries, 'issuer_entries': issuer_entries}
+            )
 
         context['cert_context'] = cert_context
         return context
+
 
 class TruststoreDownloadView(TruststoresContextMixin, DetailView[TruststoreModel]):
     """View for downloading a single truststore."""
@@ -373,11 +364,7 @@ class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
     queryset = TruststoreModel.objects.all().order_by('-created_at')
     serializer_class = TruststoreSerializer
     permission_classes = (IsAuthenticated,)
-    filter_backends = (
-        DjangoFilterBackend,
-        filters.SearchFilter,
-        filters.OrderingFilter
-    )
+    filter_backends = (DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter)
     filterset_fields: ClassVar = ['intended_usage']
     search_fields: ClassVar = ['unique_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at']
@@ -400,10 +387,7 @@ class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
             trust_store_file=serializer.validated_data['trust_store_file'],
         )
 
-        return Response(
-            TruststoreSerializer(truststore).data,
-            status=status.HTTP_201_CREATED
-        )
+        return Response(TruststoreSerializer(truststore).data, status=status.HTTP_201_CREATED)
 
     @swagger_auto_schema(
         operation_summary='List Truststores',

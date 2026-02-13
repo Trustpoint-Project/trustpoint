@@ -1,4 +1,5 @@
 """Test suite for security mixins."""
+
 from unittest.mock import Mock, patch
 
 from django.contrib import messages
@@ -113,9 +114,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
         class TestView(SecurityLevelMixinRedirect, View):
             def __init__(self, **kwargs):
                 super().__init__(
-                    security_feature=AutoGenPkiFeature,
-                    disabled_by_security_level_url='/denied/',
-                    **kwargs
+                    security_feature=AutoGenPkiFeature, disabled_by_security_level_url='/denied/', **kwargs
                 )
 
             def get(self, request):
@@ -138,9 +137,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
         class TestView(SecurityLevelMixinRedirect, View):
             def __init__(self, **kwargs):
                 super().__init__(
-                    security_feature=MockSecurityFeature,
-                    disabled_by_security_level_url='/denied/',
-                    **kwargs
+                    security_feature=MockSecurityFeature, disabled_by_security_level_url='/denied/', **kwargs
                 )
 
             def get(self, request):
@@ -153,6 +150,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
         request = self.factory.get('/test/')
         # Enable message storage for the request
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
@@ -170,9 +168,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
         class TestView(SecurityLevelMixinRedirect, View):
             def __init__(self, **kwargs):
                 super().__init__(
-                    security_feature=MockSecurityFeature,
-                    disabled_by_security_level_url='/denied/',
-                    **kwargs
+                    security_feature=MockSecurityFeature, disabled_by_security_level_url='/denied/', **kwargs
                 )
 
             def get(self, request):
@@ -185,6 +181,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
         request = self.factory.get('/test/')
         # Enable message storage for the request
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
@@ -204,9 +201,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
         class TestView(SecurityLevelMixinRedirect, View):
             def __init__(self, **kwargs):
                 super().__init__(
-                    security_feature=AutoGenPkiFeature,
-                    disabled_by_security_level_url='/denied/',
-                    **kwargs
+                    security_feature=AutoGenPkiFeature, disabled_by_security_level_url='/denied/', **kwargs
                 )
 
             def dispatch(self, request, *args, **kwargs):
@@ -236,9 +231,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
         class TestView(SecurityLevelMixinRedirect, View):
             def __init__(self, **kwargs):
                 super().__init__(
-                    security_feature=AutoGenPkiFeature,
-                    disabled_by_security_level_url='/denied/',
-                    **kwargs
+                    security_feature=AutoGenPkiFeature, disabled_by_security_level_url='/denied/', **kwargs
                 )
 
             def post(self, request):
@@ -261,9 +254,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
         class TestView(SecurityLevelMixinRedirect, View):
             def __init__(self, **kwargs):
                 super().__init__(
-                    security_feature=AutoGenPkiFeature,
-                    disabled_by_security_level_url='/denied/',
-                    **kwargs
+                    security_feature=AutoGenPkiFeature, disabled_by_security_level_url='/denied/', **kwargs
                 )
 
             def get(self, request, pk, slug=None):
@@ -297,9 +288,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
         class TestView(SecurityLevelMixinRedirect, View):
             def __init__(self, **kwargs):
                 super().__init__(
-                    security_feature=MockSecurityFeature,
-                    disabled_by_security_level_url='/denied/',
-                    **kwargs
+                    security_feature=MockSecurityFeature, disabled_by_security_level_url='/denied/', **kwargs
                 )
 
             def get(self, request):

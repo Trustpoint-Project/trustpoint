@@ -41,9 +41,7 @@ class TestPKCS11Key:
     def test_create_pkcs11_key_rsa(self):
         """Test creating a PKCS11Key with RSA type."""
         key = PKCS11Key.objects.create(
-            token_label='test_token',
-            key_label='test_rsa_key',
-            key_type=PKCS11Key.KeyType.RSA
+            token_label='test_token', key_label='test_rsa_key', key_type=PKCS11Key.KeyType.RSA
         )
         assert key.id is not None
         assert key.token_label == 'test_token'
@@ -53,60 +51,38 @@ class TestPKCS11Key:
 
     def test_create_pkcs11_key_ec(self):
         """Test creating a PKCS11Key with EC type."""
-        key = PKCS11Key.objects.create(
-            token_label='test_token',
-            key_label='test_ec_key',
-            key_type=PKCS11Key.KeyType.EC
-        )
+        key = PKCS11Key.objects.create(token_label='test_token', key_label='test_ec_key', key_type=PKCS11Key.KeyType.EC)
         assert key.key_type == PKCS11Key.KeyType.EC
 
     def test_create_pkcs11_key_aes(self):
         """Test creating a PKCS11Key with AES type."""
         key = PKCS11Key.objects.create(
-            token_label='test_token',
-            key_label='test_aes_key',
-            key_type=PKCS11Key.KeyType.AES
+            token_label='test_token', key_label='test_aes_key', key_type=PKCS11Key.KeyType.AES
         )
         assert key.key_type == PKCS11Key.KeyType.AES
 
     def test_pkcs11_key_str(self):
         """Test string representation of PKCS11Key."""
-        key = PKCS11Key.objects.create(
-            token_label='my_token',
-            key_label='my_key',
-            key_type=PKCS11Key.KeyType.RSA
-        )
+        key = PKCS11Key.objects.create(token_label='my_token', key_label='my_key', key_type=PKCS11Key.KeyType.RSA)
         expected = 'my_token/my_key (rsa)'
         assert str(key) == expected
 
     def test_pkcs11_key_unique_together(self):
         """Test that token_label and key_label must be unique together."""
-        PKCS11Key.objects.create(
-            token_label='token1',
-            key_label='key1',
-            key_type=PKCS11Key.KeyType.RSA
-        )
-        
+        PKCS11Key.objects.create(token_label='token1', key_label='key1', key_type=PKCS11Key.KeyType.RSA)
+
         # Try to create duplicate
         with pytest.raises(IntegrityError):
             PKCS11Key.objects.create(
                 token_label='token1',
                 key_label='key1',
-                key_type=PKCS11Key.KeyType.EC  # Different type but same labels
+                key_type=PKCS11Key.KeyType.EC,  # Different type but same labels
             )
 
     def test_pkcs11_key_different_tokens_same_label(self):
         """Test that same key_label can exist on different tokens."""
-        key1 = PKCS11Key.objects.create(
-            token_label='token1',
-            key_label='shared_label',
-            key_type=PKCS11Key.KeyType.RSA
-        )
-        key2 = PKCS11Key.objects.create(
-            token_label='token2',
-            key_label='shared_label',
-            key_type=PKCS11Key.KeyType.RSA
-        )
+        key1 = PKCS11Key.objects.create(token_label='token1', key_label='shared_label', key_type=PKCS11Key.KeyType.RSA)
+        key2 = PKCS11Key.objects.create(token_label='token2', key_label='shared_label', key_type=PKCS11Key.KeyType.RSA)
         assert key1.id != key2.id
 
     def test_pkcs11_key_type_choices(self):
@@ -114,7 +90,7 @@ class TestPKCS11Key:
         assert hasattr(PKCS11Key.KeyType, 'RSA')
         assert hasattr(PKCS11Key.KeyType, 'EC')
         assert hasattr(PKCS11Key.KeyType, 'AES')
-        
+
         assert PKCS11Key.KeyType.RSA == 'rsa'
         assert PKCS11Key.KeyType.EC == 'ec'
         assert PKCS11Key.KeyType.AES == 'aes'
@@ -128,26 +104,18 @@ class TestPKCS11Key:
         """Test that fields have correct max lengths."""
         token_field = PKCS11Key._meta.get_field('token_label')
         key_field = PKCS11Key._meta.get_field('key_label')
-        
+
         assert token_field.max_length == 255
         assert key_field.max_length == 255
 
     def test_pkcs11_key_created_at_auto(self):
         """Test that created_at is set automatically."""
-        key = PKCS11Key.objects.create(
-            token_label='test_token',
-            key_label='test_key',
-            key_type=PKCS11Key.KeyType.RSA
-        )
+        key = PKCS11Key.objects.create(token_label='test_token', key_label='test_key', key_type=PKCS11Key.KeyType.RSA)
         assert key.created_at is not None
 
     def test_pkcs11_key_can_be_deleted(self):
         """Test that PKCS11Key can be deleted."""
-        key = PKCS11Key.objects.create(
-            token_label='test_token',
-            key_label='test_key',
-            key_type=PKCS11Key.KeyType.RSA
-        )
+        key = PKCS11Key.objects.create(token_label='test_token', key_label='test_key', key_type=PKCS11Key.KeyType.RSA)
         key_id = key.id
         key.delete()
         assert not PKCS11Key.objects.filter(id=key_id).exists()
@@ -189,6 +157,7 @@ class TestPKCS11KeyTypeEnum:
     def test_key_type_is_text_choices(self):
         """Test that KeyType is a TextChoices."""
         from django.db import models
+
         assert issubclass(PKCS11Key.KeyType, models.TextChoices)
 
     def test_key_type_values(self):
@@ -219,112 +188,60 @@ class TestPKCS11KeyDatabaseConstraints:
     def test_token_label_required(self):
         """Test that token_label is required."""
         with pytest.raises(Exception):  # ValidationError or IntegrityError
-            PKCS11Key.objects.create(
-                token_label=None,
-                key_label='test_key',
-                key_type=PKCS11Key.KeyType.RSA
-            )
+            PKCS11Key.objects.create(token_label=None, key_label='test_key', key_type=PKCS11Key.KeyType.RSA)
 
     def test_key_label_required(self):
         """Test that key_label is required."""
         with pytest.raises(Exception):  # ValidationError or IntegrityError
-            PKCS11Key.objects.create(
-                token_label='test_token',
-                key_label=None,
-                key_type=PKCS11Key.KeyType.RSA
-            )
+            PKCS11Key.objects.create(token_label='test_token', key_label=None, key_type=PKCS11Key.KeyType.RSA)
 
     def test_key_type_required(self):
         """Test that key_type is required."""
         with pytest.raises(Exception):  # ValidationError or IntegrityError
-            PKCS11Key.objects.create(
-                token_label='test_token',
-                key_label='test_key',
-                key_type=None
-            )
+            PKCS11Key.objects.create(token_label='test_token', key_label='test_key', key_type=None)
 
     def test_multiple_keys_same_token(self):
         """Test that multiple keys can exist on the same token."""
-        key1 = PKCS11Key.objects.create(
-            token_label='shared_token',
-            key_label='key1',
-            key_type=PKCS11Key.KeyType.RSA
-        )
-        key2 = PKCS11Key.objects.create(
-            token_label='shared_token',
-            key_label='key2',
-            key_type=PKCS11Key.KeyType.EC
-        )
-        
+        key1 = PKCS11Key.objects.create(token_label='shared_token', key_label='key1', key_type=PKCS11Key.KeyType.RSA)
+        key2 = PKCS11Key.objects.create(token_label='shared_token', key_label='key2', key_type=PKCS11Key.KeyType.EC)
+
         assert key1.token_label == key2.token_label
         assert key1.key_label != key2.key_label
 
     def test_query_by_token_label(self):
         """Test querying keys by token label."""
-        PKCS11Key.objects.create(
-            token_label='token_a',
-            key_label='key1',
-            key_type=PKCS11Key.KeyType.RSA
-        )
-        PKCS11Key.objects.create(
-            token_label='token_a',
-            key_label='key2',
-            key_type=PKCS11Key.KeyType.EC
-        )
-        PKCS11Key.objects.create(
-            token_label='token_b',
-            key_label='key3',
-            key_type=PKCS11Key.KeyType.AES
-        )
-        
+        PKCS11Key.objects.create(token_label='token_a', key_label='key1', key_type=PKCS11Key.KeyType.RSA)
+        PKCS11Key.objects.create(token_label='token_a', key_label='key2', key_type=PKCS11Key.KeyType.EC)
+        PKCS11Key.objects.create(token_label='token_b', key_label='key3', key_type=PKCS11Key.KeyType.AES)
+
         token_a_keys = PKCS11Key.objects.filter(token_label='token_a')
         assert token_a_keys.count() == 2
 
     def test_query_by_key_type(self):
         """Test querying keys by type."""
-        PKCS11Key.objects.create(
-            token_label='token1',
-            key_label='rsa_key1',
-            key_type=PKCS11Key.KeyType.RSA
-        )
-        PKCS11Key.objects.create(
-            token_label='token2',
-            key_label='rsa_key2',
-            key_type=PKCS11Key.KeyType.RSA
-        )
-        PKCS11Key.objects.create(
-            token_label='token3',
-            key_label='ec_key1',
-            key_type=PKCS11Key.KeyType.EC
-        )
-        
+        PKCS11Key.objects.create(token_label='token1', key_label='rsa_key1', key_type=PKCS11Key.KeyType.RSA)
+        PKCS11Key.objects.create(token_label='token2', key_label='rsa_key2', key_type=PKCS11Key.KeyType.RSA)
+        PKCS11Key.objects.create(token_label='token3', key_label='ec_key1', key_type=PKCS11Key.KeyType.EC)
+
         rsa_keys = PKCS11Key.objects.filter(key_type=PKCS11Key.KeyType.RSA)
         assert rsa_keys.count() == 2
 
     def test_update_key_label(self):
         """Test that key_label can be updated."""
-        key = PKCS11Key.objects.create(
-            token_label='test_token',
-            key_label='old_label',
-            key_type=PKCS11Key.KeyType.RSA
-        )
-        
+        key = PKCS11Key.objects.create(token_label='test_token', key_label='old_label', key_type=PKCS11Key.KeyType.RSA)
+
         key.key_label = 'new_label'
         key.save()
-        
+
         refreshed = PKCS11Key.objects.get(id=key.id)
         assert refreshed.key_label == 'new_label'
 
     def test_update_token_label(self):
         """Test that token_label can be updated."""
-        key = PKCS11Key.objects.create(
-            token_label='old_token',
-            key_label='test_key',
-            key_type=PKCS11Key.KeyType.RSA
-        )
-        
+        key = PKCS11Key.objects.create(token_label='old_token', key_label='test_key', key_type=PKCS11Key.KeyType.RSA)
+
         key.token_label = 'new_token'
         key.save()
-        
+
         refreshed = PKCS11Key.objects.get(id=key.id)
         assert refreshed.token_label == 'new_token'

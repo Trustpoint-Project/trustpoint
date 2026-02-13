@@ -2,6 +2,7 @@
 
 Defines the `DeviceFilter` used to filter the devices list view.
 """
+
 import django_filters
 from django import forms
 from django.utils.translation import gettext_lazy as _
@@ -18,28 +19,22 @@ class DeviceFilter(django_filters.FilterSet):
       * serial_number: case-insensitive substring match
       * domain: exact match via dropdown
     """
+
     common_name = django_filters.CharFilter(
         label='Device',
         lookup_expr='icontains',
-        widget=forms.TextInput(attrs={
-            'class': 'form-control form-control-sm',
-            'placeholder': _('Search…')
-        })
+        widget=forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': _('Search…')}),
     )
     domain = django_filters.ModelChoiceFilter(
         queryset=DomainModel.objects.all(),
         label='Domain',
-        widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
+        widget=forms.Select(attrs={'class': 'form-select form-select-sm'}),
     )
     serial_number = django_filters.CharFilter(
         label='Serial',
         lookup_expr='icontains',
-        widget=forms.TextInput(attrs={
-            'class': 'form-control form-control-sm',
-            'placeholder': _('Serial…')
-        })
+        widget=forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': _('Serial…')}),
     )
-
 
     class Meta:
         """Meta class configuration."""

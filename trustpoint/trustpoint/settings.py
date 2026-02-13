@@ -34,6 +34,7 @@ try:
 except FileNotFoundError:
     CONTAINER_ID = 'unknown'
 
+
 def app_version(_request: Any) -> dict[str, str]:
     """Provide application version and container ID for use in templates.
 
@@ -43,8 +44,8 @@ def app_version(_request: Any) -> dict[str, str]:
     Returns:
         dict: A dictionary containing the application version and container ID.
     """
-    return {'APP_VERSION': APP_VERSION,
-            'CONTAINER_ID': CONTAINER_ID}
+    return {'APP_VERSION': APP_VERSION, 'CONTAINER_ID': CONTAINER_ID}
+
 
 # Monkeypatching Django, so stubs will work for all generics,
 # see: https://github.com/typeddjango/django-stubs
@@ -84,6 +85,7 @@ PUBLIC_PATHS = [
 
 
 # ------------- Functions --------------
+
 
 def is_postgre_available() -> bool:
     """Checks whether PostgreSQL is available and issues differentiated error messages.
@@ -156,7 +158,6 @@ ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = True
 
 
-
 # Basic SMTP backend
 if DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -196,7 +197,7 @@ if _email_host:
     EMAIL_USE_TLS = (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (EMAIL_PORT == _SMTP_TLS_PORT)
     EMAIL_USE_SSL = (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (EMAIL_PORT == _SMTP_SSL_PORT)
 
-    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')       # auth only if both non-empty
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')  # auth only if both non-empty
     EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
     EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 
@@ -414,6 +415,7 @@ class UIConfig:
 
     paginate_by: ClassVar[int] = 50
     notifications_paginate_by: ClassVar[int] = 5
+
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [

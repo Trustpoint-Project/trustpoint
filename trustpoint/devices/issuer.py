@@ -57,9 +57,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
             The saved issued credential model.
         """
         self.logger.info(
-            "Saving credential for device '%s' (ID: %s) "
-            "in domain '%s' - CN: '%s', "
-            "Type: %s, Profile: %s",
+            "Saving credential for device '%s' (ID: %s) in domain '%s' - CN: '%s', Type: %s, Profile: %s",
             self.device.common_name,
             self.device.pk,
             self.domain.unique_name,
@@ -94,7 +92,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
             self.logger.info(
                 "Successfully saved IssuedCredentialModel (ID: %s) for device '%s'",
                 issued_credential_model.pk,
-                self.device.common_name
+                self.device.common_name,
             )
             return issued_credential_model
 
@@ -106,11 +104,8 @@ class SaveCredentialToDbMixin(LoggerMixin):
         issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
         issued_using_cert_profile: str,
     ) -> IssuedCredentialModel:
-
         self.logger.info(
-            "Saving keyless credential for device '%s' (ID: %s) "
-            "in domain '%s' - CN: '%s', "
-            "Type: %s, Profile: %s",
+            "Saving keyless credential for device '%s' (ID: %s) in domain '%s' - CN: '%s', Type: %s, Profile: %s",
             self.device.common_name,
             self.device.pk,
             self.domain.unique_name,
@@ -154,23 +149,21 @@ class SaveCredentialToDbMixin(LoggerMixin):
 
         except Exception:
             self.logger.exception(
-                "Failed to save keyless credential for device '%s' (ID: %s)",
-                self.device.common_name,
-                self.device.pk
+                "Failed to save keyless credential for device '%s' (ID: %s)", self.device.common_name, self.device.pk
             )
             raise
 
         self.logger.info(
             "Successfully saved keyless IssuedCredentialModel (ID: %s) for device '%s'",
             issued_credential_model.pk,
-            self.device.common_name
+            self.device.common_name,
         )
         return issued_credential_model
 
 
-
 class CredentialSaver(SaveCredentialToDbMixin):
     """A basic class for saving credentials to the database."""
+
     def __init__(self, device: DeviceModel, domain: DomainModel) -> None:
         """Initializes the Credential Saver.
 
@@ -209,7 +202,8 @@ class CredentialSaver(SaveCredentialToDbMixin):
     ) -> IssuedCredentialModel:
         """Saves a keyless (i.e. private key stays on requesting device) credential to the database."""
         return self._save_keyless_credential(
-            certificate, certificate_chain, common_name, issued_credential_type, cert_profile_disp_name)
+            certificate, certificate_chain, common_name, issued_credential_type, cert_profile_disp_name
+        )
 
 
 class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
@@ -346,14 +340,12 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
             common_name,
             validity_days,
             self.device.common_name,
-            self.device.pk
+            self.device.pk,
         )
         try:
             issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
             issuer_certificate = issuing_credential.get_certificate()
-            algorithm_identifier = SignatureSuite.from_certificate(
-                issuer_certificate
-            ).algorithm_identifier
+            algorithm_identifier = SignatureSuite.from_certificate(issuer_certificate).algorithm_identifier
             hash_algorithm_enum = algorithm_identifier.hash_algorithm
             if hash_algorithm_enum is None:
                 err_msg = 'Failed to get hash algorithm.'
@@ -362,8 +354,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
 
             if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
                 err_msg = (
-                    f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, '
-                    f'but found {type(hash_algorithm)}'
+                    f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, but found {type(hash_algorithm)}'
                 )
                 self._raise_type_error(err_msg)
 
@@ -383,9 +374,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
                     ]
                 )
             )
-            certificate_builder = certificate_builder.issuer_name(
-                issuing_credential.get_certificate().subject
-            )
+            certificate_builder = certificate_builder.issuer_name(issuing_credential.get_certificate().subject)
             certificate_builder = certificate_builder.not_valid_before(datetime.datetime.now(datetime.UTC) - one_day)
             certificate_builder = certificate_builder.not_valid_after(
                 datetime.datetime.now(datetime.UTC) + (one_day * validity_days)
@@ -438,9 +427,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
             raise
         else:
             self.logger.info(
-                "Successfully built certificate for CN: '%s' for device '%s'",
-                common_name,
-                self.device.common_name
+                "Successfully built certificate for CN: '%s' for device '%s'", common_name, self.device.common_name
             )
             return certificate
 
@@ -587,9 +574,7 @@ class LocalTlsServerCredentialIssuer(BaseTlsCredentialIssuer):
             validity_days,
             [(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), False), (san_extension, san_critical)],
         )
-        cert_chain = (
-            issuing_credential.get_credential_serializer().get_full_chain_as_crypto()
-        )
+        cert_chain = issuing_credential.get_credential_serializer().get_full_chain_as_crypto()
         credential = CredentialSerializer(
             private_key=private_key.as_crypto(), certificate=certificate, additional_certificates=cert_chain
         )
@@ -643,7 +628,7 @@ class LocalTlsServerCredentialIssuer(BaseTlsCredentialIssuer):
             ],
             common_name,
             IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-            'TLS Server'
+            'TLS Server',
         )
 
 
@@ -670,10 +655,7 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             extra_extensions=[(x509.BasicConstraints(ca=False, path_length=None), True)],
         )
 
-        cert_chain = (
-            issuing_credential.get_credential_serializer()
-            .get_full_chain_as_crypto()
-        )
+        cert_chain = issuing_credential.get_credential_serializer().get_full_chain_as_crypto()
         credential = CredentialSerializer(
             private_key=private_key.as_crypto(), certificate=certificate, additional_certificates=cert_chain
         )
@@ -721,7 +703,7 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             ],
             common_name=self._pseudonym,
             issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-            issued_using_cert_profile='Trustpoint Domain Credential'
+            issued_using_cert_profile='Trustpoint Domain Credential',
         )
 
         if self.device.onboarding_config:
@@ -830,20 +812,13 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
             ],
         )
 
-        cert_chain = (
-            issuing_credential
-            .get_credential_serializer()
-            .get_full_chain_as_crypto()
-        )
+        cert_chain = issuing_credential.get_credential_serializer().get_full_chain_as_crypto()
         credential = CredentialSerializer(
             private_key=private_key.as_crypto(), certificate=certificate, additional_certificates=cert_chain
         )
 
         return self._save(
-            credential,
-            common_name,
-            IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-            'OPC UA Server'
+            credential, common_name, IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, 'OPC UA Server'
         )
 
     def issue_opc_ua_server_certificate(  # noqa: PLR0913
@@ -968,9 +943,7 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
             ],
         )
 
-        cert_chain = (
-            issuing_credential.get_credential_serializer().get_full_chain_as_crypto()
-        )
+        cert_chain = issuing_credential.get_credential_serializer().get_full_chain_as_crypto()
         credential = CredentialSerializer(
             private_key=private_key.as_crypto(), certificate=certificate, additional_certificates=cert_chain
         )

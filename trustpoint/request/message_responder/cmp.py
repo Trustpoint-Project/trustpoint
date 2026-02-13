@@ -57,9 +57,8 @@ class CmpMessageResponder(AbstractMessageResponder):
 
     @staticmethod
     def _build_response_message_header(
-            serialized_pyasn1_message: rfc4210.PKIMessage,
-            sender_kid: rfc2459.KeyIdentifier,
-            issuer_cert: x509.Certificate) -> rfc4210.PKIHeader:
+        serialized_pyasn1_message: rfc4210.PKIMessage, sender_kid: rfc2459.KeyIdentifier, issuer_cert: x509.Certificate
+    ) -> rfc4210.PKIHeader:
         """Builds the PKI response message header for the IP and CP response messages."""
         header = rfc4210.PKIHeader()
 
@@ -98,7 +97,7 @@ class CmpMessageResponder(AbstractMessageResponder):
 
     @staticmethod
     def _add_protection_shared_secret(
-            pki_message: rfc4210.PKIMessage, context: CmpBaseRequestContext
+        pki_message: rfc4210.PKIMessage, context: CmpBaseRequestContext
     ) -> rfc4210.PKIMessage:
         """Adds HMAC-based shared-secret protection to the base PKI message."""
         if not context.cmp_shared_secret:
@@ -150,7 +149,7 @@ class CmpMessageResponder(AbstractMessageResponder):
         hmac_gen.update(encoded_protected_part)
         hmac_digest = hmac_gen.finalize()
 
-        binary_stuff = f'{int.from_bytes(hmac_digest, byteorder='big'):b}'.zfill(160)
+        binary_stuff = f'{int.from_bytes(hmac_digest, byteorder="big"):b}'.zfill(160)
         pki_message['protection'] = rfc4210.PKIProtection(univ.BitString(binary_stuff)).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
         )
@@ -158,9 +157,7 @@ class CmpMessageResponder(AbstractMessageResponder):
         return pki_message
 
     @staticmethod
-    def _sign_pki_message(
-        pki_message: rfc4210.PKIMessage, context: CmpBaseRequestContext
-        ) -> rfc4210.PKIMessage:
+    def _sign_pki_message(pki_message: rfc4210.PKIMessage, context: CmpBaseRequestContext) -> rfc4210.PKIMessage:
         """Applies signature-based protection to the base PKI message."""
         encoded_protected_part = CmpMessageResponder._get_encoded_protected_part(pki_message)
 
@@ -180,18 +177,20 @@ class CmpInitializationResponder(CmpMessageResponder):
 
     @staticmethod
     def _build_base_ip_message(
-            parsed_message: rfc4210.PKIMessage,
-            issued_cert: x509.Certificate,
-            issuer_credential: CredentialModel,
-            sender_kid: rfc2459.KeyIdentifier,
-            signer_credential: CredentialModel | None = None,
-            ) -> rfc4210.PKIMessage:
+        parsed_message: rfc4210.PKIMessage,
+        issued_cert: x509.Certificate,
+        issuer_credential: CredentialModel,
+        sender_kid: rfc2459.KeyIdentifier,
+        signer_credential: CredentialModel | None = None,
+    ) -> rfc4210.PKIMessage:
         """Builds the IP response message (without the protection)."""
         ip_header = CmpInitializationResponder._build_response_message_header(
             serialized_pyasn1_message=parsed_message,
             sender_kid=sender_kid,
-            issuer_cert=signer_credential.get_certificate() if signer_credential
-                                                            else issuer_credential.get_certificate())
+            issuer_cert=signer_credential.get_certificate()
+            if signer_credential
+            else issuer_credential.get_certificate(),
+        )
 
         ip_extra_certs = univ.SequenceOf()
 
@@ -252,7 +251,6 @@ class CmpInitializationResponder(CmpMessageResponder):
 
         return ip_message
 
-
     @staticmethod
     def build_response(context: BaseRequestContext) -> None:
         """Respond to a CMP initialization message with the issued certificate."""
@@ -282,16 +280,14 @@ class CmpInitializationResponder(CmpMessageResponder):
             issued_cert=context.issued_certificate,
             sender_kid=sender_kid,
             issuer_credential=issuing_ca_credential,
-            signer_credential=signer_credential
+            signer_credential=signer_credential,
         )
         if context.cmp_shared_secret:
             pki_message = CmpInitializationResponder._add_protection_shared_secret(
                 pki_message=pki_message, context=context
             )
         else:
-            pki_message = CmpInitializationResponder._sign_pki_message(
-                pki_message=pki_message, context=context
-            )
+            pki_message = CmpInitializationResponder._sign_pki_message(pki_message=pki_message, context=context)
 
         encoded_message = encoder.encode(pki_message)
 
@@ -308,16 +304,17 @@ class CmpCertificationResponder(CmpMessageResponder):
 
     @staticmethod
     def _build_base_cp_message(
-            parsed_message: rfc4210.PKIMessage,
-            issued_cert: x509.Certificate,
-            issuer_credential: CredentialModel,
-            sender_kid: rfc2459.KeyIdentifier,
+        parsed_message: rfc4210.PKIMessage,
+        issued_cert: x509.Certificate,
+        issuer_credential: CredentialModel,
+        sender_kid: rfc2459.KeyIdentifier,
     ) -> rfc4210.PKIMessage:
         """Builds the CR response message (without the protection)."""
         cp_header = CmpCertificationResponder._build_response_message_header(
             serialized_pyasn1_message=parsed_message,
             sender_kid=sender_kid,
-            issuer_cert=issuer_credential.get_certificate())
+            issuer_cert=issuer_credential.get_certificate(),
+        )
 
         cp_extra_certs = univ.SequenceOf()
 
@@ -403,9 +400,7 @@ class CmpCertificationResponder(CmpMessageResponder):
                 pki_message=pki_message, context=context
             )
         else:
-            pki_message = CmpCertificationResponder._sign_pki_message(
-                pki_message=pki_message, context=context
-            )
+            pki_message = CmpCertificationResponder._sign_pki_message(pki_message=pki_message, context=context)
 
         encoded_message = encoder.encode(pki_message)
 

@@ -18,7 +18,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         self.stdout.write(f'Current user: {os.getuid()}')
-        self.stdout.write(f"SOFTHSM2_CONF: {os.environ.get('SOFTHSM2_CONF')}")
+        self.stdout.write(f'SOFTHSM2_CONF: {os.environ.get("SOFTHSM2_CONF")}')
 
         # Get the PKCS11 token config
         try:
@@ -45,4 +45,5 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(self.style.ERROR(f'ERROR: {e}'))
             import traceback
+
             self.stdout.write(traceback.format_exc())

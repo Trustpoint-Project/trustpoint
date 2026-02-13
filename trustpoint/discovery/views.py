@@ -15,13 +15,13 @@ from .scanner import OTScanner
 
 SCAN_RUNNING = False
 STOP_PENDING = False
-START_IP = '192.168.1.1'
-END_IP = '192.168.1.254'
+START_IP = '192.168.0.1'
+END_IP = '192.168.0.254'
 scanner_instance = OTScanner(target_ports=[])
 
 
 def run_scan_in_background(start_ip: str, end_ip: str) -> None:
-    """Threaded task to perform network scanning."""
+    """Threaded task to perform network scanning and database updates."""
     global SCAN_RUNNING, STOP_PENDING  # noqa: PLW0603
     try:
         ports = list(DiscoveryPort.objects.values_list('port_number', flat=True))
@@ -35,13 +35,13 @@ def run_scan_in_background(start_ip: str, end_ip: str) -> None:
                 try:
                     cert_obj = ssl_info.pop('cert_object')
                     pki_cert = CertificateModel.save_certificate(cert_obj)
-                except Exception:  # noqa: S110, BLE001
+                except Exception:  # noqa: BLE001, S110
                     pass
 
             DiscoveredDevice.objects.update_or_create(
                 ip_address=d['ip'],
                 defaults={
-                    'hostname': d['hostname'],
+                    'hostname': d.get('hostname') or '',
                     'open_ports': d['ports'],
                     'ssl_info': ssl_info,
                     'certificate_record': pki_cert,
@@ -84,7 +84,7 @@ def device_list(request: HttpRequest) -> HttpResponse:
 
 
 def start_scan(request: HttpRequest) -> HttpResponse:
-    """Initialize a background network scan."""
+    """Initialize and start a background network scan."""
     global SCAN_RUNNING, START_IP, END_IP, STOP_PENDING  # noqa: PLW0603
     if request.method == 'POST':
         START_IP = request.POST.get('start_ip', START_IP)
@@ -121,7 +121,7 @@ def device_detail(request: HttpRequest, device_id: int) -> HttpResponse:
 
 
 def export_csv(request: HttpRequest) -> HttpResponse:  # noqa: ARG001
-    """Export inventory to CSV."""
+    """Export the current discovery inventory to a CSV file."""
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="inventory.csv"'
     writer = csv.writer(response)

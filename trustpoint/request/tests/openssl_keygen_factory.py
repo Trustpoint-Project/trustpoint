@@ -37,6 +37,7 @@ class RSAKeyGenerator(KeyGenerationComponent):
         """RSA generator should come first."""
         return 10
 
+
 class ECKeyGenerator(KeyGenerationComponent):
     """ECC key generation using OpenSSL ecparam command."""
 
@@ -56,13 +57,14 @@ class ECKeyGenerator(KeyGenerationComponent):
             'sect283r1': 'ECC SECT283R1',
             'sect571r1': 'ECC SECT571R1',
             'secp384r1': 'ECC SECP384R1 (P-384)',
-            'secp521r1': 'ECC SECP521R1 (P-521)'
+            'secp521r1': 'ECC SECP521R1 (P-521)',
         }
         return curve_display_names.get(self.curve_name, f'ECC {self.curve_name.upper()}')
 
     def get_priority(self) -> int:
         """EC generator should come first."""
         return 10
+
 
 class KeyFileOutput(KeyGenerationComponent):
     """Component for specifying the output file (-out argument)."""
@@ -136,7 +138,7 @@ class CompositeKeyGenerator:
     def get_description(self) -> str:
         """Get complete description of this composite generator."""
         component_descriptions = [comp.get_description() for comp in self.components]
-        return f"{self.description}: {'; '.join(component_descriptions)}"
+        return f'{self.description}: {"; ".join(component_descriptions)}'
 
     def __str__(self) -> str:
         """String representation."""
@@ -145,4 +147,3 @@ class CompositeKeyGenerator:
     def __repr__(self) -> str:
         """Detailed representation."""
         return f"CompositeKeyGenerator(name='{self.name}', components={len(self.components)})"
-

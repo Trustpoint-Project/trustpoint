@@ -8,7 +8,12 @@ from management.models import KeyStorageConfig
 from pki.util.x509 import CertificateGenerator
 
 from devices.issuer import LocalDomainCredentialIssuer
-from devices.models import DeviceModel, NoOnboardingConfigModel, NoOnboardingPkiProtocol, RemoteDeviceCredentialDownloadModel
+from devices.models import (
+    DeviceModel,
+    NoOnboardingConfigModel,
+    NoOnboardingPkiProtocol,
+    RemoteDeviceCredentialDownloadModel,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -26,7 +31,7 @@ def create_mock_models() -> dict[str, Any]:
     """Fixture to create mock CA, domain, device, and credential models for testing."""
     # Ensure crypto storage config exists for encrypted fields
     KeyStorageConfig.get_or_create_default()
-    
+
     root_1, root_1_key = CertificateGenerator.create_root_ca('Test Root CA')
     issuing_1, issuing_1_key = CertificateGenerator.create_issuing_ca(root_1_key, 'Root CA', 'Issuing CA A')
 
@@ -39,9 +44,7 @@ def create_mock_models() -> dict[str, Any]:
     mock_domain = DomainModel(unique_name='test_domain', issuing_ca=mock_ca)
     mock_domain.save()
 
-    no_onboarding_pki_protocols = [
-        NoOnboardingPkiProtocol.MANUAL
-    ]
+    no_onboarding_pki_protocols = [NoOnboardingPkiProtocol.MANUAL]
     no_onboarding_config_model = NoOnboardingConfigModel()
     no_onboarding_config_model.set_pki_protocols(no_onboarding_pki_protocols)
 

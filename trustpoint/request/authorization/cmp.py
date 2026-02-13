@@ -1,4 +1,5 @@
 """Provides the 'CmpAuthorization' class using the Composite pattern for modular CMP authorization."""
+
 from typing import Never
 
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
@@ -38,12 +39,12 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
 
         if operation not in self.allowed_operations:
             error_message = (
-                f"Unauthorized operation: '{operation}'. "
-                f"Allowed operations: {', '.join(self.allowed_operations)}."
+                f"Unauthorized operation: '{operation}'. Allowed operations: {', '.join(self.allowed_operations)}."
             )
             self.logger.warning(
                 'Operation authorization failed: %(operation)s not in allowed operations %(allowed_operations)s',
-                extra={'operation': operation, 'allowed_operations': self.allowed_operations})
+                extra={'operation': operation, 'allowed_operations': self.allowed_operations},
+            )
             raise ValueError(error_message)
 
         if not isinstance(context.parsed_message, PKIMessage):
@@ -63,8 +64,9 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
             err_msg = f'Expected CMP {context.operation} body, but got CMP {body_type.upper()} body.'
             raise ValueError(err_msg)
 
-        self.logger.debug('Operation authorization successful for operation: %(operation)s',
-                          extra={'operation': operation})
+        self.logger.debug(
+            'Operation authorization successful for operation: %(operation)s', extra={'operation': operation}
+        )
 
     def _raise_value_error(self, message: str) -> Never:
         """Raise a ValueError with the given message."""
@@ -89,6 +91,7 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
 
 class CmpAuthorization(CompositeAuthorization):
     """Composite authorization handler for EST requests."""
+
     def __init__(self, allowed_operations: list[str] | None = None) -> None:
         """Initialize the composite authorization handler with the default set of components.
 

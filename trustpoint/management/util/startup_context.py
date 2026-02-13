@@ -82,7 +82,7 @@ class StartupContextBuilder:
             self.storage_type = KeyStorageConfig.StorageType(config.storage_type)
             self.is_hsm = self.storage_type in (
                 KeyStorageConfig.StorageType.SOFTHSM,
-                KeyStorageConfig.StorageType.PHYSICAL_HSM
+                KeyStorageConfig.StorageType.PHYSICAL_HSM,
             )
             self.output.write(f'Storage type: {self.storage_type}')
             self.output.write(f'Storage requires backup recovery: {self.is_hsm}')
@@ -197,11 +197,7 @@ class StartupContextBuilder:
         wizard_state_enum = WizardState.COMPLETED if self.wizard_completed else WizardState.INCOMPLETE
 
         # Map DEK accessibility to cache state (only for HSM)
-        dek_cache = (
-            (DekCacheState.CACHED if self.dek_accessible else DekCacheState.NOT_CACHED)
-            if self.is_hsm
-            else None
-        )
+        dek_cache = (DekCacheState.CACHED if self.dek_accessible else DekCacheState.NOT_CACHED) if self.is_hsm else None
 
         return StartupContext(
             db_initialized=True,

@@ -47,7 +47,7 @@ class PKCS11ConfigFormTestCase(TestCase):
                 'hsm_type': 'softhsm',
                 'slot': 0,
                 'module_path': '/usr/local/lib/libpkcs11-proxy.so',
-            }
+            },
         )
 
     def test_clean_sets_defaults_for_softhsm(self):

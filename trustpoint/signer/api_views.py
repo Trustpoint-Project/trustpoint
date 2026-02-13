@@ -78,17 +78,12 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                 signature = private_key.sign(hash_bytes, ec.ECDSA(prehashed_algo))
             else:
                 self.logger.error('Unsupported key algorithm for signer %s', signer_id)
-                return Response(
-                    {'error': 'Unsupported key algorithm'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({'error': 'Unsupported key algorithm'}, status=status.HTTP_400_BAD_REQUEST)
 
             signature_hex = signature.hex()
 
             signed_message = SignedMessageModel.objects.create(
-                signer=signer,
-                hash_value=hash_value,
-                signature=signature_hex
+                signer=signer, hash_value=hash_value, signature=signature_hex
             )
 
             response_data = {
@@ -101,27 +96,17 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                 'created_at': signed_message.created_at,
             }
 
-            self.logger.info(
-                'Successfully signed hash with signer %s (ID: %d)',
-                signer.unique_name,
-                signer.id
-            )
+            self.logger.info('Successfully signed hash with signer %s (ID: %d)', signer.unique_name, signer.id)
 
             return Response(response_data, status=status.HTTP_200_OK)
 
         except SignerModel.DoesNotExist:
             self.logger.exception('Signer with ID %d not found', signer_id)
-            return Response(
-                {'error': f'Signer with ID {signer_id} does not exist'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({'error': f'Signer with ID {signer_id} does not exist'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             self.logger.exception('Failed to sign hash with signer %s', signer_id)
             error_msg = f'Failed to sign hash: {e!s}'
-            return Response(
-                {'error': error_msg},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({'error': error_msg}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @swagger_auto_schema(  # type: ignore[misc]
         method='get',
@@ -144,11 +129,7 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
             # Get certificate in PEM format
             certificate_pem = signer.credential.certificate.get_certificate_serializer().as_pem().decode()
 
-            self.logger.info(
-                'Certificate retrieved for signer %s (ID: %d)',
-                signer.unique_name,
-                signer.id
-            )
+            self.logger.info('Certificate retrieved for signer %s (ID: %d)', signer.unique_name, signer.id)
 
             return Response(
                 {
@@ -156,22 +137,16 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                     'signer_name': signer.unique_name,
                     'certificate_pem': certificate_pem,
                 },
-                status=status.HTTP_200_OK
+                status=status.HTTP_200_OK,
             )
 
         except SignerModel.DoesNotExist:
             self.logger.exception('Signer with ID %d not found', pk)
-            return Response(
-                {'error': f'Signer with ID {pk} does not exist'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({'error': f'Signer with ID {pk} does not exist'}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             self.logger.exception('Failed to retrieve certificate for signer %s', pk)
             error_msg = f'Failed to retrieve certificate: {e!s}'
-            return Response(
-                {'error': error_msg},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response({'error': error_msg}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class SignedMessageViewSet(viewsets.ReadOnlyModelViewSet[SignedMessageModel]):

@@ -5,7 +5,6 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('pki', '0004_tp_v0_5_0_dev1'),
     ]
@@ -14,6 +13,8 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='credentialmodel',
             name='private_key',
-            field=util.encrypted_fields.EncryptedCharField(blank=True, default='', max_length=116633, verbose_name='Private key (PEM)'),
+            field=util.encrypted_fields.EncryptedCharField(
+                blank=True, default='', max_length=116633, verbose_name='Private key (PEM)'
+            ),
         ),
     ]

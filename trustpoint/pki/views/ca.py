@@ -32,9 +32,7 @@ class CaTableView(ContextDataMixin, ListView[CaModel]):
 
     def get_queryset(self) -> QuerySet[CaModel]:
         """Return all CA models with parent relationships and domains prefetched, ordered by hierarchy."""
-        return (super().get_queryset()
-               .select_related('parent_ca')
-               .prefetch_related('domains'))
+        return super().get_queryset().select_related('parent_ca').prefetch_related('domains')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add hierarchy information to each CA and apply hierarchical ordering."""

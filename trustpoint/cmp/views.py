@@ -42,7 +42,7 @@ class CmpRequestView(LoggerMixin, View):
         cert_profile = cast('str | None', kwargs.get('cert_profile'))
         operation = cast('str | None', kwargs.get('operation'))
 
-        if domain_name in ['.','_']: # Handle empty domain segment
+        if domain_name in ['.', '_']:  # Handle empty domain segment
             domain_name = None
 
         # Handle combined 'cert_profile_or_operation' parameter
@@ -92,8 +92,8 @@ class CmpRequestView(LoggerMixin, View):
                 domain_str=domain_name,
                 protocol='cmp',
                 operation=operation,
-                cert_profile_str=cert_profile
-        )
+                cert_profile_str=cert_profile,
+            )
         except Exception:
             err_msg = 'Failed to set up CMP request context.'
             self.logger.exception(err_msg)
@@ -114,9 +114,9 @@ class CmpRequestView(LoggerMixin, View):
             )
             authorizer.authorize(ctx)
 
-            ProfileValidator.validate(ctx) # !!!
+            ProfileValidator.validate(ctx)  # !!!
 
-            CertificateIssueProcessor().process_operation(ctx) # !!!
+            CertificateIssueProcessor().process_operation(ctx)  # !!!
         except Exception:
             self.logger.exception('Error processing CMP request')
 

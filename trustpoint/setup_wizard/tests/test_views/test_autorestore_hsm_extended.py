@@ -25,9 +25,9 @@ class TestAutoRestoreHsmSetupViewDispatch:
     def test_dispatch_not_in_docker(self):
         """Test dispatch redirects when not in Docker container."""
         request = self.factory.get('/auto-restore/hsm-setup/softhsm/')
-        
+
         response = self.view.dispatch(request, hsm_type='softhsm')
-        
+
         assert response.status_code == 302
         assert 'login' in response.url
 
@@ -38,11 +38,11 @@ class TestAutoRestoreHsmSetupViewDispatch:
         """Test dispatch redirects when wizard is in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
         mock_redirect.return_value = Mock(status_code=302, url='/some-redirect/')
-        
+
         request = self.factory.get('/auto-restore/hsm-setup/softhsm/')
-        
+
         response = self.view.dispatch(request, hsm_type='softhsm')
-        
+
         assert response.status_code == 302
         mock_redirect.assert_called_once()
 
@@ -51,17 +51,18 @@ class TestAutoRestoreHsmSetupViewDispatch:
     def test_dispatch_invalid_hsm_type(self, mock_get_state):
         """Test dispatch with invalid HSM type."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE
-        
+
         request = self.factory.get('/auto-restore/hsm-setup/invalid/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
-        
+
         response = self.view.dispatch(request, hsm_type='invalid')
-        
+
         assert response.status_code == 302
         assert 'login' in response.url
         messages_list = list(get_messages(request))
@@ -73,21 +74,22 @@ class TestAutoRestoreHsmSetupViewDispatch:
     def test_dispatch_storage_type_mismatch_softhsm(self, mock_get_config, mock_get_state):
         """Test dispatch when storage type doesn't match for softhsm."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE
-        
+
         mock_config = Mock(spec=KeyStorageConfig)
         mock_config.storage_type = KeyStorageConfig.StorageType.PHYSICAL_HSM
         mock_get_config.return_value = mock_config
-        
+
         request = self.factory.get('/auto-restore/hsm-setup/softhsm/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
-        
+
         response = self.view.dispatch(request, hsm_type='softhsm')
-        
+
         assert response.status_code == 302
         assert 'login' in response.url
         messages_list = list(get_messages(request))
@@ -99,21 +101,22 @@ class TestAutoRestoreHsmSetupViewDispatch:
     def test_dispatch_storage_type_mismatch_physical(self, mock_get_config, mock_get_state):
         """Test dispatch when storage type doesn't match for physical."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE
-        
+
         mock_config = Mock(spec=KeyStorageConfig)
         mock_config.storage_type = KeyStorageConfig.StorageType.SOFTHSM
         mock_get_config.return_value = mock_config
-        
+
         request = self.factory.get('/auto-restore/hsm-setup/physical/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
-        
+
         response = self.view.dispatch(request, hsm_type='physical')
-        
+
         assert response.status_code == 302
         messages_list = list(get_messages(request))
         assert any('only available when' in str(m) for m in messages_list)
@@ -125,17 +128,18 @@ class TestAutoRestoreHsmSetupViewDispatch:
         """Test dispatch handles exception when getting config."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE
         mock_get_config.side_effect = RuntimeError('Config error')
-        
+
         request = self.factory.get('/auto-restore/hsm-setup/softhsm/')
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
-        
+
         response = self.view.dispatch(request, hsm_type='softhsm')
-        
+
         assert response.status_code == 302
         assert 'login' in response.url
 
@@ -145,18 +149,18 @@ class TestAutoRestoreHsmSetupViewDispatch:
     def test_dispatch_success(self, mock_get_config, mock_get_state):
         """Test successful dispatch."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE
-        
+
         mock_config = Mock(spec=KeyStorageConfig)
         mock_config.storage_type = KeyStorageConfig.StorageType.SOFTHSM
         mock_get_config.return_value = mock_config
-        
+
         request = self.factory.get('/auto-restore/hsm-setup/softhsm/')
-        
+
         with patch('django.views.generic.FormView.dispatch') as mock_parent:
             mock_parent.return_value = Mock(status_code=200)
-            
+
             response = self.view.dispatch(request, hsm_type='softhsm')
-            
+
             mock_parent.assert_called_once()
 
     def test_get_form_with_softhsm(self):
@@ -164,9 +168,9 @@ class TestAutoRestoreHsmSetupViewDispatch:
         request = self.factory.get('/auto-restore/hsm-setup/softhsm/')
         self.view.request = request
         self.view.kwargs = {'hsm_type': 'softhsm'}
-        
+
         form = self.view.get_form()
-        
+
         assert isinstance(form, HsmSetupForm)
         assert form.fields['hsm_type'].initial == 'softhsm'
 
@@ -175,9 +179,9 @@ class TestAutoRestoreHsmSetupViewDispatch:
         request = self.factory.get('/auto-restore/hsm-setup/physical/')
         self.view.request = request
         self.view.kwargs = {'hsm_type': 'physical'}
-        
+
         form = self.view.get_form()
-        
+
         assert isinstance(form, HsmSetupForm)
         assert form.fields['hsm_type'].initial == 'physical'
 

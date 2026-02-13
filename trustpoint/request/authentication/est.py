@@ -33,9 +33,7 @@ class UsernamePasswordAuthentication(AuthenticationComponent, LoggerMixin):
         password = context.est_password
 
         try:
-            device = DeviceModel.objects.select_related().filter(
-                common_name=username
-            ).first()
+            device = DeviceModel.objects.select_related().filter(common_name=username).first()
 
             if not device:
                 self.logger.warning('Authentication failed: Unknown username %s', username)
@@ -74,10 +72,7 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
     """Handles authentication for EST reenrollment using an Application Credential."""
 
     def _validate_certificate_extensions(
-        self,
-        credential_cert: x509.Certificate,
-        client_cert: x509.Certificate,
-        csr: x509.CertificateSigningRequest
+        self, credential_cert: x509.Certificate, client_cert: x509.Certificate, csr: x509.CertificateSigningRequest
     ) -> None:
         """Validate that certificate extensions match between credential, client cert, and CSR."""
         try:
@@ -167,10 +162,9 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
             self.logger.warning(error_message)
             raise ValueError(error_message)
 
-        if (
-            not credential_model.certificate.subjects_match(csr.subject) or
-            not credential_model.certificate.subjects_match(client_cert.subject)
-        ):
+        if not credential_model.certificate.subjects_match(
+            csr.subject
+        ) or not credential_model.certificate.subjects_match(client_cert.subject):
             error_message = "CSR/client subject does not match the credential certificate's subject"
             self.logger.warning(error_message)
             raise ValueError(error_message)
@@ -198,4 +192,3 @@ class EstAuthentication(CompositeAuthentication):
         self.add(UsernamePasswordAuthentication())
         self.add(ClientCertificateAuthentication())
         self.add(IDevIDAuthentication())
-

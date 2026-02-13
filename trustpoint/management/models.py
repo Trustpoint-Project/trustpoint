@@ -1,4 +1,5 @@
 """Models for the Trustpoint Management app."""
+
 from __future__ import annotations
 
 import hashlib
@@ -22,7 +23,6 @@ from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from management.pkcs11_util import Pkcs11AESKey
-
 
 
 class SecurityConfig(models.Model):
@@ -157,7 +157,7 @@ class TlsSettings(models.Model):
 
     def __str__(self) -> str:
         """Return a string representation of the TLS settings."""
-        return f"TLS Settings (IPv4: {self.ipv4_address or 'None'})"
+        return f'TLS Settings (IPv4: {self.ipv4_address or "None"})'
 
     @classmethod
     def get_first_ipv4_address(cls) -> str:
@@ -172,21 +172,19 @@ class TlsSettings(models.Model):
         else:
             return ipv4_address
 
+
 class AppVersion(models.Model):
     """Model representing the application version and its last update timestamp."""
+
     objects: models.Manager[AppVersion]
 
     version = models.CharField(max_length=17)
-    container_id = models.CharField(
-        max_length=64,
-        blank=True,
-        default='',
-        help_text=_('Container build ID or hash')
-    )
+    container_id = models.CharField(max_length=64, blank=True, default='', help_text=_('Container build ID or hash'))
     last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
         """Meta options for the AppVersion model."""
+
         verbose_name = 'App Version'
 
     def __str__(self) -> str:
@@ -200,10 +198,12 @@ class BackupOptions(models.Model):
 
     We store host/port/user/local_storage, plus either a password or an SSH key.
     """
+
     class AuthMethod(models.TextChoices):
         """Authentication methods for backup options."""
+
         PASSWORD = 'password', 'Password'
-        SSH_KEY   = 'ssh_key',  'SSH Key'
+        SSH_KEY = 'ssh_key', 'SSH Key'
 
     enable_sftp_storage = models.BooleanField(default=False, verbose_name=_('Use SFTP storage'))
 
@@ -212,31 +212,23 @@ class BackupOptions(models.Model):
     user = models.CharField(max_length=128, verbose_name=_('Username'), blank=True)
 
     auth_method = models.CharField(
-        max_length=10,
-        choices=AuthMethod.choices,
-        default=AuthMethod.PASSWORD,
-        verbose_name=_('Authentication Method')
+        max_length=10, choices=AuthMethod.choices, default=AuthMethod.PASSWORD, verbose_name=_('Authentication Method')
     )
 
     # TODO (Dome): Storing passwords in plain text  # noqa: FIX002
     password = models.CharField(
-        max_length=128,
-        blank=True,
-        verbose_name=_('Password'),
-        help_text=_('Plain-text password for SFTP.')
+        max_length=128, blank=True, verbose_name=_('Password'), help_text=_('Plain-text password for SFTP.')
     )
 
     private_key = models.TextField(
-        blank=True,
-        verbose_name=_('SSH Private Key (PEM format)'),
-        help_text=_('Paste the private key here (PEM).')
+        blank=True, verbose_name=_('SSH Private Key (PEM format)'), help_text=_('Paste the private key here (PEM).')
     )
 
     key_passphrase = models.CharField(
         max_length=128,
         blank=True,
         verbose_name=_('Key Passphrase'),
-        help_text=_('Passphrase for the private key, if any.')
+        help_text=_('Passphrase for the private key, if any.'),
     )
 
     remote_directory = models.CharField(
@@ -244,12 +236,12 @@ class BackupOptions(models.Model):
         blank=True,
         default='/upload/trustpoint/',
         verbose_name=_('Remote Directory'),
-        help_text=_('Remote directory (e.g. /backups/) where files should be uploaded. '
-                  'Trailing slash is optional.'),
+        help_text=_('Remote directory (e.g. /backups/) where files should be uploaded. Trailing slash is optional.'),
     )
 
     class Meta:
         """Meta options for the BackupOptions model."""
+
         verbose_name = 'Backup Option'
 
     def __str__(self) -> str:
@@ -270,11 +262,13 @@ class BackupOptions(models.Model):
 
         return super().clean()
 
+
 class KeyStorageConfig(models.Model):
     """Configuration model for cryptographic material storage."""
 
     class StorageType(models.TextChoices):
         """Types of cryptographic storage."""
+
         SOFTWARE = 'software', _('Software (No Encryption)')
         SOFTHSM = 'softhsm', _('SoftHSM Container')
         PHYSICAL_HSM = 'physical_hsm', _('Physical HSM')
@@ -284,7 +278,7 @@ class KeyStorageConfig(models.Model):
         choices=StorageType.choices,
         default=StorageType.SOFTWARE,
         verbose_name=_('Storage Type'),
-        help_text=_('Type of storage for cryptographic material')
+        help_text=_('Type of storage for cryptographic material'),
     )
 
     hsm_config = models.OneToOneField(
@@ -294,16 +288,14 @@ class KeyStorageConfig(models.Model):
         blank=True,
         related_name='crypto_storage_config',
         verbose_name=_('HSM Configuration'),
-        help_text=_('Associated HSM token configuration (SoftHSM or Physical HSM)')
+        help_text=_('Associated HSM token configuration (SoftHSM or Physical HSM)'),
     )
 
-    last_updated = models.DateTimeField(
-        auto_now=True,
-        verbose_name=_('Last Updated')
-    )
+    last_updated = models.DateTimeField(auto_now=True, verbose_name=_('Last Updated'))
 
     class Meta:
         """Meta options for the KeyStorageConfig model."""
+
         verbose_name = _('Crypto Storage Configuration')
         verbose_name_plural = _('Crypto Storage Configurations')
 
@@ -331,12 +323,7 @@ class KeyStorageConfig(models.Model):
         Returns:
             KeyStorageConfig: The configuration instance
         """
-        config, _ = cls.objects.get_or_create(
-            pk=1,
-            defaults={
-                'storage_type': cls.StorageType.SOFTWARE
-            }
-        )
+        config, _ = cls.objects.get_or_create(pk=1, defaults={'storage_type': cls.StorageType.SOFTWARE})
         return config
 
 
@@ -353,40 +340,34 @@ class PKCS11Token(models.Model, LoggerMixin):
     WRAPPED_DEK_LENGTH = 40  # Expected length of wrapped DEK in bytes (8 bytes IV + 32 bytes encrypted DEK)
 
     # Argon2 configuration
-    ARGON2_TIME_COST = 3        # Number of iterations
+    ARGON2_TIME_COST = 3  # Number of iterations
     ARGON2_MEMORY_COST = 65536  # Memory usage in KB (64MB)
-    ARGON2_PARALLELISM = 1      # Number of parallel threads
-    ARGON2_HASH_LENGTH = 32     # Output length (32 bytes for AES-256)
+    ARGON2_PARALLELISM = 1  # Number of parallel threads
+    ARGON2_HASH_LENGTH = 32  # Output length (32 bytes for AES-256)
 
     label = models.CharField(
-        max_length=100,
-        unique=True,
-        help_text=_('Token label in SoftHSM'),
-        verbose_name=_('Label')
+        max_length=100, unique=True, help_text=_('Token label in SoftHSM'), verbose_name=_('Label')
     )
-    slot = models.PositiveIntegerField(
-        help_text=_('Slot number in SoftHSM'),
-        verbose_name=_('Slot')
-    )
+    slot = models.PositiveIntegerField(help_text=_('Slot number in SoftHSM'), verbose_name=_('Slot'))
     module_path = models.CharField(
         max_length=255,
         default='/usr/local/lib/libpkcs11-proxy.so',
         help_text=_('Path to PKCS#11 module library'),
-        verbose_name=_('Module Path')
+        verbose_name=_('Module Path'),
     )
     encrypted_dek = models.BinaryField(
         max_length=512,
         verbose_name=_('Encrypted Data Encryption Key (DEK)'),
         help_text=_('Symmetric key encrypted by the PKCS#11 private key'),
         blank=True,
-        null=True
+        null=True,
     )
     bek_encrypted_dek = models.BinaryField(
         max_length=512,
         verbose_name=_('Encrypted Data Encryption Key (DEK)'),
         help_text=_('Symmetric key encrypted by the PKCS#11 private key'),
         blank=True,
-        null=True
+        null=True,
     )
     kek = models.ForeignKey(
         'pki.PKCS11Key',
@@ -394,16 +375,14 @@ class PKCS11Token(models.Model, LoggerMixin):
         null=True,
         blank=True,
         verbose_name=_('Key Encryption Key (KEK)'),
-        help_text=_('Associated key encryption key stored in this token')
+        help_text=_('Associated key encryption key stored in this token'),
     )
 
-    created_at = models.DateTimeField(
-        verbose_name=_('Created'),
-        auto_now_add=True
-    )
+    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
     class Meta:
         """Meta options for the PKCS11Token model."""
+
         verbose_name = _('PKCS#11 Token')
         verbose_name_plural = _('PKCS#11 Tokens')
 
@@ -459,25 +438,16 @@ class PKCS11Token(models.Model, LoggerMixin):
             kek, _ = PKCS11Key.objects.get_or_create(
                 token_label=self.label,
                 key_label=self.KEK_ENCRYPTION_KEY_LABEL,
-                defaults={
-                    'key_type': PKCS11Key.KeyType.AES
-                }
+                defaults={'key_type': PKCS11Key.KeyType.AES},
             )
 
-            aes_key = kek.get_pkcs11_key_instance(
-                lib_path=self.module_path,
-                user_pin=self.get_pin()
-            )
+            aes_key = kek.get_pkcs11_key_instance(lib_path=self.module_path, user_pin=self.get_pin())
             aes_key = cast('Pkcs11AESKey', aes_key)
 
             try:
                 try:
                     aes_key.load_key()
-                    self.logger.info(
-                        "KEK '%s' already exists in token '%s'",
-                        self.KEK_ENCRYPTION_KEY_LABEL,
-                        self.label
-                    )
+                    self.logger.info("KEK '%s' already exists in token '%s'", self.KEK_ENCRYPTION_KEY_LABEL, self.label)
 
                     if not self.kek:
                         self.kek = kek
@@ -490,11 +460,7 @@ class PKCS11Token(models.Model, LoggerMixin):
                     return True
 
                 aes_key.generate_key(key_length)
-                self.logger.info(
-                    "Generated KEK '%s' in token '%s'",
-                    self.KEK_ENCRYPTION_KEY_LABEL,
-                    self.label
-                )
+                self.logger.info("Generated KEK '%s' in token '%s'", self.KEK_ENCRYPTION_KEY_LABEL, self.label)
 
                 if not self.kek:
                     self.kek = kek
@@ -525,24 +491,16 @@ class PKCS11Token(models.Model, LoggerMixin):
                 self.logger.debug("No KEK reference in database for token '%s'", self.label)
                 return False
 
-            aes_key = self.kek.get_pkcs11_key_instance(
-                lib_path=self.module_path,
-                user_pin=self.get_pin()
-            )
+            aes_key = self.kek.get_pkcs11_key_instance(lib_path=self.module_path, user_pin=self.get_pin())
             aes_key = cast('Pkcs11AESKey', aes_key)
 
             try:
                 aes_key.load_key()
                 self.logger.debug(
-                    "KEK '%s' verified to exist on HSM token '%s'",
-                    self.KEK_ENCRYPTION_KEY_LABEL,
-                    self.label
+                    "KEK '%s' verified to exist on HSM token '%s'", self.KEK_ENCRYPTION_KEY_LABEL, self.label
                 )
             except pkcs11.NoSuchKey:
-                self.logger.warning(
-                    "KEK reference exists in database but not on HSM token '%s'",
-                    self.label
-                )
+                self.logger.warning("KEK reference exists in database but not on HSM token '%s'", self.label)
                 return False
             else:
                 return True
@@ -618,10 +576,7 @@ class PKCS11Token(models.Model, LoggerMixin):
                 # Retry opening the session
                 session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
 
-            wrap_key = session.get_key(
-                key_type=pkcs11.KeyType.AES,
-                label=self.KEK_ENCRYPTION_KEY_LABEL
-            )
+            wrap_key = session.get_key(key_type=pkcs11.KeyType.AES, label=self.KEK_ENCRYPTION_KEY_LABEL)
 
             # Use AES encryption instead of key wrapping since AES-KEY-WRAP is not supported
             # Generate a random IV for AES-ECB (though ECB doesn't use IV, we'll prepend for consistency)
@@ -629,10 +584,7 @@ class PKCS11Token(models.Model, LoggerMixin):
 
             # DEK is already 32 bytes (multiple of 16), no padding needed for AES-ECB
             # Encrypt using AES-ECB
-            encrypted_data = wrap_key.encrypt(
-                dek_bytes,
-                mechanism=pkcs11.Mechanism.AES_ECB
-            )
+            encrypted_data = wrap_key.encrypt(dek_bytes, mechanism=pkcs11.Mechanism.AES_ECB)
 
             # Return IV + encrypted data (8 + 32 = 40 bytes)
             wrapped_data = iv + encrypted_data
@@ -640,7 +592,7 @@ class PKCS11Token(models.Model, LoggerMixin):
         except pkcs11.NoSuchKey as e:
             msg = (
                 f"AES wrapping key '{self.KEK_ENCRYPTION_KEY_LABEL}' not found in token '{self.label}'. "
-                "Generate the KEK first using generate_kek()."
+                'Generate the KEK first using generate_kek().'
             )
             raise RuntimeError(msg) from e
         except Exception as e:
@@ -813,7 +765,6 @@ class PKCS11Token(models.Model, LoggerMixin):
         msg = f'Unexpected encrypted_dek type: {type(value)!r}'
         raise RuntimeError(msg)
 
-
     def _unwrap_dek(self) -> bytes:
         """Unwrap the DEK using the HSM AES key.
 
@@ -859,8 +810,7 @@ class PKCS11Token(models.Model, LoggerMixin):
         """
         if len(wrapped_data) != self.WRAPPED_DEK_LENGTH:
             self.logger.warning(
-                'Unexpected wrapped DEK length: %d (expected %d)',
-                len(wrapped_data), self.WRAPPED_DEK_LENGTH
+                'Unexpected wrapped DEK length: %d (expected %d)', len(wrapped_data), self.WRAPPED_DEK_LENGTH
             )
 
     def _open_session_and_get_wrap_key(self) -> tuple[pkcs11.Session, pkcs11.Key]:
@@ -868,10 +818,7 @@ class PKCS11Token(models.Model, LoggerMixin):
         pkcs11_lib = pkcs11.lib(self.module_path)
         pkcs11_token = pkcs11_lib.get_token(token_label=self.label)
         session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
-        wrap_key = session.get_key(
-            key_type=pkcs11.KeyType.AES,
-            label=self.KEK_ENCRYPTION_KEY_LABEL
-        )
+        wrap_key = session.get_key(key_type=pkcs11.KeyType.AES, label=self.KEK_ENCRYPTION_KEY_LABEL)
         return session, wrap_key
 
     def _raise_type_error(self, msg: str) -> NoReturn:
@@ -899,14 +846,10 @@ class PKCS11Token(models.Model, LoggerMixin):
             bytes: The unwrapped DEK.
         """
         try:
-
             encrypted_data = wrapped_data[8:]
 
             # Decrypt using AES-ECB (no unpadding needed as DEK is exactly 32 bytes)
-            decrypted_data = wrap_key.decrypt(
-                encrypted_data,
-                mechanism=pkcs11.Mechanism.AES_ECB
-            )
+            decrypted_data = wrap_key.decrypt(encrypted_data, mechanism=pkcs11.Mechanism.AES_ECB)
 
             if isinstance(decrypted_data, bytes):
                 return decrypted_data
@@ -935,7 +878,7 @@ class PKCS11Token(models.Model, LoggerMixin):
         """
         msg = (
             f"AES wrapping key '{self.KEK_ENCRYPTION_KEY_LABEL}' not found in token '{self.label}'. "
-            "Generate the KEK first using generate_kek()."
+            'Generate the KEK first using generate_kek().'
         )
         raise RuntimeError(msg) from e
 
@@ -960,10 +903,7 @@ class PKCS11Token(models.Model, LoggerMixin):
             )
             raise RuntimeError(msg) from e
         if 'mechanism' in error_msg:
-            msg = (
-                f'AES Key Wrap mechanism not supported or configured incorrectly. '
-                f'Original error: {e}'
-            )
+            msg = f'AES Key Wrap mechanism not supported or configured incorrectly. Original error: {e}'
             raise RuntimeError(msg) from e
         self.logger.exception('DEK unwrapping failed')
         msg = f'Failed to unwrap DEK: {e}'
@@ -1039,12 +979,10 @@ class PKCS11Token(models.Model, LoggerMixin):
         # No PIN available
         msg = (
             f"No PIN configured for PKCS#11 token '{self.label}'. "
-            "Ensure HSM_PIN_FILE points to a readable file with the PIN, "
-            "or set the HSM_PIN environment variable."
+            'Ensure HSM_PIN_FILE points to a readable file with the PIN, '
+            'or set the HSM_PIN environment variable.'
         )
-        raise ImproperlyConfigured(
-            msg
-        )
+        raise ImproperlyConfigured(msg)
 
     def set_backup_password(self, password: str, dek_size: int = 32) -> None:
         """Set a backup password and encrypt the current DEK with BEK derived from it using Argon2.
@@ -1128,7 +1066,6 @@ class PKCS11Token(models.Model, LoggerMixin):
             self.logger.info('DEK successfully retrieved using backup password for token %s', self.label)
             return dek_bytes
 
-
     def verify_backup_password(self, password: str) -> bool:
         """Verify if the provided backup password is correct.
 
@@ -1154,7 +1091,6 @@ class PKCS11Token(models.Model, LoggerMixin):
         self.save(update_fields=['bek_encrypted_dek'])
         self.logger.info('Backup encryption removed for token %s', self.label)
 
-
     def has_backup_encryption(self) -> bool:
         """Check if backup encryption is configured.
 
@@ -1164,8 +1100,8 @@ class PKCS11Token(models.Model, LoggerMixin):
         return bool(self.bek_encrypted_dek)
 
     def _raise_value_error(self, message: str) -> None:
-            """Raise a ValueError with the given message."""
-            raise ValueError(message)
+        """Raise a ValueError with the given message."""
+        raise ValueError(message)
 
     def _derive_bek_from_password(self, password: str) -> bytes:
         """Derive a BEK (Backup Encryption Key) from a password using Argon2.
@@ -1198,13 +1134,12 @@ class PKCS11Token(models.Model, LoggerMixin):
                 memory_cost=self.ARGON2_MEMORY_COST,
                 parallelism=self.ARGON2_PARALLELISM,
                 hash_len=self.ARGON2_HASH_LENGTH,
-                type=Type.ID  # Argon2id variant (most secure)
+                type=Type.ID,  # Argon2id variant (most secure)
             )
 
         except Exception as e:
             msg = f'Failed to derive BEK from password: {e}'
             raise ValueError(msg) from e
-
 
     def _encrypt_dek_with_bek(self, dek_bytes: bytes, bek: bytes) -> bytes:
         """Encrypt DEK using BEK with AES-GCM.
@@ -1224,11 +1159,7 @@ class PKCS11Token(models.Model, LoggerMixin):
             iv = secrets.token_bytes(12)  # 96 bits for GCM
 
             # Create cipher
-            cipher = Cipher(
-                algorithms.AES(bek),
-                modes.GCM(iv),
-                backend=default_backend()
-            )
+            cipher = Cipher(algorithms.AES(bek), modes.GCM(iv), backend=default_backend())
             encryptor = cipher.encryptor()
 
             # Encrypt
@@ -1270,11 +1201,7 @@ class PKCS11Token(models.Model, LoggerMixin):
             ciphertext = encrypted_data[12:-16]
 
             # Create cipher
-            cipher = Cipher(
-                algorithms.AES(bek),
-                modes.GCM(iv, tag),
-                backend=default_backend()
-            )
+            cipher = Cipher(algorithms.AES(bek), modes.GCM(iv, tag), backend=default_backend())
             decryptor = cipher.decryptor()
 
             # Decrypt and verify
@@ -1283,6 +1210,7 @@ class PKCS11Token(models.Model, LoggerMixin):
         except Exception as e:
             msg = f'Failed to decrypt DEK with BEK: {e}'
             raise ValueError(msg) from e
+
 
 class LoggingConfig(models.Model):
     """Logging Configuration model."""

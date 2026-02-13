@@ -107,8 +107,7 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
                 self._raise_value_error(error_message)
             return int(context.parsed_message['header']['senderKID'].prettyPrint())
         except (ValueError, TypeError) as e:
-            error_message = ('CMP shared secret authentication failed: '
-                           'Invalid or missing senderKID in message header.')
+            error_message = 'CMP shared secret authentication failed: Invalid or missing senderKID in message header.'
             self.logger.warning('CMP message missing or has invalid senderKID')
             raise ValueError(error_message) from e
 
@@ -121,14 +120,16 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
             self.logger.warning(error_message)
             raise ValueError(error_message) from None
 
-    def _validate_device_configuration(self, device: DeviceModel, sender_kid: int
-                                       ) -> OnboardingConfigModel | NoOnboardingConfigModel:
+    def _validate_device_configuration(
+        self, device: DeviceModel, sender_kid: int
+    ) -> OnboardingConfigModel | NoOnboardingConfigModel:
         """Validate device has required shared secret configuration."""
         device_config = device.onboarding_config or device.no_onboarding_config
         if not device_config or not device_config.cmp_shared_secret:
             error_message = 'CMP shared secret authentication failed: Device has no shared secret configured.'
             self.logger.warning(
-                'Device %s (ID: %s) has no CMP shared secret configured', device.common_name, sender_kid)
+                'Device %s (ID: %s) has no CMP shared secret configured', device.common_name, sender_kid
+            )
             self._raise_cmp_error(error_message)
         return device_config
 
@@ -140,14 +141,14 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
     def _finalize_authentication(self, context: CmpBaseRequestContext, device: DeviceModel, sender_kid: int) -> None:
         """Finalize authentication by setting device in context and logging success."""
         self.logger.info(
-            'Successfully authenticated device %s (ID: %s) via CMP shared secret', device.common_name, sender_kid)
+            'Successfully authenticated device %s (ID: %s) via CMP shared secret', device.common_name, sender_kid
+        )
         context.device = device
 
     def _handle_authentication_error(self, error: Exception) -> None:
         """Handle known authentication errors."""
         if 'senderKID' in str(error):
-            error_message = ('CMP shared secret authentication failed: '
-                           'Invalid or missing senderKID in message header.')
+            error_message = 'CMP shared secret authentication failed: Invalid or missing senderKID in message header.'
             self.logger.warning('CMP message missing or has invalid senderKID')
         else:
             error_message = f'CMP shared secret authentication failed: {error}'
@@ -165,8 +166,7 @@ class CmpSharedSecretAuthentication(CmpAuthenticationBase):
         raise ValueError(message)
 
     @staticmethod
-    def _verify_protection_shared_secret(
-            parsed_message: rfc4210.PKIMessage, shared_secret: str) -> hmac.HMAC:
+    def _verify_protection_shared_secret(parsed_message: rfc4210.PKIMessage, shared_secret: str) -> hmac.HMAC:
         """Verifies the HMAC-based protection of a CMP message using a shared secret.
 
         Returns a new HMAC object that can be used to sign the response message.
@@ -223,7 +223,6 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
     def __init__(self) -> None:
         """Initialize the CMP signature-based authentication component."""
 
-
     def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate using CMP signature-based protection for initialization requests."""
         if not isinstance(context, CmpCertificateRequestContext):
@@ -237,13 +236,16 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
         device = self._authenticate_and_verify_device(context, cmp_signer_cert, intermediate_certs)
         self.logger.info(
             'Successfully authenticated device via CMP signature-based initialization',
-            extra={'device_common_name': device.common_name})
+            extra={'device_common_name': device.common_name},
+        )
         context.device = device
 
-    def _authenticate_and_verify_device(self,
-                                        context: CmpCertificateRequestContext,
-                                        cmp_signer_cert: x509.Certificate,
-                                        intermediate_certs: list[x509.Certificate]) -> DeviceModel:
+    def _authenticate_and_verify_device(
+        self,
+        context: CmpCertificateRequestContext,
+        cmp_signer_cert: x509.Certificate,
+        intermediate_certs: list[x509.Certificate],
+    ) -> DeviceModel:
         """Authenticate and verify the device."""
         try:
             device = self._process_device_authentication(context, cmp_signer_cert, intermediate_certs)
@@ -253,8 +255,10 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
             return device
 
     def _process_device_authentication(
-        self, context: CmpCertificateRequestContext,
-        cmp_signer_cert: x509.Certificate, intermediate_certs: list[x509.Certificate]
+        self,
+        context: CmpCertificateRequestContext,
+        cmp_signer_cert: x509.Certificate,
+        intermediate_certs: list[x509.Certificate],
     ) -> DeviceModel:
         """Process device authentication using certificates."""
         device = self._authenticate_device(context, cmp_signer_cert, intermediate_certs)
@@ -285,7 +289,8 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
         return True
 
     def _extract_certificates(
-            self, context: CmpCertificateRequestContext) -> tuple[x509.Certificate, list[x509.Certificate]]:
+        self, context: CmpCertificateRequestContext
+    ) -> tuple[x509.Certificate, list[x509.Certificate]]:
         """Extract and validate certificates from the CMP message."""
         if not context or not context.parsed_message:
             err_msg = 'Missing parsed message in context.'
@@ -314,8 +319,12 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
 
         return cmp_signer_cert, intermediate_certs
 
-    def _authenticate_device(self, context: CmpCertificateRequestContext, cmp_signer_cert: x509.Certificate,
-                             intermediate_certs: list[x509.Certificate]) -> DeviceModel:
+    def _authenticate_device(
+        self,
+        context: CmpCertificateRequestContext,
+        cmp_signer_cert: x509.Certificate,
+        intermediate_certs: list[x509.Certificate],
+    ) -> DeviceModel:
         """Authenticate the device using IDevID."""
         is_aoki = self._is_aoki_request(context)
         device = IDevIDAuthenticator.authenticate_idevid_from_x509(
@@ -350,8 +359,9 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
         self.logger.warning(message)
         raise ValueError(message)
 
-    def _verify_protection_signature(self, parsed_message: rfc4210.PKIMessage,
-                                     cmp_signer_cert: x509.Certificate) -> None:
+    def _verify_protection_signature(
+        self, parsed_message: rfc4210.PKIMessage, cmp_signer_cert: x509.Certificate
+    ) -> None:
         """Verifies the message signature of a CMP message using signature-based protection."""
         protected_part = rfc4210.ProtectedPart()
         protected_part['header'] = parsed_message['header']
@@ -437,8 +447,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
         # Check application certificate template is present
         if not context.cert_profile_str:
             error_message = 'Missing application certificate template.'
-            self.logger.warning(
-                'CMP signature-based certification failed: Missing application certificate template')
+            self.logger.warning('CMP signature-based certification failed: Missing application certificate template')
             self._raise_value_error(error_message)
 
         return True
@@ -521,7 +530,7 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
                 'device_id': device_id,
                 'serial_number': device_serial_number,
                 'domain_name': domain_name,
-                'common_name': common_name_value
+                'common_name': common_name_value,
             }
 
     def _lookup_device(self, device_info: dict[str, str | int | None]) -> DeviceModel:
@@ -532,24 +541,21 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
                 device_model = DeviceModel.objects.get(pk=device_info['device_id'])
             except DeviceModel.DoesNotExist:
                 device_model = None
-                self.logger.warning(
-                    'Device with ID %s not found in database.',
-                    device_info['device_id']
-                )
+                self.logger.warning('Device with ID %s not found in database.', device_info['device_id'])
 
         if not device_model:
             error_message = 'Device not found.'
             self.logger.warning(
                 'CMP signature-based certification failed: Device not found',
-                extra={'device_id': device_info['device_id']}
+                extra={'device_id': device_info['device_id']},
             )
             self._raise_value_error(error_message)
 
         return device_model
 
     def _validate_device(
-            self, device: DeviceModel, device_info: dict[str, str | int | None], cmp_signer_cert: x509.Certificate
-        ) -> None:
+        self, device: DeviceModel, device_info: dict[str, str | int | None], cmp_signer_cert: x509.Certificate
+    ) -> None:
         """Validate device properties and certificate."""
         # Validate device serial number
         if device_info['serial_number'] and device_info['serial_number'] != device.serial_number:
@@ -584,8 +590,8 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
                 'Device has wrong PKI protocol',
                 extra={
                     'device_common_name': device.common_name,
-                    'device_pki_protocol': device.onboarding_config.get_pki_protocols()
-                }
+                    'device_pki_protocol': device.onboarding_config.get_pki_protocols(),
+                },
             )
             self._raise_value_error(error_message)
 
@@ -594,19 +600,17 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
     ) -> None:
         """Verify protection signature and finalize authentication."""
         # Verify protection signature
-        self._verify_protection_signature(
-            parsed_message=context.parsed_message,
-            cmp_signer_cert=cmp_signer_cert
-        )
+        self._verify_protection_signature(parsed_message=context.parsed_message, cmp_signer_cert=cmp_signer_cert)
 
         if not device.domain:
             self._raise_value_error('Device is not part of any domain.')
 
-        device.domain.get_issuing_ca_or_value_error() #.credential # ???
+        device.domain.get_issuing_ca_or_value_error()  # .credential # ???
 
         self.logger.info(
             'Successfully authenticated device via CMP signature-based certification',
-            extra={'device_common_name': device.common_name})
+            extra={'device_common_name': device.common_name},
+        )
         context.device = device
         context.client_certificate = cmp_signer_cert
 
@@ -618,8 +622,9 @@ class CmpSignatureBasedCertificationAuthentication(AuthenticationComponent, Logg
         """Helper method to log and raise a TypeError."""
         raise TypeError(message)
 
-    def _verify_protection_signature(self, parsed_message: rfc4210.PKIMessage,
-                                     cmp_signer_cert: x509.Certificate) -> None:
+    def _verify_protection_signature(
+        self, parsed_message: rfc4210.PKIMessage, cmp_signer_cert: x509.Certificate
+    ) -> None:
         """Verifies the message signature of a CMP message using signature-based protection."""
         protected_part = rfc4210.ProtectedPart()
         protected_part['header'] = parsed_message['header']

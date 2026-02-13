@@ -8,7 +8,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('pki', '0002_tp_v0_4_0'),
     ]
@@ -21,25 +20,98 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='certificatemodel',
             name='issuer_id',
-            field=models.ForeignKey(blank=True, db_column='issuer_id', null=True, on_delete=django.db.models.deletion.SET_NULL, to='pki.certificatemodel', verbose_name='Issuer Certificate'),
+            field=models.ForeignKey(
+                blank=True,
+                db_column='issuer_id',
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to='pki.certificatemodel',
+                verbose_name='Issuer Certificate',
+            ),
         ),
         migrations.AlterField(
             model_name='credentialmodel',
             name='private_key',
-            field=util.encrypted_fields.EncryptedCharField(blank=True, default='', max_length=116633, verbose_name='Private key (PEM)'),
+            field=util.encrypted_fields.EncryptedCharField(
+                blank=True, default='', max_length=116633, verbose_name='Private key (PEM)'
+            ),
         ),
         migrations.CreateModel(
             name='CaModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('unique_name', models.CharField(help_text='Unique identifier for this CA', max_length=100, unique=True, validators=[util.field.UniqueNameValidator()], verbose_name='CA Name')),
-                ('is_active', models.BooleanField(default=True, help_text='Whether this CA is currently active', verbose_name='Active')),
+                (
+                    'unique_name',
+                    models.CharField(
+                        help_text='Unique identifier for this CA',
+                        max_length=100,
+                        unique=True,
+                        validators=[util.field.UniqueNameValidator()],
+                        verbose_name='CA Name',
+                    ),
+                ),
+                (
+                    'is_active',
+                    models.BooleanField(
+                        default=True, help_text='Whether this CA is currently active', verbose_name='Active'
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
                 ('updated_at', models.DateTimeField(auto_now=True, verbose_name='Updated')),
-                ('ca_type', models.IntegerField(blank=True, choices=[(-1, 'Keyless CA'), (0, 'Auto-Generated Root'), (1, 'Auto-Generated'), (2, 'Local-Unprotected'), (3, 'Local-PKCS11'), (4, 'Remote-EST'), (5, 'Remote-CMP')], help_text='Type of CA - KEYLESS for keyless CAs', null=True, verbose_name='CA Type')),
-                ('certificate', models.ForeignKey(blank=True, help_text='The CA certificate (for keyless CAs)', null=True, on_delete=django.db.models.deletion.PROTECT, related_name='keyless_cas', to='pki.certificatemodel', verbose_name='CA Certificate')),
-                ('credential', models.OneToOneField(blank=True, help_text='The CA credential with private key (for issuing CAs)', null=True, on_delete=django.db.models.deletion.PROTECT, related_name='issuing_ca', to='pki.credentialmodel', verbose_name='Credential')),
-                ('parent_ca', models.ForeignKey(blank=True, help_text='The parent CA in the hierarchy (issuer of this CA)', null=True, on_delete=django.db.models.deletion.PROTECT, related_name='child_cas', to='pki.camodel', verbose_name='Parent CA')),
+                (
+                    'ca_type',
+                    models.IntegerField(
+                        blank=True,
+                        choices=[
+                            (-1, 'Keyless CA'),
+                            (0, 'Auto-Generated Root'),
+                            (1, 'Auto-Generated'),
+                            (2, 'Local-Unprotected'),
+                            (3, 'Local-PKCS11'),
+                            (4, 'Remote-EST'),
+                            (5, 'Remote-CMP'),
+                        ],
+                        help_text='Type of CA - KEYLESS for keyless CAs',
+                        null=True,
+                        verbose_name='CA Type',
+                    ),
+                ),
+                (
+                    'certificate',
+                    models.ForeignKey(
+                        blank=True,
+                        help_text='The CA certificate (for keyless CAs)',
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='keyless_cas',
+                        to='pki.certificatemodel',
+                        verbose_name='CA Certificate',
+                    ),
+                ),
+                (
+                    'credential',
+                    models.OneToOneField(
+                        blank=True,
+                        help_text='The CA credential with private key (for issuing CAs)',
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='issuing_ca',
+                        to='pki.credentialmodel',
+                        verbose_name='Credential',
+                    ),
+                ),
+                (
+                    'parent_ca',
+                    models.ForeignKey(
+                        blank=True,
+                        help_text='The parent CA in the hierarchy (issuer of this CA)',
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='child_cas',
+                        to='pki.camodel',
+                        verbose_name='Parent CA',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'Certificate Authority',
@@ -52,25 +124,76 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='domainmodel',
             name='issuing_ca',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, related_name='domains', to='pki.camodel', verbose_name='Issuing CA'),
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='domains',
+                to='pki.camodel',
+                verbose_name='Issuing CA',
+            ),
         ),
         migrations.AlterField(
             model_name='revokedcertificatemodel',
             name='ca',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='revoked_certificates', to='pki.camodel', verbose_name='Issuing CA'),
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name='revoked_certificates',
+                to='pki.camodel',
+                verbose_name='Issuing CA',
+            ),
         ),
         migrations.CreateModel(
             name='CrlModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('crl_pem', models.TextField(help_text='The Certificate Revocation List in PEM format', verbose_name='CRL in PEM format')),
-                ('crl_number', models.PositiveBigIntegerField(blank=True, help_text='The CRL number from the CRL extension', null=True, verbose_name='CRL Number')),
-                ('this_update', models.DateTimeField(help_text='The thisUpdate field from the CRL', verbose_name='This Update')),
-                ('next_update', models.DateTimeField(blank=True, help_text='The nextUpdate field from the CRL', null=True, verbose_name='Next Update')),
-                ('is_active', models.BooleanField(default=True, help_text='Whether this is the current active CRL for the CA', verbose_name='Active')),
+                (
+                    'crl_pem',
+                    models.TextField(
+                        help_text='The Certificate Revocation List in PEM format', verbose_name='CRL in PEM format'
+                    ),
+                ),
+                (
+                    'crl_number',
+                    models.PositiveBigIntegerField(
+                        blank=True,
+                        help_text='The CRL number from the CRL extension',
+                        null=True,
+                        verbose_name='CRL Number',
+                    ),
+                ),
+                (
+                    'this_update',
+                    models.DateTimeField(help_text='The thisUpdate field from the CRL', verbose_name='This Update'),
+                ),
+                (
+                    'next_update',
+                    models.DateTimeField(
+                        blank=True, help_text='The nextUpdate field from the CRL', null=True, verbose_name='Next Update'
+                    ),
+                ),
+                (
+                    'is_active',
+                    models.BooleanField(
+                        default=True,
+                        help_text='Whether this is the current active CRL for the CA',
+                        verbose_name='Active',
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
                 ('updated_at', models.DateTimeField(auto_now=True, verbose_name='Updated')),
-                ('ca', models.ForeignKey(blank=True, help_text='The CA that issued this CRL', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='crls', to='pki.camodel', verbose_name='Certificate Authority')),
+                (
+                    'ca',
+                    models.ForeignKey(
+                        blank=True,
+                        help_text='The CA that issued this CRL',
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='crls',
+                        to='pki.camodel',
+                        verbose_name='Certificate Authority',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'Certificate Revocation List',
@@ -81,6 +204,14 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='camodel',
-            constraint=models.CheckConstraint(condition=models.Q(models.Q(('ca_type', -1), ('certificate__isnull', False), ('credential__isnull', True)), models.Q(('ca_type__isnull', False), ('certificate__isnull', True), ('credential__isnull', False)), _connector='OR'), name='exactly_one_ca_mode', violation_error_message='CA must be either keyless (certificate only) or issuing (with credential)'),
+            constraint=models.CheckConstraint(
+                condition=models.Q(
+                    models.Q(('ca_type', -1), ('certificate__isnull', False), ('credential__isnull', True)),
+                    models.Q(('ca_type__isnull', False), ('certificate__isnull', True), ('credential__isnull', False)),
+                    _connector='OR',
+                ),
+                name='exactly_one_ca_mode',
+                violation_error_message='CA must be either keyless (certificate only) or issuing (with credential)',
+            ),
         ),
     ]

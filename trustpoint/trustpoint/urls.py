@@ -84,16 +84,13 @@ urlpatterns += [
     ),
     path('', base.IndexView.as_view()),
     path('workflows/', include('workflows.urls', namespace='workflows')),
-
     # API URLs
     path('api/', include('devices.api_urls')),
     path('api/', include('pki.api_urls')),
     path('api/', include('signer.api_urls')),
-
     # JWT endpoints
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-
     # Swagger & Redoc
     path('swagger/', schema_view.with_ui('swagger', cache_timeout=0), name='schema-swagger-ui'),
     path('redoc/', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),

@@ -1,4 +1,5 @@
 """EST-specific message responder classes."""
+
 import base64
 
 from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
@@ -55,8 +56,9 @@ class EstCertificateMessageResponder(EstMessageResponder):
         if workflow_state == State.FAILED:
             context.http_response_status = 500
             context.http_response_content_type = 'text/plain'
-            context.http_response_content = \
+            context.http_response_content = (
                 f'Workflow failed. Check here: -> /workflows/requests/{context.enrollment_request.id}'
+            )
             return False
         if not context.enrollment_request.is_valid():
             context.http_response_status = 500
@@ -92,7 +94,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
 
         if context.est_encoding == 'base64_der':
             b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
-            cert = '\n'.join([b64_cert[i:i + 64] for i in range(0, len(b64_cert), 64)])
+            cert = '\n'.join([b64_cert[i : i + 64] for i in range(0, len(b64_cert), 64)])
             content_type = 'application/pkix-cert'
         elif context.est_encoding == 'der':
             cert = cert_bytes

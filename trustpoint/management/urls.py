@@ -27,10 +27,14 @@ urlpatterns = [
     path('loglevel/change', settings.ChangeLogLevelView.as_view(), name='change-loglevel'),
     path('settings/', settings.SettingsView.as_view(), name='settings'),
     path('tls/', tls.TlsView.as_view(), name='tls'),
-    path('tls/add/method-select/', tls.TlsAddMethodSelectView.as_view(),
+    path(
+        'tls/add/method-select/',
+        tls.TlsAddMethodSelectView.as_view(),
         name='tls-add-method_select',
     ),
-    path('tls/add/generate-tls', tls.GenerateTlsCertificateView.as_view(),
+    path(
+        'tls/add/generate-tls',
+        tls.GenerateTlsCertificateView.as_view(),
         name='tls-generate',
     ),
     path(
@@ -47,21 +51,20 @@ urlpatterns = [
     path(
         'backups/',
         backup.BackupManageView.as_view(extra_context={'page_category': 'management', 'page_name': 'backup'}),
-        name='backups'
+        name='backups',
     ),
     path(
         'backups/',
         backup.BackupManageView.as_view(extra_context={'page_category': 'management', 'page_name': 'backup'}),
-        name='backups'
+        name='backups',
     ),
     path('backups/download/<str:filename>/', backup.BackupFileDownloadView.as_view(), name='backup-download'),
     path(
         'backups/download-multiple/<str:archive_format>/',
         backup.BackupFilesDownloadMultipleView.as_view(),
-        name='backup-download-multiple'
+        name='backup-download-multiple',
     ),
     path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
     path('help/', help_support.HelpView.as_view(), name='help'),
     path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
-
 ]

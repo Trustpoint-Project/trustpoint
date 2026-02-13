@@ -105,8 +105,6 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
         return self.queryset
 
 
-
-
 class LoggingFilesDetailsView(PageContextMixin, LoggerMixin, TemplateView):
     """Log file detail view, allows to view the content of a single log file without download."""
 

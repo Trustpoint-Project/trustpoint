@@ -381,8 +381,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
             protocol_mapping = {key: str(value) for key, value in OnboardingStatus.choices}
             device_os_counts = {
-                protocol_mapping[item['onboarding_config__onboarding_status']]:
-                item['count'] for item in device_os_qr
+                protocol_mapping[item['onboarding_config__onboarding_status']]: item['count'] for item in device_os_qr
             }
 
             for protocol in protocol_mapping.values():
@@ -540,8 +539,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
             protocol_mapping = {key: str(value) for key, value in OnboardingProtocol.choices}
             device_op_counts = {
-                protocol_mapping[item['onboarding_config__onboarding_protocol']]:
-                item['count'] for item in device_op_qr
+                protocol_mapping[item['onboarding_config__onboarding_protocol']]: item['count'] for item in device_op_qr
             }
 
         except Exception as exception:
@@ -692,9 +690,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         ca_type_counts = {str(cert_type): 0 for _, cert_type in CaModel.CaTypeChoice.choices}
         try:
             ca_type_qr = (
-                CaModel.objects.filter(created_at__gt=start_date)
-                .values('ca_type')
-                .annotate(count=Count('ca_type'))
+                CaModel.objects.filter(created_at__gt=start_date).values('ca_type').annotate(count=Count('ca_type'))
             )
 
             protocol_mapping = {key: str(value) for key, value in CaModel.CaTypeChoice.choices}
@@ -719,12 +715,16 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             expiring_device_counts = {
                 'expiring_in_24_hours': DeviceModel.objects.filter(
                     issued_credentials__credential__certificate__not_valid_after__gt=now,
-                    issued_credentials__credential__certificate__not_valid_after__lte=next_24_hours
-                ).distinct().count(),
+                    issued_credentials__credential__certificate__not_valid_after__lte=next_24_hours,
+                )
+                .distinct()
+                .count(),
                 'expiring_in_7_days': DeviceModel.objects.filter(
                     issued_credentials__credential__certificate__not_valid_after__gt=now,
-                    issued_credentials__credential__certificate__not_valid_after__lte=next_7_days
-                ).distinct().count(),
+                    issued_credentials__credential__certificate__not_valid_after__lte=next_7_days,
+                )
+                .distinct()
+                .count(),
             }
         except Exception as exception:
             err_msg = f'Error occurred in expiring device count query: {exception}'
@@ -745,11 +745,15 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             expired_device_counts = {
                 'total_expired': DeviceModel.objects.filter(
                     issued_credentials__credential__certificate__not_valid_after__lt=now
-                ).distinct().count(),
+                )
+                .distinct()
+                .count(),
                 'expired_in_last_7_days': DeviceModel.objects.filter(
                     issued_credentials__credential__certificate__not_valid_after__gte=last_7_days,
-                    issued_credentials__credential__certificate__not_valid_after__lt=now
-                ).distinct().count(),
+                    issued_credentials__credential__certificate__not_valid_after__lt=now,
+                )
+                .distinct()
+                .count(),
             }
         except Exception as exception:
             err_msg = f'Error occurred in expired device count query: {exception}'
@@ -771,11 +775,11 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             expiring_issuing_ca_counts = {
                 'expiring_in_24_hours': CaModel.objects.filter(
                     credential__certificate__not_valid_after__gt=now,
-                    credential__certificate__not_valid_after__lte=next_24_hours
+                    credential__certificate__not_valid_after__lte=next_24_hours,
                 ).count(),
                 'expiring_in_7_days': CaModel.objects.filter(
                     credential__certificate__not_valid_after__gt=now,
-                    credential__certificate__not_valid_after__lte=next_7_days
+                    credential__certificate__not_valid_after__lte=next_7_days,
                 ).count(),
             }
         except Exception as exception:
@@ -783,5 +787,3 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             self.logger.exception(err_msg)
 
         return expiring_issuing_ca_counts
-
-

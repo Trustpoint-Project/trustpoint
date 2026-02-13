@@ -9,11 +9,9 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
-    dependencies = [
-    ]
+    dependencies = []
 
     operations = [
         migrations.CreateModel(
@@ -30,8 +28,22 @@ class Migration(migrations.Migration):
             name='AuthorityKeyIdentifierExtension',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key_identifier', models.CharField(blank=True, editable=False, max_length=256, null=True, verbose_name='Key Identifier')),
-                ('authority_cert_serial_number', models.CharField(blank=True, editable=False, max_length=256, null=True, verbose_name='Authority Cert Serial Number')),
+                (
+                    'key_identifier',
+                    models.CharField(
+                        blank=True, editable=False, max_length=256, null=True, verbose_name='Key Identifier'
+                    ),
+                ),
+                (
+                    'authority_cert_serial_number',
+                    models.CharField(
+                        blank=True,
+                        editable=False,
+                        max_length=256,
+                        null=True,
+                        verbose_name='Authority Cert Serial Number',
+                    ),
+                ),
                 ('critical', models.BooleanField(editable=False, verbose_name='Critical')),
             ],
             options={
@@ -119,7 +131,10 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('critical', models.BooleanField(editable=False, verbose_name='Critical')),
-                ('inhibit_any_policy', models.PositiveIntegerField(blank=True, editable=False, null=True, verbose_name='InhibitAnyPolicy')),
+                (
+                    'inhibit_any_policy',
+                    models.PositiveIntegerField(blank=True, editable=False, null=True, verbose_name='InhibitAnyPolicy'),
+                ),
             ],
             bases=(pki.models.extension.CertificateExtension, models.Model),
         ),
@@ -134,8 +149,18 @@ class Migration(migrations.Migration):
             name='NoticeReference',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('organization', models.CharField(blank=True, editable=False, max_length=200, null=True, verbose_name='Organization')),
-                ('notice_numbers', models.CharField(blank=True, editable=False, max_length=1024, null=True, verbose_name='Notice Numbers')),
+                (
+                    'organization',
+                    models.CharField(
+                        blank=True, editable=False, max_length=200, null=True, verbose_name='Organization'
+                    ),
+                ),
+                (
+                    'notice_numbers',
+                    models.CharField(
+                        blank=True, editable=False, max_length=1024, null=True, verbose_name='Notice Numbers'
+                    ),
+                ),
             ],
             bases=(util.db.OrphanDeletionMixin, models.Model),
         ),
@@ -144,8 +169,18 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('critical', models.BooleanField(editable=False, verbose_name='Critical')),
-                ('require_explicit_policy', models.PositiveIntegerField(blank=True, editable=False, null=True, verbose_name='requireExplicitPolicy')),
-                ('inhibit_policy_mapping', models.PositiveIntegerField(blank=True, editable=False, null=True, verbose_name='inhibitPolicyMapping')),
+                (
+                    'require_explicit_policy',
+                    models.PositiveIntegerField(
+                        blank=True, editable=False, null=True, verbose_name='requireExplicitPolicy'
+                    ),
+                ),
+                (
+                    'inhibit_policy_mapping',
+                    models.PositiveIntegerField(
+                        blank=True, editable=False, null=True, verbose_name='inhibitPolicyMapping'
+                    ),
+                ),
             ],
             bases=(pki.models.extension.CertificateExtension, models.Model),
         ),
@@ -153,14 +188,20 @@ class Migration(migrations.Migration):
             name='PolicyInformation',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('policy_identifier', models.CharField(editable=False, max_length=256, verbose_name='Policy Identifier')),
+                (
+                    'policy_identifier',
+                    models.CharField(editable=False, max_length=256, verbose_name='Policy Identifier'),
+                ),
             ],
         ),
         migrations.CreateModel(
             name='PolicyQualifierInfo',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('policy_qualifier_id', models.CharField(editable=False, max_length=256, verbose_name='Policy Qualifier ID')),
+                (
+                    'policy_qualifier_id',
+                    models.CharField(editable=False, max_length=256, verbose_name='Policy Qualifier ID'),
+                ),
             ],
             options={
                 'abstract': False,
@@ -170,7 +211,10 @@ class Migration(migrations.Migration):
             name='SubjectKeyIdentifierExtension',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('key_identifier', models.CharField(editable=False, max_length=256, unique=True, verbose_name='Key Identifier')),
+                (
+                    'key_identifier',
+                    models.CharField(editable=False, max_length=256, unique=True, verbose_name='Key Identifier'),
+                ),
             ],
             bases=(pki.models.extension.CertificateExtension, models.Model),
         ),
@@ -178,8 +222,22 @@ class Migration(migrations.Migration):
             name='TruststoreModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('unique_name', models.CharField(max_length=100, unique=True, validators=[util.field.UniqueNameValidator()], verbose_name='Unique Name')),
-                ('intended_usage', models.IntegerField(choices=[(0, 'IDevID'), (1, 'TLS'), (2, 'Generic'), (3, 'Device Owner ID')], verbose_name='Intended Usage')),
+                (
+                    'unique_name',
+                    models.CharField(
+                        max_length=100,
+                        unique=True,
+                        validators=[util.field.UniqueNameValidator()],
+                        verbose_name='Unique Name',
+                    ),
+                ),
+                (
+                    'intended_usage',
+                    models.IntegerField(
+                        choices=[(0, 'IDevID'), (1, 'TLS'), (2, 'Generic'), (3, 'Device Owner ID')],
+                        verbose_name='Intended Usage',
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created-At')),
             ],
         ),
@@ -199,7 +257,12 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('critical', models.BooleanField(editable=False, verbose_name='Critical')),
-                ('authority_info_access_syntax', models.ManyToManyField(blank=True, related_name='authority_info_access_syntax', to='pki.accessdescriptionmodel')),
+                (
+                    'authority_info_access_syntax',
+                    models.ManyToManyField(
+                        blank=True, related_name='authority_info_access_syntax', to='pki.accessdescriptionmodel'
+                    ),
+                ),
             ],
             bases=(pki.models.extension.CertificateExtension, models.Model),
         ),
@@ -209,7 +272,12 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('critical', models.BooleanField(editable=False, verbose_name='Critical')),
                 ('ca', models.BooleanField(editable=False, verbose_name='CA')),
-                ('path_length_constraint', models.PositiveSmallIntegerField(blank=True, editable=False, null=True, verbose_name='Path Length Constraint')),
+                (
+                    'path_length_constraint',
+                    models.PositiveSmallIntegerField(
+                        blank=True, editable=False, null=True, verbose_name='Path Length Constraint'
+                    ),
+                ),
             ],
             options={
                 'unique_together': {('critical', 'ca', 'path_length_constraint')},
@@ -222,31 +290,196 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('is_self_signed', models.BooleanField(verbose_name='Self-Signed')),
                 ('common_name', models.CharField(default='', max_length=256, verbose_name='Common Name')),
-                ('sha256_fingerprint', models.CharField(editable=False, max_length=256, unique=True, verbose_name='Fingerprint (SHA256)')),
-                ('signature_algorithm_oid', models.CharField(choices=[('1.2.840.113549.1.1.4', 'Rsa Md5'), ('1.2.840.113549.1.1.5', 'Rsa Sha1'), ('1.3.14.3.2.29', 'Rsa Sha1 Alt'), ('1.2.840.113549.1.1.14', 'Rsa Sha224'), ('1.2.840.113549.1.1.11', 'Rsa Sha256'), ('1.2.840.113549.1.1.12', 'Rsa Sha384'), ('1.2.840.113549.1.1.13', 'Rsa Sha512'), ('2.16.840.1.101.3.4.3.13', 'Rsa Sha3 224'), ('2.16.840.1.101.3.4.3.14', 'Rsa Sha3 256'), ('2.16.840.1.101.3.4.3.15', 'Rsa Sha3 384'), ('2.16.840.1.101.3.4.3.16', 'Rsa Sha3 512'), ('1.2.840.10045.4.1', 'Ecdsa Sha1'), ('1.2.840.10045.4.3.1', 'Ecdsa Sha224'), ('1.2.840.10045.4.3.2', 'Ecdsa Sha256'), ('1.2.840.10045.4.3.3', 'Ecdsa Sha384'), ('1.2.840.10045.4.3.4', 'Ecdsa Sha512'), ('2.16.840.1.101.3.4.3.9', 'Ecdsa Sha3 224'), ('2.16.840.1.101.3.4.3.10', 'Ecdsa Sha3 256'), ('2.16.840.1.101.3.4.3.11', 'Ecdsa Sha3 384'), ('2.16.840.1.101.3.4.3.12', 'Ecdsa Sha3 512'), ('1.2.840.113533.7.66.13', 'Password Based Mac')], editable=False, max_length=256, verbose_name='Signature Algorithm OID')),
+                (
+                    'sha256_fingerprint',
+                    models.CharField(editable=False, max_length=256, unique=True, verbose_name='Fingerprint (SHA256)'),
+                ),
+                (
+                    'signature_algorithm_oid',
+                    models.CharField(
+                        choices=[
+                            ('1.2.840.113549.1.1.4', 'Rsa Md5'),
+                            ('1.2.840.113549.1.1.5', 'Rsa Sha1'),
+                            ('1.3.14.3.2.29', 'Rsa Sha1 Alt'),
+                            ('1.2.840.113549.1.1.14', 'Rsa Sha224'),
+                            ('1.2.840.113549.1.1.11', 'Rsa Sha256'),
+                            ('1.2.840.113549.1.1.12', 'Rsa Sha384'),
+                            ('1.2.840.113549.1.1.13', 'Rsa Sha512'),
+                            ('2.16.840.1.101.3.4.3.13', 'Rsa Sha3 224'),
+                            ('2.16.840.1.101.3.4.3.14', 'Rsa Sha3 256'),
+                            ('2.16.840.1.101.3.4.3.15', 'Rsa Sha3 384'),
+                            ('2.16.840.1.101.3.4.3.16', 'Rsa Sha3 512'),
+                            ('1.2.840.10045.4.1', 'Ecdsa Sha1'),
+                            ('1.2.840.10045.4.3.1', 'Ecdsa Sha224'),
+                            ('1.2.840.10045.4.3.2', 'Ecdsa Sha256'),
+                            ('1.2.840.10045.4.3.3', 'Ecdsa Sha384'),
+                            ('1.2.840.10045.4.3.4', 'Ecdsa Sha512'),
+                            ('2.16.840.1.101.3.4.3.9', 'Ecdsa Sha3 224'),
+                            ('2.16.840.1.101.3.4.3.10', 'Ecdsa Sha3 256'),
+                            ('2.16.840.1.101.3.4.3.11', 'Ecdsa Sha3 384'),
+                            ('2.16.840.1.101.3.4.3.12', 'Ecdsa Sha3 512'),
+                            ('1.2.840.113533.7.66.13', 'Password Based Mac'),
+                        ],
+                        editable=False,
+                        max_length=256,
+                        verbose_name='Signature Algorithm OID',
+                    ),
+                ),
                 ('signature_value', models.CharField(editable=False, max_length=65536, verbose_name='Signature Value')),
-                ('version', models.PositiveSmallIntegerField(choices=[(2, 'Version 3')], editable=False, verbose_name='Version')),
+                (
+                    'version',
+                    models.PositiveSmallIntegerField(
+                        choices=[(2, 'Version 3')], editable=False, verbose_name='Version'
+                    ),
+                ),
                 ('serial_number', models.CharField(editable=False, max_length=256, verbose_name='Serial Number')),
-                ('issuer_public_bytes', models.CharField(editable=False, max_length=2048, verbose_name='Issuer Public Bytes')),
+                (
+                    'issuer_public_bytes',
+                    models.CharField(editable=False, max_length=2048, verbose_name='Issuer Public Bytes'),
+                ),
                 ('not_valid_before', models.DateTimeField(editable=False, verbose_name='Not Valid Before (UTC)')),
                 ('not_valid_after', models.DateTimeField(editable=False, verbose_name='Not Valid After (UTC)')),
-                ('subject_public_bytes', models.CharField(editable=False, max_length=2048, verbose_name='Subject Public Bytes')),
-                ('spki_algorithm_oid', models.CharField(choices=[('1.2.840.10045.2.1', 'Ecc'), ('1.2.840.113549.1.1.1', 'Rsa')], editable=False, max_length=256, verbose_name='Public Key Algorithm OID')),
-                ('spki_algorithm', models.CharField(editable=False, max_length=256, verbose_name='Public Key Algorithm')),
+                (
+                    'subject_public_bytes',
+                    models.CharField(editable=False, max_length=2048, verbose_name='Subject Public Bytes'),
+                ),
+                (
+                    'spki_algorithm_oid',
+                    models.CharField(
+                        choices=[('1.2.840.10045.2.1', 'Ecc'), ('1.2.840.113549.1.1.1', 'Rsa')],
+                        editable=False,
+                        max_length=256,
+                        verbose_name='Public Key Algorithm OID',
+                    ),
+                ),
+                (
+                    'spki_algorithm',
+                    models.CharField(editable=False, max_length=256, verbose_name='Public Key Algorithm'),
+                ),
                 ('spki_key_size', models.PositiveIntegerField(editable=False, verbose_name='Public Key Size')),
-                ('spki_ec_curve_oid', models.CharField(choices=[('', 'None'), ('1.2.840.10045.3.1.1', 'Secp192R1'), ('1.3.132.0.33', 'Secp224R1'), ('1.3.132.0.10', 'Secp256K1'), ('1.2.840.10045.3.1.7', 'Secp256R1'), ('1.3.132.0.34', 'Secp384R1'), ('1.3.132.0.35', 'Secp521R1'), ('1.3.36.3.3.2.8.1.1.7', 'Brainpoolp256R1'), ('1.3.36.3.3.2.8.1.1.11', 'Brainpoolp384R1'), ('1.3.36.3.3.2.8.1.1.13', 'Brainpoolp512R1'), ('1.3.132.0.1', 'Sect163K1'), ('1.3.132.0.15', 'Sect163R2'), ('1.3.132.0.26', 'Sect233K1'), ('1.3.132.0.27', 'Sect233R1'), ('1.3.132.0.16', 'Sect283K1'), ('1.3.132.0.17', 'Sect283R1'), ('1.3.132.0.36', 'Sect409K1'), ('1.3.132.0.37', 'Sect409R1'), ('1.3.132.0.38', 'Sect571K1'), ('1.3.132.0.39', 'Sect571R1')], default='', editable=False, max_length=256, verbose_name='Public Key Curve OID (ECC)')),
-                ('spki_ec_curve', models.CharField(default=None, editable=False, max_length=256, verbose_name='Public Key Curve (ECC)')),
+                (
+                    'spki_ec_curve_oid',
+                    models.CharField(
+                        choices=[
+                            ('', 'None'),
+                            ('1.2.840.10045.3.1.1', 'Secp192R1'),
+                            ('1.3.132.0.33', 'Secp224R1'),
+                            ('1.3.132.0.10', 'Secp256K1'),
+                            ('1.2.840.10045.3.1.7', 'Secp256R1'),
+                            ('1.3.132.0.34', 'Secp384R1'),
+                            ('1.3.132.0.35', 'Secp521R1'),
+                            ('1.3.36.3.3.2.8.1.1.7', 'Brainpoolp256R1'),
+                            ('1.3.36.3.3.2.8.1.1.11', 'Brainpoolp384R1'),
+                            ('1.3.36.3.3.2.8.1.1.13', 'Brainpoolp512R1'),
+                            ('1.3.132.0.1', 'Sect163K1'),
+                            ('1.3.132.0.15', 'Sect163R2'),
+                            ('1.3.132.0.26', 'Sect233K1'),
+                            ('1.3.132.0.27', 'Sect233R1'),
+                            ('1.3.132.0.16', 'Sect283K1'),
+                            ('1.3.132.0.17', 'Sect283R1'),
+                            ('1.3.132.0.36', 'Sect409K1'),
+                            ('1.3.132.0.37', 'Sect409R1'),
+                            ('1.3.132.0.38', 'Sect571K1'),
+                            ('1.3.132.0.39', 'Sect571R1'),
+                        ],
+                        default='',
+                        editable=False,
+                        max_length=256,
+                        verbose_name='Public Key Curve OID (ECC)',
+                    ),
+                ),
+                (
+                    'spki_ec_curve',
+                    models.CharField(
+                        default=None, editable=False, max_length=256, verbose_name='Public Key Curve (ECC)'
+                    ),
+                ),
                 ('cert_pem', models.TextField(editable=False, verbose_name='Certificate (PEM)')),
-                ('public_key_pem', models.CharField(editable=False, max_length=65536, verbose_name='Public Key (PEM, SPKI)')),
+                (
+                    'public_key_pem',
+                    models.CharField(editable=False, max_length=65536, verbose_name='Public Key (PEM, SPKI)'),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created-At')),
-                ('authority_information_access_extension', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.authorityinformationaccessextension')),
-                ('authority_key_identifier_extension', models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='certificates', to='pki.authoritykeyidentifierextension', verbose_name='Authority Key Identifier')),
-                ('basic_constraints_extension', models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='certificates', to='pki.basicconstraintsextension', verbose_name='Basic Constraints')),
-                ('issuer', models.ManyToManyField(editable=False, related_name='issuer', to='pki.attributetypeandvalue', verbose_name='Issuer')),
-                ('subject', models.ManyToManyField(editable=False, related_name='subject', to='pki.attributetypeandvalue', verbose_name='Subject')),
-                ('certificate_policies_extension', models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='certificates', to='pki.certificatepoliciesextension', verbose_name='Certificate Policies')),
-                ('crl_distribution_points_extension', models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='certificates', to='pki.crldistributionpointsextension')),
-                ('extended_key_usage_extension', models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='certificates', to='pki.extendedkeyusageextension', verbose_name='Extended Key Usage')),
+                (
+                    'authority_information_access_extension',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to='pki.authorityinformationaccessextension',
+                    ),
+                ),
+                (
+                    'authority_key_identifier_extension',
+                    models.ForeignKey(
+                        blank=True,
+                        editable=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='certificates',
+                        to='pki.authoritykeyidentifierextension',
+                        verbose_name='Authority Key Identifier',
+                    ),
+                ),
+                (
+                    'basic_constraints_extension',
+                    models.ForeignKey(
+                        blank=True,
+                        editable=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='certificates',
+                        to='pki.basicconstraintsextension',
+                        verbose_name='Basic Constraints',
+                    ),
+                ),
+                (
+                    'issuer',
+                    models.ManyToManyField(
+                        editable=False, related_name='issuer', to='pki.attributetypeandvalue', verbose_name='Issuer'
+                    ),
+                ),
+                (
+                    'subject',
+                    models.ManyToManyField(
+                        editable=False, related_name='subject', to='pki.attributetypeandvalue', verbose_name='Subject'
+                    ),
+                ),
+                (
+                    'certificate_policies_extension',
+                    models.ForeignKey(
+                        blank=True,
+                        editable=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='certificates',
+                        to='pki.certificatepoliciesextension',
+                        verbose_name='Certificate Policies',
+                    ),
+                ),
+                (
+                    'crl_distribution_points_extension',
+                    models.ForeignKey(
+                        blank=True,
+                        editable=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='certificates',
+                        to='pki.crldistributionpointsextension',
+                    ),
+                ),
+                (
+                    'extended_key_usage_extension',
+                    models.ForeignKey(
+                        blank=True,
+                        editable=False,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='certificates',
+                        to='pki.extendedkeyusageextension',
+                        verbose_name='Extended Key Usage',
+                    ),
+                ),
             ],
             bases=(trustpoint.logger.LoggerMixin, models.Model),
         ),
@@ -255,8 +488,21 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('order', models.PositiveIntegerField(editable=False)),
-                ('certificate', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, to='pki.certificatemodel')),
-                ('primary_certificate', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.PROTECT, related_name='primary_certificate_set', to='pki.certificatemodel')),
+                (
+                    'certificate',
+                    models.ForeignKey(
+                        editable=False, on_delete=django.db.models.deletion.PROTECT, to='pki.certificatemodel'
+                    ),
+                ),
+                (
+                    'primary_certificate',
+                    models.ForeignKey(
+                        editable=False,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='primary_certificate_set',
+                        to='pki.certificatemodel',
+                    ),
+                ),
             ],
             options={
                 'ordering': ['order'],
@@ -266,11 +512,42 @@ class Migration(migrations.Migration):
             name='CredentialModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('credential_type', models.IntegerField(choices=[(0, 'Trustpoint TLS Server'), (1, 'Root CA'), (2, 'Issuing CA'), (3, 'Issued Credential'), (4, 'DevOwnerID')], verbose_name='Credential Type')),
-                ('private_key', models.CharField(blank=True, default='', max_length=65536, verbose_name='Private key (PEM)')),
+                (
+                    'credential_type',
+                    models.IntegerField(
+                        choices=[
+                            (0, 'Trustpoint TLS Server'),
+                            (1, 'Root CA'),
+                            (2, 'Issuing CA'),
+                            (3, 'Issued Credential'),
+                            (4, 'DevOwnerID'),
+                        ],
+                        verbose_name='Credential Type',
+                    ),
+                ),
+                (
+                    'private_key',
+                    models.CharField(blank=True, default='', max_length=65536, verbose_name='Private key (PEM)'),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
-                ('certificate', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='credential_set', to='pki.certificatemodel')),
-                ('certificate_chain', models.ManyToManyField(blank=True, related_name='credential_certificate_chains', through='pki.CertificateChainOrderModel', through_fields=('credential', 'certificate'), to='pki.certificatemodel')),
+                (
+                    'certificate',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='credential_set',
+                        to='pki.certificatemodel',
+                    ),
+                ),
+                (
+                    'certificate_chain',
+                    models.ManyToManyField(
+                        blank=True,
+                        related_name='credential_certificate_chains',
+                        through='pki.CertificateChainOrderModel',
+                        through_fields=('credential', 'certificate'),
+                        to='pki.certificatemodel',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -280,25 +557,43 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='certificatechainordermodel',
             name='credential',
-            field=models.ForeignKey(editable=False, on_delete=django.db.models.deletion.CASCADE, to='pki.credentialmodel'),
+            field=models.ForeignKey(
+                editable=False, on_delete=django.db.models.deletion.CASCADE, to='pki.credentialmodel'
+            ),
         ),
         migrations.CreateModel(
             name='ActiveTrustpointTlsServerCredentialModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('credential', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='pki.credentialmodel')),
+                (
+                    'credential',
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='pki.credentialmodel'
+                    ),
+                ),
             ],
         ),
         migrations.AddField(
             model_name='crldistributionpointsextension',
             name='distribution_points',
-            field=models.ManyToManyField(blank=True, to='pki.distributionpointmodel', verbose_name='Distribution Points'),
+            field=models.ManyToManyField(
+                blank=True, to='pki.distributionpointmodel', verbose_name='Distribution Points'
+            ),
         ),
         migrations.CreateModel(
             name='DistributionPointName',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name_relative_to_crl_issuer', models.ManyToManyField(blank=True, editable=False, related_name='distribution_point_name', to='pki.attributetypeandvalue', verbose_name='Name relative to crl issuer')),
+                (
+                    'name_relative_to_crl_issuer',
+                    models.ManyToManyField(
+                        blank=True,
+                        editable=False,
+                        related_name='distribution_point_name',
+                        to='pki.attributetypeandvalue',
+                        verbose_name='Name relative to crl issuer',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -308,7 +603,12 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='distributionpointmodel',
             name='distribution_point_name',
-            field=models.ForeignKey(blank=True, on_delete=django.db.models.deletion.PROTECT, to='pki.distributionpointname', verbose_name='Distribution Point Name'),
+            field=models.ForeignKey(
+                blank=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                to='pki.distributionpointname',
+                verbose_name='Distribution Point Name',
+            ),
         ),
         migrations.CreateModel(
             name='FreshestCrlExtension',
@@ -322,7 +622,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='certificatemodel',
             name='freshest_crl_extension',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.freshestcrlextension'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.freshestcrlextension'
+            ),
         ),
         migrations.CreateModel(
             name='GeneralNameDirectoryName',
@@ -336,7 +638,20 @@ class Migration(migrations.Migration):
             name='GeneralNameIpAddress',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('ip_type', models.CharField(choices=[('A4', 'IPv4 Address'), ('A6', 'IPv6 Address'), ('N4', 'IPv4 Network'), ('N6', 'IPv6 Network')], editable=False, max_length=2, verbose_name='IP Type')),
+                (
+                    'ip_type',
+                    models.CharField(
+                        choices=[
+                            ('A4', 'IPv4 Address'),
+                            ('A6', 'IPv6 Address'),
+                            ('N4', 'IPv4 Network'),
+                            ('N6', 'IPv6 Network'),
+                        ],
+                        editable=False,
+                        max_length=2,
+                        verbose_name='IP Type',
+                    ),
+                ),
                 ('value', models.CharField(editable=False, max_length=16384, verbose_name='Value')),
             ],
             options={
@@ -348,9 +663,30 @@ class Migration(migrations.Migration):
             name='GeneralNameModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('directory_name', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamedirectoryname')),
-                ('dns_name', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamednsname')),
-                ('ip_address', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnameipaddress')),
+                (
+                    'directory_name',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to='pki.generalnamedirectoryname',
+                    ),
+                ),
+                (
+                    'dns_name',
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamednsname'
+                    ),
+                ),
+                (
+                    'ip_address',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to='pki.generalnameipaddress',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -360,7 +696,9 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='accessdescriptionmodel',
             name='access_location',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamemodel', verbose_name='Access Location'),
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamemodel', verbose_name='Access Location'
+            ),
         ),
         migrations.CreateModel(
             name='GeneralNameOtherName',
@@ -377,29 +715,76 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='generalnamemodel',
             name='other_name',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnameothername'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnameothername'
+            ),
         ),
         migrations.AddField(
             model_name='generalnamemodel',
             name='registered_id',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnameregisteredid'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnameregisteredid'
+            ),
         ),
         migrations.AddField(
             model_name='generalnamemodel',
             name='rfc822_name',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamerfc822name'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamerfc822name'
+            ),
         ),
         migrations.CreateModel(
             name='GeneralNamesModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('directory_names', models.ManyToManyField(related_name='general_names_set', to='pki.generalnamedirectoryname', verbose_name='Directory Names')),
-                ('dns_names', models.ManyToManyField(related_name='general_names_set', to='pki.generalnamednsname', verbose_name='DNS Names')),
-                ('ip_addresses', models.ManyToManyField(related_name='general_names_set', to='pki.generalnameipaddress', verbose_name='IP Addresses')),
-                ('other_names', models.ManyToManyField(related_name='general_names_set', to='pki.generalnameothername', verbose_name='Other Names')),
-                ('registered_ids', models.ManyToManyField(related_name='general_names_set', to='pki.generalnameregisteredid', verbose_name='Registered IDs')),
-                ('rfc822_names', models.ManyToManyField(related_name='general_names_set', to='pki.generalnamerfc822name', verbose_name='RFC822 Names')),
-                ('uniform_resource_identifiers', models.ManyToManyField(related_name='general_names_set', to='pki.generalnameuniformresourceidentifier', verbose_name='Uniform Resource Identifiers')),
+                (
+                    'directory_names',
+                    models.ManyToManyField(
+                        related_name='general_names_set',
+                        to='pki.generalnamedirectoryname',
+                        verbose_name='Directory Names',
+                    ),
+                ),
+                (
+                    'dns_names',
+                    models.ManyToManyField(
+                        related_name='general_names_set', to='pki.generalnamednsname', verbose_name='DNS Names'
+                    ),
+                ),
+                (
+                    'ip_addresses',
+                    models.ManyToManyField(
+                        related_name='general_names_set', to='pki.generalnameipaddress', verbose_name='IP Addresses'
+                    ),
+                ),
+                (
+                    'other_names',
+                    models.ManyToManyField(
+                        related_name='general_names_set', to='pki.generalnameothername', verbose_name='Other Names'
+                    ),
+                ),
+                (
+                    'registered_ids',
+                    models.ManyToManyField(
+                        related_name='general_names_set',
+                        to='pki.generalnameregisteredid',
+                        verbose_name='Registered IDs',
+                    ),
+                ),
+                (
+                    'rfc822_names',
+                    models.ManyToManyField(
+                        related_name='general_names_set', to='pki.generalnamerfc822name', verbose_name='RFC822 Names'
+                    ),
+                ),
+                (
+                    'uniform_resource_identifiers',
+                    models.ManyToManyField(
+                        related_name='general_names_set',
+                        to='pki.generalnameuniformresourceidentifier',
+                        verbose_name='Uniform Resource Identifiers',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -409,22 +794,41 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='distributionpointname',
             name='full_name',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamesmodel'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamesmodel'
+            ),
         ),
         migrations.AddField(
             model_name='distributionpointmodel',
             name='crl_issuer',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamesmodel', verbose_name='CRL Issuer'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                to='pki.generalnamesmodel',
+                verbose_name='CRL Issuer',
+            ),
         ),
         migrations.AddField(
             model_name='authoritykeyidentifierextension',
             name='authority_cert_issuer',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamesmodel', verbose_name='Issuer Alternative Name Issuer'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                to='pki.generalnamesmodel',
+                verbose_name='Issuer Alternative Name Issuer',
+            ),
         ),
         migrations.AddField(
             model_name='generalnamemodel',
             name='uri',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnameuniformresourceidentifier'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                to='pki.generalnameuniformresourceidentifier',
+            ),
         ),
         migrations.CreateModel(
             name='GeneralSubtree',
@@ -439,14 +843,25 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='certificatemodel',
             name='inhibit_any_policy_extension',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.inhibitanypolicyextension'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.inhibitanypolicyextension'
+            ),
         ),
         migrations.CreateModel(
             name='IssuerAlternativeNameExtension',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('critical', models.BooleanField(editable=False, verbose_name='Critical')),
-                ('issuer_alt_name', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamesmodel', verbose_name='Issuer Alternative Name Issuer')),
+                (
+                    'issuer_alt_name',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to='pki.generalnamesmodel',
+                        verbose_name='Issuer Alternative Name Issuer',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -456,20 +871,56 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='certificatemodel',
             name='issuer_alternative_name_extension',
-            field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='certificates', to='pki.issueralternativenameextension', verbose_name='Issuer Alternative Name'),
+            field=models.ForeignKey(
+                blank=True,
+                editable=False,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='certificates',
+                to='pki.issueralternativenameextension',
+                verbose_name='Issuer Alternative Name',
+            ),
         ),
         migrations.CreateModel(
             name='IssuingCaModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('unique_name', models.CharField(max_length=100, unique=True, validators=[util.field.UniqueNameValidator()], verbose_name='Issuing CA Name')),
-                ('issuing_ca_type', models.IntegerField(choices=[(0, 'Auto-Generated Root'), (1, 'Auto-Generated'), (2, 'Local-Unprotected'), (3, 'Local-PKCS11'), (4, 'Remote-EST'), (5, 'Remote-CMP')], verbose_name='Issuing CA Type')),
+                (
+                    'unique_name',
+                    models.CharField(
+                        max_length=100,
+                        unique=True,
+                        validators=[util.field.UniqueNameValidator()],
+                        verbose_name='Issuing CA Name',
+                    ),
+                ),
+                (
+                    'issuing_ca_type',
+                    models.IntegerField(
+                        choices=[
+                            (0, 'Auto-Generated Root'),
+                            (1, 'Auto-Generated'),
+                            (2, 'Local-Unprotected'),
+                            (3, 'Local-PKCS11'),
+                            (4, 'Remote-EST'),
+                            (5, 'Remote-CMP'),
+                        ],
+                        verbose_name='Issuing CA Type',
+                    ),
+                ),
                 ('is_active', models.BooleanField(default=True, verbose_name='Active')),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
                 ('updated_at', models.DateTimeField(auto_now=True, verbose_name='Updated')),
                 ('last_crl_issued_at', models.DateTimeField(blank=True, null=True, verbose_name='Last CRL Issued')),
                 ('crl_pem', models.TextField(default='', editable=False, verbose_name='CRL in PEM format')),
-                ('credential', models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='issuing_cas', to='pki.credentialmodel')),
+                (
+                    'credential',
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='issuing_cas',
+                        to='pki.credentialmodel',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -480,27 +931,58 @@ class Migration(migrations.Migration):
             name='DomainModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('unique_name', models.CharField(max_length=100, unique=True, validators=[util.field.UniqueNameValidator()], verbose_name='Domain Name')),
+                (
+                    'unique_name',
+                    models.CharField(
+                        max_length=100,
+                        unique=True,
+                        validators=[util.field.UniqueNameValidator()],
+                        verbose_name='Domain Name',
+                    ),
+                ),
                 ('is_active', models.BooleanField(default=True, verbose_name='Active')),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
                 ('updated_at', models.DateTimeField(auto_now=True, verbose_name='Updated')),
-                ('issuing_ca', models.ForeignKey(null=True, on_delete=django.db.models.deletion.PROTECT, related_name='domains', to='pki.issuingcamodel', verbose_name='Issuing CA')),
+                (
+                    'issuing_ca',
+                    models.ForeignKey(
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='domains',
+                        to='pki.issuingcamodel',
+                        verbose_name='Issuing CA',
+                    ),
+                ),
             ],
         ),
         migrations.AddField(
             model_name='extendedkeyusageextension',
             name='key_purpose_ids',
-            field=models.ManyToManyField(editable=False, related_name='extended_key_usages', to='pki.keypurposeidmodel'),
+            field=models.ManyToManyField(
+                editable=False, related_name='extended_key_usages', to='pki.keypurposeidmodel'
+            ),
         ),
         migrations.CreateModel(
             name='KeyUsageExtension',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('critical', models.BooleanField(editable=False, verbose_name='Critical')),
-                ('digital_signature', models.BooleanField(default=False, editable=False, verbose_name='Digital Signature')),
-                ('content_commitment', models.BooleanField(default=False, editable=False, verbose_name='Content Commitment')),
-                ('key_encipherment', models.BooleanField(default=False, editable=False, verbose_name='Key Encipherment')),
-                ('data_encipherment', models.BooleanField(default=False, editable=False, verbose_name='Data Encipherment')),
+                (
+                    'digital_signature',
+                    models.BooleanField(default=False, editable=False, verbose_name='Digital Signature'),
+                ),
+                (
+                    'content_commitment',
+                    models.BooleanField(default=False, editable=False, verbose_name='Content Commitment'),
+                ),
+                (
+                    'key_encipherment',
+                    models.BooleanField(default=False, editable=False, verbose_name='Key Encipherment'),
+                ),
+                (
+                    'data_encipherment',
+                    models.BooleanField(default=False, editable=False, verbose_name='Data Encipherment'),
+                ),
                 ('key_agreement', models.BooleanField(default=False, editable=False, verbose_name='Key Agreement')),
                 ('key_cert_sign', models.BooleanField(default=False, editable=False, verbose_name='Key Cert Sign')),
                 ('crl_sign', models.BooleanField(default=False, editable=False, verbose_name='CRL Sign')),
@@ -508,37 +990,89 @@ class Migration(migrations.Migration):
                 ('decipher_only', models.BooleanField(default=False, editable=False, verbose_name='Decipher Only')),
             ],
             options={
-                'unique_together': {('digital_signature', 'content_commitment', 'key_encipherment', 'data_encipherment', 'key_agreement', 'key_cert_sign', 'crl_sign', 'encipher_only', 'decipher_only')},
+                'unique_together': {
+                    (
+                        'digital_signature',
+                        'content_commitment',
+                        'key_encipherment',
+                        'data_encipherment',
+                        'key_agreement',
+                        'key_cert_sign',
+                        'crl_sign',
+                        'encipher_only',
+                        'decipher_only',
+                    )
+                },
             },
             bases=(pki.models.extension.CertificateExtension, models.Model),
         ),
         migrations.AddField(
             model_name='certificatemodel',
             name='key_usage_extension',
-            field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='certificates', to='pki.keyusageextension', verbose_name='Key Usage'),
+            field=models.ForeignKey(
+                blank=True,
+                editable=False,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='certificates',
+                to='pki.keyusageextension',
+                verbose_name='Key Usage',
+            ),
         ),
         migrations.CreateModel(
             name='NameConstraintsExtension',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('critical', models.BooleanField(editable=False, verbose_name='Critical')),
-                ('excluded_subtrees', models.ManyToManyField(editable=False, related_name='excluded_subtrees_set', to='pki.generalsubtree')),
-                ('permitted_subtrees', models.ManyToManyField(editable=False, related_name='permitted_subtrees_set', to='pki.generalsubtree')),
+                (
+                    'excluded_subtrees',
+                    models.ManyToManyField(
+                        editable=False, related_name='excluded_subtrees_set', to='pki.generalsubtree'
+                    ),
+                ),
+                (
+                    'permitted_subtrees',
+                    models.ManyToManyField(
+                        editable=False, related_name='permitted_subtrees_set', to='pki.generalsubtree'
+                    ),
+                ),
             ],
             bases=(pki.models.extension.CertificateExtension, models.Model),
         ),
         migrations.AddField(
             model_name='certificatemodel',
             name='name_constraints_extension',
-            field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='certificates', to='pki.nameconstraintsextension'),
+            field=models.ForeignKey(
+                blank=True,
+                editable=False,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='certificates',
+                to='pki.nameconstraintsextension',
+            ),
         ),
         migrations.CreateModel(
             name='OwnerCredentialModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('unique_name', models.CharField(max_length=100, unique=True, validators=[util.field.UniqueNameValidator()], verbose_name='Unique Name')),
+                (
+                    'unique_name',
+                    models.CharField(
+                        max_length=100,
+                        unique=True,
+                        validators=[util.field.UniqueNameValidator()],
+                        verbose_name='Unique Name',
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
-                ('credential', models.OneToOneField(on_delete=django.db.models.deletion.PROTECT, related_name='dev_owner_ids', to='pki.credentialmodel')),
+                (
+                    'credential',
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='dev_owner_ids',
+                        to='pki.credentialmodel',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -550,25 +1084,42 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('idevid_ref', models.CharField(max_length=255, verbose_name='IDevID Identifier')),
-                ('dev_owner_id', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='idevid_ref_set', to='pki.ownercredentialmodel')),
+                (
+                    'dev_owner_id',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='idevid_ref_set',
+                        to='pki.ownercredentialmodel',
+                    ),
+                ),
             ],
         ),
         migrations.AddField(
             model_name='certificatemodel',
             name='policy_constraints_extension',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.policyconstraintsextension'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.policyconstraintsextension'
+            ),
         ),
         migrations.AddField(
             model_name='certificatepoliciesextension',
             name='certificate_policies',
-            field=models.ManyToManyField(editable=False, related_name='certificate_policies', to='pki.policyinformation'),
+            field=models.ManyToManyField(
+                editable=False, related_name='certificate_policies', to='pki.policyinformation'
+            ),
         ),
         migrations.CreateModel(
             name='PolicyMappingModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('issuer_domain_policy', models.CharField(editable=False, max_length=256, verbose_name='Issuer Domain Policy OID')),
-                ('subject_domain_policy', models.CharField(editable=False, max_length=256, verbose_name='Subject Domain Policy OID')),
+                (
+                    'issuer_domain_policy',
+                    models.CharField(editable=False, max_length=256, verbose_name='Issuer Domain Policy OID'),
+                ),
+                (
+                    'subject_domain_policy',
+                    models.CharField(editable=False, max_length=256, verbose_name='Subject Domain Policy OID'),
+                ),
             ],
             options={
                 'unique_together': {('issuer_domain_policy', 'subject_domain_policy')},
@@ -579,34 +1130,58 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('critical', models.BooleanField(editable=False, verbose_name='Critical')),
-                ('policy_mappings', models.ManyToManyField(editable=False, related_name='policy_mappings_extension', to='pki.policymappingmodel')),
+                (
+                    'policy_mappings',
+                    models.ManyToManyField(
+                        editable=False, related_name='policy_mappings_extension', to='pki.policymappingmodel'
+                    ),
+                ),
             ],
             bases=(pki.models.extension.CertificateExtension, models.Model),
         ),
         migrations.AddField(
             model_name='policyinformation',
             name='policy_qualifiers',
-            field=models.ManyToManyField(blank=True, editable=False, related_name='policies', to='pki.policyqualifierinfo'),
+            field=models.ManyToManyField(
+                blank=True, editable=False, related_name='policies', to='pki.policyqualifierinfo'
+            ),
         ),
         migrations.CreateModel(
             name='PrimaryCredentialCertificate',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('is_primary', models.BooleanField(default=False)),
-                ('certificate', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='pki.certificatemodel')),
-                ('credential', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='pki.credentialmodel')),
+                (
+                    'certificate',
+                    models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, to='pki.certificatemodel'),
+                ),
+                (
+                    'credential',
+                    models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='pki.credentialmodel'),
+                ),
             ],
         ),
         migrations.AddField(
             model_name='credentialmodel',
             name='certificates',
-            field=models.ManyToManyField(related_name='credential', through='pki.PrimaryCredentialCertificate', to='pki.certificatemodel'),
+            field=models.ManyToManyField(
+                related_name='credential', through='pki.PrimaryCredentialCertificate', to='pki.certificatemodel'
+            ),
         ),
         migrations.CreateModel(
             name='QualifierModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('cps_uri', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='qualifiers', to='pki.cpsurimodel')),
+                (
+                    'cps_uri',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        related_name='qualifiers',
+                        to='pki.cpsurimodel',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -616,16 +1191,53 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='policyqualifierinfo',
             name='qualifier',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.qualifiermodel'),
+            field=models.ForeignKey(
+                blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.qualifiermodel'
+            ),
         ),
         migrations.CreateModel(
             name='RevokedCertificateModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('revoked_at', models.DateTimeField(auto_now_add=True, verbose_name='Revocation Date')),
-                ('revocation_reason', models.TextField(choices=[('unspecified', 'Unspecified'), ('keyCompromise', 'Key Compromise'), ('cACompromise', 'CA Compromise'), ('affiliationChanged', 'Affiliation Changed'), ('superseded', 'Superseded'), ('cessationOfOperation', 'Cessation of Operation'), ('certificateHold', 'Certificate Hold'), ('privilegeWithdrawn', 'Privilege Withdrawn'), ('aACompromise', 'AA Compromise'), ('removeFromCRL', 'Remove from CRL')], default='unspecified', verbose_name='Revocation Reason')),
-                ('ca', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='revoked_certificates', to='pki.issuingcamodel', verbose_name='Issuing CA')),
-                ('certificate', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='revoked_certificate', to='pki.certificatemodel', verbose_name='Certificate')),
+                (
+                    'revocation_reason',
+                    models.TextField(
+                        choices=[
+                            ('unspecified', 'Unspecified'),
+                            ('keyCompromise', 'Key Compromise'),
+                            ('cACompromise', 'CA Compromise'),
+                            ('affiliationChanged', 'Affiliation Changed'),
+                            ('superseded', 'Superseded'),
+                            ('cessationOfOperation', 'Cessation of Operation'),
+                            ('certificateHold', 'Certificate Hold'),
+                            ('privilegeWithdrawn', 'Privilege Withdrawn'),
+                            ('aACompromise', 'AA Compromise'),
+                            ('removeFromCRL', 'Remove from CRL'),
+                        ],
+                        default='unspecified',
+                        verbose_name='Revocation Reason',
+                    ),
+                ),
+                (
+                    'ca',
+                    models.ForeignKey(
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='revoked_certificates',
+                        to='pki.issuingcamodel',
+                        verbose_name='Issuing CA',
+                    ),
+                ),
+                (
+                    'certificate',
+                    models.OneToOneField(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='revoked_certificate',
+                        to='pki.certificatemodel',
+                        verbose_name='Certificate',
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
@@ -633,7 +1245,16 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('critical', models.BooleanField(editable=False, verbose_name='Critical')),
-                ('subject_alt_name', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.generalnamesmodel', verbose_name='Subject Alternative Name Subject')),
+                (
+                    'subject_alt_name',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to='pki.generalnamesmodel',
+                        verbose_name='Subject Alternative Name Subject',
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -643,71 +1264,171 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='certificatemodel',
             name='subject_alternative_name_extension',
-            field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='certificates', to='pki.subjectalternativenameextension', verbose_name='Subject Alternative Name'),
+            field=models.ForeignKey(
+                blank=True,
+                editable=False,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='certificates',
+                to='pki.subjectalternativenameextension',
+                verbose_name='Subject Alternative Name',
+            ),
         ),
         migrations.CreateModel(
             name='SubjectDirectoryAttributesExtension',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('critical', models.BooleanField(editable=False, verbose_name='Critical')),
-                ('subject_directory_attributes', models.ManyToManyField(blank=True, editable=False, to='pki.attributetypeandvalue', verbose_name='Subject Directory Attributes')),
+                (
+                    'subject_directory_attributes',
+                    models.ManyToManyField(
+                        blank=True,
+                        editable=False,
+                        to='pki.attributetypeandvalue',
+                        verbose_name='Subject Directory Attributes',
+                    ),
+                ),
             ],
             bases=(pki.models.extension.CertificateExtension, models.Model),
         ),
         migrations.AddField(
             model_name='certificatemodel',
             name='subject_directory_attributes_extension',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.subjectdirectoryattributesextension'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                to='pki.subjectdirectoryattributesextension',
+            ),
         ),
         migrations.CreateModel(
             name='SubjectInformationAccessExtension',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('critical', models.BooleanField(editable=False, verbose_name='Critical')),
-                ('subject_info_access_syntax', models.ManyToManyField(blank=True, related_name='subject_info_access_syntax', to='pki.accessdescriptionmodel')),
+                (
+                    'subject_info_access_syntax',
+                    models.ManyToManyField(
+                        blank=True, related_name='subject_info_access_syntax', to='pki.accessdescriptionmodel'
+                    ),
+                ),
             ],
             bases=(pki.models.extension.CertificateExtension, models.Model),
         ),
         migrations.AddField(
             model_name='certificatemodel',
             name='subject_information_access_extension',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.subjectinformationaccessextension'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                to='pki.subjectinformationaccessextension',
+            ),
         ),
         migrations.AddField(
             model_name='certificatemodel',
             name='subject_key_identifier_extension',
-            field=models.ForeignKey(blank=True, editable=False, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='certificates', to='pki.subjectkeyidentifierextension', verbose_name='Subject Key Identifier'),
+            field=models.ForeignKey(
+                blank=True,
+                editable=False,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='certificates',
+                to='pki.subjectkeyidentifierextension',
+                verbose_name='Subject Key Identifier',
+            ),
         ),
         migrations.CreateModel(
             name='DevIdRegistration',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('unique_name', models.CharField(max_length=100, unique=True, validators=[util.field.UniqueNameValidator()], verbose_name='Unique Name')),
-                ('serial_number_pattern', models.CharField(help_text='A regex pattern to match valid serial numbers for this registration.', max_length=255, verbose_name='Serial Number Pattern')),
-                ('domain', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='devid_registrations', to='pki.domainmodel', verbose_name='Associated Domain')),
-                ('truststore', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='devid_registrations', to='pki.truststoremodel', verbose_name='Associated Truststore')),
+                (
+                    'unique_name',
+                    models.CharField(
+                        max_length=100,
+                        unique=True,
+                        validators=[util.field.UniqueNameValidator()],
+                        verbose_name='Unique Name',
+                    ),
+                ),
+                (
+                    'serial_number_pattern',
+                    models.CharField(
+                        help_text='A regex pattern to match valid serial numbers for this registration.',
+                        max_length=255,
+                        verbose_name='Serial Number Pattern',
+                    ),
+                ),
+                (
+                    'domain',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='devid_registrations',
+                        to='pki.domainmodel',
+                        verbose_name='Associated Domain',
+                    ),
+                ),
+                (
+                    'truststore',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='devid_registrations',
+                        to='pki.truststoremodel',
+                        verbose_name='Associated Truststore',
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
             name='TruststoreOrderModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('order', models.PositiveSmallIntegerField(editable=False, verbose_name='Trust Store Certificate Index (Order)')),
-                ('certificate', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.CASCADE, related_name='trust_store_components', to='pki.certificatemodel')),
-                ('trust_store', models.ForeignKey(editable=False, on_delete=django.db.models.deletion.CASCADE, to='pki.truststoremodel')),
+                (
+                    'order',
+                    models.PositiveSmallIntegerField(
+                        editable=False, verbose_name='Trust Store Certificate Index (Order)'
+                    ),
+                ),
+                (
+                    'certificate',
+                    models.ForeignKey(
+                        editable=False,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='trust_store_components',
+                        to='pki.certificatemodel',
+                    ),
+                ),
+                (
+                    'trust_store',
+                    models.ForeignKey(
+                        editable=False, on_delete=django.db.models.deletion.CASCADE, to='pki.truststoremodel'
+                    ),
+                ),
             ],
         ),
         migrations.AddField(
             model_name='truststoremodel',
             name='certificates',
-            field=models.ManyToManyField(through='pki.TruststoreOrderModel', to='pki.certificatemodel', verbose_name='Truststore certificates'),
+            field=models.ManyToManyField(
+                through='pki.TruststoreOrderModel', to='pki.certificatemodel', verbose_name='Truststore certificates'
+            ),
         ),
         migrations.CreateModel(
             name='UserNotice',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('explicit_text', models.CharField(blank=True, editable=False, max_length=200, null=True, verbose_name='Explicit Text')),
-                ('notice_ref', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.noticereference')),
+                (
+                    'explicit_text',
+                    models.CharField(
+                        blank=True, editable=False, max_length=200, null=True, verbose_name='Explicit Text'
+                    ),
+                ),
+                (
+                    'notice_ref',
+                    models.ForeignKey(
+                        blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.noticereference'
+                    ),
+                ),
             ],
             options={
                 'abstract': False,
@@ -717,11 +1438,19 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='qualifiermodel',
             name='user_notice',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='qualifiers', to='pki.usernotice'),
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                related_name='qualifiers',
+                to='pki.usernotice',
+            ),
         ),
         migrations.AddConstraint(
             model_name='certificatechainordermodel',
-            constraint=models.UniqueConstraint(fields=('credential', 'primary_certificate', 'order'), name='unique_group_order'),
+            constraint=models.UniqueConstraint(
+                fields=('credential', 'primary_certificate', 'order'), name='unique_group_order'
+            ),
         ),
         migrations.AlterUniqueTogether(
             name='truststoreordermodel',

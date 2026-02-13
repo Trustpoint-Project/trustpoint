@@ -1,4 +1,5 @@
 """Provides classes for parsing EST PKI messages."""
+
 import base64
 import contextlib
 import re
@@ -39,8 +40,9 @@ class EstAuthorizationHeaderParsing(ParsingComponent, LoggerMixin):
 
         if not auth_header.lower().startswith('basic '):
             error_message = "Authorization header must start with 'Basic'."
-            self.logger.warning("Authorization header validation failed: "
-                                "Header does not start with 'Basic': %s...", auth_header[:20])
+            self.logger.warning(
+                "Authorization header validation failed: Header does not start with 'Basic': %s...", auth_header[:20]
+            )
             raise ValueError(error_message)
 
         try:
@@ -49,8 +51,9 @@ class EstAuthorizationHeaderParsing(ParsingComponent, LoggerMixin):
 
             context.est_username = est_username
             context.est_password = est_password
-            self.logger.debug("Authorization header validation successful: "
-                              "Extracted credentials for user '%s'", est_username)
+            self.logger.debug(
+                "Authorization header validation successful: Extracted credentials for user '%s'", est_username
+            )
         except Exception as e:
             error_message = "Malformed 'Authorization' header credentials."
             self.logger.warning('Authorization header validation failed: Malformed credentials - %s', e)
@@ -90,27 +93,30 @@ class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
             if b'CERTIFICATE REQUEST-----' in context.raw_message.body:
                 est_encoding = 'pem'
                 csr = x509.load_pem_x509_csr(context.raw_message.body)
-                self.logger.debug('EST PKI message parsing: Detected PEM format, body size: %(body_size)s bytes',
-                                   extra={'body_size': body_size})
+                self.logger.debug(
+                    'EST PKI message parsing: Detected PEM format, body size: %(body_size)s bytes',
+                    extra={'body_size': body_size},
+                )
             elif re.match(rb'^[A-Za-z0-9+/=\n]+$', context.raw_message.body):
-                est_encoding = 'pkcs7' #'base64_der'
+                est_encoding = 'pkcs7'  #'base64_der'
                 der_data = base64.b64decode(context.raw_message.body)
                 csr = x509.load_der_x509_csr(der_data)
                 self.logger.debug(
                     'EST PKI message parsing: Detected Base64 DER format, '
                     'body size: %(body_size)s bytes, decoded: %(decoded_size)s bytes',
-                    extra={'body_size': body_size, 'decoded_size': len(der_data)}
+                    extra={'body_size': body_size, 'decoded_size': len(der_data)},
                 )
             elif context.raw_message.body.startswith(b'\x30'):  # ASN.1 DER starts with 0x30
-                est_encoding = 'pkcs7' #'der'
+                est_encoding = 'pkcs7'  #'der'
                 csr = x509.load_der_x509_csr(context.raw_message.body)
-                self.logger.debug('EST PKI message parsing: Detected DER format, body size: %(body_size)s bytes',
-                                   extra={'body_size': body_size})
+                self.logger.debug(
+                    'EST PKI message parsing: Detected DER format, body size: %(body_size)s bytes',
+                    extra={'body_size': body_size},
+                )
             else:
                 self.logger.warning(
-                    'EST PKI message parsing failed: Unsupported CSR format, '
-                    'body size: %(body_size)s bytes',
-                    extra={'body_size': body_size}
+                    'EST PKI message parsing failed: Unsupported CSR format, body size: %(body_size)s bytes',
+                    extra={'body_size': body_size},
                 )
                 raise_parsing_error("Unsupported CSR format. Ensure it's PEM, Base64, or raw DER.")
 
@@ -122,8 +128,10 @@ class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
                 cn_value = csr.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value
                 subject_cn = cn_value if isinstance(cn_value, str) else cn_value.decode('utf-8')
 
-            self.logger.info('EST PKI message parsing successful: %(format)s format, subject CN: %(subject_cn)s',
-                             extra={'format': est_encoding, 'subject_cn': subject_cn})
+            self.logger.info(
+                'EST PKI message parsing successful: %(format)s format, subject CN: %(subject_cn)s',
+                extra={'format': est_encoding, 'subject_cn': subject_cn},
+            )
 
         except Exception as e:
             error_message = 'Failed to parse the CSR.'
@@ -148,8 +156,9 @@ class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
 
         if not isinstance(csr, x509.CertificateSigningRequest):
             err_msg = 'CSR signature verification only supports EST requests with CertificateSigningRequest objects.'
-            self.logger.warning('EST CSR signature verification failed: Expected CertificateSigningRequest, got %s',
-                              type(csr).__name__)
+            self.logger.warning(
+                'EST CSR signature verification failed: Expected CertificateSigningRequest, got %s', type(csr).__name__
+            )
             self._raise_validation_error(err_msg)
 
         public_key = csr.public_key()
@@ -164,7 +173,8 @@ class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
             error_message = 'Unsupported public key type for CSR signature verification.'
             self.logger.warning(
                 'EST CSR signature verification failed: Unsupported public key type',
-                extra={'public_key_type': str(type(public_key))})
+                extra={'public_key_type': str(type(public_key))},
+            )
             raise TypeError(error_message)
 
         try:
@@ -184,8 +194,11 @@ class EstCsrSignatureVerification(ParsingComponent, LoggerMixin):
                     signature_algorithm=ec.ECDSA(signature_hash_algorithm),
                 )
 
-            self.logger.info('EST CSR signature verification successful: %s key with %s hash',
-                             key_type, signature_hash_algorithm.name)
+            self.logger.info(
+                'EST CSR signature verification successful: %s key with %s hash',
+                key_type,
+                signature_hash_algorithm.name,
+            )
         except Exception as e:
             error_message = 'Failed to verify the CSR signature.'
             self.logger.exception('EST CSR signature verification failed', extra={'exception': str(e)})

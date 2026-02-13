@@ -53,6 +53,7 @@ def write_private_key(key: PrivateKey, file: Path) -> None:
             )
         )
 
+
 def write_cert_pem(cert: x509.Certificate, file: Path) -> None:
     """Write the certificate to a PEM file."""
     with file.open('wb') as cert_file:
@@ -66,9 +67,7 @@ class AokiTestCertGenerator:
     def generate_idevid_pki() -> x509.Certificate:
         """Generates a testing IDevID PKI."""
         # Generate the IDevID test CA
-        root_ca_cert, root_ca_key = CertificateGenerator.create_root_ca(
-            'IDevID_Test_Root_CA'
-        )
+        root_ca_cert, root_ca_key = CertificateGenerator.create_root_ca('IDevID_Test_Root_CA')
         # write the root CA certificate and key to files
         write_cert_pem(root_ca_cert, CERTS_DIR / 'idevid_ca.pem')
         write_private_key(root_ca_key, CERTS_DIR / 'idevid_ca_pk.pem')
@@ -98,9 +97,7 @@ class AokiTestCertGenerator:
         """Generate the DeviceOwnerID certificate."""
         # It is RECOMMENDED that the same CA is used as for the IDevID cert,
         # but here a separate CA is used to ascertain they can be different
-        owner_ca_cert, owner_ca_key = CertificateGenerator.create_root_ca(
-            'Owner_Test_Root_CA'
-        )
+        owner_ca_cert, owner_ca_key = CertificateGenerator.create_root_ca('Owner_Test_Root_CA')
         write_cert_pem(owner_ca_cert, CERTS_DIR / 'ownerid_ca.pem')
         write_private_key(owner_ca_key, CERTS_DIR / 'ownerid_ca_pk.pem')
 
@@ -121,9 +118,7 @@ class AokiTestCertGenerator:
             ),
             private_key=None,
             extensions=[
-                (x509.SubjectAlternativeName([
-                    x509.UniformResourceIdentifier(idevid_san_uri)
-                ]), False),
+                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(idevid_san_uri)]), False),
                 # SAN should be critical for an OwnerID cert,
                 # but then the subject name should be empty according to RFC 5280
             ],
@@ -131,4 +126,3 @@ class AokiTestCertGenerator:
         )
         write_cert_pem(ownerid_cert, CERTS_DIR / 'owner_id.pem')
         write_private_key(ownerid_key, CERTS_DIR / 'owner_id_pk.pem')
-

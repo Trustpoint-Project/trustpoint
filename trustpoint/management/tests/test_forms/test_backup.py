@@ -1,7 +1,9 @@
 """Test suite for the BackupOptionsForm."""
+
 from django.test import TestCase
 from management.forms import BackupOptionsForm
 from management.models import BackupOptions
+
 
 class BackupOptionsFormTest(TestCase):
     """Test suite for the BackupOptionsForm."""

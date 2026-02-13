@@ -69,9 +69,7 @@ class CustomDeleteActionModel(models.Model):
         return count
 
 
-class CustomDeleteActionQuerySet[MDL: CustomDeleteActionModel, ROW: CustomDeleteActionModel](
-    models.QuerySet[MDL, ROW]
-):
+class CustomDeleteActionQuerySet[MDL: CustomDeleteActionModel, ROW: CustomDeleteActionModel](models.QuerySet[MDL, ROW]):
     """Overrides a model's queryset to invoke pre- and post-delete hooks.
 
     This ensures the pre_delete() and post_delete() methods are called on each object in the queryset.

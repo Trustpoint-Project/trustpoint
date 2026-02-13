@@ -107,6 +107,7 @@ class StartupWizardTlsCertificateForm(forms.Form):
             raise forms.ValidationError(err_msg)
         return cleaned_data
 
+
 class HsmSetupForm(forms.Form):
     """Form for HSM setup configuration."""
 
@@ -115,7 +116,7 @@ class HsmSetupForm(forms.Form):
         label=_('PKCS#11 Module Path'),
         help_text=_('Path to the PKCS#11 module library.'),
         widget=forms.TextInput(attrs={'class': 'form-control'}),
-        required=True
+        required=True,
     )
 
     slot = forms.IntegerField(
@@ -125,7 +126,7 @@ class HsmSetupForm(forms.Form):
         label=_('Slot Number'),
         help_text=_('HSM slot number to use.'),
         widget=forms.NumberInput(attrs={'class': 'form-control'}),
-        required=True
+        required=True,
     )
 
     label = forms.CharField(
@@ -133,7 +134,7 @@ class HsmSetupForm(forms.Form):
         label=_('Token Label'),
         help_text=_('Label for the HSM token.'),
         widget=forms.TextInput(attrs={'class': 'form-control'}),
-        required=True
+        required=True,
     )
 
     # Hidden field to store the HSM type (will be set by the view)
@@ -150,39 +151,23 @@ class HsmSetupForm(forms.Form):
             self.fields['slot'].initial = 0
             self.fields['label'].initial = 'Trustpoint-SoftHSM'
 
-            self.fields['module_path'].widget.attrs.update({
-                'readonly': True,
-                'class': 'form-control'
-            })
-            self.fields['slot'].widget.attrs.update({
-                'readonly': True,
-                'class': 'form-control'
-            })
-            self.fields['label'].widget.attrs.update({
-                'readonly': True,
-                'class': 'form-control'
-            })
+            self.fields['module_path'].widget.attrs.update({'readonly': True, 'class': 'form-control'})
+            self.fields['slot'].widget.attrs.update({'readonly': True, 'class': 'form-control'})
+            self.fields['label'].widget.attrs.update({'readonly': True, 'class': 'form-control'})
 
         elif hsm_type == 'physical':
             self.fields['module_path'].initial = ''
             self.fields['slot'].initial = 0
             self.fields['label'].initial = 'Trustpoint-Physical-HSM'
 
-            self.fields['module_path'].widget.attrs.update({
-                'placeholder': '/usr/lib/vendor/libpkcs11.so'
-            })
-            self.fields['label'].widget.attrs.update({
-                'placeholder': 'Enter token label'
-            })
+            self.fields['module_path'].widget.attrs.update({'placeholder': '/usr/lib/vendor/libpkcs11.so'})
+            self.fields['label'].widget.attrs.update({'placeholder': 'Enter token label'})
 
     def clean(self) -> dict[str, Any]:
         """Custom validation for the form."""
         cleaned_data = super().clean()
         if cleaned_data is None:
-            err_msg = (
-                'Unexpected error occurred. Failed to get the cleaned_data '
-                'of the HsmSetupForm instance.'
-            )
+            err_msg = 'Unexpected error occurred. Failed to get the cleaned_data of the HsmSetupForm instance.'
             raise forms.ValidationError(err_msg)
 
         hsm_type = cleaned_data.get('hsm_type')
@@ -228,28 +213,33 @@ class HsmSetupForm(forms.Form):
             return value
         return ''
 
+
 class BackupPasswordForm(forms.Form):
     """Form for setting up backup password for PKCS#11 token."""
 
     password = forms.CharField(
-        widget=forms.PasswordInput(attrs={
-            'class': 'form-control',
-            'placeholder': _('Enter backup password'),
-            'autocomplete': 'new-password',
-        }),
+        widget=forms.PasswordInput(
+            attrs={
+                'class': 'form-control',
+                'placeholder': _('Enter backup password'),
+                'autocomplete': 'new-password',
+            }
+        ),
         label=_('Backup Password'),
         help_text=_('Enter a strong password to secure your backup encryption key.'),
-        required=True
+        required=True,
     )
 
     confirm_password = forms.CharField(
-        widget=forms.PasswordInput(attrs={
-            'class': 'form-control',
-            'placeholder': _('Confirm backup password'),
-            'autocomplete': 'new-password',
-        }),
+        widget=forms.PasswordInput(
+            attrs={
+                'class': 'form-control',
+                'placeholder': _('Confirm backup password'),
+                'autocomplete': 'new-password',
+            }
+        ),
         label=_('Confirm Password'),
-        required=True
+        required=True,
     )
 
     def clean_password(self) -> str:
@@ -284,10 +274,7 @@ class BackupPasswordForm(forms.Form):
         """
         cleaned_data = super().clean()
         if cleaned_data is None:
-            err_msg = (
-                'Unexpected error occurred. Failed to get the cleaned_data '
-                'of the BackupPasswordForm instance.'
-            )
+            err_msg = 'Unexpected error occurred. Failed to get the cleaned_data of the BackupPasswordForm instance.'
             raise forms.ValidationError(err_msg)
         password = cleaned_data.get('password')
         confirm_password = cleaned_data.get('confirm_password')
@@ -297,33 +284,32 @@ class BackupPasswordForm(forms.Form):
 
         return cleaned_data
 
+
 class BackupRestoreForm(forms.Form):
     """Form for restoring from backup with optional backup password."""
 
     MAX_PASSWORD_LENGTH = 128
 
-
     backup_file = forms.FileField(
         label=_('Backup File'),
         help_text=_('Select the backup file to restore from.'),
-        widget=forms.FileInput(attrs={
-            'class': 'form-control',
-            'accept': '.dump,.gz,.sql,.zip'
-        })
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.dump,.gz,.sql,.zip'}),
     )
 
     backup_password = forms.CharField(
-        widget=forms.PasswordInput(attrs={
-            'class': 'form-control',
-            'placeholder': _('Enter backup password (optional)'),
-            'autocomplete': 'current-password'
-        }),
+        widget=forms.PasswordInput(
+            attrs={
+                'class': 'form-control',
+                'placeholder': _('Enter backup password (optional)'),
+                'autocomplete': 'current-password',
+            }
+        ),
         label=_('Backup Password'),
         help_text=_(
             'Enter the backup password if the backup was created with DEK encryption. '
             'Leave empty if no password was set.'
         ),
-        required=False
+        required=False,
     )
 
     def clean_backup_file(self) -> Any:
@@ -340,8 +326,7 @@ class BackupRestoreForm(forms.Form):
         allowed_extensions = ['.dump', '.gz', '.sql', '.zip']
         if not any(backup_file.name.lower().endswith(ext) for ext in allowed_extensions):
             raise forms.ValidationError(
-                _('Invalid file type. Allowed types: %(extensions)s') %
-                {'extensions': ', '.join(allowed_extensions)}
+                _('Invalid file type. Allowed types: %(extensions)s') % {'extensions': ', '.join(allowed_extensions)}
             )
 
         # Check file size (e.g., max 100MB)
@@ -361,17 +346,20 @@ class BackupRestoreForm(forms.Form):
 
         return password or ''
 
+
 class PasswordAutoRestoreForm(forms.Form):
     """Form for filling the password for auto-restore."""
 
     password = forms.CharField(
-        widget=forms.PasswordInput(attrs={
-            'class': 'form-control',
-            'placeholder': _('Enter backup password'),
-            'autocomplete': 'new-password',
-        }),
+        widget=forms.PasswordInput(
+            attrs={
+                'class': 'form-control',
+                'placeholder': _('Enter backup password'),
+                'autocomplete': 'new-password',
+            }
+        ),
         label=_('Backup Password'),
-        required=True
+        required=True,
     )
 
     def clean_password(self) -> str:

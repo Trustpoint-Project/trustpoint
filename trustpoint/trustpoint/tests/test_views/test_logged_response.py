@@ -1,4 +1,5 @@
 """Tests for the LoggedHttpResponse class."""
+
 from django.test import TestCase
 
 from trustpoint.views.base import THRESHOLD_LOGGER_HTTP_STATUS, LoggedHttpResponse
@@ -27,19 +28,13 @@ class TestLoggedHttpResponse(TestCase):
 
     def test_logged_response_threshold(self) -> None:
         """Test LoggedHttpResponse at threshold status."""
-        response = LoggedHttpResponse(
-            content='Threshold error', 
-            status=THRESHOLD_LOGGER_HTTP_STATUS
-        )
+        response = LoggedHttpResponse(content='Threshold error', status=THRESHOLD_LOGGER_HTTP_STATUS)
         assert response.status_code == THRESHOLD_LOGGER_HTTP_STATUS
         assert response.content == b'Threshold error'
 
     def test_logged_response_below_threshold(self) -> None:
         """Test LoggedHttpResponse below threshold status."""
-        response = LoggedHttpResponse(
-            content='Below threshold', 
-            status=THRESHOLD_LOGGER_HTTP_STATUS - 1
-        )
+        response = LoggedHttpResponse(content='Below threshold', status=THRESHOLD_LOGGER_HTTP_STATUS - 1)
         assert response.status_code == THRESHOLD_LOGGER_HTTP_STATUS - 1
 
     def test_logged_response_no_status(self) -> None:

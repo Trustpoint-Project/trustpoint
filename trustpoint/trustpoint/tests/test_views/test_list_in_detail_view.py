@@ -23,13 +23,13 @@ class TestListInDetailView(TestCase):
             notification_type=NotificationModel.NotificationTypes.INFO,
             notification_source=NotificationModel.NotificationSource.DEVICE,
             message_type=NotificationModel.NotificationMessageType.DEVICE_TEST,
-            device=cls.device
+            device=cls.device,
         )
         cls.notification2 = NotificationModel.objects.create(
             notification_type=NotificationModel.NotificationTypes.WARNING,
             notification_source=NotificationModel.NotificationSource.DEVICE,
             message_type=NotificationModel.NotificationMessageType.DEVICE_ONBOARDING_FAILED,
-            device=cls.device
+            device=cls.device,
         )
 
     def setUp(self) -> None:
@@ -77,8 +77,9 @@ class TestListInDetailView(TestCase):
         context = self.view.get_context_data()
         assert 'object' in context, "Context should contain 'object'."
         assert context['object'] == self.device, "'object' should match the parent DeviceModel instance."
-        assert 'notificationmodel_list' in context, \
+        assert 'notificationmodel_list' in context, (
             "Context should contain the child list under 'notificationmodel_list'."
+        )
 
         expected_notifications = [self.notification1, self.notification2]
         expected_notifications.sort(key=lambda x: x.id)  # Ensure ordering
@@ -115,8 +116,9 @@ class TestListInDetailView(TestCase):
         context = self.view.get_context_data()
         assert 'object' in context, "Context should contain 'object'."
         assert context['object'] == self.device, "'object' should match the parent DeviceModel instance."
-        assert 'notificationmodel_list' in context, \
+        assert 'notificationmodel_list' in context, (
             "Context should contain the child list under 'notificationmodel_list'."
+        )
         assert list(context['notificationmodel_list']) == [], (
             "'notificationmodel_list' should be empty if there are no children for the parent device."
         )

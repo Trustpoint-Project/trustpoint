@@ -162,8 +162,10 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().exclude(
-            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+        return (
+            super()
+            .get_queryset()
+            .exclude(ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT])
         )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -221,16 +223,15 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
         Returns:
             The filtered QuerySet.
         """
-        issuing_ca = get_object_or_404(CaModel.objects.exclude(
-            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
-        ), pk=self.kwargs['pk'])
+        issuing_ca = get_object_or_404(
+            CaModel.objects.exclude(ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]),
+            pk=self.kwargs['pk'],
+        )
 
         # PyCharm TypeChecker issue - this passes mypy
         # noinspection PyTypeChecker
         # TODO(AlexHx8472): This is not a good query. Use issued credentials to get the certificates.  # noqa: FIX002
-        return CertificateModel.objects.filter(
-            issuer_public_bytes=issuing_ca.subject_public_bytes
-        )
+        return CertificateModel.objects.filter(issuer_public_bytes=issuing_ca.subject_public_bytes)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the issuing ca model object to the context.
@@ -243,9 +244,8 @@ class IssuedCertificatesListView(IssuingCaContextMixin, ListView[CertificateMode
         """
         context = super().get_context_data(**kwargs)
         context['issuing_ca'] = get_object_or_404(
-            CaModel.objects.exclude(
-                ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
-            ), pk=self.kwargs['pk']
+            CaModel.objects.exclude(ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]),
+            pk=self.kwargs['pk'],
         )
         return context
 
@@ -261,8 +261,10 @@ class IssuingCaDetailView(IssuingCaContextMixin, DetailView[CaModel]):
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().exclude(
-            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+        return (
+            super()
+            .get_queryset()
+            .exclude(ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT])
         )
 
 
@@ -285,8 +287,10 @@ class IssuingCaBulkDeleteConfirmView(IssuingCaContextMixin, BulkDeleteView):
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().exclude(
-            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+        return (
+            super()
+            .get_queryset()
+            .exclude(ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT])
         )
 
     def form_valid(self, form: Form) -> HttpResponse:
@@ -323,8 +327,10 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[CaModel]):
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
         """Return only issuing CAs."""
-        return super().get_queryset().exclude(
-            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+        return (
+            super()
+            .get_queryset()
+            .exclude(ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT])
         )
 
     # TODO(Air): This view should use a POST request as it is an action.    # noqa: FIX002
@@ -378,9 +384,7 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
             except (binascii.Error, ValueError) as exc:
                 messages.error(
                     request,
-                    _(
-                        'Failed to convert CRL to DER for CA %s: %s'
-                    ) % (ca.unique_name, str(exc)),
+                    _('Failed to convert CRL to DER for CA %s: %s') % (ca.unique_name, str(exc)),
                 )
                 return redirect('pki:issuing_cas')
 

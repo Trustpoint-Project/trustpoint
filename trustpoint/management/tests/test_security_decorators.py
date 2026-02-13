@@ -1,4 +1,5 @@
 """Test suite for security decorators."""
+
 from unittest.mock import Mock, patch
 
 from django.core.exceptions import PermissionDenied
@@ -35,7 +36,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
         @security_level(mock_feature)
         def test_function():
-            return "success"
+            return 'success'
 
         with patch('management.security.decorators.SecurityManager') as mock_manager_class:
             mock_manager = Mock()
@@ -44,7 +45,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
             result = test_function()
 
-            self.assertEqual(result, "success")
+            self.assertEqual(result, 'success')
             mock_manager.is_feature_allowed.assert_called_once_with(mock_feature)
 
     def test_decorator_denies_access_when_feature_not_allowed(self):
@@ -53,7 +54,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
         @security_level(mock_feature)
         def test_function():
-            return "success"
+            return 'success'
 
         with patch('management.security.decorators.SecurityManager') as mock_manager_class:
             mock_manager = Mock()
@@ -68,9 +69,10 @@ class SecurityLevelDecoratorTest(TestCase):
 
     def test_decorator_with_feature_class(self):
         """Test decorator works with feature class instead of instance."""
+
         @security_level(MockSecurityFeature)
         def test_function():
-            return "success"
+            return 'success'
 
         with patch('management.security.decorators.SecurityManager') as mock_manager_class:
             mock_manager = Mock()
@@ -79,7 +81,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
             result = test_function()
 
-            self.assertEqual(result, "success")
+            self.assertEqual(result, 'success')
             mock_manager.is_feature_allowed.assert_called_once_with(MockSecurityFeature)
 
     def test_decorator_preserves_function_metadata(self):
@@ -89,10 +91,10 @@ class SecurityLevelDecoratorTest(TestCase):
         @security_level(mock_feature)
         def test_function_with_docstring():
             """This is a test docstring."""
-            return "success"
+            return 'success'
 
-        self.assertEqual(test_function_with_docstring.__name__, "test_function_with_docstring")
-        self.assertEqual(test_function_with_docstring.__doc__, "This is a test docstring.")
+        self.assertEqual(test_function_with_docstring.__name__, 'test_function_with_docstring')
+        self.assertEqual(test_function_with_docstring.__doc__, 'This is a test docstring.')
 
     def test_decorator_passes_args_and_kwargs(self):
         """Test decorator correctly passes arguments and keyword arguments to decorated function."""
@@ -100,22 +102,23 @@ class SecurityLevelDecoratorTest(TestCase):
 
         @security_level(mock_feature)
         def test_function(arg1, arg2, kwarg1=None):
-            return f"{arg1}-{arg2}-{kwarg1}"
+            return f'{arg1}-{arg2}-{kwarg1}'
 
         with patch('management.security.decorators.SecurityManager') as mock_manager_class:
             mock_manager = Mock()
             mock_manager.is_feature_allowed.return_value = True
             mock_manager_class.return_value = mock_manager
 
-            result = test_function("a", "b", kwarg1="c")
+            result = test_function('a', 'b', kwarg1='c')
 
-            self.assertEqual(result, "a-b-c")
+            self.assertEqual(result, 'a-b-c')
 
     def test_decorator_with_autogenpki_feature(self):
         """Test decorator works with real AutoGenPkiFeature."""
+
         @security_level(AutoGenPkiFeature)
         def test_function():
-            return "pki_success"
+            return 'pki_success'
 
         with patch('management.security.decorators.SecurityManager') as mock_manager_class:
             mock_manager = Mock()
@@ -124,7 +127,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
             result = test_function()
 
-            self.assertEqual(result, "pki_success")
+            self.assertEqual(result, 'pki_success')
             mock_manager.is_feature_allowed.assert_called_once_with(AutoGenPkiFeature)
 
     def test_decorator_with_method(self):
@@ -134,7 +137,7 @@ class SecurityLevelDecoratorTest(TestCase):
         class TestClass:
             @security_level(mock_feature)
             def test_method(self, value):
-                return f"method_{value}"
+                return f'method_{value}'
 
         with patch('management.security.decorators.SecurityManager') as mock_manager_class:
             mock_manager = Mock()
@@ -142,9 +145,9 @@ class SecurityLevelDecoratorTest(TestCase):
             mock_manager_class.return_value = mock_manager
 
             instance = TestClass()
-            result = instance.test_method("test")
+            result = instance.test_method('test')
 
-            self.assertEqual(result, "method_test")
+            self.assertEqual(result, 'method_test')
 
     def test_decorator_raises_permission_denied_with_correct_message(self):
         """Test decorator raises PermissionDenied with informative message."""
@@ -152,7 +155,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
         @security_level(mock_feature)
         def test_function():
-            return "success"
+            return 'success'
 
         with patch('management.security.decorators.SecurityManager') as mock_manager_class:
             mock_manager = Mock()
@@ -173,7 +176,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
         @security_level(mock_feature)
         def test_function():
-            return "success"
+            return 'success'
 
         with patch('management.security.decorators.SecurityManager') as mock_manager_class:
             mock_manager1 = Mock()
@@ -185,11 +188,11 @@ class SecurityLevelDecoratorTest(TestCase):
 
             # First call
             result1 = test_function()
-            self.assertEqual(result1, "success")
+            self.assertEqual(result1, 'success')
 
             # Second call
             result2 = test_function()
-            self.assertEqual(result2, "success")
+            self.assertEqual(result2, 'success')
 
             # Verify SecurityManager was instantiated twice
             self.assertEqual(mock_manager_class.call_count, 2)
@@ -200,7 +203,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
         @security_level(mock_feature)
         def test_function():
-            raise ValueError("Test error")
+            raise ValueError('Test error')
 
         with patch('management.security.decorators.SecurityManager') as mock_manager_class:
             mock_manager = Mock()
@@ -210,7 +213,7 @@ class SecurityLevelDecoratorTest(TestCase):
             with self.assertRaises(ValueError) as context:
                 test_function()
 
-            self.assertEqual(str(context.exception), "Test error")
+            self.assertEqual(str(context.exception), 'Test error')
 
     def test_decorator_with_return_value(self):
         """Test decorator correctly returns value from decorated function."""
@@ -218,7 +221,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
         @security_level(mock_feature)
         def test_function():
-            return {"key": "value", "number": 42}
+            return {'key': 'value', 'number': 42}
 
         with patch('management.security.decorators.SecurityManager') as mock_manager_class:
             mock_manager = Mock()
@@ -227,7 +230,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
             result = test_function()
 
-            self.assertEqual(result, {"key": "value", "number": 42})
+            self.assertEqual(result, {'key': 'value', 'number': 42})
 
     def test_decorator_with_none_return(self):
         """Test decorator works when decorated function returns None."""
@@ -254,7 +257,7 @@ class SecurityLevelDecoratorTest(TestCase):
         @security_level(mock_feature1)
         @security_level(mock_feature2)
         def test_function():
-            return "double_decorated"
+            return 'double_decorated'
 
         with patch('management.security.decorators.SecurityManager') as mock_manager_class:
             mock_manager = Mock()
@@ -263,7 +266,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
             result = test_function()
 
-            self.assertEqual(result, "double_decorated")
+            self.assertEqual(result, 'double_decorated')
             # Should be called twice (once per decorator)
             self.assertEqual(mock_manager.is_feature_allowed.call_count, 2)
 
@@ -277,7 +280,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
         @security_level(mock_feature)
         def test_function_tuple():
-            return (1, "two", 3.0)
+            return (1, 'two', 3.0)
 
         @security_level(mock_feature)
         def test_function_generator():
@@ -296,7 +299,7 @@ class SecurityLevelDecoratorTest(TestCase):
 
             # Test tuple
             result_tuple = test_function_tuple()
-            self.assertEqual(result_tuple, (1, "two", 3.0))
+            self.assertEqual(result_tuple, (1, 'two', 3.0))
 
             # Test generator
             result_gen = list(test_function_generator())

@@ -68,12 +68,14 @@ class ListInDetailView(ListView[Any]):
         context[self.detail_context_object_name] = self.object
         return context
 
+
 class SupportsGetContextData(Protocol):
     """For typing to provide super().get_context_data()."""
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Get the context data."""
         ...
+
 
 class ParentSupportsGetContextData(SupportsGetContextData, Protocol):
     """For typing to provide super().get_context_data()."""
@@ -102,7 +104,6 @@ class SortableTableMixin[T: models.Model]:
             return queryset.order_by('-is_active', sort_param)
         return queryset.order_by(sort_param)
 
-
     def get_context_data(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         """Add sorting information to the context."""
         # Ensure object_list is passed to super() if not already in kwargs
@@ -130,6 +131,7 @@ class SortableTableFromListMixin:
     default_sort_param must be set in the view to specify default sorting order.
     Use instead of SortableTableMixin when you have a list of dicts instead of a Django queryset.
     """
+
     default_sort_param: str
     request: HttpRequest
     model: type[models.Model]
@@ -169,6 +171,7 @@ class SortableTableFromListMixin:
         # Pass sorting details to the template
         context['current_sort'] = sort_param
         return context  # type: ignore[no-any-return]
+
 
 class ContextDataMixin:
     """Mixin to add context data from attributes prefixed with 'context_'."""
@@ -262,6 +265,7 @@ class PrimaryKeyListFromPrimaryKeyString:
 
 class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
     """Mixin to retrieve a queryset based on primary keys provided in the URL."""
+
     kwargs: dict[str, Any]
     model: type[models.Model]
     queryset: models.QuerySet[Any, Any] | None
@@ -290,6 +294,7 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 
 class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):
     """View for bulk deletion of objects."""
+
     model: type[models.Model]
 
     def get_queryset(self) -> models.QuerySet[Any, Any]:
@@ -300,6 +305,7 @@ class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFrom
 
 
 THRESHOLD_LOGGER_HTTP_STATUS: int = 400
+
 
 class LoggedHttpResponse(HttpResponse, LoggerMixin):
     """Custom HttpResponse that logs and prints error messages automatically."""

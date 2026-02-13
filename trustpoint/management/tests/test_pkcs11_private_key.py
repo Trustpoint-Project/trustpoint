@@ -98,14 +98,13 @@ class TestPkcs11PrivateKey:
     def test_digest_data_no_session(self) -> None:
         """Test digest_data when session is None."""
         # Create key without initializing session
-        with patch('pkcs11.lib'), \
-             patch.object(MockPkcs11PrivateKey, '_initialize'):
-                key = MockPkcs11PrivateKey('/path/to/lib.so', 'test_token', '1234', 'test_key')
-                object.__setattr__(key, '_session', None)
+        with patch('pkcs11.lib'), patch.object(MockPkcs11PrivateKey, '_initialize'):
+            key = MockPkcs11PrivateKey('/path/to/lib.so', 'test_token', '1234', 'test_key')
+            object.__setattr__(key, '_session', None)
 
-                algorithm = hashes.SHA256()
-                with pytest.raises(RuntimeError, match='PKCS#11 session is not initialized'):
-                    key.digest_data(b'test_data', algorithm)
+            algorithm = hashes.SHA256()
+            with pytest.raises(RuntimeError, match='PKCS#11 session is not initialized'):
+                key.digest_data(b'test_data', algorithm)
 
     def test_copy_key_success(self, pkcs11_key: MockPkcs11PrivateKey, mock_session: Mock) -> None:
         """Test copy_key method with successful operation."""
@@ -130,11 +129,11 @@ class TestPkcs11PrivateKey:
     def test_copy_key_no_session(self) -> None:
         """Test copy_key when session is None."""
         with patch('pkcs11.lib'), patch.object(MockPkcs11PrivateKey, '_initialize'):
-                key = MockPkcs11PrivateKey('/path/to/lib.so', 'test_token', '1234', 'test_key')
-                object.__setattr__(key, '_session', None)
+            key = MockPkcs11PrivateKey('/path/to/lib.so', 'test_token', '1234', 'test_key')
+            object.__setattr__(key, '_session', None)
 
-                with pytest.raises(RuntimeError, match='PKCS#11 session is not initialized'):
-                    key.copy_key('source_label', 'target_label', KeyType.RSA, ObjectClass.PRIVATE_KEY)
+            with pytest.raises(RuntimeError, match='PKCS#11 session is not initialized'):
+                key.copy_key('source_label', 'target_label', KeyType.RSA, ObjectClass.PRIVATE_KEY)
 
     def test_destroy_object_success(self, pkcs11_key: MockPkcs11PrivateKey, mock_session: Mock) -> None:
         """Test destroy_object method with successful operation."""
@@ -206,11 +205,11 @@ class TestPkcs11PrivateKey:
     def test_close_no_session(self) -> None:
         """Test close when no session exists."""
         with patch('pkcs11.lib'), patch.object(MockPkcs11PrivateKey, '_initialize'):
-                key = MockPkcs11PrivateKey('/path/to/lib.so', 'test_token', '1234', 'test_key')
-                object.__setattr__(key, '_session', None)
+            key = MockPkcs11PrivateKey('/path/to/lib.so', 'test_token', '1234', 'test_key')
+            object.__setattr__(key, '_session', None)
 
-                # Should not raise exception
-                key.close()
+            # Should not raise exception
+            key.close()
 
     def test_context_manager(self, pkcs11_key: MockPkcs11PrivateKey) -> None:
         """Test context manager functionality."""
@@ -275,9 +274,11 @@ class TestPkcs11PrivateKey:
 
     def test_initialization_failure(self) -> None:
         """Test initialization failure."""
-        with patch('pkcs11.lib', side_effect=Exception('Library error')), \
-             pytest.raises(RuntimeError, match='Failed to initialize PKCS#11 session'):
-                MockPkcs11PrivateKey('/path/to/lib.so', 'test_token', '1234', 'test_key')
+        with (
+            patch('pkcs11.lib', side_effect=Exception('Library error')),
+            pytest.raises(RuntimeError, match='Failed to initialize PKCS#11 session'),
+        ):
+            MockPkcs11PrivateKey('/path/to/lib.so', 'test_token', '1234', 'test_key')
 
     def test_raise_methods(self, pkcs11_key: MockPkcs11PrivateKey) -> None:
         """Test the private _raise methods work correctly."""

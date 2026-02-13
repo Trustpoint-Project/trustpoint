@@ -17,6 +17,7 @@ class Event:
         operation: Protocol operation (e.g., "simpleenroll"); may be empty.
         handler: Service key that will process the event.
     """
+
     key: str
     protocol: str
     operation: str
@@ -25,6 +26,7 @@ class Event:
 
 class Events:
     """Central definition of all supported events in one place."""
+
     est_simpleenroll = Event(
         key='est_simpleenroll',
         protocol='est',

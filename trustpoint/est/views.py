@@ -108,7 +108,7 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
                 operation='simpleenroll',
                 domain_str=domain_name,
                 cert_profile_str=cert_profile,
-                event=self.EVENT
+                event=self.EVENT,
             )
 
         except Exception:
@@ -126,9 +126,7 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
             est_authenticator = EstAuthentication()
             est_authenticator.authenticate(ctx)
 
-            est_authorizer = EstAuthorization(
-                allowed_operations=['simpleenroll']
-            )
+            est_authorizer = EstAuthorization(allowed_operations=['simpleenroll'])
             est_authorizer.authorize(ctx)
 
             ProfileValidator.validate(ctx)
@@ -173,11 +171,10 @@ class EstSimpleEnrollmentDefaultView(EstSimpleEnrollmentMixin, View):
         cert_profile = 'tls_client'
 
         try:
-             DomainModel.objects.get(unique_name=domain_name)
+            DomainModel.objects.get(unique_name=domain_name)
         except DomainModel.DoesNotExist:
             return LoggedHttpResponse(
-                f'Default domain "{domain_name}" does not exist. Please configure it first.',
-                status=404
+                f'Default domain "{domain_name}" does not exist. Please configure it first.', status=404
             )
 
         return self.process_enrollment(request, domain_name, cert_profile)
@@ -211,7 +208,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
                 operation='simplereenroll',
                 domain_str=domain_name,
                 cert_profile_str=cert_profile,
-                event=self.EVENT
+                event=self.EVENT,
             )
 
         except Exception:
@@ -229,9 +226,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             est_authenticator = EstAuthentication()
             est_authenticator.authenticate(ctx)
 
-            est_authorizer = EstAuthorization(
-                allowed_operations=['simplereenroll']
-            )
+            est_authorizer = EstAuthorization(allowed_operations=['simplereenroll'])
             est_authorizer.authorize(ctx)
 
             ProfileValidator.validate(ctx)
@@ -247,7 +242,6 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             EstErrorMessageResponder.build_response(ctx)
 
         return ctx.to_http_response()
-
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -273,14 +267,12 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
             if not http_response and requested_domain:
-
                 if not requested_domain.issuing_ca:
                     return LoggedHttpResponse('The requested domain has no issuing CA configured', status=500)
 
-                ca_credential_serializer = (
-                    cast('CredentialModel', requested_domain.issuing_ca.credential)
-                    .get_credential_serializer()
-                )
+                ca_credential_serializer = cast(
+                    'CredentialModel', requested_domain.issuing_ca.credential
+                ).get_credential_serializer()
                 pkcs7_certs = ca_credential_serializer.get_full_chain_as_serializer().as_pkcs7_der()
                 b64_pkcs7 = base64.b64encode(pkcs7_certs).decode()
 

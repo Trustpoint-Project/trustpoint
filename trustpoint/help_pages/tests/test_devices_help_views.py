@@ -32,9 +32,7 @@ class BaseHelpViewTests(TestCase):
 
     @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
     @patch('help_pages.devices_help_views.TlsSettings.get_first_ipv4_address')
-    def test_make_context_success(
-        self, mock_get_ip: Mock, mock_filter: Mock
-    ) -> None:
+    def test_make_context_success(self, mock_get_ip: Mock, mock_filter: Mock) -> None:
         """Test _make_context creates HelpContext successfully."""
         mock_get_ip.return_value = '192.168.1.1'
         mock_queryset = Mock()
@@ -97,9 +95,7 @@ class BaseHelpViewTests(TestCase):
 
     @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
     @patch('help_pages.devices_help_views.TlsSettings.get_first_ipv4_address')
-    def test_get_context_data_success(
-        self, mock_get_ip: Mock, mock_filter: Mock
-    ) -> None:
+    def test_get_context_data_success(self, mock_get_ip: Mock, mock_filter: Mock) -> None:
         """Test get_context_data builds help page successfully."""
         mock_get_ip.return_value = '192.168.1.1'
         mock_filter.return_value.count.return_value = 1

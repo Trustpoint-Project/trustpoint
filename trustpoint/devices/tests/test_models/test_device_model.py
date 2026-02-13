@@ -12,7 +12,7 @@ from devices.models import (
     OnboardingPkiProtocol,
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
-    OnboardingStatus
+    OnboardingStatus,
 )
 
 
@@ -69,9 +69,7 @@ def test_est_onboarding_with_client_certificate(domain_instance: dict[str, Any])
     """Test for EST onboarding configuration with EST Client Certificate PKI protocol."""
     domain = domain_instance['domain']
 
-    onboarding_pki_protocols = [
-        OnboardingPkiProtocol.EST
-    ]
+    onboarding_pki_protocols = [OnboardingPkiProtocol.EST]
     onboarding_config_model = OnboardingConfigModel(onboarding_protocol=OnboardingProtocol.EST_IDEVID)
     onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
@@ -82,7 +80,7 @@ def test_est_onboarding_with_client_certificate(domain_instance: dict[str, Any])
         common_name='EST_Onboarding',
         serial_number='SN_EST_ONBOARD',
         domain=domain,
-        onboarding_config=onboarding_config_model
+        onboarding_config=onboarding_config_model,
     )
 
     # Assertions
@@ -98,9 +96,7 @@ def test_cmp_onboarding_with_client_certificate(domain_instance: dict[str, Any])
     """Test for CMP onboarding configuration with CMP Client Certificate PKI protocol."""
     domain = domain_instance['domain']
 
-    onboarding_pki_protocols = [
-        OnboardingPkiProtocol.CMP
-    ]
+    onboarding_pki_protocols = [OnboardingPkiProtocol.CMP]
     onboarding_config_model = OnboardingConfigModel(onboarding_protocol=OnboardingProtocol.CMP_IDEVID)
     onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
@@ -111,7 +107,7 @@ def test_cmp_onboarding_with_client_certificate(domain_instance: dict[str, Any])
         common_name='CMP_Onboarding',
         serial_number='SN_CMP_ONBOARD',
         domain=domain,
-        onboarding_config=onboarding_config_model
+        onboarding_config=onboarding_config_model,
     )
 
     # Assertions
@@ -151,9 +147,7 @@ def test_device_opc_ua_gds(domain_instance: dict[str, Any]) -> None:
     """Test for a device with OPC UA GDS type."""
     domain = domain_instance['domain']
 
-    onboarding_pki_protocols = [
-        OnboardingPkiProtocol.EST
-    ]
+    onboarding_pki_protocols = [OnboardingPkiProtocol.EST]
     onboarding_config_model = OnboardingConfigModel(onboarding_protocol=OnboardingProtocol.EST_IDEVID)
     onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
@@ -165,7 +159,7 @@ def test_device_opc_ua_gds(domain_instance: dict[str, Any]) -> None:
         serial_number='SN_OPCUA',
         domain=domain,
         device_type=DeviceModel.DeviceType.OPC_UA_GDS,
-        onboarding_config=onboarding_config_model
+        onboarding_config=onboarding_config_model,
     )
 
     # Assertions
@@ -199,7 +193,10 @@ def test_device_creation_without_common_name(domain_instance: dict[str, Any]) ->
     """Test for device creation without a common name."""
     domain = domain_instance['domain']
 
-    with pytest.raises(IntegrityError, match=r'(null value in column "common_name" of relation "devices_devicemodel" violates not-null constraint|NOT NULL constraint failed: devices_devicemodel\.common_name)'):
+    with pytest.raises(
+        IntegrityError,
+        match=r'(null value in column "common_name" of relation "devices_devicemodel" violates not-null constraint|NOT NULL constraint failed: devices_devicemodel\.common_name)',
+    ):
         DeviceModel.objects.create(
             common_name=None,  # type: ignore[misc]
             serial_number='MISSING_COMMON_NAME',

@@ -1,4 +1,5 @@
 """Basic test EST client implementation."""
+
 import base64
 import logging
 
@@ -10,10 +11,12 @@ from cryptography.hazmat.primitives.serialization.pkcs7 import load_der_pkcs7_ce
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-#ruff: noqa: LOG015
+# ruff: noqa: LOG015
+
 
 class ESTClient:
     """EST Client representing a single EST request."""
+
     def __init__(
         self,
         est_url,
@@ -216,11 +219,11 @@ class ESTClient:
 if __name__ == '__main__':
     dc_client = ESTClient(
         est_url='https://localhost:443/.well-known/est',
-        auth_type='mutual_tls',#'both',
+        auth_type='mutual_tls',  #'both',
         domain='arburg',
         cert_template='domain_credential',
-        username=None,#'admin',
-        password=None,#'testing321',
+        username=None,  #'admin',
+        password=None,  #'testing321',
         cert_path='idevid.pem',
         key_path='idevid_pk.pem',
         ca_cert_path='trust_store.pem',
@@ -239,26 +242,26 @@ if __name__ == '__main__':
     # use Domain Credential to request an application certificate
     app_client = ESTClient(
         est_url='https://localhost:443/.well-known/est',
-        auth_type='mutual_tls',#'both',
+        auth_type='mutual_tls',  #'both',
         domain='arburg',
         cert_template='tlsclient',
-        username=None,#'admin',
-        password=None,#'testing321',
+        username=None,  #'admin',
+        password=None,  #'testing321',
         cert_path='dc_cert.pem',
         key_path='dc_private_key.pem',
         ca_cert_path='trust_store.pem',
         out_cert_path='app_cert.pem',
         out_key_path='app_key.pem',
     )
-    #app_client.enroll(common_name='test4.example.com', serial_number='4232', save_key=True)
+    # app_client.enroll(common_name='test4.example.com', serial_number='4232', save_key=True)
 
     app_reenroll_client = ESTClient(
         est_url='https://localhost:443/.well-known/est',
-        auth_type='mutual_tls',#'both',
+        auth_type='mutual_tls',  #'both',
         domain='arburg',
         cert_template='tlsclient',
-        username=None,#'admin',
-        password=None,#'testing321',
+        username=None,  #'admin',
+        password=None,  #'testing321',
         cert_path='app_cert.pem',
         key_path='app_key.pem',
         ca_cert_path='trust_store.pem',
@@ -266,8 +269,8 @@ if __name__ == '__main__':
         out_key_path='app_key.pem',
     )
     # re-enroll the application certificate
-    #app_reenroll_client.reenroll(
+    # app_reenroll_client.reenroll(
     #    cert_path='app_cert.pem',
     #    key_path='app_key.pem',
     #    generate_new_key=False,
-    #)
+    # )

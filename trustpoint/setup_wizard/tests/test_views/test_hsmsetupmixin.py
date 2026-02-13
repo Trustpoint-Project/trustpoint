@@ -47,25 +47,18 @@ class HsmSetupMixinTestCase(TestCase):
 
         # Add message framework support
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         self.request.session = {}
         self.request._messages = FallbackStorage(self.request)
 
     def test_validate_hsm_inputs_valid_data(self):
         """Test that valid HSM inputs pass validation."""
-        result = self.view._validate_hsm_inputs(
-            '/usr/local/lib/libpkcs11-proxy.so',
-            '0',
-            'Trustpoint-SoftHSM'
-        )
+        result = self.view._validate_hsm_inputs('/usr/local/lib/libpkcs11-proxy.so', '0', 'Trustpoint-SoftHSM')
         self.assertTrue(result)
 
     def test_validate_hsm_inputs_invalid_module_path(self):
         """Test that invalid module path fails validation."""
-        result = self.view._validate_hsm_inputs(
-            'invalid|path',
-            '0',
-            'Trustpoint-SoftHSM'
-        )
+        result = self.view._validate_hsm_inputs('invalid|path', '0', 'Trustpoint-SoftHSM')
         self.assertFalse(result)
 
         messages = list(get_messages(self.request))
@@ -74,9 +67,7 @@ class HsmSetupMixinTestCase(TestCase):
     def test_validate_hsm_inputs_invalid_slot(self):
         """Test that invalid slot fails validation."""
         result = self.view._validate_hsm_inputs(
-            '/usr/local/lib/libpkcs11-proxy.so',
-            'not_a_number',
-            'Trustpoint-SoftHSM'
+            '/usr/local/lib/libpkcs11-proxy.so', 'not_a_number', 'Trustpoint-SoftHSM'
         )
         self.assertFalse(result)
 
@@ -85,11 +76,7 @@ class HsmSetupMixinTestCase(TestCase):
 
     def test_validate_hsm_inputs_invalid_label(self):
         """Test that invalid label fails validation."""
-        result = self.view._validate_hsm_inputs(
-            '/usr/local/lib/libpkcs11-proxy.so',
-            '0',
-            'invalid-label!'
-        )
+        result = self.view._validate_hsm_inputs('/usr/local/lib/libpkcs11-proxy.so', '0', 'invalid-label!')
         self.assertFalse(result)
 
         messages = list(get_messages(self.request))
@@ -102,11 +89,7 @@ class HsmSetupMixinTestCase(TestCase):
         mock_result.returncode = 0
         mock_subprocess.return_value = mock_result
 
-        result = self.view._run_hsm_setup_script(
-            '/usr/local/lib/libpkcs11-proxy.so',
-            '0',
-            'Trustpoint-SoftHSM'
-        )
+        result = self.view._run_hsm_setup_script('/usr/local/lib/libpkcs11-proxy.so', '0', 'Trustpoint-SoftHSM')
 
         self.assertEqual(result.returncode, 0)
         mock_subprocess.assert_called_once()
@@ -130,10 +113,7 @@ class HsmSetupMixinTestCase(TestCase):
 
         with patch.object(self.view, '_assign_token_to_crypto_storage') as mock_assign:
             token, created = self.view._get_or_update_token(
-                'softhsm',
-                '/usr/local/lib/libpkcs11-proxy.so',
-                '0',
-                'Trustpoint-SoftHSM'
+                'softhsm', '/usr/local/lib/libpkcs11-proxy.so', '0', 'Trustpoint-SoftHSM'
             )
 
         self.assertTrue(created)
@@ -269,13 +249,14 @@ class HsmSetupMixinTestCase(TestCase):
         mock_super_form_valid.return_value = HttpResponseRedirect('/success/')
 
         # Mock all the method calls in the flow
-        with patch.object(self.view, '_validate_hsm_inputs', return_value=True), \
-             patch.object(self.view, '_run_hsm_setup_script') as mock_run_script, \
-             patch.object(self.view, '_get_or_update_token') as mock_get_token, \
-             patch.object(self.view, '_generate_kek_and_dek') as mock_generate_keys, \
-             patch.object(self.view, '_add_success_message') as mock_add_message, \
-             patch.object(self.view, 'logger'):
-
+        with (
+            patch.object(self.view, '_validate_hsm_inputs', return_value=True),
+            patch.object(self.view, '_run_hsm_setup_script') as mock_run_script,
+            patch.object(self.view, '_get_or_update_token') as mock_get_token,
+            patch.object(self.view, '_generate_kek_and_dek') as mock_generate_keys,
+            patch.object(self.view, '_add_success_message') as mock_add_message,
+            patch.object(self.view, 'logger'),
+        ):
             # Setup return values
             mock_result = Mock()
             mock_result.returncode = 0
@@ -289,11 +270,7 @@ class HsmSetupMixinTestCase(TestCase):
             result = self.view.form_valid(form)
 
         # Verify the flow
-        mock_run_script.assert_called_once_with(
-            '/usr/local/lib/libpkcs11-proxy.so',
-            '0',
-            'Trustpoint-SoftHSM'
-        )
+        mock_run_script.assert_called_once_with('/usr/local/lib/libpkcs11-proxy.so', '0', 'Trustpoint-SoftHSM')
         mock_get_token.assert_called_once()
         mock_generate_keys.assert_called_once_with(mock_token)
         mock_add_message.assert_called_once()
@@ -302,6 +279,7 @@ class HsmSetupMixinTestCase(TestCase):
     def test_inheritance_structure(self):
         """Test that HsmSetupMixin properly inherits from LoggerMixin."""
         from trustpoint.logger import LoggerMixin
+
         self.assertTrue(issubclass(HsmSetupMixin, LoggerMixin))
         self.assertTrue(hasattr(self.view, 'logger'))
 

@@ -58,27 +58,24 @@ class PKCS11Key(models.Model):
 
     class KeyType(models.TextChoices):
         """Supported key types in PKCS#11."""
+
         RSA = 'rsa', _('RSA')
         EC = 'ec', _('Elliptic Curve')
         AES = 'aes', _('AES')
 
     token_label = models.CharField(
-        max_length=255,
-        verbose_name=_('Token Label'),
-        help_text=_('Label of the HSM token containing the private key')
+        max_length=255, verbose_name=_('Token Label'), help_text=_('Label of the HSM token containing the private key')
     )
 
     key_label = models.CharField(
-        max_length=255,
-        verbose_name=_('Key Label'),
-        help_text=_('Unique label of the private key within the token')
+        max_length=255, verbose_name=_('Key Label'), help_text=_('Unique label of the private key within the token')
     )
 
     key_type = models.CharField(
         max_length=10,
         choices=KeyType.choices,
         verbose_name=_('Key Type'),
-        help_text=_('Type of the cryptographic key (RSA or EC)')
+        help_text=_('Type of the cryptographic key (RSA or EC)'),
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -100,24 +97,15 @@ class PKCS11Key(models.Model):
         """Get the appropriate PKCS#11 key instance."""
         if self.key_type == self.KeyType.RSA:
             return Pkcs11RSAPrivateKey(
-                lib_path=lib_path,
-                token_label=self.token_label,
-                user_pin=user_pin,
-                key_label=self.key_label
+                lib_path=lib_path, token_label=self.token_label, user_pin=user_pin, key_label=self.key_label
             )
         if self.key_type == self.KeyType.EC:
             return Pkcs11ECPrivateKey(
-                lib_path=lib_path,
-                token_label=self.token_label,
-                user_pin=user_pin,
-                key_label=self.key_label
+                lib_path=lib_path, token_label=self.token_label, user_pin=user_pin, key_label=self.key_label
             )
         if self.key_type == self.KeyType.AES:
             return Pkcs11AESKey(
-                lib_path=lib_path,
-                token_label=self.token_label,
-                user_pin=user_pin,
-                key_label=self.key_label
+                lib_path=lib_path, token_label=self.token_label, user_pin=user_pin, key_label=self.key_label
             )
         msg = f'Unsupported key type: {self.key_type}'
         raise TypeError(msg)
@@ -155,7 +143,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         verbose_name=_('PKCS#11 Private Key'),
-        help_text=_('Reference to HSM-stored private key')
+        help_text=_('Reference to HSM-stored private key'),
     )
 
     certificate = models.ForeignKey(
@@ -166,10 +154,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         CertificateModel, through='PrimaryCredentialCertificate', blank=False, related_name='credential'
     )
     certificate_chain: models.ManyToManyField[CertificateModel, CertificateChainOrderModel] = models.ManyToManyField(
-        CertificateModel, blank=True,
+        CertificateModel,
+        blank=True,
         through='CertificateChainOrderModel',
         through_fields=('credential', 'certificate'),
-        related_name='credential_certificate_chains'
+        related_name='credential_certificate_chains',
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
@@ -194,8 +183,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(exc_msg)
 
         if qs.get().certificate != self.certificate:
-            exc_msg = ('The ForeignKey certificate must be identical to the one '
-                       'marked primary in the primarycredentialcertificate_set.')
+            exc_msg = (
+                'The ForeignKey certificate must be identical to the one '
+                'marked primary in the primarycredentialcertificate_set.'
+            )
 
             raise ValidationError(exc_msg)
 
@@ -223,10 +214,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
     @classmethod
     def _import_private_key_to_hsm(
-            cls,
-            crypto_private_key: PrivateKey,
-            token_config: PKCS11Token,
-            key_label: str,
+        cls,
+        crypto_private_key: PrivateKey,
+        token_config: PKCS11Token,
+        key_label: str,
     ) -> PKCS11Key:
         """Import a private key to HSM and create corresponding PKCS11Key model.
 
@@ -285,12 +276,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 msg = f'Unsupported private key type: {type(crypto_private_key)}'
                 raise TypeError(msg)
 
-            return PKCS11Key.objects.create(
-                token_label=token_config.label,
-                key_label=key_label,
-                key_type=key_type
-            )
-
+            return PKCS11Key.objects.create(token_label=token_config.label, key_label=key_label, key_type=key_type)
 
         finally:
             if pkcs11_key_handler:
@@ -298,12 +284,12 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
     @classmethod
     def _create_private_key_in_hsm(
-            cls,
-            key_type: type[PrivateKey],
-            token_config: PKCS11Token,
-            key_label: str,
-            key_size: int | None = None,
-            key_curve: ec.EllipticCurve | None = None,
+        cls,
+        key_type: type[PrivateKey],
+        token_config: PKCS11Token,
+        key_label: str,
+        key_size: int | None = None,
+        key_curve: ec.EllipticCurve | None = None,
     ) -> PKCS11Key:
         """Generate a new private key in HSM and create corresponding PKCS11Key model.
 
@@ -331,11 +317,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             )
 
             return PKCS11Key.objects.create(
-                token_label=token_config.label,
-                key_label=key_label,
-                key_type=model_key_type
+                token_label=token_config.label, key_label=key_label, key_type=model_key_type
             )
-
 
         finally:
             if pkcs11_key_handler:
@@ -425,27 +408,18 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         credential_type: CredentialModel.CredentialTypeChoice,
     ) -> CredentialModel:
         """This method will store a credential that is expected to be normalized."""
-        cls.logger.info(
-            'Starting to save credential of type: %s',
-            credential_type
-        )
+        cls.logger.info('Starting to save credential of type: %s', credential_type)
         certificate = cls._validate_and_save_certificate(normalized_credential_serializer)
-        pkcs11_private_key, private_key_pem = cls._process_private_key(
-            normalized_credential_serializer
-        )
+        pkcs11_private_key, private_key_pem = cls._process_private_key(normalized_credential_serializer)
         credential_model = cls._create_credential_model(
             certificate, credential_type, private_key_pem, pkcs11_private_key
         )
         additional_certificates = list(reversed(normalized_credential_serializer.additional_certificates))
-        cls._save_additional_certificates(
-            credential_model, additional_certificates
-        )
+        cls._save_additional_certificates(credential_model, additional_certificates)
         return credential_model
 
     @staticmethod
-    def _validate_and_save_certificate(
-        normalized_credential_serializer: CredentialSerializer
-    ) -> CertificateModel:
+    def _validate_and_save_certificate(normalized_credential_serializer: CredentialSerializer) -> CertificateModel:
         """Validates and saves the certificate from the provided serializer.
 
         Args:
@@ -473,7 +447,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         pkcs11_private_key = None
         private_key_pem = ''
         if normalized_credential_serializer.private_key_reference.location in [
-            PrivateKeyLocation.HSM_GENERATED, PrivateKeyLocation.HSM_PROVIDED
+            PrivateKeyLocation.HSM_GENERATED,
+            PrivateKeyLocation.HSM_PROVIDED,
         ]:
             pkcs11_private_key = cls._handle_hsm_key(normalized_credential_serializer)
         else:
@@ -488,9 +463,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         try:
             storage_config = KeyStorageConfig.get_config()
             if storage_config.storage_type == KeyStorageConfig.StorageType.SOFTWARE:
-                msg = (
-                    'HSM private key location specified but KeyStorageConfig is set to SOFTWARE. '
-                )
+                msg = 'HSM private key location specified but KeyStorageConfig is set to SOFTWARE. '
                 raise ValueError(msg)
         except KeyStorageConfig.DoesNotExist:
             cls.logger.warning('KeyStorageConfig does not exist, proceeding with HSM operation')
@@ -515,7 +488,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 key_label=hsm_key_reference.key_label,
                 key_size=hsm_key_reference.key_size,
                 key_curve=cast('ec.EllipticCurve | None', hsm_key_reference.key_curve),
-                token_config=token_config
+                token_config=token_config,
             )
         if normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.HSM_PROVIDED:
             private_key_serializer = normalized_credential_serializer.get_private_key_serializer()
@@ -524,9 +497,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 raise ValueError(msg)
             crypto_private_key = private_key_serializer.as_crypto()
             return cls._import_private_key_to_hsm(
-                key_label=hsm_key_reference.key_label,
-                token_config=token_config,
-                crypto_private_key=crypto_private_key
+                key_label=hsm_key_reference.key_label, token_config=token_config, crypto_private_key=crypto_private_key
             )
         msg = f'Unsupported HSM location: {normalized_credential_serializer.private_key_reference.location}'
         raise ValueError(msg)
@@ -544,7 +515,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             certificate=certificate,
             credential_type=credential_type,
             private_key=private_key_pem,
-            pkcs11_private_key=pkcs11_private_key
+            pkcs11_private_key=pkcs11_private_key,
         )
         PrimaryCredentialCertificate.objects.create(
             certificate=certificate, credential=credential_model, is_primary=True
@@ -562,7 +533,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 certificate=certificate_model,
                 credential=credential_model,
                 order=order,
-                primary_certificate=credential_model.certificate
+                primary_certificate=credential_model.certificate,
             )
 
     @classmethod
@@ -590,7 +561,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 certificate=certificate_model,
                 credential=credential_model,
                 order=order,
-                primary_certificate=credential_model.certificate
+                primary_certificate=credential_model.certificate,
             )
 
         return credential_model
@@ -631,8 +602,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         # Issued credentials must be revoked before deletion, not a requirement for CA credentials
         if self.credential_type == CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL:
             for cert in qs:
-                if (cert.certificate_status in
-                    [CertificateModel.CertificateStatus.OK, CertificateModel.CertificateStatus.NOT_YET_VALID]):
+                if cert.certificate_status in [
+                    CertificateModel.CertificateStatus.OK,
+                    CertificateModel.CertificateStatus.NOT_YET_VALID,
+                ]:
                     exc_msg = f'Cannot delete credential {self} because it still has active certificates.'
                     self.logger.error(exc_msg)
                     raise ValidationError(exc_msg)
@@ -774,7 +747,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return CredentialSerializer(
             private_key=self.get_private_key_serializer().as_crypto(),
             certificate=self.get_certificate_serializer().as_crypto(),
-            additional_certificates=self.get_certificate_chain_serializer().as_crypto()
+            additional_certificates=self.get_certificate_chain_serializer().as_crypto(),
         )
 
     @property
@@ -788,7 +761,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return self.signature_suite.public_key_info
 
     @property
-    def hash_algorithm(self) -> hashes.HashAlgorithm  | None:
+    def hash_algorithm(self) -> hashes.HashAlgorithm | None:
         """Returns the hash algorithm used by the current credential."""
         return self.get_certificate().signature_hash_algorithm
 
@@ -856,8 +829,12 @@ class CertificateChainOrderModel(models.Model):
     credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE, null=False, blank=False, editable=False)
     order = models.PositiveIntegerField(null=False, blank=False, editable=False)
     primary_certificate = models.ForeignKey(
-        CertificateModel, on_delete=models.PROTECT, null=False, blank=False, editable=False,
-        related_name = 'primary_certificate_set'
+        CertificateModel,
+        on_delete=models.PROTECT,
+        null=False,
+        blank=False,
+        editable=False,
+        related_name='primary_certificate_set',
     )
 
     class Meta:
@@ -868,9 +845,9 @@ class CertificateChainOrderModel(models.Model):
         """
 
         ordering: ClassVar = ['order']
-        constraints: ClassVar = [models.UniqueConstraint(
-            fields=['credential', 'primary_certificate', 'order'], name='unique_group_order'
-        )]
+        constraints: ClassVar = [
+            models.UniqueConstraint(fields=['credential', 'primary_certificate', 'order'], name='unique_group_order')
+        ]
 
     def __repr__(self) -> str:
         """Returns a string representation of this CertificateChainOrderModel entry."""
@@ -952,9 +929,7 @@ class CertificateChainOrderModel(models.Model):
         """
         existing_orders = CertificateChainOrderModel.objects.filter(
             credential=self.credential, primary_certificate=self.primary_certificate
-        ).values_list(
-            'order', flat=True
-        )
+        ).values_list('order', flat=True)
         return max(existing_orders, default=-1)
 
 
@@ -963,9 +938,8 @@ class IDevIDReferenceModel(models.Model):
 
     Obtained from the SAN of the DevOwnerID certificate.
     """
-    dev_owner_id = models.ForeignKey(
-        'OwnerCredentialModel', related_name='idevid_ref_set', on_delete=models.CASCADE
-    )
+
+    dev_owner_id = models.ForeignKey('OwnerCredentialModel', related_name='idevid_ref_set', on_delete=models.CASCADE)
     idevid_ref = models.CharField(max_length=255, verbose_name=_('IDevID Identifier'))
 
     def __str__(self) -> str:
@@ -997,7 +971,6 @@ class IDevIDReferenceModel(models.Model):
             return ''
 
 
-
 class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
     """Device owner credential model.
 
@@ -1008,10 +981,10 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
     )
     credential: models.OneToOneField[CredentialModel] = models.OneToOneField(
-        CredentialModel, related_name='dev_owner_ids', on_delete=models.PROTECT)
+        CredentialModel, related_name='dev_owner_ids', on_delete=models.PROTECT
+    )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
-
 
     def __str__(self) -> str:
         """Returns a human-readable string that represents this OwnerCredentialModel entry.
@@ -1060,10 +1033,12 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
                 if san_uri_str.startswith('dev-owner:'):
                     idevid_refs.add(san_uri_str)
         if not idevid_refs:
-            raise ValidationError(_(
-                'The provided certificate is not a valid DevOwnerID; '
-                'it does not contain a valid IDevID reference in the SAN.'
-            ))
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid DevOwnerID; '
+                    'it does not contain a valid IDevID reference in the SAN.'
+                )
+            )
 
         credential_type = CredentialModel.CredentialTypeChoice.DEV_OWNER_ID
 
@@ -1077,10 +1052,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         )
         owner_credential.save()
         for idevid_ref in idevid_refs:
-            IDevIDReferenceModel.objects.create(
-                dev_owner_id=owner_credential,
-                idevid_ref=idevid_ref
-            )
+            IDevIDReferenceModel.objects.create(dev_owner_id=owner_credential, idevid_ref=idevid_ref)
 
         return owner_credential
 
@@ -1088,4 +1060,3 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         """Deletes the credential of this owner credential after deleting it."""
         self.logger.debug('Deleting credential of owner credential %s', self)
         self.credential.delete()
-

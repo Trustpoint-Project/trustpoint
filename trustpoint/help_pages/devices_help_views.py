@@ -70,7 +70,8 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
         allowed_app_profiles = list(
-            domain.get_allowed_cert_profiles().exclude(certificate_profile__unique_name='domain_credential'))
+            domain.get_allowed_cert_profiles().exclude(certificate_profile__unique_name='domain_credential')
+        )
 
         return HelpContext(
             device=device,
@@ -144,9 +145,7 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(
-            title: str, profile_name: str, cmd: str, *, hidden: bool = False
-        ) -> HelpSection:
+        def _build_section(title: str, profile_name: str, cmd: str, *, hidden: bool = False) -> HelpSection:
             return HelpSection(
                 title,
                 [
@@ -259,9 +258,7 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(
-            title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False
-        ) -> HelpSection:
+        def _build_section(title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False) -> HelpSection:
             return HelpSection(
                 title,
                 [
@@ -556,9 +553,7 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(
-            title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False
-        ) -> HelpSection:
+        def _build_section(title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False) -> HelpSection:
             return HelpSection(
                 title,
                 [
@@ -657,9 +652,7 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
 
         cred = help_context.cred_count
 
-        def _build_section(
-            title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False
-        ) -> HelpSection:
+        def _build_section(title: str, cert_profile_name: str, cmd: str, *, hidden: bool = False) -> HelpSection:
             return HelpSection(
                 title,
                 [
