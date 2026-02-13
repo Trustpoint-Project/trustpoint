@@ -101,6 +101,7 @@ class OTScanner:
         result['hostname'] = self._resolve_hostname(ip)
         return result
 
+
     def scan_network(self, start_ip: str, end_ip: str) -> list[dict[str, Any]]:
         """Orchestrate concurrent host scanning with instant shutdown support."""
         self.stop_requested.clear()

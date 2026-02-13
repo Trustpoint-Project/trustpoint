@@ -28,6 +28,11 @@ def run_scan_in_background(start_ip: str, end_ip: str) -> None:
         scanner_instance.target_ports = ports
 
         results = scanner_instance.scan_network(start_ip, end_ip)
+
+
+        if scanner_instance.stop_requested.is_set():
+            return
+
         for d in results:
             pki_cert = None
             ssl_info = d.get('ssl_info')
