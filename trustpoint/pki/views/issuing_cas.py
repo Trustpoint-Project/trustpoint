@@ -485,8 +485,9 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
         permission_classes=[IsAuthenticated],
         url_path='generate-crl',
     )
-    def generate_crl(self, _request: Request) -> Response:
+    def generate_crl(self, _request: Request, pk: int | None = None, **kwargs: Any) -> Response:
         """Generate a new CRL for this Issuing CA."""
+        del pk # not needed, but passed by DRF
         ca = self.get_object()
 
         if ca.issue_crl():
@@ -564,8 +565,9 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
         permission_classes=[IsAuthenticated],
         url_path='crl',
     )
-    def crl(self, request: Request) -> Response | HttpResponse:
+    def crl(self, request: Request, pk: int | None = None, **kwargs: Any) -> Response | HttpResponse:
         """Download the CRL for this Issuing CA."""
+        del pk # not needed, but passed by DRF
         ca = self.get_object()
         crl_pem = ca.crl_pem
 
