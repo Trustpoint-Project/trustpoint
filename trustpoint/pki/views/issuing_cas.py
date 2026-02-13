@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import binascii
 from base64 import b64decode
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, cast
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec, rsa  # noqa: TC002
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
@@ -62,6 +63,16 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
     from django.forms import Form
     from django.http import HttpRequest
+
+
+class CmpContextParams(NamedTuple):
+    """Parameters for creating a CMP certificate request context."""
+    subject: x509.Name
+    public_key: rsa.RSAPublicKey | ec.EllipticCurvePublicKey
+    private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
+    recipient_name: str
+    extensions: list[x509.Extension[x509.ExtensionType]] | None
+    sender_kid: int | None
 
 
 class IssuingCaContextMixin(ContextDataMixin):
@@ -757,9 +768,16 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
         private_key = self._load_private_key(ca)
 
-        cmp_context = self._create_cmp_context(
-            ca, csr_subject, csr_public_key, private_key, recipient_name, csr_extensions, sender_kid
+        cmp_params = CmpContextParams(
+            subject=csr_subject,
+            public_key=cast('rsa.RSAPublicKey | ec.EllipticCurvePublicKey', csr_public_key),
+            private_key=private_key,
+            recipient_name=recipient_name,
+            extensions=csr_extensions,
+            sender_kid=sender_kid,
         )
+
+        cmp_context = self._create_cmp_context(ca, cmp_params)
 
         cmp_builder = CmpMessageBuilder()
         cmp_builder.build(cmp_context)
@@ -874,6 +892,109 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             )
             return redirect(self.redirect_url_name, pk=ca.pk)
 
+    def _get_recipient_name_from_truststore(self, ca: CaModel) -> str:
+        """Extract recipient name from the CA's truststore."""
+        if not ca.no_onboarding_config or not ca.no_onboarding_config.trust_store:
+            msg = 'No truststore configured for CMP CA - recipient name cannot be determined'
+            raise ValueError(msg)
+
+        try:
+            truststore_certs = ca.no_onboarding_config.trust_store.truststoreordermodel_set.order_by('order')
+            if not truststore_certs.exists():
+                msg = 'Truststore contains no certificates - cannot determine recipient name'
+                raise ValueError(msg)
+
+            first_cert_model = truststore_certs.first().certificate  # type: ignore[union-attr]
+            ca_cert = first_cert_model.get_certificate_serializer().as_crypto()
+            recipient_name = ca_cert.subject.rfc4514_string()
+            self.logger.info('Using recipient name from truststore: %s', recipient_name)
+        except (AttributeError, IndexError) as e:
+            msg = f'Failed to extract recipient name from truststore: {e}'
+            raise ValueError(msg) from e
+        else:
+            return recipient_name
+
+    def _load_private_key(self, ca: CaModel) -> rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey:
+        """Load the private key from the CA's credential."""
+        if not ca.credential or not ca.credential.private_key:
+            msg = 'No private key available for CA credential'
+            raise ValueError(msg)
+
+        return cast(
+            'rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey',
+            serialization.load_pem_private_key(
+                ca.credential.private_key.encode(),
+                password=None,
+            ),
+        )
+
+    def _create_cmp_context(
+        self,
+        ca: CaModel,
+        params: CmpContextParams,
+    ) -> CmpCertificateRequestContext:
+        """Create the CMP certificate request context."""
+        return CmpCertificateRequestContext(
+            protocol='cmp',
+            operation='certification',
+            cmp_server_host=ca.remote_host,
+            cmp_server_port=ca.remote_port,
+            cmp_server_path=ca.remote_path,
+            cmp_shared_secret=(
+                ca.no_onboarding_config.cmp_shared_secret
+                if ca.no_onboarding_config else None
+            ),
+            cmp_server_truststore=(
+                ca.no_onboarding_config.trust_store
+                if ca.no_onboarding_config else None
+            ),
+            request_data={
+                'subject': params.subject,
+                'public_key': params.public_key,
+                'private_key': params.private_key,
+                'recipient_name': params.recipient_name,
+                'extensions': params.extensions,
+                'use_initialization_request': False,
+                'add_pop': True,
+                'prepare_shared_secret_protection': True,
+                'sender_kid': params.sender_kid,
+            },
+        )
+
+    def _save_cmp_certificates(
+        self,
+        ca: CaModel,
+        issued_cert: x509.Certificate,
+        chain_certs: list[x509.Certificate],
+    ) -> None:
+        """Save the issued certificate and chain certificates."""
+        cert_model = CertificateModel.save_certificate(issued_cert)
+        chain_cert_models = [CertificateModel.save_certificate(c) for c in chain_certs]
+
+        if ca.credential:
+            ca.credential.certificate = cert_model
+            ca.credential.save()
+            for chain_cert_model in chain_cert_models:
+                if not PrimaryCredentialCertificate.objects.filter(certificate=chain_cert_model).exists():
+                    ca.credential.certificates.add(chain_cert_model)
+        else:
+            credential = CredentialModel(
+                credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+                certificate=cert_model,
+                private_key=ca.credential.private_key if ca.credential else '',
+            )
+            credential.save()
+            credential.certificates.add(cert_model)
+            for chain_cert_model in chain_cert_models:
+                if not PrimaryCredentialCertificate.objects.filter(certificate=chain_cert_model).exists():
+                    credential.certificates.add(chain_cert_model)
+            PrimaryCredentialCertificate.objects.create(
+                credential=credential,
+                certificate=cert_model,
+                is_primary=True
+            )
+            ca.credential = credential
+            ca.save()
 
 
 class KeylessCaConfigView(LoggerMixin, KeylessCaContextMixin, DetailView[CaModel]):
