@@ -89,7 +89,19 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
                 'No DevOwnerID present for this IDevID.', status = 422
             )
         owner_pk = owner_cred.get_private_key()
-        owner_id_cert = owner_cred.certificate
+
+        try:
+            owner_id_cert = owner_cred.certificate_or_error
+            owner_cert_pem = owner_id_cert.get_certificate_serializer().as_pem().decode()
+        except ValueError:
+            self.logger.warning('Owner credential has no certificate')
+            owner_cert_pem = ''
+
+        try:
+            tls_cert_pem = tls_cert.credential.certificate_or_error.get_certificate_serializer().as_pem().decode()
+        except ValueError:
+            self.logger.warning('TLS credential has no certificate')
+            tls_cert_pem = ''
 
         aoki_init_response = {
             'aoki-init': {
@@ -102,8 +114,8 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
                         }
                     ]
                 },
-                'owner-id-cert': owner_id_cert.get_certificate_serializer().as_pem().decode(),
-                'tls-truststore': tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode()
+                'owner-id-cert': owner_cert_pem,
+                'tls-truststore': tls_cert_pem
             },
         }
         resp = JsonResponse(aoki_init_response)

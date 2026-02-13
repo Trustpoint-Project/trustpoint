@@ -1,0 +1,64 @@
+{
+  "type": "cert_profile",
+  "display_name": "Comprehensive Test Profile",
+  "subj": {
+    "allow": "*",
+    "cn": {
+      "required": true
+    },
+    "o": {
+      "default": "Test Organization"
+    },
+    "ou": {
+      "value": "Test Department",
+      "mutable": false
+    },
+    "c": {
+      "required": true
+    },
+    "st": {
+      "default": "California",
+      "mutable": true
+    },
+    "l": {
+      "value": "San Francisco",
+      "mutable": false
+    },
+    "emailAddress": {
+      "default": "test@example.com",
+      "required": false
+    }
+  },
+  "ext": {
+    "allow": "*",
+    "subject_alternative_name": {
+      "allow": "*",
+      "dns_names": {
+        "default": [
+          "example.com",
+          "www.example.com"
+        ],
+        "mutable": true
+      },
+      "ip_addresses": {
+        "required": true
+      },
+      "rfc822_names": {
+        "default": [
+          "admin@example.com"
+        ],
+        "mutable": true
+      },
+      "uris": {
+        "value": [
+          "https://example.com"
+        ],
+        "mutable": false
+      }
+    }
+  },
+  "validity": {
+    "allow": "*",
+    "days": 30
+  }
+}

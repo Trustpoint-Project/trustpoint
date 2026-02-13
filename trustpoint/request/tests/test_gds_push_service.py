@@ -2,19 +2,18 @@
 
 import datetime
 import tempfile
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 from asyncua import ua
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import ExtensionOID, ObjectIdentifier
-from cryptography.x509.oid import ExtensionOID
-from django.core.exceptions import ValidationError
+from cryptography.x509.oid import ObjectIdentifier
 
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
-from pki.models import CaModel, TruststoreModel
+from devices.models import DeviceModel
+from onboarding.models import OnboardingConfigModel, OnboardingPkiProtocol, OnboardingProtocol
+from pki.models import TruststoreModel
 from pki.models.truststore import TruststoreOrderModel
 from pki.util.x509 import CertificateGenerator
 from request.gds_push.gds_push_service import GdsPushError, GdsPushService

@@ -460,6 +460,32 @@ def test_sample_request_contains_ext_defaults_allow_any() -> None:
     print('Sample Request: ', sample_request)
     assert sample_request['extensions']['subject_alternative_name']['dns_names'] == ['default.example.com']
 
+def test_san_allow_any_no_defaults() -> None:
+    """Test that a profile with allow='*' for SAN but no defaults generates a sample request with empty SAN."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {
+            'san': {
+                'allow': '*'
+                # No defaults provided
+            },
+        },
+        'reject_mods': False
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'type': 'cert_request',
+        'subj': {'cn': 'example.com'},
+        'extensions': {
+            'subject_alternative_name': {
+                'dns_names': ['test.example.com']
+            }
+        }
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['test.example.com']
+
 # --- General parsing and conversion tests ---
 
 def test_request_normalization() -> None:

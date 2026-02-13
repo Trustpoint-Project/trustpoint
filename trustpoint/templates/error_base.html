@@ -1,0 +1,23 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Trustpoint{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'css/error.css' %}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="tp-content-wrapper">
+        <header class="tp-page-header">
+            <a class="tp-primary" href="/">
+                <img src="{% static 'img/tp-logo-horizontal-512.png' %}" alt="Trustpoint" id="tp-logo">
+            </a>
+        </header>
+        <main>
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+</body>
+</html>

@@ -23,6 +23,12 @@ class AuthenticationComponent(ABC):
 class ClientCertificateAuthentication(AuthenticationComponent, LoggerMixin):
     """Handles authentication via client certificates."""
 
+    domain_credential_only: bool = True
+
+    def __init__(self, *, domain_credential_only: bool = True) -> None:
+        """Initialize the client certificate authentication component."""
+        self.domain_credential_only = domain_credential_only
+
     def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate using the client certificate from the context."""
         if not context.client_certificate:
@@ -33,7 +39,10 @@ class ClientCertificateAuthentication(AuthenticationComponent, LoggerMixin):
         try:
             issued_credential = IssuedCredentialModel.get_credential_for_certificate(client_certificate)
 
-            is_valid, reason = issued_credential.is_valid_domain_credential()
+            if self.domain_credential_only:
+                is_valid, reason = issued_credential.is_valid_domain_credential()
+            else:
+                is_valid, reason = issued_credential.credential.is_valid_issued_credential()
             if not is_valid:
                 self.logger.warning('Invalid client certificate: %s', reason)
                 error_message = f'Invalid HTTP_SSL_CLIENT_CERT header: {reason}'

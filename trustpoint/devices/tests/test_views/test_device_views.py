@@ -6,7 +6,8 @@ import pytest
 from django.test import Client
 from django.urls import reverse
 
-from devices.models import DeviceModel, OnboardingProtocol
+from devices.models import DeviceModel
+from onboarding.models import OnboardingProtocol
 
 
 @pytest.mark.django_db
@@ -451,7 +452,7 @@ class TestOpcUaGdsCertificateLifecycleManagementSummaryView:
         device_instance: dict[str, Any]
     ) -> None:
         """Test GET request to OPC UA GDS CLM summary view."""
-        from devices.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
+        from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 
         domain = device_instance['domain']
 

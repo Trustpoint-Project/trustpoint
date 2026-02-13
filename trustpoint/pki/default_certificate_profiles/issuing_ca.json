@@ -1,0 +1,26 @@
+{
+    "type": "cert_profile",
+    "display_name": "Issuing CA",
+    "subj": {
+        "allow": "*",
+        "common_name": {"required": true},
+        "organization_name": {"required": true},
+        "country_name": {"required": true},
+        "state_or_province_name": {"required": true}
+    },
+    "reject_mods": false,
+    "ext": {
+        "basic_constraints": {
+            "ca": true,
+            "path_length": 0
+        },
+        "key_usage": {
+            "key_cert_sign": true,
+            "crl_sign": true,
+            "critical": true
+        }
+    },
+    "validity": {
+        "days": 3650
+    }
+}

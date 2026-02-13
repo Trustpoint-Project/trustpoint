@@ -79,7 +79,7 @@ def generate_crl_with_revoked_certs(
         raise ValueError(msg)
 
     crl_issued_at = timezone.now()
-    ca_subject = issuing_ca.credential.certificate.get_certificate_serializer().as_crypto().subject
+    ca_subject = issuing_ca.credential.certificate_or_error.get_certificate_serializer().as_crypto().subject
 
     latest_crl = issuing_ca.get_latest_crl()
     next_crl_number = (latest_crl.crl_number + 1) if latest_crl and latest_crl.crl_number else 1

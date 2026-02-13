@@ -167,9 +167,11 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
             self.logger.warning(error_message)
             raise ValueError(error_message)
 
+        cert = credential_model.certificate_or_error
+
         if (
-            not credential_model.certificate.subjects_match(csr.subject) or
-            not credential_model.certificate.subjects_match(client_cert.subject)
+            not cert.subjects_match(csr.subject) or
+            not cert.subjects_match(client_cert.subject)
         ):
             error_message = "CSR/client subject does not match the credential certificate's subject"
             self.logger.warning(error_message)
@@ -180,7 +182,7 @@ class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
     ) -> None:
         """Safely validate certificate extensions."""
         try:
-            credential_cert = credential_model.certificate.get_certificate_serializer().as_crypto()
+            credential_cert = credential_model.certificate_or_error.get_certificate_serializer().as_crypto()
             self._validate_certificate_extensions(credential_cert, client_cert, csr)
         except Exception as e:
             self.logger.warning('Certificate extension validation failed: %s', e)

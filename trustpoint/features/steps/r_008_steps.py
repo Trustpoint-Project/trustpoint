@@ -292,7 +292,7 @@ def step_given_ca_no_cert(context: runner.Context, name: str) -> None:  # noqa: 
     Args:
         context (runner.Context): Behave context.
     """
-    ca_subject_public_bytes = context.issuing_ca.credential.certificate.subject_public_bytes
+    ca_subject_public_bytes = context.issuing_ca.credential.certificate_or_error.subject_public_bytes
     queryset = CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude (subject_public_bytes=ca_subject_public_bytes)
     assert not queryset.exists(), f"Issuing CA {name} has associated certificates"
 

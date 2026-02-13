@@ -5,8 +5,7 @@ from typing import Any
 import pytest
 
 from devices.forms import NoOnboardingCreateForm
-from devices.models import DeviceModel, OnboardingStatus
-
+from devices.models import DeviceModel
 
 @pytest.mark.django_db
 def test_create_device_form_valid_data(domain_instance: dict[str, Any]) -> None:
