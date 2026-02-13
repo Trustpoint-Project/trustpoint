@@ -753,100 +753,26 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
         self.logger.info('CSR has %d extensions', len(csr.extensions) if csr.extensions else 0)
 
-        if not ca.no_onboarding_config or not ca.no_onboarding_config.trust_store:
-            msg = 'No truststore configured for CMP CA - recipient name cannot be determined'
-            raise ValueError(msg)
+        recipient_name = self._get_recipient_name_from_truststore(ca)
 
-        try:
-            truststore_certs = ca.no_onboarding_config.trust_store.truststoreordermodel_set.order_by('order')
-            if not truststore_certs.exists():
-                msg = 'Truststore contains no certificates - cannot determine recipient name'
-                raise ValueError(msg)
+        private_key = self._load_private_key(ca)
 
-            first_cert_model = truststore_certs.first().certificate
-            ca_cert = first_cert_model.get_certificate_serializer().as_crypto()
-            recipient_name = ca_cert.subject.rfc4514_string()
-            self.logger.info('Using recipient name from truststore: %s', recipient_name)
-        except (AttributeError, IndexError) as e:
-            msg = f'Failed to extract recipient name from truststore: {e}'
-            raise ValueError(msg) from e
-
-
-        if not ca.credential or not ca.credential.private_key:
-            msg = 'No private key available for CA credential'
-            raise ValueError(msg)
-
-        private_key = serialization.load_pem_private_key(
-            ca.credential.private_key.encode(),
-            password=None,
-        )
-
-        context = CmpCertificateRequestContext(
-            protocol='cmp',
-            operation='certification',
-            cmp_server_host=ca.remote_host,
-            cmp_server_port=ca.remote_port,
-            cmp_server_path=ca.remote_path,
-            cmp_shared_secret=(
-                ca.no_onboarding_config.cmp_shared_secret
-                if ca.no_onboarding_config else None
-            ),
-            cmp_server_truststore=(
-                ca.no_onboarding_config.trust_store
-                if ca.no_onboarding_config else None
-            ),
-            request_data={
-                'subject': csr_subject,
-                'public_key': csr_public_key,
-                'private_key': private_key,
-                'recipient_name': recipient_name,
-                'extensions': csr_extensions,
-                'use_initialization_request': False,
-                'add_pop': True,
-                'prepare_shared_secret_protection': True,
-                'sender_kid': sender_kid,
-            },
+        cmp_context = self._create_cmp_context(
+            ca, csr_subject, csr_public_key, private_key, recipient_name, csr_extensions, sender_kid
         )
 
         cmp_builder = CmpMessageBuilder()
-        cmp_builder.build(context)
+        cmp_builder.build(cmp_context)
 
-        pki_message = context.parsed_message
+        pki_message = cmp_context.parsed_message
 
-        cmp_client = CmpClient(context)
+        cmp_client = CmpClient(cmp_context)
         issued_cert, chain_certs = cmp_client.send_and_extract_certificate(
             pki_message,
             add_shared_secret_protection=True,
         )
 
-        cert_model = CertificateModel.save_certificate(issued_cert)
-
-        chain_cert_models = [CertificateModel.save_certificate(c) for c in chain_certs]
-
-        if ca.credential:
-            ca.credential.certificate = cert_model
-            ca.credential.save()
-            for chain_cert_model in chain_cert_models:
-                if not PrimaryCredentialCertificate.objects.filter(certificate=chain_cert_model).exists():
-                    ca.credential.certificates.add(chain_cert_model)
-        else:
-            credential = CredentialModel(
-                credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
-                certificate=cert_model,
-                private_key=ca.credential.private_key if ca.credential else '',
-            )
-            credential.save()
-            credential.certificates.add(cert_model)
-            for chain_cert_model in chain_cert_models:
-                if not PrimaryCredentialCertificate.objects.filter(certificate=chain_cert_model).exists():
-                    credential.certificates.add(chain_cert_model)
-            PrimaryCredentialCertificate.objects.create(
-                credential=credential,
-                certificate=cert_model,
-                is_primary=True
-            )
-            ca.credential = credential
-            ca.save()
+        self._save_cmp_certificates(ca, issued_cert, chain_certs)
 
         del request.session[f'cert_content_data_{ca.pk}']
 
