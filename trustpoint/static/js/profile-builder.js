@@ -151,12 +151,9 @@ class CertificateProfileBuilder {
     return current;
   }
 
-
   resolveFieldPath(json, field) {
-
     let val = this.getValueAt(json, field.fullPath);
     if (val !== undefined) return { value: val, path: field.fullPath };
-
 
     if (field.aliases && Array.isArray(field.aliases)) {
       for (const alias of field.aliases) {
@@ -164,11 +161,8 @@ class CertificateProfileBuilder {
         if (val !== undefined) return { value: val, path: alias };
       }
     }
-
-
     return { value: undefined, path: field.fullPath };
   }
-
 
   escapeHtml(str) {
     if (str === null || str === undefined) return '';
@@ -187,11 +181,9 @@ class CertificateProfileBuilder {
     let currentJson = {};
     try { currentJson = JSON.parse(this.editor.value); } catch (e) {}
 
-
     const resolved = this.resolveFieldPath(currentJson, field);
     const existingData = resolved.value;
     const targetPath = resolved.path;
-
 
     let descriptionHtml = '';
     if (field.description) {
@@ -207,7 +199,7 @@ class CertificateProfileBuilder {
     const childFields = this.allFields.filter(f => f.fullPath.startsWith(field.fullPath + '.'));
     const hasChildren = childFields.length > 0;
 
-
+    // --- CASE 1: Profile Property ---
     if (isProfileProperty) {
       let val = '';
       let req = false;
@@ -245,18 +237,16 @@ class CertificateProfileBuilder {
           </div>
         </div>`;
     }
-
+    // --- CASE 2: Containers ---
     else if (hasChildren) {
       formContent = `${descriptionHtml}<div style="max-height:400px; overflow-y:auto; padding-right:5px;">`;
       childFields.forEach(child => {
-
         const childResolved = this.resolveFieldPath(currentJson, child);
         const childVal = childResolved.value;
         const childPath = childResolved.path;
 
         let effectiveValue = childVal;
         let isMutable = false;
-
 
         if (childVal && typeof childVal === 'object' && !Array.isArray(childVal)) {
             if (childVal.value !== undefined) effectiveValue = childVal.value;
@@ -281,16 +271,17 @@ class CertificateProfileBuilder {
               </label>
             </div>`;
         } else {
-
           let typeAttr = 'text';
           let placeholder = 'Value...';
           let valStr = '';
+          let minAttr = '';
 
           if (child.valueType === 'list') {
              valStr = Array.isArray(effectiveValue) ? effectiveValue.join(', ') : '';
              placeholder = 'a, b, c';
           } else if (child.valueType === 'number') {
              typeAttr = 'number';
+             minAttr = 'min="0"'; // FIX 1: Prevent negative path lengths
              valStr = (effectiveValue !== undefined && effectiveValue !== null) ? effectiveValue : '';
           } else {
              valStr = (effectiveValue !== undefined && effectiveValue !== null) ? effectiveValue : '';
@@ -310,7 +301,7 @@ class CertificateProfileBuilder {
               </div>
               <input type="${typeAttr}" class="pb-input-child"
                      data-path="${this.escapeHtml(childPath)}"
-                     data-type="${child.valueType}"
+                     data-type="${child.valueType}" ${minAttr}
                      value="${this.escapeHtml(valStr)}" placeholder="${placeholder}">
               <div class="pb-input-desc">${this.escapeHtml(child.description)}</div>
             </div>`;
@@ -318,30 +309,50 @@ class CertificateProfileBuilder {
       });
       formContent += `</div>`;
     }
-
+    // --- CASE 3: Simple Values (Fix 2: Handle reject_mods as checkbox) ---
     else {
       const valStr = (existingData !== undefined && existingData !== null) ? existingData : '';
       const inputType = field.valueType === 'number' ? 'number' : 'text';
-
       let suggestions = '';
-      if (field.suggestions) {
-        suggestions = `<div class="pb-suggestions">` + field.suggestions.map(s =>
-          `<button type="button" class="pb-suggestion-btn" data-val="${this.escapeHtml(s)}">${this.escapeHtml(s)}</button>`
-        ).join('') + `</div>`;
+
+      if (field.fullPath.includes('reject_mods') || field.valueType === 'boolean') {
+          // Render as Checkbox
+          const isChecked = existingData === true ? 'checked' : '';
+          formContent = `
+            ${descriptionHtml}
+            <div class="pb-checkbox-wrapper">
+              <label>
+                <input type="checkbox" id="pb-single-input"
+                       data-path="${this.escapeHtml(targetPath)}"
+                       data-type="boolean" ${isChecked}>
+                <span class="pb-checkbox-label">
+                  <span class="pb-label-title">${this.escapeHtml(field.name)}</span>
+                  <span class="pb-label-desc">Enable to reject unknown fields.</span>
+                </span>
+              </label>
+            </div>`;
+      } else {
+          // Normal Input
+          if (field.suggestions) {
+            suggestions = `<div class="pb-suggestions">` + field.suggestions.map(s =>
+              `<button type="button" class="pb-suggestion-btn" data-val="${this.escapeHtml(s)}">${this.escapeHtml(s)}</button>`
+            ).join('') + `</div>`;
+          }
+
+          let minAttr = (field.valueType === 'number') ? 'min="0"' : ''; // FIX 1 applied here too
+
+          formContent = `
+            ${descriptionHtml}
+            <div class="pb-input-wrapper">
+              <label>Value</label>
+              ${suggestions}
+              <input type="${inputType}" id="pb-single-input"
+                     data-path="${this.escapeHtml(targetPath)}" ${minAttr}
+                     value="${this.escapeHtml(valStr)}"
+                     placeholder="${this.escapeHtml(field.expectedHint || '')}">
+            </div>`;
       }
-
-      formContent = `
-        ${descriptionHtml}
-        <div class="pb-input-wrapper">
-          <label>Value</label>
-          ${suggestions}
-          <input type="${inputType}" id="pb-single-input"
-                 data-path="${this.escapeHtml(targetPath)}"
-                 value="${this.escapeHtml(valStr)}"
-                 placeholder="${this.escapeHtml(field.expectedHint || '')}">
-        </div>`;
     }
-
 
     const modal = document.createElement('div');
     modal.className = 'profile-builder-modal';
@@ -383,7 +394,6 @@ class CertificateProfileBuilder {
 
     document.body.appendChild(modal);
 
-
     const closeModal = () => modal.remove();
     closeBtn.addEventListener('click', closeModal);
     cancelBtn.addEventListener('click', closeModal);
@@ -401,8 +411,6 @@ class CertificateProfileBuilder {
         const val = modal.querySelector('#pp-value').value;
         const req = modal.querySelector('#pp-required').checked;
         const mut = modal.querySelector('#pp-mutable').checked;
-
-
         const path = modal.querySelector('#pp-value').getAttribute('data-path');
 
         if (req || mut) {
@@ -415,8 +423,13 @@ class CertificateProfileBuilder {
           if (req) obj.required = true;
           updates[path] = obj;
         } else {
-          if (val) updates[path] = { value: val };
-          else updates[path] = undefined;
+          // FIX 3: Correctly handle unsetting both flags with empty value
+          if (val) {
+             updates[path] = { value: val };
+          } else {
+             // Explicitly set undefined to delete the key from JSON
+             updates[path] = undefined;
+          }
         }
       }
       else if (hasChildren) {
@@ -427,6 +440,12 @@ class CertificateProfileBuilder {
 
           if (type === 'boolean') {
             if (input.checked) updates[path] = true;
+            else {
+                // If unchecked, check if we need to remove it
+                // Logic: If user specifically unchecks, we remove the key (undefined)
+                // This assumes default state is false/undefined.
+                updates[path] = undefined;
+            }
           } else {
             if (type === 'list') {
                 if (input.value.trim()) val = input.value.split(',').map(s => s.trim()).filter(Boolean);
@@ -434,8 +453,7 @@ class CertificateProfileBuilder {
                 if (input.value) val = type === 'number' ? Number(input.value) : input.value;
             }
 
-            if (val !== null) {
-
+            if (val !== null && val !== '') {
                 const mutBox = modal.querySelector(`.pb-child-mutable[data-path="${path}"]`);
                 const isMutable = mutBox ? mutBox.checked : false;
 
@@ -444,17 +462,30 @@ class CertificateProfileBuilder {
                 } else {
                     updates[path] = { value: val, mutable: false };
                 }
+            } else {
+                // Input cleared -> Remove key
+                updates[path] = undefined;
             }
           }
         });
       }
       else {
-
+        // Simple
         const input = modal.querySelector('#pb-single-input');
         const path = input.getAttribute('data-path');
-        const raw = input.value;
-        const val = field.valueType === 'number' ? Number(raw) : raw;
-        if (raw) updates[path] = val;
+        const type = input.getAttribute('data-type');
+
+        if (type === 'boolean') {
+            updates[path] = input.checked; // true or false
+        } else {
+            const raw = input.value;
+            if (raw === '') {
+                updates[path] = undefined; // Remove if empty
+            } else {
+                const val = field.valueType === 'number' ? Number(raw) : raw;
+                updates[path] = val;
+            }
+        }
       }
 
       this.batchUpdateJson(updates);
@@ -468,10 +499,21 @@ class CertificateProfileBuilder {
       try { json = JSON.parse(this.editor.value); } catch(e) {}
 
       for (const [pathStr, value] of Object.entries(updates)) {
-          if (value === undefined) continue;
-
           const keys = pathStr.split('.');
           let current = json;
+
+          // Handle Delete (value === undefined)
+          if (value === undefined) {
+              for (let i = 0; i < keys.length - 1; i++) {
+                  if (!current[keys[i]]) break; // path doesn't exist
+                  current = current[keys[i]];
+              }
+              delete current[keys[keys.length - 1]];
+              // Cleanup empty objects? Optional, but cleaner.
+              continue;
+          }
+
+          // Handle Insert/Update
           for (let i = 0; i < keys.length - 1; i++) {
             const key = keys[i];
             if (!current[key]) current[key] = {};
