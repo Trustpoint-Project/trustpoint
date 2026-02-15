@@ -199,7 +199,7 @@ class CertificateProfileBuilder {
     const childFields = this.allFields.filter(f => f.fullPath.startsWith(field.fullPath + '.'));
     const hasChildren = childFields.length > 0;
 
-    // --- CASE 1: Profile Property ---
+
     if (isProfileProperty) {
       let val = '';
       let req = false;
@@ -237,7 +237,7 @@ class CertificateProfileBuilder {
           </div>
         </div>`;
     }
-    // --- CASE 2: Containers ---
+
     else if (hasChildren) {
       formContent = `${descriptionHtml}<div style="max-height:400px; overflow-y:auto; padding-right:5px;">`;
       childFields.forEach(child => {
@@ -281,7 +281,7 @@ class CertificateProfileBuilder {
              placeholder = 'a, b, c';
           } else if (child.valueType === 'number') {
              typeAttr = 'number';
-             minAttr = 'min="0"'; // FIX 1: Prevent negative path lengths
+             minAttr = 'min="0"';
              valStr = (effectiveValue !== undefined && effectiveValue !== null) ? effectiveValue : '';
           } else {
              valStr = (effectiveValue !== undefined && effectiveValue !== null) ? effectiveValue : '';
@@ -309,14 +309,13 @@ class CertificateProfileBuilder {
       });
       formContent += `</div>`;
     }
-    // --- CASE 3: Simple Values (Fix 2: Handle reject_mods as checkbox) ---
+
     else {
       const valStr = (existingData !== undefined && existingData !== null) ? existingData : '';
       const inputType = field.valueType === 'number' ? 'number' : 'text';
       let suggestions = '';
 
       if (field.fullPath.includes('reject_mods') || field.valueType === 'boolean') {
-          // Render as Checkbox
           const isChecked = existingData === true ? 'checked' : '';
           formContent = `
             ${descriptionHtml}
@@ -327,19 +326,18 @@ class CertificateProfileBuilder {
                        data-type="boolean" ${isChecked}>
                 <span class="pb-checkbox-label">
                   <span class="pb-label-title">${this.escapeHtml(field.name)}</span>
-                  <span class="pb-label-desc">Enable to reject unknown fields.</span>
+                  <span class="pb-label-desc">${this.escapeHtml(field.description)}</span>
                 </span>
               </label>
             </div>`;
       } else {
-          // Normal Input
           if (field.suggestions) {
             suggestions = `<div class="pb-suggestions">` + field.suggestions.map(s =>
               `<button type="button" class="pb-suggestion-btn" data-val="${this.escapeHtml(s)}">${this.escapeHtml(s)}</button>`
             ).join('') + `</div>`;
           }
 
-          let minAttr = (field.valueType === 'number') ? 'min="0"' : ''; // FIX 1 applied here too
+          let minAttr = (field.valueType === 'number') ? 'min="0"' : '';
 
           formContent = `
             ${descriptionHtml}
@@ -423,11 +421,9 @@ class CertificateProfileBuilder {
           if (req) obj.required = true;
           updates[path] = obj;
         } else {
-          // FIX 3: Correctly handle unsetting both flags with empty value
           if (val) {
              updates[path] = { value: val };
           } else {
-             // Explicitly set undefined to delete the key from JSON
              updates[path] = undefined;
           }
         }
@@ -440,12 +436,7 @@ class CertificateProfileBuilder {
 
           if (type === 'boolean') {
             if (input.checked) updates[path] = true;
-            else {
-                // If unchecked, check if we need to remove it
-                // Logic: If user specifically unchecks, we remove the key (undefined)
-                // This assumes default state is false/undefined.
-                updates[path] = undefined;
-            }
+            else updates[path] = undefined; // Remove unchecked bools
           } else {
             if (type === 'list') {
                 if (input.value.trim()) val = input.value.split(',').map(s => s.trim()).filter(Boolean);
@@ -463,24 +454,23 @@ class CertificateProfileBuilder {
                     updates[path] = { value: val, mutable: false };
                 }
             } else {
-                // Input cleared -> Remove key
                 updates[path] = undefined;
             }
           }
         });
       }
       else {
-        // Simple
         const input = modal.querySelector('#pb-single-input');
         const path = input.getAttribute('data-path');
         const type = input.getAttribute('data-type');
 
         if (type === 'boolean') {
-            updates[path] = input.checked; // true or false
+            if (input.checked) updates[path] = true;
+            else updates[path] = undefined;
         } else {
             const raw = input.value;
             if (raw === '') {
-                updates[path] = undefined; // Remove if empty
+                updates[path] = undefined;
             } else {
                 const val = field.valueType === 'number' ? Number(raw) : raw;
                 updates[path] = val;
@@ -493,36 +483,67 @@ class CertificateProfileBuilder {
     });
   }
 
+
+  cleanEmptyObjects(obj) {
+    if (typeof obj !== 'object' || obj === null) return obj;
+
+    if (Array.isArray(obj)) {
+        return obj
+            .map(v => this.cleanEmptyObjects(v))
+            .filter(v => v !== undefined && v !== null);
+    }
+
+    const newObj = {};
+    let hasKeys = false;
+
+    for (const [key, value] of Object.entries(obj)) {
+        const cleaned = this.cleanEmptyObjects(value);
+        if (cleaned !== undefined && cleaned !== null) {
+
+            if (typeof cleaned === 'object' && !Array.isArray(cleaned) && Object.keys(cleaned).length === 0) {
+
+               continue;
+            }
+            newObj[key] = cleaned;
+            hasKeys = true;
+        }
+    }
+
+    return hasKeys ? newObj : undefined;
+  }
+
   batchUpdateJson(updates) {
     try {
       let json = {};
       try { json = JSON.parse(this.editor.value); } catch(e) {}
 
+
       for (const [pathStr, value] of Object.entries(updates)) {
           const keys = pathStr.split('.');
           let current = json;
 
-          // Handle Delete (value === undefined)
           if (value === undefined) {
+
               for (let i = 0; i < keys.length - 1; i++) {
-                  if (!current[keys[i]]) break; // path doesn't exist
+                  if (!current[keys[i]]) break;
                   current = current[keys[i]];
               }
-              delete current[keys[keys.length - 1]];
-              // Cleanup empty objects? Optional, but cleaner.
-              continue;
+              if (current) delete current[keys[keys.length - 1]];
+          } else {
+              // Insert Logic
+              for (let i = 0; i < keys.length - 1; i++) {
+                const key = keys[i];
+                if (!current[key]) current[key] = {};
+                current = current[key];
+              }
+              current[keys[keys.length - 1]] = value;
           }
-
-          // Handle Insert/Update
-          for (let i = 0; i < keys.length - 1; i++) {
-            const key = keys[i];
-            if (!current[key]) current[key] = {};
-            current = current[key];
-          }
-          current[keys[keys.length - 1]] = value;
       }
 
-      this.editor.value = JSON.stringify(json, null, 2);
+
+      const cleanedJson = this.cleanEmptyObjects(json) || {};
+
+      this.editor.value = JSON.stringify(cleanedJson, null, 2);
       this.editor.dispatchEvent(new Event('input', { bubbles: true }));
     } catch (e) {
       alert("Invalid JSON in editor. Cannot insert.");
