@@ -16,6 +16,8 @@ from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import viewsets
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import (
@@ -26,6 +28,7 @@ from pki.models import (
     DomainModel,
 )
 from pki.models.truststore import TruststoreModel
+from pki.serializer.domain import DomainSerializer
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -408,4 +411,24 @@ class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdR
         context['pk'] = self.object.pk
 
         return context
+
+@extend_schema(tags=['Domain'])
+@extend_schema_view(
+    list=extend_schema(description='Retrieve a list of all domains.'),
+    retrieve=extend_schema(description='Retrieve a single domain by id.'),
+    create=extend_schema(description='Create a domain.'),
+    update=extend_schema(description='Update an existing domain.'),
+    partial_update=extend_schema(description='Partially update an existing domain.'),
+    destroy=extend_schema(description='Delete a domain.')
+)
+class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
+    """ViewSet for managing Domain instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+
+    queryset = DomainModel.objects.all()
+    serializer_class = DomainSerializer
+
 

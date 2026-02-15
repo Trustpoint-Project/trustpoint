@@ -21,8 +21,13 @@ from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_yasg import openapi  # type: ignore[import-untyped]
-from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    extend_schema,
+    inline_serializer,
+)
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -57,9 +62,12 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
+    from typing import ClassVar
+
     from django.db.models import QuerySet
     from django.forms import Form
     from django.http import HttpRequest
+    from rest_framework.request import Request
 
 
 class IssuingCaContextMixin(ContextDataMixin):
@@ -902,7 +910,7 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
             response['Content-Disposition'] = f'attachment; filename="{ca.unique_name}.crl"'
         return response
 
-
+@extend_schema(tags=['Issuing-CA'])
 class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
     """ViewSet for managing Issuing CA instances via REST API."""
 
@@ -920,13 +928,11 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
     search_fields: ClassVar = ['unique_name', 'credential__certificate__common_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at', 'updated_at']
 
-    # ignoring untyped decorator (drf-yasg not typed)
-    @swagger_auto_schema(
-        operation_summary='List Issuing CAs',
-        operation_description='Retrieve all Issuing CAs from the database.',
-        tags=['issuing-cas'],
-    )  # type: ignore[misc]
-    def list(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> Response:
+    @extend_schema(
+        summary='List Issuing CAs',
+        description='Retrieve all Issuing CAs from the database.',
+    )
+    def list(self, _request: Request) -> Response:
         """API endpoint to get all Issuing CAs."""
         queryset = self.get_queryset()
 
@@ -942,48 +948,56 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    @swagger_auto_schema(
-        operation_summary='Retrieve Issuing CA',
-        operation_description='Retrieve details of a specific Issuing CA by ID.',
-        tags=['issuing-cas'],
-    )  # type: ignore[misc]
-    def retrieve(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Response:
+    @extend_schema(
+        summary='Retrieve Issuing CA',
+        description='Retrieve details of a specific Issuing CA by ID.',
+    )
+    def retrieve(self, request: Request) -> Response:
         """API endpoint to get a single Issuing CA by ID."""
-        return super().retrieve(request, *args, **kwargs)  # type: ignore[arg-type]
+        return super().retrieve(request)
 
+    @extend_schema(
+        summary='Generate CRL',
+        description=(
+            'Manually generate a new Certificate Revocation List (CRL) for this Issuing CA. '
+            'No request body is required.'
+        ),
+        request=inline_serializer(name='Empty', fields={}),
+        responses={
+            200: OpenApiTypes.OBJECT,
+            500: OpenApiTypes.OBJECT,
+        },
+        examples=[
+            OpenApiExample(
+                name='CRL Generated',
+                value={
+                    'message': 'CRL generated successfully for Issuing CA "MyCA".',
+                    'last_crl_issued_at': '2025-12-02T16:30:00Z',
+                },
+                response_only=True,
+                status_codes=[200],
+                media_type='application/json',
+            ),
+            OpenApiExample(
+                name='Server Error',
+                value={
+                    'detail': 'Failed to generate CRL'
+                },
+                response_only=True,
+                status_codes=[500],
+                media_type='application/json',
+            ),
+        ],
+    )
     @action(
         detail=True,
         methods=['post'],
         permission_classes=[IsAuthenticated],
         url_path='generate-crl',
     )
-    @swagger_auto_schema(
-        operation_summary='Generate CRL',
-        operation_description=(
-            'Manually generate a new Certificate Revocation List (CRL) for this Issuing CA. '
-            'No request body is required.'
-        ),
-        tags=['issuing-cas'],
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            title='Empty',
-            properties={},
-        ),
-        responses={
-            200: openapi.Response(
-                description='CRL generated successfully',
-                examples={
-                    'application/json': {
-                        'message': 'CRL generated successfully for Issuing CA "MyCA".',
-                        'last_crl_issued_at': '2025-12-02T16:30:00Z',
-                    }
-                },
-            ),
-            500: 'Failed to generate CRL',
-        },
-    )  # type: ignore[misc]
-    def generate_crl(self, _request: HttpRequest, **_kwargs: Any) -> Response:
+    def generate_crl(self, _request: Request, pk: int | None = None, **_kwargs: Any) -> Response:
         """Generate a new CRL for this Issuing CA."""
+        del pk # not needed, but passed by DRF
         ca = self.get_object()
 
         if ca.issue_crl():
@@ -1000,47 +1014,70 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
+    @extend_schema(
+        summary='Download CRL',
+        description=(
+            'Download the Certificate Revocation List (CRL) for this Issuing CA. '
+            'Requires authentication. '
+            'Supports both PEM (default) and DER formats via the format query parameter. '
+            'If no CRL is available, use the POST /api/issuing-cas/<pk>/generate-crl/ endpoint to generate one first.'
+        ),
+        parameters=[
+            OpenApiParameter(
+                'encoding',
+                location=OpenApiParameter.QUERY,
+                description='CRL encoding: "pem" (default) or "der"',
+                type=OpenApiTypes.STR,
+                enum=['pem', 'der'],
+                default='pem',
+            ),
+        ],
+        responses={
+            200: OpenApiTypes.OBJECT,
+            400: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT
+        },
+        examples=[
+            OpenApiExample(
+                name='CRL Generated',
+                value={
+                    'detail': 'CRL file downloaded successfully.',
+                },
+                response_only=True,
+                status_codes=[200],
+                media_type='application/json',
+            ),
+            OpenApiExample(
+                name='Invalid format parameter',
+                value={
+                    'error': 'No CRL available for Issuing CA "MyCA".',
+                    'hint': 'Generate a CRL first using POST /api/issuing-cas/1/generate-crl/',
+                },
+                response_only=True,
+                status_codes=[400],
+                media_type='application/json',
+            ),
+            OpenApiExample(
+                name='Not Found',
+                value={
+                    'error': 'No CRL available for Issuing CA "MyCA".',
+                    'hint': 'Generate a CRL first using POST /api/issuing-cas/1/generate-crl/',
+                },
+                response_only=True,
+                status_codes=[404],
+                media_type='application/json',
+            ),
+        ],
+    )
     @action(
         detail=True,
         methods=['get'],
         permission_classes=[IsAuthenticated],
         url_path='crl',
     )
-    @swagger_auto_schema(
-        operation_summary='Download CRL',
-        operation_description=(
-            'Download the Certificate Revocation List (CRL) for this Issuing CA. '
-            'Requires authentication. '
-            'Supports both PEM (default) and DER formats via the format query parameter. '
-            'If no CRL is available, use the POST /api/issuing-cas/<pk>/generate-crl/ endpoint to generate one first.'
-        ),
-        tags=['issuing-cas'],
-        manual_parameters=[
-            openapi.Parameter(
-                'encoding',
-                openapi.IN_QUERY,
-                description='CRL encoding: "pem" (default) or "der"',
-                type=openapi.TYPE_STRING,
-                enum=['pem', 'der'],
-                default='pem',
-            ),
-        ],
-        responses={
-            200: 'CRL file downloaded successfully',
-            400: 'Invalid format parameter',
-            404: openapi.Response(
-                description='CRL not available for this Issuing CA',
-                examples={
-                    'application/json': {
-                        'error': 'No CRL available for Issuing CA "MyCA".',
-                        'hint': 'Generate a CRL first using POST /api/issuing-cas/1/generate-crl/',
-                    }
-                },
-            ),
-        },
-    )  # type: ignore[misc]
-    def crl(self, request: HttpRequest, **_kwargs: Any) -> HttpResponse:
+    def crl(self, request: Request, pk: int | None = None, **_kwargs: Any) -> Response | HttpResponse:
         """Download the CRL for this Issuing CA."""
+        del pk # not needed, but passed by DRF
         ca = self.get_object()
         crl_pem = ca.crl_pem
 

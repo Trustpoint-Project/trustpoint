@@ -70,4 +70,5 @@ Welcome to Trustpoint's documentation!
    development/workflow
    release-checklist
    devices/workflow
+   development/rest_api
 
