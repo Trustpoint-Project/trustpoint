@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import base64
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.http import JsonResponse
 from django.test import RequestFactory
@@ -20,7 +20,7 @@ from pki.util.x509 import CertificateGenerator, ClientCertificateAuthenticationE
 from aoki.views import AokiInitializationRequestView, AokiServiceMixin
 
 if TYPE_CHECKING:
-    from cryptography.hazmat.primitives.asymmetric.types import CertificateIssuerPrivateKeyTypes
+    pass
 
 
 @pytest.fixture

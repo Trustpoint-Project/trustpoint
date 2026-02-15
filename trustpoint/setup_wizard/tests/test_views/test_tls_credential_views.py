@@ -2,9 +2,7 @@
 
 from unittest.mock import Mock, patch
 
-from django.contrib.messages import get_messages
 from django.test import RequestFactory, TestCase
-from django.urls import reverse
 
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import EmptyForm

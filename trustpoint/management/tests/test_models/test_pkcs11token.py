@@ -2,7 +2,6 @@
 import os
 from unittest import mock
 
-import pkcs11
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.test import TestCase

@@ -3,7 +3,6 @@
 from typing import Any
 
 import pytest
-from django import forms
 
 from devices.forms import CredentialDownloadForm, BrowserLoginForm
 from devices.models import RemoteDeviceCredentialDownloadModel

@@ -1,19 +1,16 @@
 """Comprehensive tests for demo data and restore views."""
 
-import subprocess
 from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.messages import get_messages
 from django.test import RequestFactory
 
-from pki.models import CredentialModel, CaModel
+from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard import SetupWizardState
-from setup_wizard.forms import EmptyForm
 from setup_wizard.views import (
-    SetupWizardDemoDataView,
-    BackupRestoreView
+    SetupWizardDemoDataView
 )
 
 

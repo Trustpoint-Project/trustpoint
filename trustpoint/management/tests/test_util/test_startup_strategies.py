@@ -1,5 +1,5 @@
 """Test suite for startup strategies."""
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 from django.test import TestCase
 from management.models import KeyStorageConfig
