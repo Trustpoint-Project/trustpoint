@@ -2,13 +2,10 @@
 
 from unittest.mock import Mock, patch
 
-from django.contrib.messages import get_messages
 from django.test import RequestFactory, TestCase
-from django.urls import reverse
 
 from management.models import PKCS11Token
 from setup_wizard import SetupWizardState
-from setup_wizard.forms import BackupPasswordForm, PasswordAutoRestoreForm
 from setup_wizard.views import (
     BackupAutoRestorePasswordView,
     BackupPasswordRecoveryMixin,
