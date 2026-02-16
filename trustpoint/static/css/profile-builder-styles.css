@@ -185,18 +185,21 @@
 
 
 .tp-pb-footer {
-  position: sticky;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 0.55rem 1.25rem;
+  padding: 0.75rem 1.25rem;
   border-top: 1px solid var(--bs-border-color);
   background-color: var(--bs-body-bg);
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
   font-size: 0.8rem;
   color: var(--bs-secondary-color);
+  min-height: 3rem;
+  line-height: 1.4;
+  text-align: center;
+  word-break: break-word;
+  flex-shrink: 0;
 }
 
 .tp-pb-footer kbd {
@@ -208,6 +211,7 @@
   font-size: 0.75rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
                "Liberation Mono", "Courier New", monospace;
+  white-space: nowrap;
 }
 
 
