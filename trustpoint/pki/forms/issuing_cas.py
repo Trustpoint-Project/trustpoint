@@ -637,7 +637,7 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
         If is_ra_mode is True, create a REMOTE_EST_RA (Registration Authority) instead of REMOTE_ISSUING_EST.
         """
         if is_ra_mode:
-            instance = super(IssuingCaAddRequestMixin, self).save(commit=False)
+            instance = super().save(commit=False)
             instance.ca_type = CaModel.CaTypeChoice.REMOTE_EST_RA
             instance.credential = None
             instance.certificate = None  # Will be set from truststore later
