@@ -196,9 +196,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=(
-                    models.Q(certificate__isnull=False, credential__isnull=True, ca_type=-1) |
-                    models.Q(certificate__isnull=True, credential__isnull=False, ca_type__in=[0, 1, 2, 3, 6, 7]) |
-                    models.Q(certificate__isnull=True, credential__isnull=True, ca_type__in=[4, 5])
+                    models.Q(ca_type=-1, certificate__isnull=False, credential__isnull=True) |
+                    models.Q(ca_type__in=[4, 5], credential__isnull=True) |
+                    models.Q(ca_type__in=[0, 1, 2, 3, 6, 7], certificate__isnull=True, credential__isnull=False)
                 ),
                 name='ca_mode_constraint',
                 violation_error_message=_('Invalid CA configuration')
@@ -217,75 +217,78 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """Returns a string representation of the CaModel instance."""
         return f'CaModel({self.unique_name})'
 
+
     @property
     def is_issuing_ca(self) -> bool:
         """Returns True if this is an issuing CA (can issue certificates)."""
-        return self.credential is not None
+        return self.ca_type not in (
+            self.CaTypeChoice.KEYLESS,
+            self.CaTypeChoice.REMOTE_CMP_RA,
+            self.CaTypeChoice.REMOTE_EST_RA,
+        )
+
 
     @property
     def is_keyless_ca(self) -> bool:
-        """Returns True if this is a keyless CA (certificate only, no private key)."""
-        return self.certificate is not None
+        """Returns True if this is a keyless CA, or a remote RA with a certificate."""
+        return (
+            self.certificate is not None and
+            self.ca_type in (
+                self.CaTypeChoice.KEYLESS,
+                self.CaTypeChoice.REMOTE_CMP_RA,
+                self.CaTypeChoice.REMOTE_EST_RA,
+            )
+        )
+
 
     @property
     def common_name(self) -> str:
-        """Returns common name."""
+        """Returns common name, or a placeholder if missing."""
         if self.is_keyless_ca:
-            if self.certificate is None:
-                msg = 'Certificate is None for keyless CA'
-                raise ValueError(msg)
-            return self.certificate.common_name
-        if self.credential is None:
-            msg = 'Credential is None for issuing CA'
-            raise ValueError(msg)
-        if self.credential.certificate is None:
+            if self.certificate is not None:
+                return self.certificate.common_name
+            return f'{self.unique_name} (Certificate missing)'
+        if self.credential is not None:
+            if self.credential.certificate is not None:
+                return self.credential.certificate_or_error.common_name
             return f'{self.unique_name} (Certificate pending)'
-        return self.credential.certificate_or_error.common_name
+        return f'{self.unique_name} (Credential missing)'
+
 
     @property
     def subject_public_bytes(self) -> bytes:
-        """Returns the subject public bytes from the CA certificate."""
+        """Returns the subject public bytes from the CA certificate, or b'' if missing."""
         if self.is_keyless_ca:
-            if self.certificate is None:
-                msg = 'Certificate is None for keyless CA'
-                raise ValueError(msg)
-            return bytes.fromhex(self.certificate.subject_public_bytes)
-        if self.credential is None:
-            msg = 'Credential is None for issuing CA'
-            raise ValueError(msg)
-        # Handle case where credential exists but certificate is pending (e.g., remote CA)
-        if self.credential.certificate is None:
+            if self.certificate is not None:
+                return bytes.fromhex(self.certificate.subject_public_bytes)
             return b''
-        return bytes.fromhex(self.credential.certificate_or_error.subject_public_bytes)
+        if self.credential is not None and self.credential.certificate is not None:
+            return bytes.fromhex(self.credential.certificate_or_error.subject_public_bytes)
+        return b''
+
 
     @property
-    def ca_certificate_model(self) -> CertificateModel:
-        """Returns the CA certificate model for both issuing and keyless CAs."""
-        if self.is_issuing_ca:
-            if self.credential is None:
-                msg = 'Credential is None for issuing CA'
-                raise ValueError(msg)
+    def ca_certificate_model(self) -> CertificateModel | None:
+        """Returns the CA certificate model for both issuing and keyless CAs, or None if missing."""
+        if self.is_issuing_ca and self.credential is not None and self.credential.certificate is not None:
             return self.credential.certificate_or_error
-        if self.is_keyless_ca:
-            if self.certificate is None:
-                msg = 'Certificate is None for keyless CA'
-                raise ValueError(msg)
+        if self.is_keyless_ca and self.certificate is not None:
             return self.certificate
-        msg = 'CA has neither credential nor certificate'
-        raise ValueError(msg)
+        return None
 
-    def get_certificate(self) -> x509.Certificate:
-        """Returns the CA certificate (crypto object) for both issuing and keyless CAs."""
-        return self.ca_certificate_model.get_certificate_serializer().as_crypto()
 
-    def get_credential(self) -> CredentialModel:
-        """Returns the credential for issuing CAs. Raises ValueError for keyless CAs."""
+    def get_certificate(self) -> x509.Certificate | None:
+        """Returns the CA certificate (crypto object) for both issuing and keyless CAs, or None if missing."""
+        cert_model = self.ca_certificate_model
+        if cert_model is not None:
+            return cert_model.get_certificate_serializer().as_crypto()
+        return None
+
+
+    def get_credential(self) -> CredentialModel | None:
+        """Returns the credential for issuing CAs, or None if not present."""
         if self.is_keyless_ca:
-            msg = 'Cannot get credential from keyless CA'
-            raise ValueError(msg)
-        if self.credential is None:
-            msg = 'Credential is None for issuing CA'
-            raise ValueError(msg)
+            return None
         return self.credential
 
     def get_ca_chain_from_truststore(self) -> list[CaModel]:
@@ -361,8 +364,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
     def _clean_remote_non_issuing_ca(self) -> None:
         """Validates remote non-issuing CA fields."""
-        if self.certificate is not None or self.credential is not None:
-            raise ValidationError(_('Remote CAs cannot have certificate or credential.'))
+        if self.credential is not None:
+            raise ValidationError(_('Remote CAs cannot have credential.'))
+        if self.pk is not None and self.certificate is None:
+            raise ValidationError(_('Remote CAs must have certificate set.'))
         if not self.remote_host:
             raise ValidationError(_('Remote host must be set for remote CAs.'))
         if self.remote_port is None:
@@ -557,11 +562,12 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN,
         )
         for idx, cert in enumerate(cert_models):
-            TruststoreOrderModel.objects.create(
-                order=idx,
-                certificate=cert,
-                trust_store=truststore
-            )
+            if cert:  # Only add non-None certificates
+                TruststoreOrderModel.objects.create(
+                    order=idx,
+                    certificate=cert,
+                    trust_store=truststore
+                )
         issuing_ca.chain_truststore = truststore
         issuing_ca.save(update_fields=['chain_truststore'])
 
@@ -608,22 +614,16 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return True
 
     @property
-    def signature_suite(self) -> oid.SignatureSuite | None:
-        """The signature suite for the CA public key certificate.
 
-        Returns None if the CA doesn't have a certificate yet (e.g., remote CA pending).
-        """
+    def signature_suite(self) -> oid.SignatureSuite | None:
+        """The signature suite for the CA public key certificate, or None if missing."""
         if self.is_keyless_ca:
-            if self.certificate is None:
-                return None
-            return oid.SignatureSuite.from_certificate(self.certificate.get_certificate_serializer().as_crypto())
-        if self.credential is None:
-            msg = 'Credential is None for issuing CA'
-            raise ValueError(msg)
-        # Handle case where credential exists but certificate is pending (e.g., remote CA)
-        if self.credential.certificate is None:
+            if self.certificate is not None:
+                return oid.SignatureSuite.from_certificate(self.certificate.get_certificate_serializer().as_crypto())
             return None
-        return oid.SignatureSuite.from_certificate(self.credential.get_certificate_serializer().as_crypto())
+        if self.credential is not None and self.credential.certificate is not None:
+            return oid.SignatureSuite.from_certificate(self.credential.get_certificate_serializer().as_crypto())
+        return None
 
     @property
     def public_key_info(self) -> oid.PublicKeyInfo | None:
@@ -646,11 +646,11 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             that were issued by a different CA with the same subject name.
 
         Returns:
-            QuerySet: Certificates issued by this CA.
+            QuerySet: Certificates issued by this CA, or empty queryset for RAs/keyless CAs.
         """
-        if self.credential is None:
-            msg = 'Credential is None for issuing CA'
-            raise ValueError(msg)
+        # RAs and keyless CAs don't issue certificates themselves
+        if self.is_keyless_ca or self.credential is None:
+            return CertificateModel.objects.none()
         if self.credential.certificate is None:
             return CertificateModel.objects.none()
         ca_subject_public_bytes = self.credential.certificate_or_error.subject_public_bytes
@@ -782,6 +782,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.parent_ca is not None:
             return False
 
+        if not self.ca_certificate_model:
+            msg = f'Cannot determine if CA {self.unique_name} is a root CA: no certificate model'
+            raise ValueError(msg)
+
         try:
             ca_cert = self.ca_certificate_model.get_certificate_serializer().as_crypto()
         except (AttributeError, ValueError) as err:
@@ -841,5 +845,11 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             if self.credential:
                 self.credential.delete()
 
-
-IssuingCaModel = CaModel
+    @property
+    def display_not_valid_after(self) -> datetime.datetime | None:
+        """Returns the not valid after date for display purposes."""
+        if self.credential and self.credential.certificate:
+            return self.credential.certificate.not_valid_after
+        if self.certificate:
+            return self.certificate.not_valid_after
+        return None

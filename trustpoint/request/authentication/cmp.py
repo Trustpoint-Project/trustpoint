@@ -588,6 +588,10 @@ class CmpSignatureBasedCertificationAuthentication(CmpAuthenticationBase):
 
         # Verify certificate was issued by domain's issuing CA
         issuing_ca_credential = device.domain.get_issuing_ca_or_value_error().get_credential()
+        if not issuing_ca_credential:
+            err_msg = 'Issuing CA does not have a credential'
+            self.logger.warning('CMP signature-based certification failed', extra={'error_message': err_msg})
+            self._raise_value_error(err_msg)
         issuing_ca_cert = issuing_ca_credential.get_certificate()
         cmp_signer_cert.verify_directly_issued_by(issuing_ca_cert)
 

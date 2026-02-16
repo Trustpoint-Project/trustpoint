@@ -139,12 +139,23 @@ urlpatterns = [
         name='issuing_cas-add-request-cmp',
     ),
     path(
+        'issuing-cas/add/cmp-ra/',
+        issuing_cas.RemoteRaAddRequestCmpView.as_view(),
+        name='issuing_cas-add-cmp-ra',
+    ),
+    path(
+        'issuing-cas/add/est-ra/',
+        issuing_cas.RemoteRaAddRequestEstView.as_view(),
+        name='issuing_cas-add-est-ra',
+    ),
+    path(
         'issuing-cas/truststore-association/<int:pk>/',
         issuing_cas.IssuingCaTruststoreAssociationView.as_view(),
         name='issuing_cas-truststore-association',
     ),
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
+    path('issuing-cas/ra-config/<int:pk>/', issuing_cas.RaConfigView.as_view(), name='issuing_cas-ra-config'),
     path(
         'issuing-cas/define-cert-content-est/<int:pk>/',
         issuing_cas.IssuingCaDefineCertContentEstView.as_view(),

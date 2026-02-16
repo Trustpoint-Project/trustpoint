@@ -588,12 +588,14 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
             cred_serializer, CredentialModel.CredentialTypeChoice.ISSUING_CA
         )
 
-    def save(self) -> CaModel:  # type: ignore[override]
+    def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]
         """Save the form and create the CA model with configuration."""
         instance = super().save(commit=False)
 
         instance.credential = self._create_credential()
 
+        if commit:
+            instance.save()
         return instance
 
 
@@ -629,9 +631,20 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
         self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
         self.fields['ca_type'].widget = forms.HiddenInput()
 
-    def save(self) -> CaModel:  # type: ignore[override]
-        """Save the form and create the CA model with configuration."""
-        instance = super().save()
+    def save(self, *, is_ra_mode: bool = False) -> CaModel:  # type: ignore[override]
+        """Save the form and create the CA model with configuration.
+
+        If is_ra_mode is True, create a REMOTE_EST_RA (Registration Authority) instead of REMOTE_ISSUING_EST.
+        """
+        if is_ra_mode:
+            instance = super(IssuingCaAddRequestMixin, self).save(commit=False)
+            instance.ca_type = CaModel.CaTypeChoice.REMOTE_EST_RA
+            instance.credential = None
+            instance.certificate = None  # Will be set from truststore later
+        else:
+            instance = super().save(commit=False)
+            instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
+            instance.credential = self._create_credential()
 
         no_onboarding_config = NoOnboardingConfigModel.objects.create(
             pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
@@ -645,8 +658,17 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
         return instance
 
 
+
 class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
-    """Form for requesting an Issuing CA certificate using CMP."""
+    """Generic form for configuring a remote CMP endpoint (CA or RA).
+
+    This form is used for both requesting an Issuing CA certificate via CMP and
+    for setting up a remote CMP RA (Registration Authority) configuration.
+
+    Fields include remote host, port, path, and the shared secret for CMP
+    authentication. The form can be extended or reused for both CA and RA
+    scenarios.
+    """
 
     class Meta:
         """Meta class for IssuingCaAddRequestCmpForm."""
@@ -670,9 +692,20 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
         self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
         self.fields['ca_type'].widget = forms.HiddenInput()
 
-    def save(self) -> CaModel:  # type: ignore[override]
-        """Save the form and create the CA model with configuration."""
-        instance = super().save()
+    def save(self, *, is_ra_mode: bool = False) -> CaModel:  # type: ignore[override]
+        """Save the form and create the CA model with configuration.
+
+        If is_ra_mode is True, create a REMOTE_CMP_RA (Registration Authority) instead of REMOTE_ISSUING_CMP.
+        """
+        if is_ra_mode:
+            instance = super(IssuingCaAddRequestMixin, self).save(commit=False)
+            instance.ca_type = CaModel.CaTypeChoice.REMOTE_CMP_RA
+            instance.credential = None
+            instance.certificate = None  # Will be set from truststore later
+        else:
+            instance = super().save(commit=False)
+            instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
+            instance.credential = self._create_credential()
 
         no_onboarding_config = NoOnboardingConfigModel.objects.create(
             pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
@@ -688,8 +721,9 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
 class IssuingCaTruststoreAssociationForm(forms.Form):
     """Form for associating a truststore with an Issuing CA."""
 
+
     trust_store = forms.ModelChoiceField(
-        queryset=TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS),
+        queryset=TruststoreModel.objects.none(),  # Set in __init__
         empty_label='----------',
         required=True,
         label=_('Trust Store'),
@@ -701,19 +735,43 @@ class IssuingCaTruststoreAssociationForm(forms.Form):
         self.instance: CaModel = kwargs.pop('instance')
         super().__init__(*args, **kwargs)
 
-        if self.instance.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
-            self.fields['trust_store'].help_text = _(
-                'EST: Import the TLS server certificate of the remote PKI '
-                '(used for HTTPS connection security)'
+        # Cast to ModelChoiceField to access queryset attribute
+        # Use forms.ModelChoiceField string literal for mypy type checking
+        trust_store_field = cast('forms.ModelChoiceField[TruststoreModel]', self.fields['trust_store'])
+
+        # For EST RA: check if this is the first or second truststore association
+        if self.instance.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+            if not self.instance.certificate:
+                trust_store_field.queryset = TruststoreModel.objects.filter(
+                    intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+                )
+                trust_store_field.help_text = _(
+                    'EST RA (Step 1/2): Import the Issuing CA chain. This establishes the RA certificate and hierarchy.'
+                )
+            else:
+                trust_store_field.queryset = TruststoreModel.objects.filter(
+                    intended_usage=TruststoreModel.IntendedUsage.TLS
+                )
+                trust_store_field.help_text = _(
+                    'EST RA (Step 2/2): Import the TLS server certificate (used for HTTPS connection security).'
+                )
+        elif self.instance.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+            trust_store_field.queryset = TruststoreModel.objects.filter(
+                intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
             )
-        elif self.instance.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_CMP:
-            self.fields['trust_store'].help_text = _(
-                'CMP: Import the Issuing CA certificate of the remote PKI '
-                '(used to identify the recipient CA and verify responses)'
+            trust_store_field.help_text = _(
+                'CMP: Only "Issuing CA Chain" truststores can be associated.'
+            )
+        else:
+            trust_store_field.queryset = TruststoreModel.objects.filter(
+                intended_usage=TruststoreModel.IntendedUsage.TLS
+            )
+            trust_store_field.help_text = _(
+                'EST: Import the TLS server certificate of the remote PKI (used for HTTPS connection security)'
             )
 
         if self.instance.no_onboarding_config and self.instance.no_onboarding_config.trust_store:
-            self.fields['trust_store'].initial = self.instance.no_onboarding_config.trust_store
+            trust_store_field.initial = self.instance.no_onboarding_config.trust_store
 
     def save(self) -> None:
         """Save the truststore association to the CA's onboarding config."""

@@ -116,6 +116,9 @@ class LocalCaCmpSignatureProcessor(LoggerMixin, AbstractOperationProcessor):
 
                 ca = context.domain.get_issuing_ca_or_value_error()
                 context.issuer_credential = ca.get_credential()
+                if not context.issuer_credential:
+                    exc_msg = 'Issuing CA does not have a credential'
+                    raise ValueError(exc_msg)
             signer_credential = context.issuer_credential
 
         self._signature = GenericSigner.sign(self._data, signer_credential)

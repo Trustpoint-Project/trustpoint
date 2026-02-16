@@ -2188,6 +2188,8 @@ class TrustBundleDownloadView(PageContextMixin, DetailView[CaModel]):
 
         for ca in ca_chain:
             try:
+                if not ca.ca_certificate_model:
+                    continue
                 cert_der = ca.ca_certificate_model.get_certificate_serializer().as_der()
                 if cert_der is None:
                     continue

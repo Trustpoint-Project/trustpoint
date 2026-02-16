@@ -68,7 +68,7 @@ if TYPE_CHECKING:
     from typing import ClassVar
 
     from django.db.models import QuerySet
-    from django.forms import Form
+    from django.forms import ChoiceField, Form
     from django.http import HttpRequest
     from rest_framework.request import Request
 
@@ -241,15 +241,30 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
     def _handle_import(self, request: HttpRequest) -> HttpResponse:
         """Handle truststore import from modal."""
         import_form = TruststoreAddForm(request.POST, request.FILES)
+        ca = self.get_ca()
 
         if import_form.is_valid():
             truststore = import_form.cleaned_data['truststore']
+
+            expected_usage = self._get_expected_truststore_usage(ca)
+            if truststore.intended_usage != expected_usage:
+                usage_name = TruststoreModel.IntendedUsage(expected_usage).label
+                import_form.add_error(
+                    'intended_usage',
+                    _('For this CA configuration, only "{usage}" truststores are allowed.').format(
+                        usage=usage_name
+                    )
+                )
+                context = self.get_context_data()
+                context['import_form'] = import_form
+                return self.render_to_response(context)
+
             messages.success(
                 request,
                 _('Successfully imported truststore {name}.').format(name=truststore.unique_name),
             )
             return HttpResponseRedirect(
-                reverse('pki:issuing_cas-truststore-association', kwargs={'pk': self.get_ca().pk}) +
+                reverse('pki:issuing_cas-truststore-association', kwargs={'pk': ca.pk}) +
                 f'?truststore_id={truststore.id}'
             )
 
@@ -257,26 +272,129 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
         context['import_form'] = import_form
         return self.render_to_response(context)
 
+    def _get_expected_truststore_usage(self, ca: CaModel) -> int:
+        """Get the expected truststore intended_usage for the given CA type and state.
+
+        Args:
+            ca: The CA model instance
+
+        Returns:
+            The expected IntendedUsage value
+        """
+        if ca.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+            return TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+
+        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+            # Step 1: CA chain, Step 2: TLS cert
+            if not ca.certificate:
+                return TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+            return TruststoreModel.IntendedUsage.TLS
+
+        # Default for other EST CAs
+        return TruststoreModel.IntendedUsage.TLS
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add the CA and import form to the context."""
         context = super().get_context_data(**kwargs)
         ca = self.get_ca()
         context['ca'] = ca
-        context['import_form'] = TruststoreAddForm()
-        # Add flag to differentiate between EST and CMP for helpful hints
-        context['is_cmp'] = ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
+        import_form = TruststoreAddForm()
+        intended_usage_field = cast('ChoiceField', import_form.fields['intended_usage'])
+
+        # Filter choices based on CA type
+        if ca.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+            # Only allow ISSUING_CA_CHAIN for CMP RAs
+            intended_usage_field.choices = [
+                choice for choice in intended_usage_field.choices  # type: ignore[union-attr]
+                if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+            ]
+        elif ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+            if not ca.certificate:
+                # Step 1: CA chain
+                intended_usage_field.choices = [
+                    choice for choice in intended_usage_field.choices  # type: ignore[union-attr]
+                    if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+                ]
+            else:
+                # Step 2: TLS cert
+                intended_usage_field.choices = [
+                    choice for choice in intended_usage_field.choices  # type: ignore[union-attr]
+                    if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.TLS
+                ]
+
+        context['import_form'] = import_form
+        # Add flag to differentiate between EST and CMP/RA for helpful hints
+        context['is_cmp'] = ca.ca_type in [
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
+            CaModel.CaTypeChoice.REMOTE_CMP_RA
+        ]
+        context['is_est_ra'] = ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA
+        context['est_ra_step'] = 1 if (context['is_est_ra'] and not ca.certificate) else 2
         return context
+
+    def _handle_ra_certificate_extraction(self, ca: CaModel) -> bool:
+        """Extract RA certificate and parent from CA chain truststore.
+
+        Args:
+            ca: The CA model instance (must be an RA type)
+
+        Returns:
+            True if this was a CA chain association (requiring TLS cert next for EST RA), False otherwise
+        """
+        if not (ca.no_onboarding_config and ca.no_onboarding_config.trust_store):
+            return False
+
+        truststore = ca.no_onboarding_config.trust_store
+
+        if truststore.intended_usage != TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN:
+            return False
+
+        if not truststore.truststoreordermodel_set.exists():
+            return False
+
+        first_cert_order = truststore.truststoreordermodel_set.order_by('order').first()
+        if not first_cert_order:
+            return False
+
+        ca.certificate = first_cert_order.certificate
+
+        cert_orders = list(truststore.truststoreordermodel_set.order_by('order'))
+        if len(cert_orders) >= 2:  # noqa: PLR2004
+            issuer_cert = cert_orders[1].certificate
+            issuer_ca = CaModel.objects.filter(certificate=issuer_cert).first()
+            if issuer_ca:
+                ca.parent_ca = issuer_ca
+
+        ca.chain_truststore = truststore
+
+        ca.save(update_fields=['certificate', 'parent_ca', 'chain_truststore'])
+        return True
 
     def form_valid(self, form: IssuingCaTruststoreAssociationForm) -> HttpResponse:
         """Handle successful form submission."""
         form.save()
         ca = self.get_ca()
+
+        if ca.ca_type in [CaModel.CaTypeChoice.REMOTE_EST_RA, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+            is_ca_chain = self._handle_ra_certificate_extraction(ca)
+
+            if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA and is_ca_chain:
+                messages.success(
+                    self.request,
+                    _('Successfully associated CA chain. Now please associate the TLS server certificate.')
+                )
+                return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+
         messages.success(
             self.request,
             _('Successfully associated truststore with Issuing CA {name}.').format(name=ca.unique_name)
         )
         if ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
             return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+            return redirect('pki:issuing_cas-config', pk=ca.pk)
+        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA:
+            return redirect('pki:issuing_cas-config', pk=ca.pk)
         return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
 
 
@@ -353,6 +471,21 @@ class IssuingCaDefineCertContentEstView(IssuingCaDefineCertContentMixin, FormVie
         return _('Certificate content defined. Please proceed to request the certificate via EST.')
 
 
+
+class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
+    """Mixin for CMP RA configuration views."""
+
+    def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
+        """Handle successful CMP RA configuration submission."""
+        ca = form.save(is_ra_mode=True)
+        messages.success(
+            self.request,  # type: ignore[attr-defined]
+            _('Successfully configured CMP RA {name}. Please associate a trust store.').format(name=ca.unique_name)
+        )
+        return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+
+
+
 class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddRequestCmpForm]):
     """View to request an Issuing CA certificate using CMP."""
 
@@ -369,6 +502,36 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
             ),
         )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+
+
+class RemoteRaAddRequestCmpView(RemoteRaAddRequestCmpMixin, FormView[IssuingCaAddRequestCmpForm]):
+    """View to configure a remote CMP RA (Registration Authority)."""
+
+    form_class = IssuingCaAddRequestCmpForm
+    template_name = 'pki/issuing_cas/add/cmp_ra.html'
+
+
+class RemoteRaAddRequestEstMixin(IssuingCaContextMixin):
+    """Mixin for EST RA configuration views."""
+
+    def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
+        """Handle successful EST RA configuration submission."""
+        ca = form.save(is_ra_mode=True)
+        messages.success(
+            self.request,  # type: ignore[attr-defined]
+            _('Successfully configured EST RA {name}. Please associate the CA chain trust store.').format(
+                name=ca.unique_name
+            )
+        )
+        return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+
+
+
+class RemoteRaAddRequestEstView(RemoteRaAddRequestEstMixin, FormView[IssuingCaAddRequestEstForm]):
+    """View to configure a remote EST RA (Registration Authority)."""
+
+    form_class = IssuingCaAddRequestEstForm
+    template_name = 'pki/issuing_cas/add/est_ra.html'
 
 
 class IssuingCaDefineCertContentCmpView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
@@ -410,15 +573,34 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         """
         context = super().get_context_data(**kwargs)
         issuing_ca = self.get_object()
-        if issuing_ca.credential and issuing_ca.credential.certificate:
-            credential = issuing_ca.credential
-            issuer_public_bytes = credential.certificate_or_error.subject_public_bytes
+
+        ca_cert = issuing_ca.ca_certificate_model
+        if ca_cert:
+            issuer_public_bytes = ca_cert.subject_public_bytes
             issued_certificates = CertificateModel.objects.filter(issuer_public_bytes=issuer_public_bytes)
         else:
             issued_certificates = CertificateModel.objects.none()
+
         context['issued_certificates'] = issued_certificates
         context['active_crl'] = issuing_ca.get_active_crl()
+
+        if issuing_ca.is_issuing_ca and issuing_ca.credential:
+            context['certificate_chain'] = issuing_ca.credential.ordered_certificate_chain_queryset
+        elif issuing_ca.chain_truststore:
+            if issuing_ca.ca_type in [CaModel.CaTypeChoice.REMOTE_EST_RA, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+                context['certificate_chain'] = issuing_ca.chain_truststore.truststoreordermodel_set.filter(
+                    order__gt=0
+                ).order_by('order')
+            else:
+                context['certificate_chain'] = issuing_ca.chain_truststore.truststoreordermodel_set.order_by('order')
+        else:
+            context['certificate_chain'] = []
+
         return context
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
+        return super().get(request, *args, **kwargs)
 
 
 class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
@@ -1028,10 +1210,16 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         chain_ca_models: list[CaModel],
     ) -> None:
         """Build the CA hierarchy by setting parent-child relationships."""
-        ca_by_subject = {ca.get_certificate().subject.public_bytes().hex(): ca for ca in chain_ca_models}
+        ca_by_subject = {}
+        for ca in chain_ca_models:
+            cert = ca.get_certificate()
+            if cert:
+                ca_by_subject[cert.subject.public_bytes().hex()] = ca
 
         for ca in chain_ca_models:
             cert = ca.get_certificate()
+            if not cert:
+                continue
             issuer_subject_bytes = cert.issuer.public_bytes().hex()
             if issuer_subject_bytes in ca_by_subject:
                 parent_ca = ca_by_subject[issuer_subject_bytes]
@@ -1048,7 +1236,8 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         """Find the CA that issued the certificate."""
         issuer_subject_bytes = issued_cert.issuer.public_bytes().hex()
         for ca in chain_ca_models:
-            if ca.get_certificate().subject.public_bytes().hex() == issuer_subject_bytes:
+            ca_cert = ca.get_certificate()
+            if ca_cert and ca_cert.subject.public_bytes().hex() == issuer_subject_bytes:
                 return ca
         return None
 
@@ -1075,7 +1264,7 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         for existing_ca in CaModel.objects.filter(certificate__isnull=False):
             try:
                 ca_cert = existing_ca.get_certificate()
-                if (ca_cert.subject.public_bytes() == cert.subject.public_bytes() and
+                if ca_cert and (ca_cert.subject.public_bytes() == cert.subject.public_bytes() and
                     ca_cert.issuer.public_bytes() == cert.issuer.public_bytes()):
                     return existing_ca
             except (AttributeError, ValueError) as e:
@@ -1085,7 +1274,7 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         for existing_ca in CaModel.objects.filter(credential__isnull=False):
             try:
                 ca_cert = existing_ca.get_certificate()
-                if (ca_cert.subject.public_bytes() == cert.subject.public_bytes() and
+                if ca_cert and (ca_cert.subject.public_bytes() == cert.subject.public_bytes() and
                     ca_cert.issuer.public_bytes() == cert.issuer.public_bytes()):
                     return existing_ca
             except (AttributeError, ValueError) as e:
@@ -1170,9 +1359,14 @@ class IssuingCaDetailView(IssuingCaContextMixin, DetailView[CaModel]):
     context_object_name = 'issuing_ca'
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
-        """Return only issuing CAs."""
+        """Return only issuing CAs (excluding RAs and keyless CAs)."""
         return super().get_queryset().exclude(
-            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+            ca_type__in=[
+                CaModel.CaTypeChoice.KEYLESS,
+                CaModel.CaTypeChoice.AUTOGEN_ROOT,
+                CaModel.CaTypeChoice.REMOTE_EST_RA,
+                CaModel.CaTypeChoice.REMOTE_CMP_RA,
+            ]
         )
 
 
@@ -1506,3 +1700,43 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
                 )
 
         return response
+
+
+class RaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel]):
+    """View to display the details of an RA (Registration Authority)."""
+
+    model = CaModel
+    success_url = reverse_lazy('pki:issuing_cas')
+    ignore_url = reverse_lazy('pki:issuing_cas')
+    template_name = 'pki/issuing_cas/ra_config.html'
+    context_object_name = 'ra'
+
+    def get_queryset(self) -> QuerySet[CaModel, CaModel]:
+        """Return only RA CAs."""
+        return super().get_queryset().filter(
+            ca_type__in=[CaModel.CaTypeChoice.REMOTE_EST_RA, CaModel.CaTypeChoice.REMOTE_CMP_RA]
+        )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds RA-specific information to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data()
+
+        Returns:
+            The context to render the page.
+        """
+        context = super().get_context_data(**kwargs)
+        ra = self.get_object()
+
+        if ra.chain_truststore:
+            truststore_certificates = [
+                cert_order.certificate
+                for cert_order in ra.chain_truststore.truststoreordermodel_set.order_by('order')
+            ]
+        else:
+            truststore_certificates = []
+
+        context['truststore_certificates'] = truststore_certificates
+        context['active_crl'] = None
+        return context

@@ -98,6 +98,9 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             raise TypeError(err_msg)
 
         issuing_credential = ca.get_credential()
+        if not issuing_credential:
+            err_msg = 'Issuing CA does not have a credential'
+            raise ValueError(err_msg)
         issuer_certificate = issuing_credential.get_certificate()
         context.issuer_credential = issuing_credential
 

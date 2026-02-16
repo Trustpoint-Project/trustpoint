@@ -28,9 +28,10 @@
 
                     <h2>{% trans 'Configure a Remote Issuing CA' %}</h2>
                     <hr class="mb-4">
-                    <a href="#" class="btn btn-primary min-width-30 mb-3 disabled" tabindex="-1" aria-disabled="true">{% trans 'Configure A Remote Issuing CA Using EST' %}</a>
+                    <a href="{% url 'pki:issuing_cas-add-est-ra' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Configure A Remote Issuing CA Using EST' %}</a>
                     <br>
-                    <a href="#" class="btn btn-primary min-width-30 mb-3 disabled" tabindex="-1" aria-disabled="true">{% trans 'Configure A Remote Issuing CA Using CMP' %}</a>
+                    <a href="{% url 'pki:issuing_cas-add-cmp-ra' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Configure A Remote Issuing CA Using CMP' %}</a>
+
 
                 </div>
             </div>

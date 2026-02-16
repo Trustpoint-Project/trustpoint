@@ -134,6 +134,9 @@ class EstCaCsrSignProcessor(EstCsrSignProcessor):
 
             ca = context.domain.get_issuing_ca_or_value_error()
             context.issuer_credential = ca.get_credential()
+            if not context.issuer_credential:
+                exc_msg = 'Issuing CA does not have a credential'
+                raise ValueError(exc_msg)
 
         return context.issuer_credential
 

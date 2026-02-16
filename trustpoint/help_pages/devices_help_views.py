@@ -908,6 +908,8 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             has_missing_crl = False
             for idx, ca in enumerate(ca_chain):
                 try:
+                    if not ca.ca_certificate_model:
+                        continue
                     cert_serializer = ca.ca_certificate_model.get_certificate_serializer()
                     cert_crypto = cert_serializer.as_crypto()
 
