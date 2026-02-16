@@ -155,7 +155,6 @@ urlpatterns = [
     ),
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
-    path('issuing-cas/ra-config/<int:pk>/', issuing_cas.RaConfigView.as_view(), name='issuing_cas-ra-config'),
     path(
         'issuing-cas/define-cert-content-est/<int:pk>/',
         issuing_cas.IssuingCaDefineCertContentEstView.as_view(),

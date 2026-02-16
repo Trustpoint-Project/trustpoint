@@ -229,10 +229,16 @@
                                 <div>{% trans 'CRL Management' %}</div>
                                 <div>
                                     <div class="mb-2">
-                                        <a href="{% url 'pki:issuing_cas-crl-gen' pk=issuing_ca.pk %}"
-                                            class="btn btn-sm btn-primary me-2">
-                                            {% trans 'Generate CRL' %}
-                                        </a>
+                                        {% if issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_EST_RA or issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_CMP_RA %}
+                                            <a href="{% url 'pki:crl-import' %}" class="btn btn-primary btn-sm me-2">
+                                                {% trans 'Import CRL' %}
+                                            </a>
+                                        {% else %}
+                                            <a href="{% url 'pki:issuing_cas-crl-gen' pk=issuing_ca.pk %}"
+                                                class="btn btn-sm btn-primary me-2">
+                                                {% trans 'Generate CRL' %}
+                                            </a>
+                                        {% endif %}
                                         {% if issuing_ca.last_crl_issued_at %}
                                             <a href="{% url 'pki:crl-detail' pk=active_crl.pk %}" class="btn btn-sm btn-primary me-2">
                                                 {% trans 'CRL Details' %}
@@ -251,6 +257,7 @@
                                             </button>
                                         {% endif %}
                                     </div>
+                                    {% if issuing_ca.ca_type != issuing_ca.CaTypeChoice.REMOTE_EST_RA and issuing_ca.ca_type != issuing_ca.CaTypeChoice.REMOTE_CMP_RA %}
                                     <div>
                                         <a href="{% url 'pki:help_issuing_cas_crl_download' pk=issuing_ca.pk %}"
                                             class="btn btn-sm btn-primary"
@@ -258,6 +265,7 @@
                                             {% trans 'Download CRL with curl' %}
                                         </a>
                                     </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div>
