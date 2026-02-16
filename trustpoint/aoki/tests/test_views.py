@@ -6,7 +6,6 @@ import base64
 from typing import TYPE_CHECKING
 from unittest.mock import Mock, patch
 
-import cryptography
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -21,7 +20,7 @@ from pki.util.x509 import CertificateGenerator, ClientCertificateAuthenticationE
 from aoki.views import AokiInitializationRequestView, AokiServiceMixin
 
 if TYPE_CHECKING:
-    cryptography.hazmat.primitives.asymmetric.types import CertificateIssuerPrivateKeyTypes
+    from cryptography.hazmat.primitives.asymmetric.types import CertificateIssuerPrivateKeyTypes
 
 
 @pytest.fixture
