@@ -1,6 +1,5 @@
 """Tests for the JSON template verification module."""
 
-from re import match
 import pytest
 from pydantic import ValidationError
 

@@ -12,7 +12,7 @@ from django.utils import timezone
 from trustpoint_core import oid
 
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
-from pki.models.truststore import TruststoreModel, TruststoreOrderModel
+from pki.models.truststore import TruststoreModel
 from pki.models import CaModel
 from pki.util.x509 import CertificateGenerator
 

@@ -6,11 +6,10 @@ from unittest.mock import Mock
 from cryptography import x509
 from cryptography.x509 import CertificateSigningRequest
 from devices.models import DeviceModel
-from django.http import HttpRequest
 from pki.models import DomainModel
 from pyasn1_modules.rfc4210 import PKIMessage
 
-from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext, HttpBaseRequestContext
+from request.request_context import BaseRequestContext, EstCertificateRequestContext
 
 
 class TestRequestContext:

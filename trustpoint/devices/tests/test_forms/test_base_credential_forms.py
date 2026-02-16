@@ -6,7 +6,6 @@ import pytest
 from django import forms
 
 from devices.forms import BaseCredentialForm, BaseServerCredentialForm
-from devices.models import DeviceModel, IssuedCredentialModel
 
 
 @pytest.mark.django_db
