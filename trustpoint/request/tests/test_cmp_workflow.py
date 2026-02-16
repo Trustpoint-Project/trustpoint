@@ -8,7 +8,7 @@ from request.authentication import CmpAuthentication
 from request.authorization import CmpAuthorization
 from request.request_validator.http_req import CmpHttpRequestValidator
 from request.message_parser import CmpMessageParser
-from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext
+from request.request_context import CmpCertificateRequestContext
 from request.tests.cmp_mock_server import CMPMockServer
 from request.tests.openssl_cmp_factory import (
     BasicCMPArgs,

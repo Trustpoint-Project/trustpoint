@@ -1,6 +1,5 @@
 """Comprehensive tests for EST urls.py module."""
 
-import pytest
 from django.urls import resolve, reverse
 
 from est import views

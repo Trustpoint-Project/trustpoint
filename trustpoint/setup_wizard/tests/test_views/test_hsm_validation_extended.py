@@ -8,7 +8,6 @@ from django.contrib.messages import get_messages
 from django.test import RequestFactory
 
 from management.models import PKCS11Token, KeyStorageConfig
-from setup_wizard.forms import HsmSetupForm
 from setup_wizard.views import SetupWizardHsmSetupView
 
 

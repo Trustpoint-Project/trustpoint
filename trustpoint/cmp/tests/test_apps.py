@@ -1,6 +1,5 @@
 """Tests for CMP Django app configuration."""
 
-import pytest
 from django.apps import apps
 
 

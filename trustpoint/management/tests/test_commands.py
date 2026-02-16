@@ -1,9 +1,7 @@
 """Test suite for Django management commands."""
 from io import StringIO
-from pathlib import Path
-from unittest.mock import Mock, MagicMock, patch, mock_open
+from unittest.mock import Mock, MagicMock, patch
 
-from cryptography.hazmat.primitives.asymmetric import ec
 from django.conf import settings
 from django.core.management import call_command
 from django.core.management.base import CommandError

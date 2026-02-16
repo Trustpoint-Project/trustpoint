@@ -1,23 +1,19 @@
 """Tests for signer.forms module."""
 
-import io
 from datetime import datetime, timedelta, timezone as dt_timezone
 from unittest.mock import Mock, patch
 
 import pytest
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.hashes import SHA256
 from cryptography.hazmat.primitives.serialization import (
-    Encoding,
     NoEncryption,
-    PrivateFormat,
     pkcs12,
 )
 from cryptography.x509.oid import NameOID
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from trustpoint_core.serializer import CertificateSerializer, PrivateKeySerializer
 
 from management.models import KeyStorageConfig
 from signer.forms import (
@@ -604,7 +600,7 @@ class TestSignerAddFileImportSeparateFilesFormAdvanced:
 
     def test_clean_with_valid_certificate_chain(self, key_storage_config, sample_pkcs12_data):
         """Test clean_signer_certificate_chain with valid chain file."""
-        from trustpoint_core.serializer import CertificateSerializer, CertificateCollectionSerializer
+        from trustpoint_core.serializer import CertificateSerializer
         
         # Create a simple certificate chain
         cert_pem = CertificateSerializer(sample_pkcs12_data['certificate']).as_pem()

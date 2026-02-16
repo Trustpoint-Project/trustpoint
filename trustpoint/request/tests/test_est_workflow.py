@@ -12,7 +12,7 @@ from request.authorization.est import EstOperationAuthorization
 from request.request_validator.http_req import EstHttpRequestValidator
 from request.operation_processor import OperationProcessor
 from request.message_parser import EstMessageParser
-from request.request_context import BaseRequestContext, EstCertificateRequestContext
+from request.request_context import EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 

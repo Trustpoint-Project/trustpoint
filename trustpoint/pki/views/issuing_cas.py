@@ -48,7 +48,7 @@ from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.truststore import TruststoreModel
-from pki.serializer import IssuingCaSerializer
+from pki.serializer.issuing_ca import IssuingCaSerializer
 from pki.util.cert_profile import ProfileValidationError
 from request.clients import EstClient, EstClientError
 from request.clients.cmp_client import CmpClient, CmpClientError
@@ -65,10 +65,8 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
-    from typing import ClassVar
-
     from django.db.models import QuerySet
-    from django.forms import ChoiceField, Form
+    from django.forms import Form
     from django.http import HttpRequest
     from rest_framework.request import Request
 
