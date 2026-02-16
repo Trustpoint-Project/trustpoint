@@ -13,7 +13,7 @@ from setup_wizard import SetupWizardState
 from users.views import TrustpointLoginView
 
 if TYPE_CHECKING:
-    pass
+    from django.contrib.auth.models import AbstractBaseUser
 
 User = get_user_model()
 

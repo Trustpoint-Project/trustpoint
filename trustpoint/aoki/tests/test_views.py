@@ -20,7 +20,7 @@ from pki.util.x509 import CertificateGenerator, ClientCertificateAuthenticationE
 from aoki.views import AokiInitializationRequestView, AokiServiceMixin
 
 if TYPE_CHECKING:
-    pass
+    cryptography.hazmat.primitives.asymmetric.types import CertificateIssuerPrivateKeyTypes
 
 
 @pytest.fixture

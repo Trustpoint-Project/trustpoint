@@ -11,7 +11,7 @@ from django.urls import reverse
 from setup_wizard import SetupWizardState
 
 if TYPE_CHECKING:
-    pass
+    from django.contrib.auth.models import AbstractBaseUser
 
 User = get_user_model()
 
