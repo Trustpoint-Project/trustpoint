@@ -1,4 +1,4 @@
-"""Views for the network discovery dashboard."""
+"""Views for the network discovery dashboard and port management."""
 
 import csv
 import threading
@@ -15,8 +15,8 @@ from .scanner import OTScanner
 
 SCAN_RUNNING = False
 STOP_PENDING = False
-START_IP = '192.168.0.1'
-END_IP = '192.168.0.254'
+START_IP = '10.100.13.1'
+END_IP = '10.100.13.254'
 scanner_instance = OTScanner(target_ports=[])
 
 
@@ -28,7 +28,6 @@ def run_scan_in_background(start_ip: str, end_ip: str) -> None:
         scanner_instance.target_ports = ports
 
         results = scanner_instance.scan_network(start_ip, end_ip)
-
 
         if scanner_instance.stop_requested.is_set():
             return
@@ -58,8 +57,10 @@ def run_scan_in_background(start_ip: str, end_ip: str) -> None:
 
 
 def device_list(request: HttpRequest) -> HttpResponse:
-    """Display the asset discovery dashboard."""
+    """Display the asset discovery dashboard with scan results and port config."""
     all_devs = DiscoveredDevice.objects.all().order_by('-last_seen')
+    all_ports = DiscoveryPort.objects.all().order_by('port_number')
+
     stats = {'total': all_devs.count(), 'risks': 0, 'industrial': 0}
 
     ot_ports = list(
@@ -79,6 +80,7 @@ def device_list(request: HttpRequest) -> HttpResponse:
         'discovery/device_list.html',
         {
             'devices': all_devs,
+            'scan_ports': all_ports,
             'scan_running': SCAN_RUNNING,
             'stop_pending': STOP_PENDING,
             'stats': stats,
@@ -109,6 +111,26 @@ def stop_scan(request: HttpRequest) -> HttpResponse:  # noqa: ARG001
     global STOP_PENDING  # noqa: PLW0603
     scanner_instance.stop_requested.set()
     STOP_PENDING = True
+    return redirect('discovery:device_list')
+
+
+def add_port(request: HttpRequest) -> HttpResponse:
+    """Add a new port to the scan configuration."""
+    if request.method == 'POST':
+        port = request.POST.get('port_number')
+        desc = request.POST.get('description')
+        if port and desc:
+            DiscoveryPort.objects.get_or_create(port_number=port, description=desc)
+            messages.success(request, f'Port {port} added to scan configuration.')
+    return redirect('discovery:device_list')
+
+
+def delete_port(request: HttpRequest, port_id: int) -> HttpResponse:
+    """Remove a port from the scan configuration."""
+    port = get_object_or_404(DiscoveryPort, id=port_id)
+    port_num = port.port_number
+    port.delete()
+    messages.info(request, f'Port {port_num} removed from scan configuration.')
     return redirect('discovery:device_list')
 
 

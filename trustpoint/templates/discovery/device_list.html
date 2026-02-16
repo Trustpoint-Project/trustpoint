@@ -7,94 +7,155 @@
 
 {% block content %}
 <div class="container-fluid p-4">
+    <!-- Header -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h3 fw-bold mb-0">Network Discovery</h1>
-        <div class="d-flex gap-2">
-            <a href="/admin/discovery/discoveryport/" class="btn btn-outline-secondary btn-sm">Configure Ports</a>
+        <h1 class="h3 fw-bold mb-0 text-white">Network Discovery</h1>
+        <div class="d-flex align-items-center gap-2">
+            <!-- NEW: Settings Toggle Button -->
+            <button class="btn btn-outline-secondary text-light btn-sm px-3" type="button" data-bs-toggle="collapse" data-bs-target="#scanSettings" aria-expanded="false" aria-controls="scanSettings">
+                Configure Ports
+            </button>
+
+            <!-- Status Badges -->
             {% if stop_pending %}
                 <span class="badge bg-secondary text-light px-3 py-2">Stopping...</span>
             {% elif scan_running %}
                 <span class="badge bg-warning text-dark px-3 py-2">Scanning Active</span>
             {% else %}
-                <span class="badge bg-success px-3 py-2">System Ready</span>
+                <span class="badge bg-success px-3 py-2 text-white">System Ready</span>
             {% endif %}
         </div>
-    </div> 
+    </div>
 
+    <!-- Stats Section -->
     <div class="row mb-4">
         <div class="col-md-4">
             <div class="card p-3 border-0 border-start border-4 border-primary shadow-sm" style="background: rgba(255,255,255,0.05);">
-                <h6 class="text-muted small fw-bold">Total Assets</h6>
-                <h2 class="fw-bold mb-0">{{ stats.total }}</h2>
+                <h6 class="text-muted small fw-bold text-uppercase">Total Assets</h6>
+                <h2 class="fw-bold mb-0 text-white">{{ stats.total }}</h2>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card p-3 border-0 border-start border-4 border-info shadow-sm" style="background: rgba(255,255,255,0.05);">
-                <h6 class="text-muted small fw-bold">Industrial / OT</h6>
-                <h2 class="fw-bold mb-0">{{ stats.industrial }}</h2>
+                <h6 class="text-muted small fw-bold text-uppercase">Industrial / OT</h6>
+                <h2 class="fw-bold mb-0 text-white">{{ stats.industrial }}</h2>
             </div>
         </div>
         <div class="col-md-4">
             <div class="card p-3 border-0 border-start border-4 border-warning shadow-sm" style="background: rgba(255,255,255,0.05);">
-                <h6 class="text-muted small fw-bold">Security Risks</h6>
-                <h2 class="fw-bold mb-0">{{ stats.risks }}</h2>
+                <h6 class="text-muted small fw-bold text-uppercase">Security Risks</h6>
+                <h2 class="fw-bold mb-0 text-white">{{ stats.risks }}</h2>
             </div>
         </div>
     </div>
 
-    <div class="card p-4 mb-4 shadow-sm border-0" style="background: rgba(255,255,255,0.05);">
-        <form action="{% url 'discovery:start_scan' %}" method="post" class="row g-3 align-items-end">
-            {% csrf_token %}
-            <div class="col-md-3">
-                <label class="form-label text-muted small fw-bold">Start IP Address</label>
-                <input type="text" name="start_ip" class="form-control border-secondary bg-transparent text-white" value="{{ start_ip }}">
+    <!-- NEW COLLAPSIBLE PORT CONFIGURATION -->
+    <div class="collapse mb-4" id="scanSettings">
+        <div class="card shadow-sm border border-secondary" style="background: rgba(255,255,255,0.02);">
+            <div class="card-header border-bottom border-secondary py-2 px-4">
+                <h6 class="mb-0 text-white fw-bold text-uppercase small">Scanner Settings</h6>
             </div>
-            <div class="col-md-3">
-                <label class="form-label text-muted small fw-bold">End IP Address</label>
-                <input type="text" name="end_ip" class="form-control border-secondary bg-transparent text-white" value="{{ end_ip }}">
+            
+            <div class="card-body p-4">
+                <div class="row">
+                    <!-- Column 1: List of Active Ports -->
+                    <div class="col-md-7 border-end border-secondary">
+                        <h6 class="text-info small fw-bold text-uppercase mb-3">Active Target Ports</h6>
+                        <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                            <table class="table table-sm table-hover mb-0 text-white">
+                                <thead>
+                                    <tr>
+                                        <th>Port</th>
+                                        <th>Description</th>
+                                        <th class="text-end">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for port in scan_ports %}
+                                    <tr>
+                                        <td class="font-monospace text-info">{{ port.port_number }}</td>
+                                        <td>{{ port.description }}</td>
+                                        <td class="text-end">
+                                            <form action="{% url 'discovery:delete_port' port.id %}" method="post" class="d-inline">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-sm btn-link text-danger text-decoration-none p-0">Remove</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Column 2: Add New Port Form -->
+                    <div class="col-md-5 ps-md-4">
+                        <h6 class="text-success small fw-bold text-uppercase mb-3">Add Custom Port</h6>
+                        <form action="{% url 'discovery:add_port' %}" method="post">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label class="form-label text-muted small">Port Number</label>
+                                <input type="number" name="port_number" class="form-control form-control-sm border-secondary bg-dark text-white" placeholder="e.g. 8080" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-muted small">Protocol / Description</label>
+                                <input type="text" name="description" class="form-control form-control-sm border-secondary bg-dark text-white" placeholder="e.g. HTTP Alt" required>
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-primary w-100">Add to Scan List</button>
+                        </form>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-6 d-flex gap-2">
-                {% if stop_pending %}
-                    <button class="btn btn-secondary w-100 fw-bold" disabled>Stopping...</button>
-                {% elif scan_running %}
-                    <a href="{% url 'discovery:stop_scan' %}" class="btn btn-danger w-100 fw-bold">Stop Scan</a>
-                {% else %}
-                    <button type="submit" class="btn btn-primary w-100 fw-bold">Run Scan</button>
-                    <a href="{% url 'discovery:clear_devices' %}" class="btn btn-outline-danger px-4">Clean</a>
-                {% endif %}
-            </div>
-        </form>
+        </div>
     </div>
 
-    <div class="card shadow-sm border-0" style="background: rgba(255,255,255,0.05);">
-        <div class="card-header bg-transparent d-flex justify-content-between align-items-center border-0 pt-4">
-            <h5 class="mb-0 fw-bold">Discovered Assets</h5>
-            {% if devices %}
-                <a href="{% url 'discovery:export_csv' %}" class="btn btn-sm btn-success">Download CSV</a>
-            {% endif %}
+    <!-- DISCOVERED ASSETS CARD (Main Interface) -->
+    <div class="card shadow-sm border border-secondary" style="background: rgba(255,255,255,0.02);">
+        <div class="card-header border-bottom border-secondary py-3 px-4">
+            <form action="{% url 'discovery:start_scan' %}" method="post" class="row g-3 align-items-end">
+                {% csrf_token %}
+                <div class="col-md-3">
+                    <label class="form-label text-muted small fw-bold text-uppercase">Start IP</label>
+                    <input type="text" name="start_ip" class="form-control form-control-sm border-secondary bg-dark text-white" value="{{ start_ip }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted small fw-bold text-uppercase">End IP</label>
+                    <input type="text" name="end_ip" class="form-control form-control-sm border-secondary bg-dark text-white" value="{{ end_ip }}">
+                </div>
+                <div class="col-md-6">
+                    {% if stop_pending %}
+                        <button class="btn btn-sm btn-secondary w-100 fw-bold" disabled>Stopping...</button>
+                    {% elif scan_running %}
+                        <a href="{% url 'discovery:stop_scan' %}" class="btn btn-sm btn-danger w-100 fw-bold">Stop Scan</a>
+                    {% else %}
+                        <button type="submit" class="btn btn-sm btn-primary w-100 fw-bold">Run Network Scan</button>
+                    {% endif %}
+                </div>
+            </form>
         </div>
+
         <div class="table-responsive">
             <table class="table table-hover mb-0">
                 <thead>
-                    <tr>
-                        <th class="ps-4 text-muted small text-uppercase">IP Address</th>
-                        <th class="text-muted small text-uppercase">Hostname</th>
-                        <th class="text-muted small text-uppercase">Ports</th>
-                        <th class="text-muted small text-uppercase">SSL Status</th>
-                        <th class="text-end pe-4 text-muted small text-uppercase">Actions</th>
+                    <tr class="border-bottom border-secondary">
+                        <th class="ps-4 py-3"><span class="text-info small fw-bold text-uppercase">IP Address</span></th>
+                        <th class="py-3"><span class="text-info small fw-bold text-uppercase">Hostname</span></th>
+                        <th class="py-3"><span class="text-info small fw-bold text-uppercase">Ports Found</span></th>
+                        <th class="py-3"><span class="text-info small fw-bold text-uppercase">SSL Status</span></th>
+                        <th class="text-end pe-4 py-3"><span class="text-white small fw-bold text-uppercase">Actions</span></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for d in devices %}
-                    <tr>
+                    <tr class="border-bottom border-secondary align-middle">
                         <td class="ps-4"><a href="{% url 'discovery:device_detail' d.id %}" class="text-info fw-bold">{{ d.ip_address }}</a></td>
-                        <td>{{ d.hostname|default:"Unknown" }}</td>
-                        <td>{{ d.open_ports|join:", " }}</td>
+                        <td class="text-white">{{ d.hostname|default:"Unknown" }}</td>
+                        <td class="text-white">{{ d.open_ports|join:", " }}</td>
                         <td>
                             {% if d.certificate_record.is_self_signed %}
-                                <span class="badge bg-warning text-dark">Self-Signed</span>
+                                <span class="badge bg-warning text-dark fw-bold">Self-Signed</span>
                             {% elif d.certificate_record %}
-                                <span class="badge bg-success">PKI Linked</span>
+                                <span class="badge bg-success text-white fw-bold">PKI Linked</span>
                             {% else %}
                                 <span class="text-muted small">None</span>
                             {% endif %}
@@ -103,9 +164,18 @@
                             <a href="{% url 'discovery:device_detail' d.id %}" class="btn btn-sm btn-outline-info">View Details</a>
                         </td>
                     </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center p-5 text-muted">No assets discovered in inventory.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+
+        <div class="card-footer bg-transparent border-top border-secondary py-3 px-4 d-flex justify-content-between align-items-center">
+            <a href="{% url 'discovery:clear_devices' %}" class="btn btn-danger btn-sm">Clean Inventory</a>
+            {% if devices %}
+                <a href="{% url 'discovery:export_csv' %}" class="btn btn-success btn-sm text-white px-4">Download CSV</a>
+            {% endif %}
         </div>
     </div>
 </div>
