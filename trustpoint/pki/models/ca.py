@@ -471,6 +471,102 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return keyless_ca
 
     @classmethod
+    @classmethod
+    def _validate_ca_certificate(cls, ca_cert: x509.Certificate) -> None:
+        """Validate that the certificate is suitable for use as a CA.
+
+        Args:
+            ca_cert: The certificate to validate.
+
+        Raises:
+            ValidationError: If the certificate is not a valid CA certificate.
+        """
+        try:
+            bc_extension = ca_cert.extensions.get_extension_for_class(x509.BasicConstraints)
+        except x509.ExtensionNotFound as e:
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid CA certificate; '
+                    'it does not contain a Basic Constraints extension.'
+                )
+            ) from e
+        if not bc_extension.value.ca:
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid CA certificate; '
+                    'it is an End Entity certificate.'
+                )
+            )
+
+    @classmethod
+    def _generate_unique_name(cls, ca_cert: x509.Certificate) -> str:
+        """Generate a unique name from the CA certificate.
+
+        Args:
+            ca_cert: The CA certificate.
+
+        Returns:
+            The generated unique name.
+
+        Raises:
+            ValidationError: If unable to generate a unique name.
+        """
+        from cryptography.x509.oid import NameOID  # noqa: PLC0415
+
+        try:
+            cn_attrs = ca_cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+            return str(cn_attrs[0].value) if cn_attrs else 'CA'
+        except Exception:  # noqa: BLE001
+            return 'CA'
+
+    @classmethod
+    def _validate_ca_type(cls, ca_type: CaModel.CaTypeChoice) -> None:
+        """Validate that the CA type is supported for issuing CAs.
+
+        Args:
+            ca_type: The CA type to validate.
+
+        Raises:
+            ValueError: If the CA type is not supported.
+        """
+        ca_types = (
+            cls.CaTypeChoice.AUTOGEN_ROOT,
+            cls.CaTypeChoice.AUTOGEN,
+            cls.CaTypeChoice.LOCAL_UNPROTECTED,
+            cls.CaTypeChoice.LOCAL_PKCS11,
+            cls.CaTypeChoice.REMOTE_ISSUING_EST,
+            cls.CaTypeChoice.REMOTE_ISSUING_CMP,
+        )
+        if ca_type not in ca_types:
+            exc_msg = f'CA Type {ca_type} is not supported for issuing CAs.'
+            raise ValueError(exc_msg)
+
+    @classmethod
+    def _create_chain_truststore(cls, issuing_ca: CaModel) -> TruststoreModel:
+        """Create and populate a truststore for the CA chain.
+
+        Args:
+            issuing_ca: The issuing CA model.
+
+        Returns:
+            The created truststore model.
+        """
+        chain = issuing_ca.get_hierarchy_path()
+        cert_models = [ca.ca_certificate_model for ca in chain]
+        truststore = TruststoreModel.objects.create(
+            unique_name=f'{issuing_ca.unique_name}_chain',
+            intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN,
+        )
+        for idx, cert in enumerate(cert_models):
+            if cert:  # Only add non-None certificates
+                TruststoreOrderModel.objects.create(
+                    order=idx,
+                    certificate=cert,
+                    trust_store=truststore
+                )
+        return truststore
+
+    @classmethod
     def create_new_issuing_ca(
         cls,
         credential_serializer: CredentialSerializer,
@@ -500,48 +596,16 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if ca_type is None:
             msg = 'Must specify ca_type parameter.'
             raise ValueError(msg)
+
         ca_cert = credential_serializer.certificate
         if not ca_cert:
             raise ValidationError(_('The provided credential is not a valid CA; it does not contain a certificate.'))
 
-        # Auto-generate unique_name from certificate if not provided
-        if unique_name is None:
-            from cryptography.x509.oid import NameOID  # noqa: PLC0415
-            try:
-                cn_attrs = ca_cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
-                unique_name = str(cn_attrs[0].value) if cn_attrs else 'CA'
-            except Exception:  # noqa: BLE001
-                unique_name = 'CA'
-        if unique_name is None:
-            raise ValidationError(_('Unable to generate unique name for CA.'))
-        try:
-            bc_extension = ca_cert.extensions.get_extension_for_class(x509.BasicConstraints)
-        except x509.ExtensionNotFound as e:
-            raise ValidationError(
-                _(
-                    'The provided certificate is not a valid CA certificate; '
-                    'it does not contain a Basic Constraints extension.'
-                )
-            ) from e
-        if not bc_extension.value.ca:
-            raise ValidationError(
-                _(
-                    'The provided certificate is not a valid CA certificate; '
-                    'it is an End Entity certificate.'
-                )
-            )
+        cls._validate_ca_certificate(ca_cert)
+        cls._validate_ca_type(ca_type)
 
-        ca_types = (
-            cls.CaTypeChoice.AUTOGEN_ROOT,
-            cls.CaTypeChoice.AUTOGEN,
-            cls.CaTypeChoice.LOCAL_UNPROTECTED,
-            cls.CaTypeChoice.LOCAL_PKCS11,
-            cls.CaTypeChoice.REMOTE_ISSUING_EST,
-            cls.CaTypeChoice.REMOTE_ISSUING_CMP,
-        )
-        if ca_type not in ca_types:
-            exc_msg = f'CA Type {ca_type} is not supported for issuing CAs.'
-            raise ValueError(exc_msg)
+        if unique_name is None:
+            unique_name = cls._generate_unique_name(ca_cert)
 
         credential_model = CredentialModel.save_credential_serializer(
             credential_serializer=credential_serializer, credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA
@@ -555,19 +619,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         )
         issuing_ca.save()
 
-        chain = issuing_ca.get_hierarchy_path()
-        cert_models = [ca.ca_certificate_model for ca in chain]
-        truststore = TruststoreModel.objects.create(
-            unique_name=f'{unique_name}_chain',
-            intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN,
-        )
-        for idx, cert in enumerate(cert_models):
-            if cert:  # Only add non-None certificates
-                TruststoreOrderModel.objects.create(
-                    order=idx,
-                    certificate=cert,
-                    trust_store=truststore
-                )
+        truststore = cls._create_chain_truststore(issuing_ca)
         issuing_ca.chain_truststore = truststore
         issuing_ca.save(update_fields=['chain_truststore'])
 

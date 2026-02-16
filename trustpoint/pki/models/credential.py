@@ -864,7 +864,7 @@ class PrimaryCredentialCertificate(models.Model):
     """
 
     credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE)
-    certificate = models.OneToOneField(CertificateModel, on_delete=models.CASCADE)
+    certificate = models.ForeignKey(CertificateModel, on_delete=models.CASCADE)
     is_primary = models.BooleanField(default=False)
 
     def __repr__(self) -> str:

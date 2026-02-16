@@ -42,6 +42,8 @@ from trustpoint.page_context import (
 if TYPE_CHECKING:
     from typing import Any
 
+    from pki.models import CaModel
+
 
 # --------------------------------------------------- Base Classes ----------------------------------------------------
 
@@ -882,6 +884,63 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             ],
         )
 
+    def _build_ca_hierarchy_html(self, ca_chain: list[CaModel]) -> tuple[str, bool]:
+        """Build HTML representation of CA hierarchy and check for missing CRLs.
+
+        Args:
+            ca_chain: List of CA models in reverse order.
+
+        Returns:
+            Tuple of (hierarchy_html, has_missing_crl).
+        """
+        hierarchy_html = (
+            '<div style="font-family: monospace;">'
+            '<strong>Certificate Authority Hierarchy:</strong><br>'
+        )
+
+        has_missing_crl = False
+        for idx, ca in enumerate(ca_chain):
+            try:
+                if not ca.ca_certificate_model:
+                    continue
+                cert_serializer = ca.ca_certificate_model.get_certificate_serializer()
+                cert_crypto = cert_serializer.as_crypto()
+
+                common_name = cert_crypto.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
+                if common_name:
+                    value = common_name[0].value
+                    cn_value = value.decode('utf-8') if isinstance(value, bytes) else value
+                else:
+                    cn_value = ca.unique_name
+
+                crl_status = 'MISSING'
+                crl_link = ''
+                if ca.crl_pem:
+                    try:
+                        x509.load_pem_x509_crl(ca.crl_pem.encode())
+                        active_crl = ca.get_active_crl()
+                        if active_crl:
+                            crl_detail_url = reverse('pki:crl-detail', kwargs={'pk': active_crl.pk})
+                            crl_link = f'<a href="{crl_detail_url}" target="_blank">CRL</a> '
+                        crl_status = 'OK'
+                    except (ValueError, TypeError):
+                        crl_status = 'INVALID'
+                else:
+                    has_missing_crl = True
+
+                ca_detail_url = reverse('pki:issuing_cas-detail', kwargs={'pk': ca.pk})
+                indent = '&nbsp;' * (idx * 4)
+                hierarchy_html += (
+                    f'{indent}└─ <a href="{ca_detail_url}" target="_blank">{cn_value}</a> '
+                    f'[{crl_link}{crl_status}]<br>'
+                )
+
+            except (ValueError, TypeError, AttributeError):
+                continue
+
+        hierarchy_html += '</div>'
+        return hierarchy_html, has_missing_crl
+
     def _build_ca_hierarchy_section(self, device: DeviceModel) -> HelpSection:
         """Build the CA hierarchy section with certificate chain information."""
         if not (device.domain and device.domain.issuing_ca):
@@ -900,54 +959,10 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             ca_chain = device.domain.issuing_ca.get_ca_chain_from_truststore()
             ca_chain = list(reversed(ca_chain))
 
-            hierarchy_html = (
-                '<div style="font-family: monospace;">'
-                '<strong>Certificate Authority Hierarchy:</strong><br>'
-            )
-
-            has_missing_crl = False
-            for idx, ca in enumerate(ca_chain):
-                try:
-                    if not ca.ca_certificate_model:
-                        continue
-                    cert_serializer = ca.ca_certificate_model.get_certificate_serializer()
-                    cert_crypto = cert_serializer.as_crypto()
-
-                    common_name = cert_crypto.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
-                    if common_name:
-                        value = common_name[0].value
-                        cn_value = value.decode('utf-8') if isinstance(value, bytes) else value
-                    else:
-                        cn_value = ca.unique_name
-
-                    crl_status = 'MISSING'
-                    crl_link = ''
-                    if ca.crl_pem:
-                        try:
-                            x509.load_pem_x509_crl(ca.crl_pem.encode())
-                            active_crl = ca.get_active_crl()
-                            if active_crl:
-                                crl_detail_url = reverse('pki:crl-detail', kwargs={'pk': active_crl.pk})
-                                crl_link = f'<a href="{crl_detail_url}" target="_blank">CRL</a> '
-                            crl_status = 'OK'
-                        except (ValueError, TypeError):
-                            crl_status = 'INVALID'
-                    else:
-                        has_missing_crl = True
-
-                    ca_detail_url = reverse('pki:issuing_cas-detail', kwargs={'pk': ca.pk})
-                    indent = '&nbsp;' * (idx * 4)
-                    hierarchy_html += (
-                        f'{indent}└─ <a href="{ca_detail_url}" target="_blank">{cn_value}</a> '
-                        f'[{crl_link}{crl_status}]<br>'
-                    )
-
-                except (ValueError, TypeError, AttributeError):
-                    continue
-
-            hierarchy_html += '</div>'
+            hierarchy_html, has_missing_crl = self._build_ca_hierarchy_html(ca_chain)
 
             rows = [
+
                 HelpRow(
                     _non_lazy('Certificate Chain'),
                     hierarchy_html,

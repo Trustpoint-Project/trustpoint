@@ -66,7 +66,7 @@ from trustpoint.views.base import (
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
-    from django.forms import Form
+    from django.forms import ChoiceField, Form
     from django.http import HttpRequest
     from rest_framework.request import Request
 
