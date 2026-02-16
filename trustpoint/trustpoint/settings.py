@@ -285,7 +285,6 @@ INSTALLED_APPS = [
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
     INSTALLED_APPS.append('django_extensions')
     INSTALLED_APPS.append('behave_django')
-    TEST_RUNNER = 'django_behave.runner.DjangoBehaveTestSuiteRunner'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',

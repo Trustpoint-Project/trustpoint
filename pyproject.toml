@@ -13,7 +13,6 @@ dependencies = [
     "crispy-bootstrap5~=2025.4",
     "cryptography>=46.0.1",
     "django>=6.0.2,<7",
-    "django-behave>=0.1.6",
     "django-crispy-forms~=2.3",
     "django-dbbackup>=5.0.0",
     "django-filter~=25.1",
@@ -36,7 +35,7 @@ dependencies = [
     "trustpoint-core==0.3.0",
     "types-paramiko>=3.5.0.20250516",
     "zeroconf>=0.148,<0.149",
-    "asyncua>=1.1.5"
+    "asyncua>=1.1.5",
 ]
 
 [dependency-groups]
