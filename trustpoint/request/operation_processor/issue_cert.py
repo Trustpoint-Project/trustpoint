@@ -45,7 +45,7 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
         if context.domain and context.domain.issuing_ca:
             issuing_ca = context.domain.issuing_ca
 
-            # Remote Issuing CAs - handle direct issuance via remote CA
+            # Remote Issuing CAs
             if issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
                 processor: (
                     LocalCaCertificateIssueProcessor | RemoteCaCertificateIssueProcessor
@@ -61,7 +61,7 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
             if issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA:
                 processor = RemoteCaCertificateIssueProcessor(ca_type='cmp')
                 return processor.process_operation(context)
-            # Local CAs (including keyless and RA CAs that have credentials)
+            # Local CAs
             processor = LocalCaCertificateIssueProcessor()
             return processor.process_operation(context)
 
