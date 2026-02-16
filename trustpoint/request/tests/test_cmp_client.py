@@ -4,9 +4,6 @@ from unittest.mock import Mock, patch
 
 import pytest
 from cryptography import x509
-from pyasn1.codec.der import encoder
-from pyasn1.type import tag, univ
-from pyasn1_modules import rfc4210
 
 from request.clients.cmp_client import CmpClient, CmpClientError
 from request.request_context import CmpBaseRequestContext
