@@ -15,7 +15,7 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db import connection
 from django.db.models import ProtectedError
-from django.http import HttpRequest, HttpResponse, HttpResponseBase, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
@@ -117,61 +117,139 @@ def execute_shell_script(script: Path, *args: str) -> None:
         raise subprocess.CalledProcessError(result.returncode, str(script_path))
 
 
-class StartupWizardRedirect:
-    """Handles redirection logic based on the current state of the setup wizard.
+class SetupWizardInitialView(LoggerMixin, TemplateView):
+    """Initial wizard: Fresh Install vs. Restore Backup."""
 
-    This class provides a static method for determining the appropriate redirection
-    URL based on the wizard's state, ensuring users are guided through the setup process.
-    """
+    http_method_names = ('get',)
+    template_name = 'setup_wizard/setup_mode.html'
 
-    @staticmethod
-    def redirect_by_state(wizard_state: SetupWizardState) -> HttpResponseRedirect:
-        """Redirects the user to the appropriate setup wizard page based on the current state.
+    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests for the setup mode wizard page.
+
+        This method validates the current state of the setup wizard and redirects
+        the user to the appropriate page. If the application is not running in a
+        Docker container, the user is redirected to the login page.
 
         Args:
-            wizard_state (SetupWizardState): The current state of the setup wizard.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
 
         Returns:
-            HttpResponseRedirect: A redirection response to the appropriate page.
-
-        Raises:
-            ValueError: If the wizard state is unrecognized or invalid.
+            HttpResponse: A redirect response to the appropriate setup wizard page
+                          or the login page if the setup is not in a Docker container.
         """
-        state_to_url = {
-            SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE: 'setup_wizard:crypto_storage_setup',
-            SetupWizardState.WIZARD_SETUP_HSM: 'setup_wizard:hsm_setup',
-            SetupWizardState.WIZARD_SETUP_MODE: 'setup_wizard:setup_mode',
-            SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY: 'setup_wizard:tls_server_credential_apply',
-            SetupWizardState.WIZARD_BACKUP_PASSWORD: 'setup_wizard:backup_password',
-            SetupWizardState.WIZARD_DEMO_DATA: 'setup_wizard:demo_data',
-            SetupWizardState.WIZARD_CREATE_SUPER_USER: 'setup_wizard:create_super_user',
-            SetupWizardState.WIZARD_COMPLETED: 'users:login',
-            SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE: 'setup_wizard:auto_restore_hsm_setup',
-            SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD: 'setup_wizard:auto_restore_password',
-        }
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
 
-        if wizard_state in [SetupWizardState.WIZARD_SETUP_HSM, SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE]:
-            try:
-                config = KeyStorageConfig.get_config()
-                if config.storage_type == KeyStorageConfig.StorageType.SOFTHSM:
-                    hsm_type = 'softhsm'
-                elif config.storage_type == KeyStorageConfig.StorageType.PHYSICAL_HSM:
-                    hsm_type = 'physical'
-                else:
-                    msg = 'Invalid storage type for HSM setup.'
-                    raise ValueError(msg) from None
+        return super().get(*args, **kwargs)
 
-                return redirect(state_to_url[wizard_state], hsm_type=hsm_type, permanent=False)
+class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User]]):
+    """View for handling the creation of a superuser during the setup wizard.
 
-            except KeyStorageConfig.DoesNotExist:
-                msg = 'KeyStorageConfig is not configured.'
-                raise ValueError(msg) from None
+    This view is part of the setup wizard process. It allows an admin to create a
+    superuser account, ensuring that the application has at least one administrative
+    user configured. The view validates the input using the `UserCreationForm`
+    and transitions the wizard state upon successful completion.
+    """
 
-        if wizard_state in state_to_url:
-            return redirect(state_to_url[wizard_state], permanent=False)
+    http_method_names = ('get', 'post')
+    form_class: type[UserCreationForm[User]] = UserCreationForm
+    template_name = 'setup_wizard/create_super_user.html'
+    success_url = reverse_lazy('users:login')
 
-        err_msg = 'Unknown wizard state found. Failed to redirect by state.'
-        raise ValueError(err_msg) from None
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
+        """Handle request dispatch and wizard state validation."""
+        if not DOCKER_CONTAINER:
+            return redirect('users:login', permanent=False)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
+        """Handle form submission for creating a superuser.
+
+        Args:
+            form: The form containing the data for the superuser creation.
+
+        Returns:
+            HttpResponseRedirect: Redirect to the next step or login page.
+        """
+        try:
+            username = form.cleaned_data['username']
+            password = form.cleaned_data['password1']
+            call_command('createsuperuser', interactive=False, username=username, email='')
+
+            user = User.objects.get(username=username)
+            user.set_password(password)
+            user.save()
+            messages.add_message(self.request, messages.SUCCESS, 'Successfully created super-user.')
+
+        except User.DoesNotExist as e:
+            messages.add_message(self.request, messages.ERROR, f'User not found error: {e}')
+            return redirect('setup_wizard:create_super_user', permanent=False)
+        except Exception:
+            err_msg = 'An unexpected error occurred.'
+            messages.add_message(self.request, messages.ERROR, err_msg)
+            self.logger.exception(err_msg)
+            return redirect('setup_wizard:create_super_user', permanent=False)
+
+        return super().form_valid(form)
+
+
+# class StartupWizardRedirect:
+#     """Handles redirection logic based on the current state of the setup wizard.
+
+#     This class provides a static method for determining the appropriate redirection
+#     URL based on the wizard's state, ensuring users are guided through the setup process.
+#     """
+
+#     @staticmethod
+#     def redirect_by_state(wizard_state: SetupWizardState) -> HttpResponseRedirect:
+#         """Redirects the user to the appropriate setup wizard page based on the current state.
+
+#         Args:
+#             wizard_state (SetupWizardState): The current state of the setup wizard.
+
+#         Returns:
+#             HttpResponseRedirect: A redirection response to the appropriate page.
+
+#         Raises:
+#             ValueError: If the wizard state is unrecognized or invalid.
+#         """
+#         state_to_url = {
+#             SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE: 'setup_wizard:crypto_storage_setup',
+#             SetupWizardState.WIZARD_SETUP_HSM: 'setup_wizard:hsm_setup',
+#             SetupWizardState.WIZARD_SETUP_MODE: 'setup_wizard:setup_mode',
+#             SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY: 'setup_wizard:tls_server_credential_apply',
+#             SetupWizardState.WIZARD_BACKUP_PASSWORD: 'setup_wizard:backup_password',
+#             SetupWizardState.WIZARD_DEMO_DATA: 'setup_wizard:demo_data',
+#             SetupWizardState.WIZARD_CREATE_SUPER_USER: 'setup_wizard:create_super_user',
+#             SetupWizardState.WIZARD_COMPLETED: 'users:login',
+#             SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE: 'setup_wizard:auto_restore_hsm_setup',
+#             SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD: 'setup_wizard:auto_restore_password',
+#         }
+
+#         if wizard_state in [SetupWizardState.WIZARD_SETUP_HSM, SetupWizardState.WIZARD_SETUP_HSM_AUTORESTORE]:
+#             try:
+#                 config = KeyStorageConfig.get_config()
+#                 if config.storage_type == KeyStorageConfig.StorageType.SOFTHSM:
+#                     hsm_type = 'softhsm'
+#                 elif config.storage_type == KeyStorageConfig.StorageType.PHYSICAL_HSM:
+#                     hsm_type = 'physical'
+#                 else:
+#                     msg = 'Invalid storage type for HSM setup.'
+#                     raise ValueError(msg) from None
+
+#                 return redirect(state_to_url[wizard_state], hsm_type=hsm_type, permanent=False)
+
+#             except KeyStorageConfig.DoesNotExist:
+#                 msg = 'KeyStorageConfig is not configured.'
+#                 raise ValueError(msg) from None
+
+#         if wizard_state in state_to_url:
+#             return redirect(state_to_url[wizard_state], permanent=False)
+
+#         err_msg = 'Unknown wizard state found. Failed to redirect by state.'
+#         raise ValueError(err_msg) from None
 
 
 class HsmSetupMixin(LoggerMixin):
@@ -367,8 +445,6 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -459,8 +535,6 @@ class SetupWizardHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != self.get_expected_wizard_state():
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         hsm_type = kwargs.get('hsm_type')
         if hsm_type not in ['softhsm', 'physical']:
@@ -564,8 +638,6 @@ class SetupWizardSetupModeView(TemplateView):
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().get(*args, **kwargs)
 
@@ -588,7 +660,6 @@ class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView[EmptyForm])
                 wizard_state,
                 SetupWizardState.WIZARD_SETUP_MODE,
             )
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -651,8 +722,6 @@ class SetupWizardRestoreOptionsView(TemplateView):
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().get(*args, **kwargs)
 
@@ -681,7 +750,6 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
                 wizard_state,
                 SetupWizardState.WIZARD_BACKUP_PASSWORD,
             )
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -954,8 +1022,6 @@ class AutoRestoreHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != self.get_expected_wizard_state():
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         hsm_type = kwargs.get('hsm_type')
         if hsm_type not in ['softhsm', 'physical']:
@@ -1146,8 +1212,6 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_AUTO_RESTORE_PASSWORD:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -1345,8 +1409,6 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -1439,8 +1501,6 @@ class SetupWizardImportTlsServerCredentialMethodSelectView(TemplateView):
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -1469,8 +1529,6 @@ class SetupWizardImportTlsServerCredentialPkcs12View(LoggerMixin, FormView[TlsAd
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -1579,8 +1637,6 @@ class SetupWizardImportTlsServerCredentialSeparateFilesView(
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -1704,10 +1760,6 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
         if not DOCKER_CONTAINER:
             return redirect('users:login', permanent=False)
 
-        wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
-
         file_format = self.kwargs.get('file_format')
         if file_format:
             return self._generate_trust_store_response(file_format)
@@ -1728,8 +1780,6 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().post(*args, **kwargs)
 
@@ -1940,8 +1990,6 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return self._clear_credential_and_certificate_data_and_execute(request)
 
@@ -2025,8 +2073,6 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
             return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_DEMO_DATA:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().dispatch(request, *args, **kwargs)
 
@@ -2110,87 +2156,3 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
         }
         return error_messages.get(return_code, 'An unknown error occurred while executing the demo data script.')
 
-class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User]]):
-    """View for handling the creation of a superuser during the setup wizard.
-
-    This view is part of the setup wizard process. It allows an admin to create a
-    superuser account, ensuring that the application has at least one administrative
-    user configured. The view validates the input using the `UserCreationForm`
-    and transitions the wizard state upon successful completion.
-    """
-
-    http_method_names = ('get', 'post')
-    form_class: type[UserCreationForm[User]] = UserCreationForm
-    template_name = 'setup_wizard/create_super_user.html'
-    success_url = reverse_lazy('users:login')
-
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Handle request dispatch and wizard state validation."""
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_CREATE_SUPER_USER:
-            return StartupWizardRedirect.redirect_by_state(wizard_state)
-
-        return super().dispatch(request, *args, **kwargs)
-
-    def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
-        """Handle form submission for creating a superuser.
-
-        Args:
-            form: The form containing the data for the superuser creation.
-
-        Returns:
-            HttpResponseRedirect: Redirect to the next step or login page.
-        """
-        try:
-            username = form.cleaned_data['username']
-            password = form.cleaned_data['password1']
-            call_command('createsuperuser', interactive=False, username=username, email='')
-
-            user = User.objects.get(username=username)
-            user.set_password(password)
-            user.save()
-            messages.add_message(self.request, messages.SUCCESS, 'Successfully created super-user.')
-
-            execute_shell_script(SCRIPT_WIZARD_CREATE_SUPER_USER)
-        except User.DoesNotExist as e:
-            messages.add_message(self.request, messages.ERROR, f'User not found error: {e}')
-            return redirect('setup_wizard:create_super_user', permanent=False)
-        except subprocess.CalledProcessError as e:
-            messages.add_message(
-                self.request,
-                messages.ERROR,
-                f'Create superuser script failed with exit code {e.returncode}: '
-                f'{self._map_exit_code_to_message(e.returncode)}',
-            )
-            return redirect('setup_wizard:create_super_user', permanent=False)
-        except FileNotFoundError:
-            err_msg = f'Create superuser script not found: {SCRIPT_WIZARD_CREATE_SUPER_USER}'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('setup_wizard:create_super_user', permanent=False)
-        except ValueError:
-            err_msg = 'Value error occurred.'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('setup_wizard:create_super_user', permanent=False)
-        except Exception:
-            err_msg = 'An unexpected error occurred.'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('setup_wizard:create_super_user', permanent=False)
-
-        return super().form_valid(form)
-
-    @staticmethod
-    def _map_exit_code_to_message(return_code: int) -> str:
-        """Map script exit codes to meaningful error messages."""
-        error_messages = {
-            1: 'Trustpoint is not in the WIZARD_CREATE_SUPER_USER state.',
-            2: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
-            3: 'Failed to remove the WIZARD_CREATE_SUPER_USER state file.',
-            4: 'Failed to create the WIZARD_COMPLETED state file.',
-        }
-        return error_messages.get(return_code, 'An unknown error occurred while executing the create superuser script.')

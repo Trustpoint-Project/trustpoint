@@ -74,8 +74,8 @@ LOG_FILE_PATH = LOG_DIR_PATH / Path('trustpoint.log')
 
 BACKUP_FILE_PATH = MEDIA_ROOT / Path('backups')
 
+# Allows all paths that start with:
 PUBLIC_PATHS = [
-    '/setup-wizard',
     '/.well-known/cmp',
     '/.well-known/est',
     '/aoki',
