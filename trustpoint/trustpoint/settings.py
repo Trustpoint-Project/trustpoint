@@ -268,6 +268,7 @@ INSTALLED_APPS = [
     'management.apps.ManagementConfig',
     'notifications.apps.NotificationsConfig',
     'trustpoint_core',
+    'discovery',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
