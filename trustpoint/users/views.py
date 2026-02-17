@@ -8,7 +8,6 @@ from django.contrib import messages
 from django.contrib.auth.views import LoginView
 
 from setup_wizard import SetupWizardState
-from setup_wizard.views import StartupWizardRedirect
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
@@ -36,14 +35,9 @@ class TrustpointLoginView(LoginView):
         for _ in messages.get_messages(self.request):
             pass
 
-        if not DOCKER_CONTAINER:
-            return super().get(request, *args, **kwargs)
+        # if not DOCKER_CONTAINER:
+        return super().get(request, *args, **kwargs)
 
-        wizard_state = SetupWizardState.get_current_state()
-        if wizard_state == SetupWizardState.WIZARD_COMPLETED:
-            return super().get(request, *args, **kwargs)
-
-        return StartupWizardRedirect.redirect_by_state(wizard_state)
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Redirects to the appropriate startup wizard section if the setup wizard is not completed.
@@ -59,11 +53,11 @@ class TrustpointLoginView(LoginView):
         for _ in messages.get_messages(self.request):
             pass
 
-        if not DOCKER_CONTAINER:
-            return super().post(request, *args, **kwargs)
+        # if not DOCKER_CONTAINER:
+        return super().post(request, *args, **kwargs)
 
-        wizard_state = SetupWizardState.get_current_state()
-        if wizard_state == SetupWizardState.WIZARD_COMPLETED:
-            return super().post(request, *args, **kwargs)
+        # wizard_state = SetupWizardState.get_current_state()
+        # if wizard_state == SetupWizardState.WIZARD_COMPLETED:
+        #     return super().post(request, *args, **kwargs)
 
-        return StartupWizardRedirect.redirect_by_state(wizard_state)
+        # return StartupWizardRedirect.redirect_by_state(wizard_state)
