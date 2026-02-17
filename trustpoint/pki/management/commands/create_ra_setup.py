@@ -250,6 +250,17 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             self.log_and_stdout('Issuing CA certificate not found for EST RA.', level='error')
             raise ValueError('CA certificate required for EST RA')
 
+        # Create a truststore for the remote CA's chain
+        ca_chain_truststore, created = TruststoreModel.objects.get_or_create(
+            unique_name=f'{ra_name}-ca-chain-truststore',
+            defaults={'intended_usage': TruststoreModel.IntendedUsage.TLS}
+        )
+        
+        # Add the issuing CA certificate to the chain truststore
+        if created or not ca_chain_truststore.certificates.filter(pk=issuing_ca_cert.pk).exists():
+            ca_chain_truststore.certificates.add(issuing_ca_cert, through_defaults={'order': 0})
+            self.log_and_stdout(f'Created/updated CA chain truststore for "{ra_name}".')
+
         # Build the remote EST path pointing to the issuing CA's domain-specific endpoint
         remote_est_path = f'/.well-known/est/{issuing_ca_domain.unique_name}/tls_server/simpleenroll'
 
@@ -266,7 +277,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
             remote_path=remote_est_path,
             est_username=issuing_ca_device.common_name,
             certificate=issuing_ca_cert,
-            chain_truststore=tls_truststore,
+            chain_truststore=ca_chain_truststore,
         )
         # RAs don't need a credential (they're not issuers)
         # but they need onboarding config for EST authentication

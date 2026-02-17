@@ -106,6 +106,8 @@
                         </div>
                     </div>
 
+                    {% include 'pki/issuing_cas/includes/remote_ca_config.html' %}
+
                     <h3>
                         {% if issuing_ca.ca_certificate_model %}
                             {% if issuing_ca.ca_certificate_model.subject_public_bytes == issuing_ca.ca_certificate_model.issuer_public_bytes %}
