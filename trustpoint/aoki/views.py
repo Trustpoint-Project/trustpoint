@@ -81,8 +81,7 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
             return LoggedHttpResponse(
                 'IDevID authentication failed.', status = 403
             )
-        except IDevIDAuthenticationError as e:
-            return LoggedHttpResponse(f'IDevID authentication failed: {e}', status=403)
+
 
         owner_cred = self.get_owner_credential(client_cert)
         if not owner_cred:
