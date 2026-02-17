@@ -13,17 +13,7 @@ from pki.models.certificate import CertificateModel
 
 # Project imports
 from pki.tests import (
-    COMMON_NAME,
-    COUNTRY_NAME,
-    DNS_NAME_VALUE,
-    IP_ADDRESS_VALUE,
-    KEY_USAGE_FLAGS,
-    ORGANIZATION_NAME,
-    OTHER_NAME_CONTENT,
-    OTHER_NAME_OID,
-    REGISTERED_ID_OID,
-    RFC822_EMAIL,
-    URI_VALUE,
+    COMMON_NAME
 )
 from pki.tests.fixtures import self_signed_cert_basic
 

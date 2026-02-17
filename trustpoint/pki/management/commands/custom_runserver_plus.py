@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from typing import Callable
 
 from django_extensions.management.commands.runserver_plus import Command as RunServerPlusCommand
 from pki.models import CredentialModel
