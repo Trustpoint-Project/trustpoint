@@ -54,7 +54,7 @@ if BUILD_AUTODOCS:
     extensions.extend(autodoc_extensions)
     autoapi_dirs = [
         '../../trustpoint',
-    ]  
+    ]
     autodoc_typehints = 'description'  # Display type hints in descriptions
     autoapi_ignore_patterns = [
         '*features*',
