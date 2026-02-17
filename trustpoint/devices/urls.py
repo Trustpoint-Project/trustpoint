@@ -139,18 +139,18 @@ urlpatterns = [
     path(
         (
             'certificate-lifecycle-management/<int:pk>'
-            '/no-onboarding/issue-application-credential/manual/issue-tls-client-credential/'
+            '/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/'
         ),
-        views.DeviceIssueTlsClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_client_credential',
+        views.DeviceIssueProfileCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_profile_credential',
     ),
     path(
         (
             'opc-ua-gds/certificate-lifecycle-management/<int:pk>'
-            '/no-onboarding/issue-application-credential/manual/issue-tls-client-credential/'
+            '/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/'
         ),
-        views.OpcUaGdsIssueTlsClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_client_credential',
+        views.OpcUaGdsIssueProfileCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_profile_credential',
     ),
     path(
         (

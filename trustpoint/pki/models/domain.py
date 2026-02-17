@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import TYPE_CHECKING
 
 from django.core.exceptions import ValidationError
@@ -241,3 +242,31 @@ class DomainAllowedCertificateProfileModel(models.Model):
             name_str += f' (alias: {self.alias})'
         return name_str
 
+    @staticmethod
+    def get_list_of_display_names(allowed_profiles: list[DomainAllowedCertificateProfileModel]
+                               ) -> list[tuple[int, str, str]]:
+        """Get display names for the allowed certificate profiles, ensuring uniqueness.
+
+        Returns a list of tuples containing (profile_id, display_name, unique_name). If multiple profiles share the same
+        display name, the unique name will be appended to the display name for disambiguation.
+        """
+        display_names = [
+            profile.certificate_profile.display_name
+            for profile in allowed_profiles
+            if profile.certificate_profile.display_name
+        ]
+        display_name_counts = Counter(display_names)
+        profile_list = []
+
+        for profile in allowed_profiles:
+            name = profile.alias or profile.certificate_profile.unique_name
+            display_name = profile.certificate_profile.display_name
+
+            if display_name and display_name_counts.get(display_name, 0) > 1:
+                title = f'{display_name} - {profile.certificate_profile.unique_name}'
+            else:
+                title = display_name or name
+
+            profile_list.append((profile.certificate_profile.id, title, name))
+
+        return profile_list

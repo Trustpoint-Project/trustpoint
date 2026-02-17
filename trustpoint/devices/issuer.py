@@ -449,6 +449,264 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
             return certificate
 
 
+class BaseProfileCredentialIssuer(SaveCredentialToDbMixin):
+    """Base class for issuing TLS credentials.
+
+    This class provides common functionality for creating and saving TLS certificates
+    and key pairs for different use cases, including TLS client, server, domain, and
+    OPC UA credentials.
+    """
+
+    _pseudonym: str
+    _device: DeviceModel
+    _domain: DomainModel
+
+    _credential: None | CredentialSerializer = None
+    _credential_model: None | CredentialModel = None
+    _issued_application_credential_model: None | IssuedCredentialModel = None
+
+    def __init__(self, device: DeviceModel, domain: DomainModel) -> None:
+        """Initializes the TLS Credential Issuer.
+
+        Args:
+            device: The device for which the credential is issued.
+            domain: The domain associated with the credential.
+        """
+        self._device = device
+        self._domain = domain
+
+    @property
+    def device(self) -> DeviceModel:
+        """Gets the device associated with this credential issuer.
+
+        Returns:
+            DeviceModel: The device linked to the issued credential.
+        """
+        return self._device
+
+    @property
+    def domain(self) -> DomainModel:
+        """Gets the domain associated with this credential issuer.
+
+        Returns:
+            DomainModel: The domain linked to the issued credential.
+        """
+        return self._domain
+
+    @property
+    def serial_number(self) -> str:
+        """Gets the serial number of the associated device.
+
+        Returns:
+            str: The serial number of the device.
+        """
+        return self.device.serial_number
+
+    @property
+    def domain_component(self) -> str:
+        """Gets the unique name of the domain component.
+
+        Returns:
+            str: The unique name of the domain.
+        """
+        return self.domain.unique_name
+
+    @property
+    def pseudonym(self) -> str:
+        """Gets the pseudonym associated with this issuer.
+
+        Returns:
+            str: The predefined pseudonym for the credential issuer.
+        """
+        return self._pseudonym
+
+    @classmethod
+    def get_fixed_values(cls, device: DeviceModel, domain: DomainModel) -> dict[str, str]:
+        """Retrieves a dictionary of fixed values related to the device and domain.
+
+        Args:
+            device: The device for which credentials are issued.
+            domain: The domain associated with the credentials.
+
+        Returns:
+            A dictionary containing the pseudonym, domain component,
+            and serial number of the device.
+        """
+        return {
+            'pseudonym': cls._pseudonym,
+            'domain_component': domain.unique_name,
+            'serial_number': device.serial_number,
+        }
+
+    def _raise_value_error(self, message: str) -> None:
+        """Raises a ValueError with the given message.
+
+        Args:
+            message: The error message to include in the exception.
+
+        Raises:
+            ValueError: Always raised with the provided message.
+        """
+        raise ValueError(message)
+
+    def _raise_type_error(self, message: str) -> None:
+        """Raises a TypeError with the given message.
+
+        Args:
+            message: The error message to include in the exception.
+
+        Raises:
+            TypeError: Always raised with the provided message.
+        """
+        raise TypeError(message)
+
+    def _build_certificate(
+        self,
+        certificate_builder: x509.CertificateBuilder,
+        public_key: PublicKey,
+    ) -> x509.Certificate:
+        """Builds an X.509 certificate with the specified parameters.
+
+        Args:
+            certificate_builder: The X.509 certificate builder instance.
+            public_key: The public key associated with the certificate.
+            validity_days: The number of days the certificate should be valid.
+            extra_extensions: Additional extensions to be added.
+
+        Returns:
+            The generated X.509 certificate.
+        """
+        self.logger.info(
+            "Building profile certificate for device: '%s' (ID: %s)",
+            self.device.common_name,
+            self.device.pk
+        )
+        try:
+            issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+            issuer_certificate = issuing_credential.get_certificate()
+            algorithm_identifier = SignatureSuite.from_certificate(
+                issuer_certificate
+            ).algorithm_identifier
+            hash_algorithm_enum = algorithm_identifier.hash_algorithm
+            if hash_algorithm_enum is None:
+                err_msg = 'Failed to get hash algorithm.'
+                self._raise_value_error(err_msg)
+            hash_algorithm = hash_algorithm_enum.hash_algorithm()  # type: ignore[union-attr]
+
+            if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
+                err_msg = (
+                    f'The hash algorithm must be one of {AllowedCertSignHashAlgos}, '
+                    f'but found {type(hash_algorithm)}'
+                )
+                self._raise_type_error(err_msg)
+
+            allowed_hash_algorithm: AllowedCertSignHashAlgos = hash_algorithm  # type: ignore[assignment]
+
+            certificate_builder = certificate_builder.issuer_name(
+                issuing_credential.get_certificate().subject
+            )
+
+            certificate_builder = certificate_builder.serial_number(x509.random_serial_number())
+            certificate_builder = certificate_builder.public_key(public_key)
+
+            certificate = certificate_builder.sign(
+                private_key=issuing_credential.get_private_key_serializer().as_crypto(),
+                algorithm=allowed_hash_algorithm,
+            )
+
+        except Exception:
+            self.logger.exception(
+                "Failed to build certificate for device: '%s' (ID: %s)",
+                self.device.common_name,
+                self.device.pk
+            )
+            raise
+        else:
+            self.logger.info(
+                "Successfully built certificate for device: '%s' (ID: %s)'",
+                self.device.common_name,
+                self.device.pk
+            )
+            return certificate
+
+
+class LocalProfileCredentialIssuer(BaseProfileCredentialIssuer):
+    """Handles issuing profile credentials."""
+
+    _pseudonym = 'Trustpoint Application Credential - Certificate Profile'
+
+    def issue_profile_credential(self, cert_builder: x509.CertificateBuilder) -> IssuedCredentialModel:
+        """Issues a profile credential.
+
+        Args:
+            cert_builder: The certificate builder for the profile certificate.
+
+            public_key: The public key to be included in the certificate.
+
+        Returns:
+            The issued credential model.
+        """
+        private_key = KeyGenerator.generate_private_key(domain=self.domain)
+        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+
+        certificate = self._build_certificate(
+            cert_builder,
+            private_key.public_key_serializer.as_crypto(),
+        )
+        credential = CredentialSerializer(
+            private_key=private_key.as_crypto(),
+            certificate=certificate,
+            additional_certificates=[
+                issuing_credential.get_certificate(),
+                *issuing_credential.get_certificate_chain(),
+            ],
+        )
+        return self._save(
+            credential,
+            'Profile Credential', # Temp
+            IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+            'TLS Client',
+        )
+
+    def issue_tls_client_certificate(
+        self, common_name: str, validity_days: int, public_key: PublicKey
+    ) -> IssuedCredentialModel:
+        """Issues a TLS client certificate without a private key.
+
+        Args:
+            common_name: Certificate common name.
+            validity_days: Certificate validity period.
+            public_key: Public key for the certificate.
+
+        Returns:
+            The issued TLS client certificate.
+        """
+        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+
+        san_uri = re.sub(r'[^a-zA-Z0-9_.-]', '', common_name) + '.alt'
+        certificate = self._build_certificate(
+            common_name,
+            public_key,
+            validity_days,
+            [
+                (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
+                # TODO (Air): This is a workaround for cryptography < 45.0.0 requiring # noqa: FIX002
+                #  a SAN to verify the certificate.
+                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(san_uri)]), False),
+            ],
+        )
+        return self._save_keyless_credential(
+            certificate,
+            [
+                issuing_credential.get_certificate(),
+                *issuing_credential.get_certificate_chain(),
+            ],
+            common_name,
+            IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
+            'TLS Client',
+        )
+
+
 class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
     """Handles issuing TLS client credentials."""
 
