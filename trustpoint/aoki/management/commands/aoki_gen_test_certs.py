@@ -75,7 +75,7 @@ class AokiTestCertGenerator:
         # Generate the IDevID test cert
         idevid_cert, idevid_key = CertificateGenerator.create_ee(
             issuer_private_key=root_ca_key,
-            issuer_cn='IDevID_Test_Root_CA',
+            issuer_name=root_ca_cert.subject,
             subject_name=x509.Name(
                 [
                     x509.NameAttribute(x509.NameOID.COMMON_NAME, 'IDevID_Test'),
@@ -109,7 +109,7 @@ class AokiTestCertGenerator:
         print(f'DeviceOwnerID SAN URI: {idevid_san_uri}')
         ownerid_cert, ownerid_key = CertificateGenerator.create_ee(
             issuer_private_key=owner_ca_key,
-            issuer_cn='Owner_Test_Root_CA',
+            issuer_name=owner_ca_cert.subject,
             subject_name=x509.Name(
                 [
                     x509.NameAttribute(x509.NameOID.COMMON_NAME, 'DevOwnerID_Test'),

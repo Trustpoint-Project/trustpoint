@@ -3,7 +3,6 @@
 import datetime
 from typing import Any
 
-import pytest
 from cryptography import x509
 from django.utils import timezone
 from trustpoint_core import oid

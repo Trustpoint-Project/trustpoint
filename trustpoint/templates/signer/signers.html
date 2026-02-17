@@ -80,7 +80,9 @@ document.addEventListener('DOMContentLoaded', function() {
     bulkDeleteBtn.addEventListener('click', function() {
         const selectedIds = Array.from(checkboxes)
             .filter(cb => cb.checked)
-            .map(cb => cb.value);
+            .map(cb => cb.value)
+            .filter(value => /^\d+$/.test(value))
+            .map(value => parseInt(value));
         
         if (selectedIds.length > 0) {
             const pksPath = selectedIds.join('/') + '/';

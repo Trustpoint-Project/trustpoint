@@ -312,7 +312,7 @@ def credential_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
     subject_cn = 'Test End-Entity Certificate'
     ee_cert, ee_private_key = CertificateGenerator.create_ee(
         issuer_private_key=issuing_ca_priv_key,
-        issuer_cn=issuing_ca_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value,
+        issuer_name=issuing_ca_cert.subject,
         subject_name=subject_cn,
         validity_days=365,
     )
@@ -483,13 +483,13 @@ def tls_client_request_with_client_cert_header(
     domain_str = domain.unique_name
     operation_str = 'simpleenroll'
     protocol_str = 'est'
-    certtemplate_str = 'tls_client'
+    cert_profile_str = 'tls_client'
 
     domaincredential_pem = domain_credential_instance.credential.certificate.cert_pem
 
     request_factory = RequestFactory()
     request = request_factory.post(
-        path=f'/.well-known/{protocol_str}/{domain_str}/{certtemplate_str}/{operation_str}',
+        path=f'/.well-known/{protocol_str}/{domain_str}/{cert_profile_str}/{operation_str}',
         data=csr.public_bytes(serialization.Encoding.DER),
         content_type='application/pkcs10',
         HTTP_SSL_CLIENT_CERT=domaincredential_pem,

@@ -9,7 +9,7 @@ from django.contrib.messages import get_messages
 from django.http import HttpResponseRedirect
 from django.test import RequestFactory, TestCase
 from django.views.generic import FormView
-from management.models import KeyStorageConfig, PKCS11Token
+from management.models import KeyStorageConfig
 
 from setup_wizard import SetupWizardState
 from setup_wizard.forms import HsmSetupForm

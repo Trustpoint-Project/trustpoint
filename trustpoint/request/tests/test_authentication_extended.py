@@ -6,8 +6,6 @@ from unittest.mock import Mock, patch
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
-from pyasn1.codec.der import decoder, encoder
-from pyasn1_modules import rfc4210
 
 from devices.models import (
     DeviceModel,
@@ -15,7 +13,6 @@ from devices.models import (
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
     OnboardingConfigModel,
-    OnboardingPkiProtocol,
 )
 from pki.util.keys import KeyGenerator
 from request.authentication import (
@@ -321,8 +318,7 @@ class TestCompositeAuthentication:
             # Update the existing config
             onboarding_config = device.onboarding_config
             # Only set password if protocol supports it
-            from devices.models import OnboardingProtocol
-
+            from onboarding.models import OnboardingProtocol
             if onboarding_config.onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
                 onboarding_config.est_password = 'onboarding-password-123'
                 onboarding_config.save()
@@ -337,8 +333,7 @@ class TestCompositeAuthentication:
                 assert context.device == device
         else:
             # Create a new onboarding config with EST_USERNAME_PASSWORD
-            from devices.models import OnboardingProtocol
-
+            from onboarding.models import OnboardingProtocol
             onboarding_config = OnboardingConfigModel()
             onboarding_config.onboarding_protocol = OnboardingProtocol.EST_USERNAME_PASSWORD
             onboarding_config.est_password = 'onboarding-password-123'

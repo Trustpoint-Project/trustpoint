@@ -1,6 +1,5 @@
 """Comprehensive tests for EST urls.py module."""
 
-import pytest
 from django.urls import resolve, reverse
 
 from est import views
@@ -22,7 +21,7 @@ class TestEstUrlPatterns:
         """Test simpleenroll default URL pattern resolution."""
         url = EST_PREFIX + 'simpleenroll'
         resolved = resolve(url)
-        assert resolved.func.view_class == views.EstSimpleEnrollmentDefaultView
+        assert resolved.func.view_class == views.EstSimpleEnrollmentView
         assert resolved.url_name == 'simple-enrollment-default'
         assert resolved.app_name == 'est'
 
@@ -30,7 +29,7 @@ class TestEstUrlPatterns:
         """Test simpleenroll default URL with trailing slash."""
         url = EST_PREFIX + 'simpleenroll/'
         resolved = resolve(url)
-        assert resolved.func.view_class == views.EstSimpleEnrollmentDefaultView
+        assert resolved.func.view_class == views.EstSimpleEnrollmentView
         assert resolved.url_name == 'simple-enrollment-default'
 
     def test_simple_enrollment_with_domain_url(self):
@@ -40,16 +39,16 @@ class TestEstUrlPatterns:
         assert resolved.func.view_class == views.EstSimpleEnrollmentView
         assert resolved.url_name == 'simple-enrollment-post'
         assert resolved.kwargs['domain'] == 'test_domain'
-        assert 'certtemplate' not in resolved.kwargs
+        assert 'cert_profile' not in resolved.kwargs
 
     def test_simple_enrollment_with_domain_and_template_url(self):
-        """Test simpleenroll URL with domain and certtemplate parameters."""
+        """Test simpleenroll URL with domain and cert_profile parameters."""
         url = EST_PREFIX + 'test_domain/tls_client/simpleenroll'
         resolved = resolve(url)
         assert resolved.func.view_class == views.EstSimpleEnrollmentView
         assert resolved.url_name == 'simple-enrollment-post'
         assert resolved.kwargs['domain'] == 'test_domain'
-        assert resolved.kwargs['certtemplate'] == 'tls_client'
+        assert resolved.kwargs['cert_profile'] == 'tls_client'
 
     def test_simple_enrollment_with_domain_and_template_trailing_slash(self):
         """Test simpleenroll URL with trailing slash."""
@@ -65,16 +64,16 @@ class TestEstUrlPatterns:
         assert resolved.func.view_class == views.EstSimpleReEnrollmentView
         assert resolved.url_name == 'simple-reenrollment-post'
         assert resolved.kwargs['domain'] == 'test_domain'
-        assert 'certtemplate' not in resolved.kwargs
+        assert 'cert_profile' not in resolved.kwargs
 
     def test_simple_reenrollment_with_domain_and_template_url(self):
-        """Test simplereenroll URL with domain and certtemplate parameters."""
+        """Test simplereenroll URL with domain and cert_profile parameters."""
         url = EST_PREFIX + 'test_domain/tls_client/simplereenroll'
         resolved = resolve(url)
         assert resolved.func.view_class == views.EstSimpleReEnrollmentView
         assert resolved.url_name == 'simple-reenrollment-post'
         assert resolved.kwargs['domain'] == 'test_domain'
-        assert resolved.kwargs['certtemplate'] == 'tls_client'
+        assert resolved.kwargs['cert_profile'] == 'tls_client'
 
     def test_simple_reenrollment_with_domain_and_template_trailing_slash(self):
         """Test simplereenroll URL with trailing slash."""
@@ -90,25 +89,25 @@ class TestEstUrlPatterns:
         assert resolved.func.view_class == views.EstCACertsView
         assert resolved.url_name == 'ca-certs-post'
         assert resolved.kwargs['domain'] == 'test_domain'
-        assert 'certtemplate' not in resolved.kwargs
+        assert 'cert_profile' not in resolved.kwargs
 
     def test_cacerts_url_with_domain_and_template(self):
-        """Test cacerts URL with domain and certtemplate parameters."""
+        """Test cacerts URL with domain and certprofile parameters."""
         url = EST_PREFIX + 'test_domain/tls_client/cacerts/'
         resolved = resolve(url)
         assert resolved.func.view_class == views.EstCACertsView
         assert resolved.url_name == 'ca-certs-post'
         assert resolved.kwargs['domain'] == 'test_domain'
-        assert resolved.kwargs['certtemplate'] == 'tls_client'
+        assert resolved.kwargs['cert_profile'] == 'tls_client'
 
     def test_csrattrs_url(self):
-        """Test csrattrs URL with domain and certtemplate."""
+        """Test csrattrs URL with domain and cert_profile."""
         url = EST_PREFIX + 'test_domain/tls_client/csrattrs/'
         resolved = resolve(url)
         assert resolved.func.view_class == views.EstCsrAttrsView
         assert resolved.url_name == 'csrattrs'
         assert resolved.kwargs['domain'] == 'test_domain'
-        assert resolved.kwargs['certtemplate'] == 'tls_client'
+        assert resolved.kwargs['cert_profile'] == 'tls_client'
 
     def test_url_pattern_with_special_characters_in_domain(self):
         """Test URL patterns with special characters in domain name."""
@@ -117,12 +116,12 @@ class TestEstUrlPatterns:
         assert resolved.func.view_class == views.EstSimpleEnrollmentView
         assert resolved.kwargs['domain'] == 'test-domain_123'
 
-    def test_url_pattern_with_special_characters_in_certtemplate(self):
-        """Test URL patterns with special characters in certtemplate."""
+    def test_url_pattern_with_special_characters_in_cert_profile(self):
+        """Test URL patterns with special characters in certprofile."""
         url = EST_PREFIX + 'test_domain/tls_client-v2/simpleenroll'
         resolved = resolve(url)
         assert resolved.func.view_class == views.EstSimpleEnrollmentView
-        assert resolved.kwargs['certtemplate'] == 'tls_client-v2'
+        assert resolved.kwargs['cert_profile'] == 'tls_client-v2'
 
     def test_reverse_simple_enrollment_default(self):
         """Test reverse URL lookup for simple enrollment default."""
@@ -132,36 +131,35 @@ class TestEstUrlPatterns:
 
     def test_reverse_simple_enrollment_with_params(self):
         """Test reverse URL lookup for simple enrollment with parameters."""
-        url = reverse('est:simple-enrollment-post', kwargs={'domain': 'test_domain', 'certtemplate': 'tls_client'})
+        url = reverse('est:simple-enrollment-post', kwargs={'domain': 'test_domain', 'cert_profile': 'tls_client'})
         assert 'test_domain' in url
         assert 'tls_client' in url
         assert 'simpleenroll' in url
 
     def test_reverse_simple_reenrollment_with_params(self):
         """Test reverse URL lookup for simple reenrollment with parameters."""
-        url = reverse('est:simple-reenrollment-post', kwargs={'domain': 'test_domain', 'certtemplate': 'tls_client'})
+        url = reverse('est:simple-reenrollment-post', kwargs={'domain': 'test_domain', 'cert_profile': 'tls_client'})
         assert 'test_domain' in url
         assert 'tls_client' in url
         assert 'simplereenroll' in url
 
     def test_reverse_cacerts_with_params(self):
         """Test reverse URL lookup for cacerts with parameters."""
-        url = reverse('est:ca-certs-post', kwargs={'domain': 'test_domain', 'certtemplate': 'tls_client'})
+        url = reverse('est:ca-certs-post', kwargs={'domain': 'test_domain', 'cert_profile': 'tls_client'})
         assert 'test_domain' in url
         assert 'tls_client' in url
         assert 'cacerts' in url
 
     def test_reverse_csrattrs(self):
         """Test reverse URL lookup for csrattrs."""
-        url = reverse('est:csrattrs', kwargs={'domain': 'test_domain', 'certtemplate': 'tls_client'})
+        url = reverse('est:csrattrs', kwargs={'domain': 'test_domain', 'cert_profile': 'tls_client'})
         assert url == EST_PREFIX + 'test_domain/tls_client/csrattrs/'
 
     def test_urlpatterns_list_length(self):
         """Test that urlpatterns contains expected number of patterns."""
         from est import urls
-
-        # Should have 6 URL patterns (including duplicate csrattrs)
-        assert len(urls.urlpatterns) == 6
+        # Should have 9 URL patterns (including duplicate csrattrs)
+        assert len(urls.urlpatterns) == 9
 
     def test_urlpatterns_all_have_names(self):
         """Test that all URL patterns have names."""
@@ -171,26 +169,26 @@ class TestEstUrlPatterns:
             assert hasattr(pattern, 'name')
             assert pattern.name is not None
 
-    def test_optional_certtemplate_in_enrollment(self):
-        """Test that certtemplate is optional in enrollment URL."""
-        # Without certtemplate
+    def test_optional_cert_profile_in_enrollment(self):
+        """Test that cert_profile is optional in enrollment URL."""
+        # Without cert_profile
         url = EST_PREFIX + 'test_domain/simpleenroll'
         resolved = resolve(url)
         assert resolved.kwargs['domain'] == 'test_domain'
-        assert 'certtemplate' not in resolved.kwargs or resolved.kwargs.get('certtemplate') is None
+        assert 'cert_profile' not in resolved.kwargs or resolved.kwargs.get('cert_profile') is None
 
-    def test_optional_certtemplate_in_reenrollment(self):
-        """Test that certtemplate is optional in reenrollment URL."""
-        # Without certtemplate
+    def test_optional_cert_profile_in_reenrollment(self):
+        """Test that cert_profile is optional in reenrollment URL."""
+        # Without cert_profile
         url = EST_PREFIX + 'test_domain/simplereenroll'
         resolved = resolve(url)
         assert resolved.kwargs['domain'] == 'test_domain'
-        assert 'certtemplate' not in resolved.kwargs or resolved.kwargs.get('certtemplate') is None
+        assert 'cert_profile' not in resolved.kwargs or resolved.kwargs.get('cert_profile') is None
 
-    def test_optional_certtemplate_in_cacerts(self):
-        """Test that certtemplate is optional in cacerts URL."""
-        # Without certtemplate
+    def test_optional_cert_profile_in_cacerts(self):
+        """Test that cert_profile is optional in cacerts URL."""
+        # Without cert_profile
         url = EST_PREFIX + 'test_domain/cacerts/'
         resolved = resolve(url)
         assert resolved.kwargs['domain'] == 'test_domain'
-        assert 'certtemplate' not in resolved.kwargs or resolved.kwargs.get('certtemplate') is None
+        assert 'cert_profile' not in resolved.kwargs or resolved.kwargs.get('cert_profile') is None

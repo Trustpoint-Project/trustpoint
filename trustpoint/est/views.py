@@ -8,6 +8,8 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 
+from request.operation_processor.general import OperationProcessor
+
 if TYPE_CHECKING:
     from pki.models.credential import CredentialModel
 
@@ -16,8 +18,6 @@ from request.authentication import EstAuthentication
 from request.authorization import EstAuthorization
 from request.message_parser import EstMessageParser
 from request.message_responder import EstErrorMessageResponder, EstMessageResponder
-from request.operation_processor import CertificateIssueProcessor
-from request.profile_validator import ProfileValidator
 from request.request_context import EstCertificateRequestContext
 from request.request_validator.http_req import EstHttpRequestValidator
 from request.workflow_handler import WorkflowHandler
@@ -102,13 +102,18 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
         self.logger.info('Request received: method=%s path=%s', request.method, request.path)
 
         try:
+            # TODO (FHK): Implement a more robust way to allow the issuance of Issuing CA certificates  # noqa: FIX002
+            # Allow CA certificate requests if using the issuing_ca profile
+            allow_ca_cert = cert_profile == 'issuing_ca'
+
             ctx = EstCertificateRequestContext(
                 raw_message=request,
                 protocol='est',
                 operation='simpleenroll',
                 domain_str=domain_name,
                 cert_profile_str=cert_profile,
-                event=self.EVENT,
+                allow_ca_certificate_request=allow_ca_cert,
+                event=self.EVENT
             )
 
         except Exception:
@@ -129,11 +134,9 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
             est_authorizer = EstAuthorization(allowed_operations=['simpleenroll'])
             est_authorizer.authorize(ctx)
 
-            ProfileValidator.validate(ctx)
-
             WorkflowHandler().handle(ctx)
 
-            CertificateIssueProcessor().process_operation(ctx)
+            OperationProcessor().process_operation(ctx)
 
             EstMessageResponder.build_response(ctx)
 
@@ -153,29 +156,7 @@ class EstSimpleEnrollmentView(EstSimpleEnrollmentMixin, View):
         del args
 
         domain_name = cast('str', kwargs.get('domain'))
-        cert_profile = cast('str', kwargs.get('certtemplate'))
-
-        return self.process_enrollment(request, domain_name, cert_profile)
-
-
-@method_decorator(csrf_exempt, name='dispatch')
-class EstSimpleEnrollmentDefaultView(EstSimpleEnrollmentMixin, View):
-    """Handles simple EST enrollment requests without requiring domain or cert profile in URL."""
-
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle POST requests for simple enrollment with optional domain/cert profile."""
-        del args
-        del kwargs
-
-        domain_name = 'arburg'
-        cert_profile = 'tls_client'
-
-        try:
-            DomainModel.objects.get(unique_name=domain_name)
-        except DomainModel.DoesNotExist:
-            return LoggedHttpResponse(
-                f'Default domain "{domain_name}" does not exist. Please configure it first.', status=404
-            )
+        cert_profile = cast('str', kwargs.get('cert_profile', 'domain_credential'))
 
         return self.process_enrollment(request, domain_name, cert_profile)
 
@@ -200,7 +181,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
         # it also needs to handle the case where one or both are omitted
         try:
             domain_name = cast('str', kwargs.get('domain'))
-            cert_profile = cast('str', kwargs.get('certtemplate'))
+            cert_profile = cast('str', kwargs.get('cert_profile'))
 
             ctx = EstCertificateRequestContext(
                 raw_message=request,
@@ -229,11 +210,9 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             est_authorizer = EstAuthorization(allowed_operations=['simplereenroll'])
             est_authorizer.authorize(ctx)
 
-            ProfileValidator.validate(ctx)
-
             WorkflowHandler().handle(ctx)
 
-            CertificateIssueProcessor().process_operation(ctx)
+            OperationProcessor().process_operation(ctx)
 
             EstMessageResponder.build_response(ctx)
 
@@ -293,8 +272,9 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
             if not http_response:
                 http_response = LoggedHttpResponse('Something went wrong during EST getcacerts.', status=500)
 
-        except Exception as e:  # noqa:BLE001
-            return LoggedHttpResponse(f'Error retrieving CA certificates: {e!s}', status=500)
+        except Exception:
+            self.logger.exception('Error retrieving CA certificates')
+            return LoggedHttpResponse('Error retrieving CA certificates', status=500)
         else:
             return http_response
 

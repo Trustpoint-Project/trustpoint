@@ -6,14 +6,19 @@ from typing import Any, Never, get_args
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
 from cryptography.hazmat.primitives.serialization import load_der_public_key
-from cryptography.x509.oid import ExtensionOID
+from cryptography.x509.oid import CRLEntryExtensionOID, ExtensionOID
 from pyasn1.codec.ber import decoder as ber_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import decoder as der_decoder  # type: ignore[import-untyped]
 from pyasn1.codec.der import encoder as der_encoder
-from pyasn1_modules import rfc2459, rfc2511, rfc4210  # type: ignore[import-untyped]
+from pyasn1_modules import rfc2459, rfc2511, rfc4210, rfc5280  # type: ignore[import-untyped]
 
 from cmp.util import NameParser
-from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpCertificateRequestContext
+from request.request_context import (
+    BaseRequestContext,
+    CmpBaseRequestContext,
+    CmpCertificateRequestContext,
+    CmpRevocationRequestContext,
+)
 from trustpoint.logger import LoggerMixin
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
@@ -132,6 +137,7 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
 
         try:
             self._check_header(context.parsed_message)
+            self._check_implicit_confirm(context, context.parsed_message)
             self.logger.info('CMP header validation successful')
         except ValueError:
             self.logger.exception('CMP header validation failed')
@@ -157,6 +163,15 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
             err_msg = 'senderNonce fail'
             raise ValueError(err_msg)
 
+
+    def _check_implicit_confirm(
+        self,
+        context: CmpBaseRequestContext,
+        serialized_pyasn1_message: rfc4210.PKIMessage,
+    ) -> None:
+        """Check for the presence and correctness of the implicit confirm entry."""
+        if context.operation not in ['initialization', 'certification', 'key_update']:
+            return
         implicit_confirm_entry = None
         for entry in serialized_pyasn1_message['header']['generalInfo']:
             if entry['infoType'].prettyPrint() == self.implicit_confirm_oid:
@@ -169,6 +184,7 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
         if implicit_confirm_entry['infoValue'].prettyPrint() != self.implicit_confirm_str_value:
             err_msg = 'implicit confirm entry fail'
             raise ValueError(err_msg)
+
 
 
 class CmpCertificateBodyValidation(LoggerMixin):
@@ -474,6 +490,51 @@ class CmpCertificateBodyValidation(LoggerMixin):
         context.cert_requested = request_builder
 
 
+class CmpRevocationBodyValidation(LoggerMixin):
+    """Sub-component for validating CMP revocation body for RR message type."""
+
+    def parse_rr_body(self, context: CmpRevocationRequestContext, pki_body: rfc4210.PKIBody) -> None:
+        """Extract the revocation request details from CMP RR body."""
+        rev_req = pki_body['rr']
+
+        if len(rev_req) > 1:
+            self._raise_value_error('Multiple RevReqMessages found.')
+
+        if len(rev_req) < 1:
+            self._raise_value_error('No RevReqMessages found.')
+
+        rev_req_msg = rev_req[0]
+
+        if not rev_req_msg['certDetails'].hasValue(): #certDetails?
+            self._raise_value_error('certDetails must be contained in RR RevReqMessage.')
+
+        cert_details = rev_req_msg['certDetails']
+
+        if cert_details['serialNumber'].hasValue():
+            sn = int(cert_details['serialNumber'])
+            # uppercase hex without '0x' prefix
+            context.cert_serial_number = format(sn, 'X')
+        else:
+            self._raise_value_error('serialNumber must be present in certDetails for revocation request.')
+
+        if rev_req_msg['crlEntryDetails'].hasValue():
+            crl_entry_details = rev_req_msg['crlEntryDetails']
+            if (crl_entry_details[0].hasValue()
+                and crl_entry_details[0]['extnID'] == CRLEntryExtensionOID.CRL_REASON.dotted_string):
+                inner_bytes = crl_entry_details[0]['extnValue'].asOctets()
+                reason_code, _ = der_decoder.decode(inner_bytes, asn1Spec=rfc5280.CRLReason())
+                context.revocation_reason = x509.ReasonFlags(int(reason_code))
+            else:
+                context.revocation_reason = x509.ReasonFlags.unspecified
+        else:
+            self.logger.warning('crlEntryDetails must be contained in RR RevReqMessage.')
+            context.revocation_reason = x509.ReasonFlags.unspecified
+
+    def _raise_value_error(self, message: str) -> Never:
+        """Helper function to raise a ValueError with the given message."""
+        raise ValueError(message)
+
+
 class CmpBodyValidation(ParsingComponent, LoggerMixin):
     """Component for validating CMP body based on operation context."""
 
@@ -518,7 +579,8 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
                 context = context.narrow(CmpCertificateRequestContext)
                 CmpCertificateBodyValidation().parse_ircr_body(context, pki_body, body_type)
             elif body_type == 'rr':
-                self._raise_not_implemented_error('CMP RR is not implemented yet.')
+                context = context.narrow(CmpRevocationRequestContext)
+                CmpRevocationBodyValidation().parse_rr_body(context, pki_body)
 
             self.logger.info('CMP body type validation successful: %s body extracted', body_type.upper())
 
@@ -531,7 +593,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
 
     def _validate_body_type_supported(self, body_type: str) -> None:
         """Validate that the CMP body type is supported by the request pipeline."""
-        if body_type not in ('ir', 'cr'):
+        if body_type not in ('ir', 'cr', 'rr'):
             err_msg = f'Unsupported CMP body type: {body_type}'
             self._raise_value_error(err_msg)
 
@@ -581,7 +643,7 @@ class CmpMessageParser(CompositeParsing):
         """Initialize the composite parser with the default set of parsing components."""
         super().__init__()
         self.add(CmpPkiMessageParsing())
-        self.add(CmpHeaderValidation())
         self.add(CmpBodyValidation())
+        self.add(CmpHeaderValidation())
         self.add(DomainParsing())
         self.add(CertProfileParsing())

@@ -2,8 +2,6 @@
 
 import ipaddress
 
-import pytest
-from django.core.exceptions import ValidationError
 
 from setup_wizard.forms import StartupWizardTlsCertificateForm
 

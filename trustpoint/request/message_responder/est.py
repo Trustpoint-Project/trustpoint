@@ -4,7 +4,7 @@ import base64
 
 from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
 
-from devices.models import OnboardingStatus
+from onboarding.models import OnboardingStatus
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from workflows.models import State
 
@@ -69,14 +69,8 @@ class EstCertificateMessageResponder(EstMessageResponder):
         return True
 
     @staticmethod
-    def build_response(context: BaseRequestContext) -> None:  # noqa: C901 - Splitting this method adds unnecessary complexity
-        """Respond to an EST enrollment message with the issued certificate."""
-        if not isinstance(context, EstCertificateRequestContext):
-            exc_msg = 'EstCertificateMessageResponder requires an EstCertificateRequestContext.'
-            raise TypeError(exc_msg)
-
-        if not EstCertificateMessageResponder._check_workflow_state(context):
-            return
+    def _prepare_certificate_data(context: EstCertificateRequestContext) -> tuple[str | bytes, str]:
+        """Prepare the certificate data and content type based on encoding."""
         if context.issued_certificate is None:
             exc_msg = 'Issued certificate is not set in the context.'
             raise ValueError(exc_msg)
@@ -90,26 +84,38 @@ class EstCertificateMessageResponder(EstMessageResponder):
         else:
             cert_bytes = context.issued_certificate.public_bytes(encoding=encoding)
 
-        cert: str | bytes
-
-        if context.est_encoding == 'base64_der':
-            b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
-            cert = '\n'.join([b64_cert[i : i + 64] for i in range(0, len(b64_cert), 64)])
-            content_type = 'application/pkix-cert'
-        elif context.est_encoding == 'der':
-            cert = cert_bytes
-            content_type = 'application/pkix-cert'
-        elif context.est_encoding == 'pkcs7':
-            # this is the only type compliant with RFC 7030
-            # others are only provided for compatibility with practical implementations
-            cert = cert_bytes
-            content_type = 'application/pkcs7-mime; smime-type=certs-only'
-        else:
+        if context.est_encoding == 'der':
+            return cert_bytes, 'application/pkix-cert'
+        if context.est_encoding == 'pem':
+            cert: str | bytes
             try:
                 cert = cert_bytes.decode('utf-8')
             except UnicodeDecodeError:
                 cert = cert_bytes
-            content_type = 'application/x-pem-file'
+            return cert, 'application/x-pem-file'
+        # Default to RFC 7030 compliant format: base64-encoded with line wrapping
+        b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
+        cert = '\n'.join([b64_cert[i:i + 64] for i in range(0, len(b64_cert), 64)])
+        if context.est_encoding == 'base64_der':
+            content_type = 'application/pkix-cert'
+        else:
+            content_type = 'application/pkcs7-mime; smime-type=certs-only'
+        return cert, content_type
+
+    @staticmethod
+    def build_response(context: BaseRequestContext) -> None:
+        """Respond to an EST enrollment message with the issued certificate."""
+        if not isinstance(context, EstCertificateRequestContext):
+            exc_msg = 'EstCertificateMessageResponder requires an EstCertificateRequestContext.'
+            raise TypeError(exc_msg)
+
+        if not EstCertificateMessageResponder._check_workflow_state(context):
+            return
+        if context.issued_certificate is None:
+            exc_msg = 'Issued certificate is not set in the context.'
+            raise ValueError(exc_msg)
+
+        cert, content_type = EstCertificateMessageResponder._prepare_certificate_data(context)
 
         if context.device and context.device.onboarding_config:
             context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED

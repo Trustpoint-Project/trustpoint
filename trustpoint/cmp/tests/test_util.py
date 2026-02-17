@@ -6,9 +6,9 @@ from unittest.mock import Mock
 
 import pytest
 from cryptography import x509
-from pyasn1.codec.der import decoder, encoder
+from pyasn1.codec.der import encoder
 from pyasn1.type.char import UTF8String, PrintableString, IA5String
-from pyasn1.type.univ import ObjectIdentifier, Sequence
+from pyasn1.type.univ import ObjectIdentifier
 from pyasn1_modules import rfc2459
 
 from cmp.util import GeneralNameType, NameParser, PkiMessageType, Popo

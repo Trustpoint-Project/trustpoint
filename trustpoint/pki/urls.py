@@ -16,6 +16,9 @@ urlpatterns = [
         name='truststores',
     ),
     path('truststores/add/', truststores.TruststoreCreateView.as_view(), name='truststores-add'),
+    re_path(r'^truststores/add/(?P<pk>\d+)?/?$',
+            truststores.TruststoreCreateView.as_view(),
+            name='truststores-add-with-pk'),
     path('truststores/add/<int:pk>/', truststores.TruststoreCreateView.as_view(), name='truststores-add-with-pk'),
     re_path(
         r'^truststores/download/(?P<pk>[0-9]+)/?$',
@@ -125,8 +128,43 @@ urlpatterns = [
         issuing_cas.IssuingCaAddFileImportSeparateFilesView.as_view(),
         name='issuing_cas-add-file_import-separate_files',
     ),
+    path(
+        'issuing-cas/add/request-est/',
+        issuing_cas.IssuingCaAddRequestEstView.as_view(),
+        name='issuing_cas-add-request-est',
+    ),
+    path(
+        'issuing-cas/add/request-cmp/',
+        issuing_cas.IssuingCaAddRequestCmpView.as_view(),
+        name='issuing_cas-add-request-cmp',
+    ),
+    path(
+        'issuing-cas/truststore-association/<int:pk>/',
+        issuing_cas.IssuingCaTruststoreAssociationView.as_view(),
+        name='issuing_cas-truststore-association',
+    ),
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
+    path(
+        'issuing-cas/define-cert-content-est/<int:pk>/',
+        issuing_cas.IssuingCaDefineCertContentEstView.as_view(),
+        name='issuing_cas-define-cert-content-est',
+    ),
+    path(
+        'issuing-cas/request-cert-est/<int:pk>/',
+        issuing_cas.IssuingCaRequestCertEstView.as_view(),
+        name='issuing_cas-request-cert-est',
+    ),
+    path(
+        'issuing-cas/define-cert-content-cmp/<int:pk>/',
+        issuing_cas.IssuingCaDefineCertContentCmpView.as_view(),
+        name='issuing_cas-define-cert-content-cmp',
+    ),
+    path(
+        'issuing-cas/request-cert-cmp/<int:pk>/',
+        issuing_cas.IssuingCaRequestCertCmpView.as_view(),
+        name='issuing_cas-request-cert-cmp',
+    ),
     path('keyless-cas/config/<int:pk>/', issuing_cas.KeylessCaConfigView.as_view(), name='keyless_cas-config'),
     path('issuing-cas/crl-gen/<int:pk>/', issuing_cas.IssuingCaCrlGenerationView.as_view(), name='issuing_cas-crl-gen'),
     path(
@@ -173,21 +211,29 @@ urlpatterns = [
         domains.IssuedCertificatesView.as_view(),
         name='domain-issued_certificates',
     ),
-    path(
-        'devid-registration/method_select/<int:pk>/',
+    re_path(
+        r'^devid-registration/method_select/(?P<pk>\d+)?/?$',
         DevIdMethodSelectView.as_view(),
         name='devid_registration-method_select',
     ),
-    path(
-        'devid-registration/create/<int:pk>/',
+
+    re_path(
+        r'devid-registration/create/(?P<pk>\d+)?/?$',
         DevIdRegistrationCreateView.as_view(),
         name='devid_registration_create',
     ),
+
     path(
         'devid-registration/create/<int:pk>/<int:truststore_id>/',
         DevIdRegistrationCreateView.as_view(),
         name='devid_registration_create-with_truststore_id',
     ),
+    path(
+        'truststores/add/from-device/',
+        truststores.TruststoreCreateView.as_view(),
+        name='truststores-add-from-device',
+    ),
+
     path(
         'devid-registration/delete/<int:pk>/', DevIdRegistrationDeleteView.as_view(), name='devid_registration_delete'
     ),
@@ -214,6 +260,11 @@ urlpatterns = [
         'cert-profiles/config/<int:pk>/',
         cert_profiles.CertProfileConfigView.as_view(),
         name='cert_profiles-details',
+    ),
+    path(
+        'cert-profiles/issuance/<int:pk>/',
+        cert_profiles.CertProfileIssuanceView.as_view(),
+        name='cert_profiles-issuance',
     ),
     path(
         'cert-profiles/add/',

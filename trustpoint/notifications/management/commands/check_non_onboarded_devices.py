@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from devices.models import DeviceModel, OnboardingStatus
+from devices.models import DeviceModel
+from onboarding.models import OnboardingStatus
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from notifications.models import NotificationModel, NotificationStatus

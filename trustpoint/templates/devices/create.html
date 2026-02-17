@@ -7,7 +7,9 @@
             {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
                 <h1>{% trans 'Create new Device' %}</h1>
             {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
-                <h1>{% trans 'Create new OPC UA GDS' %}</h1>
+                <h1>{% trans 'Create new OPC UA GDS Server' %}</h1>
+            {% elif page_name == DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY %}
+                <h1>{% trans 'Create new OPC UA GDS Push Application' %}</h1>
             {% endif %}
         </div>
         <form method="POST" id="add-device-form">
@@ -21,7 +23,9 @@
                         {% if page_name == DEVICES_PAGE_DEVICES_SUBCATEGORY %}
                             {% trans 'Create new Device' %}
                         {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
-                            {% trans 'Create new OPC UA GDS' %}
+                            {% trans 'Create new OPC UA GDS Server' %}
+                        {% elif page_name == DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY %}
+                            {% trans 'Create new OPC UA GDS Push Application' %}
                         {% endif %}
                     </button>
                 </div>

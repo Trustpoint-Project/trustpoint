@@ -12,28 +12,47 @@ from cryptography.hazmat.primitives import serialization
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_yasg import openapi  # type: ignore[import-untyped]
-from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    extend_schema,
+    inline_serializer,
+)
 from rest_framework import filters, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from pki.forms import (
+    CertificateIssuanceForm,
     IssuingCaAddFileImportPkcs12Form,
     IssuingCaAddFileImportSeparateFilesForm,
     IssuingCaAddMethodSelectForm,
+    IssuingCaAddRequestCmpForm,
+    IssuingCaAddRequestEstForm,
+    IssuingCaTruststoreAssociationForm,
+    TruststoreAddForm,
 )
-from pki.models import CaModel, CertificateModel
+from pki.models import CaModel, CertificateModel, CredentialModel
+from pki.models.cert_profile import CertificateProfileModel
+from pki.models.credential import PrimaryCredentialCertificate
+from pki.models.truststore import TruststoreModel
 from pki.serializer import IssuingCaSerializer
+from pki.util.cert_profile import ProfileValidationError
+from request.clients import EstClient, EstClientError
+from request.operation_processor.csr_build import ProfileAwareCsrBuilder
+from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
+from request.request_context import EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -43,11 +62,12 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
+    from typing import ClassVar
+
     from django.db.models import QuerySet
     from django.forms import Form
     from django.http import HttpRequest
-
-    from pki.models.credential import CredentialModel
+    from rest_framework.request import Request
 
 
 class IssuingCaContextMixin(ContextDataMixin):
@@ -149,10 +169,207 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView[Is
         return super().form_valid(form)
 
 
+class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddRequestEstForm]):
+    """View to request an Issuing CA certificate using EST."""
+
+    form_class = IssuingCaAddRequestEstForm
+    template_name = 'pki/issuing_cas/add/request_est.html'
+
+    def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
+        """Handle successful form submission."""
+        ca = form.save()
+        messages.success(
+            self.request,
+            _('Successfully created Issuing CA {name}. Please associate a trust store.').format(
+                name=ca.unique_name
+            ),
+        )
+        return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+
+
+class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[IssuingCaTruststoreAssociationForm]):
+    """View for associating a truststore with an Issuing CA."""
+
+    form_class = IssuingCaTruststoreAssociationForm
+    template_name = 'pki/issuing_cas/truststore_association.html'
+
+    def get_ca(self) -> CaModel:
+        """Get the CA from the URL parameters."""
+        pk = self.kwargs.get('pk')
+        return get_object_or_404(
+            CaModel.objects.exclude(ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]),
+            pk=pk
+        )
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Add the CA instance to the form kwargs."""
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = self.get_ca()
+        truststore_id = self.request.GET.get('truststore_id')
+        if truststore_id:
+            try:
+                truststore = TruststoreModel.objects.get(pk=truststore_id)
+                kwargs['initial'] = kwargs.get('initial', {})
+                kwargs['initial']['trust_store'] = truststore
+            except TruststoreModel.DoesNotExist:
+                messages.warning(
+                    self.request,
+                    'Truststore with id %s does not exist. Ignoring truststore_id parameter.',
+                    truststore_id
+                )
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the CA and import form to the context."""
+        context = super().get_context_data(**kwargs)
+        context['ca'] = self.get_ca()
+        context['import_form'] = TruststoreAddForm()
+        return context
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle both association and import form submissions."""
+        if 'trust_store_file' in request.FILES:
+            return self._handle_import(request)
+        return super().post(request, *args, **kwargs)
+
+    def _handle_import(self, request: HttpRequest) -> HttpResponse:
+        """Handle truststore import from modal."""
+        import_form = TruststoreAddForm(request.POST, request.FILES)
+
+        if import_form.is_valid():
+            truststore = import_form.cleaned_data['truststore']
+            messages.success(
+                request,
+                _('Successfully imported truststore {name}.').format(name=truststore.unique_name),
+            )
+            return HttpResponseRedirect(
+                reverse('pki:issuing_cas-truststore-association', kwargs={'pk': self.get_ca().pk}) +
+                f'?truststore_id={truststore.id}'
+            )
+
+        context = self.get_context_data()
+        context['import_form'] = import_form
+        return self.render_to_response(context)
+
+    def form_valid(self, form: IssuingCaTruststoreAssociationForm) -> HttpResponse:
+        """Handle successful form submission."""
+        form.save()
+        ca = self.get_ca()
+        messages.success(
+            self.request,
+            _('Successfully associated truststore with Issuing CA {name}.').format(name=ca.unique_name)
+        )
+        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
+            return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+        return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
+
+
+class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
+    """Mixin for defining certificate content using the issuing_ca profile."""
+
+    ca_type_filter: CaModel.CaTypeChoice
+    redirect_url_name: str
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Dispatch the request, ensuring the CA and profile exist."""
+        self.ca = get_object_or_404(
+            CaModel.objects.filter(ca_type=self.ca_type_filter),
+            pk=kwargs['pk']
+        )
+        try:
+            self.cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
+        except CertificateProfileModel.DoesNotExist:
+            messages.error(
+                request,
+                _('Certificate profile "issuing_ca" not found. Please create it or contact your administrator.')
+            )
+            return redirect('pki:issuing_cas')
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))  # type: ignore[misc]
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Get form kwargs, including the profile."""
+        kwargs = super().get_form_kwargs()  # type: ignore[misc]
+        raw_profile = self.cert_profile.profile
+        kwargs['profile'] = raw_profile
+        return kwargs  # type: ignore[no-any-return]
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add additional context data."""
+        context = super().get_context_data(**kwargs)
+        context['issuing_ca'] = self.ca
+        context['cert_profile'] = self.cert_profile
+        context['profile_dict'] = self.get_form_kwargs()['profile']
+        return context
+
+    def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
+        """Handle the case where the form is invalid."""
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f'{field}: {error}')  # type: ignore[attr-defined]
+        return super().form_invalid(form)  # type: ignore[misc,no-any-return]
+
+    def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        self.logger.info('Form cleaned_data: %s', form.cleaned_data)
+        self.request.session[f'cert_content_data_{self.ca.pk}'] = form.cleaned_data # type: ignore[attr-defined]
+        messages.success(
+            self.request, # type: ignore[attr-defined]
+            self.get_success_message()
+        )
+        return redirect(self.redirect_url_name, pk=self.ca.pk)
+
+    def get_success_message(self) -> str:
+        """Get the success message for the form submission."""
+        msg = 'Subclasses must implement get_success_message()'
+        raise NotImplementedError(msg)
+
+
+class IssuingCaDefineCertContentEstView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
+    """View to define certificate content using the issuing_ca profile before requesting via EST."""
+
+    form_class = CertificateIssuanceForm
+    template_name = 'pki/issuing_cas/define_cert_content_est.html'
+    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
+    redirect_url_name = 'pki:issuing_cas-request-cert-est'
+
+    def get_success_message(self) -> str:
+        """Get the success message for the form submission."""
+        return _('Certificate content defined. Please proceed to request the certificate via EST.')
+
+
+class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddRequestCmpForm]):
+    """View to request an Issuing CA certificate using CMP."""
+
+    form_class = IssuingCaAddRequestCmpForm
+    template_name = 'pki/issuing_cas/add/request_cmp.html'
+
+    def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
+        """Handle successful form submission."""
+        ca = form.save()
+        messages.success(
+            self.request,
+            _('Successfully created Issuing CA {name}. Please associate a trust store.').format(
+                name=ca.unique_name
+            ),
+        )
+        return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+
+
+class IssuingCaDefineCertContentCmpView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
+    """View to define certificate content using the issuing_ca profile before requesting via CMP."""
+
+    form_class = CertificateIssuanceForm
+    template_name = 'pki/issuing_cas/define_cert_content_cmp.html'
+    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
+    redirect_url_name = 'pki:issuing_cas-request-cert-cmp'
+
+    def get_success_message(self) -> str:
+        """Get the success message for the form submission."""
+        return _('Certificate content defined. Please proceed to request the certificate via CMP.')
+
+
 class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel]):
     """View to display the details of an Issuing CA."""
-
-    http_method_names = ('get',)
 
     model = CaModel
     success_url = reverse_lazy('pki:issuing_cas')
@@ -179,12 +396,314 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         """
         context = super().get_context_data(**kwargs)
         issuing_ca = self.get_object()
-        issued_certificates = CertificateModel.objects.filter(
-            issuer_public_bytes=cast('CredentialModel', issuing_ca.credential).certificate.subject_public_bytes
-        )
+        if issuing_ca.credential and issuing_ca.credential.certificate:
+            credential = issuing_ca.credential
+            issuer_public_bytes = credential.certificate_or_error.subject_public_bytes
+            issued_certificates = CertificateModel.objects.filter(issuer_public_bytes=issuer_public_bytes)
+        else:
+            issued_certificates = CertificateModel.objects.none()
         context['issued_certificates'] = issued_certificates
         context['active_crl'] = issuing_ca.get_active_crl()
         return context
+
+
+class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
+    """Mixin for certificate request views for EST and CMP protocols."""
+
+    context_object_name = 'issuing_ca'
+    ca_type_filter: CaModel.CaTypeChoice
+    redirect_url_name: str
+
+    def get_queryset(self) -> QuerySet[CaModel, CaModel]:
+        """Return only CAs matching the protocol-specific type filter."""
+        return CaModel.objects.filter(ca_type=self.ca_type_filter)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the issuing_ca certificate profile and cert content summary to the context."""
+        context = super().get_context_data(**kwargs)
+
+        # Get certificate profile
+        try:
+            cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
+            context['cert_profile'] = cert_profile
+            context['profile_json'] = cert_profile.profile_json
+        except CertificateProfileModel.DoesNotExist:
+            self.logger.warning('issuing_ca certificate profile not found')
+            context['cert_profile'] = None
+            context['profile_json'] = None
+
+        # Get certificate content data from session
+        ca = self.get_object()  # type: ignore[attr-defined]
+        cert_content_key = f'cert_content_data_{ca.pk}'
+        cert_content_data = self.request.session.get(cert_content_key)  # type: ignore[attr-defined]
+
+        if cert_content_data:
+            context['cert_content_data'] = cert_content_data
+            context['has_cert_content'] = True
+
+            # Build a summary of the certificate content
+            summary = self._build_cert_content_summary(cert_content_data)
+            context['cert_content_summary'] = summary
+        else:
+            context['has_cert_content'] = False
+            context['cert_content_data'] = None
+            context['cert_content_summary'] = None
+
+        return context
+
+    def _build_cert_content_summary(self, cert_data: dict[str, Any]) -> dict[str, Any]:
+        """Build a human-readable summary of the certificate content."""
+        summary: dict[str, Any] = {
+            'subject': {},
+            'san': {},
+            'validity': {}
+        }
+
+        # Subject fields
+        subject_fields = [
+            ('common_name', 'Common Name (CN)'),
+            ('organization_name', 'Organization (O)'),
+            ('organizational_unit_name', 'Organizational Unit (OU)'),
+            ('country_name', 'Country (C)'),
+            ('state_or_province_name', 'State/Province (ST)'),
+            ('locality_name', 'Locality (L)'),
+            ('email_address', 'Email Address'),
+        ]
+
+        for field_name, label in subject_fields:
+            value = cert_data.get(field_name)
+            if value:
+                summary['subject'][label] = value
+
+        # SAN fields
+        san_fields = [
+            ('dns_names', 'DNS Names'),
+            ('ip_addresses', 'IP Addresses'),
+            ('rfc822_names', 'Email Addresses'),
+            ('uris', 'URIs'),
+        ]
+
+        for field_name, label in san_fields:
+            value = cert_data.get(field_name)
+            if value:
+                summary['san'][label] = value
+
+        # Validity
+        validity_parts = []
+        if cert_data.get('days'):
+            validity_parts.append(f"{cert_data['days']} days")
+        if cert_data.get('hours'):
+            validity_parts.append(f"{cert_data['hours']} hours")
+        if cert_data.get('minutes'):
+            validity_parts.append(f"{cert_data['minutes']} minutes")
+        if cert_data.get('seconds'):
+            validity_parts.append(f"{cert_data['seconds']} seconds")
+
+        summary['validity'] = ', '.join(validity_parts) if validity_parts else 'Not specified'
+
+        return summary
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle POST request to request certificate."""
+        ca = self.get_object()  # type: ignore[attr-defined]
+
+        # TODO(FlorianHandke): Implement certificate request client  # noqa: FIX002
+        messages.warning(request, self.get_not_implemented_message())
+        return redirect(self.redirect_url_name, pk=ca.pk)
+
+    def get_not_implemented_message(self) -> str:
+        """Get the not implemented message for the specific protocol."""
+        msg = 'Subclasses must implement get_not_implemented_message()'
+        raise NotImplementedError(msg)
+
+
+class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]):  # type: ignore[misc]
+    """View to display the EST certificate request page."""
+
+    template_name = 'pki/issuing_cas/request_cert_est.html'
+    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
+    redirect_url_name = 'pki:issuing_cas-request-cert-est'
+
+    def get_not_implemented_message(self) -> str:
+        """Get the not implemented message for EST."""
+        return _('EST certificate request not yet implemented.')
+
+    def _perform_est_enrollment(self, ca: CaModel, cert_content_data: dict[str, Any], request: HttpRequest) -> None:
+        """Perform the EST enrollment process."""
+        cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
+
+        request_data = self._build_request_data_from_form(cert_content_data)
+        self.logger.info('Built request data: %s', request_data)
+
+        context = EstCertificateRequestContext(
+            operation='simpleenroll',
+            protocol='est',
+            domain=None,
+            cert_profile_str='issuing_ca',
+            certificate_profile_model=cert_profile,
+            allow_ca_certificate_request=True,  # Allow CA cert requests for Issuing CA enrollment
+            est_server_host=ca.remote_host,
+            est_server_port=ca.remote_port,
+            est_server_path=ca.remote_path,
+            est_username=ca.est_username,
+            est_password=(
+                ca.no_onboarding_config.est_password
+                if ca.no_onboarding_config else None
+            ),
+            est_server_truststore=(
+                ca.no_onboarding_config.trust_store
+                if ca.no_onboarding_config else None
+            ),
+        )
+
+        context.request_data = request_data
+        context.owner_credential = ca.credential
+
+        csr_builder = ProfileAwareCsrBuilder()
+        csr_builder.process_operation(context)
+        csr = csr_builder.get_csr()
+
+        context.cert_requested = csr
+
+        # Use EstDeviceCsrSignProcessor to re-sign the CSR with the proper signature algorithm
+        csr_signer = EstDeviceCsrSignProcessor()
+        csr_signer.process_operation(context)
+        signed_csr = csr_signer.get_signed_csr()
+
+        # Send the re-signed CSR to the remote EST server
+        est_client = EstClient(context)
+        issued_cert = est_client.simple_enroll(signed_csr)
+
+        cert_pem = issued_cert.public_bytes(encoding=serialization.Encoding.PEM).decode('utf-8')
+        cert_obj = x509.load_pem_x509_certificate(cert_pem.encode())
+        cert_model = CertificateModel.save_certificate(cert_obj)
+
+        if ca.credential:
+            ca.credential.certificate = cert_model
+            ca.credential.save()
+        else:
+            credential = CredentialModel(
+                credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+                certificate=cert_model,
+                private_key=ca.credential.private_key if ca.credential else '',
+            )
+            credential.save()
+            credential.certificates.add(cert_model)
+            PrimaryCredentialCertificate.objects.create(
+                credential=credential,
+                certificate=cert_model,
+                is_primary=True
+            )
+            ca.credential = credential
+            ca.save()
+
+        del request.session[f'cert_content_data_{ca.pk}']
+
+    def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
+        """Build request data structure from form data.
+
+        Args:
+            cert_content_data: Form data containing certificate fields.
+
+        Returns:
+            Request data in the format expected by the profile verifier.
+        """
+        self.logger.info('Building request data from: %s', cert_content_data)
+        request_data: dict[str, Any] = {
+            'subj': {},
+            'ext': {
+                'subject_alternative_name': {}
+            },
+            'validity': {}
+        }
+
+        # Subject fields
+        required_subject_fields = ['common_name', 'organization_name', 'country_name', 'state_or_province_name']
+        for field_name in required_subject_fields:
+            value = cert_content_data.get(field_name)
+            if value:
+                request_data['subj'][field_name] = value
+
+        # SAN fields
+        san_fields = {
+            'dns_names': 'dns_names',
+            'ip_addresses': 'ip_addresses',
+            'rfc822_names': 'rfc822_names',
+            'uris': 'uris'
+        }
+
+        for profile_key, form_key in san_fields.items():
+            value = cert_content_data.get(form_key)
+            if value is not None:
+                request_data['ext']['subject_alternative_name'][profile_key] = value
+
+        # Validity fields
+        validity_fields = ['days', 'hours', 'minutes', 'seconds']
+        for field in validity_fields:
+            value = cert_content_data.get(field)
+            if value is not None:
+                request_data['validity'][field] = int(value)
+
+        return request_data
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle POST request to request certificate via EST."""
+        ca = self.get_object()
+
+        cert_content_key = f'cert_content_data_{ca.pk}'
+        cert_content_data = request.session.get(cert_content_key)
+
+        self.logger.info('Cert content data for CA %s: %s', ca.pk, cert_content_data)
+
+        if not cert_content_data:
+            messages.error(
+                request,
+                _(
+                    'Certificate content data not found. '
+                    'Please define the certificate content first.'
+                )
+            )
+            return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+
+        try:
+            self._perform_est_enrollment(ca, cert_content_data, request)
+            messages.success(
+                request,
+                _('Successfully enrolled certificate for Issuing CA {name} via EST.').format(name=ca.unique_name)
+            )
+            return redirect('pki:issuing_cas-config', pk=ca.pk)
+        except (ValueError, KeyError, ProfileValidationError) as exc:
+            messages.error(request, _('Failed to build certificate request: {error}').format(error=str(exc)))
+            return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+        except CertificateProfileModel.DoesNotExist:
+            messages.error(request, _('Certificate profile "issuing_ca" not found.'))
+            return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+        except EstClientError as exc:
+            self.logger.exception('EST client error during certificate enrollment')
+            messages.error(
+                request,
+                _('Failed to enroll certificate via EST: {error}').format(error=str(exc))
+            )
+            return redirect(self.redirect_url_name, pk=ca.pk)
+        except Exception as exc:
+            self.logger.exception('Unexpected error during EST certificate enrollment')
+            messages.error(
+                request,
+                _('Unexpected error during certificate enrollment: {error}').format(error=str(exc))
+            )
+            return redirect(self.redirect_url_name, pk=ca.pk)
+
+
+class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]):   # type: ignore[misc]
+    """View to display the CMP certificate request page."""
+
+    template_name = 'pki/issuing_cas/request_cert_cmp.html'
+    ca_type_filter = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
+    redirect_url_name = 'pki:issuing_cas-request-cert-cmp'
+
+    def get_not_implemented_message(self) -> str:
+        """Get the not implemented message for CMP."""
+        return _('CMP certificate request not yet implemented.')
 
 
 class KeylessCaConfigView(LoggerMixin, KeylessCaContextMixin, DetailView[CaModel]):
@@ -346,7 +865,7 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[CaModel]):
         else:
             messages.error(request, _('Failed to generate CRL for Issuing CA %s.') % issuing_ca.unique_name)
         next_url = request.GET.get('next')
-        if next_url:
+        if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts=[request.get_host()]):
             return redirect(next_url)
         return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
 
@@ -395,8 +914,8 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
             response['Content-Disposition'] = f'attachment; filename="{ca.unique_name}.crl"'
         return response
 
-
-class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
+@extend_schema(tags=['Issuing-CA'])
+class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
     """ViewSet for managing Issuing CA instances via REST API."""
 
     queryset = CaModel.objects.exclude(
@@ -413,13 +932,11 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
     search_fields: ClassVar = ['unique_name', 'credential__certificate__common_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at', 'updated_at']
 
-    # ignoring untyped decorator (drf-yasg not typed)
-    @swagger_auto_schema(
-        operation_summary='List Issuing CAs',
-        operation_description='Retrieve all Issuing CAs from the database.',
-        tags=['issuing-cas'],
-    )  # type: ignore[misc]
-    def list(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> Response:
+    @extend_schema(
+        summary='List Issuing CAs',
+        description='Retrieve all Issuing CAs from the database.',
+    )
+    def list(self, _request: Request) -> Response:
         """API endpoint to get all Issuing CAs."""
         queryset = self.get_queryset()
 
@@ -435,48 +952,56 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-    @swagger_auto_schema(
-        operation_summary='Retrieve Issuing CA',
-        operation_description='Retrieve details of a specific Issuing CA by ID.',
-        tags=['issuing-cas'],
-    )  # type: ignore[misc]
-    def retrieve(self, request: HttpRequest, *args: Any, **kwargs: Any) -> Response:
+    @extend_schema(
+        summary='Retrieve Issuing CA',
+        description='Retrieve details of a specific Issuing CA by ID.',
+    )
+    def retrieve(self, request: Request) -> Response:
         """API endpoint to get a single Issuing CA by ID."""
-        return super().retrieve(request, *args, **kwargs)  # type: ignore[arg-type]
+        return super().retrieve(request)
 
+    @extend_schema(
+        summary='Generate CRL',
+        description=(
+            'Manually generate a new Certificate Revocation List (CRL) for this Issuing CA. '
+            'No request body is required.'
+        ),
+        request=inline_serializer(name='Empty', fields={}),
+        responses={
+            200: OpenApiTypes.OBJECT,
+            500: OpenApiTypes.OBJECT,
+        },
+        examples=[
+            OpenApiExample(
+                name='CRL Generated',
+                value={
+                    'message': 'CRL generated successfully for Issuing CA "MyCA".',
+                    'last_crl_issued_at': '2025-12-02T16:30:00Z',
+                },
+                response_only=True,
+                status_codes=[200],
+                media_type='application/json',
+            ),
+            OpenApiExample(
+                name='Server Error',
+                value={
+                    'detail': 'Failed to generate CRL'
+                },
+                response_only=True,
+                status_codes=[500],
+                media_type='application/json',
+            ),
+        ],
+    )
     @action(
         detail=True,
         methods=['post'],
         permission_classes=[IsAuthenticated],
         url_path='generate-crl',
     )
-    @swagger_auto_schema(
-        operation_summary='Generate CRL',
-        operation_description=(
-            'Manually generate a new Certificate Revocation List (CRL) for this Issuing CA. '
-            'No request body is required.'
-        ),
-        tags=['issuing-cas'],
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            title='Empty',
-            properties={},
-        ),
-        responses={
-            200: openapi.Response(
-                description='CRL generated successfully',
-                examples={
-                    'application/json': {
-                        'message': 'CRL generated successfully for Issuing CA "MyCA".',
-                        'last_crl_issued_at': '2025-12-02T16:30:00Z',
-                    }
-                },
-            ),
-            500: 'Failed to generate CRL',
-        },
-    )  # type: ignore[misc]
-    def generate_crl(self, _request: HttpRequest, **_kwargs: Any) -> Response:
+    def generate_crl(self, _request: Request, pk: int | None = None, **_kwargs: Any) -> Response:
         """Generate a new CRL for this Issuing CA."""
+        del pk # not needed, but passed by DRF
         ca = self.get_object()
 
         if ca.issue_crl():
@@ -493,47 +1018,70 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
 
+    @extend_schema(
+        summary='Download CRL',
+        description=(
+            'Download the Certificate Revocation List (CRL) for this Issuing CA. '
+            'Requires authentication. '
+            'Supports both PEM (default) and DER formats via the format query parameter. '
+            'If no CRL is available, use the POST /api/issuing-cas/<pk>/generate-crl/ endpoint to generate one first.'
+        ),
+        parameters=[
+            OpenApiParameter(
+                'encoding',
+                location=OpenApiParameter.QUERY,
+                description='CRL encoding: "pem" (default) or "der"',
+                type=OpenApiTypes.STR,
+                enum=['pem', 'der'],
+                default='pem',
+            ),
+        ],
+        responses={
+            200: OpenApiTypes.OBJECT,
+            400: OpenApiTypes.OBJECT,
+            404: OpenApiTypes.OBJECT
+        },
+        examples=[
+            OpenApiExample(
+                name='CRL Generated',
+                value={
+                    'detail': 'CRL file downloaded successfully.',
+                },
+                response_only=True,
+                status_codes=[200],
+                media_type='application/json',
+            ),
+            OpenApiExample(
+                name='Invalid format parameter',
+                value={
+                    'error': 'No CRL available for Issuing CA "MyCA".',
+                    'hint': 'Generate a CRL first using POST /api/issuing-cas/1/generate-crl/',
+                },
+                response_only=True,
+                status_codes=[400],
+                media_type='application/json',
+            ),
+            OpenApiExample(
+                name='Not Found',
+                value={
+                    'error': 'No CRL available for Issuing CA "MyCA".',
+                    'hint': 'Generate a CRL first using POST /api/issuing-cas/1/generate-crl/',
+                },
+                response_only=True,
+                status_codes=[404],
+                media_type='application/json',
+            ),
+        ],
+    )
     @action(
         detail=True,
         methods=['get'],
         permission_classes=[IsAuthenticated],
         url_path='crl',
     )
-    @swagger_auto_schema(
-        operation_summary='Download CRL',
-        operation_description=(
-            'Download the Certificate Revocation List (CRL) for this Issuing CA. '
-            'Requires authentication. '
-            'Supports both PEM (default) and DER formats via the format query parameter. '
-            'If no CRL is available, use the POST /api/issuing-cas/<pk>/generate-crl/ endpoint to generate one first.'
-        ),
-        tags=['issuing-cas'],
-        manual_parameters=[
-            openapi.Parameter(
-                'encoding',
-                openapi.IN_QUERY,
-                description='CRL encoding: "pem" (default) or "der"',
-                type=openapi.TYPE_STRING,
-                enum=['pem', 'der'],
-                default='pem',
-            ),
-        ],
-        responses={
-            200: 'CRL file downloaded successfully',
-            400: 'Invalid format parameter',
-            404: openapi.Response(
-                description='CRL not available for this Issuing CA',
-                examples={
-                    'application/json': {
-                        'error': 'No CRL available for Issuing CA "MyCA".',
-                        'hint': 'Generate a CRL first using POST /api/issuing-cas/1/generate-crl/',
-                    }
-                },
-            ),
-        },
-    )  # type: ignore[misc]
-    def crl(self, request: HttpRequest, **_kwargs: Any) -> HttpResponse:
+    def crl(self, request: Request, pk: int | None = None, **_kwargs: Any) -> Response | HttpResponse:
         """Download the CRL for this Issuing CA."""
+        del pk # not needed, but passed by DRF
         ca = self.get_object()
         crl_pem = ca.crl_pem
 
@@ -563,9 +1111,10 @@ class IssuingCaViewSet(viewsets.ReadOnlyModelViewSet[CaModel]):
                 crl_der = crl_obj.public_bytes(encoding=serialization.Encoding.DER)
                 response = HttpResponse(crl_der, content_type='application/pkix-crl')
                 response['Content-Disposition'] = f'attachment; filename="{ca.unique_name}.crl"'
-            except (ValueError, TypeError) as exc:
+            except (ValueError, TypeError):
+                self.logger.exception('Failed to convert CRL to DER format')
                 return Response(
-                    {'error': f'Failed to convert CRL to DER format: {exc!s}'},
+                    {'error': 'Failed to convert CRL to DER format'},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
 

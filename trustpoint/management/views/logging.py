@@ -4,28 +4,100 @@ from __future__ import annotations
 
 import datetime
 import io
+import os
 import re
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from django.http import Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import render
 from django.utils.translation import gettext as _
 from django.views.generic import TemplateView, View
 from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
+from drf_spectacular.utils import extend_schema
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
+from management.serializer.logging import LoggingSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
 from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
 from trustpoint.views.base import SortableTableFromListMixin
 
 if TYPE_CHECKING:
-    from typing import Any
 
     from django.http import HttpRequest
+    from rest_framework.request import Request
+
+
+_LOG_FILENAME_RE = re.compile(r'^trustpoint\.log(?:\.\d+)?$')
+
+_CONTROL_CHAR_THRESHOLD = 32
+
+
+def _secure_log_filename(filename: str) -> str:
+    """Secure a log filename by removing any potentially dangerous characters.
+
+    Args:
+        filename: The filename to secure
+
+    Returns:
+        The secured filename with dangerous characters removed
+
+    Raises:
+        Http404: If the filename is invalid
+    """
+    if not isinstance(filename, str) or not filename:
+        exc_msg = f'Invalid filename: {filename}'
+        raise Http404(exc_msg)
+
+    if '\x00' in filename or any(ord(c) < _CONTROL_CHAR_THRESHOLD for c in filename):
+        exc_msg = f'Invalid filename: {filename}'
+        raise Http404(exc_msg)
+
+    for sep in (os.sep, os.path.altsep, '/', '\\'):
+        if sep:
+            filename = filename.replace(sep, '')
+
+    filename = filename.replace('..', '').replace('~', '').replace(':', '')
+
+    if not filename:
+        exc_msg = 'Invalid filename after sanitization'
+        raise Http404(exc_msg)
+
+    return filename
+
+
+def _validate_log_filename(filename: str) -> Path:
+    """Validate a log filename and return the resolved path if valid.
+
+    Args:
+        filename: The filename to validate
+
+    Returns:
+        The resolved Path object if valid
+
+    Raises:
+        Http404: If the filename is invalid or not found
+    """
+    secured_filename = _secure_log_filename(filename)
+
+    if not _LOG_FILENAME_RE.match(secured_filename):
+        exc_msg = 'Invalid filename.'
+        raise Http404(exc_msg)
+
+    resolved_log_dir = LOG_DIR_PATH.resolve()
+
+    for file_path in resolved_log_dir.iterdir():
+        if file_path.is_file() and file_path.name == secured_filename:
+            return file_path
+
+    exc_msg = 'Log file not found.'
+    raise Http404(exc_msg)
 
 
 class IndexView(RedirectView):
@@ -54,7 +126,7 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
 
     template_name = 'management/logging/logging_files.html'
     context_object_name = 'log_files'
-    default_sort_param = 'filename'
+    default_sort_param = 'updated_at'
     paginate_by = None
 
     page_category = 'management'
@@ -79,8 +151,9 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
 
     @classmethod
     def _get_log_file_data(cls, log_filename: str) -> dict[str, str]:
-        log_file_path = LOG_DIR_PATH / Path(log_filename)
-        if not log_file_path.exists() or not log_file_path.is_file():
+        try:
+            log_file_path = _validate_log_filename(log_filename)
+        except Http404:
             return {}
 
         first_date, last_date = cls._get_first_and_last_entry_date(log_file_path)
@@ -99,9 +172,18 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
     def get_queryset(self) -> list[dict[str, str]]:  # type: ignore[override]
         """Gets a queryset of all valid Trustpoint log files in the log directory."""
         all_files = [file.name for file in LOG_DIR_PATH.iterdir()]
-        valid_log_files = [f for f in all_files if re.compile(r'^trustpoint\.log(?:\.\d+)?$').match(f)]
 
-        self.queryset = [self._get_log_file_data(log_file_name) for log_file_name in valid_log_files]
+        file_data_list = [self._get_log_file_data(log_file_name) for log_file_name in all_files]
+
+        self.queryset = [data for data in file_data_list if data]
+
+        def sort_key(item: dict[str, str]) -> datetime.datetime:
+            if item['updated_at'] == _('None'):
+                return datetime.datetime.min.replace(tzinfo=datetime.UTC)
+            date_str = item['updated_at'][:-4]
+            return datetime.datetime.strptime(date_str, DATE_FORMAT).replace(tzinfo=datetime.UTC)
+
+        self.queryset.sort(key=sort_key, reverse=True)
         return self.queryset
 
 
@@ -121,12 +203,11 @@ class LoggingFilesDetailsView(PageContextMixin, LoggerMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         log_filename = self.kwargs.get('filename')
 
-        log_file_path = LOG_DIR_PATH / Path(log_filename)
-
-        if not log_file_path.exists() or not log_file_path.is_file():
+        try:
+            resolved_path = _validate_log_filename(log_filename)
+            context['log_content'] = resolved_path.read_text(encoding='utf-8', errors='backslashreplace')
+        except Http404:
             context['log_content'] = 'Log-File not found.'
-        else:
-            context['log_content'] = log_file_path.read_text(encoding='utf-8', errors='backslashreplace')
 
         return context
 
@@ -145,16 +226,14 @@ class LoggingFilesDownloadView(PageContextMixin, LoggerMixin, TemplateView):
         if not filename:
             msg = 'Filename not provided.'
             raise Http404(msg)
-        log_file_path = LOG_DIR_PATH / Path(filename)
 
-        if not log_file_path.exists() or not log_file_path.is_file():
-            exc_msg = 'Log file not found.'
-            raise Http404(exc_msg)
+        resolved_path = _validate_log_filename(filename)
 
         response = HttpResponse(
-            log_file_path.read_text(encoding='utf-8', errors='backslashreplace'), content_type='text/plain'
+            resolved_path.read_text(encoding='utf-8', errors='backslashreplace'), content_type='text/plain'
         )
-        response['Content-Disposition'] = f'attachment; filename={filename}'
+        # Use the validated filename from the resolved path in the response header.
+        response['Content-Disposition'] = f'attachment; filename={resolved_path.name}'
         return response
 
 
@@ -183,7 +262,16 @@ class LoggingFilesDownloadMultipleView(PageContextMixin, LoggerMixin, View):
 
         filenames = [filename for filename in filenames.split('/') if filename]
 
-        file_collection = [(filename, (LOG_DIR_PATH / Path(filename)).read_bytes()) for filename in filenames]
+        valid_log_files: list[tuple[str, Path]] = []
+        for filename in filenames:
+            try:
+                resolved_path = _validate_log_filename(filename)
+                valid_log_files.append((filename, resolved_path))
+            except Http404 as exc:
+                exc_msg = f'Invalid filename: {filename}'
+                raise Http404(exc_msg) from exc
+
+        file_collection = [(filename, resolved_path.read_bytes()) for filename, resolved_path in valid_log_files]
 
         if archive_format.lower() == 'zip':
             bytes_io = io.BytesIO()
@@ -207,3 +295,115 @@ class LoggingFilesDownloadMultipleView(PageContextMixin, LoggerMixin, View):
         response = HttpResponse(bytes_io.getvalue(), content_type='application/gzip')
         response['Content-Disposition'] = 'attachment; filename=trustpoint-logs.tar.gz'
         return response
+
+@extend_schema(tags=['Logging'])
+class LoggingViewSet(viewsets.GenericViewSet[Any]):
+    """ViewSet for managing Backup instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+    serializer_class = LoggingSerializer
+    filter_backends = ()
+
+    @action(detail=False, methods=['get'])
+    def list_files(self, _request: Request) -> Response:
+        """Retrieve detailed info for all log files."""
+        if not LOG_DIR_PATH.exists():
+            return Response({'error': 'Log files not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        files_info = []
+        all_files = [file.name for file in LOG_DIR_PATH.iterdir()]
+        valid_log_files = [f for f in all_files if re.compile(r'^trustpoint\.log(?:\.\d+)?$').match(f)]
+        for filename in valid_log_files:
+            file_path = LOG_DIR_PATH / Path(filename)
+            if file_path.is_file():
+                stat = file_path.stat()
+                files_info.append({
+                    'name': filename,
+                    'size': stat.st_size,
+                    'modified': datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.UTC)
+                })
+
+        serializer = self.get_serializer(files_info, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path=r'download/(?P<file_name>[^/]+)')
+    def download(self, _request: Request, file_name: str) -> FileResponse | Response:
+        """Download a log file by name.
+
+        /logs/download/trustpoint.log/
+        """
+        if not file_name:
+            return Response(
+                {'error': "Missing 'file_name' path parameter"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Prevent path traversal
+        safe_file_name = Path(file_name)
+        file_path = LOG_DIR_PATH / safe_file_name
+        if not file_path.exists() or not file_path.is_file():
+            return Response(
+                {'error': 'File not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        return FileResponse(
+            file_path.read_text(encoding='utf-8', errors='backslashreplace'),
+            as_attachment=True,
+            filename=file_name
+        )
+
+    @action(
+        detail=False,
+        methods=['delete'],
+        url_path=r'delete/(?P<file_name>[^/]+)'
+    )
+    def delete(self, _request: Request, file_name: str) -> Response:
+        """Delete a log file by name.
+
+        DELETE /logs/delete/trustpoint.log/
+        """
+        if not file_name:
+            return Response(
+                {'error': 'File name is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file name against allowed log file pattern
+        if not re.compile(r'^trustpoint\.log(?:\.\d+)?$').match(file_name):
+            return Response(
+                {'error': 'Invalid file name'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Prevent path traversal by restricting to a filename within LOG_DIR_PATH
+        safe_file_name = Path(file_name).name
+        log_root = LOG_DIR_PATH.resolve()
+        file_path = (log_root / safe_file_name).resolve()
+
+        # Ensure the resolved file path is within the log directory
+        if log_root not in file_path.parents:
+            return Response(
+                {'error': 'Invalid file name'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not file_path.exists() or not file_path.is_file():
+            return Response(
+                {'error': 'File not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            file_path.unlink()
+            return Response(
+                {'message': f"File '{safe_file_name}' deleted successfully"},
+                status=status.HTTP_200_OK
+            )
+        except Exception: # noqa: BLE001
+            return Response(
+                {'error': 'An internal error occurred while deleting the file.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

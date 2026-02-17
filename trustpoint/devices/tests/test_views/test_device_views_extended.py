@@ -7,7 +7,8 @@ from django.contrib.messages import get_messages
 from django.test import Client
 from django.urls import reverse
 
-from devices.models import DeviceModel, NoOnboardingConfigModel, NoOnboardingPkiProtocol, OnboardingProtocol
+from devices.models import DeviceModel
+from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol, OnboardingProtocol
 
 
 @pytest.mark.django_db
@@ -389,3 +390,46 @@ class TestOpcUaGdsViews:
         assert response.status_code == 200
         devices = response.context['object_list']
         assert opcua_device not in devices
+
+
+class TestOpcUaGdsPushViews:
+    """Test OPC UA GDS Push specific view functionality."""
+    
+    def test_opcua_gds_push_table_excludes_generic_devices(
+        self,
+        admin_client: Client,
+        device_instance: dict[str, Any]
+    ) -> None:
+        """Test that devices table shows OPC UA GDS Push devices."""
+        generic_device = device_instance['device']
+        assert generic_device.device_type == DeviceModel.DeviceType.GENERIC_DEVICE
+        
+        url = reverse('devices:devices')
+        response = admin_client.get(url)
+        
+        assert response.status_code == 200
+        devices = response.context['object_list']
+        assert generic_device in devices
+    
+    def test_device_table_excludes_opcua_gds_push_devices(
+        self,
+        admin_client: Client,
+        domain_instance: dict[str, Any]
+    ) -> None:
+        """Test that device table shows OPC UA GDS Push devices."""
+        domain = domain_instance['domain']
+        
+        # Create OPC UA GDS Push device
+        opcua_gds_push_device = DeviceModel.objects.create(
+            common_name='opcua-gds-push-test-device',
+            serial_number='SN-GDS-PUSH',
+            domain=domain,
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH
+        )
+        
+        url = reverse('devices:devices')
+        response = admin_client.get(url)
+        
+        assert response.status_code == 200
+        devices = response.context['object_list']
+        assert opcua_gds_push_device in devices

@@ -1,6 +1,5 @@
 """Tests for PKI domain views."""
 
-from typing import Any
 
 import pytest
 from django.contrib.messages import get_messages
@@ -12,7 +11,6 @@ from pki.models import (
     CaModel,
     DevIdRegistration,
     TruststoreModel,
-    CertificateModel,
     CertificateProfileModel,
 )
 from pki.views.domains import (
@@ -20,9 +18,7 @@ from pki.views.domains import (
     DomainCreateView,
     DomainConfigView,
     DomainDetailView,
-    DomainCaBulkDeleteConfirmView,
     DevIdRegistrationCreateView,
-    DevIdRegistrationDeleteView,
     DevIdMethodSelectView,
     IssuedCertificatesView,
     OnboardingMethodSelectIdevidHelpView,
@@ -480,7 +476,7 @@ class TestDevIdMethodSelectView:
 
         assert response.status_code == 302
         # The actual URL pattern is /pki/devid-registration/create/<pk>/
-        assert f'/pki/devid-registration/create/{domain.pk}/' in response.url
+        assert f'/pki/devid-registration/create/{domain.pk}' in response.url
 
 
 @pytest.mark.django_db

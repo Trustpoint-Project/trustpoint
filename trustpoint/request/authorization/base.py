@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 
 from aoki.views import AokiServiceMixin
+from request.profile_validator import ProfileValidator
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin
 
@@ -77,7 +78,12 @@ class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
             self.logger.warning(error_message)
             raise ValueError(error_message) from e
 
-        self.logger.debug('Certificate profile authorization successful for profile: %s', requested_profile)
+        ProfileValidator.validate(context)
+
+        self.logger.debug(
+            'Certificate profile authorization successful for profile: %s',
+            requested_profile
+        )
 
 
 class DomainScopeValidation(AuthorizationComponent, LoggerMixin):

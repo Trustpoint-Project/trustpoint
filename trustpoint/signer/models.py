@@ -37,7 +37,7 @@ class SignerModel(CustomDeleteActionModel):
     @property
     def common_name(self) -> str:
         """Returns common name."""
-        return self.credential.certificate.common_name
+        return self.credential.certificate_or_error.common_name
 
     @property
     def signature_suite(self) -> oid.SignatureSuite:

@@ -153,9 +153,9 @@ DOCKER_CONTAINER = False
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = not DOCKER_CONTAINER
 ADMIN_ENABLED = bool(DEBUG)
-DEVELOPMENT_ENV = True
+DEVELOPMENT_ENV = DEBUG
 
 
 # Basic SMTP backend
@@ -259,6 +259,7 @@ INSTALLED_APPS = [
     'users.apps.UsersConfig',
     'home.apps.HomeConfig',
     'devices.apps.DevicesConfig',
+    'onboarding.apps.OnboardingConfig',
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
@@ -279,8 +280,7 @@ INSTALLED_APPS = [
     'dbbackup',
     'workflows.apps.WorkflowsConfig',
     'rest_framework',
-    'drf_yasg',
-    'discovery.apps.DiscoveryConfig',
+    'drf_spectacular'
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
@@ -429,18 +429,13 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-SWAGGER_SETTINGS = {
-    'SECURITY_DEFINITIONS': {
-        'Bearer': {
-            'type': 'apiKey',
-            'description': 'Enter JWT token as: Bearer {token}',
-            'name': 'Authorization',
-            'in': 'header',
-        }
-    },
-    'USE_SESSION_AUTH': False,  # disables Django login in Swagger UI
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Trustpoint APIs',
+    'DESCRIPTION': 'API documentation for Trustpoint project',
+    'VERSION': 'v0.0.5',
 }
 
 SWAGGER_USE_COMPAT_RENDERERS = False

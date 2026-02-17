@@ -6,9 +6,8 @@ import pytest
 from devices.models import DeviceModel
 from django.core.exceptions import ImproperlyConfigured
 from django.db.models import QuerySet
-from django.http import Http404, HttpResponse
+from django.http import Http404
 from django.test import RequestFactory, TestCase
-from django.urls import reverse
 
 from trustpoint.views.base import (
     BaseBulkDeleteView,

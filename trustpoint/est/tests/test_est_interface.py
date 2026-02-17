@@ -1,6 +1,4 @@
 """Tests for the EST interface endpoints."""
-
-import base64
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,8 +11,6 @@ from pki.util.x509 import ClientCertificateAuthenticationError
 from est.views import (
     EstCACertsView,
     EstSimpleEnrollmentView,
-    LoggedHttpResponse,
-    UsernamePasswordAuthenticationError,
 )
 
 

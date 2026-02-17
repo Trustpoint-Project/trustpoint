@@ -1,14 +1,12 @@
 """Test suite for TLS import forms."""
 
 import datetime
-from io import BytesIO
 from unittest.mock import Mock, patch
-from zoneinfo import ZoneInfo
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase

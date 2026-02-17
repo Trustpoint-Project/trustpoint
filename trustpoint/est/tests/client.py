@@ -219,11 +219,11 @@ class ESTClient:
 if __name__ == '__main__':
     dc_client = ESTClient(
         est_url='https://localhost:443/.well-known/est',
-        auth_type='mutual_tls',  #'both',
-        domain='arburg',
-        cert_template='domain_credential',
-        username=None,  #'admin',
-        password=None,  #'testing321',
+        auth_type='mutual_tls',#'both',
+        #domain='arburg',
+        #cert_template='domain_credential',
+        username=None,#'admin',
+        password=None,#'testing321',
         cert_path='idevid.pem',
         key_path='idevid_pk.pem',
         ca_cert_path='trust_store.pem',

@@ -1,15 +1,13 @@
 """Extended tests for HSM setup mixin error handling."""
 
 import subprocess
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.messages import get_messages
 from django.test import RequestFactory
 
 from management.models import PKCS11Token, KeyStorageConfig
-from setup_wizard import SetupWizardState
-from setup_wizard.forms import HsmSetupForm
 from setup_wizard.views import SetupWizardHsmSetupView
 
 

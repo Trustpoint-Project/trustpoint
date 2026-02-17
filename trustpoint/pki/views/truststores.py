@@ -1,12 +1,11 @@
 """This module contains all views concerning the PKI -> Truststore section."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING
+from typing import Any, ClassVar, cast
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, QuerySet
+from django.forms import Form
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
@@ -17,14 +16,16 @@ from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, status, viewsets
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
 from rest_framework.response import Response
 from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.oid import NameOid
 from trustpoint_core.serializer import CertificateFormat
 
+from pki.filters import TruststoreFilter
 from pki.forms import TruststoreAddForm
 from pki.models import DomainModel
 from pki.models.truststore import TruststoreModel
@@ -38,10 +39,11 @@ from trustpoint.views.base import (
     SortableTableMixin,
 )
 
-if TYPE_CHECKING:
-    from typing import Any, ClassVar
-
-    from django.forms import Form
+# Import DeviceModel for runtime use
+try:
+    from devices.models import DeviceModel
+except ImportError:
+    DeviceModel = None  # type: ignore[assignment,misc]
 
 
 class TruststoresRedirectView(RedirectView):
@@ -66,6 +68,41 @@ class TruststoreTableView(TruststoresContextMixin, SortableTableMixin[Truststore
     context_object_name = 'truststores'
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'unique_name'
+    filterset_class = TruststoreFilter
+
+    def apply_filters(self, qs: QuerySet[TruststoreModel]) -> QuerySet[TruststoreModel]:
+        """Applies the `TruststoreFilter` to the given queryset.
+
+        Args:
+            qs: The base queryset to filter.
+
+        Returns:
+            The filtered queryset according to GET parameters.
+        """
+        self.filterset = TruststoreFilter(self.request.GET, queryset=qs)
+        return cast('QuerySet[TruststoreModel]', self.filterset.qs)
+
+    def get_queryset(self) -> QuerySet[TruststoreModel]:
+        """Filter queryset to only include truststores filtered by UI filters.
+
+        Returns:
+            Returns a queryset of all TruststoreModels, filtered by UI filters.
+        """
+        base_qs = super().get_queryset()
+        return self.apply_filters(base_qs)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the filter to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the truststores page.
+        """
+        context = super().get_context_data(**kwargs)
+        context['filter'] = getattr(self, 'filterset', None)
+        return context
 
 
 class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm]):
@@ -75,6 +112,14 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
     form_class = TruststoreAddForm
     template_name = 'pki/truststores/add/file_import.html'
     ignore_url = reverse_lazy('pki:truststores')
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Set context flags based on URL."""
+        if 'from-device' in request.path:
+            self.for_devid = True
+        else:
+            self.for_devid = False
+        return cast('HttpResponse',super().dispatch(request, *args, **kwargs))
 
     def form_valid(self, form: TruststoreAddForm) -> HttpResponseRedirect:
         """If the form is valid, redirect to Truststore overview."""
@@ -88,6 +133,11 @@ class TruststoreCreateView(TruststoresContextMixin, FormView[TruststoreAddForm])
                     kwargs={'pk': domain_id, 'truststore_id': truststore.id},
                 )
             )
+
+        if getattr(self, 'for_devid', False):
+            # Use query parameter for truststore_id
+            url = reverse('pki:devid_registration_create')
+            return HttpResponseRedirect(f'{url}?truststore_id={truststore.id}')
 
         n_certificates = truststore.number_of_certificates
         msg_str = ngettext(
@@ -353,7 +403,13 @@ class TruststoreBulkDeleteConfirmView(TruststoresContextMixin, BulkDeleteView):
 
         return response
 
-
+@extend_schema(tags=['Truststore'])
+@extend_schema_view(
+    retrieve=extend_schema(description='Retrieve a single Truststore by id.'),
+    update=extend_schema(description='Update an existing Truststore.'),
+    partial_update=extend_schema(description='Partially update an existing Truststore.'),
+    destroy=extend_schema(description='Delete a Truststore.')
+)
 class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
     """ViewSet for managing Truststore instances.
 
@@ -369,16 +425,13 @@ class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
     search_fields: ClassVar = ['unique_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at']
 
-    # ignoring untyped decorator (drf-yasg not typed)
-    @swagger_auto_schema(
-        operation_summary='Create a new truststore',
-        operation_description='Add a new truststore by providing its unique_name, intended_usage and trust_store_file.',
-        tags=['truststores'],
-    )  # type: ignore[misc]
-    def create(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+    @extend_schema(
+        summary='Create a new truststore',
+        description='Add a new truststore by providing its unique_name, intended_usage and trust_store_file.',
+    )
+    def create(self, request: Request) -> Response:
         """API endpoint to create truststore."""
-        del args, _kwargs
-        serializer = self.get_serializer(data=request.data)  # type: ignore[attr-defined]
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         truststore = TruststoreService().create(
@@ -389,14 +442,12 @@ class TruststoreViewSet(viewsets.ModelViewSet[TruststoreModel]):
 
         return Response(TruststoreSerializer(truststore).data, status=status.HTTP_201_CREATED)
 
-    @swagger_auto_schema(
-        operation_summary='List Truststores',
-        operation_description='Retrieve truststore from the database.',
-        tags=['truststores'],
-    )  # type: ignore[misc]
-    def list(self, request: HttpRequest, *args: Any, **_kwargs: Any) -> HttpResponse:
+    @extend_schema(
+        summary='List Truststores',
+        description='Retrieve truststore from the database.',
+    )
+    def list(self, _request: Request) -> Response:
         """API endpoint to get all truststores."""
-        del request, args, _kwargs
         queryset = self.get_queryset()
 
         for backend in list(self.filter_backends):

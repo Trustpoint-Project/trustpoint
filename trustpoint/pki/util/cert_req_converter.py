@@ -156,8 +156,22 @@ class JSONCertRequestConverter:
         )
 
     @staticmethod
-    def _ext_from_json(json: dict[str, Any], builder: x509.CertificateBuilder) -> x509.CertificateBuilder:  # noqa: C901 (makes sense to check all supported extensions here)
-        """Processes JSON data to add X.509 certificate extensions to a CertificateBuilder."""
+    def _ext_from_json(  # noqa: C901
+        json: dict[str, Any],
+        builder: x509.CertificateBuilder,
+        *,
+        allow_ca_cert: bool = False
+    ) -> x509.CertificateBuilder:
+        """Processes JSON data to add X.509 certificate extensions to a CertificateBuilder.
+
+        Args:
+            json: JSON dictionary containing extension data
+            builder: Certificate builder to add extensions to
+            allow_ca_cert: Whether to allow CA certificate requests (use for legitimate CA cert enrollment)
+
+        Returns:
+            Updated certificate builder with extensions added
+        """
         ext = json.get('extensions', {})
         for ext_name, ext_value in ext.items():
             critical = ext_value.get('critical', False)
@@ -180,9 +194,9 @@ class JSONCertRequestConverter:
                 builder = builder.add_extension(x509.ExtendedKeyUsage(eku_oids), critical=critical)
             elif ext_name == 'basic_constraints':
                 ca = ext_value.get('ca', False)
-                if ca:
-                    # If requesting CAs is required, implement additional safeguards first
-                    # (only if {"ca": true} is explicitly set in the profile)
+                if ca and not allow_ca_cert:
+                    # Safeguard: CA certificate requests are blocked by default
+                    # Use allow_ca_certificate_request flag in context for legitimate CA cert requests
                     exc_msg = 'Safeguard: Requesting CA certificates is not allowed.'
                     raise ValueError(exc_msg)
                 builder = builder.add_extension(
@@ -247,13 +261,21 @@ class JSONCertRequestConverter:
         return builder.not_valid_after(datetime.datetime.now(datetime.UTC) + validity_period)
 
     @staticmethod
-    def from_json(json: dict[str, Any]) -> x509.CertificateBuilder:
-        """Convert a JSON request dict to a CertificateBuilder."""
-        json = JSONProfileVerifier.validate_request(json)  # normalize aliases and validate
+    def from_json(json: dict[str, Any], *, allow_ca_cert: bool = False) -> x509.CertificateBuilder:
+        """Convert a JSON request dict to a CertificateBuilder.
+
+        Args:
+            json: JSON dictionary containing certificate request data
+            allow_ca_cert: Whether to allow CA certificate requests (use for legitimate CA cert enrollment)
+
+        Returns:
+            Certificate builder with all data from JSON applied
+        """
+        json = JSONProfileVerifier.validate_request(json) # normalize aliases and validate
 
         builder = JSONCertRequestConverter._subject_from_json(json, x509.CertificateBuilder())
 
-        builder = JSONCertRequestConverter._ext_from_json(json, builder)
+        builder = JSONCertRequestConverter._ext_from_json(json, builder, allow_ca_cert=allow_ca_cert)
 
         return JSONCertRequestConverter._validity_from_json(json, builder)
 

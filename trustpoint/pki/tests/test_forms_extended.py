@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
 
 import pytest
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
+from django import forms
 from django.core.files.uploadedfile import SimpleUploadedFile
 from management.models import KeyStorageConfig
 from trustpoint_core.serializer import PrivateKeyLocation
@@ -16,10 +13,12 @@ from trustpoint_core.serializer import PrivateKeyLocation
 from pki.forms import (
     CertProfileConfigForm,
     CertificateDownloadForm,
+    CertificateIssuanceForm,
     DevIdAddMethodSelectForm,
     DevIdRegistrationForm,
     IssuingCaAddMethodSelectForm,
     IssuingCaFileTypeSelectForm,
+    ProfileBasedFormFieldBuilder,
     TruststoreAddForm,
     TruststoreDownloadForm,
     get_private_key_location_from_config,
@@ -34,7 +33,7 @@ class TestGetPrivateKeyLocationFromConfig:
 
     def test_returns_hsm_provided_for_softhsm(self):
         """Test that HSM_PROVIDED is returned for SOFTHSM storage type."""
-        with patch('pki.forms.KeyStorageConfig.get_config') as mock_get_config:
+        with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
             mock_config = Mock()
             mock_config.storage_type = KeyStorageConfig.StorageType.SOFTHSM
             mock_get_config.return_value = mock_config
@@ -44,7 +43,7 @@ class TestGetPrivateKeyLocationFromConfig:
 
     def test_returns_hsm_provided_for_physical_hsm(self):
         """Test that HSM_PROVIDED is returned for PHYSICAL_HSM storage type."""
-        with patch('pki.forms.KeyStorageConfig.get_config') as mock_get_config:
+        with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
             mock_config = Mock()
             mock_config.storage_type = KeyStorageConfig.StorageType.PHYSICAL_HSM
             mock_get_config.return_value = mock_config
@@ -54,7 +53,7 @@ class TestGetPrivateKeyLocationFromConfig:
 
     def test_returns_software_when_config_does_not_exist(self):
         """Test that SOFTWARE is returned when KeyStorageConfig does not exist."""
-        with patch('pki.forms.KeyStorageConfig.get_config') as mock_get_config:
+        with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
             mock_get_config.side_effect = KeyStorageConfig.DoesNotExist()
 
             result = get_private_key_location_from_config()
@@ -583,3 +582,702 @@ class TestFormFieldAttributes:
         assert 'local_file_import' in choices
         assert 'local_request' in choices
         assert 'remote_est' in choices
+
+
+class TestProfileBasedFormFieldBuilder:
+    """Test the ProfileBasedFormFieldBuilder class."""
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    def test_initialization(self, mock_verifier_class):
+        """Test that ProfileBasedFormFieldBuilder initializes correctly."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {'cn': {'required': True}},
+            'ext': {},
+            'validity': {'days': 365}
+        }
+        builder = ProfileBasedFormFieldBuilder(profile)
+        assert builder.profile == profile
+        assert builder.verifier == mock_verifier
+        assert builder.fields == {}
+        mock_verifier_class.assert_called_once_with(profile)
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    def test_build_all_fields_basic_profile(self, mock_verifier_class):
+        """Test building fields from a basic profile."""
+        mock_verifier = Mock()
+        sample_request = {
+            'subject': {'cn': 'CHANGEME_common_name', 'o': 'TestOrg'},
+            'extensions': {'subject_alternative_name': {'dns_names': ['CHANGEME_dns']}},
+            'validity': {'days': 365}
+        }
+        mock_verifier.get_sample_request.return_value = sample_request
+        mock_verifier_class.return_value = mock_verifier
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {
+                'cn': {'required': True, 'mutable': True},
+                'o': {'required': False, 'mutable': True}
+            },
+            'ext': {
+                'subject_alternative_name': {
+                    'dns_names': {'required': False, 'mutable': True}
+                }
+            },
+            'validity': {
+                'days': {'required': True, 'mutable': True, 'value': 365}
+            }
+        }
+        builder = ProfileBasedFormFieldBuilder(profile)
+        fields = builder.build_all_fields()
+
+        assert 'cn' in fields
+        assert 'o' in fields
+        assert 'dns_names' in fields
+        assert 'days' in fields
+
+        # Check required field
+        assert fields['cn'].required is True
+        assert fields['days'].required is True
+
+        # Check initial values
+        assert fields['days'].initial == 365
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    def test_build_all_subject_fields_allow_star(self, mock_verifier_class):
+        """Test building all subject fields when allow='*'."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {
+                'allow': '*',
+                'common_name': {'required': True, 'mutable': False, 'value': 'test'},
+                'organization_name': {'required': False, 'mutable': True}
+            }
+        }
+        builder = ProfileBasedFormFieldBuilder(profile)
+        builder._build_all_subject_fields(profile['subj'])
+
+        # Should include all subject fields except the basic ones that are skipped
+        assert 'common_name' in builder.fields
+        assert 'organization_name' in builder.fields
+
+        # Check required and mutable settings
+        assert builder.fields['common_name'].required is True
+        assert builder.fields['common_name'].disabled is True  # mutable=False
+        assert builder.fields['common_name'].initial == 'test'
+
+        assert builder.fields['organization_name'].required is False
+        assert builder.fields['organization_name'].disabled is False  # mutable=True
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    def test_build_all_san_fields_allow_star(self, mock_verifier_class):
+        """Test building all SAN fields when allow='*'."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        profile = {
+            'type': 'cert_profile',
+            'ext': {
+                'subject_alternative_name': {
+                    'allow': '*',
+                    'dns_names': {'required': True, 'mutable': True, 'value': ['example.com']},
+                    'ip_addresses': {'required': False, 'mutable': False}
+                }
+            }
+        }
+        builder = ProfileBasedFormFieldBuilder(profile)
+        builder._build_all_san_fields(profile['ext']['subject_alternative_name'])
+
+        assert 'dns_names' in builder.fields
+        assert 'ip_addresses' in builder.fields
+
+        # Check field properties
+        assert builder.fields['dns_names'].required is True
+        assert builder.fields['dns_names'].disabled is False
+        assert builder.fields['dns_names'].initial == 'example.com'
+
+        assert builder.fields['ip_addresses'].required is False
+        assert builder.fields['ip_addresses'].disabled is True  # mutable=False
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    def test_build_subject_fields_from_sample(self, mock_verifier_class):
+        """Test building subject fields from sample request."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {
+                'cn': {'required': True},
+                'o': {'mutable': False, 'value': 'TestOrg'}
+            }
+        }
+        builder = ProfileBasedFormFieldBuilder(profile)
+        sample_subject = {
+            'cn': 'CHANGEME_common_name',
+            'o': 'TestOrg',
+            'ou': 'TestUnit'
+        }
+        builder._build_subject_fields_from_sample(sample_subject)
+
+        assert 'cn' in builder.fields
+        assert 'o' in builder.fields
+        assert 'ou' in builder.fields
+
+        # CHANGEME should result in empty initial value
+        assert builder.fields['cn'].initial == ''
+        assert builder.fields['cn'].required is True
+
+        # Fixed value should be set
+        assert builder.fields['o'].initial == 'TestOrg'
+        assert builder.fields['o'].disabled is True  # mutable=False
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    def test_build_san_fields_from_sample(self, mock_verifier_class):
+        """Test building SAN fields from sample request."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        profile = {
+            'type': 'cert_profile',
+            'ext': {
+                'subject_alternative_name': {
+                    'dns_names': {'required': True},
+                    'ip_addresses': {'mutable': False, 'value': ['192.168.1.1']}
+                }
+            }
+        }
+        builder = ProfileBasedFormFieldBuilder(profile)
+        sample_san = {
+            'dns_names': ['CHANGEME_dns'],
+            'ip_addresses': ['192.168.1.1'],
+            'uris': ['https://example.com']
+        }
+        builder._build_san_fields_from_sample(sample_san)
+
+        assert 'dns_names' in builder.fields
+        assert 'ip_addresses' in builder.fields
+        assert 'uris' in builder.fields
+
+        # Check field properties
+        assert builder.fields['dns_names'].required is True
+        assert builder.fields['dns_names'].initial == ''
+
+        assert builder.fields['ip_addresses'].disabled is True  # mutable=False
+        assert builder.fields['ip_addresses'].initial == '192.168.1.1'
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    def test_build_validity_fields_from_sample(self, mock_verifier_class):
+        """Test building validity fields from sample request."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        profile = {
+            'type': 'cert_profile',
+            'validity': {
+                'days': {'required': True, 'value': 365},
+                'hours': {'mutable': False}
+            }
+        }
+        builder = ProfileBasedFormFieldBuilder(profile)
+        sample_validity = {
+            'days': 365,
+            'hours': 0,
+            'minutes': 'CHANGEME_minutes'
+        }
+        builder._build_validity_fields_from_sample(sample_validity)
+
+        assert 'days' in builder.fields
+        assert 'hours' in builder.fields
+        assert 'minutes' in builder.fields
+
+        # Check field types and properties
+        assert isinstance(builder.fields['days'], forms.IntegerField)
+        assert builder.fields['days'].required is True
+        assert builder.fields['days'].initial == 365
+
+        assert builder.fields['hours'].disabled is True  # mutable=False
+        assert builder.fields['minutes'].initial == 0  # CHANGEME becomes 0
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    def test_country_field_validation(self, mock_verifier_class):
+        """Test that country fields have proper validation."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {
+                'allow': '*',
+                'country_name': {'required': True}
+            }
+        }
+        builder = ProfileBasedFormFieldBuilder(profile)
+        builder._build_all_subject_fields(profile['subj'])
+
+        country_field = builder.fields['country_name']
+        assert country_field.min_length == 2
+        assert country_field.max_length == 2
+        assert country_field.required is True
+
+
+class TestCertificateIssuanceForm:
+    """Test the CertificateIssuanceForm class."""
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    def test_form_initialization(self, mock_builder_class, mock_verifier_class):
+        """Test that CertificateIssuanceForm initializes correctly."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {'cn': Mock()}
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {'cn': {'required': True}},
+            'ext': {},
+            'validity': {'days': 365}
+        }
+        form = CertificateIssuanceForm(profile)
+
+        assert form.profile == profile
+        mock_verifier_class.assert_called_once_with(profile)
+        mock_builder_class.assert_called_once_with(profile)
+        assert form.verifier == mock_verifier
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    def test_form_with_subject_fields(self, mock_builder_class, mock_verifier_class):
+        """Test form with subject fields from profile."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {
+            'cn': forms.CharField(required=True),
+            'o': forms.CharField(required=False),
+            'c': forms.CharField(required=True, initial='US', disabled=True)
+        }
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {
+                'cn': {'required': True, 'mutable': True},
+                'o': {'required': False, 'mutable': True},
+                'c': {'required': True, 'mutable': False, 'value': 'US'}
+            },
+            'ext': {},
+            'validity': {}
+        }
+        form = CertificateIssuanceForm(profile)
+        form.fields = mock_builder.fields
+
+        assert 'cn' in form.fields
+        assert 'o' in form.fields
+        assert 'c' in form.fields
+
+        assert form.fields['cn'].required is True
+        assert form.fields['c'].required is True
+        assert form.fields['c'].disabled is True  # mutable=False
+        assert form.fields['c'].initial == 'US'
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    def test_form_with_san_fields(self, mock_builder_class, mock_verifier_class):
+        """Test form with SAN fields from profile."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {
+            'dns_names': forms.CharField(required=True),
+            'ip_addresses': forms.CharField(required=False)
+        }
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {},
+            'ext': {
+                'subject_alternative_name': {
+                    'dns_names': {'required': True},
+                    'ip_addresses': {'required': False}
+                }
+            },
+            'validity': {}
+        }
+        form = CertificateIssuanceForm(profile)
+        form.fields = mock_builder.fields
+
+        assert 'dns_names' in form.fields
+        assert 'ip_addresses' in form.fields
+        assert form.fields['dns_names'].required is True
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    def test_form_with_validity_fields(self, mock_builder_class, mock_verifier_class):
+        """Test form with validity fields from profile."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {
+            'days': forms.IntegerField(required=True, initial=365),
+            'hours': forms.IntegerField(required=False)
+        }
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {},
+            'ext': {},
+            'validity': {
+                'days': {'required': True, 'value': 365},
+                'hours': {'required': False}
+            }
+        }
+        form = CertificateIssuanceForm(profile)
+        form.fields = mock_builder.fields
+
+        assert 'days' in form.fields
+        assert 'hours' in form.fields
+        assert isinstance(form.fields['days'], forms.IntegerField)
+        assert form.fields['days'].required is True
+        assert form.fields['days'].initial == 365
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    def test_form_validation_valid_data(self, mock_builder_class, mock_verifier_class):
+        """Test form validation with valid data."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {
+            'cn': forms.CharField(required=True),
+            'o': forms.CharField(required=False),
+            'dns_names': forms.CharField(required=False),
+            'days': forms.IntegerField(required=True)
+        }
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {
+                'cn': {'required': True},
+                'o': {'required': False}
+            },
+            'ext': {
+                'subject_alternative_name': {
+                    'dns_names': {'required': False}
+                }
+            },
+            'validity': {
+                'days': {'required': True, 'value': 365}
+            }
+        }
+        form_data = {
+            'cn': 'test.example.com',
+            'o': 'Test Organization',
+            'dns_names': 'www.example.com, api.example.com',
+            'days': 365
+        }
+        form = CertificateIssuanceForm(profile, data=form_data)
+        form.fields = mock_builder.fields
+
+        assert form.is_valid()
+        assert form.cleaned_data['cn'] == 'test.example.com'
+        assert form.cleaned_data['o'] == 'Test Organization'
+        assert form.cleaned_data['dns_names'] == 'www.example.com, api.example.com'
+        assert form.cleaned_data['days'] == 365
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    def test_form_validation_missing_required_field(self, mock_builder_class, mock_verifier_class):
+        """Test form validation fails when required field is missing."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {
+            'cn': forms.CharField(required=True)
+        }
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {
+                'cn': {'required': True}
+            },
+            'ext': {},
+            'validity': {}
+        }
+        form_data = {}  # Missing required 'cn'
+        form = CertificateIssuanceForm(profile, data=form_data)
+        form.fields = mock_builder.fields
+
+        assert not form.is_valid()
+        assert 'cn' in form.errors
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    def test_form_data_to_json_request(self, mock_builder_class, mock_verifier_class):
+        """Test conversion of form data to JSON request format."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {}
+        # Set the labels on the mock class
+        mock_builder_class.SUBJECT_LABELS = {
+            'cn': 'Common Name (CN)',
+        }
+        mock_builder_class.SAN_LABELS = {}
+        mock_builder_class.VALIDITY_LABELS = {
+            'days': 'Days',
+        }
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {'cn': {'required': True}},
+            'ext': {},
+            'validity': {'days': {'required': True}}
+        }
+        form = CertificateIssuanceForm(profile)
+        form.cleaned_data = {
+            'cn': 'test.example.com',
+            'days': 365
+        }
+
+        request = form._form_data_to_json_request()
+
+        assert request['type'] == 'cert_request'
+        assert request['subject'] == {'cn': 'test.example.com'}
+        assert request['validity'] == {'days': 365}
+        assert 'extensions' not in request  # No extensions in this case
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    def test_build_subject_from_form_data(self, mock_builder_class, mock_verifier_class):
+        """Test building subject DN from form data."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {}
+        # Set the SUBJECT_LABELS on the mock class
+        mock_builder_class.SUBJECT_LABELS = {
+            'cn': 'Common Name (CN)',
+            'common_name': 'Common Name (CN)',
+            'o': 'Organization (O)',
+            'organization_name': 'Organization (O)',
+            'c': 'Country (C)',
+            'country_name': 'Country (C)',
+        }
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {'type': 'cert_profile', 'subj': {}, 'ext': {}, 'validity': {}}
+        form = CertificateIssuanceForm(profile)
+        cleaned_data = {
+            'cn': 'test.example.com',
+            'o': 'Test Org',
+            'c': 'US',
+            'days': 365  # Should be filtered out
+        }
+
+        subject = form._build_subject_from_form_data(cleaned_data)
+
+        assert subject == {
+            'cn': 'test.example.com',
+            'o': 'Test Org',
+            'c': 'US'
+        }
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    def test_build_san_from_form_data(self, mock_builder_class, mock_verifier_class):
+        """Test building SAN extension from form data."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {}
+        # Set the SAN_LABELS on the mock class
+        mock_builder_class.SAN_LABELS = {
+            'dns_names': 'DNS Names (comma separated)',
+            'ip_addresses': 'IP Addresses (comma separated)',
+            'rfc822_names': 'Email Addresses (comma separated)',
+            'uris': 'URIs (comma separated)',
+        }
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {'type': 'cert_profile', 'subj': {}, 'ext': {}, 'validity': {}}
+        form = CertificateIssuanceForm(profile)
+        cleaned_data = {
+            'dns_names': 'www.example.com, api.example.com',
+            'ip_addresses': '192.168.1.1, 10.0.0.1',
+            'cn': 'test.com'  # Should be filtered out
+        }
+
+        san = form._build_san_from_form_data(cleaned_data)
+
+        assert san == {
+            'dns_names': ['www.example.com', 'api.example.com'],
+            'ip_addresses': ['192.168.1.1', '10.0.0.1']
+        }
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    def test_build_validity_from_form_data(self, mock_builder_class, mock_verifier_class):
+        """Test building validity period from form data."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {}
+        # Set the VALIDITY_LABELS on the mock class
+        mock_builder_class.VALIDITY_LABELS = {
+            'days': 'Days',
+            'hours': 'Hours',
+            'minutes': 'Minutes',
+            'seconds': 'Seconds',
+        }
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {'type': 'cert_profile', 'subj': {}, 'ext': {}, 'validity': {}}
+        form = CertificateIssuanceForm(profile)
+        cleaned_data = {
+            'days': 365,
+            'hours': 0,
+            'cn': 'test.com'  # Should be filtered out
+        }
+
+        validity = form._build_validity_from_form_data(cleaned_data)
+
+        assert validity == {'days': 365}  # hours: 0 is falsy, so not included
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    @patch('pki.forms.cert_profiles.JSONCertRequestConverter.from_json')
+    def test_get_certificate_builder(self, mock_converter, mock_builder_class, mock_verifier_class):
+        """Test get_certificate_builder method."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {}
+        # Set the labels on the mock class
+        mock_builder_class.SUBJECT_LABELS = {
+            'cn': 'Common Name (CN)',
+        }
+        mock_builder_class.SAN_LABELS = {}
+        mock_builder_class.VALIDITY_LABELS = {
+            'days': 'Days',
+        }
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {'cn': {'required': True}},
+            'ext': {},
+            'validity': {'days': {'required': True}}
+        }
+        form = CertificateIssuanceForm(profile)
+        form.cleaned_data = {
+            'cn': 'test.example.com',
+            'days': 365
+        }
+        form.data = form.cleaned_data  # Make the form bound
+
+        mock_builder_instance = Mock()
+        mock_converter.return_value = mock_builder_instance
+
+        result = form.get_certificate_builder()
+
+        assert result == mock_builder_instance
+        mock_converter.assert_called_once()
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    def test_form_with_allow_star_subject(self, mock_builder_class, mock_verifier_class):
+        """Test form handles allow='*' for subject fields."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {
+            'common_name': forms.CharField(required=True, initial='test'),
+            'organization_name': forms.CharField(required=False)
+        }
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {
+                'allow': '*',
+                'common_name': {'required': True, 'value': 'test'},
+                'organization_name': {'required': False}
+            },
+            'ext': {},
+            'validity': {}
+        }
+        form = CertificateIssuanceForm(profile)
+        form.fields = mock_builder.fields
+
+        # Should have all subject fields
+        assert 'common_name' in form.fields
+        assert 'organization_name' in form.fields
+
+        assert form.fields['common_name'].required is True
+        assert form.fields['common_name'].initial == 'test'
+
+    @patch('pki.forms.cert_profiles.JSONProfileVerifier')
+    @patch('pki.forms.cert_profiles.ProfileBasedFormFieldBuilder')
+    def test_form_with_allow_star_san(self, mock_builder_class, mock_verifier_class):
+        """Test form handles allow='*' for SAN fields."""
+        mock_verifier = Mock()
+        mock_verifier_class.return_value = mock_verifier
+        
+        mock_builder = Mock()
+        mock_builder.fields = {
+            'dns_names': forms.CharField(required=True),
+            'ip_addresses': forms.CharField(required=False),
+            'rfc822_names': forms.CharField(),
+            'uris': forms.CharField()
+        }
+        mock_builder_class.return_value = mock_builder
+        
+        profile = {
+            'type': 'cert_profile',
+            'subj': {},
+            'ext': {
+                'subject_alternative_name': {
+                    'allow': '*',
+                    'dns_names': {'required': True},
+                    'ip_addresses': {'required': False}
+                }
+            },
+            'validity': {}
+        }
+        form = CertificateIssuanceForm(profile)
+        form.fields = mock_builder.fields
+
+        # Should have all SAN fields
+        assert 'dns_names' in form.fields
+        assert 'ip_addresses' in form.fields
+        assert 'rfc822_names' in form.fields
+        assert 'uris' in form.fields
+
+        assert form.fields['dns_names'].required is True

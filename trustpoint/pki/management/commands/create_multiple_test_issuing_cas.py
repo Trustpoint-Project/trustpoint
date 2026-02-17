@@ -102,9 +102,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             private_key=rsa2_root_ca_key,
             hash_algorithm=hashes.SHA256(),
             validity_days=root_validity_days,
-        )
-        rsa2_root_crl = self.generate_empty_crl(
-            rsa2_root, rsa2_root_ca_key, hashes.SHA256(), crl_validity_hours=root_validity_days * 24
+            path_length=2,  # Allow 2 non-self-issued intermediate CAs (intermediate + issuing)
         )
         rsa2_root_ca = self.save_keyless_ca(
             root_ca_cert=rsa2_root,
@@ -119,6 +117,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             subject_cn='Intermediate CA A-1',
             hash_algorithm=hashes.SHA256(),
             validity_days=intermediate_validity_days,
+            path_length=1,
         )
         rsa2_int_ca_crl = self.generate_empty_crl(
             rsa2_int_ca_1, rsa2_int_ca_key_1, hashes.SHA256(), crl_validity_hours=intermediate_validity_days * 24
@@ -138,6 +137,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             subject_cn='Intermediate CA A-2',
             hash_algorithm=hashes.SHA256(),
             validity_days=intermediate_validity_days,
+            path_length=1, 
         )
         rsa2_int_ca_crl_2 = self.generate_empty_crl(
             rsa2_int_ca_2, rsa2_int_ca_key_2, hashes.SHA256(), crl_validity_hours=intermediate_validity_days * 24

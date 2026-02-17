@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import base64
 from typing import TYPE_CHECKING
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.http import JsonResponse
 from django.test import RequestFactory
@@ -39,6 +39,7 @@ def mock_tls_cert():
     cert_serializer.as_pem.return_value = b'-----BEGIN CERTIFICATE-----\nTLS_CERT\n-----END CERTIFICATE-----'
     certificate.get_certificate_serializer.return_value = cert_serializer
     credential.certificate = certificate
+    credential.certificate_or_error = certificate
     tls_cert.credential = credential
     return tls_cert
 
@@ -65,7 +66,8 @@ def mock_owner_credential(rsa_private_key: rsa.RSAPrivateKey):
 
     owner_cred.get_private_key.return_value = rsa_private_key
     owner_cred.certificate = owner_cert
-
+    owner_cred.certificate_or_error = owner_cert
+    
     return owner_cred
 
 

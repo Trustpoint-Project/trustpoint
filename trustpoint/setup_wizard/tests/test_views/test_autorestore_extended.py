@@ -1,14 +1,13 @@
 """Comprehensive tests for auto-restore password recovery views."""
 
 import subprocess
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, PropertyMock
+from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.messages import get_messages
 from django.test import RequestFactory
 
-from pki.models import CaModel, CredentialModel
+from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.forms import PasswordAutoRestoreForm
 from setup_wizard.views import BackupAutoRestorePasswordView

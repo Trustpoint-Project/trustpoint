@@ -2,7 +2,7 @@
 
 import json
 from typing import Any
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 from cryptography import x509
@@ -13,7 +13,7 @@ from pydantic_core import ValidationError
 
 from pki.models import CertificateProfileModel
 from request.profile_validator import ProfileValidator
-from request.request_context import BaseRequestContext, BaseCertificateRequestContext, EstCertificateRequestContext
+from request.request_context import EstCertificateRequestContext
 
 
 @pytest.mark.django_db

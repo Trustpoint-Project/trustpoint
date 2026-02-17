@@ -1,17 +1,13 @@
 """Tests for PKI certificate views."""
 
-from typing import Any
-from unittest.mock import Mock, patch
 
 import pytest
-from cryptography import x509
 from django.http import Http404
 from django.urls import reverse
 from django.test import RequestFactory
 from trustpoint_core.archiver import ArchiveFormat
 from trustpoint_core.serializer import CertificateFormat
 
-from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.views.certificates import (
     CertificatesRedirectView,

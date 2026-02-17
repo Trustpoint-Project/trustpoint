@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING, override
 
+from cryptography import x509
 from django.http import Http404
+from django.urls import reverse
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.detail import DetailView
@@ -105,6 +107,7 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
         context['help_page'] = HelpPage(heading=heading, sections=sections)
         context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
         context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
+        context['ValueRenderType_HTML'] = ValueRenderType.HTML.value
         context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
         return context
 
@@ -166,7 +169,7 @@ class NoOnboardingCmpSharedSecretStrategy(HelpPageStrategy):
             title = profile.certificate_profile.display_name or name
 
             try:
-                cert_profile = json.loads(profile.certificate_profile.profile_json)
+                cert_profile = profile.certificate_profile.profile
                 sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
 
                 cmd = CmpSharedSecretCommandBuilder.get_dynamic_cert_profile_command(
@@ -289,7 +292,7 @@ class NoOnboardingEstUsernamePasswordStrategy(HelpPageStrategy):
             title = profile.certificate_profile.display_name or name
 
             try:
-                cert_profile = json.loads(profile.certificate_profile.profile_json)
+                cert_profile = profile.certificate_profile.profile
                 sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
 
                 cmd = EstUsernamePasswordCommandBuilder.get_dynamic_cert_profile_command(
@@ -574,7 +577,7 @@ class ApplicationCertificateWithCmpDomainCredentialStrategy(HelpPageStrategy):
             title = profile.certificate_profile.display_name or name
 
             try:
-                cert_profile = json.loads(profile.certificate_profile.profile_json)
+                cert_profile = profile.certificate_profile.profile
                 sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
 
                 cmd = CmpClientCertificateCommandBuilder.get_dynamic_cert_profile_command(
@@ -681,7 +684,7 @@ class ApplicationCertificateWithEstDomainCredentialStrategy(HelpPageStrategy):
             title = profile.certificate_profile.display_name or name
 
             try:
-                cert_profile = json.loads(profile.certificate_profile.profile_json)
+                cert_profile = profile.certificate_profile.profile
                 sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
 
                 cmd = EstUsernamePasswordCommandBuilder.get_dynamic_cert_profile_command(
@@ -735,3 +738,289 @@ class OpcUaGdsApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = ApplicationCertificateWithEstDomainCredentialStrategy()
+
+
+class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
+    """Strategy for building the OPC UA GDS Push onboarding help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        onboarding_config = getattr(device, 'onboarding_config', None)
+        if not onboarding_config:
+            raise Http404(_('Onboarding is not configured for this device.'))
+
+        sections = [
+            self._build_summary_section(help_context),
+            self._build_ca_hierarchy_section(device),
+            self._build_download_section(device),
+            self._build_actions_section(device),
+        ]
+
+        return sections, _non_lazy('Help - OPC UA GDS Push Certificate Management')
+
+    def _build_summary_section(self, help_context: HelpContext) -> HelpSection:
+        """Build the summary section with basic device information."""
+        return HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(
+                    _non_lazy('Protocol'),
+                    'OPC UA GDS Push',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Device Type'),
+                    'OPC UA GDS Push Device',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Domain'),
+                    help_context.domain_unique_name,
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Required Public Key Type'),
+                    str(help_context.domain.public_key_info),
+                    ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+    def _build_actions_section(self, device: DeviceModel) -> HelpSection:
+        """Build the actions section with available operations."""
+        has_domain_credential = IssuedCredentialModel.objects.filter(
+            device=device,
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
+        ).exists()
+
+        discover_server_url = reverse(
+            'devices:devices_discover_server',
+            kwargs={'pk': device.pk}
+        )
+
+        discover_html = (
+            '<form method="post" action="' + discover_server_url + '" style="display: inline;">'
+            'CSRF_TOKEN_PLACEHOLDER'
+            '<button type="submit" class="btn btn-info">Discover Server</button>'
+            '</form>'
+            '<p class="text-muted mt-2">Connects to the OPC UA server without authentication '
+            'to retrieve server information and certificates for initial configuration.</p>'
+        )
+
+        if has_domain_credential:
+            update_trustlist_url = reverse(
+                'devices:devices_update_trustlist',
+                kwargs={'pk': device.pk}
+            )
+            update_cert_url = reverse(
+                'devices:devices_update_server_certificate',
+                kwargs={'pk': device.pk}
+            )
+
+            trustlist_html = (
+                '<form method="post" action="' + update_trustlist_url + '" style="display: inline;">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<button type="submit" class="btn btn-primary">Update Trustlist</button>'
+                '</form>'
+                '<p class="text-muted mt-2">Updates the device\'s trust list with CA certificates '
+                'and CRLs from the associated truststore.</p>'
+            )
+
+            cert_html = (
+                '<form method="post" action="' + update_cert_url + '" style="display: inline;">'
+                'CSRF_TOKEN_PLACEHOLDER'
+                '<button type="submit" class="btn btn-primary">Update Server Certificate</button>'
+                '</form>'
+                '<p class="text-muted mt-2">Generates a new CSR on the server, signs it with the '
+                'domain CA, and updates the server certificate.</p>'
+            )
+
+            return HelpSection(
+                _non_lazy('Available Actions'),
+                [
+                    HelpRow(
+                        _non_lazy('Discover Server'),
+                        discover_html,
+                        ValueRenderType.HTML,
+                    ),
+                    HelpRow(
+                        _non_lazy('Update Trustlist'),
+                        trustlist_html,
+                        ValueRenderType.HTML,
+                    ),
+                    HelpRow(
+                        _non_lazy('Update Server Certificate'),
+                        cert_html,
+                        ValueRenderType.HTML,
+                    ),
+                ],
+            )
+
+        return HelpSection(
+            _non_lazy('Available Actions'),
+            [
+                HelpRow(
+                    _non_lazy('Discover Server'),
+                    discover_html,
+                    ValueRenderType.HTML,
+                ),
+                HelpRow(
+                    _non_lazy('Domain Credential Required'),
+                    'Before you can update the trustlist or server certificate, you must first issue '
+                    'a domain credential for this device. This credential is used to authenticate '
+                    'securely with the OPC UA server.',
+                    ValueRenderType.PLAIN,
+                ),
+            ],
+        )
+
+    def _build_ca_hierarchy_section(self, device: DeviceModel) -> HelpSection:
+        """Build the CA hierarchy section with certificate chain information."""
+        if not (device.domain and device.domain.issuing_ca):
+            return HelpSection(
+                _non_lazy('CA Certificates'),
+                [
+                    HelpRow(
+                        _non_lazy('No CA Configured'),
+                        'No issuing CA is configured for this device.',
+                        ValueRenderType.PLAIN,
+                    ),
+                ],
+            )
+
+        try:
+            ca_chain = device.domain.issuing_ca.get_ca_chain_from_truststore()
+            ca_chain = list(reversed(ca_chain))
+
+            hierarchy_html = (
+                '<div style="font-family: monospace;">'
+                '<strong>Certificate Authority Hierarchy:</strong><br>'
+            )
+
+            has_missing_crl = False
+            for idx, ca in enumerate(ca_chain):
+                try:
+                    cert_serializer = ca.ca_certificate_model.get_certificate_serializer()
+                    cert_crypto = cert_serializer.as_crypto()
+
+                    common_name = cert_crypto.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
+                    if common_name:
+                        value = common_name[0].value
+                        cn_value = value.decode('utf-8') if isinstance(value, bytes) else value
+                    else:
+                        cn_value = ca.unique_name
+
+                    crl_status = 'MISSING'
+                    crl_link = ''
+                    if ca.crl_pem:
+                        try:
+                            x509.load_pem_x509_crl(ca.crl_pem.encode())
+                            active_crl = ca.get_active_crl()
+                            if active_crl:
+                                crl_detail_url = reverse('pki:crl-detail', kwargs={'pk': active_crl.pk})
+                                crl_link = f'<a href="{crl_detail_url}" target="_blank">CRL</a> '
+                            crl_status = 'OK'
+                        except (ValueError, TypeError):
+                            crl_status = 'INVALID'
+                    else:
+                        has_missing_crl = True
+
+                    ca_detail_url = reverse('pki:issuing_cas-detail', kwargs={'pk': ca.pk})
+                    indent = '&nbsp;' * (idx * 4)
+                    hierarchy_html += (
+                        f'{indent}└─ <a href="{ca_detail_url}" target="_blank">{cn_value}</a> '
+                        f'[{crl_link}{crl_status}]<br>'
+                    )
+
+                except (ValueError, TypeError, AttributeError):
+                    continue
+
+            hierarchy_html += '</div>'
+
+            rows = [
+                HelpRow(
+                    _non_lazy('Certificate Chain'),
+                    hierarchy_html,
+                    ValueRenderType.HTML,
+                ),
+            ]
+
+            if has_missing_crl:
+                rows.append(
+                    HelpRow(
+                        _non_lazy('Warning'),
+                        '<div class="alert alert-warning" role="alert">'
+                        '<strong>CRL Missing:</strong> One or more Certificate Authorities in the chain '
+                        'are missing Certificate Revocation Lists (CRLs). CRLs are mandatory for OPC UA '
+                        'GDS Push trustlist operations. Please generate CRLs for all CAs before '
+                        'proceeding with trustlist updates.'
+                        '</div>',
+                        ValueRenderType.HTML,
+                    )
+                )
+
+            return HelpSection(
+                _non_lazy('CA Hierarchy'),
+                rows,
+            )
+
+        except ValueError:
+            return HelpSection(
+                _non_lazy('CA Certificates'),
+                [
+                    HelpRow(
+                        _non_lazy('Error'),
+                        'Invalid truststore configuration for the issuing CA.',
+                        ValueRenderType.PLAIN,
+                    ),
+                ],
+            )
+
+    def _build_download_section(self, device: DeviceModel) -> HelpSection:
+        """Build the download section for trust bundle."""
+        if device.domain and device.domain.issuing_ca:
+            download_url = reverse(
+                'devices:trust_bundle_download',
+                kwargs={'pk': device.domain.issuing_ca.pk}
+            )
+            download_html = (
+                f'<a href="{download_url}" class="btn btn-primary">Download Trust Bundle</a>'
+                '<p class="text-muted mt-2">Download a ZIP file containing all CA certificates '
+                'and CRLs in DER format for use with OPC UA servers.</p>'
+            )
+            return HelpSection(
+                _non_lazy('Download Trust Bundle'),
+                [
+                    HelpRow(
+                        _non_lazy('Trust Bundle Download'),
+                        download_html,
+                        ValueRenderType.HTML,
+                    ),
+                ],
+            )
+
+        return HelpSection(
+            _non_lazy('Download Trust Bundle'),
+            [
+                HelpRow(
+                    _non_lazy('Trust Bundle Download'),
+                    '<p class="text-muted">No issuing CA configured for this device.</p>',
+                    ValueRenderType.HTML,
+                ),
+            ],
+        )
+
+
+class OpcUaGdsPushApplicationCertificateHelpView(BaseHelpView):
+    """Help view for OPC UA GDS Push application certificates."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    strategy = OpcUaGdsPushOnboardingStrategy()
+
+
+class OpcUaGdsPushOnboardingHelpView(BaseHelpView):
+    """Help view for OPC UA GDS Push onboarding."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    strategy = OpcUaGdsPushOnboardingStrategy()

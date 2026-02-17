@@ -8,7 +8,10 @@ from typing import Any, ClassVar
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
-from drf_yasg.utils import swagger_auto_schema  # type: ignore[import-untyped]
+from drf_spectacular.utils import (
+    OpenApiResponse,
+    extend_schema,
+)
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -21,33 +24,33 @@ from signer.serializers import (
     SignerCertificateSerializer,
     SignerSerializer,
     SignHashRequestSerializer,
-    SignHashResponseSerializer,
 )
 from trustpoint.logger import LoggerMixin
 
 
+@extend_schema(tags=['Signer'])
 class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
     """ViewSet for Signer operations."""
 
     queryset = SignerModel.objects.all()
     serializer_class = SignerSerializer
-    permission_classes: ClassVar[list[Any]] = [IsAuthenticated]  # type: ignore[misc]
+    permission_classes = (IsAuthenticated,)
 
-    @swagger_auto_schema(  # type: ignore[misc]
-        method='post',
-        request_body=SignHashRequestSerializer,
-        responses={
-            200: SignHashResponseSerializer,
-            400: 'Bad Request - Invalid input data',
-            404: 'Not Found - Signer does not exist',
-            500: 'Internal Server Error - Failed to sign hash',
-        },
-        operation_summary='Sign a hash value',
-        operation_description=(
+    @extend_schema(
+        methods=['post'],
+        summary='Sign a hash value',
+        description=(
             'Signs a hash value using the specified signer. '
             'The hash value must be provided as a hexadecimal string. '
             'The signature is returned in hexadecimal format.'
         ),
+        responses={
+            200: OpenApiResponse(description='Signature generated successfully'),
+            400: OpenApiResponse(description='Bad Request - Invalid input data'),
+            404: OpenApiResponse(description='Not Found - Signer does not exist'),
+            500: OpenApiResponse(description='Internal Server Error - Failed to sign hash')
+        },
+        request=None
     )
     @action(detail=False, methods=['post'], url_path='sign')
     def sign_hash(self, request: Request) -> Response:
@@ -102,32 +105,37 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
 
         except SignerModel.DoesNotExist:
             self.logger.exception('Signer with ID %d not found', signer_id)
-            return Response({'error': f'Signer with ID {signer_id} does not exist'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
+            return Response(
+                {'error': f'Signer with ID {signer_id} does not exist'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception:
             self.logger.exception('Failed to sign hash with signer %s', signer_id)
-            error_msg = f'Failed to sign hash: {e!s}'
-            return Response({'error': error_msg}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {'error': 'Failed to sign hash'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-    @swagger_auto_schema(  # type: ignore[misc]
-        method='get',
+    @extend_schema(
+        methods='get',
         responses={
             200: SignerCertificateSerializer,
             404: 'Not Found - Signer does not exist',
         },
-        operation_summary='Get signer certificate',
-        operation_description=(
+        summary='Get signer certificate',
+        description=(
             "Returns the signer's certificate in PEM format. "
             'The certificate can be used to verify signatures created by this signer.'
         ),
     )
     @action(detail=True, methods=['get'], url_path='certificate')
-    def get_certificate(self, request: Request, pk: int | None = None) -> Response:  # noqa: ARG002
+    def get_certificate(self, _request: Request, pk: int | None = None) -> Response:
         """Get the signer's certificate in PEM format."""
         try:
             signer = self.get_object()
 
             # Get certificate in PEM format
-            certificate_pem = signer.credential.certificate.get_certificate_serializer().as_pem().decode()
+            certificate_pem = signer.credential.certificate_or_error.get_certificate_serializer().as_pem().decode()
 
             self.logger.info('Certificate retrieved for signer %s (ID: %d)', signer.unique_name, signer.id)
 
@@ -142,32 +150,37 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
 
         except SignerModel.DoesNotExist:
             self.logger.exception('Signer with ID %d not found', pk)
-            return Response({'error': f'Signer with ID {pk} does not exist'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
+            return Response(
+                {'error': f'Signer with ID {pk} does not exist'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception:
             self.logger.exception('Failed to retrieve certificate for signer %s', pk)
-            error_msg = f'Failed to retrieve certificate: {e!s}'
-            return Response({'error': error_msg}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {'error': 'Failed to retrieve certificate'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-
+@extend_schema(tags=['Signer'])
 class SignedMessageViewSet(viewsets.ReadOnlyModelViewSet[SignedMessageModel]):
     """ViewSet for SignedMessage operations."""
 
     queryset = SignedMessageModel.objects.all().order_by('-created_at')
     serializer_class = SignedMessageSerializer
-    permission_classes: ClassVar[list[Any]] = [IsAuthenticated]  # type: ignore[misc]
+    permission_classes = (IsAuthenticated,)
     filterset_fields: ClassVar[list[str]] = ['signer']
 
-    @swagger_auto_schema(  # type: ignore[misc]
-        operation_summary='List all signed messages',
-        operation_description='Returns a list of all signed messages, ordered by creation date (newest first).',
+    @extend_schema(
+        summary='List all signed messages',
+        description='Returns a list of all signed messages, ordered by creation date (newest first).',
     )
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """List all signed messages."""
         return super().list(request, *args, **kwargs)
 
-    @swagger_auto_schema(  # type: ignore[misc]
-        operation_summary='Retrieve a signed message',
-        operation_description='Returns details of a specific signed message.',
+    @extend_schema(
+        summary='Retrieve a signed message',
+        description='Returns details of a specific signed message.',
     )
     def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Retrieve a specific signed message."""

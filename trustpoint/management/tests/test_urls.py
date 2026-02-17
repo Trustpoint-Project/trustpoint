@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import resolve, reverse
 
-from management.views import IndexView, backup, logging, tls, key_storage, settings
+from management.views import IndexView, backup, logging, tls, key_storage
 
 
 class SettingsUrlsTestCase(TestCase):

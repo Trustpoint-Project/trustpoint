@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from io import BytesIO
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 

@@ -1,15 +1,13 @@
 """Comprehensive tests for TLS credential import and generate views."""
 
 import subprocess
-from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 from django.contrib.messages import get_messages
 from django.test import RequestFactory
-from django.db import connection
 
-from management.forms import TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
+from management.forms import TlsAddFileImportPkcs12Form
 from management.models import KeyStorageConfig
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel

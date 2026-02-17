@@ -1,7 +1,5 @@
 """Tests for page_context module."""
 
-from typing import Any
-
 from django.test import TestCase
 from django.views.generic import TemplateView
 

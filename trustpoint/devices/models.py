@@ -14,13 +14,19 @@ from django.utils.translation import gettext_lazy as _
 from django_stubs_ext.db.models import TypedModelMeta
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 
-from pki.models import CaModel
+from onboarding.models import (
+    AbstractPkiProtocolModel,
+    NoOnboardingConfigModel,
+    NoOnboardingPkiProtocol,
+    OnboardingConfigModel,
+    OnboardingPkiProtocol,
+    OnboardingProtocol,
+    OnboardingStatus,
+)
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
-from pki.models.truststore import TruststoreModel
 from util.db import CustomDeleteActionModel
-from util.encrypted_fields import EncryptedCharField
 
 if TYPE_CHECKING:
     from typing import Any
@@ -29,328 +35,17 @@ if TYPE_CHECKING:
 
 
 __all__ = [
+    'AbstractPkiProtocolModel',
     'DeviceModel',
     'IssuedCredentialModel',
+    'NoOnboardingConfigModel',
+    'NoOnboardingPkiProtocol',
+    'OnboardingConfigModel',
+    'OnboardingPkiProtocol',
+    'OnboardingProtocol',
+    'OnboardingStatus',
     'RemoteDeviceCredentialDownloadModel',
 ]
-
-
-class OnboardingStatus(models.IntegerChoices):
-    """The onboarding status."""
-
-    PENDING = 1, _('Pending')
-    ONBOARDED = 2, _('Onboarded')
-
-
-class OnboardingProtocol(models.IntegerChoices):
-    """Choices of onboarding protocols."""
-
-    MANUAL = 0, _('Manual Onboarding')
-    CMP_IDEVID = 1, _('CMP - IDevID')
-    CMP_SHARED_SECRET = 2, _('CMP - Shared Secret')
-    EST_IDEVID = 3, _('EST - IDevID')
-    EST_USERNAME_PASSWORD = 4, _('EST - Username & Password')
-    AOKI = 5, _('AOKI')
-    BRSKI = 6, _('BRSKI')
-
-
-class OnboardingPkiProtocol(models.IntegerChoices):
-    """Choices for onboarding pki protocols."""
-
-    # Bitmask: Only use powers of 2: 1, 2, 4, 8, 16 ...
-    CMP = 1, _('CMP')
-    EST = 2, _('EST')
-
-
-class NoOnboardingPkiProtocol(models.IntegerChoices):
-    """Choices for no onboarding pki protocols."""
-
-    # Bitmask: Only use powers of 2: 1, 2, 4, 8, 16 ...
-    CMP_SHARED_SECRET = 1, _('CMP - Shared Secret (HMAC)')
-    # 2 reserved for CMP Client Certificate
-    EST_USERNAME_PASSWORD = 4, _('EST - Username & Password')
-    # 8 reserved for EST Client Certificate
-    MANUAL = 16, _('Manual')
-
-
-class AbstractPkiProtocolModel[T: models.IntegerChoices]:
-    """Extends a model for IntegerChoices stored as bitwise flags."""
-
-    pki_protocol_class: type[T]
-
-    def add_pki_protocol(self, pki_protocol: T) -> None:
-        """Adds the provided PkiProtocol to the allowed protocols for onboarded devices.
-
-        Args:
-            pki_protocol: The PkiProtocol to allow.
-        """
-        self.pki_protocols |= pki_protocol.value
-
-    def remove_pki_protocol(self, pki_protocol: T) -> None:
-        """Removes the provided PkiProtocol from the allowed protocols if it is allowed..
-
-        Args:
-            pki_protocol: The PkiProtocol to forbid.
-        """
-        self.pki_protocols &= ~pki_protocol
-
-    def clear_pki_protocols(self) -> None:
-        """Clears all allowed PkiProtocols, that is, it deactivates application certificate issuance."""
-        self.pki_protocols = 0
-
-    def has_pki_protocol(self, pki_protocol: T) -> bool:
-        """Checks if the provided PkiProtocol is allowed.
-
-        Args:
-            pki_protocol: The PkiProtocol that is checked against the allowed ones.
-
-        Returns:
-            Returns True if the provided PkiProtocol is allowed, False otherwise.
-        """
-        return (self.pki_protocols & pki_protocol) == pki_protocol
-
-    def get_pki_protocols(self) -> list[T]:
-        """Gets all allowed PkiProtocols.
-
-        Returns:
-            Retruns the allowed PkiProtocols as list.
-        """
-        return [pki_protocol for pki_protocol in self.pki_protocol_class if self.has_pki_protocol(pki_protocol)]
-
-    def set_pki_protocols(self, pki_protocols: list[T]) -> None:
-        """Sets all allowed PkiProtocols exactly matching the provided list."""
-        self.clear_pki_protocols()
-        for pki_protocol in pki_protocols:
-            self.add_pki_protocol(pki_protocol)
-
-
-class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], models.Model):
-    """Onboarding Configuration Model."""
-
-    pki_protocol_class = OnboardingPkiProtocol
-
-    pki_protocols = models.PositiveIntegerField(
-        verbose_name=_('Pki Protocol Bitwise Flag'), null=False, blank=True, default=0
-    )
-
-    onboarding_status = models.IntegerField(
-        choices=OnboardingStatus,
-        verbose_name=_('Onboarding Status'),
-        null=False,
-        blank=False,
-        default=OnboardingStatus.PENDING,
-    )
-
-    onboarding_protocol = models.PositiveIntegerField(
-        choices=OnboardingProtocol,
-        verbose_name=_('Onboarding Protocol'),
-        null=False,
-        blank=False,
-    )
-
-    # these will be dropped after successfull onboarding
-    est_password = EncryptedCharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
-    cmp_shared_secret = EncryptedCharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
-
-    idevid_trust_store = models.ForeignKey(
-        TruststoreModel,
-        verbose_name=_('IDevID Manufacturer Truststore'),
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-    )
-
-    def __str__(self) -> str:
-        """Gets the model instance as human-readable string."""
-        return (
-            'OnboardingConfigModel('
-            f'onboarding_status:{OnboardingStatus(self.onboarding_status).label}, '
-            f'onboarding_protocol:{OnboardingProtocol(self.onboarding_protocol).label}, '
-            f'cmp_shared_secret:{bool(self.cmp_shared_secret)}, '
-            f'est_password:{bool(self.est_password)})'
-        )
-
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        """Executes full_clean() before saving.
-
-        Args:
-            *args: Positional arguments are passed to super().save().
-            **kwargs: Keyword arguments are passed to super().save().
-        """
-        self.full_clean()
-        super().save(*args, **kwargs)
-
-    def clean(self) -> None:
-        """Validation before saving the model."""
-        error_messages = None
-
-        match self.onboarding_protocol:
-            case OnboardingProtocol.MANUAL:
-                error_messages = self._validate_case_manual_onboarding()
-            case OnboardingProtocol.CMP_IDEVID:
-                error_messages = self._validate_case_cmp_idevid_onboarding()
-            case OnboardingProtocol.CMP_SHARED_SECRET:
-                error_messages = self._validate_case_cmp_shared_secret_onboarding()
-            case OnboardingProtocol.EST_IDEVID:
-                error_messages = self._validate_case_est_idevid_onboarding()
-            case OnboardingProtocol.EST_USERNAME_PASSWORD:
-                error_messages = self._validate_case_est_username_password_onboarding()
-            case OnboardingProtocol.AOKI:
-                err_msg = 'AOKI is not yet supported as onboarding protocol.'
-                raise ValidationError(err_msg)
-            case OnboardingProtocol.BRSKI:
-                err_msg = 'BRSKI is not yet supported as onboarding protocol.'
-                raise ValidationError(err_msg)
-            case _:
-                err_msg = f'Unknown onboarding protocol found: {self.onboarding_protocol}.'
-                raise ValidationError(err_msg)
-
-        if error_messages:
-            raise ValidationError(error_messages)
-
-    def _validate_case_manual_onboarding(self) -> dict[str, str]:
-        """Validates case OnboardingProtocol.MANUAL.
-
-        Args:
-            error_messages: The container that gathers all error messages.
-
-        Returns:
-            The error_messages gathered.
-        """
-        error_messages = {}
-
-        if self.est_password != '':
-            error_messages['est_password'] = 'EST password must not be set for manual onboarding.'  # noqa: S105
-
-        if self.cmp_shared_secret != '':
-            error_messages['cmp_shared_secret'] = 'CMP shared-secret must not be set for manual onboarding.'  # noqa: S105
-
-        if self.idevid_trust_store is not None:
-            error_messages['idevid_trust_store'] = 'IDevID truststore must not be set for manual onboarding.'
-
-        return error_messages
-
-    def _validate_case_cmp_idevid_onboarding(self) -> dict[str, str]:
-        """Validates case OnboardingProtocol.CMP_IDEVID.
-
-        Args:
-            error_messages: The container that gathers all error messages.
-
-        Returns:
-            The error_messages gathered.
-        """
-        return {}
-
-    def _validate_case_cmp_shared_secret_onboarding(self) -> dict[str, str]:
-        """Validates case OnboardingProtocol.CMP_SHARED_SECRET.
-
-        Args:
-            error_messages: The container that gathers all error messages.
-
-        Returns:
-            The error_messages gathered.
-        """
-        error_messages = {}
-
-        if self.est_password != '':
-            error_messages['est_password'] = 'EST password must not be set for CMP shared-secret onboarding.'  # noqa: S105
-
-        if self.idevid_trust_store is not None:
-            error_messages['idevid_trust_store'] = 'IDevID truststore must not be set for CMP shared-secret onboarding.'
-
-        return error_messages
-
-    def _validate_case_est_idevid_onboarding(self) -> dict[str, str]:
-        """Validates case OnboardingProtocol.EST_IDEVID.
-
-        Args:
-            error_messages: The container that gathers all error messages.
-
-        Returns:
-            The error_messages gathered.
-        """
-        error_messages = {}
-
-        if self.est_password != '':
-            error_messages['est_password'] = 'EST password must not be set for EST IDevID onboarding.'  # noqa: S105
-
-        if self.cmp_shared_secret != '':
-            error_messages['cmp_shared_secret'] = 'CMP shared-secret must not be set for EST IDevID onboarding.'  # noqa: S105
-
-        # idevid_trust_store can be left blank while this would ofcourse mean no onboarding is possible.
-
-        return error_messages
-
-    def _validate_case_est_username_password_onboarding(self) -> dict[str, str]:
-        """Validates case OnboardingProtocol.EST_USERNAME_PASSWORD.
-
-        Args:
-            error_messages: The container that gathers all error messages.
-
-        Returns:
-            The error_messages gathered.
-        """
-        error_messages = {}
-
-        if self.cmp_shared_secret != '':
-            error_messages['cmp_shared_secret'] = (
-                'CMP shared-secret must not be set for EST username / password onboarding.'  # noqa: S105
-            )
-
-        if self.idevid_trust_store is not None:
-            error_messages['idevid_trust_store'] = (
-                'IDevID truststore must not be set for EST username / password onboarding.'
-            )
-
-        return error_messages
-
-
-class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol], models.Model):
-    """No Onboarding Configuration Model."""
-
-    pki_protocol_class = NoOnboardingPkiProtocol
-
-    pki_protocols = models.PositiveIntegerField(
-        verbose_name=_('Pki Protocol Bitwise Flag'), null=False, blank=True, default=0
-    )
-    est_password = models.CharField(verbose_name=_('EST Password'), max_length=128, blank=True, default='')
-    cmp_shared_secret = models.CharField(verbose_name=_('CMP Shared Secret'), max_length=128, blank=True, default='')
-
-    def __str__(self) -> str:
-        """Gets the model instance as human-readable string."""
-        return (
-            'NoOnboardingConfigModel('
-            f'cmp_shared_secret:{bool(self.cmp_shared_secret)}'
-            f'est_password:{bool(self.est_password)})'
-        )
-
-    def save(self, *args: Any, **kwargs: Any) -> None:
-        """Executes full_clean() before saving.
-
-        Args:
-            *args: Positional arguments are passed to super().save().
-            **kwargs: Keyword arguments are passed to super().save().
-        """
-        self.full_clean()
-        super().save(*args, **kwargs)
-
-    def clean(self) -> None:
-        """Validation before saving the model."""
-        error_messages = {}
-
-        if self.cmp_shared_secret != '' and not self.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
-            error_messages['cmp_shared_secret'] = (
-                'CMP shared-secret must not be set if EST_USERNAME_PASSWORD is not enabled.'  # noqa: S105
-            )
-
-        if self.cmp_shared_secret == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
-            error_messages['cmp_shared_secret'] = 'CMP shared-secret must be set if EST_USERNAME_PASSWORD is enabled.'  # noqa: S105
-
-        if self.est_password != '' and not self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
-            error_messages['est_password'] = 'EST password must not be set if EST_USERNAME_PASSWORD is not enabled.'  # noqa: S105
-
-        if self.est_password == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
-            error_messages['est_password'] = 'EST password must be set if EST_USERNAME_PASSWORD is enabled.'  # noqa: S105
 
 
 class DeviceModel(CustomDeleteActionModel):
@@ -358,6 +53,8 @@ class DeviceModel(CustomDeleteActionModel):
 
     common_name = models.CharField(_('Device'), max_length=100, default='', unique=True)
     serial_number = models.CharField(_('Serial-Number'), max_length=100, default='', blank=True, null=False)
+    ip_address = models.GenericIPAddressField(_('IP Address'), protocol='both', unpack_ipv4=True, null=True, blank=True)
+    opc_server_port = models.PositiveIntegerField(_('OPC Server Port'), default=0, blank=True, null=False)
     domain = models.ForeignKey(
         DomainModel, verbose_name=_('Domain'), related_name='devices', blank=True, null=True, on_delete=models.PROTECT
     )
@@ -384,6 +81,7 @@ class DeviceModel(CustomDeleteActionModel):
 
         GENERIC_DEVICE = 0, _('Generic Device')
         OPC_UA_GDS = 1, _('OPC UA GDS')
+        OPC_UA_GDS_PUSH = 2, _('OPC UA GDS Push')
 
     device_type = models.IntegerField(
         choices=DeviceType,
@@ -408,13 +106,28 @@ class DeviceModel(CustomDeleteActionModel):
 
     def clean(self) -> None:
         """Validation before saving the model."""
+        error_messages = {}
+
         if not (self.onboarding_config or self.no_onboarding_config):
-            err_msg = 'Either onboarding or no-onboarding has to be configured.'
-            raise ValidationError(err_msg)
+            error_messages['onboarding_config'] = 'Either onboarding or no-onboarding has to be configured.'
 
         if self.onboarding_config and self.no_onboarding_config:
-            err_msg = 'Only one of onboarding or no-onboarding can be configured.'
-            raise ValidationError(err_msg)
+            error_messages['onboarding_config'] = 'Only one of onboarding or no-onboarding can be configured.'
+
+        if self.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH:
+            if not self.onboarding_config:
+                error_messages['device_type'] = 'OPC UA GDS Push devices must use onboarding configuration.'
+            elif self.onboarding_config.onboarding_protocol != OnboardingProtocol.OPC_GDS_PUSH:
+                error_messages['device_type'] = 'OPC UA GDS Push devices must use OPC_GDS_PUSH onboarding protocol.'
+
+            if not self.ip_address:
+                error_messages['ip_address'] = 'OPC UA GDS Push devices must have an IP address.'
+
+            if not self.opc_server_port or self.opc_server_port == 0:
+                error_messages['opc_server_port'] = 'OPC UA GDS Push devices must have a valid OPC server port.'
+
+        if error_messages:
+            raise ValidationError(error_messages)
 
 
 class IssuedCredentialModel(CustomDeleteActionModel):
@@ -459,16 +172,13 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
     def revoke(self) -> None:
         """Revokes all active certificates associated with this credential."""
+        if self.domain.issuing_ca is None:
+            return
+        ca = self.domain.issuing_ca
         cert: CertificateModel
         for cert in self.credential.certificates.all():
             status = cert.certificate_status
             if status in (CertificateModel.CertificateStatus.REVOKED, CertificateModel.CertificateStatus.EXPIRED):
-                continue
-            try:
-                ca = CaModel.objects.get(credential__certificate__subject_public_bytes=cert.issuer_public_bytes)
-            except CaModel.DoesNotExist:
-                continue
-            except CaModel.MultipleObjectsReturned:
                 continue
             RevokedCertificateModel.objects.create(
                 certificate=cert, revocation_reason=RevokedCertificateModel.ReasonCode.CESSATION, ca=ca
@@ -508,7 +218,7 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
         :param cert: x509.Certificate to search for.
         :return: The corresponding IssuedCredentialModel instance.
-        :raises ClientCertificateAuthenticationError: if no matching issued credential is found.
+        :raises DoesNotExist: if no matching issued credential is found.
         """
         cert_fingerprint = cert.fingerprint(hashes.SHA256()).hex().upper()
         credential = CredentialModel.objects.filter(certificates__sha256_fingerprint=cert_fingerprint).first()
@@ -520,6 +230,27 @@ class IssuedCredentialModel(CustomDeleteActionModel):
             issued_credential = IssuedCredentialModel.objects.get(credential=credential)
         except IssuedCredentialModel.DoesNotExist:
             error_message = f'No issued credential found for certificate with fingerprint {cert_fingerprint}'
+            raise IssuedCredentialModel.DoesNotExist(error_message) from None
+
+        return issued_credential
+
+    @staticmethod
+    def get_credential_for_serial_number(
+        domain: DomainModel, device: DeviceModel, serial_number: str
+    ) -> IssuedCredentialModel:
+        """Retrieve an IssuedCredentialModel instance for the given X.509 serial number within the specified domain.
+
+        Raises: DoesNotExist if no matching issued credential is found.
+        """
+        credential = CredentialModel.objects.filter(certificates__serial_number=serial_number).first()
+        if not credential:
+            error_message = f'No credential found for certificate with serial {serial_number}'
+            raise IssuedCredentialModel.DoesNotExist(error_message)
+
+        try:
+            issued_credential = IssuedCredentialModel.objects.get(credential=credential, domain=domain, device=device)
+        except IssuedCredentialModel.DoesNotExist:
+            error_message = f'No issued credential found for certificate with serial {serial_number}'
             raise IssuedCredentialModel.DoesNotExist(error_message) from None
 
         return issued_credential

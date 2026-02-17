@@ -136,6 +136,7 @@ class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
         except Exception as e:
             error_message = 'Failed to parse the CSR.'
             self.logger.exception('EST PKI message parsing failed', extra={'exception': str(e)})
+            context.error(error_message, http_status=400)
             raise ValueError(error_message) from e
 
 

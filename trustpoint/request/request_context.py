@@ -5,17 +5,20 @@ from __future__ import annotations
 from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Any, TypeVar
 
+from cryptography import x509
 from django.http import HttpResponse
 
+from trustpoint.logger import LoggerMixin
+
 if TYPE_CHECKING:
-    from cryptography import x509
     from cryptography.x509 import CertificateSigningRequest
     from cryptography.x509.base import CertificateBuilder
     from django.http import HttpRequest
-    from pyasn1_modules.rfc4210 import PKIFailureInfo, PKIMessage  # type: ignore[import-untyped]
+    from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
+    from cmp.util import PKIFailureInfo
     from devices.models import DeviceModel, IssuedCredentialModel
-    from pki.models import CertificateProfileModel, CredentialModel, DomainModel
+    from pki.models import CertificateProfileModel, CredentialModel, DomainModel, TruststoreModel
     from workflows.events import Event
     from workflows.models import EnrollmentRequest
 
@@ -25,7 +28,7 @@ RCT = TypeVar('RCT', bound='BaseRequestContext')
 
 
 @dataclass(kw_only=True)
-class BaseRequestContext:
+class BaseRequestContext(LoggerMixin):
     """Base class for all specific request context classes."""
 
     operation: str | None = None
@@ -75,6 +78,7 @@ class BaseRequestContext:
     def narrow(self, child_cls: type[RCT], **extra: Any) -> RCT:
         """Create a new request context of a more specific subclass, copying existing attributes."""
         data = self.to_dict()
+        data = {k: v for k, v in data.items() if hasattr(child_cls, k)}
         return child_cls(**data, **extra)
 
     def clear(self) -> None:
@@ -106,6 +110,13 @@ class BaseCertificateRequestContext(BaseRequestContext):
 
     certificate_profile_model: CertificateProfileModel | None = None
 
+    # Flag to allow CA certificate requests (e.g., for Issuing CA certificate enrollment)
+    allow_ca_certificate_request: bool = False
+
+    # Request data for building CSR
+    request_data: dict[str, Any] | None = None
+    validated_request_data: dict[str, Any] | None = None
+
     # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
     enrollment_request: EnrollmentRequest | None = None
     event: Event | None = None
@@ -114,8 +125,9 @@ class BaseCertificateRequestContext(BaseRequestContext):
 @dataclass(kw_only=True)
 class BaseRevocationRequestContext(BaseRequestContext):
     """Shared context for all revocation request operations."""
-
+    cert_serial_number: str | None = None
     credential_to_revoke: IssuedCredentialModel | None = None
+    revocation_reason: x509.ReasonFlags = x509.ReasonFlags.unspecified
 
 
 @dataclass(kw_only=True)
@@ -132,13 +144,22 @@ class HttpBaseRequestContext(BaseRequestContext):
 
 @dataclass(kw_only=True)
 class EstBaseRequestContext(HttpBaseRequestContext):
-    """Shared context for all EST requests."""
+    """Shared context for all EST requests.
 
+    Supports both EST server functionality (receiving requests) and EST client
+    functionality (sending requests to external EST servers).
+    """
+    # Server-side fields
     parsed_message: CertificateSigningRequest | None = None
     est_encoding: str | None = None
     est_username: str | None = None
     est_password: str | None = None
 
+    # Client-side fields
+    est_server_host: str | None = None
+    est_server_port: int | None = None
+    est_server_path: str | None = None
+    est_server_truststore: TruststoreModel | None = None
 
 @dataclass(kw_only=True)
 class CmpBaseRequestContext(HttpBaseRequestContext):
