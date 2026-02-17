@@ -44,7 +44,7 @@ class CrashRecoveryTests(TestCase):
             ir_hash=ir["meta"]["ir_hash"],
         )
 
-    def test_worker_recovers_stale_running_job_and_pauses_instance(self) -> None:
+    def test_worker_recovers_stale_running_job_and_cancels_instance(self) -> None:
         d = self._mk_definition()
         runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
         inst = runtime.create_instance(definition=d, event={"device": {"common_name": "dev1"}})

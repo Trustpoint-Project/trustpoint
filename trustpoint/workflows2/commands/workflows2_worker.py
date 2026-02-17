@@ -12,7 +12,8 @@ from django.utils import timezone
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.services.runtime import WorkflowRuntimeService
 from workflows2.services.worker import Workflow2DbWorker
-from workflows2.models import Workflow2WorkerHeartbeat
+
+from workflows2.models import Workflow2WorkerHeartbeat  # uses your model
 
 
 class Command(BaseCommand):
@@ -20,22 +21,15 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser: Any) -> None:
         parser.add_argument("--once", action="store_true", help="Run one tick and exit (debug).")
-
-        # Keep your old/compose flag names (aliases)
-        parser.add_argument("--id", type=str, default="", help="Worker id (default: hostname).")
-        parser.add_argument("--lease", type=int, default=30, help="Lease seconds (alias).")
-        parser.add_argument("--batch", type=int, default=10, help="Batch size (alias).")
-        parser.add_argument("--sleep", type=float, default=1.0, help="Sleep between ticks.")
-
-        # New/explicit names (also supported)
-        parser.add_argument("--lease-seconds", type=int, default=None, help="Job lease duration.")
-        parser.add_argument("--limit", type=int, default=None, help="Batch size per tick.")
         parser.add_argument(
             "--wait-migrations-seconds",
             type=int,
             default=180,
             help="Wait for required DB tables before starting (0 = forever).",
         )
+        parser.add_argument("--sleep", type=float, default=1.0, help="Sleep between ticks.")
+        parser.add_argument("--lease-seconds", type=int, default=30, help="Job lease duration.")
+        parser.add_argument("--limit", type=int, default=10, help="Batch size per tick.")
 
     def _wait_for_tables(self, *, tables: list[str], timeout_seconds: int) -> None:
         start = time.time()
@@ -62,29 +56,21 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **opts: Any) -> None:
         once = bool(opts["once"])
         wait_seconds = int(opts["wait_migrations_seconds"] or 0)
-
-        # Prefer explicit flags, fall back to aliases
-        lease_seconds = int(opts["lease_seconds"] if opts["lease_seconds"] is not None else opts["lease"])
-        batch_limit = int(opts["limit"] if opts["limit"] is not None else opts["batch"])
         sleep_seconds = float(opts["sleep"])
+        lease_seconds = int(opts["lease_seconds"])
+        batch_limit = int(opts["limit"])
 
-        worker_id = (opts.get("id") or "").strip() or socket.gethostname()
+        worker_id = socket.gethostname()
 
+        # Critical: wait until migrations created the required tables
         required_tables = [
             "workflows2_workflow2job",
             "workflows2_workflow2instance",
             "workflows2_workflow2workerheartbeat",
         ]
-
-        self.stdout.write(f"[workflows2_worker] worker_id={worker_id}")
         self.stdout.write(f"[workflows2_worker] waiting for tables: {', '.join(required_tables)} ...")
         self._wait_for_tables(tables=required_tables, timeout_seconds=wait_seconds)
         self.stdout.write(self.style.SUCCESS("[workflows2_worker] migrations ready."))
-
-        # *** CRITICAL: heartbeat immediately so you can see it even if tick() later crashes ***
-        self.stdout.write("[workflows2_worker] writing initial heartbeat ...")
-        Workflow2WorkerHeartbeat.beat(worker_id)
-        self.stdout.write(self.style.SUCCESS("[workflows2_worker] initial heartbeat written."))
 
         executor = WorkflowExecutor()
         runtime = WorkflowRuntimeService(executor=executor)
@@ -104,20 +90,13 @@ class Command(BaseCommand):
         while True:
             close_old_connections()
 
-            # Heartbeat BEFORE tick so UI stays alive even if tick blows up later
+            # heartbeat every 5 seconds
             now = timezone.now()
             if (now - last_beat).total_seconds() >= 5:
                 Workflow2WorkerHeartbeat.beat(worker_id)
                 last_beat = now
 
-            try:
-                stats = worker.tick()
-            except Exception as e:  # noqa: BLE001
-                # Don’t die silently; keep the worker alive and keep heartbeating
-                self.stderr.write(self.style.ERROR(f"[workflows2_worker] tick() crashed: {type(e).__name__}: {e}"))
-                time.sleep(sleep_seconds)
-                continue
-
+            stats = worker.tick()
             if stats.claimed or stats.recovered:
                 self.stdout.write(
                     f"[workflows2_worker] claimed={stats.claimed} processed={stats.processed} "

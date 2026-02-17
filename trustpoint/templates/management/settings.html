@@ -48,6 +48,7 @@
       </div>
     </div>
   </div>
+
   <div class="accordion-item">
     <h2 class="accordion-header">
       <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
@@ -183,6 +184,57 @@
       </div>
     </div>
   </div>
+
+  {# ---------------- NEW: Workflow Execution Configuration ---------------- #}
+  <div class="accordion-item">
+    <h2 class="accordion-header">
+      <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseWorkflow" aria-expanded="false" aria-controls="collapseWorkflow">
+        {% trans "Workflow Execution" %}
+      </button>
+    </h2>
+    <div id="collapseWorkflow" class="accordion-collapse collapse" data-bs-parent="#accordionSettings">
+      <div class="accordion-body">
+        <div class="card">
+          <div class="card-body pt-4 pb-4">
+              <form method="POST" enctype="multipart/form-data" id="workflow_execution_configuration">
+                  {% csrf_token %}
+                  <input type="hidden" name="form_name" value="workflow_execution">
+
+                  <fieldset class="form-group tp-form-group">
+                      {# Keep it simple; if your form is crispy, you can swap to {% crispy workflow_execution_form %} #}
+                      {{ workflow_execution_form.as_p }}
+                  </fieldset>
+
+                  <div class="alert alert-info mt-3" role="alert">
+                      <div class="text-start">
+                          <strong>{% trans "Worker detection" %}</strong><br>
+                          {% trans "A worker is considered available if a heartbeat was seen within" %} {{ workflow_worker_stale_after_seconds }} {% trans "seconds." %}
+                          <br><br>
+                          {% if workflow_worker_any_alive %}
+                              <strong>{% trans "Status" %}:</strong> {% trans "Worker detected" %}<br>
+                              <strong>{% trans "Latest worker" %}:</strong> {{ workflow_worker_latest_id }}<br>
+                              <strong>{% trans "Last seen" %}:</strong> {{ workflow_worker_latest_seen }}
+                          {% else %}
+                              <strong>{% trans "Status" %}:</strong> {% trans "No worker detected" %}
+                          {% endif %}
+                      </div>
+                  </div>
+              </form>
+          </div>
+
+          <div class="card-footer d-flex justify-content-between">
+              <div class="tp-card-btn-footer m-1">
+                  <button class="btn btn-primary" type="submit" form="workflow_execution_configuration">
+                      {% trans "Save" %}
+                  </button>
+              </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {# ---------------------------------------------------------------------- #}
+
   <div class="accordion-item">
     <h2 class="accordion-header">
       <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">

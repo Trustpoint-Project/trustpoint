@@ -5,11 +5,9 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from .adapters import (
-    ApprovalAdapter,
+    DjangoEmailAdapter,
     EmailAdapter,
-    NoopApprovalAdapter,
-    NoopEmailAdapter,
-    NoopWebhookAdapter,
+    RequestsWebhookAdapter,
     WebhookAdapter,
     WebhookResponse,
 )
@@ -21,16 +19,17 @@ from .types import ExecutionResult, StepRun
 
 OnStepRun = Callable[[StepRun], None]
 
-_TERMINAL_RUN_STATUSES = {"stopped", "failed", "awaiting", "succeeded"}
+_TERMINAL_RUN_STATUSES = {"stopped", "failed", "awaiting", "succeeded", "rejected"}
 
 
 class WorkflowExecutor:
     """
-    Deterministic IR executor (sync).
+    Deterministic IR executor.
 
-    IMPORTANT:
-      - For crash-resumable execution, use execute_single_step() from a DB worker.
-      - run() remains for dev/testing convenience.
+    IMPORTANT (TrustPoint workflow2):
+      - Approval is DB-driven, NOT blocking.
+      - Therefore the approval step ALWAYS returns status="awaiting"
+        and the RuntimeService is responsible for persisting a Workflow2Approval record.
     """
 
     def __init__(
@@ -38,13 +37,11 @@ class WorkflowExecutor:
         *,
         email: EmailAdapter | None = None,
         webhook: WebhookAdapter | None = None,
-        approval: ApprovalAdapter | None = None,
         on_step_run: OnStepRun | None = None,
         max_steps: int = 200,
     ) -> None:
-        self.email = email or NoopEmailAdapter()
-        self.webhook = webhook or NoopWebhookAdapter()
-        self.approval = approval or NoopApprovalAdapter()
+        self.email = email or DjangoEmailAdapter()
+        self.webhook = webhook or RequestsWebhookAdapter()
         self.on_step_run = on_step_run
         self.max_steps = max_steps
 
@@ -57,11 +54,6 @@ class WorkflowExecutor:
         ctx: RuntimeContext,
         transitions: Any,
     ) -> StepRun:
-        """
-        Execute exactly one step and return StepRun.
-
-        NOTE: ctx.vars is mutated (checkpointing happens outside the engine).
-        """
         wf = ir.get("workflow") or {}
         steps: dict[str, Any] = wf.get("steps") or {}
         if step_id not in steps:
@@ -185,10 +177,41 @@ class WorkflowExecutor:
             output = self._step_email(step_id, params, ctx)
         elif step_type == "webhook":
             output = self._step_webhook(step_id, params, ctx)
+
         elif step_type == "approval":
-            # NOTE: approval is currently blocking via adapter. For DB mode we will redesign approval
-            # to set status="awaiting" and persist a wait token instead.
-            outcome = self._step_approval(step_id, params, ctx)
+            # DB-driven approval: executor never blocks.
+            # RuntimeService will create Workflow2Approval row and pause instance.
+            return StepRun(
+                run_index=run_index,
+                step_id=step_id,
+                step_type=step_type,
+                status="awaiting",
+                outcome=None,
+                next_step=None,
+                vars_delta=_delta(vars_before, ctx.vars),
+                output={
+                    "approved_outcome": params.get("approved_outcome"),
+                    "rejected_outcome": params.get("rejected_outcome"),
+                    "timeout_seconds": params.get("timeout_seconds"),
+                },
+                error=None,
+                created_at=_now(),
+            )
+
+        elif step_type == "reject":
+            output = {"reason": render_template(params.get("reason"), ctx)}
+            return StepRun(
+                run_index=run_index,
+                step_id=step_id,
+                step_type=step_type,
+                status="rejected",
+                outcome=None,
+                next_step=None,
+                vars_delta=_delta(vars_before, ctx.vars),
+                output=output,
+                error=None,
+                created_at=_now(),
+            )
 
         elif step_type == "stop":
             output = {"reason": render_template(params.get("reason"), ctx)}
@@ -365,19 +388,6 @@ class WorkflowExecutor:
                 ctx.vars[var_name] = resp.headers
 
         return {"status_code": resp.status_code}
-
-    def _step_approval(self, step_id: str, params: dict[str, Any], ctx: RuntimeContext) -> str:
-        approved = params.get("approved_outcome")
-        rejected = params.get("rejected_outcome")
-        if not isinstance(approved, str) or not isinstance(rejected, str):
-            raise StepExecutionError(step_id, "Invalid approval params")
-
-        choice = self.approval.await_signal(step_id=step_id, prompt=None, event=ctx.event, vars=ctx.vars)
-        if choice == "approved":
-            return approved
-        if choice == "rejected":
-            return rejected
-        raise StepExecutionError(step_id, "ApprovalAdapter returned invalid choice")
 
     # ------------------- routing ------------------- #
 

@@ -4,5 +4,3 @@ from .definitions import (
     Workflow2DefinitionListView,
 )
 from .triggers import Workflow2TriggerCatalogView
-from .graph import Workflow2DefinitionGraphView
-from .graph import Workflow2GraphView

@@ -130,6 +130,35 @@
 
                 </div>
                 </div>
+            <div class="tp-menu-group">
+                <a href="{% url 'workflows2:definitions_list' %}"
+                class="tp-menu-head {% if page_category == 'workflows2' %}tp-menu-active{% endif %}">
+                    <svg class="bi" fill="currentColor" role="img">
+                        <use href="{% static 'img/icons.svg' %}#icon-card-checklist"></use>
+                    </svg>
+                    {% translate "Workflows 2" %}
+                    <div class="btn-collapse" data-category="workflows2"
+                        aria-expanded="{% if page_category == 'workflows2' %}true{% else %}false{% endif %}">
+                    </div>
+                </a>
+
+                <div class="tp-menu-collapse {% if page_category == 'workflows2' %}show{% endif %}">
+                    <a href="{% url 'workflows2:definitions_list' %}"
+                    class="tp-menu-item {% if page_name == 'definitions_list' %}tp-menu-active{% endif %}">
+                        {% trans "Definitions" %}
+                    </a>
+
+                    <a href="{% url 'workflows2:runs-list' %}"
+                    class="tp-menu-item {% if page_name == 'runs-list' %}tp-menu-active{% endif %}">
+                        {% trans "Runs" %}
+                    </a>
+
+                    <a href="{% url 'workflows2:approvals-list' %}"
+                    class="tp-menu-item {% if page_name == 'approvals-list' %}tp-menu-active{% endif %}">
+                        {% trans "Approvals" %}
+                    </a>
+                </div>
+            </div>
             <div class="tp-menu-footer">
                 <div class="tp-menu-group">
                     <button class="tp-menu-head theme-toggle" type="button">

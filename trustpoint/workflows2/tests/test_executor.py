@@ -81,6 +81,82 @@ workflow:
 """
 
 
+# --- YAML-op compute version (the new form you want to support) ---
+# IMPORTANT: quote ${...} inside flow-style lists [ ... ]
+YAML_YAMLOP = """\
+schema: trustpoint.workflow.v2
+name: Example v2
+enabled: true
+
+trigger:
+  on: device.created
+  sources:
+    trustpoint: true
+    ca_ids: []
+    domain_ids: []
+    device_ids: []
+
+apply:
+  - exists: ${event.device}
+
+workflow:
+  start: notify
+
+  steps:
+    notify:
+      type: email
+      to: [test.test@gmx.de]
+      subject: "New device: ${event.device.common_name}"
+      body: "CN=${event.device.common_name}"
+
+    call_status:
+      type: webhook
+      method: POST
+      url: "https://example.com/"
+      capture:
+        status_code: vars.http_status
+
+    route_by_status:
+      type: logic
+      cases:
+        - when:
+            compare:
+              left: ${vars.http_status}
+              op: "=="
+              right: 200
+          outcome: ok
+      default: fail
+
+    compute_ok:
+      type: compute
+      set:
+        vars.score:
+          add: ["${vars.http_status}", 1]
+
+    stop_ok:
+      type: stop
+      reason: "Done ok: ${vars.score}"
+
+    stop_fail:
+      type: stop
+      reason: "Done fail"
+
+  flow:
+    - from: notify
+      to: call_status
+    - from: call_status
+      to: route_by_status
+    - from: route_by_status
+      on: ok
+      to: compute_ok
+    - from: compute_ok
+      to: stop_ok
+    - from: route_by_status
+      on: fail
+      to: stop_fail
+"""
+
+
 class FakeWebhook:
     def __init__(self, status_code: int) -> None:
         self.status_code = status_code
@@ -123,3 +199,19 @@ class ExecutorTests(SimpleTestCase):
         res = ex.run(ir, event={"device": {"common_name": "dev1"}}, vars={})
         self.assertEqual(res.status, "stopped")
         self.assertEqual(res.runs[-1].step_id, "stop_fail")
+
+    def test_compute_yaml_op_form(self) -> None:
+        ir = compile_workflow_yaml(YAML_YAMLOP, compiler_version="test")
+        ex = WorkflowExecutor(email=CapturingEmail(), webhook=FakeWebhook(200))
+
+        res = ex.run(ir, event={"device": {"common_name": "dev1"}}, vars={})
+        self.assertEqual(res.status, "stopped")
+        self.assertEqual(res.vars["http_status"], 200)
+        self.assertEqual(res.vars["score"], 201)
+
+    def test_compute_yaml_op_compiles_to_call_ir(self) -> None:
+        ir = compile_workflow_yaml(YAML_YAMLOP, compiler_version="test")
+        compute = ir["workflow"]["steps"]["compute_ok"]["params"]["set"]["vars.score"]
+        self.assertEqual(compute["kind"], "expr")
+        self.assertEqual(compute["expr"]["kind"], "call")
+        self.assertEqual(compute["expr"]["name"], "add")

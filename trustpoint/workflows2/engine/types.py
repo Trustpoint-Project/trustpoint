@@ -6,8 +6,8 @@ from datetime import datetime
 from typing import Any, Literal
 
 
-StepStatus = Literal["ok", "failed", "stopped", "awaiting", "succeeded"]
-RunStatus = Literal["ok", "failed", "stopped", "awaiting", "succeeded"]
+StepStatus = Literal["ok", "failed", "stopped", "awaiting", "succeeded", "rejected"]
+RunStatus = Literal["ok", "failed", "stopped", "awaiting", "succeeded", "rejected"]
 
 
 @dataclass

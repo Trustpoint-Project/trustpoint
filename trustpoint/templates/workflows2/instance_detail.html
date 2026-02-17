@@ -1,0 +1,130 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% block content %}
+
+<div class="card">
+  <div class="card-header">
+    <h1 class="mb-0">{% trans "Instance" %} {{ inst.id }}</h1>
+  </div>
+
+  <div class="card-body">
+    <p><strong>{% trans "Definition" %}:</strong> {{ inst.definition.name }}</p>
+    <p><strong>{% trans "Status" %}:</strong> {{ inst.get_status_display }}</p>
+    <p><strong>{% trans "Current step" %}:</strong> {{ inst.current_step }}</p>
+
+    {# --- ACTIONS --- #}
+    <div class="d-flex gap-2 mb-3 flex-wrap">
+      <form method="post" action="{% url 'workflows2:instances-run-inline' inst.id %}">
+        {% csrf_token %}
+        <button class="btn btn-warning" type="submit">{% trans "Run inline" %}</button>
+      </form>
+
+      {% if inst.status == "paused" %}
+        <form method="post" action="{% url 'workflows2:instances-resume' inst.id %}">
+          {% csrf_token %}
+          <button class="btn btn-primary" type="submit">{% trans "Resume" %}</button>
+        </form>
+      {% endif %}
+
+      <form method="post" action="{% url 'workflows2:instances-cancel' inst.id %}">
+        {% csrf_token %}
+        <button class="btn btn-danger" type="submit">{% trans "Cancel instance" %}</button>
+      </form>
+    </div>
+
+    {# --- APPROVALS --- #}
+    {% if approvals %}
+      <hr>
+      <h2>{% trans "Approvals" %}</h2>
+
+      <div class="list-group mb-3">
+        {% for a in approvals %}
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <div>
+              <strong>
+                {% if a.status == "pending" %}
+                  {% trans "Pending approval" %}
+                {% else %}
+                  {{ a.get_status_display }}
+                {% endif %}
+              </strong><br>
+
+              <span class="text-muted">{% trans "Step" %}: {{ a.step_id }}</span><br>
+              <span class="text-muted">{% trans "Created" %}: {{ a.created_at|date:"Y-m-d H:i:s" }}</span>
+              {% if a.expires_at %}
+                <br><span class="text-muted">{% trans "Expires" %}: {{ a.expires_at|date:"Y-m-d H:i:s" }}</span>
+              {% endif %}
+            </div>
+
+            <div class="d-flex gap-2 flex-wrap justify-content-end">
+              {% if a.status == "pending" and inst.status == "awaiting" %}
+                <form method="post" action="{% url 'workflows2:approvals-resolve' a.id %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="decision" value="approved">
+                  <button class="btn btn-success" type="submit">{% trans "Approve" %}</button>
+                </form>
+
+                <form method="post" action="{% url 'workflows2:approvals-resolve' a.id %}">
+                  {% csrf_token %}
+                  <input type="hidden" name="decision" value="rejected">
+                  <button class="btn btn-danger" type="submit">{% trans "Reject" %}</button>
+                </form>
+              {% endif %}
+
+              <a class="btn btn-outline-secondary"
+                 href="{% url 'workflows2:approvals-detail' a.id %}">
+                {% trans "Details" %}
+              </a>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <hr>
+
+    <h2>{% trans "Vars" %}</h2>
+    <pre style="white-space: pre-wrap;">{{ vars_pretty }}</pre>
+
+    <h2>{% trans "Event" %}</h2>
+    <pre style="white-space: pre-wrap;">{{ event_pretty }}</pre>
+
+    <hr>
+
+    <h2>{% trans "Step History" %}</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>{% trans "Run" %}</th>
+          <th>{% trans "Step" %}</th>
+          <th>{% trans "Type" %}</th>
+          <th>{% trans "Status" %}</th>
+          <th>{% trans "Outcome" %}</th>
+          <th>{% trans "Next" %}</th>
+          <th>{% trans "At" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in step_runs %}
+          <tr>
+            <td>{{ r.run_index }}</td>
+            <td>{{ r.step_id }}</td>
+            <td>{{ r.step_type }}</td>
+            <td>{{ r.status }}</td>
+            <td>{{ r.outcome }}</td>
+            <td>{{ r.next_step }}</td>
+            <td>{{ r.created_at|date:"Y-m-d H:i:s" }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7" class="middle">{% trans "No step runs yet." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <a href="{% url 'workflows2:runs-list' %}" class="btn btn-secondary">{% trans "Back" %}</a>
+  </div>
+</div>
+
+{% endblock %}

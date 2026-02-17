@@ -1,0 +1,63 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% block content %}
+
+<div class="card">
+  <div class="card-header">
+    <h1 class="mb-0">{% trans "Approvals" %}</h1>
+  </div>
+  <div class="card-body">
+
+    <form method="get" class="row g-2 mb-3">
+      <div class="col-md-10">
+        <label class="form-label">{% trans "Status" %}</label>
+        <select name="status" class="form-select">
+          <option value="">{% trans "All" %}</option>
+          {% for val,label in status_choices %}
+            <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 d-flex align-items-end">
+        <button class="btn btn-primary w-100" type="submit">{% trans "Filter" %}</button>
+      </div>
+    </form>
+
+    <table class="table">
+      <thead>
+        <tr>
+          <th>{% trans "Status" %}</th>
+          <th>{% trans "Step" %}</th>
+          <th>{% trans "Created" %}</th>
+          <th>{% trans "Expires" %}</th>
+          <th>{% trans "Instance" %}</th>
+          <th>{% trans "Details" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in page_obj %}
+          <tr>
+            <td>{{ a.get_status_display }}</td>
+            <td>{{ a.step_id }}</td>
+            <td>{{ a.created_at|date:"Y-m-d H:i" }}</td>
+            <td>{% if a.expires_at %}{{ a.expires_at|date:"Y-m-d H:i" }}{% endif %}</td>
+            <td>
+              <a href="{% url 'workflows2:instances-detail' a.instance.id %}">{{ a.instance.id }}</a>
+            </td>
+            <td>
+              <a class="btn btn-primary tp-table-btn" href="{% url 'workflows2:approvals-detail' a.id %}">
+                {% trans "Open" %}
+              </a>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="middle">{% trans "No approvals." %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% include 'trustpoint/pagination.html' with page_obj=page_obj %}
+  </div>
+</div>
+
+{% endblock %}

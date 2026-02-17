@@ -4,24 +4,27 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.contrib import messages
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.encoding import force_str
+from django.utils.timezone import now
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic.edit import FormView
 
-from management.forms import SecurityConfigForm
-from management.models import LoggingConfig, SecurityConfig
+from management.forms import SecurityConfigForm, WorkflowExecutionConfigForm
+from management.models import LoggingConfig, SecurityConfig, WorkflowExecutionConfig
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
 from notifications.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
+from workflows2.models import Workflow2WorkerHeartbeat
 
 if TYPE_CHECKING:
     from typing import Any
@@ -29,7 +32,9 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-LOG_LEVELS=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+
+
 class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[SecurityConfigForm]):
     """A view for managing security settings in the Trustpoint application.
 
@@ -37,12 +42,47 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
     allowing users to configure security-related settings such as security mode,
     auto-generated PKI, and notification configurations.
     """
+
     template_name = 'management/settings.html'
     form_class = SecurityConfigForm
     success_url = reverse_lazy('management:settings')
 
     page_category = 'management'
     page_name = 'settings'
+
+    # ---------------- NEW: workflow execution form helpers ----------------
+
+    def _get_workflow_cfg(self) -> WorkflowExecutionConfig:
+        return WorkflowExecutionConfig.load()
+
+    def _get_workflow_form(self) -> WorkflowExecutionConfigForm:
+        wf_cfg = self._get_workflow_cfg()
+        if self.request.method == 'POST' and self.request.POST.get('form_name') == 'workflow_execution':
+            return WorkflowExecutionConfigForm(self.request.POST, instance=wf_cfg)
+        return WorkflowExecutionConfigForm(instance=wf_cfg)
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """NEW (minimal): allow submitting the workflow execution form on the same page.
+
+        We only intercept POSTs that have:
+          form_name=workflow_execution
+        Everything else remains the original FormView behavior (SecurityConfigForm).
+        """
+        if request.POST.get('form_name') == 'workflow_execution':
+            wf_form = self._get_workflow_form()
+            if wf_form.is_valid():
+                wf_form.save()
+                messages.success(request, _('Workflow execution settings saved.'))
+                return redirect(self.success_url)
+
+            messages.error(request, _('Please correct the workflow execution settings errors.'))
+            # Render page with BOTH forms (security form + workflow form)
+            return self.render_to_response(self.get_context_data(form=self.get_form(), workflow_execution_form=wf_form))
+
+        # Original behavior for security config
+        return super().post(request, *args, **kwargs)
+
+    # ---------------- existing security form code (unchanged) ----------------
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get the keyword arguments for instantiating the form.
@@ -59,9 +99,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         try:
             security_config = SecurityConfig.objects.get(id=1)
         except SecurityConfig.DoesNotExist:
-            security_config = SecurityConfig.objects.create(
-                notification_config=NotificationConfig.objects.create()
-            )
+            security_config = SecurityConfig.objects.create(notification_config=NotificationConfig.objects.create())
         kwargs['instance'] = security_config
         return kwargs
 
@@ -104,11 +142,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         if 'auto_gen_pki' in form.changed_data:
             old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
             new_auto = form.cleaned_data.get('auto_gen_pki', None)
-            self.logger.info(
-                'auto_gen_pki changed: old=%s, new=%s',
-                old_auto,
-                new_auto
-            )
+            self.logger.info('auto_gen_pki changed: old=%s, new=%s', old_auto, new_auto)
 
             if old_auto != new_auto and new_auto:
                 # autogen PKI got enabled
@@ -119,10 +153,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
                 key_alg = AutoGenPkiKeyAlgorithm(key_alg_value)
                 self.logger.info('Calling enable_feature for AutoGenPkiFeature with key_alg: %s', key_alg)
                 self.sec.enable_feature(AutoGenPkiFeature, {'key_algorithm': key_alg})
-                self.logger.info(
-                    'Auto-generated PKI enabled with key algorithm: %s',
-                    key_alg.name
-                )
+                self.logger.info('Auto-generated PKI enabled with key algorithm: %s', key_alg.name)
 
             elif old_auto != new_auto and not new_auto:
                 # autogen PKI got disabled
@@ -189,6 +220,22 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         current_level_num = logging.getLogger().getEffectiveLevel()
         context['current_loglevel'] = logging.getLevelName(current_level_num)
 
+        # ---------------- NEW: workflow execution settings context ----------------
+        context['workflow_execution_form'] = kwargs.get('workflow_execution_form') or self._get_workflow_form()
+
+        wf_cfg = self._get_workflow_cfg()
+        stale_after = int(getattr(wf_cfg, 'worker_stale_after_seconds', 30) or 30)
+        cutoff = now() - timedelta(seconds=stale_after)
+
+        latest = Workflow2WorkerHeartbeat.objects.order_by('-last_seen').first()
+        any_alive = Workflow2WorkerHeartbeat.objects.filter(last_seen__gte=cutoff).exists()
+
+        context['workflow_worker_any_alive'] = any_alive
+        context['workflow_worker_latest_id'] = getattr(latest, 'worker_id', None)
+        context['workflow_worker_latest_seen'] = getattr(latest, 'last_seen', None)
+        context['workflow_worker_stale_after_seconds'] = stale_after
+        # ------------------------------------------------------------------------
+
         return context
 
 
@@ -197,6 +244,7 @@ class ChangeLogLevelView(View):
 
     This view handles POST requests to update the logging level dynamically.
     """
+
     def post(self, request: HttpRequest) -> HttpResponse:
         """Handle POST requests to change the logging level.
 
@@ -219,10 +267,7 @@ class ChangeLogLevelView(View):
         else:
             logger = logging.getLogger()
             logger.setLevel(getattr(logging, level))
-            LoggingConfig.objects.update_or_create(
-                id=1,
-                defaults={'log_level': level}
-            )
+            LoggingConfig.objects.update_or_create(id=1, defaults={'log_level': level})
             messages.success(request, f'Log level set to {level}')
 
         return redirect(reverse('management:settings'))

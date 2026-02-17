@@ -1,0 +1,54 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% block content %}
+
+<div class="card">
+  <div class="card-header">
+    <h1 class="mb-0">{% trans "Approval" %} {{ approval.id }}</h1>
+  </div>
+
+  <div class="card-body">
+    <p><strong>{% trans "Status" %}:</strong> {{ approval.get_status_display }}</p>
+    <p><strong>{% trans "Step" %}:</strong> {{ approval.step_id }}</p>
+    <p><strong>{% trans "Instance" %}:</strong>
+      <a href="{% url 'workflows2:instances-detail' inst.id %}">{{ inst.id }}</a>
+    </p>
+
+    {% if approval.expires_at %}
+      <p><strong>{% trans "Expires" %}:</strong> {{ approval.expires_at|date:"Y-m-d H:i:s" }}</p>
+    {% endif %}
+
+    {% if approval.status == "pending" and inst.status == "awaiting" %}
+      <div class="d-flex gap-2 mb-3 flex-wrap">
+        <form method="post" action="{% url 'workflows2:approvals-resolve' approval.id %}">
+          {% csrf_token %}
+          <input type="hidden" name="decision" value="approved">
+          <button class="btn btn-success" type="submit">{% trans "Approve" %}</button>
+        </form>
+
+        <form method="post" action="{% url 'workflows2:approvals-resolve' approval.id %}">
+          {% csrf_token %}
+          <input type="hidden" name="decision" value="rejected">
+          <button class="btn btn-danger" type="submit">{% trans "Reject" %}</button>
+        </form>
+      </div>
+    {% endif %}
+
+    <hr>
+
+    <h2>{% trans "Vars" %}</h2>
+    <pre style="white-space: pre-wrap;">{{ vars_pretty }}</pre>
+
+    <h2>{% trans "Event" %}</h2>
+    <pre style="white-space: pre-wrap;">{{ event_pretty }}</pre>
+  </div>
+
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <a href="{% url 'workflows2:approvals-list' %}" class="btn btn-secondary">{% trans "Back" %}</a>
+    <a href="{% url 'workflows2:instances-detail' inst.id %}" class="btn btn-outline-secondary">
+      {% trans "Instance" %}
+    </a>
+  </div>
+</div>
+
+{% endblock %}

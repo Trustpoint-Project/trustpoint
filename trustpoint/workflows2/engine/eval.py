@@ -254,19 +254,41 @@ def _compare(lval: Any, op: Any, rval: Any) -> bool:
 def _call(name: str, args: list[Any]) -> Any:
     # numeric
     if name == 'add':
-        return _num(args, 0) + _num(args, 1)
-    if name == 'sub':
-        return _num(args, 0) - _num(args, 1)
+        # add(a,b,c,...) -> sum
+        return sum(_num(args, i) for i in range(len(args)))
     if name == 'mul':
-        return _num(args, 0) * _num(args, 1)
+        # mul(a,b,c,...) -> product
+        out = 1.0
+        for i in range(len(args)):
+            out *= _num(args, i)
+        return out
+    if name == 'sub':
+        # sub(a,b) only
+        if len(args) != 2:
+            msg = 'sub expects exactly 2 args'
+            raise ExecutionError(msg)
+        return _num(args, 0) - _num(args, 1)
     if name == 'div':
+        # div(a,b) only
+        if len(args) != 2:
+            msg = 'div expects exactly 2 args'
+            raise ExecutionError(msg)
         denom = _num(args, 1)
         return _num(args, 0) / denom if denom != 0 else None
     if name == 'min':
+        if not args:
+            msg = 'min expects at least 1 arg'
+            raise ExecutionError(msg)
         return min(args)
     if name == 'max':
+        if not args:
+            msg = 'max expects at least 1 arg'
+            raise ExecutionError(msg)
         return max(args)
     if name == 'round':
+        if not args:
+            msg = 'round expects at least 1 arg'
+            raise ExecutionError(msg)
         x = _num(args, 0)
         nd = int(args[1]) if len(args) > 1 else 0
         return round(x, nd)

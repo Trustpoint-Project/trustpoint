@@ -34,7 +34,7 @@ class Workflow2DefinitionCreateView(LoginRequiredMixin, View):
             initial={
                 "name": "New workflow",
                 "enabled": True,
-                "yaml_text": DEFAULT_YAML,
+                "yaml_text": '',
             }
         )
         return render(

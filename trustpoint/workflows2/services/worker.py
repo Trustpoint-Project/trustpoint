@@ -1,6 +1,8 @@
 # workflows2/services/worker.py
 from __future__ import annotations
 
+import threading
+import time
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Optional
@@ -9,7 +11,7 @@ from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from workflows2.models import Workflow2Instance, Workflow2Job
+from workflows2.models import Workflow2Instance, Workflow2Job, Workflow2Run
 from workflows2.services.runtime import WorkflowRuntimeService
 
 
@@ -19,20 +21,10 @@ class WorkerStats:
     processed: int
     created_next_jobs: int
     skipped: int
-    recovered: int  # number of stale RUNNING jobs recovered (lease expired)
+    recovered: int
 
 
 class Workflow2DbWorker:
-    """
-    DB-backed worker (no external infra).
-
-    Design:
-      - Exactly one step per job => crash-resumable.
-      - Lease to avoid duplicate processing if worker crashes.
-      - If we detect a RUNNING job whose lease expired, we PAUSE the instance
-        and require manual resume.
-    """
-
     def __init__(
         self,
         *,
@@ -51,8 +43,24 @@ class Workflow2DbWorker:
         self.lease_seconds = lease_seconds
         self.batch_limit = batch_limit
 
+    def _start_heartbeat_thread(self, job_id: str, stop: threading.Event) -> threading.Thread:
+        # renew at half the lease; never less than 1s
+        interval = max(1.0, self.lease_seconds / 2)
+
+        def _loop() -> None:
+            while not stop.is_set():
+                try:
+                    self.heartbeat(job_id)
+                except Exception:
+                    # don't crash worker because heartbeat failed once
+                    pass
+                stop.wait(interval)
+
+        t = threading.Thread(target=_loop, daemon=True)
+        t.start()
+        return t
+
     def tick(self) -> WorkerStats:
-        # 1) Crash recovery sweep
         recovered = self._recover_stale_running_jobs()
 
         claimed = 0
@@ -60,7 +68,6 @@ class Workflow2DbWorker:
         created_next = 0
         skipped = 0
 
-        # 2) Normal processing loop
         for _ in range(self.batch_limit):
             job = self._claim_one()
             if job is None:
@@ -81,19 +88,30 @@ class Workflow2DbWorker:
         )
 
     @transaction.atomic
+    def heartbeat(self, job_id: str) -> bool:
+        now = timezone.now()
+        lease_until = now + timedelta(seconds=self.lease_seconds)
+        updated = Workflow2Job.objects.filter(
+            id=job_id,
+            status=Workflow2Job.STATUS_RUNNING,
+            locked_by=self.worker_id,
+        ).update(locked_until=lease_until, updated_at=now)
+        return updated == 1
+
+    @transaction.atomic
     def _recover_stale_running_jobs(self) -> int:
         """
         Detect crashed workers: jobs stuck in RUNNING with an expired lease.
 
-        Policy:
-          - Mark job FAILED with lease-expired error
-          - Mark instance PAUSED (non-terminal, requires manual resume)
+        Policy (recommended):
+        - Treat as infra failure and RETRY (until max_attempts)
+        - If attempts exhausted -> FAIL instance + run
         """
         now = timezone.now()
 
         stale_jobs = (
             Workflow2Job.objects.select_for_update(skip_locked=True)
-            .select_related("instance")
+            .select_related("instance")  # OK: instance FK is non-null -> INNER JOIN
             .filter(status=Workflow2Job.STATUS_RUNNING)
             .filter(locked_until__isnull=False, locked_until__lte=now)
             .order_by("locked_until", "created_at")
@@ -102,35 +120,76 @@ class Workflow2DbWorker:
         count = 0
         for job in stale_jobs:
             inst = job.instance
+            err = "Lease expired (worker likely crashed)."
 
-            # Mark job failed
-            job.status = Workflow2Job.STATUS_FAILED
-            job.last_error = "Lease expired (worker likely crashed). Instance paused; manual resume required."
+            # clear lease first
             job.locked_until = None
             job.locked_by = None
+
+            # Retry if possible
+            if job.attempts < job.max_attempts:
+                job.schedule_retry(error=err)
+                job.save(
+                    update_fields=[
+                        "attempts",
+                        "last_error",
+                        "run_after",
+                        "status",
+                        "locked_until",
+                        "locked_by",
+                        "updated_at",
+                    ]
+                )
+
+                # Put instance back to queued (so run recompute shows queued/running correctly)
+                if inst.status not in {
+                    Workflow2Instance.STATUS_SUCCEEDED,
+                    Workflow2Instance.STATUS_REJECTED,
+                    Workflow2Instance.STATUS_FAILED,
+                    Workflow2Instance.STATUS_STOPPED,
+                    Workflow2Instance.STATUS_CANCELLED,
+                    Workflow2Instance.STATUS_AWAITING,
+                }:
+                    inst.status = Workflow2Instance.STATUS_QUEUED
+                    inst.save(update_fields=["status", "updated_at"])
+
+                # recompute run
+                if inst.run_id:
+                    run = Workflow2Run.objects.select_for_update().get(id=inst.run_id)
+                    self.runtime.recompute_run_status(run)
+
+                count += 1
+                continue
+
+            # Attempts exhausted -> terminal fail
+            job.status = Workflow2Job.STATUS_FAILED
+            job.last_error = err
             job.save(update_fields=["status", "last_error", "locked_until", "locked_by", "updated_at"])
 
-            # Pause instance if it isn't already terminal
             if inst.status not in {
                 Workflow2Instance.STATUS_SUCCEEDED,
+                Workflow2Instance.STATUS_REJECTED,
                 Workflow2Instance.STATUS_FAILED,
                 Workflow2Instance.STATUS_STOPPED,
                 Workflow2Instance.STATUS_CANCELLED,
             }:
-                inst.status = Workflow2Instance.STATUS_PAUSED
-                inst.save(update_fields=["status", "updated_at"])
+                inst.status = Workflow2Instance.STATUS_FAILED
+                inst.current_step = None
+                inst.save(update_fields=["status", "current_step", "updated_at"])
+
+            if inst.run_id:
+                run = Workflow2Run.objects.select_for_update().get(id=inst.run_id)
+                run.status = Workflow2Run.STATUS_FAILED
+                run.finalized = True
+                run.save(update_fields=["status", "finalized", "updated_at"])
 
             count += 1
 
         return count
 
+
     @transaction.atomic
     def resume_instance(self, *, instance: Workflow2Instance) -> Workflow2Job:
-        """
-        Manual operator action:
-          - instance must be PAUSED (or AWAITING, depending on your future signal model)
-          - enqueue a job to continue from instance.current_step
-        """
         instance = Workflow2Instance.objects.select_for_update().get(id=instance.id)
 
         if instance.status != Workflow2Instance.STATUS_PAUSED:
@@ -169,25 +228,24 @@ class Workflow2DbWorker:
         return job
 
     def _process_job(self, job: Workflow2Job) -> tuple[bool, bool, bool]:
-        """
-        Returns: (ok, created_next_job, skipped)
-        """
         created_next = False
         skipped = False
+
+        stop_evt = threading.Event()
+        hb_thread = self._start_heartbeat_thread(str(job.id), stop_evt)
 
         try:
             with transaction.atomic():
                 inst = Workflow2Instance.objects.select_for_update().get(id=job.instance_id)
 
-                # Do not auto-run paused instances. Must be resumed explicitly.
                 if inst.status == Workflow2Instance.STATUS_PAUSED:
                     skipped = True
                     self._mark_done(job)
                     return True, False, skipped
 
-                # Already terminal? finalize job and count as skipped.
                 if inst.status in {
                     Workflow2Instance.STATUS_SUCCEEDED,
+                    Workflow2Instance.STATUS_REJECTED,
                     Workflow2Instance.STATUS_FAILED,
                     Workflow2Instance.STATUS_STOPPED,
                     Workflow2Instance.STATUS_CANCELLED,
@@ -196,13 +254,21 @@ class Workflow2DbWorker:
                     self._mark_done(job)
                     return True, False, skipped
 
-                # Execute exactly one step and checkpoint.
+                # Mark instance/run as running (helps UI stay consistent)
+                if inst.status != Workflow2Instance.STATUS_RUNNING:
+                    inst.status = Workflow2Instance.STATUS_RUNNING
+                    inst.save(update_fields=["status", "updated_at"])
+
+                if inst.run_id:
+                    Workflow2Run.objects.filter(id=inst.run_id).update(
+                        status=Workflow2Run.STATUS_RUNNING,
+                        updated_at=timezone.now(),
+                    )
+
                 step_res = self.runtime.run_one_step(inst)
 
-                # Mark job done
                 self._mark_done(job)
 
-                # If still not terminal, enqueue next job immediately
                 if not step_res.terminal:
                     Workflow2Job.objects.create(
                         instance=inst,
@@ -211,12 +277,27 @@ class Workflow2DbWorker:
                         run_after=timezone.now(),
                     )
                     created_next = True
+                else:
+                    # Terminal outcome: ensure run is finalized (runtime may already do this;
+                    # this is a safety net for UI consistency).
+                    if inst.run_id:
+                        # instance status should already have been set by runtime;
+                        # but run can be finalized here if not.
+                        Workflow2Run.objects.filter(id=inst.run_id).update(
+                            finalized=True,
+                            updated_at=timezone.now(),
+                        )
 
             return True, created_next, skipped
 
         except Exception as e:  # noqa: BLE001
             self._handle_failure(job, e)
             return False, False, False
+
+        finally:
+            stop_evt.set()
+            # best effort join; don't hang shutdown
+            hb_thread.join(timeout=1.0)
 
     @transaction.atomic
     def _mark_done(self, job: Workflow2Job) -> None:
@@ -228,10 +309,16 @@ class Workflow2DbWorker:
 
     @transaction.atomic
     def _handle_failure(self, job: Workflow2Job, exc: Exception) -> None:
-        job = Workflow2Job.objects.select_for_update().get(id=job.id)
+        """
+        Failure policy:
+        - Retry with exponential backoff until max_attempts is reached
+        - On terminal failure: mark job FAILED and also mark instance/run FAILED
+        """
+        job = Workflow2Job.objects.select_for_update().select_related("instance").get(id=job.id)
+        inst = job.instance
         err = f"{type(exc).__name__}: {exc}"
 
-        # retry if possible
+        # IMPORTANT: schedule_retry() increments attempts
         if job.attempts < job.max_attempts:
             job.schedule_retry(error=err)
             job.save(
@@ -245,11 +332,45 @@ class Workflow2DbWorker:
                     "updated_at",
                 ]
             )
+
+            # put instance back to queued (so UI doesn't show RUNNING forever)
+            if inst.status not in {
+                Workflow2Instance.STATUS_SUCCEEDED,
+                Workflow2Instance.STATUS_REJECTED,
+                Workflow2Instance.STATUS_FAILED,
+                Workflow2Instance.STATUS_STOPPED,
+                Workflow2Instance.STATUS_CANCELLED,
+                Workflow2Instance.STATUS_AWAITING,
+            }:
+                inst.status = Workflow2Instance.STATUS_QUEUED
+                inst.save(update_fields=["status", "updated_at"])
+
+            if inst.run_id:
+                run = Workflow2Run.objects.select_for_update().get(id=inst.run_id)
+                self.runtime.recompute_run_status(run)
+
             return
 
-        # no retries left => mark failed
+        # Terminal failure
         job.status = Workflow2Job.STATUS_FAILED
         job.last_error = err
         job.locked_until = None
         job.locked_by = None
         job.save(update_fields=["status", "last_error", "locked_until", "locked_by", "updated_at"])
+
+        if inst.status not in {
+            Workflow2Instance.STATUS_SUCCEEDED,
+            Workflow2Instance.STATUS_REJECTED,
+            Workflow2Instance.STATUS_FAILED,
+            Workflow2Instance.STATUS_STOPPED,
+            Workflow2Instance.STATUS_CANCELLED,
+        }:
+            inst.status = Workflow2Instance.STATUS_FAILED
+            inst.current_step = None
+            inst.save(update_fields=["status", "current_step", "updated_at"])
+
+        if inst.run_id:
+            run = Workflow2Run.objects.select_for_update().get(id=inst.run_id)
+            run.status = Workflow2Run.STATUS_FAILED
+            run.finalized = True
+            run.save(update_fields=["status", "finalized", "updated_at"])

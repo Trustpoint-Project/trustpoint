@@ -89,6 +89,14 @@ class SchemaLinter:
                 "title",
                 "approved_outcome",
                 "rejected_outcome",
+                "timeout_seconds",  # <-- NEW: optional
+            }
+        ),
+        "reject": _StepSpec(  # <-- NEW
+            allowed_keys={
+                "type",
+                "title",
+                "reason",
             }
         ),
         "stop": _StepSpec(

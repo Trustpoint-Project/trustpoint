@@ -18,7 +18,7 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from management.models import BackupOptions, KeyStorageConfig, PKCS11Token, SecurityConfig
+from management.models import BackupOptions, KeyStorageConfig, PKCS11Token, SecurityConfig, WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from pki.models import CredentialModel
@@ -707,3 +707,13 @@ class PKCS11ConfigForm(forms.Form):
                     setattr(token, field, value)
             token.save()
         return token
+
+
+class WorkflowExecutionConfigForm(forms.ModelForm):
+    class Meta:
+        model = WorkflowExecutionConfig
+        fields = ["mode", "worker_stale_after_seconds"]
+        widgets = {
+            "mode": forms.Select(attrs={"class": "form-select"}),
+            "worker_stale_after_seconds": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
+        }

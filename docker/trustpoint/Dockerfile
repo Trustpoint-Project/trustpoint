@@ -16,6 +16,7 @@ EXPOSE 80 443
 RUN apt-get update && \
     apt-get upgrade -y && \
         apt-get install -y --no-install-recommends \
+        ca-certificates \
         opensc \
         sudo \
         apt-utils \
@@ -29,7 +30,14 @@ RUN apt-get update && \
         cmake \
         libssl-dev \
         libseccomp-dev \
+        && update-ca-certificates \
         && rm -rf /var/lib/apt/lists/*
+
+
+ENV SSL_CERT_FILE=/usr/lib/ssl/cert.pem \
+    SSL_CERT_DIR=/usr/lib/ssl/certs \
+    REQUESTS_CA_BUNDLE=/usr/lib/ssl/cert.pem
+
 
 # Clone and build pkcs11-proxy
 RUN git clone https://github.com/SUNET/pkcs11-proxy.git /tmp/pkcs11-proxy && \
