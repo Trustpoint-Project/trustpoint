@@ -449,118 +449,10 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
             return certificate
 
 
-class BaseProfileCredentialIssuer(SaveCredentialToDbMixin):
-    """Base class for issuing TLS credentials.
+class BaseProfileCredentialIssuer(BaseTlsCredentialIssuer):
+    """Base class for issuing credentials based on certificate profiles."""
 
-    This class provides common functionality for creating and saving TLS certificates
-    and key pairs for different use cases, including TLS client, server, domain, and
-    OPC UA credentials.
-    """
-
-    _pseudonym: str
-    _device: DeviceModel
-    _domain: DomainModel
-
-    _credential: None | CredentialSerializer = None
-    _credential_model: None | CredentialModel = None
-    _issued_application_credential_model: None | IssuedCredentialModel = None
-
-    def __init__(self, device: DeviceModel, domain: DomainModel) -> None:
-        """Initializes the TLS Credential Issuer.
-
-        Args:
-            device: The device for which the credential is issued.
-            domain: The domain associated with the credential.
-        """
-        self._device = device
-        self._domain = domain
-
-    @property
-    def device(self) -> DeviceModel:
-        """Gets the device associated with this credential issuer.
-
-        Returns:
-            DeviceModel: The device linked to the issued credential.
-        """
-        return self._device
-
-    @property
-    def domain(self) -> DomainModel:
-        """Gets the domain associated with this credential issuer.
-
-        Returns:
-            DomainModel: The domain linked to the issued credential.
-        """
-        return self._domain
-
-    @property
-    def serial_number(self) -> str:
-        """Gets the serial number of the associated device.
-
-        Returns:
-            str: The serial number of the device.
-        """
-        return self.device.serial_number
-
-    @property
-    def domain_component(self) -> str:
-        """Gets the unique name of the domain component.
-
-        Returns:
-            str: The unique name of the domain.
-        """
-        return self.domain.unique_name
-
-    @property
-    def pseudonym(self) -> str:
-        """Gets the pseudonym associated with this issuer.
-
-        Returns:
-            str: The predefined pseudonym for the credential issuer.
-        """
-        return self._pseudonym
-
-    @classmethod
-    def get_fixed_values(cls, device: DeviceModel, domain: DomainModel) -> dict[str, str]:
-        """Retrieves a dictionary of fixed values related to the device and domain.
-
-        Args:
-            device: The device for which credentials are issued.
-            domain: The domain associated with the credentials.
-
-        Returns:
-            A dictionary containing the pseudonym, domain component,
-            and serial number of the device.
-        """
-        return {
-            'pseudonym': cls._pseudonym,
-            'domain_component': domain.unique_name,
-            'serial_number': device.serial_number,
-        }
-
-    def _raise_value_error(self, message: str) -> None:
-        """Raises a ValueError with the given message.
-
-        Args:
-            message: The error message to include in the exception.
-
-        Raises:
-            ValueError: Always raised with the provided message.
-        """
-        raise ValueError(message)
-
-    def _raise_type_error(self, message: str) -> None:
-        """Raises a TypeError with the given message.
-
-        Args:
-            message: The error message to include in the exception.
-
-        Raises:
-            TypeError: Always raised with the provided message.
-        """
-        raise TypeError(message)
-
-    def _build_certificate(
+    def _build_certificate_from_builder(
         self,
         certificate_builder: x509.CertificateBuilder,
         public_key: PublicKey,
@@ -649,7 +541,7 @@ class LocalProfileCredentialIssuer(BaseProfileCredentialIssuer):
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
 
-        certificate = self._build_certificate(
+        certificate = self._build_certificate_from_builder(
             cert_builder,
             private_key.public_key_serializer.as_crypto(),
         )
@@ -664,44 +556,6 @@ class LocalProfileCredentialIssuer(BaseProfileCredentialIssuer):
         return self._save(
             credential,
             'Profile Credential', # Temp
-            IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
-            'TLS Client',
-        )
-
-    def issue_tls_client_certificate(
-        self, common_name: str, validity_days: int, public_key: PublicKey
-    ) -> IssuedCredentialModel:
-        """Issues a TLS client certificate without a private key.
-
-        Args:
-            common_name: Certificate common name.
-            validity_days: Certificate validity period.
-            public_key: Public key for the certificate.
-
-        Returns:
-            The issued TLS client certificate.
-        """
-        issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
-
-        san_uri = re.sub(r'[^a-zA-Z0-9_.-]', '', common_name) + '.alt'
-        certificate = self._build_certificate(
-            common_name,
-            public_key,
-            validity_days,
-            [
-                (x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.CLIENT_AUTH]), False),
-                # TODO (Air): This is a workaround for cryptography < 45.0.0 requiring # noqa: FIX002
-                #  a SAN to verify the certificate.
-                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier(san_uri)]), False),
-            ],
-        )
-        return self._save_keyless_credential(
-            certificate,
-            [
-                issuing_credential.get_certificate(),
-                *issuing_credential.get_certificate_chain(),
-            ],
-            common_name,
             IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL,
             'TLS Client',
         )
