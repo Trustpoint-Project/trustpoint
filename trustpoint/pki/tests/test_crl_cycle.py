@@ -218,6 +218,8 @@ def test_crl_cycle_custom_intervals(issuing_ca_instance: dict[str, Any]) -> None
     for interval in test_intervals:
         issuing_ca.crl_cycle_enabled = True
         issuing_ca.crl_cycle_interval_hours = interval
+        # Set validity period to be at least as large as the interval
+        issuing_ca.crl_validity_hours = max(interval, 24.0)
         issuing_ca.save()
         issuing_ca.full_clean()  # Should not raise
 

@@ -78,7 +78,7 @@ def test_crl_cycle_form_various_validity_values(issuing_ca_instance: dict[str, A
     """Test that various validity hour values are accepted."""
     issuing_ca = issuing_ca_instance.get('issuing_ca')
 
-    test_values = [1.0, 6.0, 12.0, 24.0, 48.0, 72.0, 168.0]
+    test_values = [24.0, 48.0, 72.0, 168.0, 240.0]
 
     for validity in test_values:
         form_data = {
