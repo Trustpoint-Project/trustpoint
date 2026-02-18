@@ -400,6 +400,19 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(
                 {'crl_cycle_interval_hours': _('CRL cycle interval must be at least 5 minutes')}
             )
+        if self.crl_validity_hours and float(self.crl_validity_hours) < 1.0:
+            raise ValidationError(
+                {'crl_validity_hours': _('CRL validity period must be at least 1 hour')}
+            )
+        if (
+            self.crl_cycle_enabled
+            and self.crl_cycle_interval_hours
+            and self.crl_validity_hours
+            and float(self.crl_cycle_interval_hours) > float(self.crl_validity_hours)
+        ):
+            raise ValidationError(
+                {'crl_cycle_interval_hours': _('CRL cycle interval must not exceed the CRL validity period')}
+            )
         if self.ca_type in (self.CaTypeChoice.REMOTE_EST_RA, self.CaTypeChoice.REMOTE_CMP_RA):
             self._clean_remote_non_issuing_ca()
         elif self.ca_type in (self.CaTypeChoice.REMOTE_ISSUING_EST, self.CaTypeChoice.REMOTE_ISSUING_CMP):
