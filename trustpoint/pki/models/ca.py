@@ -65,7 +65,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         max_length=100,
         validators=[UniqueNameValidator()],
         unique=True,
-        help_text=_('Unique identifier for this CA')
+        help_text=_('Unique identifier for this CA'),
     )
 
     parent_ca = models.ForeignKey(
@@ -75,24 +75,14 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         verbose_name=_('Parent CA'),
-        help_text=_('The parent CA in the hierarchy (issuer of this CA)')
+        help_text=_('The parent CA in the hierarchy (issuer of this CA)'),
     )
 
-    is_active = models.BooleanField(
-        _('Active'),
-        default=True,
-        help_text=_('Whether this CA is currently active')
-    )
+    is_active = models.BooleanField(_('Active'), default=True, help_text=_('Whether this CA is currently active'))
 
-    created_at = models.DateTimeField(
-        verbose_name=_('Created'),
-        auto_now_add=True
-    )
+    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
-    updated_at = models.DateTimeField(
-        verbose_name=_('Updated'),
-        auto_now=True
-    )
+    updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 
     # CA type field
     ca_type = models.IntegerField(
@@ -100,7 +90,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         choices=CaTypeChoice,
         null=True,
         blank=True,
-        help_text=_('Type of CA - KEYLESS for keyless CAs')
+        help_text=_('Type of CA - KEYLESS for keyless CAs'),
     )
 
     # For keyless CAs: certificate without private key
@@ -111,7 +101,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         verbose_name=_('CA Certificate'),
-        help_text=_('The CA certificate (for keyless CAs)')
+        help_text=_('The CA certificate (for keyless CAs)'),
     )
 
     # For issuing CAs: full credential with private key
@@ -122,7 +112,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         verbose_name=_('Credential'),
-        help_text=_('The CA credential with private key (for issuing CAs)')
+        help_text=_('The CA credential with private key (for issuing CAs)'),
     )
 
     chain_truststore = models.OneToOneField(
@@ -448,10 +438,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
         if not bc_extension.value.ca:
             raise ValidationError(
-                _(
-                    'The provided certificate is not a valid CA certificate; '
-                    'it is an End Entity certificate.'
-                )
+                _('The provided certificate is not a valid CA certificate; it is an End Entity certificate.')
             )
 
         cert_model = CertificateModel.save_certificate(certificate_obj)
@@ -502,6 +489,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         # Auto-generate unique_name from certificate if not provided
         if unique_name is None:
             from cryptography.x509.oid import NameOID  # noqa: PLC0415
+
             try:
                 cn_attrs = ca_cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
                 unique_name = str(cn_attrs[0].value) if cn_attrs else 'CA'
@@ -520,10 +508,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             ) from e
         if not bc_extension.value.ca:
             raise ValidationError(
-                _(
-                    'The provided certificate is not a valid CA certificate; '
-                    'it is an End Entity certificate.'
-                )
+                _('The provided certificate is not a valid CA certificate; it is an End Entity certificate.')
             )
 
         ca_types = (
@@ -800,8 +785,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         qs = self.get_issued_certificates()
 
         for cert in qs:
-            if (cert.certificate_status
-                not in [CertificateModel.CertificateStatus.OK, CertificateModel.CertificateStatus.NOT_YET_VALID]):
+            if cert.certificate_status not in [
+                CertificateModel.CertificateStatus.OK,
+                CertificateModel.CertificateStatus.NOT_YET_VALID,
+            ]:
                 continue
             RevokedCertificateModel.objects.create(certificate=cert, revocation_reason=reason, ca=self)
 

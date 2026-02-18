@@ -317,7 +317,7 @@ class TestEncryptedCharField(TestCase):
         # Calculate expected encrypted length
         expected_padded = ((original_length + 16 + 15) // 16) * 16
         expected_with_iv = expected_padded + 16
-        expected_base64 = int(expected_with_iv * 4/3) + 4
+        expected_base64 = int(expected_with_iv * 4 / 3) + 4
 
         self.assertEqual(field.max_length, expected_base64)
 

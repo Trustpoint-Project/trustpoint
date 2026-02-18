@@ -70,8 +70,10 @@ class SettingsUrlsTestCase(TestCase):
     def test_logging_files_download_multiple_url(self):
         """Test the logging files download multiple URL."""
         # Test with tar.gz format
-        url = reverse('management:logging-files-download-multiple',
-                    kwargs={'archive_format': 'tar.gz', 'filenames': '/trustpoint.log/trustpoint.log.1'})
+        url = reverse(
+            'management:logging-files-download-multiple',
+            kwargs={'archive_format': 'tar.gz', 'filenames': '/trustpoint.log/trustpoint.log.1'},
+        )
         self.assertEqual(url, '/management/logging/files/download/tar.gz/trustpoint.log/trustpoint.log.1')
 
         resolver = resolve(url)
@@ -81,8 +83,10 @@ class SettingsUrlsTestCase(TestCase):
         self.assertEqual(resolver.kwargs['filenames'], '/trustpoint.log/trustpoint.log.1')
 
         # Test with zip format
-        url = reverse('management:logging-files-download-multiple',
-                    kwargs={'archive_format': 'zip', 'filenames': '/trustpoint.log'})
+        url = reverse(
+            'management:logging-files-download-multiple',
+            kwargs={'archive_format': 'zip', 'filenames': '/trustpoint.log'},
+        )
         self.assertEqual(url, '/management/logging/files/download/zip/trustpoint.log')
 
         resolver = resolve(url)
@@ -179,4 +183,5 @@ class SettingsUrlsTestCase(TestCase):
         # This is tested implicitly by all the reverse() calls above
         # but we can also test it explicitly
         from management.urls import app_name
+
         self.assertEqual(app_name, 'management')

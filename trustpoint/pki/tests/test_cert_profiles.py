@@ -9,12 +9,7 @@ from pki.util.cert_req_converter import JSONCertRequestConverter
 
 def test_valid_profile_instance() -> None:
     """Test that a valid profile instance can be created."""
-    template = {
-        'type': 'cert_profile',
-        'subj': {'cn': 'example.com'},
-        'allow': '*',
-        'reject_mods': False
-    }
+    template = {'type': 'cert_profile', 'subj': {'cn': 'example.com'}, 'allow': '*', 'reject_mods': False}
     verifier = JSONProfileVerifier(template)
     assert isinstance(verifier, JSONProfileVerifier)
 
@@ -27,6 +22,7 @@ def test_invalid_profile_instance() -> None:
     with pytest.raises(ValidationError):
         JSONProfileVerifier(template)
 
+
 def test_incomplete_profile_instance() -> None:
     """Test that an incomplete profile instance raises an error.
 
@@ -37,54 +33,44 @@ def test_incomplete_profile_instance() -> None:
         'type': 'cert_profile',
         # 'subj' field is missing
     }
-    #with pytest.raises(ValidationError) as exc_info:
+    # with pytest.raises(ValidationError) as exc_info:
     JSONProfileVerifier(template)
 
 
 # --- Subject field tests ---
 
+
 def test_prohibited_cn_present() -> None:
     """Test that a request with a prohibited CN fails verification."""
-    profile = {
-        'type': 'cert_profile',
-        'subj': {'cn': None},
-        'reject_mods': True
-    }
+    profile = {'type': 'cert_profile', 'subj': {'cn': None}, 'reject_mods': True}
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'}
-    }
+    request = {'subj': {'cn': 'example.com'}}
     with pytest.raises(ProfileValidationError, match="Field 'common_name' is prohibited in the profile."):
         verifier.apply_profile_to_request(request)
 
+
 def test_prohibited_cn_present_no_reject() -> None:
     """Test that a request with a prohibited CN is removed when reject_mods is False."""
-    profile = {
-        'type': 'cert_profile',
-        'subj': {'cn': None},
-        'reject_mods': False
-    }
+    profile = {'type': 'cert_profile', 'subj': {'cn': None}, 'reject_mods': False}
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com', 'ou': 'IT'}
-    }
+    request = {'subj': {'cn': 'example.com', 'ou': 'IT'}}
     validated_request = verifier.apply_profile_to_request(request)
     print('Validated Request: ', validated_request)
     assert 'common_name' not in validated_request['subject']
+
 
 def test_allowed_cn_present() -> None:
     """Test that a request with an allowed CN passes verification."""
     profile = {
         'type': 'cert_profile',
-        'subj': {'allow': ['cn','common_name']},
+        'subj': {'allow': ['cn', 'common_name']},
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'}
-    }
+    request = {'subj': {'cn': 'example.com'}}
     validated_request = verifier.apply_profile_to_request(request)
     print('Validated Request: ', validated_request)
     assert validated_request['subject']['common_name'] == 'example.com'
+
 
 def test_allowed_cn_alias_present() -> None:
     """Test that a request with an allowed CN passes verification (alias 'cn' for 'common_name')."""
@@ -93,12 +79,11 @@ def test_allowed_cn_alias_present() -> None:
         'subj': {'allow': ['cn']},
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'}
-    }
+    request = {'subj': {'cn': 'example.com'}}
     validated_request = verifier.apply_profile_to_request(request)
     print('Validated Request: ', validated_request)
     assert validated_request['subject']['common_name'] == 'example.com'
+
 
 def test_unspecified_cn_present_no_reject() -> None:
     """Test that a not explicitly allowed CN without implicit allow is removed from the request."""
@@ -107,25 +92,19 @@ def test_unspecified_cn_present_no_reject() -> None:
         'subj': {'allow': ['pamajauke']},
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'}
-    }
+    request = {'subj': {'cn': 'example.com'}}
     validated_request = verifier.apply_profile_to_request(request)
     assert 'common_name' not in validated_request['subject']
 
+
 def test_unspecified_cn_present_reject() -> None:
     """Test that a not explicitly allowed CN with reject_mods=True fails verification."""
-    profile = {
-        'type': 'cert_profile',
-        'subj': {'allow': ['pamajauke']},
-        'reject_mods': True
-    }
+    profile = {'type': 'cert_profile', 'subj': {'allow': ['pamajauke']}, 'reject_mods': True}
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'}
-    }
+    request = {'subj': {'cn': 'example.com'}}
     with pytest.raises(ProfileValidationError, match="Field 'common_name' is not explicitly allowed in the profile."):
         verifier.apply_profile_to_request(request)
+
 
 def test_default_cn_present_in_request() -> None:
     """Test that the request CN takes precedence over the profile's default CN."""
@@ -134,11 +113,10 @@ def test_default_cn_present_in_request() -> None:
         'subj': {'cn': {'default': 'default.example.com'}},
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'}
-    }
+    request = {'subj': {'cn': 'example.com'}}
     validated_request = verifier.apply_profile_to_request(request)
     assert validated_request['subject']['common_name'] == 'example.com'
+
 
 def test_default_cn_absent_in_request() -> None:
     """Test that the profile's default CN is applied when the request CN is absent."""
@@ -152,6 +130,7 @@ def test_default_cn_absent_in_request() -> None:
     print('Validated Request: ', validated_request)
     assert validated_request['subject']['common_name'] == 'default.example.com'
 
+
 def test_implicit_allow_subject() -> None:
     """Test that a request with implicit allow for all fields passes verification."""
     template = {
@@ -163,6 +142,7 @@ def test_implicit_allow_subject() -> None:
         'subj': {'cn': 'example.com', 'ou': 'IT'},
     }
     assert verifier.apply_profile_to_request(request)
+
 
 def test_implicit_allow_unknown_field() -> None:
     """Test that a request with an unknown field passes verification with implicit allow."""
@@ -178,6 +158,7 @@ def test_implicit_allow_unknown_field() -> None:
     }
     assert verifier.apply_profile_to_request(request)
 
+
 def test_required_cn_absent() -> None:
     """Test that a request missing a required CN fails verification."""
     profile = {
@@ -185,42 +166,31 @@ def test_required_cn_absent() -> None:
         'subj': {'cn': {'required': True}},
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'ou': 'IT'}
-    }
+    request = {'subj': {'ou': 'IT'}}
     with pytest.raises(ProfileValidationError, match="Field 'common_name' is required but not present in the request."):
         verifier.apply_profile_to_request(request)
 
+
 def test_incompatible_request_cn() -> None:
     """Test that a request with a CN incompatible with the profile and reject_mods fails verification."""
-    profile = {
-        'type': 'cert_profile',
-        'subj': {'cn': 'onlyallowed.com'},
-        'reject_mods': True
-    }
+    profile = {'type': 'cert_profile', 'subj': {'cn': 'onlyallowed.com'}, 'reject_mods': True}
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'}
-    }
+    request = {'subj': {'cn': 'example.com'}}
     with pytest.raises(ProfileValidationError, match="Field 'common_name' is not mutable in the profile."):
         verifier.apply_profile_to_request(request)
 
+
 def test_incompatible_request_cn_no_reject_mods() -> None:
     """Test that a request with a CN incompatible with the profile and no reject_mods uses the CN from the profile."""
-    profile = {
-        'type': 'cert_profile',
-        'subj': {'cn': 'onlyallowed.com'},
-        'reject_mods': False
-    }
+    profile = {'type': 'cert_profile', 'subj': {'cn': 'onlyallowed.com'}, 'reject_mods': False}
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'}
-    }
+    request = {'subj': {'cn': 'example.com'}}
     validated_request = verifier.apply_profile_to_request(request)
     assert validated_request['subject']['common_name'] == 'onlyallowed.com'
 
 
 # --- Extension tests ---
+
 
 def test_required_ext_absent() -> None:
     """Test that a request missing a required extension fails verification."""
@@ -228,15 +198,15 @@ def test_required_ext_absent() -> None:
         'type': 'cert_profile',
         'subj': {'cn': 'example.com'},
         'ext': {'san': {'required': True}},
-        'reject_mods': True
+        'reject_mods': True,
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'},
-        'ext': {}
-    }
-    with pytest.raises(ProfileValidationError, match="Field 'subject_alternative_name' is required but not present in the request."):
+    request = {'subj': {'cn': 'example.com'}, 'ext': {}}
+    with pytest.raises(
+        ProfileValidationError, match="Field 'subject_alternative_name' is required but not present in the request."
+    ):
         verifier.apply_profile_to_request(request)
+
 
 def test_default_ext_present_in_req() -> None:
     """Test that the request extension takes precedence over the profile's default extension."""
@@ -245,17 +215,15 @@ def test_default_ext_present_in_req() -> None:
         'subj': {'cn': 'example.com'},
         #'ext': {'san': {'default': {'dns_names': ['default.example.com']}}},
         # This variant also works:
-        'ext': {'san': {'dns_names': {"default": ['default.example.com']}}},
-        'reject_mods': False
+        'ext': {'san': {'dns_names': {'default': ['default.example.com']}}},
+        'reject_mods': False,
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'},
-        'ext': {'san': {'dns_names': ['example.com']}}
-    }
+    request = {'subj': {'cn': 'example.com'}, 'ext': {'san': {'dns_names': ['example.com']}}}
     validated_request = verifier.apply_profile_to_request(request)
     print('Validated Request: ', validated_request)
     assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['example.com']
+
 
 def test_default_ext_absent_in_req() -> None:
     """Test that the profile's default extension is applied when the request extension is absent."""
@@ -263,15 +231,13 @@ def test_default_ext_absent_in_req() -> None:
         'type': 'cert_profile',
         'subj': {'cn': 'example.com'},
         'ext': {'san': {'default': {'dns_names': ['example.com']}}},
-        'reject_mods': False
+        'reject_mods': False,
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'},
-        'ext': {}
-    }
+    request = {'subj': {'cn': 'example.com'}, 'ext': {}}
     validated_request = verifier.apply_profile_to_request(request)
     assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['example.com']
+
 
 def test_incompatible_ext() -> None:
     """Test that a request with an extension incompatible with the profile and reject_mods fails verification."""
@@ -279,15 +245,13 @@ def test_incompatible_ext() -> None:
         'type': 'cert_profile',
         'subj': {'cn': 'example.com'},
         'ext': {'san': {'dns_names': ['default.example.com']}},
-        'reject_mods': True
+        'reject_mods': True,
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'},
-        'ext': {'san': {'dns_names': ['incompatible.example.com']}}
-    }
+    request = {'subj': {'cn': 'example.com'}, 'ext': {'san': {'dns_names': ['incompatible.example.com']}}}
     with pytest.raises(ProfileValidationError, match="Field 'dns_names' is not mutable in the profile."):
         verifier.apply_profile_to_request(request)
+
 
 def test_incompatible_ext_extra_field() -> None:
     """Test that a request with an extension incompatible with the profile (extra field in req) and reject_mods fails verification."""
@@ -295,30 +259,29 @@ def test_incompatible_ext_extra_field() -> None:
         'type': 'cert_profile',
         'subj': {'cn': 'example.com'},
         'ext': {'san': {'dns_names': ['ok.example.com']}},
-        'reject_mods': True
+        'reject_mods': True,
     }
     verifier = JSONProfileVerifier(profile)
     request = {
         'subj': {'cn': 'example.com'},
-        'ext': {'san': {'dns_names': ['ok.example.com'], 'uris': ['https://not-ok.example.com']}}
+        'ext': {'san': {'dns_names': ['ok.example.com'], 'uris': ['https://not-ok.example.com']}},
     }
     with pytest.raises(ProfileValidationError, match="Field 'uris' is not explicitly allowed in the profile."):
         verifier.apply_profile_to_request(request)
+
 
 def test_incompatible_ext_no_reject() -> None:
     """Test that a request with an incompatible extension and no reject_mods uses the extension from the profile."""
     profile = {
         'type': 'cert_profile',
         'subj': {'cn': 'example.com'},
-        'ext': {'san': {'dns_names': ['value.example.com']}}
+        'ext': {'san': {'dns_names': ['value.example.com']}},
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'},
-        'ext': {'san': {'dns_names': ['incompatible.example.com']}}
-    }
+    request = {'subj': {'cn': 'example.com'}, 'ext': {'san': {'dns_names': ['incompatible.example.com']}}}
     validated_request = verifier.apply_profile_to_request(request)
     assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['value.example.com']
+
 
 def test_ext_value_mutable() -> None:
     """Test that a request with a mutable extension value passes verification."""
@@ -329,33 +292,24 @@ def test_ext_value_mutable() -> None:
         # This variant works
         'ext': {
             'san': {'dns_names': ['val.example.com'], 'mutable': True},
-            'crl': {'uris': ['http://crl.example.com/crl.pem']}
-        }
+            'crl': {'uris': ['http://crl.example.com/crl.pem']},
+        },
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'},
-        'ext': {'san': {'dns_names': ['mutable.example.com']}}
-    }
+    request = {'subj': {'cn': 'example.com'}, 'ext': {'san': {'dns_names': ['mutable.example.com']}}}
     validated_request = verifier.apply_profile_to_request(request)
     assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['mutable.example.com']
     assert validated_request['extensions']['crl_distribution_points']['uris'] == ['http://crl.example.com/crl.pem']
 
+
 def test_prohibited_ext_present() -> None:
     """Test that a request with a prohibited extension fails verification."""
-    profile = {
-        'type': 'cert_profile',
-        'subj': {'cn': 'example.com'},
-        'ext': {'san': None},
-        'reject_mods': True
-    }
+    profile = {'type': 'cert_profile', 'subj': {'cn': 'example.com'}, 'ext': {'san': None}, 'reject_mods': True}
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'},
-        'ext': {'san': {'dns_names': ['prohibited.example.com']}}
-    }
+    request = {'subj': {'cn': 'example.com'}, 'ext': {'san': {'dns_names': ['prohibited.example.com']}}}
     with pytest.raises(ProfileValidationError, match="Field 'subject_alternative_name' is prohibited in the profile."):
         verifier.apply_profile_to_request(request)
+
 
 def test_not_allowed_ext_present() -> None:
     """Test that a request with an extension not explicitely allowed by the profile fails verification."""
@@ -363,15 +317,15 @@ def test_not_allowed_ext_present() -> None:
         'type': 'cert_profile',
         'subj': {'cn': 'example.com'},
         'ext': {'allow': ['key_usage']},
-        'reject_mods': True
+        'reject_mods': True,
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'},
-        'ext': {'san': {'dns_names': ['not.allowed.example.com']}}
-    }
-    with pytest.raises(ProfileValidationError, match="Field 'subject_alternative_name' is not explicitly allowed in the profile."):
+    request = {'subj': {'cn': 'example.com'}, 'ext': {'san': {'dns_names': ['not.allowed.example.com']}}}
+    with pytest.raises(
+        ProfileValidationError, match="Field 'subject_alternative_name' is not explicitly allowed in the profile."
+    ):
         verifier.apply_profile_to_request(request)
+
 
 def test_allowed_ext_present() -> None:
     """Test that a request with an allowed extension passes verification."""
@@ -379,67 +333,52 @@ def test_allowed_ext_present() -> None:
         'type': 'cert_profile',
         'subj': {'cn': 'example.com'},
         'ext': {'allow': ['san', 'key_usage']},
-        'reject_mods': True
+        'reject_mods': True,
     }
     verifier = JSONProfileVerifier(profile)
     print(verifier.profile.model_dump())
-    request = {
-        'subj': {'cn': 'example.com'},
-        'ext': {'san': {'dns_names': ['allowed.example.com']}}
-    }
+    request = {'subj': {'cn': 'example.com'}, 'ext': {'san': {'dns_names': ['allowed.example.com']}}}
     validated_request = verifier.apply_profile_to_request(request)
     assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['allowed.example.com']
 
+
 def test_allowed_ext_allow_any() -> None:
     """Test that a request with any extension passes verification when allow='*'."""
-    profile = {
-        'type': 'cert_profile',
-        'subj': {'cn': 'example.com'},
-        'ext': {'allow': '*'},
-        'reject_mods': True
-    }
+    profile = {'type': 'cert_profile', 'subj': {'cn': 'example.com'}, 'ext': {'allow': '*'}, 'reject_mods': True}
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'},
-        'ext': {'san': {'dns_names': ['any.allowed.example.com']}}
-    }
+    request = {'subj': {'cn': 'example.com'}, 'ext': {'san': {'dns_names': ['any.allowed.example.com']}}}
     validated_request = verifier.apply_profile_to_request(request)
     assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['any.allowed.example.com']
+
 
 def test_allowed_ext_allow_any_explicit_profile() -> None:
     """Test that a request with a SAN extension passes verification when allow='*' and SAN specified in profile."""
     profile = {
         'type': 'cert_profile',
         'subj': {'cn': 'example.com'},
-        'ext': {
-            'allow': '*',
-            'san': {'mutable': True, 'dns_names': ['should.not.matter.example.com']}
-        },
-        'reject_mods': True
+        'ext': {'allow': '*', 'san': {'mutable': True, 'dns_names': ['should.not.matter.example.com']}},
+        'reject_mods': True,
     }
     verifier = JSONProfileVerifier(profile)
-    request = {
-        'subj': {'cn': 'example.com'},
-        'ext': {'san': {'dns_names': ['any.allowed.example.com']}}
-    }
+    request = {'subj': {'cn': 'example.com'}, 'ext': {'san': {'dns_names': ['any.allowed.example.com']}}}
     validated_request = verifier.apply_profile_to_request(request)
     print('Validated Request: ', validated_request)
     assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['any.allowed.example.com']
+
 
 def test_sample_request_contains_ext_defaults() -> None:
     """Test that a sample request generated from a profile includes default extension values."""
     profile = {
         'type': 'cert_profile',
         'subj': {'cn': 'example.com'},
-        'ext': {
-            'san': {'dns_names': {'default': ['default.example.com']}}
-        },
-        'reject_mods': False
+        'ext': {'san': {'dns_names': {'default': ['default.example.com']}}},
+        'reject_mods': False,
     }
     verifier = JSONProfileVerifier(profile)
     sample_request = verifier.get_sample_request()
     print('Sample Request: ', sample_request)
     assert sample_request['extensions']['subject_alternative_name']['dns_names'] == ['default.example.com']
+
 
 def test_sample_request_contains_ext_defaults_allow_any() -> None:
     """Regression test that a sample req. from a profile includes default ext values when allow='*'."""
@@ -447,12 +386,9 @@ def test_sample_request_contains_ext_defaults_allow_any() -> None:
         'type': 'cert_profile',
         'subj': {'cn': 'example.com'},
         'ext': {
-            'san': {
-                'dns_names': {'default': ['default.example.com']},
-                'allow': '*'
-            },
+            'san': {'dns_names': {'default': ['default.example.com']}, 'allow': '*'},
         },
-        'reject_mods': False
+        'reject_mods': False,
     }
     verifier = JSONProfileVerifier(profile)
     sample_request = verifier.get_sample_request()
@@ -487,6 +423,7 @@ def test_san_allow_any_no_defaults() -> None:
 
 # --- General parsing and conversion tests ---
 
+
 def test_request_normalization() -> None:
     """Test that a request is normalized correctly."""
     request = {
@@ -495,6 +432,7 @@ def test_request_normalization() -> None:
     validated_request = JSONProfileVerifier.validate_request(request)
     # 'subj' should be expanded to 'subject' and 'cn' to 'common_name'
     assert validated_request['subject']['common_name'] == 'example.com'
+
 
 def test_csr_to_json_adapter() -> None:
     """Test that the CSR to JSON adapter works correctly."""
@@ -506,19 +444,23 @@ def test_csr_to_json_adapter() -> None:
     csr = (
         x509.CertificateBuilder()
         .subject_name(
-            x509.Name([
-                x509.NameAttribute(x509.NameOID.COMMON_NAME, 'example.com'),
-                x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, 'Example Org'),
-            ])
+            x509.Name(
+                [
+                    x509.NameAttribute(x509.NameOID.COMMON_NAME, 'example.com'),
+                    x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, 'Example Org'),
+                ]
+            )
         )
         .add_extension(
-            x509.SubjectAlternativeName([
-                x509.DNSName('www.example.com'),
-                x509.IPAddress(ipaddress.IPv4Address('127.0.0.1')),
-                x509.RFC822Name('user@example.com'),
-                x509.UniformResourceIdentifier('http://www.example.com'),
-                x509.OtherName(x509.ObjectIdentifier('2.5.4.45'), b'John')
-            ]),
+            x509.SubjectAlternativeName(
+                [
+                    x509.DNSName('www.example.com'),
+                    x509.IPAddress(ipaddress.IPv4Address('127.0.0.1')),
+                    x509.RFC822Name('user@example.com'),
+                    x509.UniformResourceIdentifier('http://www.example.com'),
+                    x509.OtherName(x509.ObjectIdentifier('2.5.4.45'), b'John'),
+                ]
+            ),
             critical=False,
         )
         .add_extension(
@@ -531,15 +473,17 @@ def test_csr_to_json_adapter() -> None:
                 key_cert_sign=False,
                 crl_sign=False,
                 encipher_only=False,
-                decipher_only=False
+                decipher_only=False,
             ),
             critical=True,
         )
         .add_extension(
-            x509.ExtendedKeyUsage([
-                x509.ExtendedKeyUsageOID.SERVER_AUTH,
-                x509.ExtendedKeyUsageOID.CLIENT_AUTH,
-            ]),
+            x509.ExtendedKeyUsage(
+                [
+                    x509.ExtendedKeyUsageOID.SERVER_AUTH,
+                    x509.ExtendedKeyUsageOID.CLIENT_AUTH,
+                ]
+            ),
             critical=False,
         )
         .add_extension(
@@ -548,14 +492,16 @@ def test_csr_to_json_adapter() -> None:
         )
         # Normally not included in CSR
         .add_extension(
-            x509.CRLDistributionPoints([
-                x509.DistributionPoint(
-                    full_name=[x509.UniformResourceIdentifier('http://crl.example.com/crl.pem')],
-                    relative_name=None,
-                    reasons=None,
-                    crl_issuer=None
-                )
-            ]),
+            x509.CRLDistributionPoints(
+                [
+                    x509.DistributionPoint(
+                        full_name=[x509.UniformResourceIdentifier('http://crl.example.com/crl.pem')],
+                        relative_name=None,
+                        reasons=None,
+                        crl_issuer=None,
+                    )
+                ]
+            ),
             critical=False,
         )
     )
@@ -566,26 +512,18 @@ def test_csr_to_json_adapter() -> None:
     print('Validated Request:', validated_request)
     assert validated_request['subject']['common_name'] == 'example.com'
 
+
 def test_json_to_cb_adapter() -> None:
     """Test that the JSON to Certificate Builder adapter works correctly."""
     from cryptography import x509
 
     request = {
-        'subj': {
-            'cn': 'example.com',
-            'o': 'Example Org'
-        },
+        'subj': {'cn': 'example.com', 'o': 'Example Org'},
         'ext': {
-            'san': {
-                'dns_names': {'default': ['www.example.com']}
-            },
-            'crl': {
-                'uris': ['http://crl.example.com/crl.pem']
-            }
+            'san': {'dns_names': {'default': ['www.example.com']}},
+            'crl': {'uris': ['http://crl.example.com/crl.pem']},
         },
-        'validity': {
-            'days': 30
-        }
+        'validity': {'days': 30},
     }
     validated_request = JSONProfileVerifier.validate_request(request)
     cb = JSONCertRequestConverter.from_json(validated_request)
@@ -602,18 +540,13 @@ def test_json_to_cb_adapter() -> None:
 def test_json_to_cb_adapter_no_validity() -> None:
     """Test that the JSON to Certificate Builder adapter raises an error when validity is missing."""
     request = {
-        'subj': {
-            'cn': 'example.com',
-            'o': 'Example Org'
-        },
+        'subj': {'cn': 'example.com', 'o': 'Example Org'},
         'ext': {
             'san': {
                 'dns_names': ['www.example.com'],
             },
-            'crl': {
-                'uris': ['http://crl.example.com/crl.pem']
-            }
-        }
+            'crl': {'uris': ['http://crl.example.com/crl.pem']},
+        },
         # No validity field
     }
     validated_request = JSONProfileVerifier.validate_request(request)

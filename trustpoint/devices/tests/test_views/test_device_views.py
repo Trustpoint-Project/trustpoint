@@ -23,9 +23,7 @@ class TestDeviceTableView:
         assert 'devices/devices.html' in [t.name for t in response.templates]
 
     def test_device_table_view_filters_generic_devices(
-        self,
-        admin_client: Client,
-        device_instance: dict[str, Any]
+        self, admin_client: Client, device_instance: dict[str, Any]
     ) -> None:
         """Test that device table view only shows generic devices."""
         device = device_instance['device']
@@ -51,7 +49,7 @@ class TestDeviceTableView:
                 common_name=f'test-device-pagination-{i}',
                 serial_number=f'SN-PAGINATE-{i:05d}',
                 domain=domain,
-                device_type=DeviceModel.DeviceType.GENERIC_DEVICE
+                device_type=DeviceModel.DeviceType.GENERIC_DEVICE,
             )
 
         url = reverse('devices:devices')
@@ -74,9 +72,7 @@ class TestOpcUaGdsTableView:
         assert 'devices/opc_ua_gds.html' in [t.name for t in response.templates]
 
     def test_opcua_gds_table_view_filters_opcua_devices(
-        self,
-        admin_client: Client,
-        device_instance: dict[str, Any]
+        self, admin_client: Client, device_instance: dict[str, Any]
     ) -> None:
         """Test that OPC UA GDS table view only shows OPC UA GDS devices."""
         domain = device_instance['domain']
@@ -86,7 +82,7 @@ class TestOpcUaGdsTableView:
             common_name='opcua-gds-device',
             serial_number='SN12345',
             domain=domain,
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS
+            device_type=DeviceModel.DeviceType.OPC_UA_GDS,
         )
 
         url = reverse('devices:opc_ua_gds')
@@ -150,9 +146,7 @@ class TestDeviceCreateChooseOnboardingView:
         assert 'devices/create_choose_onboarding.html' in [t.name for t in response.templates]
 
     def test_device_create_choose_onboarding_context(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
+        self, admin_client: Client, domain_instance: dict[str, Any]
     ) -> None:
         """Test that view provides correct context."""
         url = reverse('devices:devices_create')
@@ -209,9 +203,7 @@ class TestDeviceCreateNoOnboardingView:
         assert 'devices/create.html' in [t.name for t in response.templates]
 
     def test_device_create_no_onboarding_post_valid(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
+        self, admin_client: Client, domain_instance: dict[str, Any]
     ) -> None:
         """Test POST request with valid data creates device."""
         domain = domain_instance['domain']
@@ -267,9 +259,7 @@ class TestOpcUaGdsCreateNoOnboardingView:
         assert 'devices/create.html' in [t.name for t in response.templates]
 
     def test_opcua_gds_create_no_onboarding_creates_opcua_device(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
+        self, admin_client: Client, domain_instance: dict[str, Any]
     ) -> None:
         """Test that OPC UA GDS view creates OPC UA GDS device type."""
         domain = domain_instance['domain']
@@ -341,9 +331,7 @@ class TestOpcUaGdsCreateOnboardingView:
         assert 'devices/create.html' in [t.name for t in response.templates]
 
     def test_opcua_gds_create_onboarding_creates_opcua_device(
-        self,
-        admin_client: Client,
-        domain_instance: dict[str, Any]
+        self, admin_client: Client, domain_instance: dict[str, Any]
     ) -> None:
         """Test that OPC UA GDS view creates OPC UA GDS device with onboarding."""
         domain = domain_instance['domain']
@@ -468,7 +456,7 @@ class TestOpcUaGdsCertificateLifecycleManagementSummaryView:
             serial_number='SN55555',
             domain=domain,
             device_type=DeviceModel.DeviceType.OPC_UA_GDS,
-            no_onboarding_config=no_onboarding_config
+            no_onboarding_config=no_onboarding_config,
         )
 
         url = reverse('devices:opc_ua_gds_certificate_lifecycle_management', kwargs={'pk': opcua_device.pk})

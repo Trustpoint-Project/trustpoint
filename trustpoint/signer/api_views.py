@@ -81,17 +81,12 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                 signature = private_key.sign(hash_bytes, ec.ECDSA(prehashed_algo))
             else:
                 self.logger.error('Unsupported key algorithm for signer %s', signer_id)
-                return Response(
-                    {'error': 'Unsupported key algorithm'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                return Response({'error': 'Unsupported key algorithm'}, status=status.HTTP_400_BAD_REQUEST)
 
             signature_hex = signature.hex()
 
             signed_message = SignedMessageModel.objects.create(
-                signer=signer,
-                hash_value=hash_value,
-                signature=signature_hex
+                signer=signer, hash_value=hash_value, signature=signature_hex
             )
 
             response_data = {
@@ -104,11 +99,7 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                 'created_at': signed_message.created_at,
             }
 
-            self.logger.info(
-                'Successfully signed hash with signer %s (ID: %d)',
-                signer.unique_name,
-                signer.id
-            )
+            self.logger.info('Successfully signed hash with signer %s (ID: %d)', signer.unique_name, signer.id)
 
             return Response(response_data, status=status.HTTP_200_OK)
 
@@ -146,11 +137,7 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
             # Get certificate in PEM format
             certificate_pem = signer.credential.certificate_or_error.get_certificate_serializer().as_pem().decode()
 
-            self.logger.info(
-                'Certificate retrieved for signer %s (ID: %d)',
-                signer.unique_name,
-                signer.id
-            )
+            self.logger.info('Certificate retrieved for signer %s (ID: %d)', signer.unique_name, signer.id)
 
             return Response(
                 {
@@ -158,7 +145,7 @@ class SignerViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[SignerModel]):
                     'signer_name': signer.unique_name,
                     'certificate_pem': certificate_pem,
                 },
-                status=status.HTTP_200_OK
+                status=status.HTTP_200_OK,
             )
 
         except SignerModel.DoesNotExist:

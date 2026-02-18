@@ -37,7 +37,7 @@ class TestGetPrivateKeyLocationFromConfig:
             mock_config = Mock()
             mock_config.storage_type = KeyStorageConfig.StorageType.SOFTHSM
             mock_get_config.return_value = mock_config
-            
+
             result = get_private_key_location_from_config()
             assert result == PrivateKeyLocation.HSM_PROVIDED
 
@@ -47,7 +47,7 @@ class TestGetPrivateKeyLocationFromConfig:
             mock_config = Mock()
             mock_config.storage_type = KeyStorageConfig.StorageType.PHYSICAL_HSM
             mock_get_config.return_value = mock_config
-            
+
             result = get_private_key_location_from_config()
             assert result == PrivateKeyLocation.HSM_PROVIDED
 
@@ -55,7 +55,7 @@ class TestGetPrivateKeyLocationFromConfig:
         """Test that SOFTWARE is returned when KeyStorageConfig does not exist."""
         with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
             mock_get_config.side_effect = KeyStorageConfig.DoesNotExist()
-            
+
             result = get_private_key_location_from_config()
             assert result == PrivateKeyLocation.SOFTWARE
 
@@ -104,32 +104,33 @@ class TestDevIdRegistrationForm:
 
     def setup_method(self):
         """Set up test fixtures."""
-        self.domain = DomainModel.objects.create(
-            unique_name='test-domain'
-        )
+        self.domain = DomainModel.objects.create(unique_name='test-domain')
         self.truststore = TruststoreModel.objects.create(
-            unique_name='test-truststore',
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
+            unique_name='test-truststore', intended_usage=TruststoreModel.IntendedUsage.IDEVID
         )
 
     def test_form_valid_with_all_fields(self):
         """Test form is valid with all required and optional fields."""
-        form = DevIdRegistrationForm(data={
-            'unique_name': 'test-devidreg',
-            'truststore': self.truststore.pk,
-            'domain': self.domain.pk,
-            'serial_number_pattern': r'^\d{10}$'
-        })
+        form = DevIdRegistrationForm(
+            data={
+                'unique_name': 'test-devidreg',
+                'truststore': self.truststore.pk,
+                'domain': self.domain.pk,
+                'serial_number_pattern': r'^\d{10}$',
+            }
+        )
         assert form.is_valid()
 
     def test_form_valid_without_optional_unique_name(self):
         """Test form is valid without the optional unique_name field."""
-        form = DevIdRegistrationForm(data={
-            'unique_name': '',
-            'truststore': self.truststore.pk,
-            'domain': self.domain.pk,
-            'serial_number_pattern': r'^\d{10}$'
-        })
+        form = DevIdRegistrationForm(
+            data={
+                'unique_name': '',
+                'truststore': self.truststore.pk,
+                'domain': self.domain.pk,
+                'serial_number_pattern': r'^\d{10}$',
+            }
+        )
         assert form.is_valid()
 
     def test_form_invalid_without_required_fields(self):
@@ -147,16 +148,18 @@ class TestDevIdRegistrationForm:
             unique_name='duplicate-name',
             truststore=self.truststore,
             domain=self.domain,
-            serial_number_pattern=r'^\d{10}$'
+            serial_number_pattern=r'^\d{10}$',
         )
-        
+
         # Try to create another with the same name
-        form = DevIdRegistrationForm(data={
-            'unique_name': 'duplicate-name',
-            'truststore': self.truststore.pk,
-            'domain': self.domain.pk,
-            'serial_number_pattern': r'^\d{8}$'
-        })
+        form = DevIdRegistrationForm(
+            data={
+                'unique_name': 'duplicate-name',
+                'truststore': self.truststore.pk,
+                'domain': self.domain.pk,
+                'serial_number_pattern': r'^\d{8}$',
+            }
+        )
         assert not form.is_valid()
 
     def test_form_has_expected_fields(self):
@@ -255,38 +258,34 @@ class TestTruststoreDownloadForm:
 
     def test_form_valid_with_all_fields(self):
         """Test form is valid with all fields provided."""
-        form = TruststoreDownloadForm(data={
-            'cert_file_container': 'single_file',
-            'cert_chain_incl': 'cert_only',
-            'cert_file_format': 'pem'
-        })
+        form = TruststoreDownloadForm(
+            data={'cert_file_container': 'single_file', 'cert_chain_incl': 'cert_only', 'cert_file_format': 'pem'}
+        )
         assert form.is_valid()
 
     def test_form_valid_with_zip_container(self):
         """Test form is valid with zip container."""
-        form = TruststoreDownloadForm(data={
-            'cert_file_container': 'zip',
-            'cert_chain_incl': 'chain_incl',
-            'cert_file_format': 'der'
-        })
+        form = TruststoreDownloadForm(
+            data={'cert_file_container': 'zip', 'cert_chain_incl': 'chain_incl', 'cert_file_format': 'der'}
+        )
         assert form.is_valid()
 
     def test_form_valid_with_tar_gz_container(self):
         """Test form is valid with tar_gz container."""
-        form = TruststoreDownloadForm(data={
-            'cert_file_container': 'tar_gz',
-            'cert_chain_incl': 'cert_only',
-            'cert_file_format': 'pkcs7_pem'
-        })
+        form = TruststoreDownloadForm(
+            data={'cert_file_container': 'tar_gz', 'cert_chain_incl': 'cert_only', 'cert_file_format': 'pkcs7_pem'}
+        )
         assert form.is_valid()
 
     def test_form_valid_with_pkcs7_der_format(self):
         """Test form is valid with pkcs7_der format."""
-        form = TruststoreDownloadForm(data={
-            'cert_file_container': 'single_file',
-            'cert_chain_incl': 'chain_incl',
-            'cert_file_format': 'pkcs7_der'
-        })
+        form = TruststoreDownloadForm(
+            data={
+                'cert_file_container': 'single_file',
+                'cert_chain_incl': 'chain_incl',
+                'cert_file_format': 'pkcs7_der',
+            }
+        )
         assert form.is_valid()
 
     def test_form_invalid_without_required_fields(self):
@@ -316,38 +315,34 @@ class TestCertificateDownloadForm:
 
     def test_form_valid_with_pem_format(self):
         """Test form is valid with PEM format."""
-        form = CertificateDownloadForm(data={
-            'cert_file_container': 'single_file',
-            'cert_chain_incl': 'cert_only',
-            'cert_file_format': 'pem'
-        })
+        form = CertificateDownloadForm(
+            data={'cert_file_container': 'single_file', 'cert_chain_incl': 'cert_only', 'cert_file_format': 'pem'}
+        )
         assert form.is_valid()
 
     def test_form_valid_with_der_format(self):
         """Test form is valid with DER format."""
-        form = CertificateDownloadForm(data={
-            'cert_file_container': 'single_file',
-            'cert_chain_incl': 'chain_incl',
-            'cert_file_format': 'der'
-        })
+        form = CertificateDownloadForm(
+            data={'cert_file_container': 'single_file', 'cert_chain_incl': 'chain_incl', 'cert_file_format': 'der'}
+        )
         assert form.is_valid()
 
     def test_form_valid_with_pkcs7_format(self):
         """Test form is valid with PKCS7 PEM format."""
-        form = CertificateDownloadForm(data={
-            'cert_file_container': 'single_file',
-            'cert_chain_incl': 'cert_only',
-            'cert_file_format': 'pkcs7_pem'
-        })
+        form = CertificateDownloadForm(
+            data={'cert_file_container': 'single_file', 'cert_chain_incl': 'cert_only', 'cert_file_format': 'pkcs7_pem'}
+        )
         assert form.is_valid()
 
     def test_form_valid_with_pkcs7_der_format(self):
         """Test form is valid with PKCS7 DER format."""
-        form = CertificateDownloadForm(data={
-            'cert_file_container': 'single_file',
-            'cert_chain_incl': 'chain_incl',
-            'cert_file_format': 'pkcs7_der'
-        })
+        form = CertificateDownloadForm(
+            data={
+                'cert_file_container': 'single_file',
+                'cert_chain_incl': 'chain_incl',
+                'cert_file_format': 'pkcs7_der',
+            }
+        )
         assert form.is_valid()
 
     def test_form_invalid_without_required_fields(self):
@@ -376,22 +371,16 @@ class TestCertProfileConfigForm:
     def test_form_is_model_form(self):
         """Test that form is a ModelForm for CertificateProfileModel."""
         from pki.models.cert_profile import CertificateProfileModel
+
         form = CertProfileConfigForm()
         assert form._meta.model == CertificateProfileModel
 
     def test_form_with_valid_json(self):
         """Test form with valid JSON profile data."""
-        json_data = {
-            'version': 1,
-            'subject': {
-                'common_name': 'test.example.com'
-            }
-        }
-        form = CertProfileConfigForm(data={
-            'unique_name': 'test-profile',
-            'profile_json': json_data,
-            'is_default': False
-        })
+        json_data = {'version': 1, 'subject': {'common_name': 'test.example.com'}}
+        form = CertProfileConfigForm(
+            data={'unique_name': 'test-profile', 'profile_json': json_data, 'is_default': False}
+        )
         # Just check it doesn't crash - full validation depends on Pydantic schema
         assert 'unique_name' in form.fields
 
@@ -434,24 +423,27 @@ class TestTruststoreAddFormValidation:
         der_file_path = 'tests/data/issuing_cas/ee0_valid.der'
         with open(der_file_path, 'rb') as f:
             der_data = f.read()
-        
+
         uploaded_file = SimpleUploadedFile('certificate.der', der_data, content_type='application/x-x509-ca-cert')
-        
+
         form_data = {
             'intended_usage': TruststoreModel.IntendedUsage.GENERIC.value,
         }
         form = TruststoreAddForm(data=form_data, files={'trust_store_file': uploaded_file})
-        
-        assert form.is_valid(), f"Form should be valid but got errors: {form.errors}"
+
+        assert form.is_valid(), f'Form should be valid but got errors: {form.errors}'
         assert 'truststore' in form.cleaned_data
         truststore = form.cleaned_data['truststore']
-        assert truststore.number_of_certificates == 1  
+        assert truststore.number_of_certificates == 1
+
+
 class TestIssuingCaAddFileImportPkcs12Form:
     """Test IssuingCaAddFileImportPkcs12Form."""
 
     def test_form_has_required_fields(self):
         """Test that form has all required fields."""
         from pki.forms import IssuingCaAddFileImportPkcs12Form
+
         form = IssuingCaAddFileImportPkcs12Form()
         assert 'unique_name' in form.fields
         assert 'pkcs12_file' in form.fields
@@ -460,6 +452,7 @@ class TestIssuingCaAddFileImportPkcs12Form:
     def test_form_unique_name_not_required(self):
         """Test that unique_name field is not required."""
         from pki.forms import IssuingCaAddFileImportPkcs12Form
+
         form = IssuingCaAddFileImportPkcs12Form()
         assert form.fields['unique_name'].required is False
 
@@ -471,6 +464,7 @@ class TestIssuingCaAddFileImportSeparateFilesForm:
     def test_form_has_required_fields(self):
         """Test that form has all required fields."""
         from pki.forms import IssuingCaAddFileImportSeparateFilesForm
+
         form = IssuingCaAddFileImportSeparateFilesForm()
         assert 'unique_name' in form.fields
         assert 'ca_certificate' in form.fields
@@ -481,6 +475,7 @@ class TestIssuingCaAddFileImportSeparateFilesForm:
     def test_form_optional_fields_not_required(self):
         """Test that optional fields are not required."""
         from pki.forms import IssuingCaAddFileImportSeparateFilesForm
+
         form = IssuingCaAddFileImportSeparateFilesForm()
         assert form.fields['unique_name'].required is False
         assert form.fields['ca_certificate_chain'].required is False
@@ -494,7 +489,7 @@ class TestOwnerCredentialFileImportForm:
     def test_form_has_required_fields(self):
         """Test that form has all required fields."""
         from pki.forms import OwnerCredentialFileImportForm
-        
+
         form = OwnerCredentialFileImportForm()
         assert 'unique_name' in form.fields
         assert 'certificate' in form.fields
@@ -505,7 +500,7 @@ class TestOwnerCredentialFileImportForm:
     def test_form_optional_fields_not_required(self):
         """Test that optional fields are not required."""
         from pki.forms import OwnerCredentialFileImportForm
-        
+
         form = OwnerCredentialFileImportForm()
         assert form.fields['unique_name'].required is False
         assert form.fields['certificate_chain'].required is False
@@ -525,7 +520,7 @@ class TestIssuingCaFileTypeSelectForm:
         form = IssuingCaFileTypeSelectForm()
         choices = form.fields['method_select'].choices
         choice_values = [c[0] for c in choices]
-        
+
         assert 'pkcs_12' in choice_values
         assert 'other' in choice_values
 
@@ -546,7 +541,7 @@ class TestFormFieldAttributes:
     def test_dev_id_registration_form_fields(self):
         """Test DevIdRegistrationForm field configuration."""
         form = DevIdRegistrationForm()
-        
+
         # Check that form has the correct fields
         assert 'unique_name' in form.fields
         assert 'domain' in form.fields
@@ -556,7 +551,7 @@ class TestFormFieldAttributes:
     def test_certificate_download_form_format_choices(self):
         """Test CertificateDownloadForm has correct format fields."""
         form = CertificateDownloadForm()
-        
+
         assert 'cert_file_format' in form.fields
         assert 'cert_file_container' in form.fields
         assert 'cert_chain_incl' in form.fields
@@ -564,7 +559,7 @@ class TestFormFieldAttributes:
     def test_truststore_download_form_format_choices(self):
         """Test TruststoreDownloadForm has correct format fields."""
         form = TruststoreDownloadForm()
-        
+
         assert 'cert_file_format' in form.fields
         assert 'cert_file_container' in form.fields
         assert 'cert_chain_incl' in form.fields
@@ -572,18 +567,18 @@ class TestFormFieldAttributes:
     def test_cert_profile_config_form_widgets(self):
         """Test CertProfileConfigForm widget configuration."""
         form = CertProfileConfigForm()
-        
+
         # Check that profile_json has textarea widget
         assert 'profile_json' in form.fields
         # Widget should be configured for JSON input
-        
+
     def test_issuing_ca_add_method_select_form_choices(self):
         """Test IssuingCaAddMethodSelectForm has correct choices."""
         form = IssuingCaAddMethodSelectForm()
-        
+
         assert 'method_select' in form.fields
         choices = [c[0] for c in form.fields['method_select'].choices]
-        
+
         assert 'local_file_import' in choices
         assert 'local_request' in choices
         assert 'remote_est' in choices

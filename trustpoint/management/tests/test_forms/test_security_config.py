@@ -1,4 +1,5 @@
 """Test suite for SecurityConfigForm."""
+
 from django.test import TestCase
 from management.forms import SecurityConfigForm
 from management.models import SecurityConfig
@@ -13,7 +14,7 @@ class SecurityConfigFormTest(TestCase):
         self.config = SecurityConfig.objects.create(
             security_mode=SecurityConfig.SecurityModeChoices.LOW,
             auto_gen_pki=False,
-            auto_gen_pki_key_algorithm=AutoGenPkiKeyAlgorithm.RSA2048
+            auto_gen_pki_key_algorithm=AutoGenPkiKeyAlgorithm.RSA2048,
         )
 
     def test_form_initialization_with_instance(self):
@@ -32,6 +33,7 @@ class SecurityConfigFormTest(TestCase):
         """Test that security_mode uses RadioSelect widget."""
         form = SecurityConfigForm()
         from django.forms import RadioSelect
+
         self.assertIsInstance(form.fields['security_mode'].widget, RadioSelect)
 
     def test_auto_gen_pki_field_has_correct_attributes(self):
@@ -47,7 +49,7 @@ class SecurityConfigFormTest(TestCase):
         form_data = {
             'security_mode': SecurityConfig.SecurityModeChoices.DEV,
             'auto_gen_pki': True,
-            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
+            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -57,7 +59,7 @@ class SecurityConfigFormTest(TestCase):
         form_data = {
             'security_mode': SecurityConfig.SecurityModeChoices.HIGH,
             'auto_gen_pki': False,
-            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
+            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -73,7 +75,7 @@ class SecurityConfigFormTest(TestCase):
         form_data = {
             'security_mode': SecurityConfig.SecurityModeChoices.LOW,
             'auto_gen_pki': True,
-            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.SECP256R1  # Explicitly set the value
+            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.SECP256R1,  # Explicitly set the value
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -86,7 +88,7 @@ class SecurityConfigFormTest(TestCase):
         form_data = {
             'security_mode': SecurityConfig.SecurityModeChoices.LOW,
             'auto_gen_pki': True,
-            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
+            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
         }
         form = SecurityConfigForm(data=form_data)
         self.assertTrue(form.is_valid())
@@ -98,7 +100,7 @@ class SecurityConfigFormTest(TestCase):
         form_data = {
             'security_mode': SecurityConfig.SecurityModeChoices.LOW,
             'auto_gen_pki': True,
-            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA4096
+            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA4096,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -111,10 +113,7 @@ class SecurityConfigFormTest(TestCase):
         self.config.save()
 
         form = SecurityConfigForm(instance=self.config)
-        self.assertEqual(
-            form.fields['auto_gen_pki_key_algorithm'].widget.attrs.get('disabled'),
-            'disabled'
-        )
+        self.assertEqual(form.fields['auto_gen_pki_key_algorithm'].widget.attrs.get('disabled'), 'disabled')
 
     def test_form_initialization_with_data_security_mode(self):
         """Test form initialization considers security_mode from form data."""
@@ -131,10 +130,10 @@ class SecurityConfigFormTest(TestCase):
             form_data = {
                 'security_mode': mode,
                 'auto_gen_pki': False,
-                'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
+                'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
             }
             form = SecurityConfigForm(data=form_data, instance=self.config)
-            self.assertTrue(form.is_valid(), f"Form should be valid for mode {mode}")
+            self.assertTrue(form.is_valid(), f'Form should be valid for mode {mode}')
 
     def test_form_helper_layout(self):
         """Test that form has crispy forms helper with proper layout."""

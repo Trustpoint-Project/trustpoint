@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -37,13 +36,54 @@ class Migration(migrations.Migration):
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('action', models.CharField(max_length=32)),
                 ('payload', models.JSONField(blank=True, default=dict)),
-                ('aggregated_state', models.CharField(choices=[('Running', 'Running'), ('AwaitingApproval', 'AwaitingApproval'), ('Approved', 'Approved'), ('Passed', 'Passed'), ('Finalized', 'Finalized'), ('Rejected', 'Rejected'), ('Failed', 'Failed'), ('Aborted', 'Aborted')], default='AwaitingApproval', max_length=32)),
+                (
+                    'aggregated_state',
+                    models.CharField(
+                        choices=[
+                            ('Running', 'Running'),
+                            ('AwaitingApproval', 'AwaitingApproval'),
+                            ('Approved', 'Approved'),
+                            ('Passed', 'Passed'),
+                            ('Finalized', 'Finalized'),
+                            ('Rejected', 'Rejected'),
+                            ('Failed', 'Failed'),
+                            ('Aborted', 'Aborted'),
+                        ],
+                        default='AwaitingApproval',
+                        max_length=32,
+                    ),
+                ),
                 ('finalized', models.BooleanField(default=False)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('ca', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='device_requests', to='pki.issuingcamodel')),
-                ('device', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='device_requests', to='devices.devicemodel')),
-                ('domain', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='device_requests', to='pki.domainmodel')),
+                (
+                    'ca',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='device_requests',
+                        to='pki.issuingcamodel',
+                    ),
+                ),
+                (
+                    'device',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='device_requests',
+                        to='devices.devicemodel',
+                    ),
+                ),
+                (
+                    'domain',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='device_requests',
+                        to='pki.domainmodel',
+                    ),
+                ),
             ],
             options={
                 'ordering': ('-created_at',),
@@ -57,13 +97,56 @@ class Migration(migrations.Migration):
                 ('operation', models.CharField(max_length=50)),
                 ('fingerprint', models.CharField(max_length=128)),
                 ('template', models.CharField(blank=True, default='', max_length=100)),
-                ('aggregated_state', models.CharField(choices=[('Running', 'Running'), ('AwaitingApproval', 'AwaitingApproval'), ('Approved', 'Approved'), ('Passed', 'Passed'), ('Finalized', 'Finalized'), ('Rejected', 'Rejected'), ('Failed', 'Failed'), ('Aborted', 'Aborted')], default='AwaitingApproval', max_length=32)),
+                (
+                    'aggregated_state',
+                    models.CharField(
+                        choices=[
+                            ('Running', 'Running'),
+                            ('AwaitingApproval', 'AwaitingApproval'),
+                            ('Approved', 'Approved'),
+                            ('Passed', 'Passed'),
+                            ('Finalized', 'Finalized'),
+                            ('Rejected', 'Rejected'),
+                            ('Failed', 'Failed'),
+                            ('Aborted', 'Aborted'),
+                        ],
+                        default='AwaitingApproval',
+                        max_length=32,
+                    ),
+                ),
                 ('finalized', models.BooleanField(default=False)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('ca', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='ca', to='pki.issuingcamodel')),
-                ('device', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='device', to='devices.devicemodel')),
-                ('domain', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='domain', to='pki.domainmodel')),
+                (
+                    'ca',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='ca',
+                        to='pki.issuingcamodel',
+                    ),
+                ),
+                (
+                    'device',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='device',
+                        to='devices.devicemodel',
+                    ),
+                ),
+                (
+                    'domain',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='domain',
+                        to='pki.domainmodel',
+                    ),
+                ),
             ],
             options={
                 'db_table': 'enrollment_requests',
@@ -73,16 +156,72 @@ class Migration(migrations.Migration):
             name='WorkflowInstance',
             fields=[
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ('current_step', models.CharField(help_text='The step-ID we are currently at (e.g. "step-1")', max_length=100)),
-                ('state', models.CharField(choices=[('Running', 'Running'), ('AwaitingApproval', 'AwaitingApproval'), ('Approved', 'Approved'), ('Passed', 'Passed'), ('Finalized', 'Finalized'), ('Rejected', 'Rejected'), ('Failed', 'Failed'), ('Aborted', 'Aborted')], default='Running', max_length=32)),
+                (
+                    'current_step',
+                    models.CharField(help_text='The step-ID we are currently at (e.g. "step-1")', max_length=100),
+                ),
+                (
+                    'state',
+                    models.CharField(
+                        choices=[
+                            ('Running', 'Running'),
+                            ('AwaitingApproval', 'AwaitingApproval'),
+                            ('Approved', 'Approved'),
+                            ('Passed', 'Passed'),
+                            ('Finalized', 'Finalized'),
+                            ('Rejected', 'Rejected'),
+                            ('Failed', 'Failed'),
+                            ('Aborted', 'Aborted'),
+                        ],
+                        default='Running',
+                        max_length=32,
+                    ),
+                ),
                 ('payload', models.JSONField(help_text='Immutable inputs (eg. CSR fingerprint, CA/Domain/Device IDs)')),
-                ('step_contexts', models.JSONField(default=dict, help_text='Mutable per-step storage: e.g. for Approval, email-sent flag; for Timer, deadline timestamp; etc.')),
-                ('finalized', models.BooleanField(default=False, help_text='Once true, this instance will never be re-queued or advanced again.')),
+                (
+                    'step_contexts',
+                    models.JSONField(
+                        default=dict,
+                        help_text='Mutable per-step storage: e.g. for Approval, email-sent flag; for Timer, deadline timestamp; etc.',
+                    ),
+                ),
+                (
+                    'finalized',
+                    models.BooleanField(
+                        default=False, help_text='Once true, this instance will never be re-queued or advanced again.'
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
-                ('definition', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='instances', to='workflows.workflowdefinition')),
-                ('device_request', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='instances', to='workflows.devicerequest')),
-                ('enrollment_request', models.ForeignKey(blank=True, help_text='Parent request for EST fan-out orchestration.', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='instances', to='workflows.enrollmentrequest')),
+                (
+                    'definition',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='instances',
+                        to='workflows.workflowdefinition',
+                    ),
+                ),
+                (
+                    'device_request',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='instances',
+                        to='workflows.devicerequest',
+                    ),
+                ),
+                (
+                    'enrollment_request',
+                    models.ForeignKey(
+                        blank=True,
+                        help_text='Parent request for EST fan-out orchestration.',
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='instances',
+                        to='workflows.enrollmentrequest',
+                    ),
+                ),
             ],
             options={
                 'db_table': 'workflow_instances',
@@ -95,7 +234,14 @@ class Migration(migrations.Migration):
                 ('ca_id', models.IntegerField(blank=True, null=True)),
                 ('domain_id', models.IntegerField(blank=True, null=True)),
                 ('device_id', models.IntegerField(blank=True, null=True)),
-                ('workflow', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='scopes', to='workflows.workflowdefinition')),
+                (
+                    'workflow',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='scopes',
+                        to='workflows.workflowdefinition',
+                    ),
+                ),
             ],
             options={
                 'db_table': 'workflow_scopes',
@@ -103,7 +249,10 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='enrollmentrequest',
-            index=models.Index(fields=['protocol', 'operation', 'ca_id', 'domain_id', 'device_id', 'fingerprint', 'template'], name='enrollment__protoco_ab5ce2_idx'),
+            index=models.Index(
+                fields=['protocol', 'operation', 'ca_id', 'domain_id', 'device_id', 'fingerprint', 'template'],
+                name='enrollment__protoco_ab5ce2_idx',
+            ),
         ),
         migrations.AddIndex(
             model_name='enrollmentrequest',

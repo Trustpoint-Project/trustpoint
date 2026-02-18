@@ -33,16 +33,14 @@ def api_client(issuing_ca_instance: dict[str, Any]) -> tuple[APIClient, Any]:
     """Create an authenticated API client with JWT token."""
     client = APIClient()
     user = User.objects.create_user(username='apiuser', password='apipass123')
-    
+
     # Get JWT token
     response = client.post(
-        reverse('token_obtain_pair'),
-        {'username': 'apiuser', 'password': 'apipass123'},
-        format='json'
+        reverse('token_obtain_pair'), {'username': 'apiuser', 'password': 'apipass123'}, format='json'
     )
     token = response.data['access']
     client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
-    
+
     return client, user
 
 
@@ -51,83 +49,74 @@ def api_client(issuing_ca_instance: dict[str, Any]) -> tuple[APIClient, Any]:
 # ========================================
 
 
-def test_crl_generation_view_creates_crl(
-    authenticated_client: Client, 
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_crl_generation_view_creates_crl(authenticated_client: Client, issuing_ca_instance: dict[str, Any]) -> None:
     """Test that the CRL generation view creates a CRL."""
     issuing_ca = issuing_ca_instance['issuing_ca']
-    
+
     # Verify no CRL exists initially (empty string or None)
     assert not issuing_ca.crl_pem or issuing_ca.crl_pem == ''
     assert issuing_ca.last_crl_issued_at is None
-    
+
     # Generate CRL via GET request
     url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': issuing_ca.pk})
     response = authenticated_client.get(url)
-    
+
     # Should redirect to config page
     assert response.status_code == 302
     assert response.url == reverse('pki:issuing_cas-config', kwargs={'pk': issuing_ca.pk})
-    
+
     # Refresh from DB and verify CRL was created
     issuing_ca.refresh_from_db()
     assert issuing_ca.crl_pem is not None
     assert issuing_ca.last_crl_issued_at is not None
-    
+
     # Verify success message
     messages = list(get_messages(response.wsgi_request))
     assert len(messages) == 1
     assert 'generated' in str(messages[0]).lower()
 
 
-def test_crl_generation_with_next_parameter(
-    authenticated_client: Client, 
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_crl_generation_with_next_parameter(authenticated_client: Client, issuing_ca_instance: dict[str, Any]) -> None:
     """Test that CRL generation respects the 'next' parameter."""
     issuing_ca = issuing_ca_instance['issuing_ca']
-    
+
     # Generate CRL with next parameter
     help_url = reverse('pki:help_issuing_cas_crl_download', kwargs={'pk': issuing_ca.pk})
     url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': issuing_ca.pk})
     response = authenticated_client.get(f'{url}?next={help_url}')
-    
+
     # Should redirect to the help page
     assert response.status_code == 302
     assert response.url == help_url
-    
+
     # Verify CRL was created
     issuing_ca.refresh_from_db()
     assert issuing_ca.crl_pem is not None
 
 
-def test_crl_generation_updates_existing_crl(
-    authenticated_client: Client, 
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_crl_generation_updates_existing_crl(authenticated_client: Client, issuing_ca_instance: dict[str, Any]) -> None:
     """Test that generating a CRL multiple times updates the timestamp."""
     issuing_ca = issuing_ca_instance['issuing_ca']
-    
+
     # Generate first CRL
     url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': issuing_ca.pk})
     authenticated_client.get(url)
-    
+
     issuing_ca.refresh_from_db()
     first_crl_pem = issuing_ca.crl_pem
     first_timestamp = issuing_ca.last_crl_issued_at
-    
+
     # Verify CRL was created
     assert first_crl_pem
     assert first_timestamp is not None
-    
+
     # Generate second CRL
     authenticated_client.get(url)
-    
+
     issuing_ca.refresh_from_db()
     second_crl_pem = issuing_ca.crl_pem
     second_timestamp = issuing_ca.last_crl_issued_at
-    
+
     # Timestamp should be updated (CRL content may be same if no revocations)
     assert second_timestamp >= first_timestamp
     assert second_crl_pem
@@ -138,99 +127,84 @@ def test_crl_generation_updates_existing_crl(
 # ========================================
 
 
-def test_crl_download_pem_format(
-    client: Client,
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_crl_download_pem_format(client: Client, issuing_ca_instance: dict[str, Any]) -> None:
     """Test downloading CRL in PEM format (default)."""
     issuing_ca = issuing_ca_instance['issuing_ca']
-    
+
     # Generate CRL first
     issuing_ca.issue_crl()
-    
+
     # Download CRL
     url = reverse('crl-download', kwargs={'pk': issuing_ca.pk})
     response = client.get(url)
-    
+
     assert response.status_code == 200
     assert response['Content-Type'] == 'application/x-pem-file'
     assert b'BEGIN X509 CRL' in response.content
-    
+
     # Verify it's valid PEM
     crl = x509.load_pem_x509_crl(response.content)
     assert crl is not None
 
 
-def test_crl_download_der_format(
-    client: Client,
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_crl_download_der_format(client: Client, issuing_ca_instance: dict[str, Any]) -> None:
     """Test downloading CRL in DER format."""
     issuing_ca = issuing_ca_instance['issuing_ca']
-    
+
     # Generate CRL first
     issuing_ca.issue_crl()
-    
+
     # Download CRL with DER encoding
     url = reverse('crl-download', kwargs={'pk': issuing_ca.pk})
     response = client.get(f'{url}?encoding=der')
-    
+
     assert response.status_code == 200
     assert response['Content-Type'] == 'application/pkix-crl'
-    
+
     # Verify it's valid DER
     crl = x509.load_der_x509_crl(response.content)
     assert crl is not None
 
 
-def test_crl_download_no_authentication_required(
-    client: Client,
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_crl_download_no_authentication_required(client: Client, issuing_ca_instance: dict[str, Any]) -> None:
     """Test that CRL download does not require authentication."""
     issuing_ca = issuing_ca_instance['issuing_ca']
     issuing_ca.issue_crl()
-    
+
     # Use unauthenticated client
     url = reverse('crl-download', kwargs={'pk': issuing_ca.pk})
     response = client.get(url)
-    
+
     # Should succeed without authentication
     assert response.status_code == 200
 
 
-def test_crl_download_without_crl_redirects(
-    authenticated_client: Client,
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_crl_download_without_crl_redirects(authenticated_client: Client, issuing_ca_instance: dict[str, Any]) -> None:
     """Test that downloading CRL without generating it first redirects."""
     issuing_ca = issuing_ca_instance['issuing_ca']
-    
+
     # Try to download CRL without generating it
     url = reverse('crl-download', kwargs={'pk': issuing_ca.pk})
     response = authenticated_client.get(url)
-    
+
     # Should redirect
     assert response.status_code == 302
-    
+
     # Should show warning message
     messages = list(get_messages(response.wsgi_request))
     assert len(messages) == 1
     assert 'no crl available' in str(messages[0]).lower()
 
 
-def test_crl_download_invalid_encoding_defaults_to_pem(
-    client: Client,
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_crl_download_invalid_encoding_defaults_to_pem(client: Client, issuing_ca_instance: dict[str, Any]) -> None:
     """Test that invalid encoding parameter defaults to PEM."""
     issuing_ca = issuing_ca_instance['issuing_ca']
     issuing_ca.issue_crl()
-    
+
     # Try invalid encoding
     url = reverse('crl-download', kwargs={'pk': issuing_ca.pk})
     response = client.get(f'{url}?encoding=invalid')
-    
+
     assert response.status_code == 200
     assert response['Content-Type'] == 'application/x-pem-file'
     assert b'BEGIN X509 CRL' in response.content
@@ -241,99 +215,87 @@ def test_crl_download_invalid_encoding_defaults_to_pem(
 # ========================================
 
 
-def test_api_crl_generation(
-    api_client: tuple[APIClient, Any],
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_api_crl_generation(api_client: tuple[APIClient, Any], issuing_ca_instance: dict[str, Any]) -> None:
     """Test CRL generation via REST API."""
     client, _ = api_client
     issuing_ca = issuing_ca_instance['issuing_ca']
-    
+
     # Generate CRL via API
     url = reverse('issuing-ca-generate-crl', kwargs={'pk': issuing_ca.pk})
     response = client.post(url)
-    
+
     assert response.status_code == 200
     assert 'message' in response.data
     assert 'last_crl_issued_at' in response.data
-    
+
     # Verify CRL was created
     issuing_ca.refresh_from_db()
     assert issuing_ca.crl_pem is not None
 
 
-def test_api_crl_download_pem(
-    api_client: tuple[APIClient, Any],
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_api_crl_download_pem(api_client: tuple[APIClient, Any], issuing_ca_instance: dict[str, Any]) -> None:
     """Test CRL download in PEM format via REST API."""
     client, _ = api_client
     issuing_ca = issuing_ca_instance['issuing_ca']
     issuing_ca.issue_crl()
-    
+
     # Download CRL
     url = reverse('issuing-ca-crl', kwargs={'pk': issuing_ca.pk})
     response = client.get(url)
-    
+
     assert response.status_code == 200
     assert response['Content-Type'] == 'application/x-pem-file'
     assert b'BEGIN X509 CRL' in response.content
 
 
-def test_api_crl_download_der(
-    api_client: tuple[APIClient, Any],
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_api_crl_download_der(api_client: tuple[APIClient, Any], issuing_ca_instance: dict[str, Any]) -> None:
     """Test CRL download in DER format via REST API."""
     client, _ = api_client
     issuing_ca = issuing_ca_instance['issuing_ca']
     issuing_ca.issue_crl()
-    
+
     # Download CRL with DER encoding
     url = reverse('issuing-ca-crl', kwargs={'pk': issuing_ca.pk})
     response = client.get(f'{url}?encoding=der')
-    
+
     assert response.status_code == 200
     assert response['Content-Type'] == 'application/pkix-crl'
 
 
-def test_api_requires_authentication(
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_api_requires_authentication(issuing_ca_instance: dict[str, Any]) -> None:
     """Test that API endpoints require authentication."""
     issuing_ca = issuing_ca_instance['issuing_ca']
     issuing_ca.issue_crl()
-    
+
     # Create unauthenticated client
     client = APIClient()
-    
+
     # Try to access CRL endpoint
     url = reverse('issuing-ca-crl', kwargs={'pk': issuing_ca.pk})
     response = client.get(url)
-    
+
     assert response.status_code == 401
 
 
 def test_api_list_issuing_cas_includes_crl_status(
-    api_client: tuple[APIClient, Any],
-    issuing_ca_instance: dict[str, Any]
+    api_client: tuple[APIClient, Any], issuing_ca_instance: dict[str, Any]
 ) -> None:
     """Test that issuing CA list includes has_crl field."""
     client, _ = api_client
     issuing_ca = issuing_ca_instance['issuing_ca']
-    
+
     # List without CRL
     url = reverse('issuing-ca-list')
     response = client.get(url)
-    
+
     assert response.status_code == 200
     assert len(response.data) > 0
     assert 'has_crl' in response.data[0]
     assert response.data[0]['has_crl'] is False
-    
+
     # Generate CRL
     issuing_ca.issue_crl()
-    
+
     # List with CRL
     response = client.get(url)
     assert response.data[0]['has_crl'] is True
@@ -344,65 +306,59 @@ def test_api_list_issuing_cas_includes_crl_status(
 # ========================================
 
 
-def test_crl_contains_issuer_information(
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_crl_contains_issuer_information(issuing_ca_instance: dict[str, Any]) -> None:
     """Test that generated CRL contains correct issuer information."""
     issuing_ca = issuing_ca_instance['issuing_ca']
     cert = issuing_ca_instance['cert']
     issuing_ca.issue_crl()
-    
+
     # Load and verify CRL
     crl = x509.load_pem_x509_crl(issuing_ca.crl_pem.encode())
-    
+
     # Verify issuer matches CA
     assert crl.issuer == cert.subject
 
 
-def test_crl_is_signed_by_issuing_ca(
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_crl_is_signed_by_issuing_ca(issuing_ca_instance: dict[str, Any]) -> None:
     """Test that CRL is properly signed by the issuing CA."""
     issuing_ca = issuing_ca_instance['issuing_ca']
     cert = issuing_ca_instance['cert']
     issuing_ca.issue_crl()
-    
+
     # Load CRL
     crl = x509.load_pem_x509_crl(issuing_ca.crl_pem.encode())
-    
+
     # Verify the CRL has valid structure and can be loaded
     # If we get here without exception, the CRL is valid
     assert crl.issuer == cert.subject
     assert crl.signature is not None
 
 
-def test_crl_pem_to_der_conversion_is_valid(
-    issuing_ca_instance: dict[str, Any]
-) -> None:
+def test_crl_pem_to_der_conversion_is_valid(issuing_ca_instance: dict[str, Any]) -> None:
     """Test that PEM to DER conversion produces valid DER."""
     issuing_ca = issuing_ca_instance['issuing_ca']
     issuing_ca.issue_crl()
-    
+
     # Convert PEM to DER manually (same logic as in view)
-    pem_lines = [line.strip() for line in issuing_ca.crl_pem.splitlines() 
-                 if line and not line.startswith('-----')]
+    pem_lines = [line.strip() for line in issuing_ca.crl_pem.splitlines() if line and not line.startswith('-----')]
     b64data = ''.join(pem_lines)
     crl_der = b64decode(b64data)
-    
+
     # Verify DER is valid
     crl = x509.load_der_x509_crl(crl_der)
     assert crl is not None
-    
+
     # Also verify using cryptography's built-in conversion
     crl_pem = x509.load_pem_x509_crl(issuing_ca.crl_pem.encode())
     crl_der_expected = crl_pem.public_bytes(serialization.Encoding.DER)
-    
+
     assert crl_der == crl_der_expected
 
 
 # ========================================
 # CRL Model Tests
 # ========================================
+
 
 def test_crl_model_str_representation(issuing_ca_instance: dict[str, Any]) -> None:
     """Test CrlModel string representation."""
@@ -498,15 +454,17 @@ def test_crl_model_create_from_pem_wrong_issuer(issuing_ca_instance: dict[str, A
 
     # Create a different root CA
     root_cert, root_key = CertificateGenerator.create_root_ca('Different Root CA')
-    other_cert, other_key = CertificateGenerator.create_issuing_ca(
-        root_key, 'Different Root CA', 'Other Issuing CA'
-    )
+    other_cert, other_key = CertificateGenerator.create_issuing_ca(root_key, 'Different Root CA', 'Other Issuing CA')
 
     # Save the other CA
     from pki.models.ca import CaModel
+
     other_ca = CertificateGenerator.save_issuing_ca(
-        issuing_ca_cert=other_cert, private_key=other_key, chain=[root_cert],
-        unique_name='other-ca-test', ca_type=CaModel.CaTypeChoice.LOCAL_UNPROTECTED
+        issuing_ca_cert=other_cert,
+        private_key=other_key,
+        chain=[root_cert],
+        unique_name='other-ca-test',
+        ca_type=CaModel.CaTypeChoice.LOCAL_UNPROTECTED,
     )
 
     with pytest.raises(ValidationError, match='The CRL issuer does not match the CA subject'):
@@ -595,6 +553,7 @@ def test_crl_model_save_active_logic(issuing_ca_instance: dict[str, Any]) -> Non
 # CRL Views Tests
 # ========================================
 
+
 def test_crl_table_view(authenticated_client: Client) -> None:
     """Test CRL table view displays CRLs."""
     url = reverse('pki:crls')
@@ -634,9 +593,7 @@ def test_crl_detail_view(issuing_ca_instance: dict[str, Any], authenticated_clie
 
 
 def test_crl_detail_view_with_revoked_certificates(
-    issuing_ca_instance: dict[str, Any],
-    authenticated_client: Client,
-    credential_instance: dict[str, Any]
+    issuing_ca_instance: dict[str, Any], authenticated_client: Client, credential_instance: dict[str, Any]
 ) -> None:
     """Test CRL detail view with revoked certificates."""
     issuing_ca = issuing_ca_instance['issuing_ca']
@@ -644,10 +601,9 @@ def test_crl_detail_view_with_revoked_certificates(
 
     # Revoke the certificate by creating a RevokedCertificateModel
     from pki.models.certificate import RevokedCertificateModel
+
     RevokedCertificateModel.objects.create(
-        certificate=certificate,
-        ca=issuing_ca,
-        revocation_reason=RevokedCertificateModel.ReasonCode.UNSPECIFIED
+        certificate=certificate, ca=issuing_ca, revocation_reason=RevokedCertificateModel.ReasonCode.UNSPECIFIED
     )
 
     issuing_ca.issue_crl()
@@ -790,8 +746,7 @@ def test_crl_bulk_delete_confirm_view_no_selection(authenticated_client: Client)
 
 
 def test_crl_bulk_delete_confirm_view_with_selection(
-    issuing_ca_instance: dict[str, Any],
-    authenticated_client: Client
+    issuing_ca_instance: dict[str, Any], authenticated_client: Client
 ) -> None:
     """Test bulk delete confirm view with CRL selection."""
     issuing_ca = issuing_ca_instance['issuing_ca']
@@ -809,8 +764,7 @@ def test_crl_bulk_delete_confirm_view_with_selection(
 
 
 def test_crl_bulk_delete_confirm_view_post_success(
-    issuing_ca_instance: dict[str, Any],
-    authenticated_client: Client
+    issuing_ca_instance: dict[str, Any], authenticated_client: Client
 ) -> None:
     """Test successful bulk delete of CRLs."""
     issuing_ca = issuing_ca_instance['issuing_ca']
@@ -828,8 +782,7 @@ def test_crl_bulk_delete_confirm_view_post_success(
 
 
 def test_crl_bulk_delete_confirm_view_post_protected_error(
-    issuing_ca_instance: dict[str, Any],
-    authenticated_client: Client
+    issuing_ca_instance: dict[str, Any], authenticated_client: Client
 ) -> None:
     """Test bulk delete with protected error."""
     issuing_ca = issuing_ca_instance['issuing_ca']
@@ -854,6 +807,7 @@ def test_crl_bulk_delete_confirm_view_post_protected_error(
 # CRL Import Tests
 # ========================================
 
+
 @pytest.mark.django_db
 def test_crl_import_view_get(authenticated_client: Client) -> None:
     """Test GET request to CRL import view."""
@@ -871,7 +825,7 @@ def test_crl_import_view_post_pem_success(
 ) -> None:
     """Test successful PEM CRL import."""
     ca = issuing_ca_instance['issuing_ca']
-    
+
     # Create a sample CRL PEM (simplified for testing)
     crl_pem = """-----BEGIN X509 CRL-----
 MIIBvjCBpwIBATANBgkqhkiG9w0BAQsFADAVMRMwEQYDVQQDEwppLXNhbXBsZS1j
@@ -884,23 +838,24 @@ Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
 -----END X509 CRL-----"""
 
     url = reverse('pki:crl-import')
-    
+
     # Create a temporary file-like object
     from io import BytesIO
+
     file_content = BytesIO(crl_pem.encode())
     file_content.name = 'test.crl'
-    
+
     data = {
         'crl_file': file_content,
         'file_format': 'pem',
         'ca': str(ca.pk),
         'set_active': 'on',
     }
-    
+
     # Note: This test will fail because the CRL PEM above is not valid
     # In a real test, you'd use a properly signed CRL
     response = authenticated_client.post(url, data, format='multipart')
-    
+
     # For now, expect validation error due to invalid CRL
     assert response.status_code == 200  # Form re-rendered with errors
 
@@ -909,20 +864,21 @@ Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
 def test_crl_import_view_post_invalid_format(authenticated_client: Client) -> None:
     """Test CRL import with invalid file content."""
     url = reverse('pki:crl-import')
-    
+
     # Create invalid file content
     from io import BytesIO
+
     invalid_file = BytesIO(b'invalid content')
     invalid_file.name = 'invalid.crl'
-    
+
     data = {
         'crl_file': invalid_file,
         'ca': '1',
         'set_active': 'on',
     }
-    
+
     response = authenticated_client.post(url, data)
-    
+
     assert response.status_code == 200
     assert 'Unable to parse CRL' in response.content.decode()
 
@@ -931,14 +887,14 @@ def test_crl_import_view_post_invalid_format(authenticated_client: Client) -> No
 def test_crl_import_view_post_no_file(authenticated_client: Client) -> None:
     """Test CRL import without file."""
     url = reverse('pki:crl-import')
-    
+
     data = {
         'ca': '1',
         'set_active': 'on',
     }
-    
+
     response = authenticated_client.post(url, data)
-    
+
     assert response.status_code == 200
     assert 'This field is required' in response.content.decode()
 
@@ -960,6 +916,7 @@ Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2Q2
 -----END X509 CRL-----"""
 
     from io import BytesIO
+
     crl_file = BytesIO(crl_pem.encode())
     crl_file.name = 'test.crl'
 

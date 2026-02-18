@@ -126,11 +126,7 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         )
 
         context['profile_data'] = {
-            profile.id: {
-                'unique_name': profile.unique_name,
-                'alias': '',
-                'is_allowed': False
-            }
+            profile.id: {'unique_name': profile.unique_name, 'alias': '', 'is_allowed': False}
             for profile in CertificateProfileModel.objects.all()
         }
 
@@ -166,11 +162,10 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
         for alias_value, profile in rejected_aliases:
             messages.warning(
                 request,
-                _('Alias "{alias}" not applied for profile {profile} as it is already in use. '
-                'Please use an unique domain alias for each Certificate Profile.').format(
-                    alias=alias_value,
-                    profile=profile
-                )
+                _(
+                    'Alias "{alias}" not applied for profile {profile} as it is already in use. '
+                    'Please use an unique domain alias for each Certificate Profile.'
+                ).format(alias=alias_value, profile=profile),
             )
 
         domain.save()
@@ -397,6 +392,7 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
         domain = self.get_domain()
         context['domain'] = domain
         return context
+
 
 class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdRegistration]):
     """View to select the protocol for IDevID enrollment."""

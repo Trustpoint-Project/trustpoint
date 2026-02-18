@@ -1,4 +1,5 @@
 """Test suite for security features."""
+
 import threading
 from unittest.mock import patch
 
@@ -130,6 +131,7 @@ class AutoGenPkiFeatureTest(TestCase):
 
             # Wait a bit to ensure thread doesn't start
             import time
+
             time.sleep(0.1)
 
             mock_enable.assert_not_called()

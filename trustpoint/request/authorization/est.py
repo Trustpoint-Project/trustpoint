@@ -1,4 +1,5 @@
 """Provides the 'EstAuthentication' class using the Composite pattern for modular EST authorization."""
+
 from request.request_context import BaseRequestContext, EstBaseRequestContext
 from trustpoint.logger import LoggerMixin
 
@@ -33,21 +34,19 @@ class EstOperationAuthorization(AuthorizationComponent, LoggerMixin):
 
         if operation not in self.allowed_operations:
             error_message = (
-                f"Unauthorized operation: '{operation}'. "
-                f"Allowed operations: {', '.join(self.allowed_operations)}."
+                f"Unauthorized operation: '{operation}'. Allowed operations: {', '.join(self.allowed_operations)}."
             )
             self.logger.warning(
-                'Operation authorization failed: %s not in allowed operations %s',
-                operation, self.allowed_operations
+                'Operation authorization failed: %s not in allowed operations %s', operation, self.allowed_operations
             )
             raise ValueError(error_message)
 
         self.logger.debug('Operation authorization successful for operation: %s', operation)
 
 
-
 class EstAuthorization(CompositeAuthorization):
     """Composite authorization handler for EST requests."""
+
     def __init__(self, allowed_operations: list[str] | None = None) -> None:
         """Initialize the composite authorization handler with the default set of components.
 

@@ -15,7 +15,7 @@ class UsersUrlsTest(SimpleTestCase):
         """Test that login URL resolves to correct view."""
         url = reverse('users:login')
         self.assertEqual(url, '/users/login/')
-        
+
         resolver = resolve(url)
         self.assertEqual(resolver.view_name, 'users:login')
         self.assertEqual(resolver.func.view_class, TrustpointLoginView)
@@ -24,7 +24,7 @@ class UsersUrlsTest(SimpleTestCase):
         """Test that logout URL resolves to correct view."""
         url = reverse('users:logout')
         self.assertEqual(url, '/users/logout/')
-        
+
         resolver = resolve(url)
         self.assertEqual(resolver.view_name, 'users:logout')
         # LogoutView is a standard Django view

@@ -43,7 +43,7 @@ class CMPMockRequestHandler(BaseHTTPRequestHandler, LoggerMixin):
             path=self.path,
             data=raw_data,
             content_type=self.headers.get('Content-Type', 'application/pkixcmp'),
-            **extra_headers
+            **extra_headers,
         )
 
         try:
@@ -84,11 +84,7 @@ class CMPMockRequestHandler(BaseHTTPRequestHandler, LoggerMixin):
 class CMPMockServer(LoggerMixin):
     """Mock CMP server that integrates with CMP and key generation factories."""
 
-    def __init__(self,
-                 cmp_factory=None,
-                 keygen_factory=None,
-                 host: str = 'localhost',
-                 port: int = 8443):
+    def __init__(self, cmp_factory=None, keygen_factory=None, host: str = 'localhost', port: int = 8443):
         """Initialize the mock CMP server.
 
         Args:
@@ -123,14 +119,10 @@ class CMPMockServer(LoggerMixin):
             context['temp_dir'] = temp_dir
 
             key_gen_command = self.keygen_factory.build_command(context)
-            self.logger.info(f"Key generation command: {' '.join(key_gen_command)}")
+            self.logger.info(f'Key generation command: {" ".join(key_gen_command)}')
 
             result = subprocess.run(
-                key_gen_command,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                cwd=temp_dir, check=False
+                key_gen_command, capture_output=True, text=True, timeout=30, cwd=temp_dir, check=False
             )
 
             if result.returncode == 0:
@@ -150,20 +142,13 @@ class CMPMockServer(LoggerMixin):
             return False
 
         try:
-
             prepared_files = self.cmp_factory.prepare_files(temp_dir, context)
             self.logger.info(f'Prepared CMP files: {prepared_files}')
 
             cmp_command = self.cmp_factory.build_args(context)
-            self.logger.info(f"CMP command: {' '.join(cmp_command)}")
+            self.logger.info(f'CMP command: {" ".join(cmp_command)}')
 
-            result = subprocess.run(
-                cmp_command,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                cwd=temp_dir, check=False
-            )
+            result = subprocess.run(cmp_command, capture_output=True, text=True, timeout=30, cwd=temp_dir, check=False)
 
             self.logger.info(f'CMP command exit code: {result.returncode}')
             if result.stdout:
@@ -235,7 +220,7 @@ class CMPMockServer(LoggerMixin):
                 self.captured_cmp_message,
                 self.captured_path,
                 self.captured_headers,
-                self.captured_content_length
+                self.captured_content_length,
             )
 
         finally:
@@ -246,6 +231,7 @@ class CMPMockServer(LoggerMixin):
         """Clean up temporary directory."""
         try:
             import shutil
+
             shutil.rmtree(temp_dir)
             self.logger.debug(f'Cleaned up temporary directory: {temp_dir}')
         except Exception as e:
@@ -265,15 +251,17 @@ if __name__ == '__main__':
         )
         from openssl_keygen_factory import CompositeKeyGenerator, KeyFileOutput, RSAKeyGenerator
 
-        cmp_factory = (CompositeCMPCommand('test_cmp', 'Test CMP command')
-                       .add_component(BasicCMPArgs(cmd='cr'))
-                       .add_component(ServerConfig('http://localhost:8443/.well-known/cmp/test2'))
-                       .add_component(SharedSecretAuth('33', 'pass:Qj7yJEh6D6BYBXKMhrp1wQ'))
-                       .add_component(CertificateRequest('/CN=Test-Certificate', 10, '127.0.0.1,localhost')))
+        cmp_factory = (
+            CompositeCMPCommand('test_cmp', 'Test CMP command')
+            .add_component(BasicCMPArgs(cmd='cr'))
+            .add_component(ServerConfig('http://localhost:8443/.well-known/cmp/test2'))
+            .add_component(SharedSecretAuth('33', 'pass:Qj7yJEh6D6BYBXKMhrp1wQ'))
+            .add_component(CertificateRequest('/CN=Test-Certificate', 10, '127.0.0.1,localhost'))
+        )
 
-        keygen_factory = (CompositeKeyGenerator('RSA')
-                      .add_component(RSAKeyGenerator(4096))
-                      .add_component(KeyFileOutput()))
+        keygen_factory = (
+            CompositeKeyGenerator('RSA').add_component(RSAKeyGenerator(4096)).add_component(KeyFileOutput())
+        )
 
         mock_server = CMPMockServer(cmp_factory, keygen_factory, 'localhost', 8443)
 
@@ -294,4 +282,3 @@ if __name__ == '__main__':
 
     except Exception as e:
         print(f'Error: {e}')
-

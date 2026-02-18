@@ -19,6 +19,7 @@ from workflows.services.types import ExecutorResult
 
 _CTX_PLACEHOLDER_RE = re.compile(r'\{\{\s*ctx\.([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)*)\s*\}\}')
 
+
 def _lookup_ctx_path(ctx: dict[str, Any], path: str) -> Any:
     cur: Any = ctx
     for part in path.split('.'):
@@ -26,6 +27,7 @@ def _lookup_ctx_path(ctx: dict[str, Any], path: str) -> Any:
             return None
         cur = cur.get(part)
     return cur
+
 
 def _render_ctx_placeholders(template: str, ctx: dict[str, Any]) -> str:
     def repl(m: re.Match[str]) -> str:
@@ -49,6 +51,7 @@ def _validate_url(url: str) -> tuple[bool, str]:
 
 logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
 
 
 class WebhookExecutor(AbstractStepExecutor):
@@ -211,6 +214,7 @@ def _build_headers(
         headers.setdefault('Authorization', f'Bearer {bearer_token}')
 
     return headers
+
 
 def _build_body(body_raw: Any, ctx: dict[str, Any]) -> tuple[bool, dict[str, Any], str]:
     data_kwargs: dict[str, Any] = {}

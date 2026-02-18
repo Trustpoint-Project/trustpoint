@@ -14,6 +14,7 @@ class DisableOptionsSelect(forms.Select):
             widget=DisableOptionsSelect(disabled_options=['some_value'])
         )
     """
+
     def __init__(
         self,
         attrs: dict[str, Any] | None = None,
@@ -55,9 +56,7 @@ class DisableOptionsSelect(forms.Select):
         Returns:
             A dictionary representing the option to render.
         """
-        option_dict = super().create_option(
-            name, value, label, selected, index, subindex=subindex, attrs=attrs
-        )
+        option_dict = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
 
         if value in self.disabled_options:
             option_dict['attrs']['disabled'] = 'disabled'

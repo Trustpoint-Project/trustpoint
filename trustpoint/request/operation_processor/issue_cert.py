@@ -38,20 +38,23 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
         raise ValueError(exc_msg)
 
     @staticmethod
-    def _get_credential_type_for_template(context: BaseCertificateRequestContext
-            ) -> tuple[IssuedCredentialModel.IssuedCredentialType, str]:
+    def _get_credential_type_for_template(
+        context: BaseCertificateRequestContext,
+    ) -> tuple[IssuedCredentialModel.IssuedCredentialType, str]:
         """Map certificate template to issued credential type."""
         if context.certificate_profile_model is None:
             exc_msg = 'Certificate profile model is required but not set in context.'
             raise ValueError(exc_msg)
 
-        profile_display_name = (context.certificate_profile_model.display_name
-                                or context.certificate_profile_model.unique_name)
+        profile_display_name = (
+            context.certificate_profile_model.display_name or context.certificate_profile_model.unique_name
+        )
 
         if context.certificate_profile_model.unique_name == 'domain_credential':
             return (IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL, profile_display_name)
 
         return (IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, profile_display_name)
+
 
 class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
     """Operation processor for issuing certificates via a local CA."""
@@ -66,7 +69,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
         if isinstance(context, HttpBaseRequestContext):
             request = context.raw_message
         port = request.META.get('SERVER_PORT', '') if request else ''
-        if port == '443': # CRL always served via HTTP
+        if port == '443':  # CRL always served via HTTP
             port = ''
         port_str = f':{port}' if port else ''
         return f'http://{TlsSettings.get_first_ipv4_address()}{port_str}/crl/{ca_id}'
@@ -121,9 +124,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             exc_msg = 'The certificate request has not been validated against a profile.'
             raise ValueError(exc_msg)
 
-        certificate_builder = certificate_builder.issuer_name(
-            issuing_credential.get_certificate().subject
-        )
+        certificate_builder = certificate_builder.issuer_name(issuing_credential.get_certificate().subject)
 
         certificate_builder = certificate_builder.serial_number(x509.random_serial_number())
         certificate_builder = certificate_builder.public_key(public_key)
@@ -151,17 +152,25 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
                 False,
             ),
             x509.SubjectKeyIdentifier: (x509.SubjectKeyIdentifier.from_public_key(public_key), False),
-            x509.CRLDistributionPoints: (x509.CRLDistributionPoints([
-                x509.DistributionPoint(
-                    full_name=[x509.UniformResourceIdentifier(
-                        self._get_crl_distribution_point_url(context, ca.id)
-                    )], relative_name=None, reasons=None, crl_issuer=None
+            x509.CRLDistributionPoints: (
+                x509.CRLDistributionPoints(
+                    [
+                        x509.DistributionPoint(
+                            full_name=[
+                                x509.UniformResourceIdentifier(self._get_crl_distribution_point_url(context, ca.id))
+                            ],
+                            relative_name=None,
+                            reasons=None,
+                            crl_issuer=None,
+                        ),
+                    ]
                 ),
-            ]), False),
+                False,
+            ),
         }
 
         for ext, critical in default_extensions.values():
-            with contextlib.suppress(ValueError): # extension already present
+            with contextlib.suppress(ValueError):  # extension already present
                 certificate_builder = certificate_builder.add_extension(ext, critical)
 
         signed_cert = certificate_builder.sign(

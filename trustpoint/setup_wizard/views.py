@@ -40,7 +40,6 @@ from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
-
     from trustpoint_core.serializer import CertificateSerializer
 
 
@@ -62,7 +61,6 @@ from setup_wizard.state_dir_paths import (
 )
 
 logger = logging.getLogger(__name__)
-
 
 
 class TrustpointWizardError(Exception):
@@ -176,6 +174,7 @@ class StartupWizardRedirect:
 
 class HsmSetupMixin(LoggerMixin):
     """Mixin that provides common HSM setup functionality for both initial setup and auto restore."""
+
     request: HttpRequest
 
     def form_valid(self, form: HsmSetupForm) -> HttpResponse:
@@ -236,7 +235,7 @@ class HsmSetupMixin(LoggerMixin):
             defaults={
                 'slot': int(slot),
                 'module_path': module_path,
-            }
+            },
         )
         if not created:
             token.slot = int(slot)
@@ -265,7 +264,8 @@ class HsmSetupMixin(LoggerMixin):
             else:
                 self.logger.warning(
                     'Token HSM type %s does not match crypto storage type %s, not assigning',
-                    hsm_type, config.storage_type
+                    hsm_type,
+                    config.storage_type,
                 )
 
         except (AttributeError, ValueError, RuntimeError) as e:
@@ -278,15 +278,19 @@ class HsmSetupMixin(LoggerMixin):
             self.logger.info('key encryption key (KEK) generated for token: %s', token.label)
         except (subprocess.CalledProcessError, ValueError, RuntimeError) as e:
             self.logger.exception('Failed to generate key encryption key (KEK)')
-            messages.add_message(self.request, messages.WARNING,
-                                 f'HSM setup completed, but key encryption key (KEK) generation failed: {e!s}')
+            messages.add_message(
+                self.request,
+                messages.WARNING,
+                f'HSM setup completed, but key encryption key (KEK) generation failed: {e!s}',
+            )
         try:
             token.generate_and_wrap_dek()
             self.logger.info('DEK generated and wrap for token: %s', token.label)
         except Exception as e:
             self.logger.exception('Failed to generate and wrap DEK')
-            messages.add_message(self.request, messages.WARNING,
-                                 f'HSM setup completed, but DEK generation failed: {e!s}')
+            messages.add_message(
+                self.request, messages.WARNING, f'HSM setup completed, but DEK generation failed: {e!s}'
+            )
 
     def _raise_called_process_error(self, returncode: int) -> None:
         """Raise a subprocess.CalledProcessError with the given return code."""
@@ -296,9 +300,12 @@ class HsmSetupMixin(LoggerMixin):
         """Add a success message for HSM setup."""
         action = 'created' if created else 'updated'
         context = self.get_success_context()
-        messages.add_message(self.request, messages.SUCCESS,
-                             f'HSM setup completed successfully {context} with {hsm_type.upper()}. '
-                             f'PKCS#11 token configuration {action}.')
+        messages.add_message(
+            self.request,
+            messages.SUCCESS,
+            f'HSM setup completed successfully {context} with {hsm_type.upper()}. '
+            f'PKCS#11 token configuration {action}.',
+        )
         self.logger.info('PKCS11Token %s %s: %s', action, context, token)
 
     def _handle_hsm_setup_exception(self, exc: Exception) -> HttpResponse:
@@ -354,6 +361,7 @@ class HsmSetupMixin(LoggerMixin):
         msg = 'Subclasses must implement get_expected_wizard_state()'
         raise NotImplementedError(msg)
 
+
 class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
     """View for handling crypto storage setup during the setup wizard."""
 
@@ -383,7 +391,7 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
             messages.add_message(
                 self.request,
                 messages.SUCCESS,
-                f'Crypto storage configuration saved: {config.get_storage_type_display()}'
+                f'Crypto storage configuration saved: {config.get_storage_type_display()}',
             )
 
             self.logger.info('Crypto storage configured with type: %s', storage_type)
@@ -393,18 +401,10 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
             if storage_type == KeyStorageConfig.StorageType.SOFTHSM:
                 return redirect('setup_wizard:hsm_setup', hsm_type='softhsm', permanent=False)
             if storage_type == KeyStorageConfig.StorageType.PHYSICAL_HSM:
-                    messages.add_message(
-                                    self.request,
-                                    messages.ERROR,
-                                    'Physical HSM is coming soon.'
-                                )
-                # return redirect('setup_wizard:hsm_setup', hsm_type='physical', permanent=False)  # noqa: ERA001
+                messages.add_message(self.request, messages.ERROR, 'Physical HSM is coming soon.')
+            # return redirect('setup_wizard:hsm_setup', hsm_type='physical', permanent=False)  # noqa: ERA001
 
-            messages.add_message(
-                self.request,
-                messages.ERROR,
-                'Unknown storage type selected.'
-            )
+            messages.add_message(self.request, messages.ERROR, 'Unknown storage type selected.')
             return redirect('setup_wizard:crypto_storage_setup', permanent=False)
 
         except subprocess.CalledProcessError as exception:
@@ -427,11 +427,7 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
 
     def form_invalid(self, form: KeyStorageConfigForm) -> HttpResponse:
         """Handle invalid form submission."""
-        messages.add_message(
-            self.request,
-            messages.ERROR,
-            'Please correct the errors below and try again.'
-        )
+        messages.add_message(self.request, messages.ERROR, 'Please correct the errors below and try again.')
         return super().form_invalid(form)
 
     @staticmethod
@@ -445,6 +441,7 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
             5: 'Invalid crypto storage type provided.',
         }
         return error_messages.get(return_code, 'An unknown error occurred during crypto storage setup.')
+
 
 class SetupWizardHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
     """View for handling HSM setup during the setup wizard."""
@@ -464,18 +461,15 @@ class SetupWizardHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
 
         hsm_type = kwargs.get('hsm_type')
         if hsm_type not in ['softhsm', 'physical']:
-            messages.add_message(
-                self.request,
-                messages.ERROR,
-                'Invalid HSM type specified.'
-            )
+            messages.add_message(self.request, messages.ERROR, 'Invalid HSM type specified.')
             return redirect('setup_wizard:crypto_storage_setup', permanent=False)
 
         try:
             config = KeyStorageConfig.get_config()
 
             expected_storage_type = (
-                KeyStorageConfig.StorageType.SOFTHSM if hsm_type == 'softhsm'
+                KeyStorageConfig.StorageType.SOFTHSM
+                if hsm_type == 'softhsm'
                 else KeyStorageConfig.StorageType.PHYSICAL_HSM
             )
 
@@ -483,7 +477,7 @@ class SetupWizardHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
                 messages.add_message(
                     self.request,
                     messages.ERROR,
-                    f'{hsm_type.title()} HSM setup is only available when {hsm_type.title()} HSM storage is selected.'
+                    f'{hsm_type.title()} HSM setup is only available when {hsm_type.title()} HSM storage is selected.',
                 )
                 return redirect('setup_wizard:crypto_storage_setup', permanent=False)
         except Exception:  # noqa: BLE001
@@ -528,6 +522,7 @@ class SetupWizardHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
         """Return the expected wizard state for this view."""
         return SetupWizardState.WIZARD_SETUP_HSM
 
+
 class SetupWizardSetupModeView(TemplateView):
     """View for the initial step of the setup wizard.
 
@@ -569,6 +564,7 @@ class SetupWizardSetupModeView(TemplateView):
 
         return super().get(*args, **kwargs)
 
+
 class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView[EmptyForm]):
     """View for selecting the TLS server credential during setup."""
 
@@ -603,11 +599,7 @@ class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView[EmptyForm])
                 return redirect('setup_wizard:generate_tls_server_credential', permanent=False)
             if 'import_credential' in self.request.POST:
                 return redirect('setup_wizard:import_tls_server_credential', permanent=False)
-            messages.add_message(
-                self.request,
-                messages.ERROR,
-                'Invalid option selected.'
-            )
+            messages.add_message(self.request, messages.ERROR, 'Invalid option selected.')
             return redirect('setup_wizard:select_tls_server_credential', permanent=False)
 
         except FileNotFoundError:
@@ -620,6 +612,7 @@ class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView[EmptyForm])
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
             return redirect('setup_wizard:select_tls_server_credential', permanent=False)
+
 
 class SetupWizardRestoreOptionsView(TemplateView):
     """View for the restore option during initialization.
@@ -655,6 +648,7 @@ class SetupWizardRestoreOptionsView(TemplateView):
             return StartupWizardRedirect.redirect_by_state(wizard_state)
 
         return super().get(*args, **kwargs)
+
 
 class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
     """View for setting up backup password for PKCS#11 token during the setup wizard.
@@ -706,28 +700,20 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
                 messages.add_message(
                     self.request,
                     messages.ERROR,
-                    'No PKCS#11 token found. This should not happen in the backup password step.'
+                    'No PKCS#11 token found. This should not happen in the backup password step.',
                 )
                 self.logger.error('No PKCS11Token found in backup password step')
                 return redirect('setup_wizard:demo_data', permanent=False)
 
             if not isinstance(password, str):
-                messages.add_message(
-                    self.request,
-                    messages.ERROR,
-                    'Invalid password provided.'
-                )
+                messages.add_message(self.request, messages.ERROR, 'Invalid password provided.')
                 self.logger.error('Invalid password type provided in backup password step')
                 return self.form_invalid(form)
 
             token.set_backup_password(password)
             execute_shell_script(SCRIPT_WIZARD_BACKUP_PASSWORD)
 
-            messages.add_message(
-                self.request,
-                messages.SUCCESS,
-                'Backup password set successfully.'
-            )
+            messages.add_message(self.request, messages.SUCCESS, 'Backup password set successfully.')
             self.logger.info('Backup password set for token: %s', token.label)
             return super().form_valid(form)
 
@@ -765,11 +751,7 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
 
     def form_invalid(self, form: BackupPasswordForm) -> HttpResponse:
         """Handle invalid form submission."""
-        messages.add_message(
-            self.request,
-            messages.ERROR,
-            'Please correct the errors below and try again.'
-        )
+        messages.add_message(self.request, messages.ERROR, 'Please correct the errors below and try again.')
         return super().form_invalid(form)
 
     @staticmethod
@@ -784,8 +766,10 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
         }
         return error_messages.get(return_code, 'An unknown error occurred during backup password setup.')
 
+
 class BackupPasswordRecoveryMixin(LoggerMixin):
     """Mixin that provides backup password recovery functionality."""
+
     request: HttpRequest
 
     def handle_backup_password_recovery(self, backup_password: str) -> bool:
@@ -822,11 +806,7 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
 
         except Exception:
             self.logger.exception('Unexpected error during backup password recovery')
-            messages.add_message(
-                self.request,
-                messages.ERROR,
-                'Unexpected error during backup password recovery'
-            )
+            messages.add_message(self.request, messages.ERROR, 'Unexpected error during backup password recovery')
             return False
         else:
             return True
@@ -859,11 +839,7 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
                 self.logger.info('New KEK generated successfully for token %s', token.label)
             except (subprocess.CalledProcessError, ValueError, RuntimeError) as e:
                 self.logger.exception('Failed to generate new KEK for token %s', token.label)
-                messages.add_message(
-                    self.request,
-                    messages.ERROR,
-                    f'Failed to generate new KEK: {e}'
-                )
+                messages.add_message(self.request, messages.ERROR, f'Failed to generate new KEK: {e}')
                 return None
 
         return has_kek
@@ -876,18 +852,14 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
             self.logger.exception('Invalid backup password provided for token %s', token.label)
             self.logger.exception('The restore process needs to be redone with the correct backup password.')
             messages.add_message(
-                self.request,
-                messages.ERROR,
-                'Invalid backup password provided. DEK recovery failed. '
+                self.request, messages.ERROR, 'Invalid backup password provided. DEK recovery failed. '
             )
             messages.add_message(
-                self.request,
-                messages.ERROR,
-                'The restore process needs to be redone with the correct backup password.'
+                self.request, messages.ERROR, 'The restore process needs to be redone with the correct backup password.'
             )
             return None
 
-    def _wrap_and_save_dek(self, token: PKCS11Token, dek_bytes: bytes, *,had_kek: bool) -> bool:
+    def _wrap_and_save_dek(self, token: PKCS11Token, dek_bytes: bytes, *, had_kek: bool) -> bool:
         """Wrap recovered DEK with KEK and save."""
         try:
             wrapped_dek = token.wrap_dek(dek_bytes)
@@ -895,18 +867,10 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
             token.save(update_fields=['encrypted_dek'])
 
             kek_status = 'newly generated' if not had_kek else 'existing'
-            self.logger.info(
-                'Successfully wrapped recovered DEK with %s KEK for token %s',
-                kek_status,
-                token.label
-            )
+            self.logger.info('Successfully wrapped recovered DEK with %s KEK for token %s', kek_status, token.label)
         except RuntimeError as e:
             self.logger.exception('Failed to wrap recovered DEK for token %s', token.label)
-            messages.add_message(
-                self.request,
-                messages.ERROR,
-                f'Failed to wrap recovered DEK with KEK: {e}'
-            )
+            messages.add_message(self.request, messages.ERROR, f'Failed to wrap recovered DEK with KEK: {e}')
             return False
         else:
             return True
@@ -925,15 +889,11 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
     def _log_success(self, token: PKCS11Token, *, had_kek: bool) -> None:
         """Log successful recovery."""
         recovery_type = 'with new KEK generation' if not had_kek else 'with existing KEK'
-        self.logger.info(
-            'Successfully completed backup password recovery for token %s %s',
-            token.label,
-            recovery_type
-        )
+        self.logger.info('Successfully completed backup password recovery for token %s %s', token.label, recovery_type)
         messages.add_message(
             self.request,
             messages.SUCCESS,
-            'DEK successfully recovered using backup password and re-secured with HSM key.'
+            'DEK successfully recovered using backup password and re-secured with HSM key.',
         )
 
 
@@ -959,18 +919,15 @@ class AutoRestoreHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
 
         hsm_type = kwargs.get('hsm_type')
         if hsm_type not in ['softhsm', 'physical']:
-            messages.add_message(
-                self.request,
-                messages.ERROR,
-                'Invalid HSM type specified.'
-            )
+            messages.add_message(self.request, messages.ERROR, 'Invalid HSM type specified.')
             return redirect('users:login', permanent=False)
 
         try:
             config = KeyStorageConfig.get_config()
 
             expected_storage_type = (
-                KeyStorageConfig.StorageType.SOFTHSM if hsm_type == 'softhsm'
+                KeyStorageConfig.StorageType.SOFTHSM
+                if hsm_type == 'softhsm'
                 else KeyStorageConfig.StorageType.PHYSICAL_HSM
             )
 
@@ -978,7 +935,7 @@ class AutoRestoreHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
                 messages.add_message(
                     self.request,
                     messages.ERROR,
-                    f'Auto restore HSM setup is only available when {hsm_type.title()} HSM storage is selected.'
+                    f'Auto restore HSM setup is only available when {hsm_type.title()} HSM storage is selected.',
                 )
                 return redirect('users:login', permanent=False)
         except Exception:  # noqa: BLE001
@@ -1058,11 +1015,7 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
 
     def _handle_invalid_form(self) -> HttpResponse:
         """Handle invalid form submission."""
-        messages.add_message(
-            self.request,
-            messages.ERROR,
-            'Please correct the errors below and try again.'
-        )
+        messages.add_message(self.request, messages.ERROR, 'Please correct the errors below and try again.')
         return redirect('users:login')
 
     def _process_backup_file(self, backup_file: Any, backup_password: str | None) -> HttpResponse:
@@ -1092,21 +1045,16 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
             success = self.handle_backup_password_recovery(backup_password)
             if not success:
                 messages.add_message(
-                    self.request,
-                    messages.ERROR,
-                    'Database restored successfully, but backup password recovery failed.'
+                    self.request, messages.ERROR, 'Database restored successfully, but backup password recovery failed.'
                 )
         else:
             self.logger.warning(
-                'No backup password provided, skipping DEK recovery. '
-                'Encrypted fields may not be accessible.'
+                'No backup password provided, skipping DEK recovery. Encrypted fields may not be accessible.'
             )
         call_command('trustpointrestore')
 
         messages.add_message(
-            self.request,
-            messages.SUCCESS,
-            f'Trustpoint restored successfully from {backup_file.name}'
+            self.request, messages.SUCCESS, f'Trustpoint restored successfully from {backup_file.name}'
         )
 
     def _cleanup_temp_file(self, temp_path: Path) -> None:
@@ -1126,6 +1074,7 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
             4: 'Failed to create the WIZARD_COMPLETED state file.',
         }
         return error_messages.get(return_code, 'An unknown error occurred during the restore process.')
+
 
 class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, FormView[PasswordAutoRestoreForm]):
     """View for handling backup password entry during auto restore process.
@@ -1182,15 +1131,13 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             self._deactivate_all_issuing_cas()
 
             messages.add_message(
-                self.request,
-                messages.SUCCESS,
-                'Auto restore completed successfully. You can now log in.'
+                self.request, messages.SUCCESS, 'Auto restore completed successfully. You can now log in.'
             )
             messages.add_message(
                 self.request,
                 messages.WARNING,
                 'All Certificate Authorities have been deactivated because their private keys are no longer '
-                'available after HSM change.'
+                'available after HSM change.',
             )
             self.logger.info('Auto restore completed successfully with backup password recovery')
             return super().form_valid(form)
@@ -1215,11 +1162,7 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
 
     def form_invalid(self, form: PasswordAutoRestoreForm) -> HttpResponse:
         """Handle invalid form submission."""
-        messages.add_message(
-            self.request,
-            messages.ERROR,
-            'Please correct the errors below and try again.'
-        )
+        messages.add_message(self.request, messages.ERROR, 'Please correct the errors below and try again.')
         return super().form_invalid(form)
 
     def _raise_runtime_error(self, message: str) -> None:
@@ -1241,9 +1184,8 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             if count > 0:
                 active_cas.update(is_active=False)
                 self.logger.info(
-                    'Deactivated %d Certificate Authority(ies) due to HSM change - '
-                    'private keys no longer available',
-                    count
+                    'Deactivated %d Certificate Authority(ies) due to HSM change - private keys no longer available',
+                    count,
                 )
             else:
                 self.logger.info('No active Certificate Authorities found to deactivate')
@@ -1304,6 +1246,7 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             5: 'Failed to execute post-restore operations.',
         }
         return error_messages.get(return_code, 'An unknown error occurred during auto restore password processing.')
+
 
 class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWizardTlsCertificateForm]):
     """View for generating TLS Server Credentials in the setup wizard.
@@ -1417,6 +1360,7 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
         }
         return error_messages.get(return_code, 'An unknown error occurred during setup mode transition.')
 
+
 class SetupWizardImportTlsServerCredentialMethodSelectView(TemplateView):
     """View for selecting the import method for TLS Server Credentials."""
 
@@ -1500,17 +1444,17 @@ class SetupWizardImportTlsServerCredentialPkcs12View(LoggerMixin, FormView[TlsAd
                         # Delete from certificate chain order table
                         cursor.execute(
                             f'DELETE FROM {CertificateChainOrderModel._meta.db_table} WHERE credential_id = %s',  # noqa: SLF001,S608
-                            [old_credential_id]
+                            [old_credential_id],
                         )
                         # Delete from primary credential certificate table
                         cursor.execute(
                             f'DELETE FROM {PrimaryCredentialCertificate._meta.db_table} WHERE credential_id = %s',  # noqa: SLF001,S608
-                            [old_credential_id]
+                            [old_credential_id],
                         )
                         # Finally delete the credential itself
                         cursor.execute(
                             f'DELETE FROM {CredentialModel._meta.db_table} WHERE id = %s',  # noqa: SLF001,S608
-                            [old_credential_id]
+                            [old_credential_id],
                         )
                         deleted_count = cursor.rowcount
                     if deleted_count > 0:
@@ -1525,8 +1469,7 @@ class SetupWizardImportTlsServerCredentialPkcs12View(LoggerMixin, FormView[TlsAd
                 self.logger.error(err_msg)
                 return redirect('setup_wizard:setup_mode', permanent=False)
             self.logger.info(
-                'Activated TLS credential: %s, certificate: %s',
-                tls_certificate.id, tls_certificate.certificate.id
+                'Activated TLS credential: %s, certificate: %s', tls_certificate.id, tls_certificate.certificate.id
             )
             execute_shell_script(SCRIPT_WIZARD_SETUP_MODE)
             messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential imported successfully.')
@@ -1558,9 +1501,7 @@ class SetupWizardImportTlsServerCredentialPkcs12View(LoggerMixin, FormView[TlsAd
         return error_messages.get(return_code, 'An unknown error occurred.')
 
 
-class SetupWizardImportTlsServerCredentialSeparateFilesView(
-    LoggerMixin, FormView[TlsAddFileImportSeparateFilesForm]
-):
+class SetupWizardImportTlsServerCredentialSeparateFilesView(LoggerMixin, FormView[TlsAddFileImportSeparateFilesForm]):
     """View for importing TLS Server Credentials using separate files in the setup wizard."""
 
     http_method_names = ('get', 'post')
@@ -1615,17 +1556,17 @@ class SetupWizardImportTlsServerCredentialSeparateFilesView(
                         # Delete from certificate chain order table
                         cursor.execute(
                             f'DELETE FROM {CertificateChainOrderModel._meta.db_table} WHERE credential_id = %s',  # noqa: SLF001,S608
-                            [old_credential_id]
+                            [old_credential_id],
                         )
                         # Delete from primary credential certificate table
                         cursor.execute(
                             f'DELETE FROM {PrimaryCredentialCertificate._meta.db_table} WHERE credential_id = %s',  # noqa: SLF001,S608
-                            [old_credential_id]
+                            [old_credential_id],
                         )
                         # Finally delete the credential itself
                         cursor.execute(
                             f'DELETE FROM {CredentialModel._meta.db_table} WHERE id = %s',  # noqa: SLF001,S608
-                            [old_credential_id]
+                            [old_credential_id],
                         )
                         deleted_count = cursor.rowcount
                     if deleted_count > 0:
@@ -1640,8 +1581,7 @@ class SetupWizardImportTlsServerCredentialSeparateFilesView(
                 self.logger.error(err_msg)
                 return redirect('setup_wizard:setup_mode', permanent=False)
             self.logger.info(
-                'Activated TLS credential: %s, certificate: %s',
-                tls_certificate.id, tls_certificate.certificate.id
+                'Activated TLS credential: %s, certificate: %s', tls_certificate.id, tls_certificate.certificate.id
             )
             execute_shell_script(SCRIPT_WIZARD_SETUP_MODE)
             messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential imported successfully.')
@@ -1691,10 +1631,7 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
         """Return the success URL based on storage type."""
         try:
             config = KeyStorageConfig.get_config()
-            if config.storage_type in [
-                KeyStorageConfig.StorageType.SOFTHSM,
-                KeyStorageConfig.StorageType.PHYSICAL_HSM
-            ]:
+            if config.storage_type in [KeyStorageConfig.StorageType.SOFTHSM, KeyStorageConfig.StorageType.PHYSICAL_HSM]:
                 return str(reverse_lazy('setup_wizard:backup_password'))
             return str(reverse_lazy('setup_wizard:demo_data'))
         except KeyStorageConfig.DoesNotExist:
@@ -1767,7 +1704,7 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
                 config = KeyStorageConfig.get_config()
                 if config.storage_type in [
                     KeyStorageConfig.StorageType.SOFTHSM,
-                    KeyStorageConfig.StorageType.PHYSICAL_HSM
+                    KeyStorageConfig.StorageType.PHYSICAL_HSM,
                 ]:
                     storage_param = 'hsm'
                 else:
@@ -1928,6 +1865,7 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
             # Remove chain file if it exists but chain is empty
             NGINX_CERT_CHAIN_PATH.unlink()
 
+
 class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
     """View for handling the cancellation of TLS Server Credential application.
 
@@ -2000,7 +1938,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
         """Clears all credential and certificate data if canceled in the 'WIZARD_TLS_SERVER_CREDENTIAL_APPLY' state."""
         CaModel.objects.all().delete()
         CredentialModel.objects.all().delete()
-        #ActiveTrustpointTlsServerCredentialModel.objects.all().delete()  # noqa: ERA001
+        # ActiveTrustpointTlsServerCredentialModel.objects.all().delete()  # noqa: ERA001
         CertificateModel.objects.all().delete()
 
     def _map_exit_code_to_message(self, return_code: int) -> str:
@@ -2015,6 +1953,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
             'permissions are set correctly.',
         }
         return error_messages.get(return_code, 'An unknown error occurred during the cancel operation.')
+
 
 class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
     """View for handling the demo data setup during the setup wizard.
@@ -2044,7 +1983,7 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
         """Handle form submission for demo data setup."""
         try:
             if 'without-demo-data' in self.request.POST:
-                call_command('create_default_cert_profiles') # default cert profiles are always added
+                call_command('create_default_cert_profiles')  # default cert profiles are always added
                 self._execute_notifications()
                 execute_shell_script(SCRIPT_WIZARD_DEMO_DATA)
                 messages.add_message(self.request, messages.SUCCESS, 'Setup Trustpoint with no demo data')
@@ -2119,6 +2058,7 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
             4: 'Failed to create WIZARD_CREATE_SUPER_USER state file.',
         }
         return error_messages.get(return_code, 'An unknown error occurred while executing the demo data script.')
+
 
 class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User]]):
     """View for handling the creation of a superuser during the setup wizard.

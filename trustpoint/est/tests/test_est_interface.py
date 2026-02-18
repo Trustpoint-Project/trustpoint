@@ -74,6 +74,7 @@ def test_tls_client_cert_verification_no_cert(est_simple_enrollment_view) -> Non
             est_simple_enrollment_view.request, est_simple_enrollment_view.requested_domain
         )
 
+
 def test_tls_client_cert_domain_credential_enrollment() -> None:
     """Tests that an issued credential can be enrolled via EST simpleenroll using an IDevID."""
 

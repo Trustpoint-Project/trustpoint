@@ -36,7 +36,7 @@ class SetupWizardBackupPasswordViewTests(TestCase):
     def test_dispatch_wrong_state(self, mock_get_state: Mock) -> None:
         """Test dispatch redirects when in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
-        
+
         request = self.factory.get('/setup_wizard/backup_password/')
         response = self.view.dispatch(request)
 
@@ -47,13 +47,13 @@ class SetupWizardBackupPasswordViewTests(TestCase):
     def test_get_context_data(self, mock_get_state: Mock) -> None:
         """Test get_context_data adds password requirements."""
         mock_get_state.return_value = SetupWizardState.WIZARD_BACKUP_PASSWORD
-        
+
         request = self.factory.get('/setup_wizard/backup_password/')
         self.view.request = request
         self.view.setup(request)
-        
+
         context = self.view.get_context_data()
-        
+
         assert 'password_requirements' in context
         assert len(context['password_requirements']) == 4
 
@@ -70,11 +70,11 @@ class BackupPasswordRecoveryMixinTests(TestCase):
     def test_get_token_for_recovery_no_token(self, mock_first: Mock) -> None:
         """Test _get_token_for_recovery when no token exists."""
         mock_first.return_value = None
-        
+
         request = self.factory.get('/')
         request._messages = Mock()
         self.mixin.request = request
-        
+
         result = self.mixin._get_token_for_recovery()
         assert result is None
 
@@ -84,11 +84,11 @@ class BackupPasswordRecoveryMixinTests(TestCase):
         mock_token = Mock(spec=PKCS11Token)
         mock_token.has_backup_encryption.return_value = False
         mock_first.return_value = mock_token
-        
+
         request = self.factory.get('/')
         request._messages = Mock()
         self.mixin.request = request
-        
+
         result = self.mixin._get_token_for_recovery()
         assert result is None
 
@@ -98,11 +98,11 @@ class BackupPasswordRecoveryMixinTests(TestCase):
         mock_token = Mock(spec=PKCS11Token)
         mock_token.has_backup_encryption.return_value = True
         mock_first.return_value = mock_token
-        
+
         request = self.factory.get('/')
         request._messages = Mock()
         self.mixin.request = request
-        
+
         result = self.mixin._get_token_for_recovery()
         assert result == mock_token
 
@@ -110,11 +110,11 @@ class BackupPasswordRecoveryMixinTests(TestCase):
         """Test _ensure_kek_exists when KEK already exists."""
         mock_token = Mock(spec=PKCS11Token)
         mock_token.kek = 'existing_kek'
-        
+
         request = self.factory.get('/')
         request._messages = Mock()
         self.mixin.request = request
-        
+
         result = self.mixin._ensure_kek_exists(mock_token)
         assert result is True
 
@@ -123,11 +123,11 @@ class BackupPasswordRecoveryMixinTests(TestCase):
         mock_token = Mock(spec=PKCS11Token)
         mock_token.kek = None
         mock_token.generate_kek = Mock()
-        
+
         request = self.factory.get('/')
         request._messages = Mock()
         self.mixin.request = request
-        
+
         result = self.mixin._ensure_kek_exists(mock_token)
         assert result is False
         mock_token.generate_kek.assert_called_once_with(key_length=256)
@@ -136,11 +136,11 @@ class BackupPasswordRecoveryMixinTests(TestCase):
         """Test _recover_dek_with_password success."""
         mock_token = Mock(spec=PKCS11Token)
         mock_token.get_dek_with_backup_password.return_value = b'recovered_dek'
-        
+
         request = self.factory.get('/')
         request._messages = Mock()
         self.mixin.request = request
-        
+
         result = self.mixin._recover_dek_with_password(mock_token, 'password123')
         assert result == b'recovered_dek'
 
@@ -148,11 +148,11 @@ class BackupPasswordRecoveryMixinTests(TestCase):
         """Test _recover_dek_with_password with invalid password."""
         mock_token = Mock(spec=PKCS11Token)
         mock_token.get_dek_with_backup_password.side_effect = ValueError('Invalid password')
-        
+
         request = self.factory.get('/')
         request._messages = Mock()
         self.mixin.request = request
-        
+
         result = self.mixin._recover_dek_with_password(mock_token, 'wrong_password')
         assert result is None
 
@@ -161,11 +161,11 @@ class BackupPasswordRecoveryMixinTests(TestCase):
         mock_token = Mock(spec=PKCS11Token)
         mock_token.wrap_dek.return_value = b'wrapped_dek'
         mock_token.save = Mock()
-        
+
         request = self.factory.get('/')
         request._messages = Mock()
         self.mixin.request = request
-        
+
         result = self.mixin._wrap_and_save_dek(mock_token, b'dek_bytes', had_kek=True)
         assert result is True
         mock_token.save.assert_called_once()
@@ -192,7 +192,7 @@ class BackupRestoreViewTests(TestCase):
         """Test POST with invalid form."""
         request = self.factory.post('/setup_wizard/restore/', {})
         request._messages = Mock()
-        
+
         self.view.request = request
         response = self.view.post(request)
 
@@ -222,7 +222,7 @@ class BackupAutoRestorePasswordViewTests(TestCase):
     def test_dispatch_wrong_state(self, mock_get_state: Mock) -> None:
         """Test dispatch redirects when in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
-        
+
         request = self.factory.get('/setup_wizard/auto_restore_password/')
         response = self.view.dispatch(request)
 

@@ -1,4 +1,5 @@
 """Filter classes for workflow instances and enrollment requests."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -12,6 +13,7 @@ from workflows.models import EnrollmentRequest, State
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
+
 
 class EnrollmentRequestFilter(django_filters.FilterSet):
     """Filters for the enrollment request list."""
@@ -80,6 +82,7 @@ class EnrollmentRequestFilter(django_filters.FilterSet):
 
     class Meta:
         """Configuration for EnrollmentRequestFilter."""
+
         model = EnrollmentRequest
         fields: tuple[str, ...] = ()
 

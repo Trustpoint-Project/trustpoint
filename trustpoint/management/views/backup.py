@@ -1,4 +1,5 @@
 """Django backup view."""
+
 import datetime
 import io
 import tarfile
@@ -95,22 +96,21 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # ty
         - save_backup_settings: Saves or updates BackupOptions.
         - reset_backup_settings: Deletes existing BackupOptions, reverting to defaults.
     """
+
     template_name = 'management/backups/manage_backups.html'
     context_object_name = 'backup_files'
     paginate_by = 20
     default_sort_param = 'filename'
     success_url = reverse_lazy('management:backups')
 
-    def get_queryset(self) -> Any: # list[dict[str, Any]]
+    def get_queryset(self) -> Any:  # list[dict[str, Any]]
         """Collect metadata for all backup_*.dump.gz files under BACKUP_FILE_PATH."""
         backup_dir: Path = settings.BACKUP_FILE_PATH
         try:
             files = [p.name for p in backup_dir.iterdir() if p.is_file()]
         except (FileNotFoundError, NotADirectoryError):
             return []
-        backups = [
-            f for f in files if f.startswith('backup_') and f.endswith('.dump.gz')
-        ]
+        backups = [f for f in files if f.startswith('backup_') and f.endswith('.dump.gz')]
         data: list[dict[str, Any]] = [get_backup_file_data(f) for f in backups]
         self.object_list = data
         return data
@@ -121,11 +121,7 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # ty
         instance, _ = BackupOptions.objects.get_or_create(pk=1)
         context['backup_options_form'] = BackupOptionsForm(instance=instance)
         # Check if settings have been saved (not default values)
-        context['has_saved_settings'] = (
-            instance.enable_sftp_storage and
-            bool(instance.host) and
-            bool(instance.user)
-        )
+        context['has_saved_settings'] = instance.enable_sftp_storage and bool(instance.host) and bool(instance.user)
         return context
 
     def post(self, request: Any, *_args: Any, **_kwargs: Any) -> HttpResponse:
@@ -415,9 +411,9 @@ class BackupFilesDeleteMultipleView(View, LoggerMixin):
                 errors.append(fname)
 
         if deleted:
-            messages.success(request, f"Deleted: {', '.join(deleted)}")
+            messages.success(request, f'Deleted: {", ".join(deleted)}')
         if errors:
-            messages.error(request, f"Errors deleting: {', '.join(errors)}")
+            messages.error(request, f'Errors deleting: {", ".join(errors)}')
 
         return redirect('management:backups')
 

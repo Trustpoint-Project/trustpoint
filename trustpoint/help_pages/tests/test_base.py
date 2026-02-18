@@ -224,9 +224,7 @@ class BuildTlsTrustStoreSectionTests(TestCase):
 
     @patch('help_pages.base.ActiveTrustpointTlsServerCredentialModel.objects.first')
     @patch('help_pages.base.reverse')
-    def test_build_tls_trust_store_section_success(
-        self, mock_reverse: Mock, mock_first: Mock
-    ) -> None:
+    def test_build_tls_trust_store_section_success(self, mock_reverse: Mock, mock_first: Mock) -> None:
         """Test building TLS trust store section successfully."""
         mock_tls = Mock()
         mock_credential = Mock()

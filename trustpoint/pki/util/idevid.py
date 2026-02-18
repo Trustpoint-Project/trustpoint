@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 class IDevIDAuthenticationError(Exception):
     """Exception raised for IDevID authentication failures."""
 
+
 class IDevIDExtensionPolicy:
     """Builder for IDevID extension policies."""
 
@@ -35,9 +36,7 @@ class IDevIDExtensionPolicy:
         """Create an extension policy for all certificates in a IDevID PKI."""
         policy = ExtensionPolicy.permit_all()
         # Require the presence of the Authority Key Identifier extension as per IEEE 802.1AR 8.10.1
-        return policy.require_present(
-            x509.AuthorityKeyIdentifier, Criticality.AGNOSTIC, None
-        )
+        return policy.require_present(x509.AuthorityKeyIdentifier, Criticality.AGNOSTIC, None)
 
     @staticmethod
     def idevid_ee_policy() -> ExtensionPolicy:
@@ -49,15 +48,11 @@ class IDevIDExtensionPolicy:
         """Create an extension policy for IDevID CA certificates."""
         policy = IDevIDExtensionPolicy._idevid_base_policy()
         # Require the presence of the Subject Key Identifier extension as per IEEE 802.1AR 8.10.2
-        policy = policy.require_present(
-            x509.SubjectKeyIdentifier, Criticality.AGNOSTIC, None
-        )
+        policy = policy.require_present(x509.SubjectKeyIdentifier, Criticality.AGNOSTIC, None)
         # Require the presence of the Basic Constraints extension as per RFC 5280
         # Note: There are conflicting requirements in RFC 5280 and IEEE 802.1AR 8.10
         # with respect to CA Basic Constraints being critical
-        return policy.require_present(
-            x509.BasicConstraints, Criticality.CRITICAL, None
-        )
+        return policy.require_present(x509.BasicConstraints, Criticality.CRITICAL, None)
 
 
 class IDevIDVerifier(LoggerMixin):
@@ -79,8 +74,8 @@ class IDevIDVerifier(LoggerMixin):
         builder = PolicyBuilder().store(store)
         builder = builder.max_chain_depth(2)
         builder = builder.extension_policies(
-           ca_policy=IDevIDExtensionPolicy.idevid_ca_policy(),
-           ee_policy=IDevIDExtensionPolicy.idevid_ee_policy(),
+            ca_policy=IDevIDExtensionPolicy.idevid_ca_policy(),
+            ee_policy=IDevIDExtensionPolicy.idevid_ee_policy(),
         )
         verifier = builder.build_client_verifier()
         try:
@@ -107,18 +102,20 @@ class IDevIDAuthenticator(LoggerMixin):
             raise IDevIDAuthenticationError(error_message)
 
         matching_registrations = [
-            r for r in domain_registrations
-            if re.fullmatch(r.serial_number_pattern, idevid_subj_sn)
+            r for r in domain_registrations if re.fullmatch(r.serial_number_pattern, idevid_subj_sn)
         ]
         if not matching_registrations:
-            error_message = (f'No DevID registration pattern matching SN {idevid_subj_sn} '
-                             f'for requested domain {domain_name}.')
+            error_message = (
+                f'No DevID registration pattern matching SN {idevid_subj_sn} for requested domain {domain_name}.'
+            )
             raise IDevIDAuthenticationError(error_message)
         return matching_registrations
 
     @staticmethod
     def _auto_create_device_from_idevid(
-        idevid_cert: x509.Certificate, idevid_subj_sn: str, domain: DomainModel,
+        idevid_cert: x509.Certificate,
+        idevid_subj_sn: str,
+        domain: DomainModel,
         pki_protocol: OnboardingPkiProtocol,
         onboarding_protocol: OnboardingProtocol,
     ) -> DeviceModel:
@@ -141,7 +138,7 @@ class IDevIDAuthenticator(LoggerMixin):
             serial_number=idevid_subj_sn,
             common_name=common_name,
             domain=domain,
-            onboarding_config=onboarding_config_model
+            onboarding_config=onboarding_config_model,
         )
         onboarding_config_model.full_clean()
         onboarding_config_model.save()
@@ -175,19 +172,19 @@ class IDevIDAuthenticator(LoggerMixin):
 
         # verify IDevID against Truststore
         for registration in matching_registrations:
-            if (IDevIDVerifier.verify_idevid_against_truststore(
+            if IDevIDVerifier.verify_idevid_against_truststore(
                 idevid_cert=idevid_cert,
                 intermediate_cas=intermediate_cas,
                 truststore=registration.truststore,
-            )):
+            ):
                 cls.logger.info(
                     'IDevID certificate with SN %s successfully verified against truststore %s',
                     idevid_subj_sn,
-                    registration.truststore.unique_name
+                    registration.truststore.unique_name,
                 )
                 return (registration.domain, idevid_subj_sn)
 
-        error_message = (f'IDevID with SN {idevid_subj_sn} could not be verified against any truststore.')
+        error_message = f'IDevID with SN {idevid_subj_sn} could not be verified against any truststore.'
         cls.logger.warning(error_message)
         raise IDevIDAuthenticationError(error_message)
 
@@ -210,13 +207,13 @@ class IDevIDAuthenticator(LoggerMixin):
             existing_device = DeviceModel.objects.get(
                 domain=domain,
                 serial_number=idevid_subj_sn,
-
             )
         except DeviceModel.DoesNotExist:
             pass
         except DeviceModel.MultipleObjectsReturned:
-            error_message = (f'Multiple devices with the same serial number {idevid_subj_sn} '
-                            f'found in domain {domain.unique_name}.')
+            error_message = (
+                f'Multiple devices with the same serial number {idevid_subj_sn} found in domain {domain.unique_name}.'
+            )
             cls.logger.warning(error_message)
             cls.logger.warning('Auto-creating new device.')
 
@@ -227,7 +224,7 @@ class IDevIDAuthenticator(LoggerMixin):
             idevid_subj_sn=idevid_subj_sn,
             domain=domain,
             onboarding_protocol=onboarding_protocol,
-            pki_protocol=pki_protocol
+            pki_protocol=pki_protocol,
         )
 
     @classmethod
@@ -236,7 +233,5 @@ class IDevIDAuthenticator(LoggerMixin):
         idevid_cert, intermediate_cas = NginxTLSClientCertExtractor.get_client_cert_as_x509(request)
 
         return cls.authenticate_idevid_from_x509(
-            idevid_cert=idevid_cert,
-            intermediate_cas=intermediate_cas,
-            domain=domain
+            idevid_cert=idevid_cert, intermediate_cas=intermediate_cas, domain=domain
         )

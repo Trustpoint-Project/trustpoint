@@ -34,7 +34,7 @@ class SetupWizardSelectTlsServerCredentialViewTests(TestCase):
     def test_dispatch_wrong_state(self, mock_get_state: Mock) -> None:
         """Test dispatch redirects when in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
-        
+
         request = self.factory.get('/setup_wizard/select_tls_server_credential/')
         response = self.view.dispatch(request)
 
@@ -45,68 +45,62 @@ class SetupWizardSelectTlsServerCredentialViewTests(TestCase):
     def test_dispatch_correct_state(self, mock_get_state: Mock) -> None:
         """Test dispatch continues when in correct state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_MODE
-        
+
         request = self.factory.get('/setup_wizard/select_tls_server_credential/')
         self.view.request = request
         self.view.setup(request)
-        
+
         response = self.view.get(request)
         assert response.status_code == 200
 
     def test_form_valid_generate_credential(self) -> None:
         """Test form_valid redirects to generate credential page."""
-        request = self.factory.post(
-            '/setup_wizard/select_tls_server_credential/',
-            {'generate_credential': 'true'}
-        )
+        request = self.factory.post('/setup_wizard/select_tls_server_credential/', {'generate_credential': 'true'})
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         form = EmptyForm()
-        
+
         response = self.view.form_valid(form)
-        
+
         assert response.status_code == 302
         assert 'generate-tls-server-credential' in response.url
 
     def test_form_valid_import_credential(self) -> None:
         """Test form_valid redirects to import credential page."""
-        request = self.factory.post(
-            '/setup_wizard/select_tls_server_credential/',
-            {'import_credential': 'true'}
-        )
+        request = self.factory.post('/setup_wizard/select_tls_server_credential/', {'import_credential': 'true'})
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         form = EmptyForm()
-        
+
         response = self.view.form_valid(form)
-        
+
         assert response.status_code == 302
         assert 'import-tls-server-credential' in response.url
 
     def test_form_valid_invalid_option(self) -> None:
         """Test form_valid handles invalid option."""
-        request = self.factory.post(
-            '/setup_wizard/select_tls_server_credential/',
-            {'invalid_option': 'true'}
-        )
+        request = self.factory.post('/setup_wizard/select_tls_server_credential/', {'invalid_option': 'true'})
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
-        
+
         self.view.request = request
         form = EmptyForm()
-        
+
         response = self.view.form_valid(form)
-        
+
         assert response.status_code == 302
 
 
@@ -132,7 +126,7 @@ class SetupWizardRestoreOptionsViewTests(TestCase):
     def test_get_wrong_state(self, mock_get_state: Mock) -> None:
         """Test GET redirects when in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
-        
+
         request = self.factory.get('/setup_wizard/restore_options/')
         response = self.view.get(request)
 
@@ -143,10 +137,10 @@ class SetupWizardRestoreOptionsViewTests(TestCase):
     def test_get_correct_state(self, mock_get_state: Mock) -> None:
         """Test GET renders template when in correct state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_MODE
-        
+
         request = self.factory.get('/setup_wizard/restore_options/')
         self.view.request = request
         self.view.setup(request)
-        
+
         response = self.view.get(request)
         assert response.status_code == 200

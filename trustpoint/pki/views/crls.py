@@ -38,9 +38,7 @@ class CrlTableView(CrlContextMixin, ListView[CrlModel]):
 
     def get_queryset(self) -> QuerySet[CrlModel]:
         """Return all CRL models with related CA information."""
-        return (super().get_queryset()
-               .select_related('ca')
-               .order_by('-this_update'))
+        return super().get_queryset().select_related('ca').order_by('-this_update')
 
 
 class CrlBulkDeleteConfirmView(BulkDeleteView):
@@ -159,9 +157,7 @@ class CrlDownloadView(CrlContextMixin, DetailView[CrlModel]):
             file_extension = '.crl'
         elif file_format == 'der':
             pem_lines = [
-                line.strip()
-                for line in crl_model.crl_pem.splitlines()
-                if line and not line.startswith('-----')
+                line.strip() for line in crl_model.crl_pem.splitlines() if line and not line.startswith('-----')
             ]
             b64data = ''.join(pem_lines)
             try:
@@ -181,9 +177,7 @@ class CrlDownloadView(CrlContextMixin, DetailView[CrlModel]):
                 file_extension = '.p7c'
             else:
                 pem_lines = [
-                    line.strip()
-                    for line in crl_model.crl_pem.splitlines()
-                    if line and not line.startswith('-----')
+                    line.strip() for line in crl_model.crl_pem.splitlines() if line and not line.startswith('-----')
                 ]
                 b64data = ''.join(pem_lines)
                 try:
@@ -210,6 +204,7 @@ class CrlDownloadView(CrlContextMixin, DetailView[CrlModel]):
         response['Content-Disposition'] = f'attachment; filename="{file_name}"'
 
         return response
+
 
 class CrlDetailView(CrlContextMixin, DetailView[CrlModel]):
     """Detail view for a single CRL."""
@@ -274,13 +269,15 @@ class CrlDetailView(CrlContextMixin, DetailView[CrlModel]):
         for revoked_cert in crypto_crl:
             serial_hex = f'{revoked_cert.serial_number:x}'.upper()
             cert_id = certificates_by_serial.get(serial_hex)
-            revoked_certs.append({
-                'serial_number': revoked_cert.serial_number,
-                'serial_number_hex': serial_hex,
-                'revocation_date': revoked_cert.revocation_date_utc,
-                'reason': getattr(revoked_cert, 'reason', None),
-                'certificate_id': cert_id,
-            })
+            revoked_certs.append(
+                {
+                    'serial_number': revoked_cert.serial_number,
+                    'serial_number_hex': serial_hex,
+                    'revocation_date': revoked_cert.revocation_date_utc,
+                    'reason': getattr(revoked_cert, 'reason', None),
+                    'certificate_id': cert_id,
+                }
+            )
         context['revoked_certificates'] = revoked_certs
 
         extensions = [
@@ -354,24 +351,15 @@ class CrlImportView(CrlContextMixin, FormView[CrlImportForm]):
             )
 
             if ca is not None:
-                messages.success(
-                    self.request,
-                    _('Successfully imported CRL for CA %(ca)s.') % {'ca': ca.unique_name}
-                )
+                messages.success(self.request, _('Successfully imported CRL for CA %(ca)s.') % {'ca': ca.unique_name})
             else:
-                messages.success(
-                    self.request,
-                    _('Successfully imported CRL with no associated CA.')
-                )
+                messages.success(self.request, _('Successfully imported CRL with no associated CA.'))
 
         except ValidationError as exc:
             messages.error(self.request, str(exc))
             return self.form_invalid(form)
         except (ValueError, UnicodeDecodeError) as exc:
-            messages.error(
-                self.request,
-                _('Failed to import CRL: %(error)s') % {'error': str(exc)}
-            )
+            messages.error(self.request, _('Failed to import CRL: %(error)s') % {'error': str(exc)})
             return self.form_invalid(form)
 
         return super().form_valid(form)

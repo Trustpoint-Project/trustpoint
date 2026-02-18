@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 ENGINE_SQLITE = 'django.db.backends.sqlite3'
 ENGINE_POSTGRESQL = 'django.db.backends.postgresql'
 
+
 class Command(BaseCommand):
     """Management command to reset the database and migrations."""
 
@@ -34,11 +35,13 @@ class Command(BaseCommand):
         parser.add_argument('--force', action='store_true', help='Force database reset without prompt.')
         parser.add_argument('--no-user', action='store_true', help='Skip superuser creation.')
         parser.add_argument(
-            '--keep-all-migrations', action='store_true',
-            help='Use in CI environments, does not regenerate migrations.')
+            '--keep-all-migrations', action='store_true', help='Use in CI environments, does not regenerate migrations.'
+        )
         parser.add_argument(
-            '--initial-migrations', action='store_true',
-            help='DO NOT USE! Breaks the DB of existing installations! Remove all migrations and create initial.')
+            '--initial-migrations',
+            action='store_true',
+            help='DO NOT USE! Breaks the DB of existing installations! Remove all migrations and create initial.',
+        )
 
     def handle(self, *_args: tuple[str], **options: dict[str, str]) -> None:
         """Executes the command."""
@@ -113,8 +116,8 @@ class Command(BaseCommand):
             if 'migrations' in root:
                 for file in files:
                     if (file.endswith('.py') and file != '__init__.py') or file.endswith('.pyc'):
-                        if (keep_established and
-                            (('_tp_v' in file and current_version_py_id not in file) or '0001_initial' in file)
+                        if keep_established and (
+                            ('_tp_v' in file and current_version_py_id not in file) or '0001_initial' in file
                         ):
                             continue
                         try:

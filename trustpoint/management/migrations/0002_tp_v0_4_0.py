@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('management', '0001_initial'),
         ('pki', '0002_tp_v0_4_0'),
@@ -30,19 +29,62 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='backupoptions',
             name='password',
-            field=models.CharField(blank=True, help_text='Plain-text password for SFTP.', max_length=128, verbose_name='Password'),
+            field=models.CharField(
+                blank=True, help_text='Plain-text password for SFTP.', max_length=128, verbose_name='Password'
+            ),
         ),
         migrations.CreateModel(
             name='PKCS11Token',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('label', models.CharField(help_text='Token label in SoftHSM', max_length=100, unique=True, verbose_name='Label')),
+                (
+                    'label',
+                    models.CharField(
+                        help_text='Token label in SoftHSM', max_length=100, unique=True, verbose_name='Label'
+                    ),
+                ),
                 ('slot', models.PositiveIntegerField(help_text='Slot number in SoftHSM', verbose_name='Slot')),
-                ('module_path', models.CharField(default='/usr/local/lib/libpkcs11-proxy.so', help_text='Path to PKCS#11 module library', max_length=255, verbose_name='Module Path')),
-                ('encrypted_dek', models.BinaryField(blank=True, help_text='Symmetric key encrypted by the PKCS#11 private key', max_length=512, null=True, verbose_name='Encrypted Data Encryption Key (DEK)')),
-                ('bek_encrypted_dek', models.BinaryField(blank=True, help_text='Symmetric key encrypted by the PKCS#11 private key', max_length=512, null=True, verbose_name='Encrypted Data Encryption Key (DEK)')),
+                (
+                    'module_path',
+                    models.CharField(
+                        default='/usr/local/lib/libpkcs11-proxy.so',
+                        help_text='Path to PKCS#11 module library',
+                        max_length=255,
+                        verbose_name='Module Path',
+                    ),
+                ),
+                (
+                    'encrypted_dek',
+                    models.BinaryField(
+                        blank=True,
+                        help_text='Symmetric key encrypted by the PKCS#11 private key',
+                        max_length=512,
+                        null=True,
+                        verbose_name='Encrypted Data Encryption Key (DEK)',
+                    ),
+                ),
+                (
+                    'bek_encrypted_dek',
+                    models.BinaryField(
+                        blank=True,
+                        help_text='Symmetric key encrypted by the PKCS#11 private key',
+                        max_length=512,
+                        null=True,
+                        verbose_name='Encrypted Data Encryption Key (DEK)',
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
-                ('kek', models.ForeignKey(blank=True, help_text='Associated key encryption key stored in this token', null=True, on_delete=django.db.models.deletion.SET_NULL, to='pki.pkcs11key', verbose_name='Key Encryption Key (KEK)')),
+                (
+                    'kek',
+                    models.ForeignKey(
+                        blank=True,
+                        help_text='Associated key encryption key stored in this token',
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        to='pki.pkcs11key',
+                        verbose_name='Key Encryption Key (KEK)',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'PKCS#11 Token',
@@ -54,9 +96,33 @@ class Migration(migrations.Migration):
             name='KeyStorageConfig',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('storage_type', models.CharField(choices=[('software', 'Software (No Encryption)'), ('softhsm', 'SoftHSM Container'), ('physical_hsm', 'Physical HSM')], default='software', help_text='Type of storage for cryptographic material', max_length=12, verbose_name='Storage Type')),
+                (
+                    'storage_type',
+                    models.CharField(
+                        choices=[
+                            ('software', 'Software (No Encryption)'),
+                            ('softhsm', 'SoftHSM Container'),
+                            ('physical_hsm', 'Physical HSM'),
+                        ],
+                        default='software',
+                        help_text='Type of storage for cryptographic material',
+                        max_length=12,
+                        verbose_name='Storage Type',
+                    ),
+                ),
                 ('last_updated', models.DateTimeField(auto_now=True, verbose_name='Last Updated')),
-                ('hsm_config', models.OneToOneField(blank=True, help_text='Associated HSM token configuration (SoftHSM or Physical HSM)', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='crypto_storage_config', to='management.pkcs11token', verbose_name='HSM Configuration')),
+                (
+                    'hsm_config',
+                    models.OneToOneField(
+                        blank=True,
+                        help_text='Associated HSM token configuration (SoftHSM or Physical HSM)',
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='crypto_storage_config',
+                        to='management.pkcs11token',
+                        verbose_name='HSM Configuration',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'Crypto Storage Configuration',

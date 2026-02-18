@@ -50,12 +50,13 @@ def test_database_settings(monkeypatch):
 
             databases = settings.DATABASES
 
-            assert databases['default']['ENGINE'] == 'django.db.backends.postgresql', "Database ENGINE should be 'django.db.backends.postgresql'."
+            assert databases['default']['ENGINE'] == 'django.db.backends.postgresql', (
+                "Database ENGINE should be 'django.db.backends.postgresql'."
+            )
             assert databases['default']['USER'] == 'test_user', "Database USER should be 'test_user'."
             assert databases['default']['PASSWORD'] == 'test_password', "Database PASSWORD should be 'test_password'."
             assert databases['default']['HOST'] == 'localhost', "Database HOST should be 'localhost'."
             assert databases['default']['PORT'] == '5432', "Database PORT should be '5432'."
-
 
 
 def test_database_fallback_to_sqlite(monkeypatch):
@@ -68,8 +69,13 @@ def test_database_fallback_to_sqlite(monkeypatch):
 
             databases = settings.DATABASES
 
-            assert databases['default']['ENGINE'] == 'django.db.backends.sqlite3', 'Database should fall back to SQLite when PostgreSQL is unavailable.'
-            assert str(databases['default']['NAME']).endswith('db.sqlite3'), "SQLite database NAME should default to 'db.sqlite3'."
+            assert databases['default']['ENGINE'] == 'django.db.backends.sqlite3', (
+                'Database should fall back to SQLite when PostgreSQL is unavailable.'
+            )
+            assert str(databases['default']['NAME']).endswith('db.sqlite3'), (
+                "SQLite database NAME should default to 'db.sqlite3'."
+            )
+
 
 def test_secret_key():
     """Ensure the secret key is defined."""
@@ -103,7 +109,6 @@ def test_installed_apps():
         assert app in installed_app_labels, f'App {app} should be in INSTALLED_APPS.'
 
 
-
 def test_logging_configuration():
     """Ensure logging configuration is properly configured."""
     logging_config = settings.LOGGING
@@ -112,9 +117,7 @@ def test_logging_configuration():
     assert 'formatters' in logging_config, 'Logging configuration must include formatters.'
 
     expected_log_file_path = os.path.abspath(str(settings.LOG_FILE_PATH))
-    actual_log_file_path = os.path.abspath(
-        logging_config['handlers']['rotatingFile']['filename']
-    )
+    actual_log_file_path = os.path.abspath(logging_config['handlers']['rotatingFile']['filename'])
 
     assert actual_log_file_path == expected_log_file_path, (
         f'Log file path should match the defined value in settings. '
@@ -132,13 +135,7 @@ def test_static_and_media_settings():
 def test_public_paths():
     """Ensure PUBLIC_PATHS is defined and contains expected values."""
     public_paths = settings.PUBLIC_PATHS
-    expected_paths = [
-        '/setup-wizard',
-        '/.well-known/cmp',
-        '/.well-known/est',
-        '/aoki',
-        '/crl'
-    ]
+    expected_paths = ['/setup-wizard', '/.well-known/cmp', '/.well-known/est', '/aoki', '/crl']
     assert isinstance(public_paths, list), 'PUBLIC_PATHS should be a list.'
     assert public_paths == expected_paths, 'PUBLIC_PATHS should match the defined values.'
 

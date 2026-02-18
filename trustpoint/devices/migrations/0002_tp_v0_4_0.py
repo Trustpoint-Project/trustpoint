@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('devices', '0001_initial'),
     ]
@@ -23,11 +22,15 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='onboardingconfigmodel',
             name='cmp_shared_secret',
-            field=util.encrypted_fields.EncryptedCharField(blank=True, default='', max_length=345, verbose_name='CMP Shared Secret'),
+            field=util.encrypted_fields.EncryptedCharField(
+                blank=True, default='', max_length=345, verbose_name='CMP Shared Secret'
+            ),
         ),
         migrations.AlterField(
             model_name='onboardingconfigmodel',
             name='est_password',
-            field=util.encrypted_fields.EncryptedCharField(blank=True, default='', max_length=345, verbose_name='EST Password'),
+            field=util.encrypted_fields.EncryptedCharField(
+                blank=True, default='', max_length=345, verbose_name='EST Password'
+            ),
         ),
     ]

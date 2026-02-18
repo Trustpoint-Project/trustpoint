@@ -29,7 +29,9 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-LOG_LEVELS=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+
+
 class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[SecurityConfigForm]):
     """A view for managing security settings in the Trustpoint application.
 
@@ -37,6 +39,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
     allowing users to configure security-related settings such as security mode,
     auto-generated PKI, and notification configurations.
     """
+
     template_name = 'management/settings.html'
     form_class = SecurityConfigForm
     success_url = reverse_lazy('management:settings')
@@ -59,9 +62,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         try:
             security_config = SecurityConfig.objects.get(id=1)
         except SecurityConfig.DoesNotExist:
-            security_config = SecurityConfig.objects.create(
-                notification_config=NotificationConfig.objects.create()
-            )
+            security_config = SecurityConfig.objects.create(notification_config=NotificationConfig.objects.create())
         kwargs['instance'] = security_config
         return kwargs
 
@@ -104,11 +105,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         if 'auto_gen_pki' in form.changed_data:
             old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
             new_auto = form.cleaned_data.get('auto_gen_pki', None)
-            self.logger.info(
-                'auto_gen_pki changed: old=%s, new=%s',
-                old_auto,
-                new_auto
-            )
+            self.logger.info('auto_gen_pki changed: old=%s, new=%s', old_auto, new_auto)
 
             if old_auto != new_auto and new_auto:
                 # autogen PKI got enabled
@@ -119,10 +116,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
                 key_alg = AutoGenPkiKeyAlgorithm(key_alg_value)
                 self.logger.info('Calling enable_feature for AutoGenPkiFeature with key_alg: %s', key_alg)
                 self.sec.enable_feature(AutoGenPkiFeature, {'key_algorithm': key_alg})
-                self.logger.info(
-                    'Auto-generated PKI enabled with key algorithm: %s',
-                    key_alg.name
-                )
+                self.logger.info('Auto-generated PKI enabled with key algorithm: %s', key_alg.name)
 
             elif old_auto != new_auto and not new_auto:
                 # autogen PKI got disabled
@@ -197,6 +191,7 @@ class ChangeLogLevelView(View):
 
     This view handles POST requests to update the logging level dynamically.
     """
+
     def post(self, request: HttpRequest) -> HttpResponse:
         """Handle POST requests to change the logging level.
 
@@ -219,10 +214,7 @@ class ChangeLogLevelView(View):
         else:
             logger = logging.getLogger()
             logger.setLevel(getattr(logging, level))
-            LoggingConfig.objects.update_or_create(
-                id=1,
-                defaults={'log_level': level}
-            )
+            LoggingConfig.objects.update_or_create(id=1, defaults={'log_level': level})
             messages.success(request, f'Log level set to {level}')
 
         return redirect(reverse('management:settings'))

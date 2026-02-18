@@ -131,9 +131,7 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
             est_authenticator = EstAuthentication()
             est_authenticator.authenticate(ctx)
 
-            est_authorizer = EstAuthorization(
-                allowed_operations=['simpleenroll']
-            )
+            est_authorizer = EstAuthorization(allowed_operations=['simpleenroll'])
             est_authorizer.authorize(ctx)
 
             WorkflowHandler().handle(ctx)
@@ -191,7 +189,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
                 operation='simplereenroll',
                 domain_str=domain_name,
                 cert_profile_str=cert_profile,
-                event=self.EVENT
+                event=self.EVENT,
             )
 
         except Exception:
@@ -209,9 +207,7 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             est_authenticator = EstAuthentication()
             est_authenticator.authenticate(ctx)
 
-            est_authorizer = EstAuthorization(
-                allowed_operations=['simplereenroll']
-            )
+            est_authorizer = EstAuthorization(allowed_operations=['simplereenroll'])
             est_authorizer.authorize(ctx)
 
             WorkflowHandler().handle(ctx)
@@ -225,7 +221,6 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             EstErrorMessageResponder.build_response(ctx)
 
         return ctx.to_http_response()
-
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -251,14 +246,12 @@ class EstCACertsView(EstRequestedDomainExtractorMixin, View, LoggerMixin):
             requested_domain, http_response = self.extract_requested_domain(domain_name=domain_name)
 
             if not http_response and requested_domain:
-
                 if not requested_domain.issuing_ca:
                     return LoggedHttpResponse('The requested domain has no issuing CA configured', status=500)
 
-                ca_credential_serializer = (
-                    cast('CredentialModel', requested_domain.issuing_ca.credential)
-                    .get_credential_serializer()
-                )
+                ca_credential_serializer = cast(
+                    'CredentialModel', requested_domain.issuing_ca.credential
+                ).get_credential_serializer()
                 pkcs7_certs = ca_credential_serializer.get_full_chain_as_serializer().as_pkcs7_der()
                 b64_pkcs7 = base64.b64encode(pkcs7_certs).decode()
 

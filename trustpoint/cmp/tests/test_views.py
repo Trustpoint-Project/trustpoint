@@ -29,19 +29,17 @@ def request_factory():
 def mock_request_context():
     """Mock CmpCertificateRequestContext."""
     from django.http import HttpResponse
-    
+
     ctx = Mock()
     ctx.http_response_content = b'test response'
     ctx.http_response_status = 200
     ctx.http_response_content_type = 'application/pkixcmp'
-    
+
     # Mock to_http_response to return actual HttpResponse
     ctx.to_http_response.return_value = HttpResponse(
-        content=ctx.http_response_content,
-        status=ctx.http_response_status,
-        content_type=ctx.http_response_content_type
+        content=ctx.http_response_content, status=ctx.http_response_status, content_type=ctx.http_response_content_type
     )
-    
+
     return ctx
 
 
@@ -106,15 +104,15 @@ class TestCmpInitializationRequestView:
     ):
         """Test POST request to initialization endpoint with domain name only."""
         mock_context_cls.return_value = mock_request_context
-        
+
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
-        
+
         request = request_factory.post('/cmp/initialization/test_domain')
         view = CmpRequestView()
-        
+
         response = view.post(request, domain='test_domain')
-        
+
         # Verify CmpCertificateRequestContext was created with correct parameters
         mock_context_cls.assert_called_once()
         call_kwargs = mock_context_cls.call_args[1]
@@ -122,7 +120,7 @@ class TestCmpInitializationRequestView:
         assert call_kwargs['protocol'] == 'cmp'
         assert call_kwargs['operation'] == None
         assert call_kwargs['cert_profile_str'] == 'domain_credential'
-        
+
         # Verify all processors were called
         mock_validator_cls.return_value.validate.assert_called_once()
         mock_parser_cls.return_value.parse.assert_called_once()
@@ -130,7 +128,7 @@ class TestCmpInitializationRequestView:
         mock_authz_cls.return_value.authorize.assert_called_once()
         mock_processor_cls.return_value.process_operation.assert_called_once()
         mock_responder_cls.build_response.assert_called_once()
-        
+
         # Verify response
         assert response.status_code == 200
         assert response.content == b'test response'
@@ -164,7 +162,7 @@ class TestCmpInitializationRequestView:
         )
 
         mock_context_cls.return_value = mock_request_context
-        
+
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
         #parser_instance = mock_parser_cls.return_value
@@ -172,13 +170,13 @@ class TestCmpInitializationRequestView:
         
         request = request_factory.post('/cmp/p/test_domain/tls_client/initialization')
         view = CmpRequestView()
-        
+
         response = view.post(request, domain='test_domain', cert_profile='tls_client')
-        
+
         # Verify CmpCertificateRequestContext was created with correct profile
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['cert_profile_str'] == 'tls_client'
-        
+
         # Verify response
         assert response.status_code == 200
 
@@ -203,15 +201,15 @@ class TestCmpInitializationRequestView:
     ):
         """Test that authorization is called with correct operations for initialization."""
         mock_context_cls.return_value = mock_request_context
-        
+
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
-        
+
         request = request_factory.post('/cmp/initialization/test_domain')
         view = CmpRequestView()
-        
+
         view.post(request, domain='test_domain')
-        
+
         # Verify CmpAuthorization was initialized with correct operations
         mock_authz_cls.assert_called_once_with(['initialization', 'certification', 'revocation'])
 
@@ -240,23 +238,25 @@ class TestCmpCertificationRequestView:
     ):
         """Test POST request to certification endpoint with domain name only."""
         mock_context_cls.return_value = mock_request_context
-        
+
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
-        
+
         request = request_factory.post('/cmp/p/test_domain/certification')
         view = CmpRequestView()
-        
+
         response = view.post(request, domain='test_domain')
-        
+
         # Verify CmpCertificateRequestContext was created with correct parameters
         mock_context_cls.assert_called_once()
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['domain_str'] == 'test_domain'
         assert call_kwargs['protocol'] == 'cmp'
         assert call_kwargs['operation'] == None
-        assert call_kwargs['cert_profile_str'] == 'domain_credential'  # Default for certification should be 'tls_client'? # TODO: better automatic cert profile selection
-        
+        assert (
+            call_kwargs['cert_profile_str'] == 'domain_credential'
+        )  # Default for certification should be 'tls_client'? # TODO: better automatic cert profile selection
+
         # Verify all processors were called
         mock_validator_cls.return_value.validate.assert_called_once()
         mock_parser_cls.return_value.parse.assert_called_once()
@@ -264,7 +264,7 @@ class TestCmpCertificationRequestView:
         mock_authz_cls.return_value.authorize.assert_called_once()
         mock_processor_cls.return_value.process_operation.assert_called_once()
         mock_responder_cls.build_response.assert_called_once()
-        
+
         # Verify response
         assert response.status_code == 200
         assert response.content == b'test response'
@@ -291,19 +291,19 @@ class TestCmpCertificationRequestView:
     ):
         """Test POST request to certification endpoint with certificate profile."""
         mock_context_cls.return_value = mock_request_context
-        
+
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
-        
+
         request = request_factory.post('/cmp/p/test_domain/tls_server/certification')
         view = CmpRequestView()
-        
+
         response = view.post(request, domain='test_domain', cert_profile='tls_server')
-        
+
         # Verify CmpCertificateRequestContext was created with correct profile
         call_kwargs = mock_context_cls.call_args[1]
         assert call_kwargs['cert_profile_str'] == 'tls_server'
-        
+
         # Verify response
         assert response.status_code == 200
 
@@ -328,15 +328,15 @@ class TestCmpCertificationRequestView:
     ):
         """Test that authorization is called with correct operations for certification."""
         mock_context_cls.return_value = mock_request_context
-        
+
         # Configure parser mock to return the context
         mock_parser_cls.return_value.parse.return_value = mock_request_context
-        
+
         request = request_factory.post('/cmp/p/test_domain/certification')
         view = CmpRequestView()
-        
+
         view.post(request, domain='test_domain')
-        
+
         mock_authz_cls.assert_called_once()
 
 
@@ -437,7 +437,7 @@ class TestCmpRequestViewPathParamExtraction:
         assert domain == 'test_domain'
         assert profile is None
         assert operation == 'initialization'
-    
+
     def test_extract_path_all(self, request_factory):
         """Test extraction with domain name, certificate profile, and operation."""
 

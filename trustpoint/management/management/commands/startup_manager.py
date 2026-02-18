@@ -43,10 +43,7 @@ class Command(BaseCommand):
 
             context = StartupContextBuilder(output, current_version).build_for_db_init()
 
-            strategy = StartupStrategySelector.select_startup_strategy(
-                db_initialized=False,
-                has_version=False
-            )
+            strategy = StartupStrategySelector.select_startup_strategy(db_initialized=False, has_version=False)
             strategy.execute(context)
             return
 
@@ -55,10 +52,7 @@ class Command(BaseCommand):
 
             context = StartupContextBuilder(output, current_version).build_for_db_init()
 
-            strategy = StartupStrategySelector.select_startup_strategy(
-                db_initialized=True,
-                has_version=False
-            )
+            strategy = StartupStrategySelector.select_startup_strategy(db_initialized=True, has_version=False)
             strategy.execute(context)
             return
 
@@ -75,10 +69,7 @@ class Command(BaseCommand):
 
         try:
             strategy = StartupStrategySelector.select_startup_strategy(
-                db_initialized=True,
-                has_version=True,
-                context=context,
-                app_version=app_version
+                db_initialized=True, has_version=True, context=context, app_version=app_version
             )
 
             output.write(f'Selected strategy: {strategy.__class__.__name__}')

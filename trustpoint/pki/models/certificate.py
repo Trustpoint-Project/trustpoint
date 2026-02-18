@@ -175,8 +175,13 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
     issuer_public_bytes = models.CharField(verbose_name=_('Issuer Public Bytes'), max_length=2048, editable=False)
 
     issuer_id = models.ForeignKey(
-        to='CertificateModel', verbose_name=_('Issuer Certificate'),
-        null=True, blank=True, on_delete=models.SET_NULL, db_column='issuer_id')
+        to='CertificateModel',
+        verbose_name=_('Issuer Certificate'),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        db_column='issuer_id',
+    )
 
     # The validity entries use datetime objects with UTC timezone.
     not_valid_before = models.DateTimeField(verbose_name=_('Not Valid Before (UTC)'), editable=False)
@@ -442,6 +447,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         if self.not_valid_after > now:
             return (self.not_valid_after - now).days
         return 0
+
     @property
     def is_ca(self) -> bool:
         """Check if the certificate is a CA certificate."""
@@ -679,8 +685,7 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
 
         for issuer_candidate in issuer_candidates:
             try:
-                certificate.verify_directly_issued_by(
-                    issuer_candidate.get_certificate_serializer().as_crypto())
+                certificate.verify_directly_issued_by(issuer_candidate.get_certificate_serializer().as_crypto())
                 cert_model.issuer_id = issuer_candidate
                 break
             except (ValueError, TypeError, InvalidSignature):
@@ -689,8 +694,9 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         cert_model._save()
 
         # Adding issuer references on CertificateModels that were issued by this certificate
-        issued_candidates = cls.objects.filter(issuer_public_bytes=cert_model.subject_public_bytes,
-                                               issuer_id__isnull=True)
+        issued_candidates = cls.objects.filter(
+            issuer_public_bytes=cert_model.subject_public_bytes, issuer_id__isnull=True
+        )
 
         for issued_candidate in issued_candidates:
             try:

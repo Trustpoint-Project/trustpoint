@@ -62,5 +62,7 @@ class TestTrustpointLoginRequiredMiddleware:
         settings.PUBLIC_PATHS = []
         http_request.path = '/public/resource/'
         response = middleware.process_view(http_request, None, None, None)
-        assert response.status_code == 302, 'If no public paths are defined, unauthenticated users should be redirected.'
+        assert response.status_code == 302, (
+            'If no public paths are defined, unauthenticated users should be redirected.'
+        )
         assert response['Location'] == reverse('users:login') + '?next=/public/resource/'

@@ -1,4 +1,5 @@
 """Provides the `PkiMessageParser` class for parsing PKI messages."""
+
 from abc import ABC, abstractmethod
 
 from pki.models import DomainModel
@@ -12,7 +13,6 @@ class ParsingComponent(ABC):
     @abstractmethod
     def parse(self, context: BaseRequestContext) -> None | BaseRequestContext:
         """Execute parsing logic and store results in the context."""
-
 
 
 class DomainParsing(ParsingComponent, LoggerMixin):
@@ -33,7 +33,6 @@ class DomainParsing(ParsingComponent, LoggerMixin):
         context.domain = domain
         self.logger.info("Domain parsing successful: Domain '%s'", domain_str)
 
-
     def _extract_requested_domain(self, domain_name: str) -> DomainModel:
         """Validate and fetch the domain object by name."""
         try:
@@ -49,6 +48,7 @@ class DomainParsing(ParsingComponent, LoggerMixin):
         else:
             self.logger.debug("Domain lookup successful: Found domain '%s'", domain_name)
             return domain
+
 
 class CertProfileParsing(ParsingComponent, LoggerMixin):
     """Parses the certificate profile from the request context object."""
@@ -67,9 +67,6 @@ class CertProfileParsing(ParsingComponent, LoggerMixin):
         self.logger.info("Certificate profile parsing successful: Profile '%s'", certprofile_str)
 
 
-
-
-
 class CompositeParsing(ParsingComponent, LoggerMixin):
     """Composite parser to group multiple parsing strategies."""
 
@@ -85,13 +82,13 @@ class CompositeParsing(ParsingComponent, LoggerMixin):
         """Remove a parsing component from the composite parser."""
         if component in self.components:
             self.components.remove(component)
-            self.logger.debug('Removed parsing component: %(component_name)s',
-                              extra={'component_name': component.__class__.__name__})
+            self.logger.debug(
+                'Removed parsing component: %(component_name)s', extra={'component_name': component.__class__.__name__}
+            )
         else:
             error_message = f'Attempted to remove non-existent parsing component: {component.__class__.__name__}'
             self.logger.warning(error_message)
             raise ValueError(error_message)
-
 
     def parse(self, context: BaseRequestContext) -> BaseRequestContext:
         """Execute all child parsers, returning the updated type-narrowed context."""
@@ -102,25 +99,27 @@ class CompositeParsing(ParsingComponent, LoggerMixin):
                 ret_val = component.parse(context)
                 if isinstance(ret_val, BaseRequestContext):
                     context = ret_val
-                self.logger.debug('Parsing component %s completed successfully',
-                                  component.__class__.__name__)
+                self.logger.debug('Parsing component %s completed successfully', component.__class__.__name__)
             except ValueError as e:
                 error_message = f'{component.__class__.__name__}: {e}'
-                self.logger.warning('Parsing component %s failed: %s',
-                                    component.__class__.__name__, str(e))
+                self.logger.warning('Parsing component %s failed: %s', component.__class__.__name__, str(e))
                 self.logger.exception(
                     'Composite parsing failed at component %s/%s: %s',
-                    i + 1, len(self.components), component.__class__.__name__)
+                    i + 1,
+                    len(self.components),
+                    component.__class__.__name__,
+                )
                 raise ValueError(error_message) from e
             except Exception as e:
                 error_message = f'Unexpected error in {component.__class__.__name__}: {e}'
-                self.logger.exception('Unexpected error in parsing component %s',
-                                      component.__class__.__name__)
+                self.logger.exception('Unexpected error in parsing component %s', component.__class__.__name__)
                 self.logger.exception(
                     'Composite parsing failed at component %s/%s: %s',
-                    i + 1, len(self.components), component.__class__.__name__)
+                    i + 1,
+                    len(self.components),
+                    component.__class__.__name__,
+                )
                 raise ValueError(error_message) from e
 
-        self.logger.info('Composite parsing successful. All %i components completed',
-                         len(self.components))
+        self.logger.info('Composite parsing successful. All %i components completed', len(self.components))
         return context

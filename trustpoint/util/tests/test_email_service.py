@@ -20,18 +20,18 @@ def locmem_email_backend(settings: Any) -> None:
 def templates_dir(settings: Any, tmp_path: Any) -> Any:
     """Provide a clean temporary template directory and point Django to it."""
     from copy import deepcopy
-    
+
     tdir = tmp_path / 'templates'
     tdir.mkdir(parents=True, exist_ok=True)
-    
+
     engines = deepcopy(settings.TEMPLATES)
     engines[0]['DIRS'] = [str(tdir)]
     settings.TEMPLATES = engines
-    
+
     # Create emails directory
     emails_dir = tdir / 'emails'
     emails_dir.mkdir(parents=True, exist_ok=True)
-    
+
     return tdir
 
 
@@ -50,14 +50,14 @@ class TestEmailService:
         """Test sending a basic email."""
         _write_template(templates_dir, 'emails/test.txt', 'Hello {{ name }}!')
         _write_template(templates_dir, 'emails/test.html', '<h1>Hello {{ name }}!</h1>')
-        
+
         EmailService.send_email(
             subject='Test Subject',
             to=['recipient@example.com'],
             template_name='test',
             context={'name': 'World'},
         )
-        
+
         assert len(mail.outbox) == 1
         msg = mail.outbox[0]
         assert msg.subject == 'Test Subject'
@@ -72,7 +72,7 @@ class TestEmailService:
         """Test sending email with custom from_email."""
         _write_template(templates_dir, 'emails/custom.txt', 'Test')
         _write_template(templates_dir, 'emails/custom.html', '<p>Test</p>')
-        
+
         EmailService.send_email(
             subject='Custom From',
             to=['recipient@example.com'],
@@ -80,24 +80,24 @@ class TestEmailService:
             context={},
             from_email='custom@example.com',
         )
-        
+
         assert len(mail.outbox) == 1
         assert mail.outbox[0].from_email == 'custom@example.com'
 
     def test_send_email_with_default_from(self, templates_dir: Any, settings: Any) -> None:
         """Test sending email with default from_email from settings."""
         settings.DEFAULT_FROM_EMAIL = 'default@example.com'
-        
+
         _write_template(templates_dir, 'emails/default.txt', 'Test')
         _write_template(templates_dir, 'emails/default.html', '<p>Test</p>')
-        
+
         EmailService.send_email(
             subject='Default From',
             to=['recipient@example.com'],
             template_name='default',
             context={},
         )
-        
+
         assert len(mail.outbox) == 1
         assert mail.outbox[0].from_email == 'default@example.com'
 
@@ -105,7 +105,7 @@ class TestEmailService:
         """Test sending email with CC recipients."""
         _write_template(templates_dir, 'emails/cc.txt', 'Test')
         _write_template(templates_dir, 'emails/cc.html', '<p>Test</p>')
-        
+
         EmailService.send_email(
             subject='With CC',
             to=['recipient@example.com'],
@@ -113,7 +113,7 @@ class TestEmailService:
             context={},
             cc=['cc1@example.com', 'cc2@example.com'],
         )
-        
+
         assert len(mail.outbox) == 1
         assert mail.outbox[0].cc == ['cc1@example.com', 'cc2@example.com']
 
@@ -121,7 +121,7 @@ class TestEmailService:
         """Test sending email with BCC recipients."""
         _write_template(templates_dir, 'emails/bcc.txt', 'Test')
         _write_template(templates_dir, 'emails/bcc.html', '<p>Test</p>')
-        
+
         EmailService.send_email(
             subject='With BCC',
             to=['recipient@example.com'],
@@ -129,7 +129,7 @@ class TestEmailService:
             context={},
             bcc=['bcc1@example.com', 'bcc2@example.com'],
         )
-        
+
         assert len(mail.outbox) == 1
         assert mail.outbox[0].bcc == ['bcc1@example.com', 'bcc2@example.com']
 
@@ -137,7 +137,7 @@ class TestEmailService:
         """Test sending email with both CC and BCC recipients."""
         _write_template(templates_dir, 'emails/both.txt', 'Test')
         _write_template(templates_dir, 'emails/both.html', '<p>Test</p>')
-        
+
         EmailService.send_email(
             subject='With Both',
             to=['recipient@example.com'],
@@ -146,7 +146,7 @@ class TestEmailService:
             cc=['cc@example.com'],
             bcc=['bcc@example.com'],
         )
-        
+
         assert len(mail.outbox) == 1
         msg = mail.outbox[0]
         assert msg.cc == ['cc@example.com']
@@ -156,9 +156,9 @@ class TestEmailService:
         """Test sending email with attachments."""
         _write_template(templates_dir, 'emails/attach.txt', 'Test')
         _write_template(templates_dir, 'emails/attach.html', '<p>Test</p>')
-        
+
         attachment_content = b'This is a test file content'
-        
+
         EmailService.send_email(
             subject='With Attachment',
             to=['recipient@example.com'],
@@ -168,7 +168,7 @@ class TestEmailService:
                 ('test.txt', attachment_content, 'text/plain'),
             ],
         )
-        
+
         assert len(mail.outbox) == 1
         msg = mail.outbox[0]
         assert len(msg.attachments) == 1
@@ -185,7 +185,7 @@ class TestEmailService:
         """Test sending email with multiple attachments."""
         _write_template(templates_dir, 'emails/multi_attach.txt', 'Test')
         _write_template(templates_dir, 'emails/multi_attach.html', '<p>Test</p>')
-        
+
         EmailService.send_email(
             subject='Multiple Attachments',
             to=['recipient@example.com'],
@@ -197,7 +197,7 @@ class TestEmailService:
                 ('file3.jpg', b'Content 3', 'image/jpeg'),
             ],
         )
-        
+
         assert len(mail.outbox) == 1
         msg = mail.outbox[0]
         assert len(msg.attachments) == 3
@@ -206,14 +206,14 @@ class TestEmailService:
         """Test sending email to multiple recipients."""
         _write_template(templates_dir, 'emails/multi.txt', 'Test')
         _write_template(templates_dir, 'emails/multi.html', '<p>Test</p>')
-        
+
         EmailService.send_email(
             subject='Multiple Recipients',
             to=['recipient1@example.com', 'recipient2@example.com', 'recipient3@example.com'],
             template_name='multi',
             context={},
         )
-        
+
         assert len(mail.outbox) == 1
         msg = mail.outbox[0]
         assert len(msg.to) == 3
@@ -226,14 +226,14 @@ class TestEmailService:
         _write_template(
             templates_dir,
             'emails/complex.txt',
-            'Hello {{ user.name }}! Your order #{{ order.id }} is {{ order.status }}.'
+            'Hello {{ user.name }}! Your order #{{ order.id }} is {{ order.status }}.',
         )
         _write_template(
             templates_dir,
             'emails/complex.html',
-            '<p>Hello {{ user.name }}! Your order #{{ order.id }} is {{ order.status }}.</p>'
+            '<p>Hello {{ user.name }}! Your order #{{ order.id }} is {{ order.status }}.</p>',
         )
-        
+
         EmailService.send_email(
             subject='Complex Context',
             to=['recipient@example.com'],
@@ -243,7 +243,7 @@ class TestEmailService:
                 'order': {'id': 12345, 'status': 'shipped'},
             },
         )
-        
+
         assert len(mail.outbox) == 1
         msg = mail.outbox[0]
         assert 'Hello John Doe!' in msg.body
@@ -254,14 +254,14 @@ class TestEmailService:
         """Test sending email with empty context."""
         _write_template(templates_dir, 'emails/empty.txt', 'Static content')
         _write_template(templates_dir, 'emails/empty.html', '<p>Static content</p>')
-        
+
         EmailService.send_email(
             subject='Empty Context',
             to=['recipient@example.com'],
             template_name='empty',
             context={},
         )
-        
+
         assert len(mail.outbox) == 1
         assert 'Static content' in mail.outbox[0].body
 
@@ -269,7 +269,7 @@ class TestEmailService:
         """Test that None CC and BCC are handled as empty lists."""
         _write_template(templates_dir, 'emails/none.txt', 'Test')
         _write_template(templates_dir, 'emails/none.html', '<p>Test</p>')
-        
+
         EmailService.send_email(
             subject='None CC/BCC',
             to=['recipient@example.com'],
@@ -278,7 +278,7 @@ class TestEmailService:
             cc=None,
             bcc=None,
         )
-        
+
         assert len(mail.outbox) == 1
         msg = mail.outbox[0]
         assert msg.cc == []
@@ -288,7 +288,7 @@ class TestEmailService:
         """Test that None attachments are handled correctly."""
         _write_template(templates_dir, 'emails/no_attach.txt', 'Test')
         _write_template(templates_dir, 'emails/no_attach.html', '<p>Test</p>')
-        
+
         EmailService.send_email(
             subject='No Attachments',
             to=['recipient@example.com'],
@@ -296,7 +296,7 @@ class TestEmailService:
             context={},
             attachments=None,
         )
-        
+
         assert len(mail.outbox) == 1
         assert len(mail.outbox[0].attachments) == 0
 
@@ -305,14 +305,14 @@ class TestEmailService:
         """Test that sending email logs an info message."""
         _write_template(templates_dir, 'emails/log.txt', 'Test')
         _write_template(templates_dir, 'emails/log.html', '<p>Test</p>')
-        
+
         EmailService.send_email(
             subject='Log Test',
             to=['recipient@example.com'],
             template_name='log',
             context={},
         )
-        
+
         mock_logger.info.assert_called_once()
         call_args = mock_logger.info.call_args[0]
         assert 'Sent email' in call_args[0]
@@ -324,14 +324,14 @@ class TestEmailService:
         """Test that logging includes all recipients."""
         _write_template(templates_dir, 'emails/log_multi.txt', 'Test')
         _write_template(templates_dir, 'emails/log_multi.html', '<p>Test</p>')
-        
+
         EmailService.send_email(
             subject='Multi Log',
             to=['r1@example.com', 'r2@example.com'],
             template_name='log_multi',
             context={},
         )
-        
+
         mock_logger.info.assert_called_once()
         call_args = mock_logger.info.call_args[0]
         recipients_str = call_args[2]
@@ -340,24 +340,18 @@ class TestEmailService:
 
     def test_send_email_template_rendering(self, templates_dir: Any) -> None:
         """Test that templates are rendered correctly with context."""
+        _write_template(templates_dir, 'emails/render.txt', 'Plain: {{ var1 }} and {{ var2 }}')
         _write_template(
-            templates_dir,
-            'emails/render.txt',
-            'Plain: {{ var1 }} and {{ var2 }}'
+            templates_dir, 'emails/render.html', '<html><body>HTML: {{ var1 }} and {{ var2 }}</body></html>'
         )
-        _write_template(
-            templates_dir,
-            'emails/render.html',
-            '<html><body>HTML: {{ var1 }} and {{ var2 }}</body></html>'
-        )
-        
+
         EmailService.send_email(
             subject='Rendering Test',
             to=['recipient@example.com'],
             template_name='render',
             context={'var1': 'Value1', 'var2': 'Value2'},
         )
-        
+
         assert len(mail.outbox) == 1
         msg = mail.outbox[0]
         assert 'Plain: Value1 and Value2' in msg.body
@@ -368,7 +362,7 @@ class TestEmailService:
         """Test that send is called with fail_silently=False."""
         _write_template(templates_dir, 'emails/fail.txt', 'Test')
         _write_template(templates_dir, 'emails/fail.html', '<p>Test</p>')
-        
+
         with patch.object(EmailMultiAlternatives, 'send') as mock_send:
             EmailService.send_email(
                 subject='Fail Test',
@@ -376,21 +370,21 @@ class TestEmailService:
                 template_name='fail',
                 context={},
             )
-            
+
             mock_send.assert_called_once_with(fail_silently=False)
 
     def test_send_email_special_characters_in_subject(self, templates_dir: Any) -> None:
         """Test sending email with special characters in subject."""
         _write_template(templates_dir, 'emails/special.txt', 'Test')
         _write_template(templates_dir, 'emails/special.html', '<p>Test</p>')
-        
+
         EmailService.send_email(
             subject='Test Äöü 日本語 🎉',
             to=['recipient@example.com'],
             template_name='special',
             context={},
         )
-        
+
         assert len(mail.outbox) == 1
         assert mail.outbox[0].subject == 'Test Äöü 日本語 🎉'
 
@@ -398,14 +392,14 @@ class TestEmailService:
         """Test sending email with Unicode characters in templates."""
         _write_template(templates_dir, 'emails/unicode.txt', 'Ä ö ü ß 日本語 {{ name }}')
         _write_template(templates_dir, 'emails/unicode.html', '<p>Ä ö ü ß 日本語 {{ name }}</p>')
-        
+
         EmailService.send_email(
             subject='Unicode Test',
             to=['recipient@example.com'],
             template_name='unicode',
             context={'name': '世界'},
         )
-        
+
         assert len(mail.outbox) == 1
         msg = mail.outbox[0]
         assert 'Ä ö ü ß 日本語 世界' in msg.body

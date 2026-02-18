@@ -11,6 +11,7 @@ from management.models import KeyStorageConfig, PKCS11Token
 
 class KeyStorageConfigView(TemplateView):
     """Class-based view for displaying key storage configuration (read-only)."""
+
     template_name = 'management/key_storage.html'
     extra_context: dict[str, str] = {'page_category': 'management', 'page_name': 'key_storage'}  # noqa: RUF012
 
@@ -23,10 +24,7 @@ class KeyStorageConfigView(TemplateView):
             config = KeyStorageConfig.get_config()
             context['config'] = config
 
-            if config.storage_type in [
-                KeyStorageConfig.StorageType.SOFTHSM,
-                KeyStorageConfig.StorageType.PHYSICAL_HSM
-            ]:
+            if config.storage_type in [KeyStorageConfig.StorageType.SOFTHSM, KeyStorageConfig.StorageType.PHYSICAL_HSM]:
                 if config.hsm_config:
                     context['hsm_config'] = config.hsm_config
                 else:

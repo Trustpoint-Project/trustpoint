@@ -66,7 +66,7 @@ class StartupContextTest(TestCase):
             dek_cache_state=None,
             output=self.mock_output,
         )
-        
+
         self.assertTrue(context.db_initialized)
         self.assertEqual(context.db_version, self.db_version)
         self.assertEqual(context.current_version, self.current_version)
@@ -86,7 +86,7 @@ class StartupContextTest(TestCase):
             dek_cache_state=None,
             output=self.mock_output,
         )
-        
+
         self.assertTrue(context.is_wizard_completed)
 
     def test_is_wizard_completed_false(self):
@@ -101,7 +101,7 @@ class StartupContextTest(TestCase):
             dek_cache_state=None,
             output=self.mock_output,
         )
-        
+
         self.assertFalse(context.is_wizard_completed)
 
     def test_is_software_storage(self):
@@ -116,7 +116,7 @@ class StartupContextTest(TestCase):
             dek_cache_state=None,
             output=self.mock_output,
         )
-        
+
         self.assertTrue(context.is_software_storage)
         self.assertFalse(context.is_softhsm_storage)
         self.assertFalse(context.is_physical_hsm_storage)
@@ -134,7 +134,7 @@ class StartupContextTest(TestCase):
             dek_cache_state=DekCacheState.CACHED,
             output=self.mock_output,
         )
-        
+
         self.assertFalse(context.is_software_storage)
         self.assertTrue(context.is_softhsm_storage)
         self.assertFalse(context.is_physical_hsm_storage)
@@ -152,7 +152,7 @@ class StartupContextTest(TestCase):
             dek_cache_state=DekCacheState.CACHED,
             output=self.mock_output,
         )
-        
+
         self.assertFalse(context.is_software_storage)
         self.assertFalse(context.is_softhsm_storage)
         self.assertTrue(context.is_physical_hsm_storage)
@@ -170,7 +170,7 @@ class StartupContextTest(TestCase):
             dek_cache_state=DekCacheState.CACHED,
             output=self.mock_output,
         )
-        
+
         self.assertTrue(context.is_dek_cached)
 
     def test_is_dek_cached_false(self):
@@ -185,7 +185,7 @@ class StartupContextTest(TestCase):
             dek_cache_state=DekCacheState.NOT_CACHED,
             output=self.mock_output,
         )
-        
+
         self.assertFalse(context.is_dek_cached)
 
     def test_is_dek_cached_raises_for_software_storage(self):
@@ -200,10 +200,10 @@ class StartupContextTest(TestCase):
             dek_cache_state=None,
             output=self.mock_output,
         )
-        
+
         with self.assertRaises(ValueError) as cm:
             _ = context.is_dek_cached
-        
+
         self.assertIn('only applicable for HSM storage', str(cm.exception))
 
     def test_is_new_kek_scenario_true(self):
@@ -220,7 +220,7 @@ class StartupContextTest(TestCase):
             has_kek=False,
             has_backup_encrypted_dek=True,
         )
-        
+
         self.assertTrue(context.is_new_kek_scenario)
 
     def test_is_new_kek_scenario_false_software_storage(self):
@@ -237,7 +237,7 @@ class StartupContextTest(TestCase):
             has_kek=False,
             has_backup_encrypted_dek=True,
         )
-        
+
         self.assertFalse(context.is_new_kek_scenario)
 
     def test_is_new_kek_scenario_false_dek_cached(self):
@@ -254,7 +254,7 @@ class StartupContextTest(TestCase):
             has_kek=False,
             has_backup_encrypted_dek=True,
         )
-        
+
         self.assertFalse(context.is_new_kek_scenario)
 
     def test_is_new_kek_scenario_false_has_kek(self):
@@ -271,7 +271,7 @@ class StartupContextTest(TestCase):
             has_kek=True,
             has_backup_encrypted_dek=True,
         )
-        
+
         self.assertFalse(context.is_new_kek_scenario)
 
     def test_is_new_kek_scenario_false_no_backup(self):
@@ -288,7 +288,7 @@ class StartupContextTest(TestCase):
             has_kek=False,
             has_backup_encrypted_dek=False,
         )
-        
+
         self.assertFalse(context.is_new_kek_scenario)
 
 
@@ -319,7 +319,7 @@ class DatabaseNotInitializedStrategyTest(TestCase):
     def test_execute_calls_init_strategy(self):
         """Test execute calls initialization strategy with TLS."""
         self.strategy.execute(self.context)
-        
+
         self.mock_init_strategy.initialize.assert_called_once_with(self.context, with_tls=True)
         self.mock_output.write.assert_called()
 
@@ -351,7 +351,7 @@ class DatabaseInitializedNoVersionStrategyTest(TestCase):
     def test_execute_calls_init_strategy(self):
         """Test execute calls initialization strategy with TLS."""
         self.strategy.execute(self.context)
-        
+
         self.mock_init_strategy.initialize.assert_called_once_with(self.context, with_tls=True)
         self.mock_output.write.assert_called()
 
@@ -365,8 +365,7 @@ class VersionMatchStrategyTest(TestCase):
         self.mock_restore_strategy = Mock()
         self.mock_init_strategy = Mock()
         self.strategy = VersionMatchStrategy(
-            restore_strategy=self.mock_restore_strategy,
-            init_strategy=self.mock_init_strategy
+            restore_strategy=self.mock_restore_strategy, init_strategy=self.mock_init_strategy
         )
         self.context = StartupContext(
             db_initialized=True,
@@ -387,7 +386,7 @@ class VersionMatchStrategyTest(TestCase):
     def test_execute_initializes_and_restores(self):
         """Test execute calls init and restore strategies."""
         self.strategy.execute(self.context)
-        
+
         self.mock_init_strategy.initialize.assert_called_once_with(self.context, with_tls=False)
         self.mock_restore_strategy.execute.assert_called_once_with(self.context)
         self.mock_output.write.assert_called()
@@ -406,7 +405,7 @@ class VersionUpgradeStrategyTest(TestCase):
         self.strategy = VersionUpgradeStrategy(
             restore_strategy=self.mock_restore_strategy,
             app_version=self.mock_app_version,
-            init_strategy=self.mock_init_strategy
+            init_strategy=self.mock_init_strategy,
         )
         self.context = StartupContext(
             db_initialized=True,
@@ -427,7 +426,7 @@ class VersionUpgradeStrategyTest(TestCase):
     def test_execute_upgrades_version(self):
         """Test execute performs upgrade and updates version."""
         self.strategy.execute(self.context)
-        
+
         self.mock_init_strategy.initialize.assert_called_once_with(self.context, with_tls=False)
         self.mock_restore_strategy.execute.assert_called_once_with(self.context)
         self.assertEqual(self.mock_app_version.version, '1.0.0')
@@ -448,7 +447,7 @@ class StartupStrategySelectorTest(TestCase):
             db_initialized=False,
             has_version=False,
         )
-        
+
         self.assertIsInstance(strategy, DatabaseNotInitializedStrategy)
 
     def test_select_startup_strategy_db_initialized_no_version(self):
@@ -457,7 +456,7 @@ class StartupStrategySelectorTest(TestCase):
             db_initialized=True,
             has_version=False,
         )
-        
+
         self.assertIsInstance(strategy, DatabaseInitializedNoVersionStrategy)
 
     def test_select_startup_strategy_requires_context_and_version(self):
@@ -467,7 +466,7 @@ class StartupStrategySelectorTest(TestCase):
                 db_initialized=True,
                 has_version=True,
             )
-        
+
         self.assertIn('required', str(cm.exception).lower())
 
     def test_select_restore_strategy_software_wizard_completed(self):
@@ -482,7 +481,7 @@ class StartupStrategySelectorTest(TestCase):
             dek_cache_state=None,
             output=self.mock_output,
         )
-        
+
         strategy = StartupStrategySelector.select_restore_strategy(context)
         self.assertIsInstance(strategy, RestoreSoftwareWizardCompletedStrategy)
 
@@ -498,7 +497,7 @@ class StartupStrategySelectorTest(TestCase):
             dek_cache_state=None,
             output=self.mock_output,
         )
-        
+
         strategy = StartupStrategySelector.select_restore_strategy(context)
         self.assertIsInstance(strategy, RestoreSoftwareWizardIncompleteStrategy)
 
@@ -514,7 +513,7 @@ class StartupStrategySelectorTest(TestCase):
             dek_cache_state=DekCacheState.CACHED,
             output=self.mock_output,
         )
-        
+
         strategy = StartupStrategySelector.select_restore_strategy(context)
         self.assertIsInstance(strategy, RestoreSoftHsmWizardCompletedDekCachedStrategy)
 
@@ -532,7 +531,7 @@ class StartupStrategySelectorTest(TestCase):
             has_kek=False,
             has_backup_encrypted_dek=True,
         )
-        
+
         strategy = StartupStrategySelector.select_restore_strategy(context)
         self.assertIsInstance(strategy, RestoreSoftHsmNewKekWizardCompletedStrategy)
 
@@ -548,10 +547,10 @@ class StartupStrategySelectorTest(TestCase):
             dek_cache_state=None,
             output=self.mock_output,
         )
-        
+
         with self.assertRaises(ValueError) as cm:
             StartupStrategySelector.select_restore_strategy(context)
-        
+
         self.assertIn('unexpected', str(cm.exception).lower())
 
     @patch('management.util.startup_strategies.AppVersion')
@@ -567,7 +566,7 @@ class StartupStrategySelectorTest(TestCase):
             dek_cache_state=None,
             output=self.mock_output,
         )
-        
+
         strategy = StartupStrategySelector.select_version_strategy(context, mock_app_version)
         self.assertIsInstance(strategy, VersionMatchStrategy)
 
@@ -584,7 +583,7 @@ class StartupStrategySelectorTest(TestCase):
             dek_cache_state=None,
             output=self.mock_output,
         )
-        
+
         strategy = StartupStrategySelector.select_version_strategy(context, mock_app_version)
         self.assertIsInstance(strategy, VersionUpgradeStrategy)
 
@@ -601,8 +600,8 @@ class StartupStrategySelectorTest(TestCase):
             dek_cache_state=None,
             output=self.mock_output,
         )
-        
+
         with self.assertRaises(RuntimeError) as cm:
             StartupStrategySelector.select_version_strategy(context, mock_app_version)
-        
+
         self.assertIn('not supported', str(cm.exception).lower())

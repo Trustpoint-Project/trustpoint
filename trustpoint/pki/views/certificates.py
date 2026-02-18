@@ -47,8 +47,7 @@ class CertificatesContextMixin(PageContextMixin):
     page_name = PKI_PAGE_CERTIFICATES_SUBCATEGORY
 
 
-class CertificateTableView(
-    CertificatesContextMixin, SortableTableMixin[CertificateModel], ListView[CertificateModel]):
+class CertificateTableView(CertificatesContextMixin, SortableTableMixin[CertificateModel], ListView[CertificateModel]):
     """Certificate Table View."""
 
     model = CertificateModel
@@ -85,27 +84,30 @@ class CertificateDetailView(CertificatesContextMixin, DetailView[CertificateMode
         subject_entries = []
         for entry in cert.subject.all():
             name = OID_MAP.get(entry.oid)
-            subject_entries.append({
-                'oid': entry.oid,
-                'name': name,
-                'value': entry.value,
-            })
+            subject_entries.append(
+                {
+                    'oid': entry.oid,
+                    'name': name,
+                    'value': entry.value,
+                }
+            )
         context['subject_entries'] = subject_entries
         issuer_entries = []
         for entry in cert.issuer.all():
             name = OID_MAP.get(entry.oid)
-            issuer_entries.append({
-                'oid': entry.oid,
-                'name': name,
-                'value': entry.value,
-            })
+            issuer_entries.append(
+                {
+                    'oid': entry.oid,
+                    'name': name,
+                    'value': entry.value,
+                }
+            )
         context['issuer_entries'] = issuer_entries
         ip_addresses = []
         san_ext = getattr(cert, 'subject_alternative_name_extension', None)
         if san_ext and getattr(san_ext, 'subject_alt_name', None):
             ip_addresses = [
-                str(entry).split(':', 1)[-1].strip()
-                for entry in san_ext.subject_alt_name.ip_addresses.all()
+                str(entry).split(':', 1)[-1].strip() for entry in san_ext.subject_alt_name.ip_addresses.all()
             ]
         context['ip_addresses'] = ip_addresses
 

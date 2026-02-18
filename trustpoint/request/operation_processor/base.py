@@ -1,4 +1,5 @@
 """Carries out the requested operation after authentication and authorization."""
+
 from abc import ABC, abstractmethod
 
 from request.request_context import BaseRequestContext

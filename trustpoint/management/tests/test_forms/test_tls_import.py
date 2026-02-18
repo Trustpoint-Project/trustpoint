@@ -1,4 +1,5 @@
 """Test suite for TLS import forms."""
+
 import datetime
 from unittest.mock import Mock, patch
 
@@ -19,17 +20,15 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
     def setUp(self):
         """Set up test fixtures."""
         # Generate a test private key and certificate
-        self.private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048,
-            backend=default_backend()
-        )
+        self.private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
 
-        subject = issuer = x509.Name([
-            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Test Org"),
-            x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
-        ])
+        subject = issuer = x509.Name(
+            [
+                x509.NameAttribute(NameOID.COUNTRY_NAME, 'US'),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Test Org'),
+                x509.NameAttribute(NameOID.COMMON_NAME, 'localhost'),
+            ]
+        )
 
         now = datetime.datetime.now(datetime.UTC)
         self.certificate = (
@@ -41,7 +40,7 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
             .not_valid_before(now)
             .not_valid_after(now + datetime.timedelta(days=365))
             .add_extension(
-                x509.SubjectAlternativeName([x509.DNSName("localhost")]),
+                x509.SubjectAlternativeName([x509.DNSName('localhost')]),
                 critical=False,
             )
             .sign(self.private_key, hashes.SHA256(), default_backend())
@@ -72,7 +71,7 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
             form_data = {'domain_name': domain}
             form = TlsAddFileImportPkcs12Form(data=form_data)
             form.full_clean()
-            self.assertNotIn('domain_name', form.errors, f"{domain} should be valid")
+            self.assertNotIn('domain_name', form.errors, f'{domain} should be valid')
 
         # Invalid domain names
         invalid_domains = ['invalid', '-invalid.com', 'invalid-.com']
@@ -97,10 +96,7 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
         pkcs12_data = b'dummy_pkcs12_data'
         pkcs12_file = SimpleUploadedFile('test.p12', pkcs12_data, content_type='application/x-pkcs12')
 
-        form_data = {
-            'pkcs12_password': '',
-            'domain_name': 'localhost'
-        }
+        form_data = {'pkcs12_password': '', 'domain_name': 'localhost'}
         form = TlsAddFileImportPkcs12Form(data=form_data, files={'pkcs12_file': pkcs12_file})
 
         self.assertTrue(form.is_valid())
@@ -108,24 +104,18 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
 
     def test_clean_without_pkcs12_file(self):
         """Test clean method raises error when no file is uploaded."""
-        form_data = {
-            'pkcs12_password': '',
-            'domain_name': 'localhost'
-        }
+        form_data = {'pkcs12_password': '', 'domain_name': 'localhost'}
         form = TlsAddFileImportPkcs12Form(data=form_data, files={})
         self.assertFalse(form.is_valid())
 
     @patch('management.forms.CredentialSerializer.from_pkcs12_bytes')
     def test_clean_with_invalid_pkcs12_file(self, mock_from_pkcs12):
         """Test clean method handles corrupted PKCS#12 file."""
-        mock_from_pkcs12.side_effect = Exception("Invalid PKCS#12 data")
+        mock_from_pkcs12.side_effect = Exception('Invalid PKCS#12 data')
 
         pkcs12_file = SimpleUploadedFile('test.p12', b'corrupted_data', content_type='application/x-pkcs12')
 
-        form_data = {
-            'pkcs12_password': '',
-            'domain_name': 'localhost'
-        }
+        form_data = {'pkcs12_password': '', 'domain_name': 'localhost'}
         form = TlsAddFileImportPkcs12Form(data=form_data, files={'pkcs12_file': pkcs12_file})
 
         self.assertFalse(form.is_valid())
@@ -138,8 +128,8 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
 
         # Create a mock password that can't be encoded
         form_data = {
-            'pkcs12_password': Mock(encode=Mock(side_effect=Exception("Encoding error"))),
-            'domain_name': 'localhost'
+            'pkcs12_password': Mock(encode=Mock(side_effect=Exception('Encoding error'))),
+            'domain_name': 'localhost',
         }
         form = TlsAddFileImportPkcs12Form(data=form_data, files={'pkcs12_file': pkcs12_file})
 
@@ -156,10 +146,7 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
 
         pkcs12_file = SimpleUploadedFile('test.p12', b'dummy_data', content_type='application/x-pkcs12')
 
-        form_data = {
-            'pkcs12_password': '',
-            'domain_name': 'localhost'
-        }
+        form_data = {'pkcs12_password': '', 'domain_name': 'localhost'}
         form = TlsAddFileImportPkcs12Form(data=form_data, files={'pkcs12_file': pkcs12_file})
 
         self.assertFalse(form.is_valid())
@@ -170,15 +157,12 @@ class TlsAddFileImportPkcs12FormTest(TestCase):
     def test_clean_with_invalid_certificate_type(self, mock_verify, mock_from_pkcs12):
         """Test clean method when certificate is not x509.Certificate."""
         mock_credential = Mock()
-        mock_credential.certificate = "not_a_certificate"
+        mock_credential.certificate = 'not_a_certificate'
         mock_from_pkcs12.return_value = mock_credential
 
         pkcs12_file = SimpleUploadedFile('test.p12', b'dummy_data', content_type='application/x-pkcs12')
 
-        form_data = {
-            'pkcs12_password': '',
-            'domain_name': 'localhost'
-        }
+        form_data = {'pkcs12_password': '', 'domain_name': 'localhost'}
         form = TlsAddFileImportPkcs12Form(data=form_data, files={'pkcs12_file': pkcs12_file})
 
         self.assertFalse(form.is_valid())
@@ -198,17 +182,15 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
     def setUp(self):
         """Set up test fixtures."""
         # Generate test private key and certificate
-        self.private_key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=2048,
-            backend=default_backend()
-        )
+        self.private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
 
-        subject = issuer = x509.Name([
-            x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Test Org"),
-            x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
-        ])
+        subject = issuer = x509.Name(
+            [
+                x509.NameAttribute(NameOID.COUNTRY_NAME, 'US'),
+                x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Test Org'),
+                x509.NameAttribute(NameOID.COMMON_NAME, 'localhost'),
+            ]
+        )
 
         now = datetime.datetime.now(datetime.UTC)
         self.certificate = (
@@ -220,7 +202,7 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
             .not_valid_before(now)
             .not_valid_after(now + datetime.timedelta(days=365))
             .add_extension(
-                x509.SubjectAlternativeName([x509.DNSName("localhost")]),
+                x509.SubjectAlternativeName([x509.DNSName('localhost')]),
                 critical=False,
             )
             .sign(self.private_key, hashes.SHA256(), default_backend())
@@ -230,7 +212,7 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
         self.private_key_pem = self.private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
+            encryption_algorithm=serialization.NoEncryption(),
         )
 
         self.certificate_pem = self.certificate.public_bytes(serialization.Encoding.PEM)
@@ -265,10 +247,7 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
         large_data = b'x' * (65 * 1024)  # 65 kiB
         private_key_file = SimpleUploadedFile('key.pem', large_data)
 
-        form = TlsAddFileImportSeparateFilesForm(
-            data={},
-            files={'private_key_file': private_key_file}
-        )
+        form = TlsAddFileImportSeparateFilesForm(data={}, files={'private_key_file': private_key_file})
         form.full_clean()
         self.assertIn('too large', str(form.errors.get('private_key_file', '')))
 
@@ -276,10 +255,7 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
         """Test clean_private_key_file with valid file."""
         private_key_file = SimpleUploadedFile('key.pem', self.private_key_pem)
 
-        form = TlsAddFileImportSeparateFilesForm(
-            data={},
-            files={'private_key_file': private_key_file}
-        )
+        form = TlsAddFileImportSeparateFilesForm(data={}, files={'private_key_file': private_key_file})
         form.full_clean()
         self.assertNotIn('private_key_file', form.errors)
 
@@ -294,24 +270,18 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
         large_data = b'x' * (65 * 1024)
         cert_file = SimpleUploadedFile('cert.pem', large_data)
 
-        form = TlsAddFileImportSeparateFilesForm(
-            data={},
-            files={'tls_certificate': cert_file}
-        )
+        form = TlsAddFileImportSeparateFilesForm(data={}, files={'tls_certificate': cert_file})
         form.full_clean()
         self.assertIn('too large', str(form.errors.get('tls_certificate', '')))
 
     @patch('management.forms.CertificateSerializer.from_bytes')
     def test_clean_tls_certificate_corrupted(self, mock_from_bytes):
         """Test clean_tls_certificate handles corrupted certificate."""
-        mock_from_bytes.side_effect = Exception("Parse error")
+        mock_from_bytes.side_effect = Exception('Parse error')
 
         cert_file = SimpleUploadedFile('cert.pem', b'corrupted_cert')
 
-        form = TlsAddFileImportSeparateFilesForm(
-            data={},
-            files={'tls_certificate': cert_file}
-        )
+        form = TlsAddFileImportSeparateFilesForm(data={}, files={'tls_certificate': cert_file})
         form.full_clean()
         self.assertIn('corrupted', str(form.errors.get('tls_certificate', '')).lower())
 
@@ -323,10 +293,7 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
 
         cert_file = SimpleUploadedFile('cert.pem', self.certificate_pem)
 
-        form = TlsAddFileImportSeparateFilesForm(
-            data={},
-            files={'tls_certificate': cert_file}
-        )
+        form = TlsAddFileImportSeparateFilesForm(data={}, files={'tls_certificate': cert_file})
         form.full_clean()
         # Should have cleaned data for tls_certificate
         self.assertEqual(form.cleaned_data.get('tls_certificate'), mock_serializer)
@@ -339,24 +306,18 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
 
         chain_file = SimpleUploadedFile('chain.pem', b'cert_chain_data')
 
-        form = TlsAddFileImportSeparateFilesForm(
-            data={},
-            files={'tls_certificate_chain': chain_file}
-        )
+        form = TlsAddFileImportSeparateFilesForm(data={}, files={'tls_certificate_chain': chain_file})
         form.full_clean()
         self.assertEqual(form.cleaned_data.get('tls_certificate_chain'), mock_serializer)
 
     @patch('management.forms.CertificateCollectionSerializer.from_bytes')
     def test_clean_tls_certificate_chain_corrupted(self, mock_from_bytes):
         """Test clean_tls_certificate_chain handles corrupted chain."""
-        mock_from_bytes.side_effect = Exception("Parse error")
+        mock_from_bytes.side_effect = Exception('Parse error')
 
         chain_file = SimpleUploadedFile('chain.pem', b'corrupted_chain')
 
-        form = TlsAddFileImportSeparateFilesForm(
-            data={},
-            files={'tls_certificate_chain': chain_file}
-        )
+        form = TlsAddFileImportSeparateFilesForm(data={}, files={'tls_certificate_chain': chain_file})
         form.full_clean()
         self.assertIn('corrupted', str(form.errors.get('tls_certificate_chain', '')).lower())
 
@@ -379,8 +340,9 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
     @patch('management.forms.CredentialSerializer.from_serializers')
     @patch('management.forms.CertificateVerifier.verify_server_cert')
     @patch('management.forms.CredentialModel.save_credential_serializer')
-    def test_clean_full_flow(self, mock_save, mock_verify, mock_from_serializers,
-                             mock_cert_from_bytes, mock_key_from_bytes):
+    def test_clean_full_flow(
+        self, mock_save, mock_verify, mock_from_serializers, mock_cert_from_bytes, mock_key_from_bytes
+    ):
         """Test complete clean flow with all files."""
         # Setup mocks
         mock_key_serializer = Mock()
@@ -397,17 +359,10 @@ class TlsAddFileImportSeparateFilesFormTest(TestCase):
         private_key_file = SimpleUploadedFile('key.pem', self.private_key_pem)
         cert_file = SimpleUploadedFile('cert.pem', self.certificate_pem)
 
-        form_data = {
-            'domain_name': 'localhost',
-            'private_key_file_password': ''
-        }
+        form_data = {'domain_name': 'localhost', 'private_key_file_password': ''}
 
         form = TlsAddFileImportSeparateFilesForm(
-            data=form_data,
-            files={
-                'private_key_file': private_key_file,
-                'tls_certificate': cert_file
-            }
+            data=form_data, files={'private_key_file': private_key_file, 'tls_certificate': cert_file}
         )
 
         self.assertTrue(form.is_valid())

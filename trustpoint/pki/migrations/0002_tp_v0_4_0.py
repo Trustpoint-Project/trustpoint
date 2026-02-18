@@ -6,7 +6,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ('pki', '0001_initial'),
     ]
@@ -27,20 +26,54 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='credentialmodel',
             name='credential_type',
-            field=models.IntegerField(choices=[(0, 'Trustpoint TLS Server'), (1, 'Root CA'), (2, 'Issuing CA'), (3, 'Issued Credential'), (4, 'DevOwnerID'), (5, 'Signer')], verbose_name='Credential Type'),
+            field=models.IntegerField(
+                choices=[
+                    (0, 'Trustpoint TLS Server'),
+                    (1, 'Root CA'),
+                    (2, 'Issuing CA'),
+                    (3, 'Issued Credential'),
+                    (4, 'DevOwnerID'),
+                    (5, 'Signer'),
+                ],
+                verbose_name='Credential Type',
+            ),
         ),
         migrations.AlterField(
             model_name='credentialmodel',
             name='private_key',
-            field=util.encrypted_fields.EncryptedCharField(blank=True, default='', max_length=116633, verbose_name='Private key (PEM)'),
+            field=util.encrypted_fields.EncryptedCharField(
+                blank=True, default='', max_length=116633, verbose_name='Private key (PEM)'
+            ),
         ),
         migrations.CreateModel(
             name='PKCS11Key',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('token_label', models.CharField(help_text='Label of the HSM token containing the private key', max_length=255, verbose_name='Token Label')),
-                ('key_label', models.CharField(help_text='Unique label of the private key within the token', max_length=255, verbose_name='Key Label')),
-                ('key_type', models.CharField(choices=[('rsa', 'RSA'), ('ec', 'Elliptic Curve'), ('aes', 'AES')], help_text='Type of the cryptographic key (RSA or EC)', max_length=10, verbose_name='Key Type')),
+                (
+                    'token_label',
+                    models.CharField(
+                        help_text='Label of the HSM token containing the private key',
+                        max_length=255,
+                        verbose_name='Token Label',
+                    ),
+                ),
+                (
+                    'key_label',
+                    models.CharField(
+                        help_text='Unique label of the private key within the token',
+                        max_length=255,
+                        verbose_name='Key Label',
+                    ),
+                ),
+                (
+                    'key_type',
+                    models.CharField(
+                        choices=[('rsa', 'RSA'), ('ec', 'Elliptic Curve'), ('aes', 'AES')],
+                        help_text='Type of the cryptographic key (RSA or EC)',
+                        max_length=10,
+                        verbose_name='Key Type',
+                    ),
+                ),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
             ],
             options={
@@ -52,18 +85,48 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='credentialmodel',
             name='pkcs11_private_key',
-            field=models.ForeignKey(blank=True, help_text='Reference to HSM-stored private key', null=True, on_delete=django.db.models.deletion.PROTECT, to='pki.pkcs11key', verbose_name='PKCS#11 Private Key'),
+            field=models.ForeignKey(
+                blank=True,
+                help_text='Reference to HSM-stored private key',
+                null=True,
+                on_delete=django.db.models.deletion.PROTECT,
+                to='pki.pkcs11key',
+                verbose_name='PKCS#11 Private Key',
+            ),
         ),
         migrations.CreateModel(
             name='DomainAllowedCertificateProfileModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('alias', models.CharField(default='', max_length=255)),
-                ('certificate_profile', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='domains', to='pki.certificateprofilemodel')),
-                ('domain', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='certificate_profiles', to='pki.domainmodel')),
+                (
+                    'certificate_profile',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='domains',
+                        to='pki.certificateprofilemodel',
+                    ),
+                ),
+                (
+                    'domain',
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='certificate_profiles',
+                        to='pki.domainmodel',
+                    ),
+                ),
             ],
             options={
-                'constraints': [models.UniqueConstraint(condition=models.Q(('alias', ''), _negated=True), fields=('domain', 'alias'), name='unique_domain_alias_when_not_empty'), models.UniqueConstraint(fields=('domain', 'certificate_profile'), name='unique_domain_certificate_profile')],
+                'constraints': [
+                    models.UniqueConstraint(
+                        condition=models.Q(('alias', ''), _negated=True),
+                        fields=('domain', 'alias'),
+                        name='unique_domain_alias_when_not_empty',
+                    ),
+                    models.UniqueConstraint(
+                        fields=('domain', 'certificate_profile'), name='unique_domain_certificate_profile'
+                    ),
+                ],
             },
         ),
     ]

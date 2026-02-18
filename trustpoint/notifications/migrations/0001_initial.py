@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -26,50 +25,229 @@ class Migration(migrations.Migration):
             name='NotificationStatus',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('status', models.CharField(choices=[('NEW', 'New'), ('CONF', 'Confirmed'), ('PROG', 'In Progress'), ('SOLV', 'Solved'), ('NOSOL', 'Not Solved'), ('ESC', 'Escalated'), ('SUS', 'Suspended'), ('REJ', 'Rejected'), ('DEL', 'Deleted'), ('CLO', 'Closed'), ('ACK', 'Acknowledged'), ('FAIL', 'Failed'), ('EXP', 'Expired'), ('PEND', 'Pending')], max_length=20, unique=True)),
+                (
+                    'status',
+                    models.CharField(
+                        choices=[
+                            ('NEW', 'New'),
+                            ('CONF', 'Confirmed'),
+                            ('PROG', 'In Progress'),
+                            ('SOLV', 'Solved'),
+                            ('NOSOL', 'Not Solved'),
+                            ('ESC', 'Escalated'),
+                            ('SUS', 'Suspended'),
+                            ('REJ', 'Rejected'),
+                            ('DEL', 'Deleted'),
+                            ('CLO', 'Closed'),
+                            ('ACK', 'Acknowledged'),
+                            ('FAIL', 'Failed'),
+                            ('EXP', 'Expired'),
+                            ('PEND', 'Pending'),
+                        ],
+                        max_length=20,
+                        unique=True,
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
             name='WeakECCCurve',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('oid', models.CharField(choices=[('1.3.132.0.8', 'SECP160R1'), ('1.2.840.10045.3.1.1', 'SECP192R1'), ('1.3.132.0.33', 'SECP224R1'), ('1.3.132.0.10', 'SECP256K1'), ('1.3.132.0.1', 'SECT163K1'), ('1.3.132.0.15', 'SECT163R2'), ('1.3.132.0.26', 'SECT233K1'), ('1.3.132.0.27', 'SECT233R1'), ('1.3.132.0.16', 'SECT283K1')], max_length=64, unique=True)),
+                (
+                    'oid',
+                    models.CharField(
+                        choices=[
+                            ('1.3.132.0.8', 'SECP160R1'),
+                            ('1.2.840.10045.3.1.1', 'SECP192R1'),
+                            ('1.3.132.0.33', 'SECP224R1'),
+                            ('1.3.132.0.10', 'SECP256K1'),
+                            ('1.3.132.0.1', 'SECT163K1'),
+                            ('1.3.132.0.15', 'SECT163R2'),
+                            ('1.3.132.0.26', 'SECT233K1'),
+                            ('1.3.132.0.27', 'SECT233R1'),
+                            ('1.3.132.0.16', 'SECT283K1'),
+                        ],
+                        max_length=64,
+                        unique=True,
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
             name='WeakSignatureAlgorithm',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('oid', models.CharField(choices=[('1.2.840.113549.2.5', 'MD5'), ('1.3.14.3.2.26', 'SHA-1'), ('2.16.840.1.101.3.4.2.4', 'SHA-224')], max_length=64, unique=True)),
+                (
+                    'oid',
+                    models.CharField(
+                        choices=[
+                            ('1.2.840.113549.2.5', 'MD5'),
+                            ('1.3.14.3.2.26', 'SHA-1'),
+                            ('2.16.840.1.101.3.4.2.4', 'SHA-224'),
+                        ],
+                        max_length=64,
+                        unique=True,
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
             name='NotificationModel',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('notification_type', models.CharField(choices=[('SET', 'SETUP'), ('INF', 'INFO'), ('WAR', 'WARNING'), ('CRI', 'CRITICAL')], default='INF', max_length=3)),
-                ('notification_source', models.CharField(choices=[('S', 'System'), ('D', 'Domain'), ('E', 'Device'), ('I', 'Issuing CA'), ('C', 'Certificate')], default='S', max_length=1)),
-                ('message_type', models.CharField(choices=[('C', 'custom'), ('TEST_CA', 'Issuing Ca Test'), ('TEST_DOMAIN', 'Domain Test'), ('TEST_CERT', 'Cert Test'), ('TEST_DEVICE', 'Device Test'), ('POP_TEST_DATA', 'Welcome Populate Test Data'), ('TP_DOCS', 'Trustpoint Documentation'), ('TP_INFO', 'Trustpoint Project Info'), ('WELCOME', 'Welcome Message'), ('SYS_NOT_HEALTHY', 'System Not Healthy'), ('VULNERABILITY', 'Vulnerability'), ('CERT_EXPIRING', 'Cert Expiring'), ('CERT_EXPIRED', 'Cert Expired'), ('CA_EXPIRING', 'Issuing Ca Expiring'), ('CA_EXPIRED', 'Issuing Ca Expired'), ('DOMAIN_NO_CA', 'Domain No Issuing Ca'), ('DEV_NOT_ONBRD', 'Device Not Onboarded'), ('DEV_ONBRD_FAIL', 'Device Onboarding Failed'), ('DEV_CERT_REV', 'Device Cert Revoked'), ('WEAK_SIG_ALGO', 'Weak Signature Algorithm'), ('INSUFF_KEY_LEN', 'Insufficient Key Length'), ('WEAK_ECC_CURVE', 'Weak Ecc Curve')], default='C', max_length=32)),
+                (
+                    'notification_type',
+                    models.CharField(
+                        choices=[('SET', 'SETUP'), ('INF', 'INFO'), ('WAR', 'WARNING'), ('CRI', 'CRITICAL')],
+                        default='INF',
+                        max_length=3,
+                    ),
+                ),
+                (
+                    'notification_source',
+                    models.CharField(
+                        choices=[
+                            ('S', 'System'),
+                            ('D', 'Domain'),
+                            ('E', 'Device'),
+                            ('I', 'Issuing CA'),
+                            ('C', 'Certificate'),
+                        ],
+                        default='S',
+                        max_length=1,
+                    ),
+                ),
+                (
+                    'message_type',
+                    models.CharField(
+                        choices=[
+                            ('C', 'custom'),
+                            ('TEST_CA', 'Issuing Ca Test'),
+                            ('TEST_DOMAIN', 'Domain Test'),
+                            ('TEST_CERT', 'Cert Test'),
+                            ('TEST_DEVICE', 'Device Test'),
+                            ('POP_TEST_DATA', 'Welcome Populate Test Data'),
+                            ('TP_DOCS', 'Trustpoint Documentation'),
+                            ('TP_INFO', 'Trustpoint Project Info'),
+                            ('WELCOME', 'Welcome Message'),
+                            ('SYS_NOT_HEALTHY', 'System Not Healthy'),
+                            ('VULNERABILITY', 'Vulnerability'),
+                            ('CERT_EXPIRING', 'Cert Expiring'),
+                            ('CERT_EXPIRED', 'Cert Expired'),
+                            ('CA_EXPIRING', 'Issuing Ca Expiring'),
+                            ('CA_EXPIRED', 'Issuing Ca Expired'),
+                            ('DOMAIN_NO_CA', 'Domain No Issuing Ca'),
+                            ('DEV_NOT_ONBRD', 'Device Not Onboarded'),
+                            ('DEV_ONBRD_FAIL', 'Device Onboarding Failed'),
+                            ('DEV_CERT_REV', 'Device Cert Revoked'),
+                            ('WEAK_SIG_ALGO', 'Weak Signature Algorithm'),
+                            ('INSUFF_KEY_LEN', 'Insufficient Key Length'),
+                            ('WEAK_ECC_CURVE', 'Weak Ecc Curve'),
+                        ],
+                        default='C',
+                        max_length=32,
+                    ),
+                ),
                 ('message_data', models.JSONField(blank=True, default=dict)),
                 ('event', models.CharField(blank=True, default='', max_length=255)),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created at')),
-                ('certificate', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='notifications', to='pki.certificatemodel')),
-                ('device', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='notifications', to='devices.devicemodel')),
-                ('domain', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='notifications', to='pki.domainmodel')),
-                ('issuing_ca', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='notifications', to='pki.issuingcamodel')),
-                ('message', models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='notifications', to='notifications.notificationmessagemodel')),
-                ('statuses', models.ManyToManyField(related_name='notifications', to='notifications.notificationstatus')),
+                (
+                    'certificate',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='notifications',
+                        to='pki.certificatemodel',
+                    ),
+                ),
+                (
+                    'device',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='notifications',
+                        to='devices.devicemodel',
+                    ),
+                ),
+                (
+                    'domain',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='notifications',
+                        to='pki.domainmodel',
+                    ),
+                ),
+                (
+                    'issuing_ca',
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.SET_NULL,
+                        related_name='notifications',
+                        to='pki.issuingcamodel',
+                    ),
+                ),
+                (
+                    'message',
+                    models.ForeignKey(
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name='notifications',
+                        to='notifications.notificationmessagemodel',
+                    ),
+                ),
+                (
+                    'statuses',
+                    models.ManyToManyField(related_name='notifications', to='notifications.notificationstatus'),
+                ),
             ],
         ),
         migrations.CreateModel(
             name='NotificationConfig',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('cert_expiry_warning_days', models.PositiveIntegerField(default=30, help_text="Number of days before a certificate's expiration to trigger a 'Certificate Expiring' warning.")),
-                ('issuing_ca_expiry_warning_days', models.PositiveIntegerField(default=30, help_text="Number of days before an issuing CA's certificate expiration to trigger a warning.")),
-                ('rsa_minimum_key_size', models.PositiveIntegerField(default=2048, help_text='Minimum RSA key size (in bits) that certificates must meet to avoid being flagged as insecure.')),
-                ('weak_ecc_curves', models.ManyToManyField(blank=True, help_text='Select ECC curves considered weak or deprecated.', to='notifications.weakecccurve')),
-                ('weak_signature_algorithms', models.ManyToManyField(blank=True, help_text='Select signature algorithms considered weak or deprecated.', to='notifications.weaksignaturealgorithm')),
+                (
+                    'cert_expiry_warning_days',
+                    models.PositiveIntegerField(
+                        default=30,
+                        help_text="Number of days before a certificate's expiration to trigger a 'Certificate Expiring' warning.",
+                    ),
+                ),
+                (
+                    'issuing_ca_expiry_warning_days',
+                    models.PositiveIntegerField(
+                        default=30,
+                        help_text="Number of days before an issuing CA's certificate expiration to trigger a warning.",
+                    ),
+                ),
+                (
+                    'rsa_minimum_key_size',
+                    models.PositiveIntegerField(
+                        default=2048,
+                        help_text='Minimum RSA key size (in bits) that certificates must meet to avoid being flagged as insecure.',
+                    ),
+                ),
+                (
+                    'weak_ecc_curves',
+                    models.ManyToManyField(
+                        blank=True,
+                        help_text='Select ECC curves considered weak or deprecated.',
+                        to='notifications.weakecccurve',
+                    ),
+                ),
+                (
+                    'weak_signature_algorithms',
+                    models.ManyToManyField(
+                        blank=True,
+                        help_text='Select signature algorithms considered weak or deprecated.',
+                        to='notifications.weaksignaturealgorithm',
+                    ),
+                ),
             ],
             options={
                 'verbose_name': 'Notification Configuration',

@@ -195,16 +195,14 @@ def step_given_the_download_is_not_yet_expired(context: runner.Context) -> None:
         context (runner.Context): Behave context.
     """
     if context.download_token is None:
-        msg  ='Download token not in context'
+        msg = 'Download token not in context'
         raise AssertionError(msg)
 
     if RemoteDeviceCredentialDownloadModel.objects.get(id=context.download_id).check_token('dummy_token'):
         msg = 'Dummy token should not be valid'
         raise AssertionError(msg)
 
-    if not RemoteDeviceCredentialDownloadModel.objects.get(id=context.download_id).check_token(
-        context.download_token
-    ):
+    if not RemoteDeviceCredentialDownloadModel.objects.get(id=context.download_id).check_token(context.download_token):
         msg = 'Actual token from URL should be valid'
         raise AssertionError(msg)
 

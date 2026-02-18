@@ -1,4 +1,3 @@
-
 """Helpers to build a flattened catalog of context keys for the UI."""
 
 from __future__ import annotations
@@ -6,10 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 MAX_SAMPLE_LEN = 160
-MAX_ITEMS      = 500      # guardrail
+MAX_ITEMS = 500  # guardrail
+
 
 def _is_scalar(v: Any) -> bool:
     return isinstance(v, (str, int, float, bool)) or v is None
+
 
 def _sample(v: Any) -> str:
     if isinstance(v, str):
@@ -22,6 +23,7 @@ def _sample(v: Any) -> str:
     if isinstance(v, dict):
         return '{…}'
     return type(v).__name__
+
 
 def _flatten(obj: Any, prefix: str = '') -> list[tuple[str, Any]]:
     out: list[tuple[str, Any]] = []
@@ -43,6 +45,7 @@ def _flatten(obj: Any, prefix: str = '') -> list[tuple[str, Any]]:
             out.append((path, cur))
     return out
 
+
 def build_catalog(ctx: dict[str, Any]) -> dict[str, Any]:
     """Build catalog rows (key/label/sample) for use in the UI.
 
@@ -58,11 +61,13 @@ def build_catalog(ctx: dict[str, Any]) -> dict[str, Any]:
     for p, v in _flatten(ctx):
         if not p:
             continue
-        rows.append({
-            'key': p,
-            'label': p.split('.')[-1].replace('_', ' ').title(),
-            'sample': _sample(v),
-        })
+        rows.append(
+            {
+                'key': p,
+                'label': p.split('.')[-1].replace('_', ' ').title(),
+                'sample': _sample(v),
+            }
+        )
     # Provide a few “nice” aliases up top
     rows.insert(0, {'key': 'steps', 'label': 'Steps (safe keys)', 'sample': '{…}'})
     return {

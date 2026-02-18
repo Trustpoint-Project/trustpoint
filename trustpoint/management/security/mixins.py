@@ -1,4 +1,5 @@
 """Management app mixins."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -13,7 +14,6 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
     from management.security.features import SecurityFeature
-
 
 
 class SecurityLevelMixin:
@@ -81,9 +81,8 @@ class SecurityLevelMixinRedirect(SecurityLevelMixin):
         """
         if not self.sec.is_feature_allowed(self.security_feature):
             msg = _(
-                _(
-                    'Your security setting %s does not allow the feature: %s'
-                ) % (
+                _('Your security setting %s does not allow the feature: %s')
+                % (
                     self.get_security_level(),
                     self.security_feature.value,
                 )

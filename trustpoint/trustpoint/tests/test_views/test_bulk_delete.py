@@ -1,4 +1,5 @@
 """Tests for the BulkDeleteView and related classes."""
+
 from typing import Any
 
 import pytest
@@ -63,6 +64,7 @@ class TestPrimaryKeyQuerysetFromUrlMixin(TestCase):
 
     def test_get_queryset_all_objects(self) -> None:
         """Test getting all objects when no pks provided."""
+
         class TestView(PrimaryKeyQuerysetFromUrlMixin):
             model = DeviceModel
             queryset = None
@@ -75,6 +77,7 @@ class TestPrimaryKeyQuerysetFromUrlMixin(TestCase):
 
     def test_get_queryset_with_pks(self) -> None:
         """Test getting queryset with specific pks."""
+
         class TestView(PrimaryKeyQuerysetFromUrlMixin):
             model = DeviceModel
             queryset = None
@@ -90,6 +93,7 @@ class TestPrimaryKeyQuerysetFromUrlMixin(TestCase):
 
     def test_get_queryset_with_invalid_pk(self) -> None:
         """Test getting queryset with invalid pk."""
+
         class TestView(PrimaryKeyQuerysetFromUrlMixin):
             model = DeviceModel
             queryset = None
@@ -104,7 +108,7 @@ class TestPrimaryKeyQuerysetFromUrlMixin(TestCase):
     def test_get_queryset_cached(self) -> None:
         """Test that queryset is cached."""
         cached_queryset = DeviceModel.objects.filter(pk=self.device1.pk)
-        
+
         class TestView(PrimaryKeyQuerysetFromUrlMixin):
             model = DeviceModel
             queryset = cached_queryset
@@ -131,45 +135,47 @@ class TestBaseBulkDeleteView(TestCase):
     def test_post_valid_form(self) -> None:
         """Test POST request with valid form."""
         device1_pk = self.device1.pk
-        
+
         class TestBulkDeleteView(BaseBulkDeleteView):
             model = DeviceModel
             success_url = '/success/'
-            
+
             def get_queryset(self) -> QuerySet[Any]:
                 return DeviceModel.objects.filter(pk=device1_pk)
 
         view = TestBulkDeleteView()
         request = self.factory.post('/delete/')
         view.request = request  # Set request attribute
-        
+
         # Store initial count
         initial_count = DeviceModel.objects.count()
-        
+
         response = view.post(request)
-        
+
         # Check response is redirect
         assert response.status_code == 302
         assert response.url == '/success/'
-        
+
         # Check device was deleted
         assert DeviceModel.objects.count() == initial_count - 1
         assert not DeviceModel.objects.filter(pk=device1_pk).exists()
 
     def test_get_success_url_missing(self) -> None:
         """Test that missing success_url raises ImproperlyConfigured."""
+
         class TestBulkDeleteView(BaseBulkDeleteView):
             model = DeviceModel
             success_url = None
 
         view = TestBulkDeleteView()
-        
+
         with pytest.raises(ImproperlyConfigured) as exc_info:
             view.get_success_url()
         assert 'No URL to redirect to. Provide a success_url.' in str(exc_info.value)
 
     def test_get_success_url_provided(self) -> None:
         """Test getting success_url when provided."""
+
         class TestBulkDeleteView(BaseBulkDeleteView):
             success_url = '/test-success/'
 

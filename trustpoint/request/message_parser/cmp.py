@@ -87,7 +87,8 @@ class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
 
                 context.client_intermediate_certificate = intermediate_certs
                 self.logger.debug(
-                    'Successfully extracted %d intermediate certificates from extraCerts', len(intermediate_certs))
+                    'Successfully extracted %d intermediate certificates from extraCerts', len(intermediate_certs)
+                )
 
             self.logger.debug('Successfully extracted CMP signer certificate from extraCerts')
 
@@ -100,9 +101,14 @@ class CmpPkiMessageParsing(ParsingComponent, LoggerMixin):
 class CmpHeaderValidation(ParsingComponent, LoggerMixin):
     """Component for validating CMP message headers."""
 
-    def __init__(self, cmp_message_version: int = 2, transaction_id_length: int = 16,
-                 sender_nonce_length: int = 16, implicit_confirm_oid: str = '1.3.6.1.5.5.7.4.13',
-                 implicit_confirm_str_value: str = '0x0500') -> None:
+    def __init__(
+        self,
+        cmp_message_version: int = 2,
+        transaction_id_length: int = 16,
+        sender_nonce_length: int = 16,
+        implicit_confirm_oid: str = '1.3.6.1.5.5.7.4.13',
+        implicit_confirm_str_value: str = '0x0500',
+    ) -> None:
         """Initialize the CMP header validation component with configurable parameters.
 
         Args:
@@ -210,17 +216,12 @@ class CmpCertificateBodyValidation(LoggerMixin):
 
         cert_req_template = cert_req_msg['certTemplate']
 
-        if (cert_req_template['version'].hasValue() and
-                cert_req_template['version'] != self.cert_template_version):
+        if cert_req_template['version'].hasValue() and cert_req_template['version'] != self.cert_template_version:
             self._raise_validation_error('Version must be 2 if supplied in certificate request.')
 
         return self._cert_template_to_builder(cert_req_template)
 
-    def _cert_template_to_builder(
-            self,
-            cert_template: rfc2511.CertTemplate
-    ) -> x509.CertificateBuilder:
-
+    def _cert_template_to_builder(self, cert_template: rfc2511.CertTemplate) -> x509.CertificateBuilder:
         if cert_template['subject'].hasValue():
             try:
                 subject = NameParser.parse_name(cert_template['subject'])
@@ -314,11 +315,7 @@ class CmpCertificateBodyValidation(LoggerMixin):
                 self.logger.warning('No valid SAN entries found')
 
             san_extension = x509.SubjectAlternativeName(general_names)
-            return x509.Extension(
-                oid=ExtensionOID.SUBJECT_ALTERNATIVE_NAME,
-                critical=critical,
-                value=san_extension
-            )
+            return x509.Extension(oid=ExtensionOID.SUBJECT_ALTERNATIVE_NAME, critical=critical, value=san_extension)
         except Exception:
             self.logger.exception('Failed to parse SAN extension.')
             raise
@@ -347,11 +344,7 @@ class CmpCertificateBodyValidation(LoggerMixin):
         return general_names
 
     def _handle_ip_address(
-        self,
-        name_value: Any,
-        general_names: list[x509.GeneralName],
-        ipv4_byte_length: int,
-        ipv6_byte_length: int
+        self, name_value: Any, general_names: list[x509.GeneralName], ipv4_byte_length: int, ipv6_byte_length: int
     ) -> None:
         """Handle IP address parsing for SAN."""
         try:
@@ -363,15 +356,11 @@ class CmpCertificateBodyValidation(LoggerMixin):
                 ipv6_addr = ipaddress.IPv6Address(ip_bytes)
                 general_names.append(x509.IPAddress(ipv6_addr))
             else:
-                self.logger.warning('Unknown IP address length: %(ip_length)s',
-                                    extra={'ip_length': len(ip_bytes)})
+                self.logger.warning('Unknown IP address length: %(ip_length)s', extra={'ip_length': len(ip_bytes)})
         except (ValueError, TypeError) as ip_error:
-            self.logger.warning('Failed to parse IP address: %(error)s',
-                                extra={'error': str(ip_error)})
+            self.logger.warning('Failed to parse IP address: %(error)s', extra={'error': str(ip_error)})
 
-    def _parse_basic_constraints(
-        self, value: bytes, *, critical: bool
-    ) -> x509.Extension[x509.BasicConstraints]:
+    def _parse_basic_constraints(self, value: bytes, *, critical: bool) -> x509.Extension[x509.BasicConstraints]:
         """Parse Basic Constraints extension manually."""
         try:
             basic_constraints_asn1, _ = der_decoder.decode(value, asn1Spec=rfc2459.BasicConstraints())
@@ -381,11 +370,7 @@ class CmpCertificateBodyValidation(LoggerMixin):
                 path_length = int(basic_constraints_asn1.getComponentByName('pathLenConstraint'))
 
             basic_constraints = x509.BasicConstraints(ca=is_ca, path_length=path_length)
-            return x509.Extension(
-                oid=ExtensionOID.BASIC_CONSTRAINTS,
-                critical=critical,
-                value=basic_constraints
-            )
+            return x509.Extension(oid=ExtensionOID.BASIC_CONSTRAINTS, critical=critical, value=basic_constraints)
         except Exception:
             self.logger.exception('Failed to parse Basic Constraints extension.')
             raise
@@ -409,14 +394,10 @@ class CmpCertificateBodyValidation(LoggerMixin):
                 key_cert_sign=self._get_usage_flag(key_usage_asn1, 'keyCertSign'),
                 crl_sign=self._get_usage_flag(key_usage_asn1, 'cRLSign'),
                 encipher_only=self._get_usage_flag(key_usage_asn1, 'encipherOnly'),
-                decipher_only=self._get_usage_flag(key_usage_asn1, 'decipherOnly')
+                decipher_only=self._get_usage_flag(key_usage_asn1, 'decipherOnly'),
             )
 
-            return x509.Extension(
-                oid=ExtensionOID.KEY_USAGE,
-                critical=critical,
-                value=key_usage
-            )
+            return x509.Extension(oid=ExtensionOID.KEY_USAGE, critical=critical, value=key_usage)
         except Exception:
             self.logger.exception('Failed to parse Key Usage extension.')
             raise
@@ -433,11 +414,7 @@ class CmpCertificateBodyValidation(LoggerMixin):
 
             extended_key_usage = x509.ExtendedKeyUsage(eku_oids)
 
-            return x509.Extension(
-                oid=ExtensionOID.EXTENDED_KEY_USAGE,
-                critical=critical,
-                value=extended_key_usage
-            )
+            return x509.Extension(oid=ExtensionOID.EXTENDED_KEY_USAGE, critical=critical, value=extended_key_usage)
         except Exception:
             self.logger.exception('Failed to parse Extended Key Usage extension.')
             raise
@@ -453,9 +430,7 @@ class CmpCertificateBodyValidation(LoggerMixin):
             subject_key_identifier = x509.SubjectKeyIdentifier(digest=ski_bytes)
 
             return x509.Extension(
-                oid=ExtensionOID.SUBJECT_KEY_IDENTIFIER,
-                critical=critical,
-                value=subject_key_identifier
+                oid=ExtensionOID.SUBJECT_KEY_IDENTIFIER, critical=critical, value=subject_key_identifier
             )
         except Exception:
             self.logger.exception('Failed to parse Subject Key Identifier extension.')
@@ -479,8 +454,7 @@ class CmpCertificateBodyValidation(LoggerMixin):
                     self._raise_value_error(error_message)
 
                 policy_info_obj = x509.PolicyInformation(
-                    policy_identifier=x509.ObjectIdentifier(policy_oid),
-                    policy_qualifiers=None
+                    policy_identifier=x509.ObjectIdentifier(policy_oid), policy_qualifiers=None
                 )
                 policy_information_list.append(policy_info_obj)
 
@@ -488,15 +462,10 @@ class CmpCertificateBodyValidation(LoggerMixin):
             oid = ExtensionOID.CERTIFICATE_POLICIES
 
             if not isinstance(oid, x509.ObjectIdentifier):
-                self.logger.warning('Invalid OID type: %(oid_type)s',
-                                    extra={'oid_type': type(oid).__name__})
+                self.logger.warning('Invalid OID type: %(oid_type)s', extra={'oid_type': type(oid).__name__})
                 self._raise_value_error('Invalid OID type')
 
-            return x509.Extension(
-                oid=oid,
-                critical=critical,
-                value=certificate_policies
-            )
+            return x509.Extension(oid=oid, critical=critical, value=certificate_policies)
 
         except Exception:
             self.logger.exception('Failed to parse Certificate Policies extension')

@@ -25,6 +25,7 @@ def api_client():
 def authenticated_client(api_client):
     """Create an authenticated API client."""
     from django.contrib.auth import get_user_model
+
     User = get_user_model()
     user = User.objects.create_user(username='testuser', password='testpass123')
     api_client.force_authenticate(user=user)
@@ -51,10 +52,12 @@ def sample_signer(key_storage_config):
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
     # Create certificate
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, 'Test Signer'),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Test Organization'),
-    ])
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, 'Test Signer'),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Test Organization'),
+        ]
+    )
 
     cert = (
         x509.CertificateBuilder()
@@ -109,10 +112,12 @@ def sample_ec_signer(key_storage_config):
     private_key = ec.generate_private_key(ec.SECP256R1())
 
     # Create certificate
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COMMON_NAME, 'Test EC Signer'),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Test Organization'),
-    ])
+    subject = issuer = x509.Name(
+        [
+            x509.NameAttribute(NameOID.COMMON_NAME, 'Test EC Signer'),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, 'Test Organization'),
+        ]
+    )
 
     cert = (
         x509.CertificateBuilder()
@@ -184,10 +189,7 @@ class TestSignerViewSet:
     def test_sign_hash_requires_authentication(self, api_client, sample_signer):
         """Test sign_hash endpoint requires authentication."""
         url = '/api/signers/sign/'
-        data = {
-            'signer_id': sample_signer.pk,
-            'hash_value': 'a' * 64
-        }
+        data = {'signer_id': sample_signer.pk, 'hash_value': 'a' * 64}
         response = api_client.post(url, data, format='json')
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -195,10 +197,7 @@ class TestSignerViewSet:
         """Test sign_hash successfully signs with RSA key."""
         url = '/api/signers/sign/'
         hash_value = 'a' * 64  # SHA256 hash (64 hex chars)
-        data = {
-            'signer_id': sample_signer.pk,
-            'hash_value': hash_value
-        }
+        data = {'signer_id': sample_signer.pk, 'hash_value': hash_value}
 
         response = authenticated_client.post(url, data, format='json')
         assert response.status_code == status.HTTP_200_OK
@@ -216,10 +215,7 @@ class TestSignerViewSet:
         """Test sign_hash successfully signs with EC key."""
         url = '/api/signers/sign/'
         hash_value = 'b' * 64  # SHA256 hash (64 hex chars)
-        data = {
-            'signer_id': sample_ec_signer.pk,
-            'hash_value': hash_value
-        }
+        data = {'signer_id': sample_ec_signer.pk, 'hash_value': hash_value}
 
         response = authenticated_client.post(url, data, format='json')
         assert response.status_code == status.HTTP_200_OK
@@ -230,10 +226,7 @@ class TestSignerViewSet:
     def test_sign_hash_invalid_signer_id(self, authenticated_client):
         """Test sign_hash with non-existent signer ID."""
         url = '/api/signers/sign/'
-        data = {
-            'signer_id': 99999,
-            'hash_value': 'a' * 64
-        }
+        data = {'signer_id': 99999, 'hash_value': 'a' * 64}
 
         response = authenticated_client.post(url, data, format='json')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -242,10 +235,7 @@ class TestSignerViewSet:
     def test_sign_hash_invalid_hex_format(self, authenticated_client, sample_signer):
         """Test sign_hash with invalid hex format."""
         url = '/api/signers/sign/'
-        data = {
-            'signer_id': sample_signer.pk,
-            'hash_value': 'not-hex-value'
-        }
+        data = {'signer_id': sample_signer.pk, 'hash_value': 'not-hex-value'}
 
         response = authenticated_client.post(url, data, format='json')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -254,9 +244,7 @@ class TestSignerViewSet:
     def test_sign_hash_missing_signer_id(self, authenticated_client):
         """Test sign_hash with missing signer_id."""
         url = '/api/signers/sign/'
-        data = {
-            'hash_value': 'a' * 64
-        }
+        data = {'hash_value': 'a' * 64}
 
         response = authenticated_client.post(url, data, format='json')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -265,9 +253,7 @@ class TestSignerViewSet:
     def test_sign_hash_missing_hash_value(self, authenticated_client, sample_signer):
         """Test sign_hash with missing hash_value."""
         url = '/api/signers/sign/'
-        data = {
-            'signer_id': sample_signer.pk
-        }
+        data = {'signer_id': sample_signer.pk}
 
         response = authenticated_client.post(url, data, format='json')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
@@ -278,7 +264,7 @@ class TestSignerViewSet:
         url = '/api/signers/sign/'
         data = {
             'signer_id': 88888,  # Valid format but doesn't exist
-            'hash_value': 'a' * 64
+            'hash_value': 'a' * 64,
         }
 
         # The validator should catch this
@@ -289,15 +275,12 @@ class TestSignerViewSet:
         """Test sign_hash with unsupported key algorithm."""
         url = '/api/signers/sign/'
         hash_value = 'c' * 64
-        data = {
-            'signer_id': sample_signer.pk,
-            'hash_value': hash_value
-        }
+        data = {'signer_id': sample_signer.pk, 'hash_value': hash_value}
 
         # Mock get_private_key at the model level to return unsupported key type
         mock_key = Mock()
         mock_key.__class__.__name__ = 'UnsupportedKey'
-        
+
         with patch('signer.api_views.SignerModel.objects.get') as mock_get:
             mock_signer = Mock()
             mock_signer.id = sample_signer.pk
@@ -314,10 +297,7 @@ class TestSignerViewSet:
         """Test sign_hash handles signing exceptions."""
         url = '/api/signers/sign/'
         hash_value = 'd' * 64
-        data = {
-            'signer_id': sample_signer.pk,
-            'hash_value': hash_value
-        }
+        data = {'signer_id': sample_signer.pk, 'hash_value': hash_value}
 
         # Mock at the model level to raise an exception during get_private_key
         with patch('signer.api_views.SignerModel.objects.get') as mock_get:
@@ -369,16 +349,8 @@ class TestSignedMessageViewSet:
     def test_list_signed_messages_authenticated(self, authenticated_client, sample_signer):
         """Test list endpoint returns signed messages when authenticated."""
         # Create some signed messages
-        SignedMessageModel.objects.create(
-            signer=sample_signer,
-            hash_value='a' * 64,
-            signature='b' * 128
-        )
-        SignedMessageModel.objects.create(
-            signer=sample_signer,
-            hash_value='c' * 64,
-            signature='d' * 128
-        )
+        SignedMessageModel.objects.create(signer=sample_signer, hash_value='a' * 64, signature='b' * 128)
+        SignedMessageModel.objects.create(signer=sample_signer, hash_value='c' * 64, signature='d' * 128)
 
         url = reverse('signed-message-list')
         response = authenticated_client.get(url)
@@ -387,16 +359,8 @@ class TestSignedMessageViewSet:
 
     def test_list_signed_messages_ordered_by_created_at(self, authenticated_client, sample_signer):
         """Test list endpoint returns messages ordered by created_at desc."""
-        msg1 = SignedMessageModel.objects.create(
-            signer=sample_signer,
-            hash_value='e' * 64,
-            signature='f' * 128
-        )
-        msg2 = SignedMessageModel.objects.create(
-            signer=sample_signer,
-            hash_value='g' * 64,
-            signature='h' * 128
-        )
+        msg1 = SignedMessageModel.objects.create(signer=sample_signer, hash_value='e' * 64, signature='f' * 128)
+        msg2 = SignedMessageModel.objects.create(signer=sample_signer, hash_value='g' * 64, signature='h' * 128)
 
         url = reverse('signed-message-list')
         response = authenticated_client.get(url)
@@ -406,16 +370,8 @@ class TestSignedMessageViewSet:
 
     def test_list_signed_messages_filter_by_signer(self, authenticated_client, sample_signer, sample_ec_signer):
         """Test list endpoint can filter by signer."""
-        SignedMessageModel.objects.create(
-            signer=sample_signer,
-            hash_value='i' * 64,
-            signature='j' * 128
-        )
-        SignedMessageModel.objects.create(
-            signer=sample_ec_signer,
-            hash_value='k' * 64,
-            signature='l' * 128
-        )
+        SignedMessageModel.objects.create(signer=sample_signer, hash_value='i' * 64, signature='j' * 128)
+        SignedMessageModel.objects.create(signer=sample_ec_signer, hash_value='k' * 64, signature='l' * 128)
 
         url = reverse('signed-message-list')
         response = authenticated_client.get(url, {'signer': sample_signer.pk})
@@ -426,11 +382,7 @@ class TestSignedMessageViewSet:
 
     def test_retrieve_signed_message(self, authenticated_client, sample_signer):
         """Test retrieve endpoint returns signed message details."""
-        msg = SignedMessageModel.objects.create(
-            signer=sample_signer,
-            hash_value='m' * 64,
-            signature='n' * 128
-        )
+        msg = SignedMessageModel.objects.create(signer=sample_signer, hash_value='m' * 64, signature='n' * 128)
 
         url = reverse('signed-message-detail', kwargs={'pk': msg.pk})
         response = authenticated_client.get(url)

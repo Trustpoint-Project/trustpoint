@@ -77,6 +77,7 @@ urlpatterns += [
     path('management/', include('management.urls')),
     path('notifications/', include('notifications.urls')),
     path('i18n/', include('django.conf.urls.i18n')),
+    path('discovery/', include('discovery.urls')),
     path(
         'jsi18n/',
         vary_on_cookie(last_modified(lambda _req, **_kw: last_modified_date)(JavaScriptCatalog.as_view())),
@@ -84,7 +85,6 @@ urlpatterns += [
     ),
     path('', base.IndexView.as_view()),
     path('workflows/', include('workflows.urls', namespace='workflows')),
-
     # API URLs
     path('api/', include('devices.api_urls')),
     path('api/', include('pki.api_urls')),

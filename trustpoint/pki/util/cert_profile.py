@@ -25,22 +25,25 @@ from pki.util.ext_oids import CertificateExtensionOid  # temp
 
 logger = logging.getLogger(__name__)
 
+
 class ProfileValidationError(Exception):
     """Raised when the request is well-formed but does not match the profile constraints."""
+
 
 ALIASES: dict[str, AliasChoices] = {
     #'common_name': AliasChoices('common_name', 'cn', 'CN', 'commonName', '2.5.4.3')
 }
 
-CERT_PROFILE_KEYWORDS = {'type','allow', 'reject_mods', 'mutable', 'default', 'value', 'required'}
+CERT_PROFILE_KEYWORDS = {'type', 'allow', 'reject_mods', 'mutable', 'default', 'value', 'required'}
+
 
 def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enum]) -> dict[str, str]:
     """Build a mapping of all known OID strings from trustpoint_core to their canonical field names."""
     for entry in enum_cls:
-        canonical = entry.name.lower() # e.g. 'common_name'
-        dotted_string = entry.value.dotted_string # e.g. '2.5.4.3'
-        abbreviation = entry.value.abbreviation # e.g. 'CN'
-        camel_case = entry.value.full_name # e.g. 'commonName'
+        canonical = entry.name.lower()  # e.g. 'common_name'
+        dotted_string = entry.value.dotted_string  # e.g. '2.5.4.3'
+        abbreviation = entry.value.abbreviation  # e.g. 'CN'
+        camel_case = entry.value.full_name  # e.g. 'commonName'
         alias_map[dotted_string] = canonical
         choices = [dotted_string]
         if camel_case != canonical:
@@ -48,12 +51,13 @@ def build_alias_map_name_oids(alias_map: dict[str, str], enum_cls: type[enum.Enu
             choices.append(camel_case)
         alias_map[canonical] = canonical
         if abbreviation:
-            abbreviation_lower = abbreviation.lower() # e.g. 'cn'
+            abbreviation_lower = abbreviation.lower()  # e.g. 'cn'
             alias_map[abbreviation] = canonical
             alias_map[abbreviation_lower] = canonical
             choices.extend([abbreviation, abbreviation_lower])
         ALIASES[canonical] = AliasChoices(canonical, *choices)
     return alias_map
+
 
 alias_map = build_alias_map_name_oids({}, NameOid)
 alias_map = build_alias_map_name_oids(alias_map, CertificateExtensionOid)
@@ -63,15 +67,19 @@ alias_map = build_alias_map_name_oids(alias_map, CertificateExtensionOid)
 # To be on the safe side, set model_config on the final final child classes.
 # See: https://github.com/pydantic/pydantic/issues/9992
 
+
 class ProfileValuePropertyModel(BaseModel):
     """Model for a profile value property."""
+
     value: Any | None = None
     default: Any | None = None
     required: bool = False
     mutable: bool = True
 
+
 class SubjectModel(BaseModel):
     """Model for the subject DN of a certificate profile."""
+
     common_name: str | ProfileValuePropertyModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('common_name'),
@@ -90,28 +98,20 @@ class SubjectModel(BaseModel):
         validation_alias=ALIASES.get('locality_name'),
     )
     state_or_province_name: str | ProfileValuePropertyModel | None = Field(
-        default=None,
-        validation_alias=ALIASES.get('state_or_province_name')
+        default=None, validation_alias=ALIASES.get('state_or_province_name')
     )
     street_address: str | ProfileValuePropertyModel | None = Field(
-        default=None,
-        validation_alias=ALIASES.get('street_address')
+        default=None, validation_alias=ALIASES.get('street_address')
     )
     organization_name: str | ProfileValuePropertyModel | None = Field(
-        default=None,
-        validation_alias=ALIASES.get('organization_name')
+        default=None, validation_alias=ALIASES.get('organization_name')
     )
     organizational_unit_name: str | ProfileValuePropertyModel | None = Field(
-        default=None,
-        validation_alias=ALIASES.get('organizational_unit_name')
+        default=None, validation_alias=ALIASES.get('organizational_unit_name')
     )
-    title: str | ProfileValuePropertyModel | None = Field(
-        default=None,
-        validation_alias=ALIASES.get('title')
-    )
+    title: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('title'))
     description: str | ProfileValuePropertyModel | None = Field(
-        default=None,
-        validation_alias=ALIASES.get('description')
+        default=None, validation_alias=ALIASES.get('description')
     )
     postal_code: str | ProfileValuePropertyModel | None = Field(
         default=None,
@@ -127,28 +127,33 @@ class SubjectModel(BaseModel):
     pseudonym: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('pseudonym'))
     uid: str | ProfileValuePropertyModel | None = Field(default=None, validation_alias=ALIASES.get('uid'))
     domain_component: str | ProfileValuePropertyModel | None = Field(
-        default=None,
-        validation_alias=ALIASES.get('domain_component')
+        default=None, validation_alias=ALIASES.get('domain_component')
     )
 
     # Should allow unknown fields, but not required
     model_config = ConfigDict(extra='allow')
 
+
 class BaseExtensionModel(BaseModel):
     """Base model for certificate extensions."""
+
     critical: bool | None = None
 
     model_config = ConfigDict(extra='forbid')
 
+
 class BasicConstraintsExtensionModel(BaseExtensionModel):
     """Model for the Basic Constraints extension of a certificate profile."""
+
     ca: bool | None = None
     path_length: int | None = None
 
     model_config = ConfigDict(extra='forbid')
 
+
 class SanExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
     """Model for the SAN extension of a certificate profile."""
+
     dns_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='dns')
     ip_addresses: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='ip')
     rfc822_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='rfc822')
@@ -156,17 +161,21 @@ class SanExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
     other_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='other')
     model_config = ConfigDict(extra='forbid', validate_by_alias=False, validate_by_name=True)
 
+
 class CRLDistributionPointsExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
     """Model for the CRL Distribution Points extension of a certificate profile.
 
     Note: Only URIs in full_name are supported.
     """
+
     uris: list[str] | ProfileValuePropertyModel | None = None
 
     model_config = ConfigDict(extra='forbid')
 
+
 class KeyUsageExtensionModel(BaseExtensionModel):
     """Model for the Key Usage extension of a certificate profile."""
+
     digital_signature: bool | None = None
     content_commitment: bool | None = None
     key_encipherment: bool | None = None
@@ -179,14 +188,18 @@ class KeyUsageExtensionModel(BaseExtensionModel):
 
     model_config = ConfigDict(extra='forbid')
 
+
 class ExtendedKeyUsageExtensionModel(BaseExtensionModel):
     """Model for the Extended Key Usage extension of a certificate profile."""
+
     usages: list[str] | ProfileValuePropertyModel | None = None
 
     model_config = ConfigDict(extra='forbid')
 
+
 class ExtensionsModel(BaseModel):
     """Model for the extensions of a certificate request."""
+
     basic_constraints: BasicConstraintsExtensionModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('basic_constraints'),
@@ -207,11 +220,12 @@ class ExtensionsModel(BaseModel):
         default=None,
         validation_alias=ALIASES.get('crl_distribution_points'),
     )
-    #model_config = ConfigDict(validate_by_validation_alias=False, validate_by_name=True)  # noqa: ERA001
+    # model_config = ConfigDict(validate_by_validation_alias=False, validate_by_name=True)  # noqa: ERA001
 
 
 class ValidityModel(BaseModel):
     """Model for the validity period of a certificate profile."""
+
     not_before: AwareDatetime | None = None  # ISO 8601 format
     not_after: AwareDatetime | None = None  # ISO 8601 format
     days: float | None = None  # Number of days for validity
@@ -226,11 +240,13 @@ class ValidityModel(BaseModel):
 
     model_config = ConfigDict(extra='ignore')  # allow, ignore (default)
 
+
 class CertProfileBaseModel(BaseModel):
     """Base model for each nesting level of certificate profiles.
 
     This allows for granular control over allowed fields and constraints at each level.
     """
+
     allow: list[str] | Literal['*'] | None = None
     reject_mods: bool = Field(default=False)
 
@@ -248,18 +264,23 @@ class CertProfileBaseModel(BaseModel):
                 normalized.append(item)
         return normalized
 
+
 class ProfileSubjectModel(SubjectModel, CertProfileBaseModel):
     """Model for the subject DN of a certificate profile, with profile constraints."""
+
 
 # Profile-specific extension models are required for extensions that allow lists of strings/nested structures
 class ProfileSanExtensionModel(SanExtensionModel, CertProfileBaseModel):
     """Model for the SAN extension of a certificate profile, with profile constraints."""
 
+
 class ProfileCrlDistributionPointsExtensionModel(CRLDistributionPointsExtensionModel, CertProfileBaseModel):
     """Model for the CRL Distribution Points extension of a certificate profile, with profile constraints."""
 
+
 class ProfileExtensionsModel(CertProfileBaseModel):
     """Model for the extensions of a certificate profile, with profile constraints."""
+
     basic_constraints: BasicConstraintsExtensionModel | ProfileValuePropertyModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('basic_constraints'),
@@ -281,8 +302,10 @@ class ProfileExtensionsModel(CertProfileBaseModel):
         validation_alias=ALIASES.get('crl_distribution_points'),
     )
 
+
 class CertProfileModel(CertProfileBaseModel):
     """Model for a certificate profile."""
+
     type: Literal['cert_profile']
     display_name: str | None = None
     subject: ProfileSubjectModel = Field(validation_alias='subj', default=ProfileSubjectModel())
@@ -292,16 +315,18 @@ class CertProfileModel(CertProfileBaseModel):
 
 class CertRequestModel(BaseModel):
     """Model for a certificate request."""
+
     type: Literal['cert_request'] | None = 'cert_request'
     subject: SubjectModel = Field(validation_alias='subj', default=SubjectModel())
     extensions: ExtensionsModel = Field(validation_alias='ext', default=ExtensionsModel())
     validity: ValidityModel = Field(default=ValidityModel(days=10))
 
-    model_config = ConfigDict(extra='allow') # extra fields are validated by _apply_profile_rules
+    model_config = ConfigDict(extra='allow')  # extra fields are validated by _apply_profile_rules
 
 
 class InheritedProfileConfig:
     """Constraints set in the profile that are inherited by deeper nesting levels."""
+
     allow_implicit: bool = False
     reject_mods: bool = False
     mutable: bool = False
@@ -311,6 +336,7 @@ class InheritedProfileConfig:
         self.allow_implicit = allow_implicit
         self.reject_mods = reject_mods
         self.mutable = mutable
+
 
 class JSONProfileVerifier:
     """Class to verify certificate requests against JSON-based profiles."""
@@ -344,9 +370,12 @@ class JSONProfileVerifier:
         return isinstance(value, (str, int, float, bool, list))
 
     def _handle_request_only_fields(
-            self, request: dict[str, Any], profile: dict[str, Any],
-            profile_config: InheritedProfileConfig, allow_list: list[str] | None = None
-            ) -> None:
+        self,
+        request: dict[str, Any],
+        profile: dict[str, Any],
+        profile_config: InheritedProfileConfig,
+        allow_list: list[str] | None = None,
+    ) -> None:
         """Consider the fields that are only in the request, but not in the profile.
 
         Don't need to do any nested stuff here,
@@ -366,10 +395,11 @@ class JSONProfileVerifier:
                 raise ProfileValidationError(msg)
             del request[field]
 
-    def _handle_profile_only_field(self, profile_value: Any, field: str, request: dict[str, Any],
-                                   profile_config: InheritedProfileConfig) -> None:
+    def _handle_profile_only_field(
+        self, profile_value: Any, field: str, request: dict[str, Any], profile_config: InheritedProfileConfig
+    ) -> None:
         if isinstance(profile_value, dict):
-        # check for default and required fields
+            # check for default and required fields
             if 'value' in profile_value:
                 # Set default value from profile
                 request[field] = profile_value['value']
@@ -385,15 +415,15 @@ class JSONProfileVerifier:
                 raise ProfileValidationError(msg)
             # TODO(Air): 're' case  # noqa: FIX002
             # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
-            request[field] = self._apply_profile_rules(
-                request.setdefault(field, {}), profile_value, profile_config)
+            request[field] = self._apply_profile_rules(request.setdefault(field, {}), profile_value, profile_config)
         elif JSONProfileVerifier._is_simple_type(profile_value):
             request[field] = profile_value
         else:
             logger.warning("Field '%s' in profile has type %s, skipping.", field, type(profile_value).__name__)
 
-    def _handle_profile_and_req_field(self, profile_value: Any, field: str, request: dict[str, Any],
-                                      profile_config: InheritedProfileConfig) -> None:
+    def _handle_profile_and_req_field(
+        self, profile_value: Any, field: str, request: dict[str, Any], profile_config: InheritedProfileConfig
+    ) -> None:
         profile_mutable = profile_config.mutable
         profile_reject_mods = profile_config.reject_mods
 
@@ -415,14 +445,18 @@ class JSONProfileVerifier:
         else:
             logger.warning("Field '%s' in profile has type %s, skipping.", field, type(profile_value).__name__)
 
-    def _apply_profile_rules(self, request: dict[str, Any], profile: dict[str, Any],
-                             parent_profile_config: InheritedProfileConfig | None = None) -> dict[str, Any]:
+    def _apply_profile_rules(
+        self,
+        request: dict[str, Any],
+        profile: dict[str, Any],
+        parent_profile_config: InheritedProfileConfig | None = None,
+    ) -> dict[str, Any]:
         """Apply the actual profile rules to one level of the request dict.
 
         It needs them both request and profile to be in the same structure and hierarchy,
         e.g. both in the "subject" sub-dict.
         """
-        if not parent_profile_config: # top level
+        if not parent_profile_config:  # top level
             parent_profile_config = InheritedProfileConfig()
 
         profile_allow = profile.get('allow', parent_profile_config.allow_implicit)
@@ -430,16 +464,15 @@ class JSONProfileVerifier:
         profile_mutable = profile.get('mutable', parent_profile_config.mutable)
 
         profile_config = InheritedProfileConfig(
-            allow_implicit=(profile_allow == '*'),
-            reject_mods=profile_reject_mods,
-            mutable=profile_mutable
+            allow_implicit=(profile_allow == '*'), reject_mods=profile_reject_mods, mutable=profile_mutable
         )
 
         if not request:
             request = {}
 
         self._handle_request_only_fields(
-            request, profile, profile_config, profile_allow if isinstance(profile_allow, list) else None)
+            request, profile, profile_config, profile_allow if isinstance(profile_allow, list) else None
+        )
 
         # Constraining profile fields that should not literally be in the request
         skip_keys = CERT_PROFILE_KEYWORDS
@@ -472,14 +505,18 @@ class JSONProfileVerifier:
         logger.debug('Validated Request before profile rules: %s', validated_request)
         return self._apply_profile_rules(validated_request, self.profile_dict)
 
-    def _apply_profile_rules_sample(self, request: dict[str, Any], profile: dict[str, Any],
-                             parent_profile_config: InheritedProfileConfig | None = None) -> dict[str, Any]:
+    def _apply_profile_rules_sample(
+        self,
+        request: dict[str, Any],
+        profile: dict[str, Any],
+        parent_profile_config: InheritedProfileConfig | None = None,
+    ) -> dict[str, Any]:
         """Apply the actual profile rules to one level of the request dict.
 
         It needs them both request and profile to be in the same structure and hierarchy,
         e.g. both in the "subject" sub-dict.
         """
-        if not parent_profile_config: # top level
+        if not parent_profile_config:  # top level
             parent_profile_config = InheritedProfileConfig()
 
         profile_allow = profile.get('allow', parent_profile_config.allow_implicit)
@@ -487,9 +524,7 @@ class JSONProfileVerifier:
         profile_mutable = profile.get('mutable', parent_profile_config.mutable)
 
         profile_config = InheritedProfileConfig(
-            allow_implicit=(profile_allow == '*'),
-            reject_mods=profile_reject_mods,
-            mutable=profile_mutable
+            allow_implicit=(profile_allow == '*'), reject_mods=profile_reject_mods, mutable=profile_mutable
         )
 
         # Constraining profile fields that should not literally be in the request
@@ -500,7 +535,7 @@ class JSONProfileVerifier:
             logger.debug('Processing field: %s Profile value: %s Request: %s', field, profile_value, request)
             logger.debug('Field %s not in request %s', field, request)
             if isinstance(profile_value, dict):
-            # check for default and required fields
+                # check for default and required fields
                 if 'value' in profile_value:
                     # Set default value from profile
                     request[field] = profile_value['value']
@@ -517,7 +552,8 @@ class JSONProfileVerifier:
                 # TODO(Air): 're' case  # noqa: FIX002
                 # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
                 request[field] = self._apply_profile_rules_sample(
-                    request.setdefault(field, {}), profile_value, profile_config)
+                    request.setdefault(field, {}), profile_value, profile_config
+                )
             elif JSONProfileVerifier._is_simple_type(profile_value):
                 request[field] = profile_value
             else:

@@ -1,4 +1,5 @@
 """Tests for forms module."""
+
 from django import forms
 from django.test import TestCase
 
@@ -29,11 +30,7 @@ class TestDisableOptionsSelect(TestCase):
         """Test creating an enabled option."""
         widget = DisableOptionsSelect(disabled_options=['disabled_value'])
         option = widget.create_option(
-            name='test_field',
-            value='enabled_value',
-            label='Enabled Option',
-            selected=False,
-            index=0
+            name='test_field', value='enabled_value', label='Enabled Option', selected=False, index=0
         )
         assert 'disabled' not in option['attrs']
 
@@ -41,11 +38,7 @@ class TestDisableOptionsSelect(TestCase):
         """Test creating a disabled option."""
         widget = DisableOptionsSelect(disabled_options=['disabled_value'])
         option = widget.create_option(
-            name='test_field',
-            value='disabled_value',
-            label='Disabled Option',
-            selected=False,
-            index=0
+            name='test_field', value='disabled_value', label='Disabled Option', selected=False, index=0
         )
         assert option['attrs']['disabled'] == 'disabled'
 
@@ -53,12 +46,7 @@ class TestDisableOptionsSelect(TestCase):
         """Test creating an option with subindex."""
         widget = DisableOptionsSelect(disabled_options=['disabled_value'])
         option = widget.create_option(
-            name='test_field',
-            value='test_value',
-            label='Test Option',
-            selected=True,
-            index=0,
-            subindex=1
+            name='test_field', value='test_value', label='Test Option', selected=True, index=0, subindex=1
         )
         assert 'disabled' not in option['attrs']
 
@@ -67,17 +55,13 @@ class TestDisableOptionsSelect(TestCase):
         widget = DisableOptionsSelect(disabled_options=['disabled_value'])
         custom_attrs = {'data-custom': 'value'}
         option = widget.create_option(
-            name='test_field',
-            value='test_value',
-            label='Test Option',
-            selected=False,
-            index=0,
-            attrs=custom_attrs
+            name='test_field', value='test_value', label='Test Option', selected=False, index=0, attrs=custom_attrs
         )
         assert 'disabled' not in option['attrs']
 
     def test_integration_with_form(self) -> None:
         """Test integration with a Django form."""
+
         class TestForm(forms.Form):
             choice_field = forms.ChoiceField(
                 choices=[
@@ -85,14 +69,10 @@ class TestDisableOptionsSelect(TestCase):
                     ('disabled', 'Disabled'),
                     ('also_disabled', 'Also Disabled'),
                 ],
-                widget=DisableOptionsSelect(
-                    disabled_options=['disabled', 'also_disabled']
-                )
+                widget=DisableOptionsSelect(disabled_options=['disabled', 'also_disabled']),
             )
 
         form = TestForm()
         # Check that the widget is properly attached
         assert isinstance(form.fields['choice_field'].widget, DisableOptionsSelect)
-        assert form.fields['choice_field'].widget.disabled_options == [
-            'disabled', 'also_disabled'
-        ]
+        assert form.fields['choice_field'].widget.disabled_options == ['disabled', 'also_disabled']

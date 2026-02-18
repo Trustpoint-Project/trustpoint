@@ -48,7 +48,6 @@ class EncryptedTextField(models.TextField[str, str]):
             ValidationError: If crypto storage config is not found or there's an error accessing it.
         """
         try:
-
             crypto_config = KeyStorageConfig.objects.first()
             if not crypto_config:
                 msg = 'No crypto storage configuration found. Please configure storage type first.'
@@ -60,10 +59,10 @@ class EncryptedTextField(models.TextField[str, str]):
             msg = f'Failed to check crypto storage configuration: {e}'
             raise ValidationError(msg) from e
         else:
-                return crypto_config.storage_type in [
-                    KeyStorageConfig.StorageType.SOFTHSM,
-                    KeyStorageConfig.StorageType.PHYSICAL_HSM
-                ]
+            return crypto_config.storage_type in [
+                KeyStorageConfig.StorageType.SOFTHSM,
+                KeyStorageConfig.StorageType.PHYSICAL_HSM,
+            ]
 
     def get_dek(self) -> bytes:
         """Get the DEK from PKCS#11 token, preferring cached value.
@@ -152,8 +151,8 @@ class EncryptedTextField(models.TextField[str, str]):
             combined = base64.b64decode(encrypted_value.encode('ascii'))
 
             # Extract nonce, tag, and ciphertext
-            nonce = combined[:12]       # First 12 bytes are nonce
-            tag = combined[12:28]       # Next 16 bytes are auth tag
+            nonce = combined[:12]  # First 12 bytes are nonce
+            tag = combined[12:28]  # Next 16 bytes are auth tag
             ciphertext = combined[28:]  # Rest is ciphertext
 
             # Create cipher with tag for authentication
@@ -167,7 +166,7 @@ class EncryptedTextField(models.TextField[str, str]):
             # Remove random padding
             padding_length = ord(padded_data[-1:])
             max_padding_length = 16
-            data = padded_data[:-padding_length - 1] if padding_length < max_padding_length else padded_data
+            data = padded_data[: -padding_length - 1] if padding_length < max_padding_length else padded_data
 
             return data.decode('utf-8')
 
@@ -218,7 +217,7 @@ class EncryptedCharField(models.CharField[str, str]):
             # Calculate encrypted length: original + padding + IV + base64 overhead
             encrypted_length = ((original_length + 16 + 15) // 16) * 16  # Padded length
             encrypted_length += 16  # IV
-            encrypted_length = int(encrypted_length * 4/3) + 4  # Base64 overhead
+            encrypted_length = int(encrypted_length * 4 / 3) + 4  # Base64 overhead
             kwargs['max_length'] = encrypted_length
 
         super().__init__(*args, **kwargs)
@@ -255,10 +254,10 @@ class EncryptedCharField(models.CharField[str, str]):
             msg = f'Failed to check crypto storage configuration: {e}'
             raise ValidationError(msg) from e
         else:
-                return crypto_config.storage_type in [
-                    KeyStorageConfig.StorageType.SOFTHSM,
-                    KeyStorageConfig.StorageType.PHYSICAL_HSM
-                ]
+            return crypto_config.storage_type in [
+                KeyStorageConfig.StorageType.SOFTHSM,
+                KeyStorageConfig.StorageType.PHYSICAL_HSM,
+            ]
 
     def get_dek(self) -> bytes:
         """Get the DEK from PKCS#11 token, preferring cached value."""
@@ -326,8 +325,8 @@ class EncryptedCharField(models.CharField[str, str]):
             combined = base64.b64decode(encrypted_value.encode('ascii'))
 
             # Extract nonce, tag, and ciphertext
-            nonce = combined[:12]       # First 12 bytes are nonce
-            tag = combined[12:28]       # Next 16 bytes are auth tag
+            nonce = combined[:12]  # First 12 bytes are nonce
+            tag = combined[12:28]  # Next 16 bytes are auth tag
             ciphertext = combined[28:]  # Rest is ciphertext
 
             # Create cipher with tag for authentication
@@ -341,7 +340,7 @@ class EncryptedCharField(models.CharField[str, str]):
             # Remove random padding
             padding_length = ord(padded_data[-1:])
             max_padding_length = 16
-            data = padded_data[:-padding_length - 1] if padding_length < max_padding_length else padded_data
+            data = padded_data[: -padding_length - 1] if padding_length < max_padding_length else padded_data
 
             return data.decode('utf-8')
 

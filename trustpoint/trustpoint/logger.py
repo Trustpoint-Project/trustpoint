@@ -1,4 +1,5 @@
 """Contains logging utilities for the trustpoint project."""
+
 from __future__ import annotations
 
 import logging

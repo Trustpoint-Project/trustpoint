@@ -94,5 +94,4 @@ urlpatterns = [
     path('create-super-user', SetupWizardCreateSuperUserView.as_view(), name='create_super_user'),
     path('restore/', BackupRestoreView.as_view(), name='restore'),
     path('auto_restore_password/', BackupAutoRestorePasswordView.as_view(), name='auto_restore_password'),
-
 ]

@@ -70,7 +70,6 @@ class DomainModel(models.Model):
         if is_new_instance:
             self._add_default_profiles()
 
-
     @property
     def signature_suite(self) -> oid.SignatureSuite | None:
         """Get the signature suite for the domain (based on its Issuing CA).
@@ -147,9 +146,7 @@ class DomainModel(models.Model):
         profile_qs = self.certificate_profiles.filter(alias=cert_profile_str)
         if not profile_qs.exists():
             # fall back to unique_name
-            profile_qs = self.certificate_profiles.filter(
-                certificate_profile__unique_name=cert_profile_str
-            )
+            profile_qs = self.certificate_profiles.filter(certificate_profile__unique_name=cert_profile_str)
         if not profile_qs.exists():
             err_msg = f'Certificate profile "{cert_profile_str}" does not exist or not allowed in domain.'
             raise ValueError(err_msg)
@@ -184,13 +181,10 @@ class DomainModel(models.Model):
 
                 # Create new relation
                 DomainAllowedCertificateProfileModel.objects.create(
-                    domain=self,
-                    certificate_profile=profile,
-                    alias=alias_value
+                    domain=self, certificate_profile=profile, alias=alias_value
                 )
 
         return rejected_aliases
-
 
     def _add_default_profiles(self) -> None:
         """Adds default certificate profiles to the domain as allowed."""
@@ -202,25 +196,17 @@ class DomainModel(models.Model):
             )
 
 
-
 class DomainAllowedCertificateProfileModel(models.Model):
     """Model representing allowed certificate profiles for a domain."""
 
-    domain = models.ForeignKey(
-        DomainModel,
-        on_delete=models.CASCADE,
-        related_name='certificate_profiles'
-    )
-    certificate_profile = models.ForeignKey(
-        CertificateProfileModel,
-        on_delete=models.CASCADE,
-        related_name='domains'
-    )
+    domain = models.ForeignKey(DomainModel, on_delete=models.CASCADE, related_name='certificate_profiles')
+    certificate_profile = models.ForeignKey(CertificateProfileModel, on_delete=models.CASCADE, related_name='domains')
     # Domain-specific alias for the certificate profile name
     alias = models.CharField(max_length=255, default='')
 
     class Meta(TypedModelMeta):
         """Meta information."""
+
         constraints: ClassVar = [
             # allow duplicate empty aliases
             models.UniqueConstraint(
@@ -228,10 +214,7 @@ class DomainAllowedCertificateProfileModel(models.Model):
                 name='unique_domain_alias_when_not_empty',
                 condition=~Q(alias=''),
             ),
-            models.UniqueConstraint(
-                fields=['domain', 'certificate_profile'],
-                name='unique_domain_certificate_profile'
-            ),
+            models.UniqueConstraint(fields=['domain', 'certificate_profile'], name='unique_domain_certificate_profile'),
         ]
 
     def __str__(self) -> str:
@@ -240,4 +223,3 @@ class DomainAllowedCertificateProfileModel(models.Model):
         if self.alias:
             name_str += f' (alias: {self.alias})'
         return name_str
-

@@ -1,4 +1,5 @@
 """URL configuration for the 'est' app."""
+
 from django.urls import path, re_path
 
 from est import views
@@ -31,12 +32,12 @@ urlpatterns = [
     re_path(
         r'^(?P<domain>[^/]+)(?:/(?P<cert_profile>[^/]+))?/simpleenroll/?$',
         views.EstSimpleEnrollmentView.as_view(),
-        name='simple-enrollment-post'
+        name='simple-enrollment-post',
     ),
     re_path(
         r'^(?P<domain>[^/]+)(?:/(?P<cert_profile>[^/]+))?/simplereenroll/?$',
         views.EstSimpleReEnrollmentView.as_view(),
-        name='simple-reenrollment-post'
+        name='simple-reenrollment-post',
     ),
     re_path(
         r'^(?P<domain>[^/]+)(?:/(?P<cert_profile>[^/]+))?/cacerts/$',
@@ -53,4 +54,6 @@ urlpatterns = [
         views.EstCsrAttrsView.as_view(),
         name='csrattrs'
     ),
+    path('<str:domain>/<str:certtemplate>/csrattrs/', views.EstCsrAttrsView.as_view(), name='csrattrs'),
+    path('<str:domain>/<str:certtemplate>/csrattrs/', views.EstCsrAttrsView.as_view(), name='csrattrs'),
 ]

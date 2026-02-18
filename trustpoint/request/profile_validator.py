@@ -1,4 +1,5 @@
 """Handles Request Conversion to JSON and Profile Validation."""
+
 import json
 
 from pydantic_core import ValidationError
@@ -22,8 +23,9 @@ class ProfileValidator(LoggerMixin):
         """
         if not isinstance(context, BaseCertificateRequestContext):
             exc_msg = 'Profile validation can only be performed on certificate request contexts.'
-            context.error('Invalid request context for profile validation.',
-                          http_status=500, cmp_code=CMPErrs.SYSTEM_FAILURE)
+            context.error(
+                'Invalid request context for profile validation.', http_status=500, cmp_code=CMPErrs.SYSTEM_FAILURE
+            )
             raise TypeError(exc_msg)
 
         cert_request_json = JSONCertRequestConverter.to_json(context.cert_requested)
@@ -31,24 +33,25 @@ class ProfileValidator(LoggerMixin):
 
         if not context.certificate_profile_model:
             exc_msg = 'Certificate profile model is not set in the context.'
-            context.error('Corresponding certificate profile is missing.',
-                          http_status=422, cmp_code=CMPErrs.UNACCEPTED_POLICY)
+            context.error(
+                'Corresponding certificate profile is missing.', http_status=422, cmp_code=CMPErrs.UNACCEPTED_POLICY
+            )
             raise ValueError(exc_msg)
 
         try:
             cert_profile = context.certificate_profile_model.profile
         except json.JSONDecodeError as e:
             exc_msg = f'Error decoding certificate profile JSON: {e}'
-            context.error('Certificate profile data is corrupted.',
-                          http_status=500, cmp_code=CMPErrs.UNACCEPTED_POLICY)
+            context.error('Certificate profile data is corrupted.', http_status=500, cmp_code=CMPErrs.UNACCEPTED_POLICY)
             raise ValueError(exc_msg) from e
 
         try:
             validated_request = JSONProfileVerifier(cert_profile).apply_profile_to_request(cert_request_json)
         except (ValidationError, ProfileValidationError) as e:
             exc_msg = f'Certificate request validation against profile failed: {e}'
-            context.error('Request does not match the certificate profile.',
-                          http_status=400, cmp_code=CMPErrs.UNACCEPTED_POLICY)
+            context.error(
+                'Request does not match the certificate profile.', http_status=400, cmp_code=CMPErrs.UNACCEPTED_POLICY
+            )
             raise ValueError(exc_msg) from e
 
         cls.logger.info('Validated Cert Request JSON: %s', validated_request)

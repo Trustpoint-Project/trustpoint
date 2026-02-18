@@ -193,10 +193,7 @@ def _validate_webhook_basic_fields(
     if headers is not None and not _validate_headers_dict(headers):
         _error(
             errors,
-            _(
-                'Step #%s (Webhook): headers must be an object of string keys and string/number values.'
-            )
-            % idx,
+            _('Step #%s (Webhook): headers must be an object of string keys and string/number values.') % idx,
         )
 
     # body
@@ -246,10 +243,7 @@ def _validate_webhook_result_mapping(
     if result_to and not _is_bare_var_path(result_to):
         _error(
             errors,
-            _(
-                'Step #%s (Webhook): result_to must be a variable path like "serial_number" or "http.status".'
-            )
-            % idx,
+            _('Step #%s (Webhook): result_to must be a variable path like "serial_number" or "http.status".') % idx,
         )
 
     result_source = (params.get('result_source') or 'auto').strip().lower()

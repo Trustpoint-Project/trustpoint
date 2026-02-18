@@ -1,4 +1,5 @@
 """Signals for device model events."""
+
 from typing import Any
 
 from django.db.models.base import ModelBase

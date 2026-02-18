@@ -10,6 +10,7 @@ from trustpoint.views.base import ContextDataMixin
 
 class MockView(ContextDataMixin, TemplateView):
     """Mock view for testing ContextDataMixin."""
+
     template_name = 'example_template.html'
 
     context_page_category = 'test_category'
@@ -43,22 +44,22 @@ class ContextDataMixinTests(TestCase):
 
         self.assertIn('page_category', context, "Expected 'page_category' to be in context.")
         self.assertEqual(
-            context['page_category'], 'test_category',
-            "Expected 'page_category' to match the 'context_page_category' value."
+            context['page_category'],
+            'test_category',
+            "Expected 'page_category' to match the 'context_page_category' value.",
         )
 
         self.assertIn('page_name', context, "Expected 'page_name' to be in context.")
         self.assertEqual(
-            context['page_name'], 'test_name',
-            "Expected 'page_name' to match the 'context_page_name' value."
+            context['page_name'], 'test_name', "Expected 'page_name' to match the 'context_page_name' value."
         )
 
         self.assertIn('custom_field', context, "Expected 'custom_field' to be in context.")
         self.assertEqual(
-            context['custom_field'], 'custom_value',
-            "Expected 'custom_field' to match the 'context_custom_field' value."
+            context['custom_field'],
+            'custom_value',
+            "Expected 'custom_field' to match the 'context_custom_field' value.",
         )
-
 
     def test_no_unprefixed_attributes_added(self):
         """Test that attributes without 'context_' prefix are not added to the context data."""
@@ -95,6 +96,5 @@ class ContextDataMixinTests(TestCase):
 
         self.assertIn('extra_key', context, "Expected 'extra_key' to be in the context.")
         self.assertEqual(
-            context['extra_key'], 'extra_value',
-            "Expected 'extra_key' to match the value passed in additional kwargs."
+            context['extra_key'], 'extra_value', "Expected 'extra_key' to match the value passed in additional kwargs."
         )

@@ -1,4 +1,5 @@
 """Tests for the SortableTableMixin class."""
+
 from typing import Any
 
 from devices.models import DeviceModel
@@ -12,12 +13,10 @@ from trustpoint.views.base import SortableTableMixin, SortableTableFromListMixin
 class AbstractSortableTableView:
     """Simple view class inheriting from SortableTableMixin."""
 
-    def __init__(self,
-                 queryset: QuerySet[Any] | None = None,
-                 model: type[Model] | None = None,
-                 default_sort_param: str ='id'
-                 ) -> None:
-        """"Initialize the view with optional queryset, model, and default sort parameter."""
+    def __init__(
+        self, queryset: QuerySet[Any] | None = None, model: type[Model] | None = None, default_sort_param: str = 'id'
+    ) -> None:
+        """ "Initialize the view with optional queryset, model, and default sort parameter."""
         self.queryset = queryset
         self.model = model
         self.default_sort_param = default_sort_param
@@ -26,7 +25,7 @@ class AbstractSortableTableView:
     def get_context_data(self, **kwargs: dict[str, Any]) -> dict[str, Any]:
         """Call get_context_data from SortableTableMixin."""
         return super().get_context_data(**kwargs)
-    
+
 
 class SortableTableView(AbstractSortableTableView, SortableTableMixin):
     """Concrete view class for testing SortableTableMixin."""
@@ -58,28 +57,34 @@ class TestSortableTableMixin(TestCase):
 
     def test_sort_queryset_ascending(self) -> None:
         """Test sorting of queryset in ascending order."""
-        view = SortableTableView(queryset=DeviceModel.objects.all(),
-                                 model=DeviceModel, default_sort_param='common_name')
+        view = SortableTableView(
+            queryset=DeviceModel.objects.all(), model=DeviceModel, default_sort_param='common_name'
+        )
         view.request = self.factory.get('/?sort=common_name')
 
         sorted_queryset = view.get_queryset()
         expected_queryset = DeviceModel.objects.all().order_by('common_name')
         self.assertQuerySetEqual(
-            sorted_queryset, expected_queryset, transform=lambda x: x,
-            msg="Queryset should be sorted by 'common_name' ascending."
+            sorted_queryset,
+            expected_queryset,
+            transform=lambda x: x,
+            msg="Queryset should be sorted by 'common_name' ascending.",
         )
 
     def test_sort_queryset_descending(self) -> None:
         """Test sorting of queryset in descending order."""
-        view = SortableTableView(queryset=DeviceModel.objects.all(),
-                                 model=DeviceModel, default_sort_param='common_name')
+        view = SortableTableView(
+            queryset=DeviceModel.objects.all(), model=DeviceModel, default_sort_param='common_name'
+        )
         view.request = self.factory.get('/?sort=-common_name')
 
         sorted_queryset = view.get_queryset()
         expected_queryset = DeviceModel.objects.all().order_by('-common_name')
         self.assertQuerySetEqual(
-            sorted_queryset, expected_queryset, transform=lambda x: x,
-            msg="Queryset should be sorted by 'common_name' descending."
+            sorted_queryset,
+            expected_queryset,
+            transform=lambda x: x,
+            msg="Queryset should be sorted by 'common_name' descending.",
         )
 
     def test_sort_list_of_dicts(self) -> None:
@@ -98,8 +103,7 @@ class TestSortableTableMixin(TestCase):
 
         sorted_list = view.get_queryset()
         expected_list = sorted(self.device_list, key=lambda x: x['common_name'], reverse=True)
-        assert sorted_list ==expected_list, \
-            "List of dictionaries should be sorted by 'common_name' descending."
+        assert sorted_list == expected_list, "List of dictionaries should be sorted by 'common_name' descending."
 
     def test_default_sort_param(self) -> None:
         """Test sorting using the default sort parameter."""
@@ -108,7 +112,6 @@ class TestSortableTableMixin(TestCase):
 
         sorted_list = view.get_queryset()
         expected_list = sorted(self.device_list, key=lambda x: x['serial_number'], reverse=False)
-        assert sorted_list == expected_list, \
+        assert sorted_list == expected_list, (
             "List of dictionaries should be sorted by default 'serial_number' ascending."
-
-
+        )

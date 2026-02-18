@@ -204,6 +204,7 @@ class StartupStrategy(ABC):
 # Initialization Strategies
 # ============================================================================
 
+
 class TlsCredentialStrategy(ABC):
     """Abstract base class for TLS credential generation strategies."""
 
@@ -253,16 +254,13 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
 
         self._display_fingerprint(context, active_tls, tls_server_credential)
 
-    def _save_to_database(
-        self, context: StartupContext, tls_server_credential: Any
-    ) -> tuple[str, str, str, Any]:
+    def _save_to_database(self, context: StartupContext, tls_server_credential: Any) -> tuple[str, str, str, Any]:
         """Save TLS credential to database and return PEM data.
 
         Returns:
             Tuple of (private_key_pem, certificate_pem, trust_store_pem, active_tls)
         """
         context.output.write('Saving credential to database...')
-
 
         trustpoint_tls_server_credential = CredentialModel.save_credential_serializer(
             credential_serializer=tls_server_credential,
@@ -287,9 +285,7 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
 
         return private_key_pem, certificate_pem, trust_store_pem, active_tls
 
-    def _get_pem_without_db_save(
-        self, context: StartupContext, tls_server_credential: Any
-    ) -> tuple[str, str, str]:
+    def _get_pem_without_db_save(self, context: StartupContext, tls_server_credential: Any) -> tuple[str, str, str]:
         """Get PEM data without saving to database.
 
         Returns:
@@ -313,9 +309,7 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
 
         return private_key_pem, certificate_pem, trust_store_pem
 
-    def _write_pem_files(
-        self, private_key_pem: str, certificate_pem: str, trust_store_pem: str
-    ) -> None:
+    def _write_pem_files(self, private_key_pem: str, certificate_pem: str, trust_store_pem: str) -> None:
         """Write PEM files to Nginx paths."""
         NGINX_KEY_PATH.write_text(private_key_pem)
         NGINX_CERT_PATH.write_text(certificate_pem)
@@ -327,9 +321,7 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
             # Remove chain file if it exists but chain is empty
             NGINX_CERT_CHAIN_PATH.unlink()
 
-    def _display_fingerprint(
-        self, context: StartupContext, active_tls: Any, tls_server_credential: Any
-    ) -> None:
+    def _display_fingerprint(self, context: StartupContext, active_tls: Any, tls_server_credential: Any) -> None:
         """Display SHA256 fingerprint of the certificate."""
         if self.save_to_db:
             if active_tls.credential is not None:
@@ -415,7 +407,7 @@ class StandardInitializationStrategy(InitializationStrategy):
                 pk=1,
                 defaults={
                     'storage_type': KeyStorageConfig.StorageType.SOFTWARE,
-                }
+                },
             )
             if created:
                 context.output.write('Created software crypto storage configuration')
@@ -524,11 +516,7 @@ class DatabaseInitializedNoVersionStrategy(StartupStrategy):
 class VersionMatchStrategy(StartupStrategy):
     """Strategy for handling version match (normal startup)."""
 
-    def __init__(
-        self,
-        restore_strategy: StartupStrategy,
-        init_strategy: InitializationStrategy | None = None
-    ) -> None:
+    def __init__(self, restore_strategy: StartupStrategy, init_strategy: InitializationStrategy | None = None) -> None:
         """Initialize with a restore strategy and initialization strategy.
 
         Args:
@@ -556,7 +544,7 @@ class VersionUpgradeStrategy(StartupStrategy):
         self,
         restore_strategy: StartupStrategy,
         app_version: AppVersion,
-        init_strategy: InitializationStrategy | None = None
+        init_strategy: InitializationStrategy | None = None,
     ) -> None:
         """Initialize with a restore strategy, app version, and initialization strategy.
 
@@ -572,9 +560,7 @@ class VersionUpgradeStrategy(StartupStrategy):
     def execute(self, context: StartupContext) -> None:
         """Upgrade database version and perform restoration."""
         context.output.write(self.get_description())
-        context.output.write(
-            f'Updating app version from {context.db_version} to {context.current_version}'
-        )
+        context.output.write(f'Updating app version from {context.db_version} to {context.current_version}')
         self.init_strategy.initialize(context, with_tls=False)
         self.restore_strategy.execute(context)
         self.app_version.version = str(context.current_version)
@@ -604,10 +590,7 @@ class RestoreSoftwareWizardCompletedStrategy(StartupStrategy):
         return '>>> SOFTWARE Storage | Wizard COMPLETED'
 
     @staticmethod
-    def unwrap_dek_for_token(
-        context: StartupContext,
-        token_label: str = DEFAULT_TOKEN_LABEL
-    ) -> None:
+    def unwrap_dek_for_token(context: StartupContext, token_label: str = DEFAULT_TOKEN_LABEL) -> None:
         """Test KEK loading and unwrap DEK for the specified token to make it available in cache.
 
         This method follows the same logic as the unwrap_dek management command:
@@ -627,8 +610,7 @@ class RestoreSoftwareWizardCompletedStrategy(StartupStrategy):
         except ObjectDoesNotExist:
             context.output.write(
                 context.output.warning(
-                    f'Token "{token_label}" not found. '
-                    f'This may be expected behavior if the token is not yet created.'
+                    f'Token "{token_label}" not found. This may be expected behavior if the token is not yet created.'
                 )
             )
             return
@@ -644,7 +626,7 @@ class RestoreSoftwareWizardCompletedStrategy(StartupStrategy):
                     kek_record = PKCS11Key.objects.get(
                         token_label=token.label,
                         key_label=token.KEK_ENCRYPTION_KEY_LABEL,
-                        key_type=PKCS11Key.KeyType.AES
+                        key_type=PKCS11Key.KeyType.AES,
                     )
                 except ObjectDoesNotExist:
                     context.output.write(
@@ -653,10 +635,7 @@ class RestoreSoftwareWizardCompletedStrategy(StartupStrategy):
                     return
 
             # Get the AES key instance
-            aes_key = kek_record.get_pkcs11_key_instance(
-                lib_path=token.module_path,
-                user_pin=token.get_pin()
-            )
+            aes_key = kek_record.get_pkcs11_key_instance(lib_path=token.module_path, user_pin=token.get_pin())
 
             try:
                 aes_key.load_key()
@@ -668,18 +647,14 @@ class RestoreSoftwareWizardCompletedStrategy(StartupStrategy):
 
         except Exception as e:
             if 'no such key' in str(e).lower():
-                context.output.write(
-                    context.output.error(f'KEK "{token.KEK_ENCRYPTION_KEY_LABEL}" not found in HSM')
-                )
+                context.output.write(context.output.error(f'KEK "{token.KEK_ENCRYPTION_KEY_LABEL}" not found in HSM'))
             else:
                 context.output.write(context.output.error(f'KEK loading failed: {e}'))
             raise
 
         # Test 2: Unwrap DEK (only if we have one)
         if not token.encrypted_dek:
-            context.output.write(
-                context.output.warning(f'No encrypted DEK found for token "{token.label}"')
-            )
+            context.output.write(context.output.warning(f'No encrypted DEK found for token "{token.label}"'))
             return
 
         context.output.write('Testing DEK unwrapping...')
@@ -695,9 +670,7 @@ class RestoreSoftwareWizardCompletedStrategy(StartupStrategy):
             else:
                 expected = DEK_EXPECTED_LENGTH
                 actual = len(dek) if dek else 0
-                context.output.write(
-                    context.output.error(f'Invalid DEK (expected {expected} bytes, got {actual})')
-                )
+                context.output.write(context.output.error(f'Invalid DEK (expected {expected} bytes, got {actual})'))
 
         except Exception as e:
             context.output.write(context.output.error(f'DEK unwrapping failed: {e}'))
@@ -859,8 +832,7 @@ class RestoreSoftHsmWizardCompletedDekNotCachedStrategy(StartupStrategy):
             4: 'Failed to create the WIZARD_AUTO_RESTORE_PASSWORD state file.',
         }
         return error_messages.get(
-            return_code,
-            'An unknown error occurred during auto restore password state transition.'
+            return_code, 'An unknown error occurred during auto restore password state transition.'
         )
 
 
@@ -979,10 +951,7 @@ class RestorePhysicalHsmWizardCompletedDekCachedStrategy(StartupStrategy):
     def execute(self, context: StartupContext) -> None:
         """Raise error as Physical HSM is not yet supported."""
         context.output.write(self.get_description())
-        error_msg = (
-            'Physical HSM storage is not yet supported. '
-            'Please use SOFTWARE or SOFTHSM storage methods.'
-        )
+        error_msg = 'Physical HSM storage is not yet supported. Please use SOFTWARE or SOFTHSM storage methods.'
         context.output.write(context.output.error(error_msg))
         raise NotImplementedError(error_msg)
 
@@ -997,10 +966,7 @@ class RestorePhysicalHsmWizardCompletedDekNotCachedStrategy(StartupStrategy):
     def execute(self, context: StartupContext) -> None:
         """Raise error as Physical HSM is not yet supported."""
         context.output.write(self.get_description())
-        error_msg = (
-            'Physical HSM storage is not yet supported. '
-            'Please use SOFTWARE or SOFTHSM storage methods.'
-        )
+        error_msg = 'Physical HSM storage is not yet supported. Please use SOFTWARE or SOFTHSM storage methods.'
         context.output.write(context.output.error(error_msg))
         raise NotImplementedError(error_msg)
 
@@ -1122,10 +1088,7 @@ class StartupStrategySelector:
         return RestorePhysicalHsmWizardIncompleteDekNotCachedStrategy()
 
     @staticmethod
-    def select_version_strategy(
-        context: StartupContext,
-        app_version: AppVersion
-    ) -> StartupStrategy:
+    def select_version_strategy(context: StartupContext, app_version: AppVersion) -> StartupStrategy:
         """Select the appropriate version management strategy.
 
         Args:
@@ -1162,7 +1125,7 @@ class StartupStrategySelector:
         db_initialized: bool,
         has_version: bool,
         context: StartupContext | None = None,
-        app_version: AppVersion | None = None
+        app_version: AppVersion | None = None,
     ) -> StartupStrategy:
         """Select the top-level startup strategy.
 

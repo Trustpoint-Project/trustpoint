@@ -1,4 +1,5 @@
 """Test suite for logging views."""
+
 import io
 import tarfile
 import zipfile
@@ -101,7 +102,7 @@ class LoggingFilesTableViewTest(TestCase):
         mock_file3.name = 'trustpoint.log.2'
         mock_file4 = Mock(spec=Path)
         mock_file4.name = 'other.log'  # Invalid pattern
-        
+
         mock_log_dir.iterdir.return_value = [mock_file1, mock_file2, mock_file3, mock_file4]
 
         def mock_get_log_file_data(filename):
@@ -192,7 +193,7 @@ class LoggingFilesTableViewTest(TestCase):
 
     def test_get_first_and_last_entry_date_with_no_dates(self):
         """Test _get_first_and_last_entry_date with log containing no dates."""
-        mock_log_content = "No dates in this log file"
+        mock_log_content = 'No dates in this log file'
 
         mock_path = Mock(spec=Path)
         mock_path.read_text.return_value = mock_log_content
@@ -239,7 +240,7 @@ class LoggingFilesDetailsViewTest(TestCase):
         context = self.view.get_context_data()
 
         self.assertIn('log_content', context)
-        self.assertEqual(context['log_content'], "Log file content here")
+        self.assertEqual(context['log_content'], 'Log file content here')
 
     @patch('management.views.logging.LOG_DIR_PATH')
     def test_get_context_data_with_nonexistent_file(self, mock_log_dir):
@@ -337,11 +338,7 @@ class LoggingFilesDownloadMultipleViewTest(TestCase):
 
         mock_log_dir.resolve.return_value = mock_resolved_dir
 
-        response = self.view.get(
-            self.view.request,
-            archive_format='zip',
-            filenames='trustpoint.log/trustpoint.log.1'
-        )
+        response = self.view.get(self.view.request, archive_format='zip', filenames='trustpoint.log/trustpoint.log.1')
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response['Content-Type'], 'application/zip')
@@ -372,9 +369,7 @@ class LoggingFilesDownloadMultipleViewTest(TestCase):
         mock_log_dir.resolve.return_value = mock_resolved_dir
 
         response = self.view.get(
-            self.view.request,
-            archive_format='tar.gz',
-            filenames='trustpoint.log/trustpoint.log.1'
+            self.view.request, archive_format='tar.gz', filenames='trustpoint.log/trustpoint.log.1'
         )
 
         self.assertEqual(response.status_code, 200)
@@ -390,42 +385,28 @@ class LoggingFilesDownloadMultipleViewTest(TestCase):
     def test_get_without_archive_format(self):
         """Test GET method without archive format raises Http404."""
         with self.assertRaises(Http404):
-            self.view.get(
-                self.view.request,
-                archive_format=None,
-                filenames='trustpoint.log'
-            )
+            self.view.get(self.view.request, archive_format=None, filenames='trustpoint.log')
 
     def test_get_without_filenames(self):
         """Test GET method without filenames raises Http404."""
         with self.assertRaises(Http404):
-            self.view.get(
-                self.view.request,
-                archive_format='zip',
-                filenames=None
-            )
+            self.view.get(self.view.request, archive_format='zip', filenames=None)
 
     def test_get_with_invalid_archive_format(self):
         """Test GET method with invalid archive format raises Http404."""
         with self.assertRaises(Http404):
-            self.view.get(
-                self.view.request,
-                archive_format='invalid',
-                filenames='trustpoint.log'
-            )
+            self.view.get(self.view.request, archive_format='invalid', filenames='trustpoint.log')
 
     @patch('management.views.logging.LOG_DIR_PATH')
     def test_get_with_empty_filenames_string(self, mock_log_dir):
         """Test GET method with empty filenames string."""
-        mock_log_dir.__truediv__ = Mock(
-            return_value=Mock(read_bytes=Mock(return_value=b''))
-        )
+        mock_log_dir.__truediv__ = Mock(return_value=Mock(read_bytes=Mock(return_value=b'')))
 
         # Should not raise error with empty filename list
         response = self.view.get(
             self.view.request,
             archive_format='zip',
-            filenames='///'  # Will result in empty list after filtering
+            filenames='///',  # Will result in empty list after filtering
         )
 
         self.assertEqual(response.status_code, 200)

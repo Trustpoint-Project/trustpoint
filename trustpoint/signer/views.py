@@ -34,6 +34,7 @@ class SignerContextMixin(ContextDataMixin):
 
     context_page_category = 'signer'
 
+
 class SignerTableView(SignerContextMixin, SortableTableMixin[SignerModel], ListView[SignerModel]):
     """Signer Table View."""
 
@@ -42,6 +43,7 @@ class SignerTableView(SignerContextMixin, SortableTableMixin[SignerModel], ListV
     context_object_name = 'signers'
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'unique_name'
+
 
 class SignerAddMethodSelectView(SignerContextMixin, FormView[SignerAddMethodSelectForm]):
     """View to select the method to add a Signer."""
@@ -134,6 +136,7 @@ class SignerConfigView(LoggerMixin, SignerContextMixin, DetailView[SignerModel])
             The context to render the page.
         """
         return super().get_context_data(**kwargs)
+
 
 class SignedMessagesListView(SignerContextMixin, ListView[SignedMessageModel]):
     """View to display all signed messages by a specific Signer."""
@@ -229,15 +232,11 @@ class SignHashView(LoggerMixin, SignerContextMixin, FormView[SignHashForm]):
 
             signature_hex = signature.hex()
 
-            SignedMessageModel.objects.create(
-                signer=signer,
-                hash_value=hash_value,
-                signature=signature_hex
-            )
+            SignedMessageModel.objects.create(signer=signer, hash_value=hash_value, signature=signature_hex)
 
             messages.success(
                 self.request,
-                _('Hash successfully signed with signer "{signer_name}".').format(signer_name=signer.unique_name)
+                _('Hash successfully signed with signer "{signer_name}".').format(signer_name=signer.unique_name),
             )
 
             self.request.session['last_signature'] = {
@@ -251,10 +250,7 @@ class SignHashView(LoggerMixin, SignerContextMixin, FormView[SignHashForm]):
 
         except Exception as e:
             self.logger.exception('Failed to sign hash')
-            messages.error(
-                self.request,
-                _('Failed to sign hash: {error}').format(error=str(e))
-            )
+            messages.error(self.request, _('Failed to sign hash: {error}').format(error=str(e)))
             return self.form_invalid(form)
 
 
@@ -288,4 +284,3 @@ class SignHashSuccessView(SignerContextMixin, View):
         context = super().get_context_data() if hasattr(super(), 'get_context_data') else {}
         context['context_page_category'] = 'signer'
         return context
-

@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
 class AokiServiceMixin:
     """Mixin for AOKI functionality."""
+
     @staticmethod
     def get_idevid_owner_san_uri(idevid_cert: x509.Certificate) -> str:
         """Get the Owner ID SAN URI corresponding to a IDevID certificate.
@@ -65,14 +66,12 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
         tls_cert = ActiveTrustpointTlsServerCredentialModel.objects.first()
         if not tls_cert or not tls_cert.credential:
             return LoggedHttpResponse(
-                'No TLS server certificate available. Are you on the development server?', status = 500
+                'No TLS server certificate available. Are you on the development server?', status=500
             )
         try:
             client_cert, intermediary_cas = NginxTLSClientCertExtractor.get_client_cert_as_x509(request)
         except ClientCertificateAuthenticationError:
-            return LoggedHttpResponse(
-                'No valid TLS client certificate provided.', status = 401
-            )
+            return LoggedHttpResponse('No valid TLS client certificate provided.', status=401)
 
         try:
             domain, _idevid_subj_sn = IDevIDAuthenticator.authenticate_idevid_from_x509_no_device(
@@ -83,11 +82,10 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
                 'IDevID authentication failed.', status = 403
             )
 
+
         owner_cred = self.get_owner_credential(client_cert)
         if not owner_cred:
-            return LoggedHttpResponse(
-                'No DevOwnerID present for this IDevID.', status = 422
-            )
+            return LoggedHttpResponse('No DevOwnerID present for this IDevID.', status=422)
         owner_pk = owner_cred.get_private_key()
 
         try:
@@ -108,10 +106,7 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
                 'version': '1.0',
                 'enrollment-info': {
                     'protocols': [
-                        {
-                            'protocol': 'EST',
-                            'url': f'/.well-known/est/{domain.unique_name}/domain_credential/'
-                        }
+                        {'protocol': 'EST', 'url': f'/.well-known/est/{domain.unique_name}/domain_credential/'}
                     ]
                 },
                 'owner-id-cert': owner_cert_pem,

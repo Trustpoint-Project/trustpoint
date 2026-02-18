@@ -39,7 +39,7 @@ class SetupWizardGenerateTlsServerCredentialViewTests(TestCase):
     def test_dispatch_wrong_state(self, mock_get_state: Mock) -> None:
         """Test dispatch redirects when in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
-        
+
         request = self.factory.get('/setup_wizard/generate_tls/')
         response = self.view.dispatch(request)
 
@@ -68,7 +68,7 @@ class SetupWizardImportTlsServerCredentialMethodSelectViewTests(TestCase):
     def test_dispatch_wrong_state(self, mock_get_state: Mock) -> None:
         """Test dispatch redirects when in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
-        
+
         request = self.factory.get('/setup_wizard/import_method_select/')
         response = self.view.dispatch(request)
 
@@ -79,11 +79,11 @@ class SetupWizardImportTlsServerCredentialMethodSelectViewTests(TestCase):
     def test_get_correct_state(self, mock_get_state: Mock) -> None:
         """Test GET renders template when in correct state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_MODE
-        
+
         request = self.factory.get('/setup_wizard/import_method_select/')
         self.view.request = request
         self.view.setup(request)
-        
+
         response = self.view.get(request)
         assert response.status_code == 200
 
@@ -110,7 +110,7 @@ class SetupWizardImportTlsServerCredentialPkcs12ViewTests(TestCase):
     def test_dispatch_wrong_state(self, mock_get_state: Mock) -> None:
         """Test dispatch redirects when in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
-        
+
         request = self.factory.get('/setup_wizard/import_pkcs12/')
         response = self.view.dispatch(request)
 
@@ -139,7 +139,7 @@ class SetupWizardImportTlsServerCredentialSeparateFilesViewTests(TestCase):
     def test_dispatch_wrong_state(self, mock_get_state: Mock) -> None:
         """Test dispatch redirects when in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
-        
+
         request = self.factory.get('/setup_wizard/import_separate/')
         response = self.view.dispatch(request)
 
@@ -168,7 +168,7 @@ class SetupWizardTlsServerCredentialApplyViewTests(TestCase):
     def test_dispatch_wrong_state(self, mock_get_state: Mock) -> None:
         """Test dispatch redirects when in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
-        
+
         request = self.factory.get('/setup_wizard/tls_apply/')
         response = self.view.dispatch(request)
 
@@ -197,7 +197,7 @@ class SetupWizardTlsServerCredentialApplyCancelViewTests(TestCase):
     def test_get_wrong_state(self, mock_get_state: Mock) -> None:
         """Test GET redirects when in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
-        
+
         request = self.factory.get('/setup_wizard/tls_cancel/')
         response = self.view.get(request)
 
@@ -226,7 +226,7 @@ class SetupWizardDemoDataViewTests(TestCase):
     def test_dispatch_wrong_state(self, mock_get_state: Mock) -> None:
         """Test dispatch redirects when in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
-        
+
         request = self.factory.get('/setup_wizard/demo_data/')
         response = self.view.dispatch(request)
 
@@ -255,7 +255,7 @@ class SetupWizardCreateSuperUserViewTests(TestCase):
     def test_dispatch_wrong_state(self, mock_get_state: Mock) -> None:
         """Test dispatch redirects when in wrong state."""
         mock_get_state.return_value = SetupWizardState.WIZARD_COMPLETED
-        
+
         request = self.factory.get('/setup_wizard/create_super_user/')
         response = self.view.dispatch(request)
 

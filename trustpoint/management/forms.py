@@ -37,7 +37,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         AutoGenPkiFeature: ['auto_gen_pki', 'auto_gen_pki_key_algorithm'],
     }
 
-    def __init__(self, *args: Any, **kwargs: Any)-> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the SecurityConfigForm."""
         super().__init__(*args, **kwargs)
 
@@ -74,9 +74,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             ),
         )
 
-    security_mode = forms.ChoiceField(
-        choices=SecurityConfig.SecurityModeChoices, widget=forms.RadioSelect(), label=''
-    )
+    security_mode = forms.ChoiceField(choices=SecurityConfig.SecurityModeChoices, widget=forms.RadioSelect(), label='')
 
     auto_gen_pki = forms.BooleanField(
         required=False,
@@ -99,6 +97,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 
     class Meta:
         """Meta configuration for SecurityConfigForm."""
+
         model = SecurityConfig
         fields: ClassVar[list[str]] = ['security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm']
 
@@ -111,11 +110,13 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             return AutoGenPkiKeyAlgorithm.RSA2048
         return AutoGenPkiKeyAlgorithm(form_value)
 
+
 class BackupOptionsForm(forms.ModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""
 
     class Meta:
         """ModelForm Meta configuration for BackupOptions."""
+
         model = BackupOptions
         fields: ClassVar[list[str]] = [
             'enable_sftp_storage',
@@ -134,13 +135,9 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
             'port': forms.NumberInput(attrs={'class': 'form-control'}),
             'user': forms.TextInput(attrs={'class': 'form-control'}),
             'auth_method': forms.Select(attrs={'class': 'form-select'}),
-            'password': forms.PasswordInput(
-                attrs={'class': 'form-control'}, render_value=True
-            ),
+            'password': forms.PasswordInput(attrs={'class': 'form-control'}, render_value=True),
             'private_key': forms.Textarea(attrs={'class': 'form-control', 'rows': 5}),
-            'key_passphrase': forms.PasswordInput(
-                attrs={'class': 'form-control'}, render_value=True
-            ),
+            'key_passphrase': forms.PasswordInput(attrs={'class': 'form-control'}, render_value=True),
             'remote_directory': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
@@ -172,8 +169,7 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
 
         if missing_fields:
             self.add_error(
-                None,
-                f"The following fields are required when SFTP storage is enabled: {', '.join(missing_fields)}."
+                None, f'The following fields are required when SFTP storage is enabled: {", ".join(missing_fields)}.'
             )
 
     def _validate_authentication_fields(self, cleaned: dict[str, Any], auth: Any) -> None:
@@ -191,10 +187,12 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
         if not pwd:
             self.add_error('password', 'Password is required when using password authentication.')
         if key or cleaned.get('key_passphrase', '').strip():
-            self.add_error('private_key',
-                           'Private key and passphrase must be empty when using password authentication.')
-            self.add_error('key_passphrase',
-                           'Private key and passphrase must be empty when using password authentication.')
+            self.add_error(
+                'private_key', 'Private key and passphrase must be empty when using password authentication.'
+            )
+            self.add_error(
+                'key_passphrase', 'Private key and passphrase must be empty when using password authentication.'
+            )
 
     def _validate_ssh_key_authentication(self, pwd: str, key: str) -> None:
         """Validate fields for SSH key authentication."""
@@ -202,6 +200,7 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
             self.add_error('private_key', 'Private key is required when using SSH Key authentication.')
         if pwd:
             self.add_error('password', 'Password must be empty when using SSH key authentication.')
+
 
 class IPv4AddressForm(forms.Form):
     """A form for selecting and updating an IPv4 address.
@@ -213,9 +212,7 @@ class IPv4AddressForm(forms.Form):
         ipv4_address: A choice field for selecting the IPv4 address.
     """
 
-    ipv4_address = forms.ChoiceField(
-        label='Update IPv4 Address'
-    )
+    ipv4_address = forms.ChoiceField(label='Update IPv4 Address')
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the IPv4AddressForm."""
@@ -229,6 +226,7 @@ class IPv4AddressForm(forms.Form):
 
         ipv4_field = cast('forms.ChoiceField', self.fields['ipv4_address'])
         ipv4_field.choices = [(ip, ip) for ip in san_ips]
+
 
 class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
     """Form for importing an TLS-Server Credential using a PKCS#12 file.
@@ -250,13 +248,15 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         required=False,
     )
     domain_name = forms.CharField(
-        label=_('Domain-Name'), initial='localhost', required=False,
-            validators=[
-              RegexValidator(
-                  regex=r'^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$',
-                  message='Enter a valid domain name (e.g. example.com).'
-              )
-        ]
+        label=_('Domain-Name'),
+        initial='localhost',
+        required=False,
+        validators=[
+            RegexValidator(
+                regex=r'^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$',
+                message='Enter a valid domain name (e.g. example.com).',
+            )
+        ],
     )
 
     def _raise_validation_error(self, message: str) -> None:
@@ -301,9 +301,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
                 return encoded
         return None
 
-    def _parse_and_save_credential(
-        self, pkcs12_raw: bytes, pkcs12_password: bytes | None, domain_name: Any
-    ) -> None:
+    def _parse_and_save_credential(self, pkcs12_raw: bytes, pkcs12_password: bytes | None, domain_name: Any) -> None:
         """Parse PKCS#12 data and save credential."""
         try:
             tls_credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
@@ -353,6 +351,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         """Return the saved credential."""
         return self.saved_credential
 
+
 class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
     """Form for importing a TLS-Server Credential using separate files.
 
@@ -378,13 +377,15 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         required=False,
     )
     domain_name = forms.CharField(
-        label=_('Domain-Name'), initial='localhost', required=False,
-            validators=[
-              RegexValidator(
-                  regex=r'^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$',
-                  message='Enter a valid domain name (e.g. example.com).'
-              )
-        ]
+        label=_('Domain-Name'),
+        initial='localhost',
+        required=False,
+        validators=[
+            RegexValidator(
+                regex=r'^localhost$|^(?!-)([A-Za-z0-9-]{1,63}\.)+[A-Za-z]{2,63}$',
+                message='Enter a valid domain name (e.g. example.com).',
+            )
+        ],
     )
 
     def clean_private_key_file(self) -> bytes:
@@ -489,13 +490,13 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         private_key_serializer: Any,
         tls_certificate_serializer: Any,
         tls_certificate_chain_serializer: Any,
-        domain_name: str
+        domain_name: str,
     ) -> None:
         """Create credential from serializers, verify, and save."""
         credential_serializer = CredentialSerializer.from_serializers(
             private_key_serializer=private_key_serializer,
             certificate_serializer=tls_certificate_serializer,
-            certificate_collection_serializer=tls_certificate_chain_serializer
+            certificate_collection_serializer=tls_certificate_chain_serializer,
         )
 
         certificate = credential_serializer.certificate
@@ -545,10 +546,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             private_key_password_bytes = self._encode_private_key_password(private_key_password)
             private_key_serializer = self._parse_private_key(private_key_bytes, private_key_password_bytes)
             self._create_and_save_credential(
-                private_key_serializer,
-                tls_certificate_serializer,
-                tls_certificate_chain_serializer,
-                domain_name
+                private_key_serializer, tls_certificate_serializer, tls_certificate_chain_serializer, domain_name
             )
         except ValidationError:
             raise
@@ -562,6 +560,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         """Return the saved credential."""
         return self.saved_credential
 
+
 class KeyStorageConfigForm(forms.ModelForm[KeyStorageConfig]):
     """Form for configuring cryptographic material storage options."""
 
@@ -573,11 +572,12 @@ class KeyStorageConfigForm(forms.ModelForm[KeyStorageConfig]):
             ('software', _('Software Storage')),
             ('softhsm', _('SoftHSM Container')),
             ('physical_hsm', _('Physical HSM')),
-        ]
+        ],
     )
 
     class Meta:
         """ModelForm Meta configuration for KeyStorageConfig."""
+
         model = KeyStorageConfig
         fields: ClassVar[list[str]] = ['storage_type']
 
@@ -603,6 +603,7 @@ class KeyStorageConfigForm(forms.ModelForm[KeyStorageConfig]):
         instance.storage_type = self.cleaned_data['storage_type']
         return instance
 
+
 class PKCS11ConfigForm(forms.Form):
     """Form for configuring PKCS#11 settings including HSM PIN and token information."""
 
@@ -616,7 +617,7 @@ class PKCS11ConfigForm(forms.Form):
         initial='softhsm',
         widget=forms.RadioSelect,
         label=_('HSM Type'),
-        help_text=_('Select the type of HSM to configure.')
+        help_text=_('Select the type of HSM to configure.'),
     )
 
     label = forms.CharField(
@@ -624,7 +625,7 @@ class PKCS11ConfigForm(forms.Form):
         max_length=100,
         widget=forms.TextInput(attrs={'class': 'form-control'}),
         help_text=_('Unique label for the PKCS#11 token'),
-        required=False
+        required=False,
     )
 
     slot = forms.IntegerField(
@@ -632,7 +633,7 @@ class PKCS11ConfigForm(forms.Form):
         widget=forms.NumberInput(attrs={'class': 'form-control'}),
         help_text=_('Slot number where the token is located'),
         min_value=0,
-        required=False
+        required=False,
     )
 
     module_path = forms.CharField(
@@ -641,7 +642,7 @@ class PKCS11ConfigForm(forms.Form):
         widget=forms.TextInput(attrs={'class': 'form-control'}),
         help_text=_('Path to the PKCS#11 module library file'),
         initial='/usr/local/lib/libpkcs11-proxy.so',
-        required=False
+        required=False,
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -698,7 +699,7 @@ class PKCS11ConfigForm(forms.Form):
                 'hsm_type': data['hsm_type'],
                 'slot': data['slot'],
                 'module_path': data['module_path'],
-            }
+            },
         )
 
         if not created:

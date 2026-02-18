@@ -13,6 +13,7 @@ from pki.util.ext_oids import ExtendedKeyUsageOid
 
 logger = logging.getLogger(__name__)
 
+
 class JSONCertRequestConverter:
     """Adapter to convert from CertificateSigningRequest to JSON certificate request dict."""
 
@@ -208,9 +209,15 @@ class JSONCertRequestConverter:
             elif ext_name == 'crl_distribution_points':
                 crl_uris = ext_value.get('uris', [])
                 if crl_uris:
-                    dp_list = [x509.DistributionPoint(full_name=[x509.UniformResourceIdentifier(uri)],
-                                                       relative_name=None, reasons=None, crl_issuer=None)
-                               for uri in crl_uris]
+                    dp_list = [
+                        x509.DistributionPoint(
+                            full_name=[x509.UniformResourceIdentifier(uri)],
+                            relative_name=None,
+                            reasons=None,
+                            crl_issuer=None,
+                        )
+                        for uri in crl_uris
+                    ]
                     builder = builder.add_extension(x509.CRLDistributionPoints(dp_list), critical=critical)
             else:
                 logger.debug('JSON Cert Request Adapter: Skipping unsupported extension: %s', ext_name)
@@ -251,9 +258,7 @@ class JSONCertRequestConverter:
         default_backdate = datetime.timedelta(hours=1)
 
         builder = builder.not_valid_before(datetime.datetime.now(datetime.UTC) - default_backdate)
-        return builder.not_valid_after(
-            datetime.datetime.now(datetime.UTC) + validity_period
-        )
+        return builder.not_valid_after(datetime.datetime.now(datetime.UTC) + validity_period)
 
     @staticmethod
     def from_json(json: dict[str, Any], *, allow_ca_cert: bool = False) -> x509.CertificateBuilder:
@@ -316,14 +321,21 @@ class JSONCertRequestCommandExtractor:
         san_parts = ''
         for san_type, san_values in san.items():
             if san_type in 'dns_names':
-                san_parts += f'DNS:{san_values}, ' if isinstance(san_values, str) \
+                san_parts += (
+                    f'DNS:{san_values}, '
+                    if isinstance(san_values, str)
                     else ''.join([f'DNS:{v}, ' for v in san_values])
+                )
             elif san_type == 'uris':
-                san_parts += f'URI:{san_values}, ' if isinstance(san_values, str) \
+                san_parts += (
+                    f'URI:{san_values}, '
+                    if isinstance(san_values, str)
                     else ''.join([f'URI:{v}, ' for v in san_values])
+                )
             elif san_type == 'ip_addresses':
-                san_parts += f'IP:{san_values}, ' if isinstance(san_values, str) \
-                    else ''.join([f'IP:{v}, ' for v in san_values])
+                san_parts += (
+                    f'IP:{san_values}, ' if isinstance(san_values, str) else ''.join([f'IP:{v}, ' for v in san_values])
+                )
             else:
                 logger.debug('JSON Cert Request Command Extractor: Skipping SAN type: %s', san_type)
         if san.get('critical', False):

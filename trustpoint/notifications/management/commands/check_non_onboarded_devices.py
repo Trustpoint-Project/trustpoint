@@ -35,7 +35,9 @@ class Command(BaseCommand):
 
     def _check_non_onboarded_devices(self) -> None:
         """Task to create an info notification if a device is not onboarded."""
-        non_onboarded_devices = DeviceModel.objects.filter(onboarding_config__onboarding_status=OnboardingStatus.PENDING)
+        non_onboarded_devices = DeviceModel.objects.filter(
+            onboarding_config__onboarding_status=OnboardingStatus.PENDING
+        )
 
         for device in non_onboarded_devices:
             if not NotificationModel.objects.filter(event='DEVICE_NOT_ONBOARDED', device=device).exists():

@@ -2,6 +2,7 @@
 
 Defines routes that map API requests to their corresponding viewsets and views.
 """
+
 from rest_framework.routers import DefaultRouter
 
 from signer.api_views import SignedMessageViewSet, SignerViewSet

@@ -14,6 +14,7 @@ class TestEstUrlPatterns:
     def test_app_name(self):
         """Test that the app_name is correctly set."""
         from est import urls
+
         assert urls.app_name == 'est'
 
     def test_simple_enrollment_default_url(self):
@@ -163,6 +164,7 @@ class TestEstUrlPatterns:
     def test_urlpatterns_all_have_names(self):
         """Test that all URL patterns have names."""
         from est import urls
+
         for pattern in urls.urlpatterns:
             assert hasattr(pattern, 'name')
             assert pattern.name is not None

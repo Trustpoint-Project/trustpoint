@@ -1,4 +1,5 @@
 """Tests for PKCS11Token model methods."""
+
 import os
 from unittest import mock
 
@@ -34,9 +35,7 @@ class PKCS11TokenTestCase(TestCase):
         result = self.token.generate_kek()
         self.assertTrue(result)
         mock_pkcs11_lib.assert_called_once()
-        mock_session.get_key.assert_called_with(
-            key_type=mock.ANY, label=self.token.KEK_ENCRYPTION_KEY_LABEL
-        )
+        mock_session.get_key.assert_called_with(key_type=mock.ANY, label=self.token.KEK_ENCRYPTION_KEY_LABEL)
 
     @mock.patch.object(PKCS11Token, 'get_pin', return_value='1234')
     @mock.patch('pkcs11.lib')

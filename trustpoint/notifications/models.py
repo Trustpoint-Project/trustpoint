@@ -397,6 +397,7 @@ class NotificationModel(models.Model):
             return _('Guess we messed up. Type of this notification is %(type)s') % {'type': self.message_type}
         return message_string.long.format(**self.message_data)
 
+
 class WeakECCCurve(models.Model):
     """Represents a weak or deprecated ECC curve."""
 
@@ -404,6 +405,7 @@ class WeakECCCurve(models.Model):
 
     class ECCCurveChoices(models.TextChoices):
         """Enumeration of weak or deprecated ECC curve OIDs."""
+
         SECP160R1 = '1.3.132.0.8', _('SECP160R1')
         SECP192R1 = '1.2.840.10045.3.1.1', _('SECP192R1')
         SECP224R1 = '1.3.132.0.33', _('SECP224R1')
@@ -414,11 +416,7 @@ class WeakECCCurve(models.Model):
         SECT233R1 = '1.3.132.0.27', _('SECT233R1')
         SECT283K1 = '1.3.132.0.16', _('SECT283K1')
 
-    oid = models.CharField(
-        max_length=64,
-        choices=ECCCurveChoices.choices,
-        unique=True
-    )
+    oid = models.CharField(max_length=64, choices=ECCCurveChoices.choices, unique=True)
 
     def __str__(self) -> str:
         """Return the human-readable name for the ECC curve."""
@@ -432,19 +430,17 @@ class WeakSignatureAlgorithm(models.Model):
 
     class SignatureChoices(models.TextChoices):
         """Enumeration of weak or deprecated signature algorithm OIDs."""
+
         MD5 = '1.2.840.113549.2.5', _('MD5')
         SHA1 = '1.3.14.3.2.26', _('SHA-1')
         SHA224 = '2.16.840.1.101.3.4.2.4', _('SHA-224')
 
-    oid = models.CharField(
-        max_length=64,
-        choices=SignatureChoices.choices,
-        unique=True
-    )
+    oid = models.CharField(max_length=64, choices=SignatureChoices.choices, unique=True)
 
     def __str__(self) -> str:
         """Return the human-readable name for the weak signature algorithm."""
         return str(dict(self.SignatureChoices.choices).get(self.oid, self.oid))
+
 
 class NotificationConfig(models.Model):
     """Stores global configuration for notification thresholds and behaviors."""
@@ -453,33 +449,29 @@ class NotificationConfig(models.Model):
 
     cert_expiry_warning_days = models.PositiveIntegerField(
         default=30,
-        help_text=_("Number of days before a certificate's expiration to trigger a 'Certificate Expiring' warning.")
+        help_text=_("Number of days before a certificate's expiration to trigger a 'Certificate Expiring' warning."),
     )
 
     issuing_ca_expiry_warning_days = models.PositiveIntegerField(
-        default=30,
-        help_text=_("Number of days before an issuing CA's certificate expiration to trigger a warning.")
+        default=30, help_text=_("Number of days before an issuing CA's certificate expiration to trigger a warning.")
     )
 
     rsa_minimum_key_size = models.PositiveIntegerField(
         default=2048,
-        help_text=_('Minimum RSA key size (in bits) that certificates must meet to avoid being flagged as insecure.')
+        help_text=_('Minimum RSA key size (in bits) that certificates must meet to avoid being flagged as insecure.'),
     )
 
     weak_ecc_curves = models.ManyToManyField(
-        WeakECCCurve,
-        blank=True,
-        help_text=_('Select ECC curves considered weak or deprecated.')
+        WeakECCCurve, blank=True, help_text=_('Select ECC curves considered weak or deprecated.')
     )
 
     weak_signature_algorithms = models.ManyToManyField(
-        WeakSignatureAlgorithm,
-        blank=True,
-        help_text=_('Select signature algorithms considered weak or deprecated.')
+        WeakSignatureAlgorithm, blank=True, help_text=_('Select signature algorithms considered weak or deprecated.')
     )
 
     class Meta:
         """Meta class configuration."""
+
         verbose_name = _('Notification Configuration')
 
     def __str__(self) -> str:

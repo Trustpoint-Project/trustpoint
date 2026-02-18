@@ -120,9 +120,7 @@ class SecurityManagerTest(TestCase):
         self.assertFalse(result)
 
         # AutoGenPkiFeature allowed at LOW level
-        result = self.manager.is_feature_allowed(
-            AutoGenPkiFeature, target_level=SecurityConfig.SecurityModeChoices.LOW
-        )
+        result = self.manager.is_feature_allowed(AutoGenPkiFeature, target_level=SecurityConfig.SecurityModeChoices.LOW)
         self.assertTrue(result)
 
     def test_is_feature_allowed_with_target_level_dev(self):
@@ -131,9 +129,7 @@ class SecurityManagerTest(TestCase):
         self.security_config.save()
 
         # Even though current mode is HIGHEST, checking against DEV should return True
-        result = self.manager.is_feature_allowed(
-            AutoGenPkiFeature, target_level=SecurityConfig.SecurityModeChoices.DEV
-        )
+        result = self.manager.is_feature_allowed(AutoGenPkiFeature, target_level=SecurityConfig.SecurityModeChoices.DEV)
         self.assertTrue(result)
 
     def test_get_features_to_disable_returns_correct_features(self):

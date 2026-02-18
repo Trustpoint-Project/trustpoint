@@ -175,7 +175,9 @@ class CertificateRequestHandler(WorkflowHandler):
         device_id = _norm(context.device.pk)
 
         fingerprint = hashlib.sha256(csr.tbs_certrequest_bytes).hexdigest()
-        template = context.cert_profile_str or ''  # TODO: ren. profile throughout EnrollmentRequest  # noqa: E501, FIX002, TD002
+        template = (
+            context.cert_profile_str or ''
+        )  # TODO: ren. profile throughout EnrollmentRequest  # noqa: FIX002, TD002
 
         # Find or create an open EnrollmentRequest
         req = (

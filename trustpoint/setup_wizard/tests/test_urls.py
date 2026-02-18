@@ -34,6 +34,7 @@ class SetupWizardUrlsTestCase(TestCase):
     def test_app_name_configuration(self):
         """Test that app_name is correctly configured."""
         from setup_wizard import urls
+
         self.assertEqual(urls.app_name, 'setup_wizard')
 
     def test_crypto_storage_setup_url(self):
@@ -100,8 +101,6 @@ class SetupWizardUrlsTestCase(TestCase):
         resolver = resolve('/setup-wizard/generate-tls-server-credential/')
         self.assertEqual(resolver.view_name, 'setup_wizard:generate_tls_server_credential')
         self.assertEqual(resolver.func.view_class, SetupWizardGenerateTlsServerCredentialView)
-
-
 
     def test_restore_options_url(self):
         """Test restore options URL pattern."""
@@ -175,8 +174,6 @@ class SetupWizardUrlsTestCase(TestCase):
         resolver = resolve('/setup-wizard/restore/')
         self.assertEqual(resolver.view_name, 'setup_wizard:restore')
         self.assertEqual(resolver.func.view_class, BackupRestoreView)
-
-
 
     def test_auto_restore_password_url(self):
         """Test auto restore password URL pattern."""
@@ -296,8 +293,9 @@ class SetupWizardUrlsTestCase(TestCase):
                     non_namespaced = reverse(url_name)
                     # If this succeeds, there might be a global URL with the same name
                     # which could cause conflicts
-                    self.assertNotEqual(namespaced_url, non_namespaced,
-                                      f"URL name '{url_name}' conflicts with global namespace")
+                    self.assertNotEqual(
+                        namespaced_url, non_namespaced, f"URL name '{url_name}' conflicts with global namespace"
+                    )
                 except NoReverseMatch:
                     # This is expected - the URL should only work with namespace
                     pass
@@ -316,8 +314,9 @@ class SetupWizardUrlsTestCase(TestCase):
                 # Should fail without namespace
                 try:
                     non_namespaced = reverse(url_name, kwargs=kwargs)
-                    self.assertNotEqual(namespaced_url, non_namespaced,
-                                      f"URL name '{url_name}' conflicts with global namespace")
+                    self.assertNotEqual(
+                        namespaced_url, non_namespaced, f"URL name '{url_name}' conflicts with global namespace"
+                    )
                 except NoReverseMatch:
                     # This is expected - the URL should only work with namespace
                     pass
@@ -329,10 +328,12 @@ class SetupWizardUrlsTestCase(TestCase):
         with patch('setup_wizard.views.DOCKER_CONTAINER', True):
             with patch('setup_wizard.views.SetupWizardState.get_current_state') as mock_state:
                 from setup_wizard import SetupWizardState
+
                 mock_state.return_value = SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE
 
                 # Test a simple GET request to crypto storage setup
                 from django.test import Client
+
                 client = Client()
 
                 url = reverse('setup_wizard:crypto_storage_setup')
@@ -492,8 +493,7 @@ class SetupWizardUrlsTestCase(TestCase):
                 used_views.add(pattern.callback.view_class)
 
         # All imported views should be used in URL patterns
-        self.assertEqual(imported_views, used_views,
-                        'Mismatch between imported views and views used in URL patterns')
+        self.assertEqual(imported_views, used_views, 'Mismatch between imported views and views used in URL patterns')
 
     def test_setup_wizard_url_prefix_consistency(self):
         """Test that all setup wizard URLs use consistent prefix."""

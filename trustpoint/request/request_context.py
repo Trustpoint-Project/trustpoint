@@ -1,4 +1,5 @@
 """This module contains the RequestContext class for managing request-specific named attributes."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, fields
@@ -25,9 +26,11 @@ if TYPE_CHECKING:
 
 RCT = TypeVar('RCT', bound='BaseRequestContext')
 
+
 @dataclass(kw_only=True)
 class BaseRequestContext(LoggerMixin):
     """Base class for all specific request context classes."""
+
     operation: str | None = None
     protocol: str | None = None
 
@@ -46,9 +49,9 @@ class BaseRequestContext(LoggerMixin):
     # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
     event: Event | None = None
 
-    def error(self, ext_msg: str | bytes |None,
-              http_status: int | None = None,
-              cmp_code: PKIFailureInfo | None = None) -> None:
+    def error(
+        self, ext_msg: str | bytes | None, http_status: int | None = None, cmp_code: PKIFailureInfo | None = None
+    ) -> None:
         """Set an error message in the context."""
         if isinstance(self, HttpBaseRequestContext):
             self.http_response_content = ext_msg
@@ -66,9 +69,11 @@ class BaseRequestContext(LoggerMixin):
         if not isinstance(self, HttpBaseRequestContext):
             exc_msg = 'to_http_response can only be called on HttpBaseRequestContext instances.'
             raise TypeError(exc_msg)
-        return HttpResponse(content=self.http_response_content or b'',
-                            status=self.http_response_status or 500,
-                            content_type=self.http_response_content_type or 'text/plain')
+        return HttpResponse(
+            content=self.http_response_content or b'',
+            status=self.http_response_status or 500,
+            content_type=self.http_response_content_type or 'text/plain',
+        )
 
     def narrow(self, child_cls: type[RCT], **extra: Any) -> RCT:
         """Create a new request context of a more specific subclass, copying existing attributes."""
@@ -88,12 +93,16 @@ class BaseRequestContext(LoggerMixin):
 
     def __repr__(self) -> str:
         """Detailed representation for debugging."""
-        return (f'{self.__class__.__name__}(protocol={self.protocol}, '
-                f'operation={self.operation}, domain_str={self.domain_str})')
+        return (
+            f'{self.__class__.__name__}(protocol={self.protocol}, '
+            f'operation={self.operation}, domain_str={self.domain_str})'
+        )
+
 
 @dataclass(kw_only=True)
 class BaseCertificateRequestContext(BaseRequestContext):
     """Shared context for all certificate request operations."""
+
     cert_requested: CertificateSigningRequest | CertificateBuilder | None = None
     cert_profile_str: str | None = None
     cert_requested_profile_validated: CertificateBuilder | None = None
@@ -124,6 +133,7 @@ class BaseRevocationRequestContext(BaseRequestContext):
 @dataclass(kw_only=True)
 class HttpBaseRequestContext(BaseRequestContext):
     """Shared context for all protocols that use HTTP(s) for message transfer."""
+
     raw_message: HttpRequest | None = None
 
     http_response_status: int | None = None
@@ -154,6 +164,7 @@ class EstBaseRequestContext(HttpBaseRequestContext):
 @dataclass(kw_only=True)
 class CmpBaseRequestContext(HttpBaseRequestContext):
     """Shared context for all CMP requests."""
+
     parsed_message: PKIMessage | None = None
     cmp_shared_secret: str | None = None
     error_code: PKIFailureInfo | None = None
@@ -169,12 +180,15 @@ class RestBaseRequestContext(HttpBaseRequestContext):
 class EstCertificateRequestContext(EstBaseRequestContext, BaseCertificateRequestContext):
     """EST context for certificate enrollment requests."""
 
+
 class EstRevocationRequestContext(EstBaseRequestContext, BaseRevocationRequestContext):
     """EST context for certificate revocation requests."""
+
 
 @dataclass(kw_only=True)
 class CmpCertificateRequestContext(CmpBaseRequestContext, BaseCertificateRequestContext):
     """CMP context for certificate enrollment requests (IR/CR)."""
+
 
 class CmpRevocationRequestContext(CmpBaseRequestContext, BaseRevocationRequestContext):
     """CMP context for certificate revocation requests (RR)."""

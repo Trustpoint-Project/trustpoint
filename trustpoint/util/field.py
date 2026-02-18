@@ -16,9 +16,7 @@ if TYPE_CHECKING:
 class UniqueNameValidator(RegexValidator):
     """Validates unique names used in the trustpoint."""
 
-    form_label = _(
-        '(All UTF-8 characters are allowed except control characters (e.g., newline, tab).)'
-    )
+    form_label = _('(All UTF-8 characters are allowed except control characters (e.g., newline, tab).)')
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes a UniqueNameValidator object.
@@ -44,7 +42,7 @@ class UniqueNameValidator(RegexValidator):
         super().__call__(value)
 
 
-def get_certificate_name(cert: x509.Certificate) -> str :
+def get_certificate_name(cert: x509.Certificate) -> str:
     """Extracts a name from an x509 certificate to auto-populate model Unique Name fields.
 
     Args:
@@ -70,7 +68,7 @@ def get_certificate_name(cert: x509.Certificate) -> str :
         san_names = san.value.get_values_for_type(x509.UniformResourceIdentifier)
         if san_names:
             candidate = san_names[0]
-            if candidate.startswith('dev-owner:'): # AOKI DevOwnerID
+            if candidate.startswith('dev-owner:'):  # AOKI DevOwnerID
                 candidate = 'Owner of SN: ' + candidate.removeprefix('dev-owner:').split('.')[0]
             return candidate
 

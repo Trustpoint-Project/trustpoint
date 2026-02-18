@@ -227,9 +227,7 @@ class CrlDownloadHelpViewTests(TestCase):
 
     @patch('help_pages.pki_help_views.build_tls_trust_store_section')
     @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address')
-    def test_get_context_data_with_crl(
-        self, mock_get_ip: Mock, mock_tls_section: Mock
-    ) -> None:
+    def test_get_context_data_with_crl(self, mock_get_ip: Mock, mock_tls_section: Mock) -> None:
         """Test get_context_data when CRL is available."""
         from datetime import datetime
 
@@ -265,9 +263,7 @@ class CrlDownloadHelpViewTests(TestCase):
     @patch('help_pages.pki_help_views.build_tls_trust_store_section')
     @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address')
     @patch('help_pages.pki_help_views.reverse')
-    def test_get_context_data_without_crl(
-        self, mock_reverse: Mock, mock_get_ip: Mock, mock_tls_section: Mock
-    ) -> None:
+    def test_get_context_data_without_crl(self, mock_reverse: Mock, mock_get_ip: Mock, mock_tls_section: Mock) -> None:
         """Test get_context_data when CRL is not available."""
         mock_get_ip.return_value = '192.168.1.1'
         mock_tls_section.return_value = Mock(heading='TLS', rows=[])
@@ -297,9 +293,7 @@ class CrlDownloadHelpViewTests(TestCase):
 
     @patch('help_pages.pki_help_views.build_tls_trust_store_section')
     @patch('help_pages.pki_help_views.TlsSettings.get_first_ipv4_address')
-    def test_get_context_data_curl_commands(
-        self, mock_get_ip: Mock, mock_tls_section: Mock
-    ) -> None:
+    def test_get_context_data_curl_commands(self, mock_get_ip: Mock, mock_tls_section: Mock) -> None:
         """Test that curl commands are properly formatted."""
         mock_get_ip.return_value = '192.168.1.1'
         mock_tls_section.return_value = Mock(heading='TLS', rows=[])

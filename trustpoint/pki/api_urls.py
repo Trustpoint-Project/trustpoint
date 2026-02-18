@@ -2,6 +2,7 @@
 
 Defines routes that map API requests to their corresponding viewsets and views.
 """
+
 from rest_framework.routers import DefaultRouter
 
 from pki.views.cert_profiles import CertProfileViewSet

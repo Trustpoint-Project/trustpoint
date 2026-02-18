@@ -40,7 +40,6 @@ class TestUrls:
         url = reverse('devices:devices')
         assert resolve(url).namespace == 'devices'
 
-
     def test_est_url_included(self):
         """Test that the 'est/' URL pattern is included and resolves correctly."""
         url = reverse('est:ca-certs-post', kwargs={'domain': 'test-domain', 'cert_profile': 'template'})

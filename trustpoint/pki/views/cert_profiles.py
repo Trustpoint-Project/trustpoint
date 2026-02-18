@@ -42,9 +42,9 @@ class CertProfileContextMixin(ContextDataMixin):
     context_page_name = 'cert_profiles'
 
 
-class CertProfileTableView(CertProfileContextMixin,
-                           SortableTableMixin[CertificateProfileModel],
-                           ListView[CertificateProfileModel]):
+class CertProfileTableView(
+    CertProfileContextMixin, SortableTableMixin[CertificateProfileModel], ListView[CertificateProfileModel]
+):
     """Certificate Profile Table View."""
 
     model = CertificateProfileModel
@@ -54,8 +54,9 @@ class CertProfileTableView(CertProfileContextMixin,
     default_sort_param = 'unique_name'
 
 
-class CertProfileConfigView(LoggerMixin, CertProfileContextMixin,
-                            UpdateView[CertificateProfileModel, CertProfileConfigForm]):
+class CertProfileConfigView(
+    LoggerMixin, CertProfileContextMixin, UpdateView[CertificateProfileModel, CertProfileConfigForm]
+):
     """View to display the details of and edit a Certificate Profile."""
 
     http_method_names = ('get', 'post')
@@ -84,7 +85,7 @@ class CertProfileConfigView(LoggerMixin, CertProfileContextMixin,
         if not form['unique_name'].value():
             context['is_new'] = True
 
-        default_json = { # new profile default
+        default_json = {  # new profile default
             'type': 'cert_profile',
             'subj': {},
             'ext': {},
@@ -213,8 +214,9 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
             messages.error(self.request, exc.message)
             return HttpResponseRedirect(self.success_url)
 
-        messages.success(self.request, _('Successfully deleted {count} certificate profile(s).')
-                .format(count=deleted_count))
+        messages.success(
+            self.request, _('Successfully deleted {count} certificate profile(s).').format(count=deleted_count)
+        )
 
         return response
 

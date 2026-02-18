@@ -7,6 +7,7 @@ from devices import views
 
 # TODO(Air): Adjust paths to cover updated views.
 
+
 @pytest.mark.parametrize(
     ('url_name', 'kwargs', 'view_class'),
     [
@@ -14,7 +15,11 @@ from devices import views
         ('devices:devices', {}, views.DeviceTableView),
         ('devices:devices_create_onboarding', {}, views.DeviceCreateOnboardingView),
         # Certificate Lifecycle Management
-        ('devices:devices_certificate_lifecycle_management', {'pk': 1}, views.DeviceCertificateLifecycleManagementSummaryView),
+        (
+            'devices:devices_certificate_lifecycle_management',
+            {'pk': 1},
+            views.DeviceCertificateLifecycleManagementSummaryView,
+        ),
         # OPC UA GDS
         ('devices:opc_ua_gds', {}, views.OpcUaGdsTableView),
         # ('devices:opc_ua_gds-add', {}, views.CreateOpcUaGdsView),
@@ -73,26 +78,26 @@ from devices import views
         #     {'pk': 1, 'certificate_template': 'template'},
         #     views.OnboardingEstApplicationCredentialsHelpView,
         # ),
-        #('devices:help-onboarding_est-ldevid', {'pk': 1}, views.OnboardingEstApplicationCredentialsHelpView),
-        #('devices:help-onboarding_est-idevid', {'pk': 1}, views.OnboardingEstIdevidHelpView),
-        #('devices:help-onboarding_est-idevid-registration', {'pk': 1}, views.OnboardingEstIdevidRegistrationHelpView),
-        #('devices:help-onboarding_method_select-idevid', {'pk': 1}, views.OnboardingMethodSelectIdevidHelpView),
+        # ('devices:help-onboarding_est-ldevid', {'pk': 1}, views.OnboardingEstApplicationCredentialsHelpView),
+        # ('devices:help-onboarding_est-idevid', {'pk': 1}, views.OnboardingEstIdevidHelpView),
+        # ('devices:help-onboarding_est-idevid-registration', {'pk': 1}, views.OnboardingEstIdevidRegistrationHelpView),
+        # ('devices:help-onboarding_method_select-idevid', {'pk': 1}, views.OnboardingMethodSelectIdevidHelpView),
         # (
         #     'devices:help-no-onboarding_est-opc-ua-gds-username-password',
         #     {'pk': 1},
         #     views.NoOnboardingEstOpcUaGdsUsernamePasswordHelpView,
         # ),
         # Downloads
-        #('devices:download', {'pk': 1}, views.DownloadPageDispatcherView),
-        #('devices:certificate-download', {'pk': 1}, views.CertificateDownloadView),
+        # ('devices:download', {'pk': 1}, views.DownloadPageDispatcherView),
+        # ('devices:certificate-download', {'pk': 1}, views.CertificateDownloadView),
         ('devices:devices_credential-download', {'pk': 1}, views.DeviceManualCredentialDownloadView),
         ('devices:devices_browser_otp_view', {'pk': 1}, views.DeviceBrowserOnboardingOTPView),
         ('devices:browser_login', {}, views.DeviceOnboardingBrowserLoginView),
         ('devices:browser_domain_credential_download', {'pk': 1}, views.DeviceBrowserCredentialDownloadView),
         ('devices:devices_browser_cancel', {'pk': 1}, views.DeviceBrowserOnboardingCancelView),
         # Revoke Views
-        #('devices:credential_revocation', {'pk': 1, 'credential_pk': 1}, views.DeviceCredentialRevocationView),
-        #('devices:device_revocation', {'pk': 1}, views.DeviceRevocationView),
+        # ('devices:credential_revocation', {'pk': 1, 'credential_pk': 1}, views.DeviceCredentialRevocationView),
+        # ('devices:device_revocation', {'pk': 1}, views.DeviceRevocationView),
         ('devices:devices_device_delete', {'pks': '1/2/3'}, views.DeviceBulkDeleteView),
     ],
 )

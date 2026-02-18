@@ -1,4 +1,5 @@
 """Unit tests for authentication components."""
+
 import datetime
 from unittest.mock import Mock, patch
 
@@ -108,8 +109,9 @@ class TestClientCertificateAuthentication:
         mock_cert = Mock()
         self.context.client_certificate = mock_cert
 
-        with patch.object(IssuedCredentialModel, 'get_credential_for_certificate',
-                          side_effect=IssuedCredentialModel.DoesNotExist()):
+        with patch.object(
+            IssuedCredentialModel, 'get_credential_for_certificate', side_effect=IssuedCredentialModel.DoesNotExist()
+        ):
             try:
                 self.auth.authenticate(self.context)
                 assert False, 'Expected ValueError to be raised'
@@ -120,19 +122,16 @@ class TestClientCertificateAuthentication:
         """Test authentication with invalid credential."""
         device = domain_credential_est_onboarding['device']
 
-        invalid_cert = x509.CertificateBuilder().subject_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Invalid Certificate')])
-        ).issuer_name(
-            x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Invalid Certificate')])
-        ).public_key(
-            rsa_private_key.public_key()
-        ).serial_number(
-            x509.random_serial_number()
-        ).not_valid_before(
-            datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(days=1)
-        ).not_valid_after(
-            datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(days=365)
-        ).sign(rsa_private_key, hashes.SHA256())
+        invalid_cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Invalid Certificate')]))
+            .issuer_name(x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Invalid Certificate')]))
+            .public_key(rsa_private_key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(datetime.datetime.now(tz=datetime.UTC) - datetime.timedelta(days=1))
+            .not_valid_after(datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(days=365))
+            .sign(rsa_private_key, hashes.SHA256())
+        )
 
         self.context.client_certificate = invalid_cert
 

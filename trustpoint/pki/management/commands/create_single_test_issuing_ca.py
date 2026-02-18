@@ -34,4 +34,3 @@ class Command(CertificateCreationCommandMixin, BaseCommand):
             chain=[rsa2_root],
             unique_name='issuing-ca-a-test-fixture',
         )
-

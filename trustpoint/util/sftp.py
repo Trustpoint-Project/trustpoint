@@ -57,16 +57,10 @@ class SftpClient:
             if self.auth_method not in valid_methods:
                 msg = f'Invalid auth_method: {self.auth_method}'
                 raise SftpError(msg)
-            if (
-                self.auth_method == BackupOptions.AuthMethod.PASSWORD
-                and not self.password
-            ):
+            if self.auth_method == BackupOptions.AuthMethod.PASSWORD and not self.password:
                 msg = 'Password is required for password authentication.'
                 raise SftpError(msg)
-            if (
-                self.auth_method == BackupOptions.AuthMethod.SSH_KEY
-                and not (self.private_key_text or '').strip()
-            ):
+            if self.auth_method == BackupOptions.AuthMethod.SSH_KEY and not (self.private_key_text or '').strip():
                 msg = 'Private key is required for SSH-key authentication.'
                 raise SftpError(msg)
 
@@ -85,9 +79,7 @@ class SftpClient:
 
         try:
             key_stream = io.StringIO(self.private_key_text)
-            return paramiko.RSAKey.from_private_key(
-                key_stream, password=self.passphrase or None
-            )
+            return paramiko.RSAKey.from_private_key(key_stream, password=self.passphrase or None)
         except paramiko.SSHException as e:
             msg = f'Failed to load private key: {e}'
             raise SftpError(msg) from e

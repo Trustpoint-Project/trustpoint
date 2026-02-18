@@ -15,16 +15,17 @@ def step_domain_exists(context: runner.Context, domain_name: str, ca_name: str) 
         ca_name: The name of the issuing ca.
     """
     issuing_ca = CaModel.objects.get(unique_name=ca_name)
-    assert issuing_ca.unique_name == ca_name, f"Issuing CA with name {ca_name} not found"
-    
+    assert issuing_ca.unique_name == ca_name, f'Issuing CA with name {ca_name} not found'
+
     domain, created = DomainModel.objects.get_or_create(unique_name=domain_name)
-    assert created, f" Domain creation failed"
+    assert created, f' Domain creation failed'
     assert domain.unique_name == domain_name, f" Domain name mismatch: expected '{domain_name}', got '{domain.name}'"
 
     domain.issuing_ca = issuing_ca
     domain.save()
 
     context.domain = domain
+
 
 @when('the admin fills in the domain details with {name} and issuing CA "{ca_name}"')
 def step_fill_domain_details(context: runner.Context, name: str, ca_name: str) -> None:  # noqa: ARG001
@@ -48,8 +49,9 @@ def step_fill_domain_details(context: runner.Context, name: str, ca_name: str) -
         'domain_credential_auth': 'on',
         'domain_credential_auth_helptext': 'off',
         'username_password_auth': 'off',
-        'allow_app_certs_without_domain': 'on'
+        'allow_app_certs_without_domain': 'on',
     }
+
 
 @then('the new domain with {name} and issuing CA "{ca_name}" should appear in the domain list')
 def step_domain_list(context: runner.Context, name: str, ca_name: str) -> None:  # noqa: ARG001
@@ -60,10 +62,10 @@ def step_domain_list(context: runner.Context, name: str, ca_name: str) -> None: 
         name (str): The name of the domain.
         ca_name (str): The name of the issuing ca.
     """
-    soup = BeautifulSoup(context.response.content, "html.parser")
+    soup = BeautifulSoup(context.response.content, 'html.parser')
 
     # Find all <td> elements
-    tds = soup.find_all("td")
+    tds = soup.find_all('td')
 
     # Get their text content (unescaped and stripped)
     values = [td.get_text(strip=True) for td in tds]
@@ -82,16 +84,18 @@ def step_delete_domain(context: runner.Context, name: str) -> None:  # noqa: ARG
     """
 
     context.response = context.authenticated_client.get(
-        '/pki/domains/delete/'+ str(context.domain.id),
-        follow=True,
-        HTTP_X_REQUESTED_WITH="XMLHttpRequest"
+        '/pki/domains/delete/' + str(context.domain.id), follow=True, HTTP_X_REQUESTED_WITH='XMLHttpRequest'
     )
 
-    assert context.response.status_code == 200, "Domain delete form submission failed"
-    assert b"Confirm Domain Deletion" in context.response.content
-    context.response = context.authenticated_client.post(f"/pki/domains/delete/{context.domain.id}/", data={}, follow=True)
-    assert context.response.status_code == 200, "Domain deletion response"
-    assert not DomainModel.objects.filter(id=context.domain.id).exists(), f"Deletion of the domain with name {name} failed."
+    assert context.response.status_code == 200, 'Domain delete form submission failed'
+    assert b'Confirm Domain Deletion' in context.response.content
+    context.response = context.authenticated_client.post(
+        f'/pki/domains/delete/{context.domain.id}/', data={}, follow=True
+    )
+    assert context.response.status_code == 200, 'Domain deletion response'
+    assert not DomainModel.objects.filter(id=context.domain.id).exists(), (
+        f'Deletion of the domain with name {name} failed.'
+    )
 
 
 @then('the domain {name} should no longer appear in the domain list')
@@ -102,7 +106,7 @@ def step_verify_domain_deletion(context: runner.Context, name: str) -> None:  # 
         context (runner.Context): Behave context.
         name (str): The name of the domain.
     """
-    assert name not in context.response, f"Domain with name {name} still exist in the list"
+    assert name not in context.response, f'Domain with name {name} still exist in the list'
 
 
 @when('the admin attempts to view the details of a non-existent domain {non_existent_domain_id}')
@@ -113,5 +117,5 @@ def step_attempt_view_nonexistent(context: runner.Context, non_existent_domain_i
         context (runner.Context): Behave context.
         non_existent_domain_id (str): The id a non-existent domain.
     """
-    #Navigate (GET request) to the domain detailed page
-    context.response = context.authenticated_client.get(f"/pki/domains/config/{non_existent_domain_id}")
+    # Navigate (GET request) to the domain detailed page
+    context.response = context.authenticated_client.get(f'/pki/domains/config/{non_existent_domain_id}')

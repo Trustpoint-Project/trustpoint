@@ -11,16 +11,16 @@ from notifications.models import NotificationMessageModel, NotificationStatus
 
 
 @pytest.fixture
-def setup_test_issuing_ca() -> CaModel :
+def setup_test_issuing_ca() -> CaModel:
     """Use custom management command to create a test Issuing CA."""
     # Ensure crypto storage config exists for encrypted fields
     from management.models import KeyStorageConfig
+
     KeyStorageConfig.get_or_create_default()
-    
+
     call_command('create_single_test_issuing_ca')
     issuing_ca = CaModel.objects.get(unique_name='issuing-ca-a-test-fixture')
     return typing.cast('CaModel', issuing_ca)
-
 
 
 @pytest.fixture
@@ -33,6 +33,7 @@ def test_domain(setup_test_issuing_ca: CaModel) -> DomainModel:
     domain.issuing_ca = setup_test_issuing_ca
     domain.save()
     return domain
+
 
 @pytest.fixture
 def test_device(test_domain: DomainModel) -> DeviceModel:
@@ -49,8 +50,7 @@ def test_device(test_domain: DomainModel) -> DeviceModel:
 def test_message() -> NotificationMessageModel:
     """Create a NotificationMessageModel used for custom notifications."""
     return NotificationMessageModel.objects.create(
-        short_description='Test short',
-        long_description='Test long description'
+        short_description='Test short', long_description='Test long description'
     )
 
 

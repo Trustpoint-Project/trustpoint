@@ -50,7 +50,8 @@ def get_random_no_onboarding_pki_protocols() -> list[NoOnboardingPkiProtocol]:
 
 
 def get_random_onboarding_pki_protocols(
-        include_protocol: OnboardingPkiProtocol | None = None) -> list[OnboardingPkiProtocol]:
+    include_protocol: OnboardingPkiProtocol | None = None,
+) -> list[OnboardingPkiProtocol]:
     """Gets random allowed PkiProtocols.
 
     Args:
@@ -77,7 +78,7 @@ def _get_private_key_location_from_config() -> PrivateKeyLocation:
         storage_config = KeyStorageConfig.get_config()
         if storage_config.storage_type in [
             KeyStorageConfig.StorageType.SOFTHSM,
-            KeyStorageConfig.StorageType.PHYSICAL_HSM
+            KeyStorageConfig.StorageType.PHYSICAL_HSM,
         ]:
             return PrivateKeyLocation.HSM_PROVIDED
     except KeyStorageConfig.DoesNotExist:
@@ -86,10 +87,7 @@ def _get_private_key_location_from_config() -> PrivateKeyLocation:
     return PrivateKeyLocation.SOFTWARE
 
 
-def create_signer_for_domain(
-    domain_name: str,
-    issuing_ca: CaModel
-) -> SignerModel:
+def create_signer_for_domain(domain_name: str, issuing_ca: CaModel) -> SignerModel:
     """Creates a signer certificate for a domain using the domain's issuing CA."""
     issuing_ca_private_key = issuing_ca.credential.get_private_key_serializer().as_crypto()
     issuing_ca_cert = issuing_ca.credential.get_certificate_serializer().as_crypto()
@@ -288,8 +286,7 @@ class Command(BaseCommand, LoggerMixin):
                 )
             else:
                 self.log_and_stdout(
-                    f"DevIdRegistration already exists for domain '{domain_name}' "
-                    f"and issuing CA '{issuing_ca_name}'"
+                    f"DevIdRegistration already exists for domain '{domain_name}' and issuing CA '{issuing_ca_name}'"
                 )
 
             signer_unique_name = f'signer-{domain_name}'
@@ -301,10 +298,7 @@ class Command(BaseCommand, LoggerMixin):
                         f"with CN '{signer.common_name}' issued by '{issuing_ca_name}'"
                     )
                 except Exception as e:  # noqa: BLE001
-                    self.log_and_stdout(
-                        f"Failed to create signer for domain '{domain_name}': {e}",
-                        level='error'
-                    )
+                    self.log_and_stdout(f"Failed to create signer for domain '{domain_name}': {e}", level='error')
             else:
                 self.log_and_stdout(f"Signer '{signer_unique_name}' already exists for domain '{domain_name}'")
 
@@ -321,7 +315,6 @@ class Command(BaseCommand, LoggerMixin):
                 serial_number = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))  # noqa: S311
 
                 if device_uses_onboarding:
-
                     onboarding_protocol = random.choice(onboarding_protocols)  # noqa: S311
                     print(f"Creating device '{device_name}' in domain '{domain_name}' with:")
                     print(f'  - Serial Number: {serial_number}')
@@ -330,12 +323,11 @@ class Command(BaseCommand, LoggerMixin):
                     if onboarding_protocol == OnboardingProtocol.MANUAL:
                         onboarding_pki_protocols = get_random_onboarding_pki_protocols()
                     elif onboarding_protocol in [
-                            OnboardingProtocol.EST_IDEVID,
-                            OnboardingProtocol.EST_USERNAME_PASSWORD]:
+                        OnboardingProtocol.EST_IDEVID,
+                        OnboardingProtocol.EST_USERNAME_PASSWORD,
+                    ]:
                         onboarding_pki_protocols = get_random_onboarding_pki_protocols(OnboardingPkiProtocol.EST)
-                    elif onboarding_protocol in [
-                            OnboardingProtocol.CMP_IDEVID,
-                            OnboardingProtocol.CMP_SHARED_SECRET]:
+                    elif onboarding_protocol in [OnboardingProtocol.CMP_IDEVID, OnboardingProtocol.CMP_SHARED_SECRET]:
                         onboarding_pki_protocols = get_random_onboarding_pki_protocols(OnboardingPkiProtocol.CMP)
                     else:
                         err_msg = 'Unknown onboarding protocol found.'
@@ -349,7 +341,7 @@ class Command(BaseCommand, LoggerMixin):
                     onboarding_config_model = OnboardingConfigModel(
                         onboarding_status=OnboardingStatus.PENDING,
                         onboarding_protocol=onboarding_protocol,
-                        idevid_trust_store=idevid_trust_store
+                        idevid_trust_store=idevid_trust_store,
                     )
                     onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
 
@@ -366,7 +358,7 @@ class Command(BaseCommand, LoggerMixin):
                         serial_number=serial_number,
                         domain=domain,
                         device_type=random_device_type,
-                        onboarding_config=onboarding_config_model
+                        onboarding_config=onboarding_config_model,
                     )
 
                     device_model.full_clean()
@@ -374,9 +366,7 @@ class Command(BaseCommand, LoggerMixin):
                     onboarding_config_model.save()
                     device_model.save()
 
-
                 else:
-
                     serial_number = ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))  # noqa: S311
 
                     no_onboarding_pki_protocols = get_random_no_onboarding_pki_protocols()
@@ -396,7 +386,7 @@ class Command(BaseCommand, LoggerMixin):
                         common_name=device_name,
                         serial_number=serial_number,
                         domain=domain,
-                        device_type=random_device_type
+                        device_type=random_device_type,
                     )
 
                     device_model.no_onboarding_config = no_onboarding_config_model
@@ -423,8 +413,8 @@ class Command(BaseCommand, LoggerMixin):
                             self.log_and_stdout(
                                 f"Creating device '{device_model.common_name}' (ID {device_model.pk}) "
                                 f"in domain '{device_model.domain}' with Serial Number: {device_model.serial_number}; "
-                                f"Onboarding Protocol: {onboarding_protocol_display}; "
-                                f"PKI Protocols: {[p.label for p in pki_protocols]}"
+                                f'Onboarding Protocol: {onboarding_protocol_display}; '
+                                f'PKI Protocols: {[p.label for p in pki_protocols]}'
                             )
                         else:
                             self.log_and_stdout(f"Device '{device_name}' was not saved correctly.", level='warning')

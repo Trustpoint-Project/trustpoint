@@ -13,6 +13,7 @@ PKI_PAGE_DOMAIN_SUBCATEGORY = 'domains'
 PKI_PAGE_ISSUING_CAS_SUBCATEGORY = 'issuing_cas'
 PKI_PAGE_TRUSTSTORES_SUBCATEGORY = 'truststores'
 
+
 class PageContextMixin:
     """Mixin which adds data to the context for the devices application."""
 

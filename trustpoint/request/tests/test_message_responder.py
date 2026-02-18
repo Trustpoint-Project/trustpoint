@@ -75,10 +75,7 @@ class TestEstMessageResponder:
         assert 'Workflow failed' in context.http_response_content
         assert '/workflows/requests/123' in context.http_response_content
 
-    def test_build_response_simpleenroll_valid(
-        self,
-        device_instance_onboarding: dict[str, Any]
-    ) -> None:
+    def test_build_response_simpleenroll_valid(self, device_instance_onboarding: dict[str, Any]) -> None:
         """Test build_response with valid simpleenroll request."""
         device = device_instance_onboarding['device']
         cert = device_instance_onboarding['cert']
@@ -100,10 +97,7 @@ class TestEstMessageResponder:
         assert context.http_response_content_type == 'application/x-pem-file'
         assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED
 
-    def test_build_response_simplereenroll_valid(
-        self,
-        device_instance: dict[str, Any]
-    ) -> None:
+    def test_build_response_simplereenroll_valid(self, device_instance: dict[str, Any]) -> None:
         """Test build_response with valid simplereenroll request."""
         device = device_instance['device']
         cert = device_instance['cert']
@@ -172,10 +166,7 @@ class TestEstCertificateMessageResponder:
         with pytest.raises(ValueError, match='Issued certificate is not set in the context'):
             EstCertificateMessageResponder.build_response(context)
 
-    def test_build_response_pem_encoding(
-        self,
-        device_instance_onboarding: dict[str, Any]
-    ) -> None:
+    def test_build_response_pem_encoding(self, device_instance_onboarding: dict[str, Any]) -> None:
         """Test build_response with PEM encoding."""
         cert = device_instance_onboarding['cert']
         device = device_instance_onboarding['device']
@@ -193,10 +184,7 @@ class TestEstCertificateMessageResponder:
         assert '-----BEGIN CERTIFICATE-----' in context.http_response_content
         assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED
 
-    def test_build_response_der_encoding(
-        self,
-        device_instance_onboarding: dict[str, Any]
-    ) -> None:
+    def test_build_response_der_encoding(self, device_instance_onboarding: dict[str, Any]) -> None:
         """Test build_response with DER encoding."""
         cert = device_instance_onboarding['cert']
         device = device_instance_onboarding['device']
@@ -213,10 +201,7 @@ class TestEstCertificateMessageResponder:
         assert isinstance(context.http_response_content, bytes)
         assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED
 
-    def test_build_response_base64_der_encoding(
-        self,
-        device_instance_onboarding: dict[str, Any]
-    ) -> None:
+    def test_build_response_base64_der_encoding(self, device_instance_onboarding: dict[str, Any]) -> None:
         """Test build_response with base64-encoded DER."""
         cert = device_instance_onboarding['cert']
         device = device_instance_onboarding['device']
@@ -233,10 +218,7 @@ class TestEstCertificateMessageResponder:
         assert isinstance(context.http_response_content, str)
         assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED
 
-    def test_build_response_pkcs7_encoding(
-        self,
-        device_instance_onboarding: dict[str, Any]
-    ) -> None:
+    def test_build_response_pkcs7_encoding(self, device_instance_onboarding: dict[str, Any]) -> None:
         """Test build_response with PKCS#7 encoding."""
         cert = device_instance_onboarding['cert']
         device = device_instance_onboarding['device']
@@ -253,10 +235,7 @@ class TestEstCertificateMessageResponder:
         assert isinstance(context.http_response_content, str)
         assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED
 
-    def test_build_response_without_onboarding_config(
-        self,
-        device_instance: dict[str, Any]
-    ) -> None:
+    def test_build_response_without_onboarding_config(self, device_instance: dict[str, Any]) -> None:
         """Test build_response when device has no onboarding_config."""
         cert = device_instance['cert']
         device = device_instance['device']
@@ -272,10 +251,7 @@ class TestEstCertificateMessageResponder:
         assert context.http_response_content_type == 'application/x-pem-file'
         # Should not raise exception even without onboarding_config
 
-    def test_build_response_without_device(
-        self,
-        device_instance: dict[str, Any]
-    ) -> None:
+    def test_build_response_without_device(self, device_instance: dict[str, Any]) -> None:
         """Test build_response when device is None."""
         cert = device_instance['cert']
 
@@ -289,10 +265,7 @@ class TestEstCertificateMessageResponder:
         assert context.http_response_status == 200
         assert context.http_response_content_type == 'application/x-pem-file'
 
-    def test_build_response_unicode_decode_error(
-        self,
-        device_instance: dict[str, Any]
-    ) -> None:
+    def test_build_response_unicode_decode_error(self, device_instance: dict[str, Any]) -> None:
         """Test build_response when UnicodeDecodeError occurs."""
         cert = device_instance['cert']
 

@@ -10,7 +10,7 @@ class TestAokiUrls:
         """Test that the AOKI init URL resolves correctly."""
         url = reverse('aoki:aoki_init')
         assert url == '/aoki/init/'
-        
+
         resolver = resolve('/aoki/init/')
         assert resolver.view_name == 'aoki:aoki_init'
         assert resolver.namespace == 'aoki'
@@ -19,6 +19,6 @@ class TestAokiUrls:
     def test_aoki_init_url_resolver(self):
         """Test that URL resolver correctly identifies the view."""
         from aoki.views import AokiInitializationRequestView
-        
+
         resolver = resolve('/aoki/init/')
         assert resolver.func.view_class == AokiInitializationRequestView

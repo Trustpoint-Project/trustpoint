@@ -62,7 +62,3 @@ class NotificationDeleteView(LoggerMixin, DeleteView[NotificationModel, Any]):
         response = super().delete(request, *args, **kwargs)
         messages.success(request, _('Notification deleted successfully.'))
         return response
-
-
-
-

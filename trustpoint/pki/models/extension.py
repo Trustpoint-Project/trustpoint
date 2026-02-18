@@ -561,7 +561,7 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
         Returns:
             GeneralNamesModel: The instance of the saved general names.
         """
-        general_names_list: (list[x509.GeneralName] | x509.ExtensionType)
+        general_names_list: list[x509.GeneralName] | x509.ExtensionType
         general_names_list = general_names.value if isinstance(general_names, x509.Extension) else general_names
 
         try:
@@ -581,7 +581,7 @@ class GeneralNamesModel(OrphanDeletionMixin, CustomDeleteActionModel):
                     self._save_registered_id(entry=entry)
                 elif isinstance(entry, x509.OtherName):
                     self._save_other_name(entry=entry)
-        except TypeError as e: # non-iterable passed
+        except TypeError as e:  # non-iterable passed
             msg = f'Expected iterable of GeneralName, got {type(general_names_list).__name__}.'
             raise TypeError(msg) from e
 
@@ -1073,27 +1073,13 @@ class ExtendedKeyUsageExtension(CertificateExtension, models.Model):
 
 
 class GeneralNameModel(OrphanDeletionMixin, CustomDeleteActionModel):
-    rfc822_name = models.ForeignKey(
-        GeneralNameRFC822Name, null=True, blank=True, on_delete=models.PROTECT
-    )
-    dns_name = models.ForeignKey(
-        GeneralNameDNSName, null=True, blank=True, on_delete=models.PROTECT
-    )
-    directory_name = models.ForeignKey(
-        GeneralNameDirectoryName, null=True, blank=True, on_delete=models.PROTECT
-    )
-    uri = models.ForeignKey(
-        GeneralNameUniformResourceIdentifier, null=True, blank=True, on_delete=models.PROTECT
-    )
-    ip_address = models.ForeignKey(
-        GeneralNameIpAddress, null=True, blank=True, on_delete=models.PROTECT
-    )
-    registered_id = models.ForeignKey(
-        GeneralNameRegisteredId, null=True, blank=True, on_delete=models.PROTECT
-    )
-    other_name = models.ForeignKey(
-        GeneralNameOtherName, null=True, blank=True, on_delete=models.PROTECT
-    )
+    rfc822_name = models.ForeignKey(GeneralNameRFC822Name, null=True, blank=True, on_delete=models.PROTECT)
+    dns_name = models.ForeignKey(GeneralNameDNSName, null=True, blank=True, on_delete=models.PROTECT)
+    directory_name = models.ForeignKey(GeneralNameDirectoryName, null=True, blank=True, on_delete=models.PROTECT)
+    uri = models.ForeignKey(GeneralNameUniformResourceIdentifier, null=True, blank=True, on_delete=models.PROTECT)
+    ip_address = models.ForeignKey(GeneralNameIpAddress, null=True, blank=True, on_delete=models.PROTECT)
+    registered_id = models.ForeignKey(GeneralNameRegisteredId, null=True, blank=True, on_delete=models.PROTECT)
+    other_name = models.ForeignKey(GeneralNameOtherName, null=True, blank=True, on_delete=models.PROTECT)
 
     def __str__(self) -> str:
         """Returns a string representation of the GeneralNameModel."""

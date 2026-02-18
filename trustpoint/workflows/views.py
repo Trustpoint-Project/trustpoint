@@ -434,6 +434,7 @@ class WorkflowDefinitionImportView(View):
             steps_out.append({'type': typ, 'params': par})
         return steps_out
 
+
 class WizardPrefillView(View):
     """Returns and CLEARS a one-time wizard prefill from the session."""
 
@@ -703,11 +704,7 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
                 current_step_label = step_label
 
             error_value = ctx.get('error')
-            details = {
-                k: v
-                for k, v in ctx.items()
-                if k not in {'status', 'ok'}
-            }
+            details = {k: v for k, v in ctx.items() if k not in {'status', 'ok'}}
 
             steps.append(
                 {
@@ -797,9 +794,13 @@ class SignalInstanceView(View):
             return redirect('workflows:request_detail', pk=inst.enrollment_request.pk)
 
         if inst.enrollment_request.aggregated_state != State.AWAITING:
-            messages.error(request,
-                           _(f'You can not {action} a workflow where request is already in state \
-                            "{inst.enrollment_request.aggregated_state.lower()}"'))  # noqa: INT001
+            messages.error(
+                request,
+                _('You can not %(action)s a workflow where request is already in state "%(state)s"') % {
+                    'action': action,
+                    'state': inst.enrollment_request.aggregated_state.lower()
+                },
+            )
 
             return redirect('workflows:request_detail', pk=inst.enrollment_request.pk)
 
@@ -813,6 +814,7 @@ class SignalInstanceView(View):
             messages.warning(request, f'Workflow {inst.id} was rejected.')
 
         return redirect('workflows:request_detail', pk=inst.enrollment_request.pk)
+
 
 class EnrollmentRequestListView(ListView[EnrollmentRequest]):
     """List EnrollmentRequests (main pending requests page)."""
@@ -969,10 +971,11 @@ class SignalEnrollmentRequestView(View):
         if er.aggregated_state != State.AWAITING:
             messages.error(
                 request,
-                _('You cannot %s a request already in state: "%s"') % (
+                _('You cannot %s a request already in state: "%s"')
+                % (
                     action,
                     er.aggregated_state.lower(),
-                )
+                ),
             )
 
         insts = list(er.instances.select_related('enrollment_request'))
@@ -1019,10 +1022,7 @@ class BulkSignalEnrollmentRequestsView(View):
             messages.warning(request, 'Please select at least one request.')
             return redirect('workflows:request_table')
 
-        qs = (
-            EnrollmentRequest.objects.filter(id__in=selected_ids)
-            .prefetch_related('instances')
-        )
+        qs = EnrollmentRequest.objects.filter(id__in=selected_ids).prefetch_related('instances')
 
         updatable: list[EnrollmentRequest] = []
 
@@ -1034,9 +1034,8 @@ class BulkSignalEnrollmentRequestsView(View):
             if er.aggregated_state != State.AWAITING:
                 messages.error(
                     request,
-                    _(
-                        'You cannot %(a)a a request which is already in state "%(s)s".'
-                    ) % {'s': er.aggregated_state.lower(), 'a': action},
+                    _('You cannot %(action)s a request which is already in state "%(state)s".')
+                    % {'state': er.aggregated_state.lower(), 'action': action},
                 )
                 return redirect('workflows:request_table')
 

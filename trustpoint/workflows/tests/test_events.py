@@ -10,12 +10,7 @@ class TestEvent:
 
     def test_event_creation(self):
         """Test creating an Event instance."""
-        event = Event(
-            key='test_event',
-            protocol='TEST',
-            operation='test_op',
-            handler='test_handler'
-        )
+        event = Event(key='test_event', protocol='TEST', operation='test_op', handler='test_handler')
         assert event.key == 'test_event'
         assert event.protocol == 'TEST'
         assert event.operation == 'test_op'
@@ -23,44 +18,24 @@ class TestEvent:
 
     def test_event_is_frozen(self):
         """Test that Event is frozen (immutable)."""
-        event = Event(
-            key='test_event',
-            protocol='TEST',
-            operation='test_op',
-            handler='test_handler'
-        )
-        
+        event = Event(key='test_event', protocol='TEST', operation='test_op', handler='test_handler')
+
         # Should not be able to modify frozen dataclass
         try:
             event.key = 'modified'  # type: ignore
-            assert False, "Should not be able to modify frozen dataclass"
+            assert False, 'Should not be able to modify frozen dataclass'
         except Exception:
             pass  # Expected
 
     def test_event_equality(self):
         """Test that two Events with same values are equal."""
-        event1 = Event(
-            key='test',
-            protocol='TEST',
-            operation='op',
-            handler='handler'
-        )
-        event2 = Event(
-            key='test',
-            protocol='TEST',
-            operation='op',
-            handler='handler'
-        )
+        event1 = Event(key='test', protocol='TEST', operation='op', handler='handler')
+        event2 = Event(key='test', protocol='TEST', operation='op', handler='handler')
         assert event1 == event2
 
     def test_event_hashable(self):
         """Test that Event instances are hashable (can be used in sets/dicts)."""
-        event = Event(
-            key='test',
-            protocol='TEST',
-            operation='op',
-            handler='handler'
-        )
+        event = Event(key='test', protocol='TEST', operation='op', handler='handler')
         # Should be able to add to a set
         event_set = {event}
         assert event in event_set

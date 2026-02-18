@@ -32,6 +32,7 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
 
         # Add message framework support
         from django.contrib.messages.storage.fallback import FallbackStorage
+
         self.request.session = {}
         self.request._messages = FallbackStorage(self.request)
 
@@ -89,9 +90,7 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
         """Test successful form submission with SOFTWARE storage type."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE
 
-        form_data = {
-            'storage_type': KeyStorageConfig.StorageType.SOFTWARE
-        }
+        form_data = {'storage_type': KeyStorageConfig.StorageType.SOFTWARE}
 
         self.client.force_login(self.user)
         response = self.client.post(self.url, data=form_data)
@@ -115,9 +114,7 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
         """Test successful form submission with SOFTHSM storage type."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE
 
-        form_data = {
-            'storage_type': KeyStorageConfig.StorageType.SOFTHSM
-        }
+        form_data = {'storage_type': KeyStorageConfig.StorageType.SOFTHSM}
 
         self.client.force_login(self.user)
         response = self.client.post(self.url, data=form_data)
@@ -138,9 +135,7 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
         """Test form submission with PHYSICAL_HSM storage type shows coming soon message."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE
 
-        form_data = {
-            'storage_type': KeyStorageConfig.StorageType.PHYSICAL_HSM
-        }
+        form_data = {'storage_type': KeyStorageConfig.StorageType.PHYSICAL_HSM}
 
         self.client.force_login(self.user)
         response = self.client.post(self.url, data=form_data)
@@ -160,9 +155,7 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE
         mock_execute.side_effect = subprocess.CalledProcessError(5, 'script', 'Invalid crypto storage type provided.')
 
-        form_data = {
-            'storage_type': KeyStorageConfig.StorageType.SOFTWARE
-        }
+        form_data = {'storage_type': KeyStorageConfig.StorageType.SOFTWARE}
 
         self.client.force_login(self.user)
         response = self.client.post(self.url, data=form_data)
@@ -182,9 +175,7 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE
         mock_execute.side_effect = FileNotFoundError('Script not found')
 
-        form_data = {
-            'storage_type': KeyStorageConfig.StorageType.SOFTWARE
-        }
+        form_data = {'storage_type': KeyStorageConfig.StorageType.SOFTWARE}
 
         self.client.force_login(self.user)
         response = self.client.post(self.url, data=form_data)
@@ -204,9 +195,7 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE
         mock_execute.side_effect = RuntimeError('Unexpected error')
 
-        form_data = {
-            'storage_type': KeyStorageConfig.StorageType.SOFTWARE
-        }
+        form_data = {'storage_type': KeyStorageConfig.StorageType.SOFTWARE}
 
         self.client.force_login(self.user)
         response = self.client.post(self.url, data=form_data)
@@ -275,9 +264,7 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
         """Test that form submission saves configuration to database."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE
 
-        form_data = {
-            'storage_type': KeyStorageConfig.StorageType.SOFTWARE
-        }
+        form_data = {'storage_type': KeyStorageConfig.StorageType.SOFTWARE}
 
         # Verify no config exists initially
         self.assertEqual(KeyStorageConfig.objects.count(), 0)
@@ -338,9 +325,7 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
         """Test that success message contains human-readable storage type."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE
 
-        form_data = {
-            'storage_type': KeyStorageConfig.StorageType.SOFTWARE
-        }
+        form_data = {'storage_type': KeyStorageConfig.StorageType.SOFTWARE}
 
         self.client.force_login(self.user)
         response = self.client.post(self.url, data=form_data)
@@ -359,9 +344,7 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
         """Test that view properly logs operations using client approach."""
         mock_get_state.return_value = SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE
 
-        form_data = {
-            'storage_type': KeyStorageConfig.StorageType.SOFTWARE
-        }
+        form_data = {'storage_type': KeyStorageConfig.StorageType.SOFTWARE}
 
         # Use client test instead of direct view instantiation to avoid request attribute issues
         with patch('setup_wizard.views.SetupWizardCryptoStorageView.logger') as mock_logger:
@@ -412,7 +395,9 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
 
                 # Should redirect back to form on error
                 self.assertEqual(response.status_code, 302)
-                self.assertRedirects(response, reverse('setup_wizard:crypto_storage_setup'), fetch_redirect_response=False)
+                self.assertRedirects(
+                    response, reverse('setup_wizard:crypto_storage_setup'), fetch_redirect_response=False
+                )
 
                 # Should have appropriate error message
                 messages = list(get_messages(response.wsgi_request))

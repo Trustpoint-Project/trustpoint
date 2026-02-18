@@ -70,7 +70,6 @@ class TruststoreModel(models.Model):
         ISSUING_CA_CHAIN = 4, _('Issuing CA Chain')
         OPC_UA_GDS_PUSH = 5, _('OPC UA GDS Push')
 
-
     unique_name = models.CharField(
         verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
     )

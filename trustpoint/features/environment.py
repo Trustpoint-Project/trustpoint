@@ -24,6 +24,7 @@ def fail_on_exception(func: Callable) -> Callable:
 
     return wrapper
 
+
 # def before_all(context):
 #     """Initializes browser before all tests."""
 
@@ -31,10 +32,10 @@ def fail_on_exception(func: Callable) -> Callable:
 #     context.browser = webdriver.Chrome()  # or webdriver.Firefox()
 #     context.browser.implicitly_wait(10)  # optional: wait for elements to load
 
- 
+
 # def after_all(context):
 #     """Quit the browser at the end of all tests."""
-    
+
 #     context.browser.quit()
 
 # Monkey-patch Behave's step decorators to automatically wrap all steps

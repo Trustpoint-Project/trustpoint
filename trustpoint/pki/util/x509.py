@@ -234,19 +234,22 @@ class CertificateGenerator:
         """Get a test PKI chain with a specified depth (excluding root CA). depth=0 is a self-signed EE."""
         ee_extensions = [
             (x509.SubjectAlternativeName([x509.UniformResourceIdentifier('test_ee.alt')]), False),
-            (x509.KeyUsage(
-                digital_signature=True,
-                content_commitment=False,
-                key_encipherment=False,
-                data_encipherment=False,
-                key_agreement=True,
-                key_cert_sign=False,
-                crl_sign=False,
-                encipher_only=False,
-                decipher_only=False,
-            ), True),
+            (
+                x509.KeyUsage(
+                    digital_signature=True,
+                    content_commitment=False,
+                    key_encipherment=False,
+                    data_encipherment=False,
+                    key_agreement=True,
+                    key_cert_sign=False,
+                    crl_sign=False,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                True,
+            ),
         ]
-        if (chain_depth == 0):
+        if chain_depth == 0:
             # Create a self-signed EE
             ee_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
             ee_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Test End Entity')])
@@ -302,9 +305,7 @@ class CertificateGenerator:
             CaModel: The created CA model.
         """
         issuing_ca_credential_serializer = CredentialSerializer(
-            private_key=private_key,
-            certificate=issuing_ca_cert,
-            additional_certificates=chain
+            private_key=private_key, certificate=issuing_ca_cert, additional_certificates=chain
         )
 
         # Determine private key location based on CA type and storage configuration
@@ -326,10 +327,7 @@ class CertificateGenerator:
                 logger.exception(error_msg)
                 raise ValueError(error_msg) from e
 
-            if config.storage_type in [
-                KeyStorageConfig.StorageType.SOFTHSM,
-                KeyStorageConfig.StorageType.PHYSICAL_HSM
-            ]:
+            if config.storage_type in [KeyStorageConfig.StorageType.SOFTHSM, KeyStorageConfig.StorageType.PHYSICAL_HSM]:
                 private_key_location = PrivateKeyLocation.HSM_PROVIDED
             else:
                 # Software storage
@@ -346,10 +344,7 @@ class CertificateGenerator:
                 logger.exception(error_msg)
                 raise ValueError(error_msg) from e
 
-            if config.storage_type in [
-                KeyStorageConfig.StorageType.SOFTHSM,
-                KeyStorageConfig.StorageType.PHYSICAL_HSM
-            ]:
+            if config.storage_type in [KeyStorageConfig.StorageType.SOFTHSM, KeyStorageConfig.StorageType.PHYSICAL_HSM]:
                 private_key_location = PrivateKeyLocation.HSM_PROVIDED
             else:
                 error_msg = (
@@ -363,19 +358,17 @@ class CertificateGenerator:
         if not issuing_ca_credential_serializer.private_key:
             err_msg = 'Issuing CA credential serializer must have a private key before saving.'
             raise ValueError(err_msg)
-        issuing_ca_credential_serializer.private_key_reference = (
-            PrivateKeyReference.from_private_key(
-                private_key=issuing_ca_credential_serializer.private_key,
-                key_label=unique_name,
-                location=private_key_location
-            )
+        issuing_ca_credential_serializer.private_key_reference = PrivateKeyReference.from_private_key(
+            private_key=issuing_ca_credential_serializer.private_key,
+            key_label=unique_name,
+            location=private_key_location,
         )
 
         issuing_ca = CaModel.create_new_issuing_ca(
             credential_serializer=issuing_ca_credential_serializer,
             ca_type=ca_type,
             unique_name=unique_name,
-            parent_ca=parent_ca
+            parent_ca=parent_ca,
         )
 
         logger.info("Issuing CA '%s' saved successfully.", unique_name)
@@ -434,7 +427,7 @@ class NginxTLSClientCertExtractor:
             error_message = f'Invalid HTTP_SSL_CLIENT_CERT header: {e}'
             raise ClientCertificateAuthenticationError(error_message) from e
 
-         # Extract intermediate CAs from NGINX variables
+        # Extract intermediate CAs from NGINX variables
         intermediate_cas = []
 
         for i in itertools.count():
@@ -450,6 +443,7 @@ class NginxTLSClientCertExtractor:
 
         return (client_cert, intermediate_cas)
 
+
 class CertificateVerifier:
     """Methods for verifying client and server certificates."""
 
@@ -458,7 +452,7 @@ class CertificateVerifier:
         cert: x509.Certificate,
         subject: str,
         untrusted_intermediates: list[x509.Certificate] | None = None,
-        verification_time: datetime.datetime | None = None
+        verification_time: datetime.datetime | None = None,
     ) -> list[x509.Certificate]:
         """Verifies a server's TLS certificate against a trusted certificate store.
 
@@ -480,16 +474,12 @@ class CertificateVerifier:
         trust_store = Store([cert])
 
         if verification_time is None:
-            verification_time =  datetime.datetime.now(UTC)
+            verification_time = datetime.datetime.now(UTC)
         verifier = (
-            PolicyBuilder()
-            .store(trust_store)
-            .time(verification_time)
-            .build_server_verifier(x509.DNSName(subject))
+            PolicyBuilder().store(trust_store).time(verification_time).build_server_verifier(x509.DNSName(subject))
         )
 
         if untrusted_intermediates is None:
             untrusted_intermediates = []
 
         return verifier.verify(cert, [])
-

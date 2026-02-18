@@ -8,7 +8,8 @@ import time
 logger = logging.getLogger(__name__)
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-LOG_FILE_PATH = os.path.abspath(f"{CURRENT_DIR}/../../media/log/trustpoint.log")
+LOG_FILE_PATH = os.path.abspath(f'{CURRENT_DIR}/../../media/log/trustpoint.log')
+
 
 @when('the admin performs an action {action}')
 def step_when_admin_performs_action(context: runner.Context, action: str) -> None:  # noqa: ARG001
@@ -18,7 +19,7 @@ def step_when_admin_performs_action(context: runner.Context, action: str) -> Non
         context (runner.Context): Behave context.
         action (str): The action being performed.
     """
-    logger.info(f"Admin performed {action} action")
+    logger.info(f'Admin performed {action} action')
 
 
 @then('the system logs the action {action} with relevant details')
@@ -29,14 +30,14 @@ def step_then_system_logs_action(context: runner.Context, action: str) -> None: 
         context (runner.Context): Behave context.
         action (str): The action that should be logged.
     """
-    
-    assert os.path.exists(LOG_FILE_PATH), f"Log file {LOG_FILE_PATH} does not exist."
+
+    assert os.path.exists(LOG_FILE_PATH), f'Log file {LOG_FILE_PATH} does not exist.'
 
     with open(LOG_FILE_PATH, 'r') as f:
         log_contents = f.read()
 
-    expected_log = f"Admin performed {action} action"
-    assert expected_log in log_contents, f"Expected log entry not found: {expected_log}"
+    expected_log = f'Admin performed {action} action'
+    assert expected_log in log_contents, f'Expected log entry not found: {expected_log}'
 
 
 @when('the admin retrieves logs for the time range {time_range}')
@@ -88,7 +89,6 @@ def step_when_admin_modifies_logging(context: runner.Context, log_level: str) ->
     context.new_log_level = log_level
 
 
-
 @then('the system applies the new logging configuration')
 def step_then_system_applies_logging_config(context: runner.Context) -> None:  # noqa: ARG001
     """Verifies that the system applies the updated logging configuration.
@@ -98,7 +98,7 @@ def step_then_system_applies_logging_config(context: runner.Context) -> None:  #
     """
     current_level_num = logging.getLogger().getEffectiveLevel()
     current_log_level = logging.getLevelName(current_level_num)
-    assert current_log_level == context.new_log_level, f"Expected log level is not: {context.new_log_level}"
+    assert current_log_level == context.new_log_level, f'Expected log level is not: {context.new_log_level}'
 
 
 @then('logs reflect the new verbosity level {log_level}')
@@ -111,12 +111,12 @@ def step_then_logs_reflect_log_level(context: runner.Context, log_level: str) ->
     """
     log_level = log_level.upper()
     reset_log_file()
-    
+
     # Emit logs of various levels
-    logger.debug("This is a DEBUG message")
-    logger.info("This is an INFO message")
-    logger.warning("This is a WARNING message")
-    logger.error("This is an ERROR message")
+    logger.debug('This is a DEBUG message')
+    logger.info('This is an INFO message')
+    logger.warning('This is a WARNING message')
+    logger.error('This is an ERROR message')
 
     # Wait for log file flush
     time.sleep(0.5)
@@ -129,11 +129,10 @@ def step_then_logs_reflect_log_level(context: runner.Context, log_level: str) ->
         levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR']
         return levels.index(level) >= levels.index(log_level)
 
-    assert ("DEBUG" in contents) == should_be_present("DEBUG"), "DEBUG presence mismatch"
-    assert ("INFO" in contents) == should_be_present("INFO"), "INFO presence mismatch"
-    assert ("WARNING" in contents) == should_be_present("WARNING"), "WARNING presence mismatch"
-    assert ("ERROR" in contents) == should_be_present("ERROR"), "ERROR presence mismatch"
-
+    assert ('DEBUG' in contents) == should_be_present('DEBUG'), 'DEBUG presence mismatch'
+    assert ('INFO' in contents) == should_be_present('INFO'), 'INFO presence mismatch'
+    assert ('WARNING' in contents) == should_be_present('WARNING'), 'WARNING presence mismatch'
+    assert ('ERROR' in contents) == should_be_present('ERROR'), 'ERROR presence mismatch'
 
 
 @when('the system restarts')
@@ -143,7 +142,7 @@ def step_when_system_restarts(context: runner.Context) -> None:  # noqa: ARG001
     Args:
         context (runner.Context): Behave context.
     """
-    marker = f"PRE_RESTART_LOG_{time.time()}"
+    marker = f'PRE_RESTART_LOG_{time.time()}'
     logger.info(marker)
     context.log_marker = marker
 
@@ -158,13 +157,12 @@ def step_then_previous_logs_are_accessible(context: runner.Context) -> None:  # 
     Args:
         context (runner.Context): Behave context.
     """
-    assert os.path.exists(LOG_FILE_PATH), "Log file does not exist."
+    assert os.path.exists(LOG_FILE_PATH), 'Log file does not exist.'
 
     with open(LOG_FILE_PATH, 'r') as f:
         contents = f.read()
 
-    assert context.log_marker in contents, "Pre-restart log entry not found after simulated restart."
-
+    assert context.log_marker in contents, 'Pre-restart log entry not found after simulated restart.'
 
 
 @then('unauthorized users cannot delete or modify logs')

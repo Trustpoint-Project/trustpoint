@@ -37,8 +37,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
     )
 
     crl_pem = models.TextField(
-        verbose_name=_('CRL in PEM format'),
-        help_text=_('The Certificate Revocation List in PEM format')
+        verbose_name=_('CRL in PEM format'), help_text=_('The Certificate Revocation List in PEM format')
     )
 
     crl_number = models.PositiveBigIntegerField(
@@ -48,33 +47,19 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
         blank=True,
     )
 
-    this_update = models.DateTimeField(
-        verbose_name=_('This Update'),
-        help_text=_('The thisUpdate field from the CRL')
-    )
+    this_update = models.DateTimeField(verbose_name=_('This Update'), help_text=_('The thisUpdate field from the CRL'))
 
     next_update = models.DateTimeField(
-        verbose_name=_('Next Update'),
-        null=True,
-        blank=True,
-        help_text=_('The nextUpdate field from the CRL')
+        verbose_name=_('Next Update'), null=True, blank=True, help_text=_('The nextUpdate field from the CRL')
     )
 
     is_active = models.BooleanField(
-        _('Active'),
-        default=True,
-        help_text=_('Whether this is the current active CRL for the CA')
+        _('Active'), default=True, help_text=_('Whether this is the current active CRL for the CA')
     )
 
-    created_at = models.DateTimeField(
-        verbose_name=_('Created'),
-        auto_now_add=True
-    )
+    created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
-    updated_at = models.DateTimeField(
-        verbose_name=_('Updated'),
-        auto_now=True
-    )
+    updated_at = models.DateTimeField(verbose_name=_('Updated'), auto_now=True)
 
     class Meta:
         """Meta options for CrlModel."""
@@ -108,12 +93,7 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
 
     def raise_invalid_signature_error(self) -> Never:
         """Raises a ValidationError indicating an invalid CRL signature."""
-        raise ValidationError(
-            _(
-                'The CRL signature is invalid. '
-                'This CRL was not signed by this CA.'
-            )
-        )
+        raise ValidationError(_('The CRL signature is invalid. This CRL was not signed by this CA.'))
 
     @classmethod
     def create_from_pem(
@@ -149,17 +129,10 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
 
             # Check if CRL issuer matches CA subject
             if crl.issuer != ca_cert.subject:
-                raise ValidationError(
-                    _('The CRL issuer does not match the CA subject.')
-                )
+                raise ValidationError(_('The CRL issuer does not match the CA subject.'))
 
             if not crl.is_signature_valid(ca_cert.public_key()):  # type: ignore[arg-type]
-                raise ValidationError(
-                    _(
-                        'The CRL signature is invalid. '
-                        'This CRL was not signed by this CA.'
-                    )
-                )
+                raise ValidationError(_('The CRL signature is invalid. This CRL was not signed by this CA.'))
 
         crl_number = None
         try:

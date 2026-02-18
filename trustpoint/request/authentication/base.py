@@ -133,8 +133,9 @@ class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
         """Authenticate the request using all registered components."""
         authentication_errors = []
 
-        self.logger.debug('Authentication components to try: %s',
-                          [component.__class__.__name__ for component in self.components])
+        self.logger.debug(
+            'Authentication components to try: %s', [component.__class__.__name__ for component in self.components]
+        )
         for component in self.components:
             try:
                 component.authenticate(context)

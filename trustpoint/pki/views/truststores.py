@@ -194,29 +194,17 @@ class TruststoreDetailView(TruststoresContextMixin, DetailView[TruststoreModel])
         cert_context = []
         for cert in truststore.certificates.all():
             subject_entries = [
-                {
-                    'oid': entry.oid,
-                    'name': OID_MAP.get(entry.oid),
-                    'value': entry.value
-                }
-                for entry in cert.subject.all()
+                {'oid': entry.oid, 'name': OID_MAP.get(entry.oid), 'value': entry.value} for entry in cert.subject.all()
             ]
 
             issuer_entries = [
-                {
-                    'oid': entry.oid,
-                    'name': OID_MAP.get(entry.oid),
-                    'value': entry.value,
-                    'id': entry.id
-                }
+                {'oid': entry.oid, 'name': OID_MAP.get(entry.oid), 'value': entry.value, 'id': entry.id}
                 for entry in cert.issuer.all()
             ]
 
-            cert_context.append({
-                'certificate': cert,
-                'subject_entries': subject_entries,
-                'issuer_entries': issuer_entries
-            })
+            cert_context.append(
+                {'certificate': cert, 'subject_entries': subject_entries, 'issuer_entries': issuer_entries}
+            )
 
         context['cert_context'] = cert_context
         return context

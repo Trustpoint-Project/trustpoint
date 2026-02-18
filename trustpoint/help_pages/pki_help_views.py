@@ -63,7 +63,7 @@ class BaseHelpView(PageContextMixin, DetailView[DevIdRegistration]):
 
         return HelpContext(
             devid_registration=devid_registration,
-            allowed_app_profiles=[], # not required, IDevID help views only for domain credential, not app certs
+            allowed_app_profiles=[],  # not required, IDevID help views only for domain credential, not app certs
             domain=domain,
             domain_unique_name=domain.unique_name,
             public_key_info=public_key_info,
@@ -291,9 +291,7 @@ class CrlDownloadHelpView(PageContextMixin, DetailView[CaModel]):
         generate_url = reverse('pki:issuing_cas-crl-gen', kwargs={'pk': ca.pk})
         generate_url_with_next = f'{generate_url}?next={help_page_url}'
         generate_button = format_html(
-            '<a href="{}" class="btn btn-primary w-100">{}</a>',
-            generate_url_with_next,
-            _non_lazy('Generate CRL')
+            '<a href="{}" class="btn btn-primary w-100">{}</a>', generate_url_with_next, _non_lazy('Generate CRL')
         )
         crl_status_rows.append(
             HelpRow(
@@ -322,9 +320,7 @@ class CrlDownloadHelpView(PageContextMixin, DetailView[CaModel]):
         )
 
         download_pem_cmd = (
-            f'curl --cacert trustpoint-tls-trust-store.pem \\\n'
-            f'  -o {ca.unique_name}.pem.crl \\\n'
-            f'  "{crl_endpoint}"'
+            f'curl --cacert trustpoint-tls-trust-store.pem \\\n  -o {ca.unique_name}.pem.crl \\\n  "{crl_endpoint}"'
         )
 
         download_der_cmd = (
@@ -373,9 +369,7 @@ class CrlDownloadHelpView(PageContextMixin, DetailView[CaModel]):
         context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
         context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
 
-        context['idevid_registration'] = type('obj', (object,), {
-            'domain': type('obj', (object,), {'pk': ca.pk})()
-        })()
+        context['idevid_registration'] = type('obj', (object,), {'domain': type('obj', (object,), {'pk': ca.pk})()})()
         context['back_url'] = f'{self.page_category}:{self.page_name}-config'
         context['back_button_text'] = _non_lazy('Back to Issuing CA Configuration')
 
