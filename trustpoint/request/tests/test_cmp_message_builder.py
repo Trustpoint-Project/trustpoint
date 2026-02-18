@@ -5,8 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from pyasn1.type import univ
-from pyasn1_modules import rfc4210, rfc4211, rfc5280
+from pyasn1_modules import rfc4210, rfc4211
 
 from request.message_builder.cmp import (
     CmpCertRequestBodyBuilding,
@@ -18,7 +17,7 @@ from request.message_builder.cmp import (
     _der_tlv,
 )
 from request.request_context import BaseRequestContext, CmpCertificateRequestContext
-from trustpoint_core.oid import AlgorithmIdentifier, HashAlgorithm, HmacAlgorithm
+from trustpoint_core.oid import HmacAlgorithm
 
 
 class TestCmpMessageBuilderError:

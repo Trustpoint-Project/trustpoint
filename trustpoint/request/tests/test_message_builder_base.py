@@ -1,7 +1,5 @@
 """Unit tests for the message builder base classes."""
 
-from unittest.mock import Mock
-
 import pytest
 
 from request.message_builder.base import BuildingComponent, CompositeBuilding
