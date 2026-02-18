@@ -123,17 +123,6 @@ class CertificateModel(LoggerMixin, CustomDeleteActionModel):
         BRAINPOOLP384R1 = NamedCurve.BRAINPOOLP384R1.dotted_string
         BRAINPOOLP512R1 = NamedCurve.BRAINPOOLP512R1.dotted_string
 
-        SECT163K1 = NamedCurve.SECT163K1.dotted_string
-        SECT163R2 = NamedCurve.SECT163R2.dotted_string
-        SECT233K1 = NamedCurve.SECT233K1.dotted_string
-        SECT233R1 = NamedCurve.SECT233R1.dotted_string
-        SECT283K1 = NamedCurve.SECT283K1.dotted_string
-        SECT283R1 = NamedCurve.SECT283R1.dotted_string
-        SECT409K1 = NamedCurve.SECT409K1.dotted_string
-        SECT409R1 = NamedCurve.SECT409R1.dotted_string
-        SECT571K1 = NamedCurve.SECT571K1.dotted_string
-        SECT571R1 = NamedCurve.SECT571R1.dotted_string
-
     # ----------------------------------------------- Custom Data Fields -----------------------------------------------
 
     is_self_signed = models.BooleanField(verbose_name=_('Self-Signed'), null=False, blank=False)
