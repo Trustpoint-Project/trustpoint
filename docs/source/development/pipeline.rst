@@ -458,52 +458,6 @@ Authorization Module Diagram
     @enduml
 
 
-Request Pipeline Flow
-=====================
-
-The following diagram shows how requests flow through the entire pipeline:
-
-.. plantuml::
-
-    @startuml
-    start
-    :Receive HTTP Request;
-    :HTTP Validation;
-    if (Valid?) then (yes)
-    else (no)
-        :Return HTTP Error;
-        stop
-    endif
-    :Message Parsing;
-    if (Valid?) then (yes)
-    else (no)
-        :Return Parse Error;
-        stop
-    endif
-    :Authentication;
-    if (Authentic?) then (yes)
-    else (no)
-        :Return Auth Error;
-        stop
-    endif
-    :Authorization;
-    if (Authorized?) then (yes)
-    else (no)
-        :Return Auth Error;
-        stop
-    endif
-    :Process Request;
-    if (Success?) then (yes)
-    else (no)
-        :Return Processing Error;
-        stop
-    endif
-    :Generate Response;
-    :Return Response;
-    stop
-    @enduml
-
-
 Key Concepts
 ============
 
