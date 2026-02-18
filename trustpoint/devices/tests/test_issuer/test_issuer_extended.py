@@ -2,16 +2,14 @@
 
 import ipaddress
 from typing import Any
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from pki.util.keys import KeyGenerator
 
 from devices.issuer import (
-    BaseTlsCredentialIssuer,
     CredentialSaver,
     LocalDomainCredentialIssuer,
     LocalTlsClientCredentialIssuer,

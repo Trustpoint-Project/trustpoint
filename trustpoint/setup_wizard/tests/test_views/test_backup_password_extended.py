@@ -1,12 +1,11 @@
 """Extended tests for backup password view error handling."""
 
 import subprocess
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.messages import get_messages
 from django.test import RequestFactory
-from django.urls import reverse
 
 from management.models import PKCS11Token
 from setup_wizard import SetupWizardState

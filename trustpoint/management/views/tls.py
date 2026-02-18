@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
@@ -10,10 +10,15 @@ from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import FormView, TemplateView, View
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import filters, viewsets
+from rest_framework.permissions import IsAuthenticated
 
 from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.management.commands.update_tls import Command as UpdateTlsCommand
 from management.models import TlsSettings
+from management.serializer.credential import CredentialSerializer
 from pki.models import CertificateModel, CredentialModel, GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.forms import StartupWizardTlsCertificateForm
@@ -304,3 +309,30 @@ class ActivateTlsServerView(View, LoggerMixin):
             self.logger.exception('Unexpected error activating TLS certificate')
             messages.error(request, 'An unexpected error occurred while activating TLS certificate')
         return redirect(reverse('management:tls'))
+
+@extend_schema(tags=['Tls'])
+@extend_schema_view(
+    list=extend_schema(description='Retrieve a list of all TLS Certificates.'),
+    retrieve=extend_schema(description='Retrieve a single TLS Certificate by id.'),
+    create=extend_schema(description='Create a TLS Certificate.'),
+    update=extend_schema(description='Update an existing TLS Certificate.'),
+    partial_update=extend_schema(description='Partially update an existing TLS Certificate.'),
+    destroy=extend_schema(description='Delete a TLS Certificate.')
+)
+class TlsViewSet(viewsets.ModelViewSet[Any]):
+    """ViewSet for managing Backup instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+    queryset = CredentialModel.objects.all().order_by('-created_at')
+    serializer_class = CredentialSerializer
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    )
+    filterset_fields: ClassVar = ['credential_type']
+    search_fields: ClassVar = ['certificates']
+    ordering_fields: ClassVar = ['created_at']

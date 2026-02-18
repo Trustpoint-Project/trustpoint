@@ -1,7 +1,6 @@
 """Tests for GDS Push service."""
 
 import datetime
-import tempfile
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest

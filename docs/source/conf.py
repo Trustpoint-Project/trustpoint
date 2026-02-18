@@ -42,6 +42,7 @@ extensions = [
     'sphinx.ext.inheritance_diagram',  # Generates class inheritance diagrams
     'sphinx.ext.viewcode',  # Adds links to highlighted source code
     'sphinxcontrib.plantuml',  # Enables PlantUML diagrams
+    'sphinxcontrib.openapi' #  Generate APIs docs
 ]
 
 if BUILD_AUTODOCS:
@@ -51,12 +52,26 @@ if BUILD_AUTODOCS:
         'autoapi.extension',  # Automatically documents the API
     ]
     extensions.extend(autodoc_extensions)
-    autoapi_dirs = ['../../trustpoint']  # Directories for autoapi to scan
+    autoapi_dirs = [
+        '../../trustpoint',
+    ]
     autodoc_typehints = 'description'  # Display type hints in descriptions
+    autoapi_ignore_patterns = [
+        '*features*',
+        '*tests*',
+        '*testing*',
+        '*__pycache__*',
+        '*migrations*',
+        '*unused*',
+        '*conftest.py',
+    ]  # Exclude features, tests, and related folders from AutoAPI
 
 # -- Templates and exclusions -----------------------------------------------
 templates_path = ['_templates']  # Custom templates directory
-exclude_patterns = ['_build', '_templates']  # Ignore these directories
+exclude_patterns = [
+    '_build',
+    '_templates',
+]
 
 # -- HTML output options ----------------------------------------------------
 html_theme = 'furo'  # Modern, responsive theme

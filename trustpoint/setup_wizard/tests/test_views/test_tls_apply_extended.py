@@ -1,8 +1,7 @@
 """Comprehensive tests for TLS apply view form_valid and write_pem_files methods."""
 
 import subprocess
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.messages import get_messages

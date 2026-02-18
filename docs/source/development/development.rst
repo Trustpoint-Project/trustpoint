@@ -104,26 +104,36 @@ Running the development server
 
 You can then access the GUI through localhost:8000.
 
+You can also specify a different port by appending it to the command, e.g.:
+
+.. code:: bash
+
+   uv run manage.py runserver 0.0.0.0:8080
+
 Alternatively, use the following command to run a development HTTPS
 server (self-signed certificate).
 
 .. code:: bash
 
-   python manage.py runserver_plus 0.0.0.0:443 --cert-file ../tests/data/x509/https_server.crt --key-file ../tests/data/x509/https_server.pem
+   uv run manage.py runserver_plus 0.0.0.0:443 --cert-file ../tests/data/x509/https_server.crt --key-file ../tests/data/x509/https_server.pem
 
-Use the following command to automatically generate a self-signed TLS
-server certificate for your current IP addresses:
+A self-signed TLS server certificate is already provided in the test data directory.
+If you need to regenerate it (e.g., with different IP addresses or hostnames),
+use the following command:
 
 .. code:: bash
 
-   python manage.py create_tls_certs
+   uv run manage.py create_tls_certs
+
+Note: The command generates a certificate with predefined IP addresses (127.0.0.1, 192.168.88.10)
+and hostnames (localhost, trustpoint.local). Modify the command source code to customize these values.
 
 ^^^^^^^^^^
 Logging in
 ^^^^^^^^^^
 
 Browsing to any page should redirect you to the login page. The login
-page can be accessed directly via /users/login/.
+page can be accessed directly via `/users/login/`.
 
 Use the username and password which you previously provided through the
 **createsuperuser** command.
@@ -236,6 +246,61 @@ Trustpoint uses behave to run BDD tests. The tests are located in the
 .. code:: shell
 
    uv run manage.py behave
+
+---------------------
+Before committing checklist
+---------------------
+
+Before pushing your changes, ensure the following:
+
+1. **Format your code** with ruff:
+
+   .. code:: shell
+
+      uv run ruff format .
+
+2. **Lint your code** with ruff:
+
+   .. code:: shell
+
+      uv run ruff check . --output-format=concise
+
+3. **Check type annotations** with mypy:
+
+   .. code:: shell
+
+      uv run mypy .
+
+4. **Run all tests**:
+
+   .. code:: shell
+
+      uv run pytest
+
+5. **Run migrations** if you modified models:
+
+   .. code:: shell
+
+      cd trustpoint
+      uv run manage.py makemigrations
+
+6. **Check for merge conflicts** in migration files:
+
+   .. code:: shell
+
+      git status
+
+   If there are duplicate migrations (e.g., multiple ``0003_tp_v0_5_0_dev1.py`` files),
+   combine them before committing.
+
+7. **Verify database state** by running:
+
+   .. code:: shell
+
+      cd trustpoint
+      uv run manage.py reset_db
+
+   This ensures your changes work with a fresh database.
 
 --------------------
 Editor configuration
