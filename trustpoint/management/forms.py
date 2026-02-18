@@ -317,7 +317,17 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
                 self._raise_validation_error('The provided PKCS#12 file does not contain a valid certificate.')
             if not isinstance(certificate, Certificate):
                 self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
-            CertificateVerifier.verify_server_cert(certificate, domain_name)  # type: ignore[arg-type]
+
+            # For self-signed certificates, treat the certificate itself as a trusted root
+            trusted_roots = [certificate] if certificate.issuer == certificate.subject else []
+            untrusted_intermediates = tls_credential_serializer.additional_certificates or []
+
+            CertificateVerifier.verify_server_cert(
+                certificate,
+                domain_name,
+                trusted_roots=trusted_roots,
+                untrusted_intermediates=untrusted_intermediates
+            )
             self.saved_credential = CredentialModel.save_credential_serializer(
                 credential_serializer=tls_credential_serializer,
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
@@ -502,7 +512,16 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         if certificate is None or not isinstance(certificate, Certificate):
             self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
 
-        CertificateVerifier.verify_server_cert(certificate, domain_name)  # type: ignore[arg-type]
+        # For self-signed certificates, treat the certificate itself as a trusted root
+        trusted_roots = [certificate] if certificate.issuer == certificate.subject else []
+        untrusted_intermediates = credential_serializer.additional_certificates or []
+
+        CertificateVerifier.verify_server_cert(
+            certificate,
+            domain_name,
+            trusted_roots=trusted_roots,
+            untrusted_intermediates=untrusted_intermediates
+        )
 
         self.saved_credential = CredentialModel.save_credential_serializer(
             credential_serializer=credential_serializer,

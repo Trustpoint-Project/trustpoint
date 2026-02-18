@@ -10,14 +10,15 @@ from datetime import UTC
 from typing import TYPE_CHECKING, get_args
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
 from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
-from management.models import KeyStorageConfig
+from management.models import KeyStorageConfig, SecurityConfig
+from notifications.models import WeakECCCurve, WeakSignatureAlgorithm
 from pki.models import CaModel
 from pki.util.keys import CryptographyUtils
 
@@ -451,36 +452,235 @@ class NginxTLSClientCertExtractor:
         return (client_cert, intermediate_cas)
 
 class CertificateVerifier:
-    """Methods for verifying client and server certificates."""
+    """Methods for verifying client, server, and CA certificates."""
+
+    @staticmethod
+    def _check_rsa_key_size(certificate: x509.Certificate) -> None:
+        """Check if an RSA certificate meets the minimum key size requirement.
+
+        Non-RSA certificates (ECC, etc.) automatically pass this check.
+
+        Args:
+            certificate (x509.Certificate): The certificate to validate.
+
+        Raises:
+            ValueError: If the certificate is RSA but the key size is below the minimum,
+                       or if SecurityConfig is not configured.
+        """
+        security_config = SecurityConfig.objects.first()
+        if not security_config or not security_config.security_mode:
+            msg = 'SecurityConfig or security_mode is not configured.'
+            raise ValueError(msg)
+
+        config_values = security_config.NOTIFICATION_CONFIGURATIONS.get(security_config.security_mode, {})
+        if not config_values:
+            msg = f'No configuration found for security mode: {security_config.security_mode}'
+            raise ValueError(msg)
+
+        public_key = certificate.public_key()
+
+        if isinstance(public_key, rsa.RSAPublicKey):
+            minimum_key_size = config_values.get('rsa_minimum_key_size', 2048)
+            if public_key.key_size < minimum_key_size:
+                err_msg = (
+                    f'RSA certificate key size ({public_key.key_size} bits) is below the minimum '
+                    f'required by security policy ({minimum_key_size} bits).'
+                )
+                raise ValueError(err_msg)
+
+    @staticmethod
+    def _check_ecc_curve(certificate: x509.Certificate) -> None:
+        """Check if an ECC certificate uses a weak curve according to security policy.
+
+        RSA and other key types automatically pass this check.
+
+        Args:
+            certificate (x509.Certificate): The certificate to validate.
+
+        Raises:
+            ValueError: If the certificate uses an ECC curve listed as weak in security policy,
+                       or if SecurityConfig is not configured.
+        """
+        security_config = SecurityConfig.objects.first()
+        if not security_config or not security_config.security_mode:
+            msg = 'SecurityConfig or security_mode is not configured.'
+            raise ValueError(msg)
+
+        config_values = security_config.NOTIFICATION_CONFIGURATIONS.get(security_config.security_mode, {})
+        if not config_values:
+            msg = f'No configuration found for security mode: {security_config.security_mode}'
+            raise ValueError(msg)
+
+        public_key = certificate.public_key()
+
+        if isinstance(public_key, ec.EllipticCurvePublicKey):
+            curve_name = public_key.curve.name
+            weak_ecc_curve_oids = config_values.get('weak_ecc_curves', [])
+
+            for weak_curve_oid in weak_ecc_curve_oids:
+                # weak_curve_oid is a WeakECCCurve.ECCCurveChoices enum value
+                weak_curve = WeakECCCurve.objects.filter(oid=weak_curve_oid).first()
+                if weak_curve and weak_curve.oid == curve_name:
+                    err_msg = (
+                        f'ECC certificate uses a weak curve ({curve_name}) according to '
+                        f'security policy ({security_config.get_security_mode_display()}).'
+                    )
+                    raise ValueError(err_msg)
+
+    @staticmethod
+    def _check_ca_key_usage(
+        certificate: x509.Certificate,
+        required_key_usage: x509.KeyUsage | None = None
+    ) -> None:
+        """Check if a certificate has valid CA key usage.
+
+        Validates that the certificate has:
+        - key_cert_sign: True (required for all CAs)
+        - crl_sign: True (required for CA certificates)
+
+        Args:
+            certificate (x509.Certificate): The certificate to validate.
+            required_key_usage (x509.KeyUsage | None): Optional exact key usage to match.
+
+        Raises:
+            ValueError: If key usage is invalid or missing.
+        """
+        try:
+            cert_key_usage = certificate.extensions.get_extension_for_class(x509.KeyUsage)
+        except x509.ExtensionNotFound as e:
+            err_msg = 'Certificate is missing required KeyUsage extension.'
+            raise ValueError(err_msg) from e
+
+        key_usage = cert_key_usage.value
+
+        if not key_usage.key_cert_sign:
+            err_msg = 'Certificate does not have key_cert_sign usage: cannot be used as a CA.'
+            raise ValueError(err_msg)
+
+        if not key_usage.crl_sign:
+            err_msg = 'Certificate does not have crl_sign usage: required for CA certificates.'
+            raise ValueError(err_msg)
+
+        if required_key_usage is not None and key_usage != required_key_usage:
+            err_msg = (
+                f'Certificate key usage does not match required key usage. '
+                f'Expected: {required_key_usage}, Got: {key_usage}'
+            )
+            raise ValueError(err_msg)
+
+    @staticmethod
+    def _check_ca_basic_constraints(certificate: x509.Certificate) -> None:
+        """Check if a certificate has valid CA basic constraints.
+
+        Args:
+            certificate (x509.Certificate): The certificate to validate.
+
+        Raises:
+            ValueError: If basic constraints are invalid or missing.
+        """
+        try:
+            basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints)
+        except x509.ExtensionNotFound as e:
+            err_msg = 'Certificate is missing required BasicConstraints extension.'
+            raise ValueError(err_msg) from e
+
+        if not basic_constraints.value.ca:
+            err_msg = 'Certificate is not a CA certificate: BasicConstraints.ca is False.'
+            raise ValueError(err_msg)
+
+    @staticmethod
+    def _check_signature_algorithm(certificate: x509.Certificate) -> None:
+        """Check if a certificate uses a weak signature algorithm according to security policy.
+
+        Args:
+            certificate (x509.Certificate): The certificate to validate.
+
+        Raises:
+            ValueError: If the certificate uses a signature algorithm listed as weak in security policy,
+                       or if SecurityConfig is not properly configured.
+        """
+        security_config = SecurityConfig.objects.first()
+        if not security_config or not security_config.security_mode:
+            msg = 'SecurityConfig or security_mode is not configured.'
+            raise ValueError(msg)
+
+        config_values = security_config.NOTIFICATION_CONFIGURATIONS.get(security_config.security_mode, {})
+        if not config_values:
+            msg = f'No configuration found for security mode: {security_config.security_mode}'
+            raise ValueError(msg)
+
+        signature_algorithm_oid = certificate.signature_algorithm_oid
+        weak_signature_algorithm_oids = config_values.get('weak_signature_algorithms', [])
+
+        for weak_algo_oid in weak_signature_algorithm_oids:
+            # weak_algo_oid is a WeakSignatureAlgorithm.SignatureChoices enum value
+            weak_algo = WeakSignatureAlgorithm.objects.filter(oid=weak_algo_oid).first()
+            if weak_algo and weak_algo.oid == str(signature_algorithm_oid):
+                hash_algo = certificate.signature_hash_algorithm
+                algo_name = (
+                    hash_algo.__class__.__name__ if hash_algo else 'unknown'
+                )
+                err_msg = (
+                    f'Certificate uses a weak signature algorithm ({algo_name}) according to '
+                    f'security policy ({security_config.get_security_mode_display()}).'
+                )
+                raise ValueError(err_msg)
 
     @staticmethod
     def verify_server_cert(
         cert: x509.Certificate,
         subject: str,
+        trusted_roots: list[x509.Certificate] | None = None,
         untrusted_intermediates: list[x509.Certificate] | None = None,
         verification_time: datetime.datetime | None = None
     ) -> list[x509.Certificate]:
         """Verifies a server's TLS certificate against a trusted certificate store.
 
+        Performs full X.509 chain validation including:
+        - Certificate validity (not before/not after)
+        - Hostname verification (DNS name matching against SAN)
+        - Chain building to a trusted root CA
+        - Basic constraints and key usage extensions
+        - RSA key size validation (if RSA certificate)
+        - ECC curve strength validation (if ECC certificate)
+        - Signature algorithm strength validation
+
         Args:
-            cert (x509.Certificate): The DER- or PEM-encoded leaf server certificate to verify.
+            cert (x509.Certificate): The leaf server certificate to verify.
             subject (str): The expected DNS name or hostname to match against the certificate's
-                Subject Alternative Name (SAN).
-            untrusted_intermediates (list[x509.Certificate]): DER- or PEM-encoded intermediate certificates that are
-                not trusted by default but provided to assist chain building.
-            verification_time (datetime): Certificate verification time
+                Subject Alternative Name (SAN) extension.
+            trusted_roots (list[x509.Certificate] | None): List of trusted root CA certificates to use as the
+                trust anchor. If None, the verification will fail as there is no trust anchor.
+            untrusted_intermediates (list[x509.Certificate] | None): Intermediate certificates that are
+                not trusted by default but provided to assist chain building. Used to help construct
+                the certificate path from the leaf to a trusted root.
+            verification_time (datetime.datetime | None): The time at which to verify the certificate validity.
+                If None, defaults to the current UTC time.
 
         Returns:
-            list[x509.Certificate]: A validated certificate chain from the leaf certificate up to a trusted root.
+            list[x509.Certificate]: A validated certificate chain from the leaf certificate up to a trusted root,
+                ordered from leaf to root.
 
         Raises:
-            VerificationError: If a valid chain cannot be constructed.
-            UnsupportedGeneralNameType: If a valid chain exists, but contains an unsupported general name type.
+            VerificationError: If a valid chain cannot be constructed, the certificate is not valid at the
+                verification time, or the subject name does not match the provided DNS name.
+            UnsupportedGeneralNameType: If a valid chain exists, but contains an unsupported general name type
+                in the Subject Alternative Name extension.
+            ValueError: If the certificate is RSA but the key size is below the minimum required by security policy,
+                if the ECC curve is weak according to security policy, or if the signature algorithm is weak.
         """
-        trust_store = Store([cert])
+        CertificateVerifier._check_rsa_key_size(cert)
+        CertificateVerifier._check_ecc_curve(cert)
+        CertificateVerifier._check_signature_algorithm(cert)
+
+        if trusted_roots is None:
+            trusted_roots = []
+
+        trust_store = Store(trusted_roots)
 
         if verification_time is None:
-            verification_time =  datetime.datetime.now(UTC)
+            verification_time = datetime.datetime.now(UTC)
+
         verifier = (
             PolicyBuilder()
             .store(trust_store)
@@ -491,5 +691,207 @@ class CertificateVerifier:
         if untrusted_intermediates is None:
             untrusted_intermediates = []
 
-        return verifier.verify(cert, [])
+        return verifier.verify(cert, untrusted_intermediates)
+
+    @staticmethod
+    def _verify_cert_signature(cert: x509.Certificate, issuer_cert: x509.Certificate) -> None:
+        """Verify that a certificate was signed by the given issuer certificate.
+
+        Args:
+            cert: The certificate whose signature is to be verified.
+            issuer_cert: The issuer certificate containing the public key.
+
+        Raises:
+            ValueError: If the signature verification fails.
+            TypeError: If the issuer public key type is unsupported.
+        """
+        issuer_public_key = issuer_cert.public_key()
+        if isinstance(issuer_public_key, rsa.RSAPublicKey):
+            try:
+                issuer_public_key.verify(
+                    cert.signature,
+                    cert.tbs_certificate_bytes,
+                    padding.PKCS1v15(),
+                    cert.signature_hash_algorithm,
+                )
+            except Exception as e:
+                err_msg = f'Certificate signature verification failed: {e}'
+                raise ValueError(err_msg) from e
+        elif isinstance(issuer_public_key, ec.EllipticCurvePublicKey):
+            try:
+                issuer_public_key.verify(
+                    cert.signature,
+                    cert.tbs_certificate_bytes,
+                    ec.ECDSA(cert.signature_hash_algorithm),
+                )
+            except Exception as e:
+                err_msg = f'Certificate signature verification failed: {e}'
+                raise ValueError(err_msg) from e
+        else:
+            err_msg = f'Unsupported issuer public key type: {type(issuer_public_key)}'
+            raise TypeError(err_msg)
+
+    @staticmethod
+    def _try_verify_against_issuer(
+        current: x509.Certificate,
+        candidate: x509.Certificate,
+        chain: list[x509.Certificate],
+        trusted_roots: list[x509.Certificate],
+        all_candidates: list[x509.Certificate],
+    ) -> list[x509.Certificate] | None:
+        """Try to verify current against a candidate issuer and recursively build the chain.
+
+        Args:
+            current: The certificate to verify.
+            candidate: The potential issuer certificate.
+            chain: The chain built so far.
+            trusted_roots: Trusted root CA certificates.
+            all_candidates: All intermediate + root candidates.
+
+        Returns:
+            The completed chain if successful, None otherwise.
+        """
+        if current.issuer != candidate.subject or candidate in chain:
+            return None
+        try:
+            CertificateVerifier._verify_cert_signature(current, candidate)
+        except (ValueError, TypeError):
+            return None
+        return CertificateVerifier._find_chain(candidate, [*chain, candidate], trusted_roots, all_candidates)
+
+    @staticmethod
+    def _find_chain(
+        current: x509.Certificate,
+        chain: list[x509.Certificate],
+        trusted_roots: list[x509.Certificate],
+        all_candidates: list[x509.Certificate],
+    ) -> list[x509.Certificate] | None:
+        """Recursively find a chain from current to a trusted root.
+
+        Args:
+            current: The current certificate being evaluated.
+            chain: The chain built so far (leaf to current).
+            trusted_roots: Trusted root CA certificates.
+            all_candidates: All intermediate + root candidates.
+
+        Returns:
+            The completed chain if a trusted root is reached, None otherwise.
+        """
+        for root in trusted_roots:
+            if current.issuer != root.subject:
+                continue
+            try:
+                CertificateVerifier._verify_cert_signature(current, root)
+            except (ValueError, TypeError):
+                continue
+            else:
+                return [*chain, root] if current != root else chain
+
+        for candidate in all_candidates:
+            result = CertificateVerifier._try_verify_against_issuer(
+                current, candidate, chain, trusted_roots, all_candidates
+            )
+            if result is not None:
+                return result
+        return None
+
+    @staticmethod
+    def _build_ca_chain(
+        cert: x509.Certificate,
+        trusted_roots: list[x509.Certificate],
+        untrusted_intermediates: list[x509.Certificate],
+    ) -> list[x509.Certificate]:
+        """Build and verify a certificate chain from cert up to a trusted root.
+
+        Args:
+            cert: The CA certificate to verify.
+            trusted_roots: Trusted root CA certificates.
+            untrusted_intermediates: Untrusted intermediate certificates for chain building.
+
+        Returns:
+            The verified chain from leaf to trusted root.
+
+        Raises:
+            ValueError: If no valid chain can be built to a trusted root.
+        """
+        all_candidates = untrusted_intermediates + trusted_roots
+        chain = CertificateVerifier._find_chain(cert, [cert], trusted_roots, all_candidates)
+        if chain is None:
+            err_msg = 'Could not build a valid certificate chain to a trusted root.'
+            raise ValueError(err_msg)
+        return chain
+
+    @staticmethod
+    def verify_ca_cert(
+        cert: x509.Certificate,
+        trusted_roots: list[x509.Certificate] | None = None,
+        untrusted_intermediates: list[x509.Certificate] | None = None,
+        verification_time: datetime.datetime | None = None,
+        required_key_usage: x509.KeyUsage | None = None,
+    ) -> list[x509.Certificate]:
+        """Verifies a CA certificate against a trusted certificate store.
+
+        Performs full X.509 chain validation including:
+        - Certificate validity (not before/not after)
+        - Chain building to a trusted root CA with signature verification
+        - BasicConstraints extension validation (ca=True)
+        - KeyUsage extension validation (key_cert_sign=True, crl_sign=True)
+        - RSA key size validation (if RSA certificate)
+        - ECC curve strength validation (if ECC certificate)
+        - Signature algorithm strength validation
+
+        Note: Unlike verify_server_cert, this method does NOT use PolicyBuilder as it
+        only supports EE certificates. CA chain verification is performed manually via
+        signature verification and issuer/subject name matching.
+
+        Args:
+            cert (x509.Certificate): The CA certificate to verify.
+            trusted_roots (list[x509.Certificate] | None): List of trusted root CA certificates to use as the
+                trust anchor. If None, defaults to empty list. For self-signed CAs, include the cert itself
+                or set to [cert].
+            untrusted_intermediates (list[x509.Certificate] | None): Intermediate CA certificates that are
+                not trusted by default but provided to assist chain building. Used to help construct
+                the certificate path from the leaf CA to a trusted root.
+            verification_time (datetime.datetime | None): The time at which to verify the certificate validity.
+                If None, defaults to the current UTC time.
+            required_key_usage (x509.KeyUsage | None): Expected KeyUsage extension. If provided, the certificate's
+                key usage must match exactly. If None, only validates required usages.
+
+        Returns:
+            list[x509.Certificate]: A validated certificate chain from the CA certificate up to a trusted root,
+                ordered from leaf to root.
+
+        Raises:
+            ValueError: If the certificate lacks required CA extensions, security properties are
+                insufficient, validity period is outside the verification time, or chain cannot be built.
+        """
+        # Validate CA extensions first
+        CertificateVerifier._check_ca_basic_constraints(cert)
+        CertificateVerifier._check_ca_key_usage(cert, required_key_usage)
+
+        # Validate certificate security properties
+        CertificateVerifier._check_rsa_key_size(cert)
+        CertificateVerifier._check_ecc_curve(cert)
+        CertificateVerifier._check_signature_algorithm(cert)
+
+        if verification_time is None:
+            verification_time = datetime.datetime.now(UTC)
+
+        # Validate validity period
+        not_before = cert.not_valid_before_utc
+        not_after = cert.not_valid_after_utc
+        if not (not_before <= verification_time <= not_after):
+            err_msg = (
+                f'Certificate is not valid at {verification_time}. '
+                f'Valid from {not_before} to {not_after}.'
+            )
+            raise ValueError(err_msg)
+
+        if trusted_roots is None:
+            trusted_roots = []
+        if untrusted_intermediates is None:
+            untrusted_intermediates = []
+
+        return CertificateVerifier._build_ca_chain(cert, trusted_roots, untrusted_intermediates)
+
 
