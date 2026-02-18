@@ -64,9 +64,6 @@ class SecurityConfig(models.Model):
             'issuing_ca_expiry_warning_days': 20,
             'rsa_minimum_key_size': 2048,
             'weak_ecc_curves': [
-                WeakECCCurve.ECCCurveChoices.SECP160R1,
-                WeakECCCurve.ECCCurveChoices.SECT163K1,
-                WeakECCCurve.ECCCurveChoices.SECT163R2,
             ],
             'weak_signature_algorithms': [
                 WeakSignatureAlgorithm.SignatureChoices.MD5,
@@ -78,9 +75,6 @@ class SecurityConfig(models.Model):
             'issuing_ca_expiry_warning_days': 25,
             'rsa_minimum_key_size': 3072,
             'weak_ecc_curves': [
-                WeakECCCurve.ECCCurveChoices.SECP160R1,
-                WeakECCCurve.ECCCurveChoices.SECT163K1,
-                WeakECCCurve.ECCCurveChoices.SECT163R2,
             ],
             'weak_signature_algorithms': [
                 WeakSignatureAlgorithm.SignatureChoices.MD5,
@@ -94,8 +88,6 @@ class SecurityConfig(models.Model):
             'rsa_minimum_key_size': 4096,
             'weak_ecc_curves': [
                 WeakECCCurve.ECCCurveChoices.SECP160R1,
-                WeakECCCurve.ECCCurveChoices.SECT163K1,
-                WeakECCCurve.ECCCurveChoices.SECT163R2,
                 WeakECCCurve.ECCCurveChoices.SECP192R1,
                 WeakECCCurve.ECCCurveChoices.SECP224R1,
             ],

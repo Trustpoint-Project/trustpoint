@@ -33,7 +33,7 @@ dependencies = [
     "pydantic>=2.11.7",
     "pydeps>=3.0.1",
     "python-pkcs11>=0.8.1",
-    "trustpoint-core==0.3.0",
+    "trustpoint-core==0.3.1",
     "types-paramiko>=3.5.0.20250516",
     "zeroconf>=0.148,<0.149",
     "asyncua>=1.1.5",
