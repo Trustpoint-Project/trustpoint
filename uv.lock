@@ -598,6 +598,31 @@ wheels = [
 ]
 
 [[package]]
+name = "django-picklefield"
+version = "3.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/93/03/13114bccbd1ec8c026ac1ff33dae75ae6c6a5632e4769ee9cda283b9f57e/django_picklefield-3.4.0.tar.gz", hash = "sha256:3a1f740536c0e60d0dba43aa89ccdbe86760d4c3f8ec47799eae122baa741d0a", size = 12555, upload-time = "2025-11-27T03:11:53.13Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/79/b7/139eb1419ca7b27fd714925b8d0eed6efb592479dcf2155fed6c0c87c956/django_picklefield-3.4.0-py3-none-any.whl", hash = "sha256:929bcfbae5b48bd22a52bc04521fdfdd152eee36abb9f20228f9480f9df65f45", size = 10031, upload-time = "2025-11-27T03:11:51.937Z" },
+]
+
+[[package]]
+name = "django-q2"
+version = "1.9.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+    { name = "django-picklefield" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/fc/e6/21375bed54a4be1339f6ee31e4173d361d457dbe91db7bff130b52566126/django_q2-1.9.0.tar.gz", hash = "sha256:ef7facca96fae9c11ddf2c5252d3817975c7a9a6d989fa0d65487d8823d57799", size = 77218, upload-time = "2025-12-04T22:11:29.336Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3e/b7/8282f9815fc9df3187d9303a6f54e0388e02742255dee1fed7b4019a03ae/django_q2-1.9.0-py3-none-any.whl", hash = "sha256:4eded27644b0ffb291839c9f9c12fea6c0dec63ebd891fa6881b0b446098a49d", size = 89615, upload-time = "2025-12-04T22:11:28.079Z" },
+]
+
+[[package]]
 name = "django-stubs"
 version = "5.2.7"
 source = { registry = "https://pypi.org/simple" }
@@ -1887,6 +1912,7 @@ dependencies = [
     { name = "django-dbbackup" },
     { name = "django-filter" },
     { name = "django-filter-stubs" },
+    { name = "django-q2" },
     { name = "django-stubs", extra = ["compatible-mypy"] },
     { name = "django-taggit" },
     { name = "djangorestframework" },
@@ -1952,6 +1978,7 @@ requires-dist = [
     { name = "django-dbbackup", specifier = ">=5.0.0" },
     { name = "django-filter", specifier = "~=25.1" },
     { name = "django-filter-stubs", specifier = ">=0.1.3" },
+    { name = "django-q2", specifier = ">=1.9.0" },
     { name = "django-stubs", extras = ["compatible-mypy"], specifier = ">=5.2.2" },
     { name = "django-taggit", specifier = ">=6.1.0,<7" },
     { name = "djangorestframework", specifier = ">=3.16.1" },

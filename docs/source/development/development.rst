@@ -118,6 +118,29 @@ server certificate for your current IP addresses:
 
    python manage.py create_tls_certs
 
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Running development server with background task worker
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For testing features that require background task processing (e.g., cyclic CRL generation),
+use the following command to start both the development server and Django-Q2 qcluster together:
+
+.. code:: bash
+
+   uv run manage.py runserver_with_qcluster
+
+This starts both processes in parallel and handles shutdown gracefully with Ctrl+C.
+
+Alternatively, you can start them separately in different terminals:
+
+.. code:: bash
+
+   # Terminal 1: Start the development server
+   uv run manage.py runserver
+
+   # Terminal 2: Start the Django-Q2 worker
+   uv run manage.py qcluster
+
 ^^^^^^^^^^
 Logging in
 ^^^^^^^^^^
