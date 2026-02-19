@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cryptography import x509
@@ -9,7 +10,9 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django_q.tasks import schedule  # type: ignore[import-untyped]
 from trustpoint_core import oid
 
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
@@ -26,7 +29,8 @@ if TYPE_CHECKING:
     from django.db.models.query import QuerySet
     from trustpoint_core.serializer import CredentialSerializer
 
-
+# Minimum CRL cycle interval: approximately 5 minutes (0.0833 hours)
+MIN_CRL_CYCLE_INTERVAL_HOURS = 0.0833
 class CaModel(LoggerMixin, CustomDeleteActionModel):
     """Generic CA Model representing any Certificate Authority.
 
@@ -184,6 +188,31 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         blank=True,
         verbose_name=_('No Onboarding Config'),
         help_text=_('No-onboarding configuration for remote CA connection')
+    )
+
+    crl_cycle_enabled = models.BooleanField(
+        _('Enable CRL Cycle Updates'),
+        default=False,
+        help_text=_('Enable automatic periodic CRL generation for this CA')
+    )
+
+    crl_cycle_interval_hours = models.FloatField(
+        _('CRL Cycle Interval (hours)'),
+        default=24.0,
+        help_text=_('The interval in hours between CRL generations (minimum ~5 minutes)')
+    )
+
+    crl_validity_hours = models.FloatField(
+        _('CRL Validity (hours)'),
+        default=24.0,
+        help_text=_('The validity period in hours for generated CRLs (nextUpdate field)')
+    )
+
+    last_crl_generation_started_at = models.DateTimeField(
+        _('Last CRL Generation Started'),
+        null=True,
+        blank=True,
+        help_text=_('Timestamp when the last CRL generation task was started')
     )
 
     class Meta:
@@ -349,9 +378,41 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         active_crl = self.get_active_crl()
         return active_crl.crl_pem if active_crl else ''
 
+    @property
+    def next_crl_generation_scheduled_at(self) -> datetime.datetime | None:
+        """Returns when the next CRL generation is scheduled.
+
+        Returns:
+            datetime | None: The scheduled time for the next CRL generation, or None if not enabled or not scheduled.
+        """
+        if not self.crl_cycle_enabled:
+            return None
+        return self.last_crl_generation_started_at
+
     def clean(self) -> None:
         """Validates that exactly one of certificate or credential is set."""
         super().clean()
+        if (
+            self.crl_cycle_enabled
+            and self.crl_cycle_interval_hours
+            and float(self.crl_cycle_interval_hours) < MIN_CRL_CYCLE_INTERVAL_HOURS
+        ):
+            raise ValidationError(
+                {'crl_cycle_interval_hours': _('CRL cycle interval must be at least 5 minutes')}
+            )
+        if self.crl_validity_hours and float(self.crl_validity_hours) < 1.0:
+            raise ValidationError(
+                {'crl_validity_hours': _('CRL validity period must be at least 1 hour')}
+            )
+        if (
+            self.crl_cycle_enabled
+            and self.crl_cycle_interval_hours
+            and self.crl_validity_hours
+            and float(self.crl_cycle_interval_hours) > float(self.crl_validity_hours)
+        ):
+            raise ValidationError(
+                {'crl_cycle_interval_hours': _('CRL cycle interval must not exceed the CRL validity period')}
+            )
         if self.ca_type in (self.CaTypeChoice.REMOTE_EST_RA, self.CaTypeChoice.REMOTE_CMP_RA):
             self._clean_remote_non_issuing_ca()
         elif self.ca_type in (self.CaTypeChoice.REMOTE_ISSUING_EST, self.CaTypeChoice.REMOTE_ISSUING_CMP):
@@ -713,6 +774,34 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             return None
         return active_crl.get_crl_as_crypto()
 
+    def schedule_next_crl_generation(self) -> None:
+        """Schedule the next CRL generation task for this CA using Django-Q2.
+
+        Creates a scheduled task in Django-Q2 that will execute at the calculated time.
+        The task will automatically trigger CRL generation without manual intervention.
+        """
+        if not self.crl_cycle_enabled:
+            self.logger.debug('CRL cycle not enabled for CA %s, skipping scheduling', self.unique_name)
+            return
+
+        scheduled_time = timezone.now() + timedelta(hours=self.crl_cycle_interval_hours)
+
+        schedule(
+            'pki.tasks.generate_crl_for_ca',
+            self.id,
+            schedule_type='O',
+            next_run=scheduled_time,
+            name=f'crl_gen_{self.unique_name}_{scheduled_time.timestamp()}'
+        )
+
+        self.last_crl_generation_started_at = scheduled_time
+        self.save(update_fields=['last_crl_generation_started_at'])
+        self.logger.info(
+            'Next CRL generation for CA %s scheduled for %s via Django-Q2',
+            self.unique_name,
+            scheduled_time
+        )
+
     # ===== Hierarchy Methods =====
 
     def get_hierarchy_depth(self) -> int:
@@ -806,7 +895,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             RevokedCertificateModel.objects.create(certificate=cert, revocation_reason=reason, ca=self)
 
         self.logger.info('All %i certificates issued by CA %s have been revoked.', qs.count(), self.unique_name)
-        self.issue_crl()
+        self.issue_crl(crl_validity_hours=int(self.crl_validity_hours))
 
     def pre_delete(self) -> None:
         """Checks for unexpired certificates issued by this CA and child CAs before deleting it.

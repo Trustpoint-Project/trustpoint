@@ -22,6 +22,7 @@ from trustpoint_core.serializer import (
 from management.models import KeyStorageConfig
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import CaModel
+from pki.models.ca import MIN_CRL_CYCLE_INTERVAL_HOURS
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.truststore import TruststoreModel
@@ -713,3 +714,59 @@ class IssuingCaTruststoreAssociationForm(forms.Form):
         self.instance.no_onboarding_config.trust_store = self.cleaned_data['trust_store']
         self.instance.no_onboarding_config.full_clean()
         self.instance.no_onboarding_config.save()
+
+
+class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
+    """Form for configuring CRL cycle settings for an Issuing CA."""
+
+    class Meta:
+        """Meta class for IssuingCaCrlCycleForm."""
+
+        model = CaModel
+        fields: ClassVar[list[str]] = [
+            'crl_cycle_enabled',
+            'crl_cycle_interval_hours',
+            'crl_validity_hours',
+        ]
+
+    crl_cycle_enabled = forms.BooleanField(
+        label=_('Enable CRL Cycle Updates'),
+        required=False,
+        help_text=_('Enable automatic periodic CRL generation for this CA'),
+    )
+
+    crl_cycle_interval_hours = forms.FloatField(
+        label=_('CRL Cycle Interval (hours)'),
+        initial=24,
+        help_text=_('The interval in hours between CRL generations (minimum 5 minutes)'),
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
+    )
+
+    crl_validity_hours = forms.FloatField(
+        label=_('CRL Validity (hours)'),
+        initial=24,
+        help_text=_('The validity period in hours for generated CRLs'),
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
+    )
+
+    def clean_crl_cycle_interval_hours(self) -> float:
+        """Validate the CRL cycle interval."""
+        interval = self.cleaned_data.get('crl_cycle_interval_hours')
+        if interval is None:
+            interval = 24
+        interval_float = float(interval)
+        if interval_float < MIN_CRL_CYCLE_INTERVAL_HOURS:
+            raise ValidationError(_('CRL cycle interval must be at least 5 minutes'))
+        return interval_float
+
+    def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]
+        """Save the form and schedule the next CRL generation if enabled."""
+        instance = super().save(commit=commit)
+        if not isinstance(instance, CaModel):
+            msg = 'Expected CaModel instance'
+            raise TypeError(msg)
+
+        if commit and instance.crl_cycle_enabled:
+            instance.schedule_next_crl_generation()
+
+        return instance

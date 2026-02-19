@@ -1295,3 +1295,4 @@ class LoggingConfig(models.Model):
     def __str__(self) -> str:
         """Output as string."""
         return f'{self.log_level}'
+
