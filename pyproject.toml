@@ -3,7 +3,7 @@ name = "trustpoint"
 version = "0.5.0.dev1"
 description = "Trustpoint Server Software"
 authors = [{ name = "Trustpoint-Project" }]
-requires-python = "==3.12.*"
+requires-python = "==3.14.*"
 readme = "README.md"
 license = { file = "LICENSE" }
 keywords = ["django", "trustpoint", "server"]
