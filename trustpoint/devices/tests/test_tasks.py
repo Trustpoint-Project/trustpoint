@@ -3,17 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
-from django.utils import timezone
 
-from devices.models import DeviceModel
 from devices.tasks import perform_gds_push_update
-from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
-from pki.models import DomainModel, CaModel
-from pki.util.x509 import CertificateGenerator
-from management.models import KeyStorageConfig
+
 from request.gds_push import GdsPushError, GdsPushService
 
 
