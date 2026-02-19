@@ -38,7 +38,6 @@ def test_generate_crl_view_uses_configured_validity(
 ) -> None:
     """Test that GenerateCrlView uses the configured CRL validity."""
     issuing_ca: CaModel = issuing_ca_instance.get('issuing_ca')  # type: ignore[assignment]
-    priv_key = issuing_ca_instance.get('priv_key')
 
     # Set custom validity
     issuing_ca.crl_validity_hours = 72.0

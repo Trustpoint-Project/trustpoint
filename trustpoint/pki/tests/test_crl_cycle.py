@@ -151,7 +151,6 @@ def test_generate_crl_for_ca_task_invalid_ca() -> None:
 def test_generate_crl_uses_configured_validity(issuing_ca_instance: dict[str, Any]) -> None:
     """Test that generated CRL respects the configured validity hours."""
     issuing_ca = issuing_ca_instance.get('issuing_ca')
-    priv_key = issuing_ca_instance.get('priv_key')
     assert isinstance(issuing_ca, CaModel)
 
     issuing_ca.crl_validity_hours = 72.0
@@ -218,6 +217,8 @@ def test_crl_cycle_custom_intervals(issuing_ca_instance: dict[str, Any]) -> None
     for interval in test_intervals:
         issuing_ca.crl_cycle_enabled = True
         issuing_ca.crl_cycle_interval_hours = interval
+        # Set validity period to be at least as large as the interval
+        issuing_ca.crl_validity_hours = max(interval, 24.0)
         issuing_ca.save()
         issuing_ca.full_clean()  # Should not raise
 
