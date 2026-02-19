@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from django.core.exceptions import ValidationError
 
 from pki.forms.issuing_cas import IssuingCaCrlCycleForm
 from pki.models import CaModel

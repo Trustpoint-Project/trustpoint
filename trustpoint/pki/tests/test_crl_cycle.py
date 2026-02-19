@@ -151,7 +151,6 @@ def test_generate_crl_for_ca_task_invalid_ca() -> None:
 def test_generate_crl_uses_configured_validity(issuing_ca_instance: dict[str, Any]) -> None:
     """Test that generated CRL respects the configured validity hours."""
     issuing_ca = issuing_ca_instance.get('issuing_ca')
-    priv_key = issuing_ca_instance.get('priv_key')
     assert isinstance(issuing_ca, CaModel)
 
     issuing_ca.crl_validity_hours = 72.0

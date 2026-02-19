@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from django.utils import timezone
 
-from pki.models import CaModel, CrlModel
+from pki.models import CaModel
 
 
 @pytest.mark.django_db
