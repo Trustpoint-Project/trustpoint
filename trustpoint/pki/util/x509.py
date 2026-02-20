@@ -5,13 +5,14 @@ from __future__ import annotations
 import datetime
 import itertools
 import logging
-import urllib
+import urllib.parse
 from datetime import UTC
 from typing import TYPE_CHECKING, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
 from cryptography.hazmat.primitives.hashes import SHA256, HashAlgorithm
+from cryptography.x509 import load_pem_x509_certificate
 from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
@@ -430,7 +431,7 @@ class NginxTLSClientCertExtractor:
         # URL-decode the certificate
         cert_data = urllib.parse.unquote(cert_data)
         try:
-            client_cert = x509.load_pem_x509_certificate(cert_data.encode('utf-8'))
+            client_cert = load_pem_x509_certificate(cert_data.encode('utf-8'))
         except Exception as e:
             error_message = f'Invalid HTTP_SSL_CLIENT_CERT header: {e}'
             raise ClientCertificateAuthenticationError(error_message) from e
@@ -443,7 +444,7 @@ class NginxTLSClientCertExtractor:
             if not ca:
                 break
             try:
-                ca_cert = x509.load_pem_x509_certificate(ca.encode('utf-8'))
+                ca_cert = load_pem_x509_certificate(ca.encode('utf-8'))
             except Exception as e:
                 error_message = f'Invalid SSL_CLIENT_CERT_CHAIN_{i} PEM: {e}'
                 raise ClientCertificateAuthenticationError(error_message) from e
@@ -702,9 +703,14 @@ class CertificateVerifier:
             issuer_cert: The issuer certificate containing the public key.
 
         Raises:
-            ValueError: If the signature verification fails.
+            ValueError: If the signature verification fails or the hash algorithm is missing.
             TypeError: If the issuer public key type is unsupported.
         """
+        hash_algorithm = cert.signature_hash_algorithm
+        if hash_algorithm is None:
+            err_msg = 'Certificate signature algorithm is not supported or is missing'
+            raise ValueError(err_msg)
+
         issuer_public_key = issuer_cert.public_key()
         if isinstance(issuer_public_key, rsa.RSAPublicKey):
             try:
@@ -712,7 +718,7 @@ class CertificateVerifier:
                     cert.signature,
                     cert.tbs_certificate_bytes,
                     padding.PKCS1v15(),
-                    cert.signature_hash_algorithm,
+                    hash_algorithm,
                 )
             except Exception as e:
                 err_msg = f'Certificate signature verification failed: {e}'
@@ -722,7 +728,7 @@ class CertificateVerifier:
                 issuer_public_key.verify(
                     cert.signature,
                     cert.tbs_certificate_bytes,
-                    ec.ECDSA(cert.signature_hash_algorithm),
+                    ec.ECDSA(hash_algorithm),
                 )
             except Exception as e:
                 err_msg = f'Certificate signature verification failed: {e}'

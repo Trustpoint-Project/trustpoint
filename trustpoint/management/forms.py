@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
@@ -259,7 +259,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         ]
     )
 
-    def _raise_validation_error(self, message: str) -> None:
+    def _raise_validation_error(self, message: str) -> NoReturn:
         """Raises a validation error with the given message."""
         raise ValidationError(message)
 
@@ -274,7 +274,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             self._raise_validation_error('No PKCS#12 file was uploaded.')
 
         try:
-            pkcs12_raw = pkcs12_file.read()  # type: ignore[union-attr]
+            pkcs12_raw = pkcs12_file.read()
             pkcs12_password = cleaned_data.get('pkcs12_password')
             domain_name = cleaned_data.get('domain_name')
         except (OSError, AttributeError) as original_exception:
@@ -318,6 +318,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             if not isinstance(certificate, Certificate):
                 self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
 
+            # At this point, both isinstance and None checks guarantee certificate is Certificate
             # For self-signed certificates, treat the certificate itself as a trusted root
             trusted_roots = [certificate] if certificate.issuer == certificate.subject else []
             untrusted_intermediates = tls_credential_serializer.additional_certificates or []
@@ -470,7 +471,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
         return None
 
-    def _raise_validation_error(self, message: str) -> None:
+    def _raise_validation_error(self, message: str) -> NoReturn:
         """Raises a validation error with the given message."""
         raise forms.ValidationError(message)
 
@@ -509,9 +510,12 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         )
 
         certificate = credential_serializer.certificate
-        if certificate is None or not isinstance(certificate, Certificate):
+        if certificate is None:
+            self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
+        if not isinstance(certificate, Certificate):
             self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
 
+        # At this point, both isinstance and None checks guarantee certificate is Certificate
         # For self-signed certificates, treat the certificate itself as a trusted root
         trusted_roots = [certificate] if certificate.issuer == certificate.subject else []
         untrusted_intermediates = credential_serializer.additional_certificates or []
