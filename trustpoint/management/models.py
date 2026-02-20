@@ -31,11 +31,11 @@ class SecurityConfig(models.Model):
     class SecurityModeChoices(models.TextChoices):
         """Types of security modes."""
 
-        DEV = '0', _('Testing env')
-        LOW = '1', _('Basic')
-        MEDIUM = '2', _('Medium')
-        HIGH = '3', _('High')
-        HIGHEST = '4', _('Highest')
+        DEV = '0', _('Lab / Development')
+        LOW = '1', _('Brownfield Compatible')
+        MEDIUM = '2', _('Industrial Standard')
+        HIGH = '3', _('Hardened Production')
+        HIGHEST = '4', _('Critical Infrastructure')
 
     security_mode = models.CharField(max_length=6, choices=SecurityModeChoices, default=SecurityModeChoices.LOW)
 
