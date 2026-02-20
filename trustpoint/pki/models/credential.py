@@ -148,7 +148,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         SIGNER = 5, _('Signer')
 
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
-    private_key = EncryptedCharField(verbose_name=_('Private key (PEM)'), max_length=65536, default='', blank=True)
+    private_key = EncryptedCharField(verbose_name=_('Private key (PEM)'), max_length=9500, default='', blank=True)
     pkcs11_private_key = models.ForeignKey(
         PKCS11Key,
         on_delete=models.PROTECT,

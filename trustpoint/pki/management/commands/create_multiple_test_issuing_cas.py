@@ -8,8 +8,9 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.core.management.base import BaseCommand
-from management.models import KeyStorageConfig
+from management.models import KeyStorageConfig, SecurityConfig
 from pki.models import CaModel
+from pki.util.x509 import CertificateVerifier
 
 from trustpoint.logger import LoggerMixin
 
@@ -87,8 +88,69 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         from pki.util.crl import generate_empty_crl  # noqa: PLC0415
         return generate_empty_crl(ca_cert, private_key, hash_algorithm, crl_validity_hours)
 
+    def verify_ca_certificate(
+        self,
+        ca_cert: x509.Certificate,
+        issuer_cert: x509.Certificate | None = None,
+        ca_name: str = 'CA'
+    ) -> bool:
+        """Verify a CA certificate against its issuer.
+
+        Args:
+            ca_cert: The CA certificate to verify.
+            issuer_cert: The issuer CA certificate (for chain verification).
+            ca_name: Name of the CA for logging purposes.
+
+        Returns:
+            bool: True if verification succeeds, False otherwise.
+        """
+        try:
+            # For root CAs, verify self-signed
+            if issuer_cert is None:
+                trusted_roots = [ca_cert]
+                untrusted_intermediates = []
+            else:
+                # For intermediate/issuing CAs, verify against issuer
+                trusted_roots = [issuer_cert]
+                untrusted_intermediates = []
+
+            # Verify as CA certificate
+            CertificateVerifier.verify_ca_cert(
+                cert=ca_cert,
+                trusted_roots=trusted_roots,
+                untrusted_intermediates=untrusted_intermediates,
+            )
+
+            self.log_and_stdout(f'✓ Certificate verification passed for {ca_name}')
+            return True
+
+        except ValueError as e:
+            self.log_and_stdout(
+                f'✗ Certificate verification failed for {ca_name}: {e}',
+                level='error'
+            )
+            return False
+        except Exception as e:
+            self.log_and_stdout(
+                f'✗ Unexpected error during verification of {ca_name}: {e}',
+                level='error'
+            )
+            return False
+
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Adds a Root CA and three issuing CAs to the database."""
+        # Initialize default SecurityConfig if not already configured
+        security_config, created = SecurityConfig.objects.get_or_create(
+            pk=1,
+            defaults={
+                'security_mode': SecurityConfig.SecurityModeChoices.MEDIUM,
+            }
+        )
+        if created:
+            self.log_and_stdout('Created default SecurityConfig with MEDIUM security mode')
+        else:
+            self.log_and_stdout(f'Using existing SecurityConfig with security mode: {security_config.get_security_mode_display()}')
+
         # Determine CA type based on storage configuration
         ca_type = self.get_ca_type_from_storage_config()
         self.log_and_stdout(f'Using CA type: {ca_type}')
@@ -115,6 +177,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             unique_name='root-ca-rsa-2048-sha256',
             crl_pem=rsa2_root_crl,
         )
+        self.verify_ca_certificate(rsa2_root, ca_name='Root-CA RSA-2048-SHA256')
 
         rsa2_int_ca_1, _key = self.create_issuing_ca(
             issuer_private_key=rsa2_root_ca_key,
@@ -133,6 +196,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         )
         rsa2_int_ca_model_1.parent_ca = rsa2_root_ca
         rsa2_int_ca_model_1.save()
+        self.verify_ca_certificate(rsa2_int_ca_1, issuer_cert=rsa2_root, ca_name='Intermediate CA A-1')
 
         rsa2_int_ca_2, _key = self.create_issuing_ca(
             issuer_private_key=rsa2_root_ca_key,
@@ -151,6 +215,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         )
         rsa2_int_ca_model_2.parent_ca = rsa2_root_ca
         rsa2_int_ca_model_2.save()
+        self.verify_ca_certificate(rsa2_int_ca_2, issuer_cert=rsa2_root, ca_name='Intermediate CA A-2')
 
         rsa2_issuing_ca_1, _key = self.create_issuing_ca(
             issuer_private_key=rsa2_int_ca_key_1,
@@ -168,6 +233,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             ca_type=ca_type,
             parent_ca=rsa2_int_ca_model_1,
         )
+        self.verify_ca_certificate(rsa2_issuing_ca_1, issuer_cert=rsa2_int_ca_1, ca_name='Issuing CA A-1')
 
         rsa2_issuing_ca_2, _key = self.create_issuing_ca(
             issuer_private_key=rsa2_int_ca_key_2,
@@ -185,6 +251,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             ca_type=ca_type,
             parent_ca=rsa2_int_ca_model_2,
         )
+        self.verify_ca_certificate(rsa2_issuing_ca_2, issuer_cert=rsa2_int_ca_2, ca_name='Issuing CA A-2')
 
         self.log_and_stdout('Creating RSA-3072 Root CA and Issuing CA B...')
         rsa3_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
@@ -198,6 +265,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             unique_name='root-ca-rsa-3072-sha256',
             crl_pem=rsa3_root_crl,
         )
+        self.verify_ca_certificate(rsa3_root, ca_name='Root-CA RSA-3072-SHA256')
+
         rsa3_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=rsa3_root_ca_key,
             private_key=rsa3_issuing_ca_key,
@@ -214,6 +283,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             ca_type=ca_type,
             parent_ca=rsa3_root_ca,
         )
+        self.verify_ca_certificate(rsa3_issuing_ca, issuer_cert=rsa3_root, ca_name='Issuing CA B')
 
         self.log_and_stdout('Creating RSA-4096 Root CA and Issuing CA C...')
         rsa4_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
@@ -227,6 +297,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             unique_name='root-ca-rsa-4096-sha256',
             crl_pem=rsa4_root_crl,
         )
+        self.verify_ca_certificate(rsa4_root, ca_name='Root-CA RSA-4096-SHA256')
+
         rsa4_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=rsa4_root_ca_key,
             private_key=rsa4_issuing_ca_key,
@@ -243,6 +315,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             ca_type=ca_type,
             parent_ca=rsa4_root_ca,
         )
+        self.verify_ca_certificate(rsa4_issuing_ca, issuer_cert=rsa4_root, ca_name='Issuing CA C')
 
         self.log_and_stdout('Creating SECP256R1 Root CA and Issuing CA D...')
         ecc1_root_ca_key = ec.generate_private_key(curve=ec.SECP256R1())
@@ -256,6 +329,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             unique_name='root-ca-secp256r1-sha256',
             crl_pem=ecc1_root_crl,
         )
+        self.verify_ca_certificate(ecc1_root, ca_name='Root-CA SECP256R1-SHA256')
+
         ecc1_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=ecc1_root_ca_key,
             private_key=ecc1_issuing_ca_key,
@@ -272,6 +347,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             ca_type=ca_type,
             parent_ca=ecc1_root_ca,
         )
+        self.verify_ca_certificate(ecc1_issuing_ca, issuer_cert=ecc1_root, ca_name='Issuing CA D')
 
         self.log_and_stdout('Creating SECP384R1 Root CA and Issuing CA E...')
         ecc2_root_ca_key = ec.generate_private_key(curve=ec.SECP384R1())
@@ -285,6 +361,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             unique_name='root-ca-secp384r1-sha256',
             crl_pem=ecc2_root_crl,
         )
+        self.verify_ca_certificate(ecc2_root, ca_name='Root-CA SECP384R1-SHA256')
+
         ecc2_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=ecc2_root_ca_key,
             private_key=ecc2_issuing_ca_key,
@@ -301,6 +379,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             ca_type=ca_type,
             parent_ca=ecc2_root_ca,
         )
+        self.verify_ca_certificate(ecc2_issuing_ca, issuer_cert=ecc2_root, ca_name='Issuing CA E')
 
         self.log_and_stdout('Creating SECP521R1 Root CA and Issuing CA F...')
         ecc3_root_ca_key = ec.generate_private_key(curve=ec.SECP521R1())
@@ -314,6 +393,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             unique_name='root-ca-secp521r1-sha256',
             crl_pem=ecc3_root_crl,
         )
+        self.verify_ca_certificate(ecc3_root, ca_name='Root-CA SECP521R1-SHA256')
+
         ecc3_issuing_ca, _key = self.create_issuing_ca(
             issuer_private_key=ecc3_root_ca_key,
             private_key=ecc3_issuing_ca_key,
@@ -330,5 +411,6 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             ca_type=ca_type,
             parent_ca=ecc3_root_ca,
         )
+        self.verify_ca_certificate(ecc3_issuing_ca, issuer_cert=ecc3_root, ca_name='Issuing CA F')
 
         self.log_and_stdout('All issuing CAs have been created successfully!')

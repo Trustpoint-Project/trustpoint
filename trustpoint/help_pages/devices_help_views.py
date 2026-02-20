@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, override
 from cryptography import x509
 from django.http import Http404
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.detail import DetailView
@@ -1035,12 +1036,109 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             ],
         )
 
+    def _build_renewal_settings_section(self, device: DeviceModel) -> HelpSection:
+        """Build the periodic server certificate and trustlist renewal settings section.
+
+        Renders an inline HTML form that posts to the cert-renewal-settings endpoint,
+        allowing the user to enable/disable periodic renewal and configure the interval.
+        Both the server certificate and the trustlist are updated on each renewal cycle.
+        When periodic updates are enabled, the section also shows when the next update
+        is scheduled to run.
+
+        :param device: The OPC UA GDS Push device instance.
+        :return: A HelpSection containing the renewal configuration form.
+        """
+        renewal_url = reverse(
+            'devices:devices_cert_renewal_settings',
+            kwargs={'pk': device.pk}
+        )
+
+        enabled = device.opc_gds_push_enable_periodic_update
+        interval = device.opc_gds_push_renewal_interval
+        next_run = device.opc_gds_push_last_update_scheduled_at
+
+        checked_attr = 'checked' if enabled else ''
+
+        if enabled and next_run is not None:
+            now = timezone.now()
+            if next_run > now:
+                next_run_html = (
+                    f'<span class="badge bg-success me-2">Enabled</span>'
+                    f'<span>{next_run.strftime("%Y-%m-%d %H:%M UTC")}</span>'
+                )
+            else:
+                next_run_html = (
+                    '<span class="badge bg-warning text-dark me-2">Pending</span>'
+                    '<span>Scheduled — awaiting worker execution</span>'
+                )
+        elif enabled:
+            next_run_html = (
+                '<span class="badge bg-secondary me-2">Enabled</span>'
+                '<span>Not yet scheduled — save settings to schedule the first update</span>'
+            )
+        else:
+            next_run_html = '<span class="badge bg-secondary">Disabled</span>'
+
+        form_html = (
+            f'<form method="post" action="{renewal_url}">'
+            'CSRF_TOKEN_PLACEHOLDER'
+            '<div class="mb-3">'
+            '<div class="form-check form-switch mb-2">'
+            f'  <input class="form-check-input" type="checkbox" role="switch" '
+            f'         id="enablePeriodicRenewal" name="opc_gds_push_enable_periodic_update" {checked_attr}>'
+            f'  <label class="form-check-label" for="enablePeriodicRenewal">'
+            f'    Enable Periodic Server Certificate &amp; Trustlist Renewal'
+            f'  </label>'
+            '</div>'
+            '<label for="renewalInterval" class="form-label mt-2">Renewal Interval (hours)</label>'
+            f'<input type="number" class="form-control" id="renewalInterval" '
+            f'       name="opc_gds_push_renewal_interval" min="1" value="{interval}" '
+            '       style="max-width: 200px;">'
+            '<div class="form-text text-muted">'
+            '  How often the server certificate and trustlist are automatically renewed. Minimum 1 hour.'
+            '</div>'
+            '</div>'
+            '<button type="submit" class="btn btn-primary">Save Renewal Settings</button>'
+            '</form>'
+        )
+
+        return HelpSection(
+            _non_lazy('Periodic Server Certificate & Trustlist Renewal'),
+            [
+                HelpRow(
+                    _non_lazy('Next Scheduled Update'),
+                    next_run_html,
+                    ValueRenderType.HTML,
+                ),
+                HelpRow(
+                    _non_lazy('Renewal Configuration'),
+                    form_html,
+                    ValueRenderType.HTML,
+                ),
+            ],
+        )
+
+
+class OpcUaGdsPushApplicationCertificateStrategy(OpcUaGdsPushOnboardingStrategy):
+    """Strategy for the OPC UA GDS Push application certificate help page.
+
+    Extends the base onboarding strategy with a periodic server certificate
+    renewal configuration section.
+    """
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        sections, heading = super().build_sections(help_context=help_context)
+        device = help_context.get_device_or_http_404()
+        sections.append(self._build_renewal_settings_section(device))
+        return sections, heading
+
 
 class OpcUaGdsPushApplicationCertificateHelpView(BaseHelpView):
     """Help view for OPC UA GDS Push application certificates."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = OpcUaGdsPushOnboardingStrategy()
+    strategy = OpcUaGdsPushApplicationCertificateStrategy()
 
 
 class OpcUaGdsPushOnboardingHelpView(BaseHelpView):

@@ -41,6 +41,7 @@ from pki.forms import (
     IssuingCaAddMethodSelectForm,
     IssuingCaAddRequestCmpForm,
     IssuingCaAddRequestEstForm,
+    IssuingCaCrlCycleForm,
     IssuingCaTruststoreAssociationForm,
     TruststoreAddForm,
 )
@@ -582,6 +583,10 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         context['issued_certificates'] = issued_certificates
         context['active_crl'] = issuing_ca.get_active_crl()
 
+        if 'crl_cycle_form' not in context:
+            context['crl_cycle_form'] = IssuingCaCrlCycleForm(instance=issuing_ca)
+
+
         if issuing_ca.is_issuing_ca and issuing_ca.credential:
             context['certificate_chain'] = issuing_ca.credential.ordered_certificate_chain_queryset
         elif issuing_ca.chain_truststore:
@@ -599,6 +604,21 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests."""
         return super().get(request, *args, **kwargs)
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle POST request to update CRL cycle settings."""
+        issuing_ca = self.get_object()
+        self.object = issuing_ca
+        form = IssuingCaCrlCycleForm(request.POST, instance=issuing_ca)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, _('CRL cycle settings updated successfully.'))
+            return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
+
+        context = self.get_context_data()
+        context['crl_cycle_form'] = form
+        return self.render_to_response(context)
 
 
 class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
@@ -1437,7 +1457,7 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[CaModel]):
         del kwargs
 
         issuing_ca = self.get_object()
-        if issuing_ca.issue_crl():
+        if issuing_ca.issue_crl(crl_validity_hours=int(issuing_ca.crl_validity_hours)):
             messages.success(request, _('CRL for Issuing CA %s has been generated.') % issuing_ca.unique_name)
         else:
             messages.error(request, _('Failed to generate CRL for Issuing CA %s.') % issuing_ca.unique_name)
@@ -1583,7 +1603,7 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
         del pk # not needed, but passed by DRF
         ca = self.get_object()
 
-        if ca.issue_crl():
+        if ca.issue_crl(crl_validity_hours=int(ca.crl_validity_hours)):
             return Response(
                 {
                     'message': f'CRL generated successfully for Issuing CA "{ca.unique_name}".',

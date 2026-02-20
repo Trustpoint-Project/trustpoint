@@ -155,7 +155,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         """Build the context dictionary for rendering the settings page.
 
         This method adds page metadata, notification configurations, log levels,
-        and the current log level to the context.
+        task execution status, and the current log level to the context.
 
         Parameters
         ----------
