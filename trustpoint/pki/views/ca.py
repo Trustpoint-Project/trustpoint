@@ -112,13 +112,18 @@ class CaBulkDeleteConfirmView(BulkDeleteView):
             return HttpResponseRedirect(self.success_url)
         return super().get(request, *args, **kwargs)
 
-    def form_valid(self, form: Form) -> HttpResponse:
-        """Delete the selected CAs on valid form."""
+    def form_valid(self, form: Form) -> HttpResponse:  # noqa: ARG002
+        """Delete the selected CAs on valid form, handling hierarchical dependencies."""
         queryset = self.get_queryset()
         deleted_count = queryset.count() if queryset else 0
 
         try:
-            response = super().form_valid(form)
+            cas_to_delete = list(queryset)
+            self._delete_cas_hierarchically(cas_to_delete)
+
+            messages.success(self.request, _('Successfully deleted {count} CA(s).').format(count=deleted_count))
+            return HttpResponseRedirect(self.success_url)
+
         except ProtectedError:
             messages.error(
                 self.request,
@@ -129,6 +134,36 @@ class CaBulkDeleteConfirmView(BulkDeleteView):
             messages.error(self.request, exc.message)
             return HttpResponseRedirect(self.success_url)
 
-        messages.success(self.request, _('Successfully deleted {count} CA(s).').format(count=deleted_count))
+    def _delete_cas_hierarchically(self, cas: list[CaModel]) -> None:
+        """Delete CAs in hierarchical order (children before parents).
 
-        return response
+        Args:
+            cas: List of CA models to delete
+        """
+        ca_ids_to_delete = {ca.id for ca in cas}
+
+        children_map: dict[int | None, list[CaModel]] = {}
+        for ca in cas:
+            parent_id = ca.parent_ca.id if ca.parent_ca else None
+            if parent_id not in children_map:
+                children_map[parent_id] = []
+            children_map[parent_id].append(ca)
+
+        deleted_ids: set[int] = set()
+
+        def delete_ca_and_children(ca: CaModel) -> None:
+            """Recursively delete a CA and all its children."""
+            if ca.id in deleted_ids:
+                return
+
+            if ca.id in children_map:
+                for child in children_map[ca.id]:
+                    delete_ca_and_children(child)
+
+            ca.delete()
+            deleted_ids.add(ca.id)
+
+        for ca in cas:
+            parent_id = ca.parent_ca.id if ca.parent_ca else None
+            if parent_id is None or parent_id not in ca_ids_to_delete:
+                delete_ca_and_children(ca)

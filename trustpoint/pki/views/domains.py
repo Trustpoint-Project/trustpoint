@@ -70,13 +70,19 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
     ignore_url = reverse_lazy('pki:domains')
 
     def get_form(self, _form_class: Any = None) -> Any:
-        """Override get_form to filter out autogen root CAs."""
+        """Override get_form to filter out keyless CAs and autogen root CAs.
+
+        Only issuing CAs (those with credentials that can sign certificates) should be assignable to domains.
+        """
         form = super().get_form()
-        # Filter out autogen root CAs
-        form.fields['issuing_ca'].queryset = CaModel.objects.exclude(  # type: ignore[attr-defined]
-            ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT
-        ).filter(is_active=True)
-        # Remove empty "---------" choice
+        form.fields['issuing_ca'].queryset = CaModel.objects.filter(  # type: ignore[attr-defined]
+            is_active=True
+        ).exclude(
+            ca_type__in=[
+                CaModel.CaTypeChoice.AUTOGEN_ROOT,
+                CaModel.CaTypeChoice.KEYLESS,
+            ]
+        )
         form.fields['issuing_ca'].empty_label = None  # type: ignore[attr-defined]
         del form.fields['is_active']
         return form
