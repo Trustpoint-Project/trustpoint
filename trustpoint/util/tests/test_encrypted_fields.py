@@ -301,8 +301,10 @@ class TestEncryptedCharField(TestCase):
         original_length = 50
         field = EncryptedCharField(max_length=original_length)
 
-        # The max_length should be increased to accommodate encryption overhead
-        self.assertGreater(field.max_length, original_length)
+        # The field should store the plaintext max_length internally
+        self.assertEqual(field._plaintext_max_length, original_length)
+        # The field's max_length should match the plaintext value (encryption handled separately)
+        self.assertEqual(field.max_length, original_length)
 
     def test_init_without_max_length(self):
         """Test field initialization without max_length parameter."""
@@ -310,16 +312,21 @@ class TestEncryptedCharField(TestCase):
         self.assertIsInstance(field, EncryptedCharField)
 
     def test_max_length_calculation(self):
-        """Test that max_length is correctly calculated for encryption overhead."""
+        """Test that max_length calculation for encryption overhead works correctly."""
         original_length = 100
         field = EncryptedCharField(max_length=original_length)
 
-        # Calculate expected encrypted length
+        # Calculate expected encrypted length using the static method
+        expected_encrypted = field._calculate_encrypted_length(original_length)
+
+        # Verify the calculation matches the formula
         expected_padded = ((original_length + 16 + 15) // 16) * 16
         expected_with_iv = expected_padded + 16
         expected_base64 = int(expected_with_iv * 4/3) + 4
 
-        self.assertEqual(field.max_length, expected_base64)
+        self.assertEqual(expected_encrypted, expected_base64)
+        # The field stores plaintext max_length, db_type() uses encrypted length
+        self.assertEqual(field._plaintext_max_length, original_length)
 
     def test_raise_validation_error(self):
         """Test raise_validation_error method."""
