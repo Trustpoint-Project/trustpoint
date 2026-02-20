@@ -7,7 +7,7 @@ body {
     padding: 0;
 }
 
-.tp-content-wrapper {
+div.tp-content-wrapper {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -42,7 +42,7 @@ main {
     align-items: center;
 }
 
-.alert {
+div.alert {
     background-color: #e9ecef;
     border: 1px solid #ced4da;
     color: #495057;
