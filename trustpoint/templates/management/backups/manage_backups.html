@@ -115,7 +115,7 @@
                 {% csrf_token %}
                 {{ backup_options_form.non_field_errors }}
 
-                <div class="form-check mb-3">
+                <div class="form-check form-switch mb-3">
                     {{ backup_options_form.enable_sftp_storage }}
                     {{ backup_options_form.enable_sftp_storage.label_tag }}
                     {{ backup_options_form.enable_sftp_storage.errors }}
