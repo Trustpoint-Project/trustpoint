@@ -477,7 +477,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         cmp_ca_domain = self._create_domain_with_ca('cmp_issuing_ca', cmp_ca)
 
         # Create CMP issuing CA device
-        cmp_ca_device = self._create_device(
+        self._create_device(
             device_name='CMP-Issuing-CA-Device',
             domain=cmp_ca_domain,
             pki_protocols=[NoOnboardingPkiProtocol.CMP_SHARED_SECRET],
