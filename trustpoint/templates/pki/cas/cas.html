@@ -31,10 +31,10 @@
                         <td>
                             {% if ca.get_hierarchy_depth > 0 %}
                                 <span style="padding-left: {{ ca.display_indentation }}; display: inline-block;">
-                                    <span style="color: #999;">└─</span> {{ ca.common_name }}
+                                    <span style="color: #999;">└─</span> {{ ca.unique_name }}
                                 </span>
                             {% else %}
-                                {{ ca.common_name }}
+                                {{ ca.unique_name }}
                             {% endif %}
                         </td>
                         <td>

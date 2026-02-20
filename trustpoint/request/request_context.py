@@ -153,11 +153,22 @@ class EstBaseRequestContext(HttpBaseRequestContext):
 
 @dataclass(kw_only=True)
 class CmpBaseRequestContext(HttpBaseRequestContext):
-    """Shared context for all CMP requests."""
+    """Shared context for all CMP requests.
+
+    Supports both CMP server functionality (receiving requests) and CMP client
+    functionality (sending requests to external CMP servers).
+    """
+    # Server-side fields
     parsed_message: PKIMessage | None = None
     cmp_shared_secret: str | None = None
     error_code: PKIFailureInfo | None = None
     error_details: str | None = None
+
+    # Client-side fields
+    cmp_server_host: str | None = None
+    cmp_server_port: int | None = None
+    cmp_server_path: str | None = None
+    cmp_server_truststore: TruststoreModel | None = None
 
 
 @dataclass(kw_only=True)

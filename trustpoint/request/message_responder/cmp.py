@@ -33,6 +33,21 @@ CMP_MESSAGE_VERSION = 2
 SENDER_NONCE_LENGTH = 16
 HTTP_ERROR_STATUS_THRESHOLD = 400
 
+# Threshold below which DER length fits in a single byte (short form).
+_DER_LENGTH_SHORT_FORM_MAX = 0x7F
+
+
+def _der_tlv(tag_byte: int, value: bytes) -> bytes:
+    """Construct a DER Tag-Length-Value triplet.
+
+    Handles both short-form (length < 128) and long-form DER lengths.
+    """
+    length = len(value)
+    if length <= _DER_LENGTH_SHORT_FORM_MAX:
+        return bytes([tag_byte, length]) + value
+    length_payload = length.to_bytes((length.bit_length() + 7) // 8, 'big')
+    return bytes([tag_byte, 0x80 | len(length_payload)]) + length_payload + value
+
 
 class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
     """Builds response to CMP requests."""
@@ -84,12 +99,18 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
 
         if issuer_cert is not None:
             raw_issuing_ca_subject = issuer_cert.subject.public_bytes()
-            name, _ = decoder.decode(raw_issuing_ca_subject, asn1spec=rfc2459.Name())
-            sender = rfc2459.GeneralName()
-            sender['directoryName'][0] = name
+            # Build a directoryName GeneralName from the issuer subject DER.
+            # directoryName is [4] IMPLICIT Name inside GeneralName.  Assigning
+            # a plain rfc2459.Name() fails pyasn1's tag-compatibility check, so
+            # we construct the tagged DER and let the BER decoder produce a
+            # properly-tagged GeneralName value.
+            tagged_dn_der = _der_tlv(0xA4, raw_issuing_ca_subject)
+            sender, _ = decoder.decode(tagged_dn_der, asn1Spec=rfc2459.GeneralName())
         else:
-            sender = rfc2459.GeneralName()
-            sender['directoryName'][0] = rfc2459.Name() # Null DN
+            # Null / empty DN as directoryName
+            empty_name_der = bytes([0x30, 0x00])  # empty SEQUENCE (empty RDNSequence)
+            tagged_dn_der = _der_tlv(0xA4, empty_name_der)
+            sender, _ = decoder.decode(tagged_dn_der, asn1Spec=rfc2459.GeneralName())
         header['sender'] = sender
         header['recipient'] = serialized_pyasn1_message['header']['sender']
 

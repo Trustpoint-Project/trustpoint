@@ -26,6 +26,7 @@ from pki.models.ca import MIN_CRL_CYCLE_INTERVAL_HOURS
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.truststore import TruststoreModel
+from pki.util.x509 import CertificateVerifier
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
 from util.validation import ValidationError as UtilValidationError
@@ -104,8 +105,49 @@ class IssuingCaImportMixin:
                 )
                 self._raise_validation_error(err_msg)
 
+    def _verify_ca_cert_with_chain(
+        self,
+        cert: x509.Certificate,
+        chain: list[x509.Certificate],
+    ) -> None:
+        """Verifies the CA certificate using the provided chain.
+
+        The chain certificates are treated as untrusted intermediates used to
+        build the path. The last certificate in the chain (or the cert itself if
+        the chain is empty) is used as the trust anchor.
+
+        If no chain is provided, the certificate is verified as self-signed.
+
+        Args:
+            cert: The CA certificate to verify.
+            chain: Optional list of intermediate/root certificates for chain building.
+
+        Raises:
+            ValidationError: If certificate verification fails.
+        """
+        try:
+            if chain:
+                # Use the last cert in the chain as the trust anchor (root)
+                trusted_roots = [chain[-1]]
+                untrusted_intermediates = chain[:-1]
+            else:
+                # No chain provided — verify as self-signed
+                trusted_roots = [cert]
+                untrusted_intermediates = []
+
+            CertificateVerifier.verify_ca_cert(
+                cert=cert,
+                trusted_roots=trusted_roots,
+                untrusted_intermediates=untrusted_intermediates,
+            )
+        except ValueError as e:
+            self._raise_validation_error(
+                f'CA certificate verification failed: {e}'
+            )
+
     def _finalize_issuing_ca_creation(
-        self, unique_name: str | None, cert: x509.Certificate, credential_serializer: CredentialSerializer
+        self, unique_name: str | None, cert: x509.Certificate, credential_serializer: CredentialSerializer,
+        chain: list[x509.Certificate] | None = None,
     ) -> None:
         """Finalizes the creation of the Issuing CA after validation."""
         if not unique_name:
@@ -113,6 +155,8 @@ class IssuingCaImportMixin:
 
         if CaModel.objects.filter(unique_name=unique_name).exists():
             self._raise_validation_error('Unique name is already taken. Choose another one.')
+
+        self._verify_ca_cert_with_chain(cert, chain or [])
 
         try:
             CaModel.create_new_issuing_ca(
@@ -285,7 +329,8 @@ class IssuingCaAddFileImportPkcs12Form(IssuingCaImportMixin, LoggerMixin, forms.
         credential_serializer = self._parse_and_prepare_credential(pkcs12_raw, pkcs12_password, unique_name)
         cert_crypto = self._validate_ca_certificate_from_serializer(credential_serializer)
 
-        self._finalize_issuing_ca_creation(unique_name, cert_crypto, credential_serializer)
+        chain = list(credential_serializer.additional_certificates or [])
+        self._finalize_issuing_ca_creation(unique_name, cert_crypto, credential_serializer, chain)
 
 
 class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin, forms.Form):
@@ -516,7 +561,8 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
         cert, pk = self._validate_credential_components(credential_serializer)
         self._prepare_credential_serializer(credential_serializer, unique_name, pk)
 
-        self._finalize_issuing_ca_creation(unique_name, cert, credential_serializer)
+        chain = list(credential_serializer.additional_certificates or [])
+        self._finalize_issuing_ca_creation(unique_name, cert, credential_serializer, chain)
 
 class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     """Mixin for forms requesting an Issuing CA certificate from remote servers."""
@@ -701,6 +747,17 @@ class IssuingCaTruststoreAssociationForm(forms.Form):
         """Initialize the form."""
         self.instance: CaModel = kwargs.pop('instance')
         super().__init__(*args, **kwargs)
+
+        if self.instance.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
+            self.fields['trust_store'].help_text = _(
+                'EST: Import the TLS server certificate of the remote PKI '
+                '(used for HTTPS connection security)'
+            )
+        elif self.instance.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_CMP:
+            self.fields['trust_store'].help_text = _(
+                'CMP: Import the Issuing CA certificate of the remote PKI '
+                '(used to identify the recipient CA and verify responses)'
+            )
 
         if self.instance.no_onboarding_config and self.instance.no_onboarding_config.trust_store:
             self.fields['trust_store'].initial = self.instance.no_onboarding_config.trust_store
