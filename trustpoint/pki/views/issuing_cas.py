@@ -41,6 +41,7 @@ from pki.forms import (
     IssuingCaAddMethodSelectForm,
     IssuingCaAddRequestCmpForm,
     IssuingCaAddRequestEstForm,
+    IssuingCaCrlCycleForm,
     IssuingCaTruststoreAssociationForm,
     TruststoreAddForm,
 )
@@ -415,7 +416,26 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
             issued_certificates = CertificateModel.objects.none()
         context['issued_certificates'] = issued_certificates
         context['active_crl'] = issuing_ca.get_active_crl()
+
+        if 'crl_cycle_form' not in context:
+            context['crl_cycle_form'] = IssuingCaCrlCycleForm(instance=issuing_ca)
+
         return context
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle POST request to update CRL cycle settings."""
+        issuing_ca = self.get_object()
+        self.object = issuing_ca
+        form = IssuingCaCrlCycleForm(request.POST, instance=issuing_ca)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, _('CRL cycle settings updated successfully.'))
+            return redirect('pki:issuing_cas-config', pk=issuing_ca.pk)
+
+        context = self.get_context_data()
+        context['crl_cycle_form'] = form
+        return self.render_to_response(context)
 
 
 class IssuingCaRequestCertMixin(LoggerMixin, IssuingCaContextMixin):
@@ -1242,7 +1262,7 @@ class IssuingCaCrlGenerationView(IssuingCaContextMixin, DetailView[CaModel]):
         del kwargs
 
         issuing_ca = self.get_object()
-        if issuing_ca.issue_crl():
+        if issuing_ca.issue_crl(crl_validity_hours=int(issuing_ca.crl_validity_hours)):
             messages.success(request, _('CRL for Issuing CA %s has been generated.') % issuing_ca.unique_name)
         else:
             messages.error(request, _('Failed to generate CRL for Issuing CA %s.') % issuing_ca.unique_name)
@@ -1388,7 +1408,7 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
         del pk # not needed, but passed by DRF
         ca = self.get_object()
 
-        if ca.issue_crl():
+        if ca.issue_crl(crl_validity_hours=int(ca.crl_validity_hours)):
             return Response(
                 {
                     'message': f'CRL generated successfully for Issuing CA "{ca.unique_name}".',
