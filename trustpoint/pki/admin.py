@@ -32,6 +32,57 @@ class CertificateChainOrderModelAdmin(admin.ModelAdmin[CertificateChainOrderMode
 class CaModelAdmin(admin.ModelAdmin[CaModel]):
     """Admin configuration for the CaModel."""
 
+    fieldsets = (
+        (
+            'General',
+            {
+                'fields': (
+                    'unique_name',
+                    'is_active',
+                    'ca_type',
+                    'parent_ca',
+                )
+            }
+        ),
+        (
+            'Certificates and Credentials',
+            {
+                'fields': (
+                    'certificate',
+                    'credential',
+                    'chain_truststore',
+                )
+            }
+        ),
+        (
+            'Remote Configuration',
+            {
+                'fields': (
+                    'remote_host',
+                    'remote_port',
+                    'remote_path',
+                    'est_username',
+                    'onboarding_config',
+                    'no_onboarding_config',
+                ),
+                'classes': ('collapse',),
+            }
+        ),
+        (
+            'CRL Cycle Configuration',
+            {
+                'fields': (
+                    'crl_cycle_enabled',
+                    'crl_cycle_interval_hours',
+                    'last_crl_generation_started_at',
+                ),
+                'description': 'Configure automatic periodic CRL generation',
+            }
+        ),
+    )
+
+    readonly_fields = ('last_crl_generation_started_at',)
+
 
 admin.site.register(CertificateModel, CertificateModelAdmin)
 admin.site.register(CredentialModel, CredentialModelAdmin)

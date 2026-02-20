@@ -2157,6 +2157,77 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
         )
 
 
+class OpcUaGdsPushCertRenewalSettingsView(PageContextMixin, DetailView[DeviceModel]):
+    """View to save the periodic server certificate and trustlist renewal settings for an OPC UA GDS Push device."""
+
+    http_method_names = ('post',)
+    model = DeviceModel
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle the POST request to update the renewal settings.
+
+        Args:
+            request: The Django request object.
+            _args: Positional arguments are discarded.
+            _kwargs: Keyword arguments are discarded.
+
+        Returns:
+            HttpResponse redirecting back to the help page.
+        """
+        self.object = self.get_object()
+
+        enable = request.POST.get('opc_gds_push_enable_periodic_update') == 'on'
+        interval_raw = request.POST.get('opc_gds_push_renewal_interval', '')
+
+        try:
+            interval = int(interval_raw)
+            if interval < 1:
+                err_msg = 'Interval must be at least 1.'
+                raise ValueError(err_msg)  # noqa: TRY301
+        except (ValueError, TypeError):
+            messages.error(
+                request,
+                gettext_lazy('Invalid renewal interval. Please enter a positive integer (hours).')
+            )
+            return self._redirect_to_help_page()
+
+        self.object.opc_gds_push_enable_periodic_update = enable
+        self.object.opc_gds_push_renewal_interval = interval
+        self.object.save(
+            update_fields=['opc_gds_push_enable_periodic_update', 'opc_gds_push_renewal_interval']
+        )
+
+        if enable:
+            messages.success(
+                request,
+                gettext_lazy(
+                    f'Periodic server certificate and trustlist renewal enabled (every {interval} hour(s)).'
+                )
+            )
+        else:
+            messages.success(
+                request,
+                gettext_lazy('Periodic server certificate and trustlist renewal disabled.')
+            )
+
+        return self._redirect_to_help_page()
+
+    def _redirect_to_help_page(self) -> HttpResponseRedirect:
+        """Redirect back to the application certificate help page.
+
+        Returns:
+            HttpResponseRedirect to the help page.
+        """
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
+                kwargs={'pk': self.object.pk}
+            )
+        )
+
+
 class TrustBundleDownloadView(PageContextMixin, DetailView[CaModel]):
     """View to download the trust bundle (CA certificates and CRLs) for a given Issuing CA."""
 

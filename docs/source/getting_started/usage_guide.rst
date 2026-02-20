@@ -16,12 +16,12 @@ Trustpoint works in two main stages:
     - Onboarding is available in two ways:
         - **User-driven Onboarding**: This is the primary method currently available, offering several options for onboarding devices:
             - **Using the Trustpoint Client**: The Trustpoint client, available at `Trustpoint Client GitHub <https://github.com/Trustpoint-Project/trustpoint-client>`_, provides a user-friendly interface to onboard devices.
-            - **Using the device CLI**: Users can request a domain credential via CMP or EST (WIP).
+            - **Using the device CLI**: Users can request a domain credential via CMP or EST.
             - **Browser-Based Onboarding**: Trustpoint offers a web interface for convenient onboarding through a browser.
             - **Manual Download of a P12 File**: Users can download a PKCS#12 file containing the certificate and manually distribute it to the target machine.
+            - **OPC UA GDS Push**: For OPC UA servers, register them directly without traditional onboarding; Trustpoint manages their certificates via GDS Push.
         - **Zero-touch Onboarding (Work in Progress)**: A feature under development that will allow fully automated device onboarding without user intervention.
-            - **BRSKI**: A zero-touch onboarding standard defined in RFC 8995
-            - **AOKI**: A custom and simplified zero-touch onboarding
+            - **AOKI**: An automated and simplified zero-touch onboarding protocol designed for industrial environments
 
 .. admonition:: Why Onboarding First is Crucial!
    :class: tip
@@ -35,9 +35,21 @@ Trustpoint works in two main stages:
 
 2. **Issuing and Managing Application Certificates**
     - Requesting certificates for applications or systems.
-    - Trustpoint currently supports **TLS server** and **TLS client** application certificates. In the future, additional certificate types will be supported for generic requests or specific applications such as OPC UA server or client certificates.
-    - Issuing certificates from the configured Issuing CA.
+    - Trustpoint currently supports:
+        - **TLS server and TLS client** certificates for generic HTTPS applications
+        - **OPC UA server and client** certificates for OPC UA-based industrial automation
+        - Generic certificates for custom applications
+    - Issuing certificates from the configured Issuing CA or Remote CA.
     - Managing the lifecycle of certificates, including renewal, revocation, and status monitoring.
+
+3. **Distributing Certificates via OPC UA GDS Push (Experimental)**
+    - For OPC UA-based deployments, Trustpoint can automatically distribute certificates and trust anchors to OPC UA servers using the standardized OPC UA GDS Push protocol.
+    - This is useful for large-scale OPC UA deployments where centralized certificate management is required.
+    - **How it Works:**
+        - Register OPC UA servers as devices in Trustpoint
+        - Trustpoint automatically manages and pushes certificates and CRLs to the servers
+        - Servers automatically retrieve and install updated credentials
+
 
 
 Issuing CA Operating Modes
@@ -49,27 +61,56 @@ Trustpoint can be configured to operate in different modes in relation to the Is
     - Trustpoint can operate using an external Issuing CA certificate.
     - This configuration is ideal for integrating with existing PKI setups.
     - **Steps to Configure:**
-        - In PKI > Issuing CAs > Add new Issuing CA
-        - You can Import a new Issuing CA from a file by importing an PKCS#12 file oder by importing the key and certificate separately
-        - or you can generate a keypair and request an issuing CA Certificate by rerquesting it via EST or CMP
-    - **Use Case:** Issuing certificates in air-gapped environments
+        - In **PKI > Certificate Authorities > Add new CA**
+        - Select CA type **Local-Unprotected** or **Local-PKCS11**
+        - You can import an Issuing CA from a file by importing a PKCS#12 file or by importing the key and certificate separately
+    - **Use Case:** Issuing certificates in air-gapped environments or when you already have a CA certificate available
 
-2. **Operating as a Registration Authority (RA)**
-    - Trustpoint can function as an RA, forwarding certificate requests to an external Issuing CA.
+2. **Requesting CA Certificates via PKI Protocols**
+    - Trustpoint can request Issuing CA certificates from a superior Certificate Authority using standard PKI protocols (CMP or EST).
+    - This is the recommended approach for obtaining Issuing CA certificates in networked environments.
+    - **Steps to Configure:**
+        - In **PKI > Certificate Authorities > Add new CA**
+        - Select CA type **Local-Unprotected** or **Local-PKCS11**
+        - Generate a keypair locally
+        - Use CMP or EST to request an Issuing CA certificate from a superior CA
+        - Trustpoint will receive and store the issued CA certificate
+    - **Advantages:**
+        - Avoid manual certificate uploads 
+        - Automated certificate chain management
+        - Leverage existing PKI infrastructure
+        - Maintain security by not exposing private keys during import
+    - **Use Case:** Obtaining Issuing CA certificates from a central PKI without manual file transfers
+
+3. **Operating as a Registration Authority (RA)**
+    - Trustpoint can function as an RA, forwarding device certificate requests to an external Issuing CA.
     - Provides the ability to handle large-scale certificate requests efficiently while offloading the actual certificate issuance to a trusted CA.
-    - **Note**: Not supported right now. Will be available in future versions
+    - **Steps to Configure:**
+        - In **PKI > Certificate Authorities > Add new CA**
+        - Select CA type **Remote-EST-RA** or **Remote-CMP-RA**
+        - Configure the remote CA connection details (host, port, path)
+        - Configure authentication method for the remote CA (username, password, or shared secret)
+    - **Supported Protocols:**
+        - EST (Enrollment over Secure Transport) with HTTP Basic Auth
+        - CMP (Certificate Management Protocol) with shared secret or certificate-based auth
     - **Benefits:**
-        - Enhanced security by separating the RA and CA roles.
-        - Scalability for large environments.
+        - Enhanced security by separating the RA and CA roles
+        - Scalability for large environments
+        - Integration with existing PKI infrastructure
+        - Centralized device management with distributed certificate issuance
     - **Use Case:** Management of certificate requests from multiple departments while maintaining tight control over the actual certificate issuance process, which is handled by a trusted external CA.
 
-.. admonition:: RA mode is WIP
-   :class: tip
+4. **Operating with Remote-Issuing CAs**
+    - Trustpoint can issue certificates through remote Issuing CAs operated by external organizations.
+    - Similar to RA mode, but Trustpoint maintains full control over device onboarding and certificate management.
+    - **Steps to Configure:**
+        - In **PKI > Certificate Authorities > Add new CA**
+        - Select CA type **Remote-Issuing-EST** or **Remote-Issuing-CMP**
+        - Configure the remote CA connection details
+        - Configure authentication method
+    - **Use Case:** Organizations that want to offload CA operations entirely while maintaining centralized device management in Trustpoint.
 
-   We are working on making the RA mode available as soon as possible.
-
-
-3. **Self-Generated Root and Issuing CA (Testing Purposes)**
+5. **Self-Generated Root and Issuing CA (Testing Purposes)**
     - Suitable for development, testing, or non-production environments.
     - Trustpoint can generate its own Root and Issuing CA to simplify testing.
     - **Steps to Configure:**
@@ -114,7 +155,7 @@ Managing Truststores in Trustpoint
     - Import a certificate file in **PEM** or **PKCS#7** format.
     - Save the Truststore configuration to ensure the new trusted certificates are active and ready for use.
 
-- **IDevID onboarding**: Truststores can be used to onboard new devices to Trustpoint. For this purpose, serial number patterns can be stored in the domain configuration to check the associated IDevID of a request.
+- **IDevID Onboarding**: Truststores can be used to onboard new devices to Trustpoint using their Initial Device Identifier (IDevID) certificate issued by the manufacturer. For this purpose, serial number patterns can be stored in the domain configuration to check the associated IDevID of a request. This enables automated onboarding with manufacturer-backed device identity.
 
 - **Integrating Truststores with Domains**: Truststores can be added to specific Domains, and once configured, they will automatically be provided to devices associated with those Domains. This feature is currently a work in progress (WIP).
 

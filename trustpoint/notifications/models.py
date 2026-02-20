@@ -408,11 +408,7 @@ class WeakECCCurve(models.Model):
         SECP192R1 = '1.2.840.10045.3.1.1', _('SECP192R1')
         SECP224R1 = '1.3.132.0.33', _('SECP224R1')
         SECP256K1 = '1.3.132.0.10', _('SECP256K1')
-        SECT163K1 = '1.3.132.0.1', _('SECT163K1')
-        SECT163R2 = '1.3.132.0.15', _('SECT163R2')
-        SECT233K1 = '1.3.132.0.26', _('SECT233K1')
-        SECT233R1 = '1.3.132.0.27', _('SECT233R1')
-        SECT283K1 = '1.3.132.0.16', _('SECT283K1')
+
 
     oid = models.CharField(
         max_length=64,
