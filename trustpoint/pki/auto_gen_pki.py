@@ -6,7 +6,7 @@ import secrets
 import threading
 from typing import cast
 
-from pki.models import CaModel, DomainModel, RevokedCertificateModel
+from pki.models import CaModel, CredentialModel, DomainModel, RevokedCertificateModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm, KeyGenerator
 from pki.util.x509 import CertificateGenerator
 from trustpoint.logger import LoggerMixin

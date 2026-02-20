@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from trustpoint_core import oid
 
     from devices.models import DeviceModel
-    from pki.models import DevIdRegistration
+    from pki.models import CredentialModel, DevIdRegistration
     from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
 
 
