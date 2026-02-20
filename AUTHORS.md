@@ -43,10 +43,12 @@ Full Name is required, all other fields are optional.
 * Ibrahim Almountaka Sambare (ibrahimsambare) <ibrahim.realmountaka A campus-schwarzwald.de> - Campus Schwarzwald / ESILV Paris
 * Kevin Rohn (KevinRohn)
 * Mario Kemper
+* Marvin Siegel (Marvin-201)
 * Mohammad Zeeshan
 * Omkar Joglekar
 * Rohit Bohara
 * Sven Bergmann <sven.bergmann A achelos.de> - achelos GmbH
+
 
 [^1]: The license text is available under the [Creative Commons Attribution-ShareAlike 3.0 Unported license](https://creativecommons.org/licenses/by-sa/3.0/).
   It is adapted from the [Linux Kernel Developer Certificate Of Origin](https://elinux.org/Developer_Certificate_Of_Origin).
