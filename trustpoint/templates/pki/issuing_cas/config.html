@@ -52,10 +52,10 @@
                 <div>
                     <div>{% trans 'Issuing CA Certificate' %}</div>
                     <div>
-                        {% if issuing_ca.credential.certificate %}
-                        <a href="{% url 'pki:certificate-detail' pk=issuing_ca.credential.certificate.id %}">
-                            {% if issuing_ca.credential.certificate.common_name %}
-                            CN: {{ issuing_ca.credential.certificate.common_name }}
+                        {% if issuing_ca.ca_certificate_model %}
+                        <a href="{% url 'pki:certificate-detail' pk=issuing_ca.ca_certificate_model.id %}">
+                            {% if issuing_ca.ca_certificate_model.common_name %}
+                            CN: {{ issuing_ca.ca_certificate_model.common_name }}
                             {% else %}
                             <h3>{% trans 'Issuing CA Certificate' %}</h3>
                             {% endif %}
@@ -106,8 +106,8 @@
             </div>
                     {% include 'pki/issuing_cas/includes/remote_ca_config.html' %}
 
-                    {% if issuing_ca.credential.certificate %}
-                        {% if issuing_ca.credential.certificate.subject_public_bytes == issuing_ca.credential.certificate.issuer_public_bytes %}
+                    {% if issuing_ca.ca_certificate_model %}
+                        {% if issuing_ca.ca_certificate_model.subject_public_bytes == issuing_ca.ca_certificate_model.issuer_public_bytes %}
                             <h3>{% trans 'Issuing CA Certificate (This is a self-signed Root CA Certificate)' %}</h3>
                         {% else %}
                             <h3>{% trans 'Issuing CA Certificate' %}</h3>
@@ -116,21 +116,21 @@
                         <h3>{% trans 'Issuing CA (Certificate Pending)' %}</h3>
                     {% endif %}
                     <hr class="hr-m">
-                    {% if issuing_ca.credential.certificate %}
+                    {% if issuing_ca.ca_certificate_model %}
                     <div class="tp-kvp-list">
                         <div>
                             <div>{% trans 'Issuing CA Certificate' %}</div>
                             <div>
-                                <a href="{% url 'pki:certificate-detail' pk=issuing_ca.credential.certificate.id %}">
-                                    {% if issuing_ca.credential.certificate.common_name %}
-                                        CN: {{ issuing_ca.credential.certificate.common_name }}
+                                <a href="{% url 'pki:certificate-detail' pk=issuing_ca.ca_certificate_model.id %}">
+                                    {% if issuing_ca.ca_certificate_model.common_name %}
+                                        CN: {{ issuing_ca.ca_certificate_model.common_name }}
                                     {% else %}
                                         {% trans 'Issuing CA Certificate' %}
                                     {% endif %}
                                 </a>
                             </div>
                         </div>
-                        {% with issuing_ca_certificate=issuing_ca.credential.certificate %}
+                        {% with issuing_ca_certificate=issuing_ca.ca_certificate_model %}
                             <div>
                                 <div>{% trans 'Serial Number' %}</div>
                                 <div>{{ issuing_ca_certificate.serial_number }}</div>
@@ -188,7 +188,7 @@
             </div>
             {% endif %}
 
-            {% if issuing_ca.credential.certificate and issuing_ca.issuing_ca_certificate.subject_public_bytes != issuing_ca.issuing_ca_certificate.issuer_public_bytes %}
+            {% if issuing_ca.ca_certificate_model and issuing_ca.issuing_ca_certificate.subject_public_bytes != issuing_ca.issuing_ca_certificate.issuer_public_bytes %}
             <h2>{% trans 'Root CA Certificate' %}</h2>
             <hr class="hr-m">
             <div class="tp-kvp-list">
@@ -254,7 +254,7 @@
                 </div>
             {% endif %}
 
-            {% if not issuing_ca.credential.certificate or issuing_ca.credential.certificate.common_name|slice:":5" == "Temp-" %}
+            {% if not issuing_ca.ca_certificate_model and issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_EST or issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_CMP %}
             <h3>{% trans 'Certificate Request' %}</h3>
             <hr class="hr-m">
             <div class="tp-kvp-list">
@@ -288,40 +288,10 @@
                 </div>
             </div>
             {% endif %}
-                    <div>
-                        {% if not issuing_ca.ca_certificate_model or issuing_ca.ca_certificate_model.common_name|slice:":5" == "Temp-" %}
-                        <h3>{% trans 'Certificate Request' %}</h3>
-                        <hr class="hr-m">
-                        <div class="tp-kvp-list">
-                            <div>
-                                <div>{% trans 'Status' %}</div>
-                                <div class="text-warning">{% trans 'Certificate not yet requested' %}</div>
-                            </div>
-                            <div>
-                                <div>{% trans 'Actions' %}</div>
-                                <div>
-                                    {% if issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_EST %}
-                                        <form method="post" action="{% url 'pki:issuing_cas-request-cert-est' pk=issuing_ca.pk %}" style="display: inline;">
-                                            {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-primary">
-                                                {% trans 'Request CA Certificate via EST' %}
-                                            </button>
-                                        </form>
-                                    {% elif issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_CMP %}
-                                        <form method="post" action="{% url 'pki:issuing_cas-request-cert-cmp' pk=issuing_ca.pk %}" style="display: inline;">
-                                            {% csrf_token %}
-                                            <button type="submit" class="btn btn-sm btn-primary">
-                                                {% trans 'Request CA Certificate via CMP' %}
-                                            </button>
-                                        </form>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
+
 
             <!-- CRL Management Card -->
-            {% if issuing_ca.credential.certificate %}
+            {% if issuing_ca.ca_certificate_model %}
             <div class="md-6 mt-4">
                 <div class="card tp-card-centered h-100">
                     <div class="card-header">

@@ -10,7 +10,10 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
+        ('notifications', '0001_initial'),
+        ('onboarding', '0002_tp_v0_5_0_dev1'),
         ('pki', '0002_tp_v0_4_0'),
+        ('workflows', '0001_tp_v0_4_0'),
     ]
 
     operations = [
@@ -42,11 +45,6 @@ class Migration(migrations.Migration):
             model_name='credentialmodel',
             name='private_key',
             field=util.encrypted_fields.EncryptedCharField(blank=True, default='', max_length=116633, verbose_name='Private key (PEM)'),
-        ),
-        migrations.AlterField(
-            model_name='primarycredentialcertificate',
-            name='certificate',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='pki.certificatemodel'),
         ),
         migrations.AlterField(
             model_name='truststoremodel',
@@ -117,7 +115,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name='camodel',
-            constraint=models.CheckConstraint(condition=models.Q(models.Q(('ca_type', -1), ('certificate__isnull', False), ('credential__isnull', True)), models.Q(('ca_type__in', [4, 5]), ('credential__isnull', True)), models.Q(('ca_type__in', [0, 1, 2, 3, 6, 7]), ('certificate__isnull', True), ('credential__isnull', False)), _connector='OR'), name='ca_mode_constraint', violation_error_message='Invalid CA configuration'),
+            constraint=models.CheckConstraint(condition=models.Q(models.Q(('ca_type', -1), ('certificate__isnull', False), ('credential__isnull', True)), models.Q(('ca_type__in', [0, 1, 2, 3, 6, 7]), ('certificate__isnull', True), ('credential__isnull', False)), models.Q(('ca_type__in', [4, 5]), ('certificate__isnull', True), ('credential__isnull', True)), _connector='OR'), name='ca_mode_constraint', violation_error_message='Invalid CA configuration'),
         ),
         migrations.DeleteModel(
             name='IssuingCaModel',
