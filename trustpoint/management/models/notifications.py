@@ -538,7 +538,10 @@ class NotificationConfig(models.Model):
                 return next_task.next_run
 
         except (AttributeError, ImportError):
-            pass
+            log.warning(
+                'Failed to query Django-Q2 schedule for next notification check',
+                exc_info=True,
+            )
 
         return self.last_notification_check_started_at
 
