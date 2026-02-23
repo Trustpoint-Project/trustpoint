@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @receiver(post_migrate)
-def initialize_notification_scheduling(sender: object, **kwargs: dict) -> None:  # noqa: ARG001
+def initialize_notification_scheduling(sender: object, **kwargs: dict[str, object]) -> None:  # noqa: ARG001
     """Initialize notification scheduling after database migrations.
 
     This signal handler runs after migrations are applied and ensures that

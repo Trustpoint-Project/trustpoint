@@ -534,8 +534,8 @@ class NotificationConfig(models.Model):
                 schedule_type='O'
             ).order_by('next_run').first()
 
-            if next_task:
-                return next_task.next_run
+            if next_task and next_task.next_run:
+                return next_task.next_run  # type: ignore[no-any-return]
 
         except (AttributeError, ImportError):
             log.warning(
@@ -543,7 +543,7 @@ class NotificationConfig(models.Model):
                 exc_info=True,
             )
 
-        return self.last_notification_check_started_at
+        return self.last_notification_check_started_at or None
 
     def schedule_next_notification_check(self, cycle_interval_hours: float | None = None) -> None:
         """Schedule the next notification execution using Django-Q2.
