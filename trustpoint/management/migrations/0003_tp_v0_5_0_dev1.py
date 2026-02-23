@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
     dependencies = [
         ('devices', '0003_tp_v0_5_0_dev1'),
         ('management', '0002_tp_v0_4_0'),
-        ('pki', '0002_tp_v0_4_0'),
+        ('pki', '0003_tp_v0_5_0_dev1'),
     ]
 
     operations = [
@@ -17,7 +17,10 @@ class Migration(migrations.Migration):
             name='NotificationConfig',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('enabled', models.BooleanField(default=True, help_text='Enable or disable all notifications globally.')),
+                ('enabled', models.BooleanField(default=False, help_text='Enable or disable all notifications globally.')),
+                ('notification_cycle_enabled', models.BooleanField(default=False, help_text='Enable automatic periodic notification checks via Django-Q2', verbose_name='Enable Notification Cycle Updates')),
+                ('notification_cycle_interval_hours', models.FloatField(default=0.0833, help_text='The interval in hours between automatic notification checks (default: 5 minutes)', verbose_name='Notification Cycle Interval (hours)')),
+                ('last_notification_check_started_at', models.DateTimeField(blank=True, help_text='Timestamp when the last notification check task was started', null=True, verbose_name='Last Notification Check Started')),
                 ('cert_expiry_warning_days', models.PositiveIntegerField(default=30, help_text="Number of days before a certificate's expiration to trigger a 'Certificate Expiring' warning.")),
                 ('issuing_ca_expiry_warning_days', models.PositiveIntegerField(default=30, help_text="Number of days before an issuing CA's certificate expiration to trigger a warning.")),
                 ('rsa_minimum_key_size', models.PositiveIntegerField(default=2048, help_text='Minimum RSA key size (in bits) that certificates must meet to avoid being flagged as insecure.')),
@@ -68,6 +71,23 @@ class Migration(migrations.Migration):
                 ('certificate', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='notifications', to='pki.certificatemodel')),
                 ('device', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='notifications', to='devices.devicemodel')),
                 ('domain', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='notifications', to='pki.domainmodel')),
+                ('issuing_ca', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='notifications', to='pki.camodel')),
+                ('message', models.ForeignKey(null=True, on_delete=django.db.models.deletion.CASCADE, related_name='notifications', to='management.notificationmessagemodel')),
             ],
+        ),
+        migrations.AddField(
+            model_name='notificationmodel',
+            name='statuses',
+            field=models.ManyToManyField(related_name='notifications', to='management.notificationstatus'),
+        ),
+        migrations.AddField(
+            model_name='notificationconfig',
+            name='weak_ecc_curves',
+            field=models.ManyToManyField(blank=True, help_text='Select ECC curves considered weak or deprecated.', to='management.weakecccurve'),
+        ),
+        migrations.AddField(
+            model_name='notificationconfig',
+            name='weak_signature_algorithms',
+            field=models.ManyToManyField(blank=True, help_text='Select signature algorithms considered weak or deprecated.', to='management.weaksignaturealgorithm'),
         ),
     ]

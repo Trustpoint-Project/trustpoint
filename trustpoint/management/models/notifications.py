@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from django.db import models
+from django.utils import timezone
 from django.utils.encoding import force_str
 from django.utils.translation import gettext_lazy as _
+from django_q.tasks import schedule  # type: ignore[import-untyped]
 from django_stubs_ext.db.models import TypedModelMeta
 
 if TYPE_CHECKING:
@@ -448,8 +451,27 @@ class NotificationConfig(models.Model):
     objects: models.Manager[NotificationConfig]
 
     enabled = models.BooleanField(
-        default=True,
+        default=False,
         help_text=_('Enable or disable all notifications globally.')
+    )
+
+    notification_cycle_enabled = models.BooleanField(
+        _('Enable Notification Cycle Updates'),
+        default=False,
+        help_text=_('Enable automatic periodic notification checks via Django-Q2')
+    )
+
+    notification_cycle_interval_hours = models.FloatField(
+        _('Notification Cycle Interval (hours)'),
+        default=0.0833,  # 5 minutes
+        help_text=_('The interval in hours between automatic notification checks (default: 5 minutes)')
+    )
+
+    last_notification_check_started_at = models.DateTimeField(
+        _('Last Notification Check Started'),
+        null=True,
+        blank=True,
+        help_text=_('Timestamp when the last notification check task was started')
     )
 
     cert_expiry_warning_days = models.PositiveIntegerField(
@@ -491,3 +513,54 @@ class NotificationConfig(models.Model):
     def get(cls) -> NotificationConfig:
         """Ensure there's always one settings object to use."""
         return cls.objects.first() or cls.objects.create()
+
+    @property
+    def next_notification_check_scheduled_at(self) -> datetime | None:
+        """Returns when the next notification check is scheduled.
+
+        Returns:
+            datetime | None: The scheduled time for the next notification check,
+                           or None if not enabled or not scheduled.
+        """
+        if not self.notification_cycle_enabled or not self.enabled:
+            return None
+        return self.last_notification_check_started_at
+
+    def schedule_next_notification_check(self, cycle_interval_hours: float | None = None) -> None:
+        """Schedule the next notification execution using Django-Q2.
+
+        Creates a scheduled task in Django-Q2 that will execute all notifications at the calculated time.
+        The task will automatically trigger notification checks without manual intervention.
+
+        Args:
+            cycle_interval_hours: The number of hours until the next notification check should run.
+                                If None, uses the model's notification_cycle_interval_hours setting.
+        """
+        if not self.notification_cycle_enabled:
+            log.debug('Notification cycle not enabled, skipping scheduling')
+            return
+
+        if not self.enabled:
+            log.debug('Notifications are disabled, skipping scheduling')
+            return
+
+        # Use provided interval or fall back to model setting
+        interval = cycle_interval_hours if cycle_interval_hours is not None else self.notification_cycle_interval_hours
+
+        scheduled_time = timezone.now() + timedelta(hours=interval)
+
+        schedule(
+            'management.tasks.execute_all_notifications',
+            schedule_type='O',
+            next_run=scheduled_time,
+            name=f'notification_check_{scheduled_time.timestamp()}'
+        )
+
+        self.last_notification_check_started_at = scheduled_time
+        self.save(update_fields=['last_notification_check_started_at'])
+
+        log.info(
+            'Next notification check scheduled for %s via Django-Q2 (interval: %.1f minutes)',
+            scheduled_time,
+            interval * 60,
+        )

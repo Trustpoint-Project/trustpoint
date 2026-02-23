@@ -115,6 +115,9 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
     """Form for managing global notification configuration settings."""
 
+    MAX_EXPIRY_WARNING_DAYS = 365
+    MIN_EXPIRY_WARNING_DAYS = 1
+
     class Meta:
         """Meta configuration for NotificationConfigForm."""
         model = NotificationConfig
@@ -139,17 +142,6 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
         """Initialize the NotificationConfigForm."""
         super().__init__(*args, **kwargs)
 
-        self.fields['enabled'].help_text = _(
-            'Enable or disable all notifications globally'
-        )
-        self.fields['cert_expiry_warning_days'].help_text = _(
-            'Number of days before certificate expiration to trigger warnings'
-        )
-        self.fields['issuing_ca_expiry_warning_days'].help_text = _(
-            'Number of days before issuing CA certificate expiration to trigger warnings'
-        )
-
-        # Set the crispy forms helper
         self.helper = FormHelper()
         self.helper.form_tag = False
         self.helper.layout = Layout(
@@ -163,6 +155,36 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
                 'issuing_ca_expiry_warning_days',
             ),
         )
+
+    def clean_cert_expiry_warning_days(self) -> int | None:
+        """Validate cert_expiry_warning_days field."""
+        cert_expiry = self.cleaned_data.get('cert_expiry_warning_days')
+        if cert_expiry is not None and (
+            cert_expiry < self.MIN_EXPIRY_WARNING_DAYS or
+            cert_expiry > self.MAX_EXPIRY_WARNING_DAYS
+        ):
+            raise ValidationError(
+                _('Value must be between %(min)d and %(max)d days.') % {
+                    'min': self.MIN_EXPIRY_WARNING_DAYS,
+                    'max': self.MAX_EXPIRY_WARNING_DAYS,
+                }
+            )
+        return cert_expiry
+
+    def clean_issuing_ca_expiry_warning_days(self) -> int | None:
+        """Validate issuing_ca_expiry_warning_days field."""
+        ca_expiry = self.cleaned_data.get('issuing_ca_expiry_warning_days')
+        if ca_expiry is not None and (
+            ca_expiry < self.MIN_EXPIRY_WARNING_DAYS or
+            ca_expiry > self.MAX_EXPIRY_WARNING_DAYS
+        ):
+            raise ValidationError(
+                _('Value must be between %(min)d and %(max)d days.') % {
+                    'min': self.MIN_EXPIRY_WARNING_DAYS,
+                    'max': self.MAX_EXPIRY_WARNING_DAYS,
+                }
+            )
+        return ca_expiry
 
 class BackupOptionsForm(forms.ModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""

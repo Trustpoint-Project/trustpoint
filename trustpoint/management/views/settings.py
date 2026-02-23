@@ -7,6 +7,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from django.contrib import messages
+from django.core.management import call_command
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.encoding import force_str
@@ -71,10 +72,39 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
             # Handle NotificationConfigForm
             notification_config = NotificationConfig.get()
             notification_form = NotificationConfigForm(request.POST, instance=notification_config)
+            self.logger.debug('NotificationConfigForm validation: is_valid=%s', notification_form.is_valid())
             if notification_form.is_valid():
+                # Check if notifications are being enabled
+                was_enabled = notification_config.enabled
+                cleaned_enabled = notification_form.cleaned_data.get('enabled', False)
+
+                # Save the form
                 notification_form.save()
-                messages.success(request, _('Notification configuration saved successfully.'))
+
+                # If notifications were just enabled, initialize the notification cycle
+                if not was_enabled and cleaned_enabled:
+                    try:
+                        # Set notification_cycle_enabled to True
+                        notification_config.notification_cycle_enabled = True
+                        notification_config.save(update_fields=['notification_cycle_enabled'])
+
+                        # Execute init_notifications command
+                        call_command('init_notifications')
+                        messages.success(
+                            request,
+                            _('Notifications enabled and notification cycle initialized.')
+                        )
+                    except Exception:  # pylint: disable=broad-except
+                        self.logger.exception('Error initializing notifications')
+                        messages.error(
+                            request,
+                            _('Notifications enabled but error initializing notification cycle.')
+                        )
+                else:
+                    messages.success(request, _('Notification configuration saved successfully.'))
                 return redirect(self.success_url)
+            self.logger.error('Notification form errors: %s', notification_form.errors)
+            self.logger.error('Notification form non-field errors: %s', notification_form.non_field_errors())
             messages.error(request, _('Error saving notification configuration'))
             return self.render_to_response(
                 self.get_context_data(notification_form=notification_form)

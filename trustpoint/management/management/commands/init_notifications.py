@@ -1,4 +1,4 @@
-"""This module contains a Django management command to schedule all notification checks via Django-Q2."""
+"""Django management command to initialize notification scheduling."""
 
 from __future__ import annotations
 
@@ -10,9 +10,9 @@ from management.models import NotificationConfig
 
 
 class Command(BaseCommand):
-    """A Django management command to schedule the next notification check execution."""
+    """Initialize notification scheduling in Django-Q2."""
 
-    help = 'Schedule the next notification check to run via Django-Q2.'
+    help = 'Initialize the notification check scheduling via Django-Q2'
 
     def add_arguments(self, parser: Any) -> None:
         """Add command arguments.
@@ -41,7 +41,10 @@ class Command(BaseCommand):
 
         if not notification_config.enabled:
             self.stdout.write(
-                self.style.WARNING('Notifications are disabled. Enable them in Management > Settings.')
+                self.style.WARNING(
+                    'Notifications are currently disabled. '
+                    'Enable them in Management > Settings to start notification checks.'
+                )
             )
             return
 
@@ -49,9 +52,11 @@ class Command(BaseCommand):
             notification_config.schedule_next_notification_check(cycle_interval_hours=interval_hours)
             self.stdout.write(
                 self.style.SUCCESS(
-                    f'Successfully scheduled next notification check in {interval_minutes} minute(s).'
+                    f'✓ Notification checking initialized successfully!\n'
+                    f'  Next check scheduled in {interval_minutes} minute(s).\n'
+                    f'  Make sure the Q Cluster is running: uv run trustpoint/manage.py qcluster'
                 )
             )
         except Exception as exc:
-            self.stdout.write(self.style.ERROR(f'Failed to schedule notification check: {exc}'))
+            self.stdout.write(self.style.ERROR(f'Failed to initialize notification scheduling: {exc}'))
             raise
