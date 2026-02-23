@@ -203,6 +203,21 @@ class CredentialSaver(SaveCredentialToDbMixin):
         """
         return self._domain
 
+    def save_credential(
+        self,
+        credential: CredentialSerializer,
+        common_name: str,
+        issued_credential_type: IssuedCredentialModel.IssuedCredentialType,
+        cert_profile_disp_name: str,
+    ) -> IssuedCredentialModel:
+        """Saves a credential with a private key to the database."""
+        return self._save(
+            credential,
+            common_name,
+            issued_credential_type,
+            cert_profile_disp_name,
+        )
+
     def save_keyless_credential(
         self,
         certificate: x509.Certificate,

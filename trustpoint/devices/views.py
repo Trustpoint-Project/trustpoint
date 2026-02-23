@@ -84,8 +84,6 @@ from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from request.authorization import ManualAuthorization
 from request.gds_push import GdsPushService
 from request.gds_push.gds_push_service import GdsPushError
-from request.message_responder import ManualMessageResponder
-from request.operation_processor import CertificateIssueProcessor
 from request.operation_processor.issue_cred import CredentialIssueProcessor
 from request.request_context import ManualCredentialRequestContext
 from trustpoint.logger import LoggerMixin
@@ -1662,7 +1660,7 @@ class AbstractIssueProfileCredentialView(
 
         messages.success(
             self.request,
-            _('Certificate builder generated successfully.'),
+            gettext_lazy('Certificate builder generated successfully.'),
         )
         return HttpResponseRedirect(reverse_lazy('pki:cert_profiles'))
 
@@ -1680,12 +1678,7 @@ class AbstractIssueProfileCredentialView(
         if not isinstance(form, CertificateIssuanceForm):
             err_msg = 'Invalid form type. Expected CertificateIssuanceForm.'
             raise TypeError(err_msg)
-        try:
-            cert_builder = form.get_certificate_builder()
-        except ValueError as e:
-            messages.error(
-                self.request, gettext_lazy('Error generating certificate builder: {error}').format(error=str(e)))
-            return self.form_invalid(form)
+        cert_builder = form.get_certificate_builder()
         if not device.domain:
             raise Http404(DeviceWithoutDomainErrorMsg)
 

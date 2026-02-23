@@ -2,11 +2,9 @@
 
 from .cmp import CmpMessageResponder
 from .est import EstErrorMessageResponder, EstMessageResponder
-from .manual import ManualMessageResponder
 
 __all__ = [
     'CmpMessageResponder',
     'EstErrorMessageResponder',
     'EstMessageResponder',
-    'ManualMessageResponder',
 ]
