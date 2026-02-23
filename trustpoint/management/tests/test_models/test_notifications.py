@@ -5,7 +5,7 @@ from devices.models import DeviceModel
 from django.utils import timezone
 from pki.models import DomainModel, CaModel
 
-from notifications.models import (
+from management.models import (
     NotificationConfig,
     NotificationMessageModel,
     NotificationModel,

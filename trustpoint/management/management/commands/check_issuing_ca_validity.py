@@ -7,7 +7,7 @@ from typing import Any, cast
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from notifications.models import NotificationConfig, NotificationModel, NotificationStatus
+from management.models import NotificationConfig, NotificationModel, NotificationStatus
 from pki.models import CaModel
 
 

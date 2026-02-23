@@ -1,4 +1,4 @@
-"""Defines views for the notifications application."""
+"""Defines views for managing notifications."""
 
 from typing import Any
 
@@ -11,7 +11,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic import DeleteView, TemplateView
 
 from home.views import ERROR, SUCCESS
-from notifications.models import NotificationModel
+from management.models import NotificationModel
 from trustpoint.logger import LoggerMixin
 
 
@@ -62,7 +62,3 @@ class NotificationDeleteView(LoggerMixin, DeleteView[NotificationModel, Any]):
         response = super().delete(request, *args, **kwargs)
         messages.success(request, _('Notification deleted successfully.'))
         return response
-
-
-
-

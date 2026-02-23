@@ -18,7 +18,7 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from management.models import BackupOptions, KeyStorageConfig, PKCS11Token, SecurityConfig
+from management.models import BackupOptions, KeyStorageConfig, NotificationConfig, PKCS11Token, SecurityConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from pki.models import CredentialModel
@@ -110,6 +110,59 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 return AutoGenPkiKeyAlgorithm(self.instance.auto_gen_pki_key_algorithm)
             return AutoGenPkiKeyAlgorithm.RSA2048
         return AutoGenPkiKeyAlgorithm(form_value)
+
+
+class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
+    """Form for managing global notification configuration settings."""
+
+    class Meta:
+        """Meta configuration for NotificationConfigForm."""
+        model = NotificationConfig
+        fields: ClassVar[list[str]] = [
+            'enabled',
+            'cert_expiry_warning_days',
+            'issuing_ca_expiry_warning_days',
+        ]
+        widgets: ClassVar[dict[str, Any]] = {
+            'enabled': forms.CheckboxInput(
+                attrs={'class': 'form-check-input'}
+            ),
+            'cert_expiry_warning_days': forms.NumberInput(
+                attrs={'class': 'form-control', 'min': '1', 'max': '365'}
+            ),
+            'issuing_ca_expiry_warning_days': forms.NumberInput(
+                attrs={'class': 'form-control', 'min': '1', 'max': '365'}
+            ),
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the NotificationConfigForm."""
+        super().__init__(*args, **kwargs)
+
+        self.fields['enabled'].help_text = _(
+            'Enable or disable all notifications globally'
+        )
+        self.fields['cert_expiry_warning_days'].help_text = _(
+            'Number of days before certificate expiration to trigger warnings'
+        )
+        self.fields['issuing_ca_expiry_warning_days'].help_text = _(
+            'Number of days before issuing CA certificate expiration to trigger warnings'
+        )
+
+        # Set the crispy forms helper
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            Fieldset(
+                _('Notification Settings'),
+                'enabled',
+            ),
+            Fieldset(
+                _('Expiry Warning Thresholds'),
+                'cert_expiry_warning_days',
+                'issuing_ca_expiry_warning_days',
+            ),
+        )
 
 class BackupOptionsForm(forms.ModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""

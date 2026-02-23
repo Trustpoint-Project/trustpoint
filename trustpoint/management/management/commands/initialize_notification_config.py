@@ -2,7 +2,7 @@
 from typing import Any
 
 from django.core.management.base import BaseCommand
-from notifications.models import (
+from management.models import (
     NotificationConfig,
     WeakECCCurve,
     WeakSignatureAlgorithm,

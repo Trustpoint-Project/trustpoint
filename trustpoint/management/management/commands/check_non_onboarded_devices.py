@@ -8,7 +8,7 @@ from devices.models import DeviceModel
 from onboarding.models import OnboardingStatus
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from notifications.models import NotificationModel, NotificationStatus
+from management.models import NotificationModel, NotificationStatus
 
 new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
 

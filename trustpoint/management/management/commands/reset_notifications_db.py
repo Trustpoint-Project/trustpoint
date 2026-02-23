@@ -3,7 +3,7 @@
 from typing import Any
 
 from django.core.management.base import BaseCommand
-from notifications.models import NotificationModel
+from management.models import NotificationModel
 
 from trustpoint.settings import DOCKER_CONTAINER
 

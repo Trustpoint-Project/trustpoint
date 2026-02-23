@@ -14,11 +14,10 @@ from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic.edit import FormView
 
-from management.forms import SecurityConfigForm
-from management.models import LoggingConfig, SecurityConfig
+from management.forms import NotificationConfigForm, SecurityConfigForm
+from management.models import LoggingConfig, NotificationConfig, SecurityConfig, WeakECCCurve, WeakSignatureAlgorithm
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
-from notifications.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
@@ -44,6 +43,44 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
     page_category = 'management'
     page_name = 'settings'
 
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle POST requests for both SecurityConfig and NotificationConfig forms.
+
+        Parameters
+        ----------
+        request : HttpRequest
+            The HTTP request object.
+        *args : tuple
+            Positional arguments.
+        **kwargs : dict
+            Keyword arguments.
+
+        Returns:
+        -------
+        HttpResponse
+            A response object.
+        """
+        # Check which form was submitted
+        if 'security_configuration' in request.POST:
+            # Handle SecurityConfigForm
+            form = self.get_form()
+            if form.is_valid():
+                return self.form_valid(form)
+            return self.form_invalid(form)
+        if 'notification_configuration' in request.POST:
+            # Handle NotificationConfigForm
+            notification_config = NotificationConfig.get()
+            notification_form = NotificationConfigForm(request.POST, instance=notification_config)
+            if notification_form.is_valid():
+                notification_form.save()
+                messages.success(request, _('Notification configuration saved successfully.'))
+                return redirect(self.success_url)
+            messages.error(request, _('Error saving notification configuration'))
+            return self.render_to_response(
+                self.get_context_data(notification_form=notification_form)
+            )
+        return super().post(request, *args, **kwargs)
+
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get the keyword arguments for instantiating the form.
 
@@ -59,9 +96,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         try:
             security_config = SecurityConfig.objects.get(id=1)
         except SecurityConfig.DoesNotExist:
-            security_config = SecurityConfig.objects.create(
-                notification_config=NotificationConfig.objects.create()
-            )
+            security_config = SecurityConfig.objects.create()
         kwargs['instance'] = security_config
         return kwargs
 
@@ -188,6 +223,10 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         context['loglevels'] = LOG_LEVELS
         current_level_num = logging.getLogger().getEffectiveLevel()
         context['current_loglevel'] = logging.getLevelName(current_level_num)
+
+        # Add notification configuration form
+        notification_config = NotificationConfig.get()
+        context['notification_form'] = NotificationConfigForm(instance=notification_config)
 
         return context
 

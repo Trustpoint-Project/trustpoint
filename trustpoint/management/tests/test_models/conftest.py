@@ -7,7 +7,7 @@ from devices.models import DeviceModel
 from django.core.management import call_command
 from pki.models import DomainModel, CaModel
 
-from notifications.models import NotificationMessageModel, NotificationStatus
+from management.models import NotificationMessageModel, NotificationStatus
 
 
 @pytest.fixture

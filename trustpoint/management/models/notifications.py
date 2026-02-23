@@ -447,6 +447,11 @@ class NotificationConfig(models.Model):
 
     objects: models.Manager[NotificationConfig]
 
+    enabled = models.BooleanField(
+        default=True,
+        help_text=_('Enable or disable all notifications globally.')
+    )
+
     cert_expiry_warning_days = models.PositiveIntegerField(
         default=30,
         help_text=_("Number of days before a certificate's expiration to trigger a 'Certificate Expiring' warning.")

@@ -1,0 +1,33 @@
+{% load i18n %}
+{% load static %}
+{% load crispy_forms_filters %}
+
+<div class="accordion-item">
+    <h2 class="accordion-header">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseNotifications" aria-expanded="false" aria-controls="collapseNotifications">
+            {% trans "Notification Configuration" %}
+        </button>
+    </h2>
+    <div id="collapseNotifications" class="accordion-collapse collapse" data-bs-parent="#accordionSettings">
+        <div class="accordion-body">
+            <div class="card">
+                <div class="card-body pt-4 pb-4">
+                    <form method="POST" enctype="multipart/form-data" id="notification_configuration">
+                        {% csrf_token %}
+                        <fieldset class="form-group tp-form-group">
+                            {% crispy notification_form %}
+                        </fieldset>
+                    </form>
+                </div>
+
+                <div class="card-footer d-flex justify-content-between">
+                    <div class="tp-card-btn-footer m-1">
+                        <button class="btn btn-primary" type="submit" form="notification_configuration">
+                            {% trans "Save" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
