@@ -81,8 +81,13 @@ from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainAllowedCertificateProfileModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
+from request.authorization import ManualAuthorization
 from request.gds_push import GdsPushService
 from request.gds_push.gds_push_service import GdsPushError
+from request.message_responder import ManualMessageResponder
+from request.operation_processor import CertificateIssueProcessor
+from request.operation_processor.issue_cred import CredentialIssueProcessor
+from request.request_context import ManualCredentialRequestContext
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -1352,10 +1357,13 @@ class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCre
         form = self.form_class(**self.get_form_kwargs())
 
         if form.is_valid():
-            credential = self.issue_credential(device=self.object, form=form)
-            messages.success(
-                request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
-            )
+            try:
+                credential = self.issue_credential(device=self.object, form=form)
+                messages.success(
+                    request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
+                )
+            except Exception as e:  # noqa: BLE001
+                messages.error(request, f'Failed to issue {self.friendly_name}: {e}')
             return HttpResponseRedirect(
                 reverse_lazy(
                     f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.get_object().id}
@@ -1680,9 +1688,19 @@ class AbstractIssueProfileCredentialView(
             return self.form_invalid(form)
         if not device.domain:
             raise Http404(DeviceWithoutDomainErrorMsg)
-        issuer = self.issuer_class(device=device, domain=device.domain)
 
-        return issuer.issue_profile_credential(cert_builder)
+        ctx = ManualCredentialRequestContext(
+            device=device,
+            domain=device.domain,
+            cert_profile_str=self.profile.unique_name,
+            cert_requested=cert_builder,
+        )
+        ManualAuthorization().authorize(ctx)
+        CredentialIssueProcessor().process_operation(ctx)
+        if not ctx.issued_credential:
+            err_msg = 'Issued credential not in context.'
+            raise ValueError(err_msg)
+        return ctx.issued_credential
 
 
 class DeviceIssueProfileCredentialView(AbstractIssueProfileCredentialView):

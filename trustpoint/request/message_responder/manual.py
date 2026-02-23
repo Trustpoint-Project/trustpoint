@@ -1,7 +1,7 @@
 """Manual-specific message responder classes."""
 
 from onboarding.models import OnboardingStatus
-from request.request_context import BaseRequestContext, ManualBaseRequestContext, ManualCertificateRequestContext
+from request.request_context import BaseRequestContext, ManualBaseRequestContext, ManualCredentialRequestContext
 
 from .base import AbstractMessageResponder
 
@@ -16,8 +16,8 @@ class ManualMessageResponder(AbstractMessageResponder):
             exc_msg = 'ManualMessageResponder requires a subclass of ManualBaseRequestContext.'
             raise TypeError(exc_msg)
 
-        if isinstance(context, ManualCertificateRequestContext):
-            responder = ManualCertificateMessageResponder()
+        if isinstance(context, ManualCredentialRequestContext):
+            responder = ManualCredentialMessageResponder()
             return responder.build_response(context)
         exc_msg = 'No suitable responder found for this manual message.'
         context.http_response_status = 500
@@ -25,14 +25,14 @@ class ManualMessageResponder(AbstractMessageResponder):
         return ManualErrorMessageResponder().build_response(context)
 
 
-class ManualCertificateMessageResponder(ManualMessageResponder):
+class ManualCredentialMessageResponder(ManualMessageResponder):
     """Respond to a manual certificate request with the issued certificate."""
 
     @staticmethod
     def build_response(context: BaseRequestContext) -> None:
         """Respond to a manual certificate request with the issued certificate."""
-        if not isinstance(context, ManualCertificateRequestContext):
-            exc_msg = 'ManualCertificateMessageResponder requires a ManualCertificateRequestContext.'
+        if not isinstance(context, ManualCredentialRequestContext):
+            exc_msg = 'ManualCredentialMessageResponder requires a ManualCredentialRequestContext.'
             raise TypeError(exc_msg)
 
         if context.device and context.device.onboarding_config:
