@@ -279,7 +279,8 @@ INSTALLED_APPS = [
     'dbbackup',
     'workflows.apps.WorkflowsConfig',
     'rest_framework',
-    'drf_spectacular'
+    'drf_spectacular',
+    'django_q',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
@@ -437,3 +438,20 @@ SPECTACULAR_SETTINGS = {
 }
 
 SWAGGER_USE_COMPAT_RENDERERS = False
+
+TASKS = {
+    'default': {
+        'BACKEND': 'django.tasks.backends.immediate.ImmediateBackend',
+    }
+}
+
+Q_CLUSTER = {
+    'name': 'trustpoint',
+    'workers': 2,
+    'recycle': 500,
+    'timeout': 120,
+    'retry': 360,
+    'queue_limit': 50,
+    'bulk': 10,
+    'orm': 'default',
+}

@@ -2060,37 +2060,98 @@ class OpcUaGdsPushUpdateServerCertificateView(PageContextMixin, DetailView[Devic
         )
 
 
+class OpcUaGdsPushCertRenewalSettingsView(PageContextMixin, DetailView[DeviceModel]):
+    """View to save the periodic server certificate and trustlist renewal settings for an OPC UA GDS Push device."""
+
+    http_method_names = ('post',)
+    model = DeviceModel
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    page_category = DEVICES_PAGE_CATEGORY
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle the POST request to update the renewal settings.
+
+        Args:
+            request: The Django request object.
+            _args: Positional arguments are discarded.
+            _kwargs: Keyword arguments are discarded.
+
+        Returns:
+            HttpResponse redirecting back to the help page.
+        """
+        self.object = self.get_object()
+
+        enable = request.POST.get('opc_gds_push_enable_periodic_update') == 'on'
+        interval_raw = request.POST.get('opc_gds_push_renewal_interval', '')
+
+        try:
+            interval = int(interval_raw)
+            if interval < 1:
+                err_msg = 'Interval must be at least 1.'
+                raise ValueError(err_msg)  # noqa: TRY301
+        except (ValueError, TypeError):
+            messages.error(
+                request,
+                gettext_lazy('Invalid renewal interval. Please enter a positive integer (hours).')
+            )
+            return self._redirect_to_help_page()
+
+        self.object.opc_gds_push_enable_periodic_update = enable
+        self.object.opc_gds_push_renewal_interval = interval
+        self.object.save(
+            update_fields=['opc_gds_push_enable_periodic_update', 'opc_gds_push_renewal_interval']
+        )
+
+        if enable:
+            messages.success(
+                request,
+                gettext_lazy(
+                    f'Periodic server certificate and trustlist renewal enabled (every {interval} hour(s)).'
+                )
+            )
+        else:
+            messages.success(
+                request,
+                gettext_lazy('Periodic server certificate and trustlist renewal disabled.')
+            )
+
+        return self._redirect_to_help_page()
+
+    def _redirect_to_help_page(self) -> HttpResponseRedirect:
+        """Redirect back to the application certificate help page.
+
+        Returns:
+            HttpResponseRedirect to the help page.
+        """
+        return HttpResponseRedirect(
+            reverse_lazy(
+                f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_opc_ua_gds_push_domain_credential',
+                kwargs={'pk': self.object.pk}
+            )
+        )
+
+
 class TrustBundleDownloadView(PageContextMixin, DetailView[CaModel]):
     """View to download the trust bundle (CA certificates and CRLs) for a given Issuing CA."""
 
     http_method_names = ('get',)
     model = CaModel
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:  # noqa: ARG002
-        """Handle the GET request to download the trust bundle.
+    def _collect_ca_chain_data(self, ca_chain: list[CaModel]) -> dict[str, bytes]:
+        """Collect certificate and CRL data from CA chain.
 
         Args:
-            request: The Django request object.
-            *args: Additional positional arguments.
-            **kwargs: Additional keyword arguments.
+            ca_chain: List of CA models in the chain.
 
         Returns:
-            FileResponse with the trust bundle zip file.
+            Dictionary mapping filenames to file data (bytes).
         """
-        self.object = self.get_object()
-
-        issuing_ca = self.object
-
-        try:
-            ca_chain = issuing_ca.get_ca_chain_from_truststore()
-        except ValueError as e:
-            msg = f'Invalid truststore configuration: {e}'
-            raise Http404(msg) from e
-
-        data_to_archive = {}
+        data_to_archive: dict[str, bytes] = {}
 
         for ca in ca_chain:
             try:
+                if not ca.ca_certificate_model:
+                    continue
                 cert_der = ca.ca_certificate_model.get_certificate_serializer().as_der()
                 if cert_der is None:
                     continue
@@ -2098,18 +2159,32 @@ class TrustBundleDownloadView(PageContextMixin, DetailView[CaModel]):
                 safe_name = ''.join(c if c.isalnum() or c in '._-' else '_' for c in ca.unique_name)
                 cert_filename = f'{safe_name}.der'
                 data_to_archive[cert_filename] = cert_der
+
+                if ca.crl_pem:
+                    try:
+                        crl_crypto = x509.load_pem_x509_crl(ca.crl_pem.encode())
+                        crl_der = crl_crypto.public_bytes(serialization.Encoding.DER)
+                        crl_filename = f'{safe_name}.crl'
+                        data_to_archive[crl_filename] = crl_der
+                    except (ValueError, TypeError):
+                        pass
             except (ValueError, TypeError, AttributeError):
                 continue
 
-            if ca.crl_pem:
-                try:
-                    crl_crypto = x509.load_pem_x509_crl(ca.crl_pem.encode())
-                    crl_der = crl_crypto.public_bytes(serialization.Encoding.DER)
-                    crl_filename = f'{safe_name}.crl'
-                    data_to_archive[crl_filename] = crl_der
-                except (ValueError, TypeError):
-                    pass
+        return data_to_archive
 
+    def _create_trust_bundle_zip(self, data_to_archive: dict[str, bytes]) -> bytes:
+        """Create a ZIP file containing trust bundle data.
+
+        Args:
+            data_to_archive: Dictionary mapping filenames to file data.
+
+        Returns:
+            The ZIP file as bytes.
+
+        Raises:
+            Http404: If no data or ZIP creation fails.
+        """
         if not data_to_archive:
             msg = 'No certificates found in truststore.'
             raise Http404(msg)
@@ -2123,6 +2198,31 @@ class TrustBundleDownloadView(PageContextMixin, DetailView[CaModel]):
         if not zip_data or len(zip_data) == 0:
             msg = f'Failed to create ZIP file. Found {len(data_to_archive)} files to archive.'
             raise Http404(msg)
+
+        return zip_data
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:  # noqa: ARG002
+        """Handle the GET request to download the trust bundle.
+
+        Args:
+            request: The Django request object.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            FileResponse with the trust bundle zip file.
+        """
+        self.object = self.get_object()
+        issuing_ca = self.object
+
+        try:
+            ca_chain = issuing_ca.get_ca_chain_from_truststore()
+        except ValueError as e:
+            msg = f'Invalid truststore configuration: {e}'
+            raise Http404(msg) from e
+
+        data_to_archive = self._collect_ca_chain_data(ca_chain)
+        zip_data = self._create_trust_bundle_zip(data_to_archive)
 
         response = FileResponse(
             io.BytesIO(zip_data),

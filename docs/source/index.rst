@@ -67,8 +67,7 @@ Welcome to Trustpoint's documentation!
    development/architecture/credentials
    development/auto_restore
    development/sbom
-   development/workflow
+   development/pipeline
    release-checklist
-   devices/workflow
    development/rest_api
 
