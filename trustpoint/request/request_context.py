@@ -166,9 +166,15 @@ class RestBaseRequestContext(HttpBaseRequestContext):
 
 
 @dataclass(kw_only=True)
+class ManualBaseRequestContext(BaseRequestContext):
+    """Shared context for all manually triggered requests (e.g., from the web UI)."""
+
+
+@dataclass(kw_only=True)
 class EstCertificateRequestContext(EstBaseRequestContext, BaseCertificateRequestContext):
     """EST context for certificate enrollment requests."""
 
+@dataclass(kw_only=True)
 class EstRevocationRequestContext(EstBaseRequestContext, BaseRevocationRequestContext):
     """EST context for certificate revocation requests."""
 
@@ -176,5 +182,11 @@ class EstRevocationRequestContext(EstBaseRequestContext, BaseRevocationRequestCo
 class CmpCertificateRequestContext(CmpBaseRequestContext, BaseCertificateRequestContext):
     """CMP context for certificate enrollment requests (IR/CR)."""
 
+@dataclass(kw_only=True)
 class CmpRevocationRequestContext(CmpBaseRequestContext, BaseRevocationRequestContext):
     """CMP context for certificate revocation requests (RR)."""
+
+
+@dataclass(kw_only=True)
+class ManualCertificateRequestContext(ManualBaseRequestContext, BaseCertificateRequestContext):
+    """Manual context for certificate enrollment requests triggered from the web UI."""
