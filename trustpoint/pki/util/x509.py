@@ -18,8 +18,7 @@ from cryptography.x509.verification import PolicyBuilder, Store
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
-from management.models import KeyStorageConfig, SecurityConfig
-from notifications.models import WeakECCCurve, WeakSignatureAlgorithm
+from management.models import KeyStorageConfig, SecurityConfig, WeakECCCurve, WeakSignatureAlgorithm
 from pki.models import CaModel
 from pki.util.keys import CryptographyUtils
 

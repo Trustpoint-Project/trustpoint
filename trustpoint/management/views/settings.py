@@ -74,34 +74,48 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
             notification_form = NotificationConfigForm(request.POST, instance=notification_config)
             self.logger.debug('NotificationConfigForm validation: is_valid=%s', notification_form.is_valid())
             if notification_form.is_valid():
-                # Check if notifications are being enabled
+                # Get the enabled status before and after
                 was_enabled = notification_config.enabled
-                cleaned_enabled = notification_form.cleaned_data.get('enabled', False)
 
-                # Save the form
                 notification_form.save()
 
-                # If notifications were just enabled, initialize the notification cycle
-                if not was_enabled and cleaned_enabled:
-                    try:
-                        # Set notification_cycle_enabled to True
-                        notification_config.notification_cycle_enabled = True
-                        notification_config.save(update_fields=['notification_cycle_enabled'])
+                notification_config.refresh_from_db()
+                cleaned_enabled = notification_config.enabled
 
-                        # Execute init_notifications command
-                        call_command('init_notifications')
-                        messages.success(
-                            request,
-                            _('Notifications enabled and notification cycle initialized.')
-                        )
-                    except Exception:  # pylint: disable=broad-except
-                        self.logger.exception('Error initializing notifications')
-                        messages.error(
-                            request,
-                            _('Notifications enabled but error initializing notification cycle.')
-                        )
+                if cleaned_enabled:
+                    needs_init = not notification_config.notification_cycle_enabled or not was_enabled
+
+                    if needs_init:
+                        try:
+                            notification_config.notification_cycle_enabled = True
+                            notification_config.save(update_fields=['notification_cycle_enabled'])
+
+                            call_command('init_notifications')
+
+                            if not was_enabled:
+                                messages.success(
+                                    request,
+                                    _('Notifications enabled and notification cycle initialized.')
+                                )
+                            else:
+                                messages.success(
+                                    request,
+                                    _('Notification configuration saved and cycle reinitialized.')
+                                )
+                        except Exception:  # pylint: disable=broad-except
+                            self.logger.exception('Error initializing notifications')
+                            messages.error(
+                                request,
+                                _('Notifications saved but error initializing notification cycle.')
+                            )
+                    else:
+                        messages.success(request, _('Notification configuration saved successfully.'))
                 else:
-                    messages.success(request, _('Notification configuration saved successfully.'))
+                    if notification_config.notification_cycle_enabled:
+                        notification_config.notification_cycle_enabled = False
+                        notification_config.save(update_fields=['notification_cycle_enabled'])
+                    messages.success(request, _('Notifications disabled successfully.'))
+
                 return redirect(self.success_url)
             self.logger.error('Notification form errors: %s', notification_form.errors)
             self.logger.error('Notification form non-field errors: %s', notification_form.non_field_errors())
@@ -257,6 +271,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         # Add notification configuration form
         notification_config = NotificationConfig.get()
         context['notification_form'] = NotificationConfigForm(instance=notification_config)
+        context['notification_config'] = notification_config
 
         return context
 

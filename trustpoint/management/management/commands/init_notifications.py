@@ -49,6 +49,10 @@ class Command(BaseCommand):
             return
 
         try:
+            # Enable notification cycle
+            notification_config.notification_cycle_enabled = True
+            notification_config.save(update_fields=['notification_cycle_enabled'])
+            
             notification_config.schedule_next_notification_check(cycle_interval_hours=interval_hours)
             self.stdout.write(
                 self.style.SUCCESS(

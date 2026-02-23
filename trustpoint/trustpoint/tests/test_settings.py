@@ -94,7 +94,6 @@ def test_installed_apps():
         'cmp',
         'est',
         'management',
-        'notifications',
     ]
 
     installed_app_labels = {app_config.name for app_config in apps.get_app_configs()}

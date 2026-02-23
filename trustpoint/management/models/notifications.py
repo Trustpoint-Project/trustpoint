@@ -10,6 +10,7 @@ from django.db import models
 from django.utils import timezone
 from django.utils.encoding import force_str
 from django.utils.translation import gettext_lazy as _
+from django_q.models import Schedule  # type: ignore[import-untyped]
 from django_q.tasks import schedule  # type: ignore[import-untyped]
 from django_stubs_ext.db.models import TypedModelMeta
 
@@ -518,12 +519,27 @@ class NotificationConfig(models.Model):
     def next_notification_check_scheduled_at(self) -> datetime | None:
         """Returns when the next notification check is scheduled.
 
+        Queries Django-Q2's schedule table to find the next scheduled notification check.
+
         Returns:
             datetime | None: The scheduled time for the next notification check,
                            or None if not enabled or not scheduled.
         """
         if not self.notification_cycle_enabled or not self.enabled:
             return None
+
+        try:
+            next_task = Schedule.objects.filter(
+                func='management.tasks.execute_all_notifications',
+                schedule_type='O'
+            ).order_by('next_run').first()
+
+            if next_task:
+                return next_task.next_run
+
+        except (AttributeError, ImportError):
+            pass
+
         return self.last_notification_check_started_at
 
     def schedule_next_notification_check(self, cycle_interval_hours: float | None = None) -> None:
