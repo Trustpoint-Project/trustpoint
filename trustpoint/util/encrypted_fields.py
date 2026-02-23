@@ -212,16 +212,51 @@ class EncryptedCharField(models.CharField[str, str]):
     description = _('Encrypted char field using PKCS#11 DEK')
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the encrypted field."""
-        if 'max_length' in kwargs:
-            original_length = kwargs['max_length']
-            # Calculate encrypted length: original + padding + IV + base64 overhead
-            encrypted_length = ((original_length + 16 + 15) // 16) * 16  # Padded length
-            encrypted_length += 16  # IV
-            encrypted_length = int(encrypted_length * 4/3) + 4  # Base64 overhead
-            kwargs['max_length'] = encrypted_length
+        """Initialize the encrypted field.
 
+        The max_length parameter should be the plaintext size limit.
+        The field keeps this value internally for consistent field declaration.
+        """
+        self._plaintext_max_length = kwargs.get('max_length')
         super().__init__(*args, **kwargs)
+
+    @staticmethod
+    def _calculate_encrypted_length(plaintext_max_length: int) -> int:
+        """Calculate the database field size needed for encrypted + base64 data.
+
+        Args:
+            plaintext_max_length: The plaintext data size limit.
+
+        Returns:
+            int: The database field size needed to store encrypted + base64 encoded data.
+        """
+        encrypted_length = ((plaintext_max_length + 16 + 15) // 16) * 16  # Padded length
+        encrypted_length += 16  # IV
+        return int(encrypted_length * 4/3) + 4  # Base64 overhead
+
+    def deconstruct(self) -> tuple[str, str, list[Any], dict[str, Any]]:
+        """Return field deconstruction for migrations.
+
+        This method ensures that the encrypted size (not plaintext) is stored in migrations,
+        but the model field keeps the plaintext max_length, preventing migration regeneration.
+        """
+        name, path, args, kwargs = super().deconstruct()
+        if self._plaintext_max_length is not None:
+            kwargs['max_length'] = self._plaintext_max_length
+        return name, path, list(args), kwargs
+
+    def db_type(self, connection: Any) -> str:
+        """Return the database column type with encrypted size.
+
+        This ensures the database actually has enough space for encrypted data.
+        """
+        if self._plaintext_max_length is None:
+            db_type_result = super().db_type(connection)
+            if db_type_result is None:
+                return 'text'
+            return db_type_result
+        encrypted_length = self._calculate_encrypted_length(self._plaintext_max_length)
+        return f'varchar({encrypted_length})'
 
     def raise_validation_error(self, msg: str) -> Never:
         """Raise a ValidationError with the given message.

@@ -26,6 +26,7 @@ from pki.models.ca import MIN_CRL_CYCLE_INTERVAL_HOURS
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.truststore import TruststoreModel
+from pki.util.x509 import CertificateVerifier
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
 from util.validation import ValidationError as UtilValidationError
@@ -104,8 +105,49 @@ class IssuingCaImportMixin:
                 )
                 self._raise_validation_error(err_msg)
 
+    def _verify_ca_cert_with_chain(
+        self,
+        cert: x509.Certificate,
+        chain: list[x509.Certificate],
+    ) -> None:
+        """Verifies the CA certificate using the provided chain.
+
+        The chain certificates are treated as untrusted intermediates used to
+        build the path. The last certificate in the chain (or the cert itself if
+        the chain is empty) is used as the trust anchor.
+
+        If no chain is provided, the certificate is verified as self-signed.
+
+        Args:
+            cert: The CA certificate to verify.
+            chain: Optional list of intermediate/root certificates for chain building.
+
+        Raises:
+            ValidationError: If certificate verification fails.
+        """
+        try:
+            if chain:
+                # Use the last cert in the chain as the trust anchor (root)
+                trusted_roots = [chain[-1]]
+                untrusted_intermediates = chain[:-1]
+            else:
+                # No chain provided — verify as self-signed
+                trusted_roots = [cert]
+                untrusted_intermediates = []
+
+            CertificateVerifier.verify_ca_cert(
+                cert=cert,
+                trusted_roots=trusted_roots,
+                untrusted_intermediates=untrusted_intermediates,
+            )
+        except ValueError as e:
+            self._raise_validation_error(
+                f'CA certificate verification failed: {e}'
+            )
+
     def _finalize_issuing_ca_creation(
-        self, unique_name: str | None, cert: x509.Certificate, credential_serializer: CredentialSerializer
+        self, unique_name: str | None, cert: x509.Certificate, credential_serializer: CredentialSerializer,
+        chain: list[x509.Certificate] | None = None,
     ) -> None:
         """Finalizes the creation of the Issuing CA after validation."""
         if not unique_name:
@@ -113,6 +155,8 @@ class IssuingCaImportMixin:
 
         if CaModel.objects.filter(unique_name=unique_name).exists():
             self._raise_validation_error('Unique name is already taken. Choose another one.')
+
+        self._verify_ca_cert_with_chain(cert, chain or [])
 
         try:
             CaModel.create_new_issuing_ca(
@@ -285,7 +329,8 @@ class IssuingCaAddFileImportPkcs12Form(IssuingCaImportMixin, LoggerMixin, forms.
         credential_serializer = self._parse_and_prepare_credential(pkcs12_raw, pkcs12_password, unique_name)
         cert_crypto = self._validate_ca_certificate_from_serializer(credential_serializer)
 
-        self._finalize_issuing_ca_creation(unique_name, cert_crypto, credential_serializer)
+        chain = list(credential_serializer.additional_certificates or [])
+        self._finalize_issuing_ca_creation(unique_name, cert_crypto, credential_serializer, chain)
 
 
 class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin, forms.Form):
@@ -516,7 +561,8 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
         cert, pk = self._validate_credential_components(credential_serializer)
         self._prepare_credential_serializer(credential_serializer, unique_name, pk)
 
-        self._finalize_issuing_ca_creation(unique_name, cert, credential_serializer)
+        chain = list(credential_serializer.additional_certificates or [])
+        self._finalize_issuing_ca_creation(unique_name, cert, credential_serializer, chain)
 
 class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     """Mixin for forms requesting an Issuing CA certificate from remote servers."""
@@ -589,12 +635,14 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
             cred_serializer, CredentialModel.CredentialTypeChoice.ISSUING_CA
         )
 
-    def save(self) -> CaModel:  # type: ignore[override]
+    def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]
         """Save the form and create the CA model with configuration."""
         instance = super().save(commit=False)
 
         instance.credential = self._create_credential()
 
+        if commit:
+            instance.save()
         return instance
 
 
@@ -630,9 +678,20 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
         self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
         self.fields['ca_type'].widget = forms.HiddenInput()
 
-    def save(self) -> CaModel:  # type: ignore[override]
-        """Save the form and create the CA model with configuration."""
-        instance = super().save()
+    def save(self, *, is_ra_mode: bool = False) -> CaModel:  # type: ignore[override]
+        """Save the form and create the CA model with configuration.
+
+        If is_ra_mode is True, create a REMOTE_EST_RA (Registration Authority) instead of REMOTE_ISSUING_EST.
+        """
+        if is_ra_mode:
+            instance = super().save(commit=False)
+            instance.ca_type = CaModel.CaTypeChoice.REMOTE_EST_RA
+            instance.credential = None
+            instance.certificate = None  # Will be set from truststore later
+        else:
+            instance = super().save(commit=False)
+            instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_EST
+            instance.credential = self._create_credential()
 
         no_onboarding_config = NoOnboardingConfigModel.objects.create(
             pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
@@ -646,8 +705,17 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
         return instance
 
 
+
 class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
-    """Form for requesting an Issuing CA certificate using CMP."""
+    """Generic form for configuring a remote CMP endpoint (CA or RA).
+
+    This form is used for both requesting an Issuing CA certificate via CMP and
+    for setting up a remote CMP RA (Registration Authority) configuration.
+
+    Fields include remote host, port, path, and the shared secret for CMP
+    authentication. The form can be extended or reused for both CA and RA
+    scenarios.
+    """
 
     class Meta:
         """Meta class for IssuingCaAddRequestCmpForm."""
@@ -671,9 +739,20 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
         self.fields['ca_type'].initial = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
         self.fields['ca_type'].widget = forms.HiddenInput()
 
-    def save(self) -> CaModel:  # type: ignore[override]
-        """Save the form and create the CA model with configuration."""
-        instance = super().save()
+    def save(self, *, is_ra_mode: bool = False) -> CaModel:  # type: ignore[override]
+        """Save the form and create the CA model with configuration.
+
+        If is_ra_mode is True, create a REMOTE_CMP_RA (Registration Authority) instead of REMOTE_ISSUING_CMP.
+        """
+        if is_ra_mode:
+            instance = super(IssuingCaAddRequestMixin, self).save(commit=False)
+            instance.ca_type = CaModel.CaTypeChoice.REMOTE_CMP_RA
+            instance.credential = None
+            instance.certificate = None  # Will be set from truststore later
+        else:
+            instance = super().save(commit=False)
+            instance.ca_type = CaModel.CaTypeChoice.REMOTE_ISSUING_CMP
+            instance.credential = self._create_credential()
 
         no_onboarding_config = NoOnboardingConfigModel.objects.create(
             pki_protocols=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
@@ -689,8 +768,9 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
 class IssuingCaTruststoreAssociationForm(forms.Form):
     """Form for associating a truststore with an Issuing CA."""
 
+
     trust_store = forms.ModelChoiceField(
-        queryset=TruststoreModel.objects.filter(intended_usage=TruststoreModel.IntendedUsage.TLS),
+        queryset=TruststoreModel.objects.none(),  # Set in __init__
         empty_label='----------',
         required=True,
         label=_('Trust Store'),
@@ -702,8 +782,43 @@ class IssuingCaTruststoreAssociationForm(forms.Form):
         self.instance: CaModel = kwargs.pop('instance')
         super().__init__(*args, **kwargs)
 
+        # Cast to ModelChoiceField to access queryset attribute
+        # Use forms.ModelChoiceField string literal for mypy type checking
+        trust_store_field = cast('forms.ModelChoiceField[TruststoreModel]', self.fields['trust_store'])
+
+        # For EST RA: check if this is the first or second truststore association
+        if self.instance.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+            if not self.instance.certificate:
+                trust_store_field.queryset = TruststoreModel.objects.filter(
+                    intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+                )
+                trust_store_field.help_text = _(
+                    'EST RA (Step 1/2): Import the Issuing CA chain. This establishes the RA certificate and hierarchy.'
+                )
+            else:
+                trust_store_field.queryset = TruststoreModel.objects.filter(
+                    intended_usage=TruststoreModel.IntendedUsage.TLS
+                )
+                trust_store_field.help_text = _(
+                    'EST RA (Step 2/2): Import the TLS server certificate (used for HTTPS connection security).'
+                )
+        elif self.instance.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+            trust_store_field.queryset = TruststoreModel.objects.filter(
+                intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+            )
+            trust_store_field.help_text = _(
+                'CMP: Only "Issuing CA Chain" truststores can be associated.'
+            )
+        else:
+            trust_store_field.queryset = TruststoreModel.objects.filter(
+                intended_usage=TruststoreModel.IntendedUsage.TLS
+            )
+            trust_store_field.help_text = _(
+                'EST: Import the TLS server certificate of the remote PKI (used for HTTPS connection security)'
+            )
+
         if self.instance.no_onboarding_config and self.instance.no_onboarding_config.trust_store:
-            self.fields['trust_store'].initial = self.instance.no_onboarding_config.trust_store
+            trust_store_field.initial = self.instance.no_onboarding_config.trust_store
 
     def save(self) -> None:
         """Save the truststore association to the CA's onboarding config."""
