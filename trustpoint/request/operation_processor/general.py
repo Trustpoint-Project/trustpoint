@@ -36,9 +36,14 @@ class OperationProcessor(AbstractOperationProcessor, LoggerMixin):
             return processor_instance.process_operation(context)
         except Exception:
             cmp_code = PKIFailureInfo.SYSTEM_FAILURE
-            if isinstance(context, CmpBaseRequestContext) and context.error_code:
-                cmp_code = context.error_code
-            context.error(context.error_details or 'PKI Operation processing failed.',
-                          http_status=500, cmp_code=cmp_code)
+            error_msg = 'PKI Operation processing failed.'
+
+            if isinstance(context, CmpBaseRequestContext):
+                if context.error_code:
+                    cmp_code = context.error_code
+                if context.error_details:
+                    error_msg = context.error_details
+
+            context.error(error_msg, http_status=500, cmp_code=cmp_code)
             self.logger.exception('Operation processing failed')
             raise

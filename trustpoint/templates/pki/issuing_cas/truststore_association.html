@@ -17,6 +17,23 @@
                 <div class="tp-card-centered-content">
                     <h2>{% trans 'Trust Store Association' %}</h2>
                     <p>{% trans 'Select a trust store to associate with this Issuing CA.' %}</p>
+                    {% if is_cmp %}
+                    <div class="alert alert-info" role="alert">
+                        <strong>{% trans 'CMP Certificate:' %}</strong> {% trans 'Import the Issuing CA certificate of the remote PKI. This certificate is used to identify the recipient CA and verify responses.' %}
+                    </div>
+                    {% elif is_est_ra %}
+                    <div class="alert alert-info" role="alert">
+                        {% if est_ra_step == 1 %}
+                        <strong>{% trans 'EST RA - Step 1/2 (CA Chain):' %}</strong> {% trans 'Import the Issuing CA chain. This establishes the RA certificate and hierarchy.' %}
+                        {% else %}
+                        <strong>{% trans 'EST RA - Step 2/2 (TLS Certificate):' %}</strong> {% trans 'Import the TLS server certificate. This certificate is used for HTTPS connection security to the remote EST server.' %}
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info" role="alert">
+                        <strong>{% trans 'EST Certificate:' %}</strong> {% trans 'Import the TLS server certificate of the remote PKI. This certificate is used for HTTPS connection security.' %}
+                    </div>
+                    {% endif %}
                     <hr>
                     {{ form|crispy }}
                     <button type="button" class="btn btn-secondary ms-2" data-bs-toggle="modal" data-bs-target="#truststoreImportModal">

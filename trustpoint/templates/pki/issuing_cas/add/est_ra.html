@@ -1,0 +1,27 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+    <form method="POST" autocomplete="off">
+        {% csrf_token %}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h1>{% trans 'Add new EST RA' %}</h1>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="tp-card-centered-content">
+                    {{ form|crispy }}
+                </div>
+            </div>
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'pki:issuing_cas-add-method_select' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
+                    <button type="submit" class="btn btn-primary">{% trans 'Create EST RA' %}</button>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock content %}
