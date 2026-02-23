@@ -82,9 +82,7 @@
         <div class="card-footer d-flex justify-content-between">
             <div class="tp-card-btn-footer m-1">
                 <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                {% if has_cert_content %}
                 <a href="{% url 'pki:issuing_cas-define-cert-content-est' pk=issuing_ca.pk %}" class="btn btn-outline-secondary">{% trans 'Edit Certificate Content' %}</a>
-                {% endif %}
             </div>
             <div class="tp-card-btn-footer m-1">
                 <form method="post" style="display: inline;">

@@ -80,8 +80,11 @@ class DomainModel(models.Model):
         issuing_ca = self.get_issuing_ca_or_value_error()
         if issuing_ca.credential and not issuing_ca.credential.certificate:
             return None
+        cert = issuing_ca.get_certificate()
+        if not cert:
+            return None
         try:
-            return oid.SignatureSuite.from_certificate(issuing_ca.get_certificate())
+            return oid.SignatureSuite.from_certificate(cert)
         except ValueError:
             return None
 

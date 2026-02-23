@@ -3,8 +3,15 @@
 {% block title %}Page Not Found - Trustpoint{% endblock %}
 
 {% block content %}
-<div class="alert">
+<div class="alert">   
     <h4 class="alert-heading">Page Not Found</h4>
     <p>The requested page could not be found.</p>
+    <button 
+    type="button" 
+    id="BacktoDashboardButton" 
+    onclick="window.location.href='/home/dashboard/';"  
+    class="btn btn-primary w-100">
+    Back to Dashboard
+    </button>
 </div>
 {% endblock %}
