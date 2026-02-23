@@ -69,7 +69,6 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
                 return self.form_valid(form)
             return self.form_invalid(form)
         if 'notification_configuration' in request.POST:
-            # Handle NotificationConfigForm
             notification_config = NotificationConfig.get()
             notification_form = NotificationConfigForm(request.POST, instance=notification_config)
             self.logger.debug('NotificationConfigForm validation: is_valid=%s', notification_form.is_valid())
