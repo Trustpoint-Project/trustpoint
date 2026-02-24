@@ -4,15 +4,16 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
 from management.models import NotificationConfig
 
 
 class Command(BaseCommand):
-    """A Django management command to schedule the next notification check execution."""
+    """A Django management command to immediately execute all notifications and schedule the next check."""
 
-    help = 'Schedule the next notification check to run via Django-Q2.'
+    help = 'Immediately run all notification checks and schedule the next execution via Django-Q2.'
 
     def add_arguments(self, parser: Any) -> None:
         """Add command arguments.
@@ -46,6 +47,9 @@ class Command(BaseCommand):
             return
 
         try:
+            call_command('run_all_notifications')
+            self.stdout.write(self.style.SUCCESS('All notifications executed successfully.'))
+
             notification_config.schedule_next_notification_check(cycle_interval_hours=interval_hours)
             self.stdout.write(
                 self.style.SUCCESS(
@@ -53,5 +57,5 @@ class Command(BaseCommand):
                 )
             )
         except Exception as exc:
-            self.stdout.write(self.style.ERROR(f'Failed to schedule notification check: {exc}'))
+            self.stdout.write(self.style.ERROR(f'Failed to execute or schedule notifications: {exc}'))
             raise
