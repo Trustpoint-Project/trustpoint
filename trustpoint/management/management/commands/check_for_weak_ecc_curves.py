@@ -6,7 +6,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from management.models import NotificationConfig, NotificationModel, NotificationStatus
+from management.models import NotificationModel, NotificationStatus, SecurityConfig
 from pki.models import CertificateModel
 
 
@@ -27,8 +27,10 @@ class Command(BaseCommand):
 
     def _check_for_weak_ecc_curves(self) -> None:
         """Task to check if any certificates are using deprecated or weak ECC curves."""
-        config = NotificationConfig.get()
-        weak_ecc_curves = config.weak_ecc_curves.values_list('oid', flat=True)
+        config = SecurityConfig.objects.first()
+        if config is None:
+            return
+        weak_ecc_curves = config.weak_ecc_curve_oids
 
         weak_ecc_certificates = CertificateModel.objects.filter(spki_ec_curve_oid__in=weak_ecc_curves)
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')

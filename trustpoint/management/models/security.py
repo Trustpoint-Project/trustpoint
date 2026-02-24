@@ -8,7 +8,6 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 from trustpoint_core.oid import HashAlgorithm, NamedCurve
 
-from management.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 
@@ -183,17 +182,6 @@ class SecurityConfig(models.Model):
         self.weak_ecc_curve_oids = list(defaults['weak_ecc_curve_oids'])  # type: ignore[arg-type]
         self.weak_signature_algorithm_oids = list(defaults['weak_signature_algorithm_oids'])  # type: ignore[arg-type]
         self.save(update_fields=['rsa_minimum_key_size', 'weak_ecc_curve_oids', 'weak_signature_algorithm_oids'])
-
-        # Sync thresholds into NotificationConfig so notification checks work unchanged.
-        notification_config = NotificationConfig.get()
-        notification_config.rsa_minimum_key_size = self.rsa_minimum_key_size
-        notification_config.weak_ecc_curves.set(
-            WeakECCCurve.objects.filter(oid__in=self.weak_ecc_curve_oids)
-        )
-        notification_config.weak_signature_algorithms.set(
-            WeakSignatureAlgorithm.objects.filter(oid__in=self.weak_signature_algorithm_oids)
-        )
-        notification_config.save(update_fields=['rsa_minimum_key_size'])
 
     @classmethod
     def get_settings_preview_json(cls) -> str:

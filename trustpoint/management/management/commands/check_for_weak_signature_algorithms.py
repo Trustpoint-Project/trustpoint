@@ -6,7 +6,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from management.models import NotificationConfig, NotificationModel, NotificationStatus
+from management.models import NotificationModel, NotificationStatus, SecurityConfig
 from pki.models import CertificateModel
 
 
@@ -27,8 +27,10 @@ class Command(BaseCommand):
 
     def _check_for_weak_signature_algorithms(self) -> None:
         """Task to check if any certificates are using weak or deprecated signature algorithms."""
-        config = NotificationConfig.get()
-        weak_algorithms = config.weak_signature_algorithms.values_list('oid', flat=True)
+        config = SecurityConfig.objects.first()
+        if config is None:
+            return
+        weak_algorithms = config.weak_signature_algorithm_oids
 
         weak_certificates = CertificateModel.objects.filter(signature_algorithm_oid__in=weak_algorithms)
         new_status, _ = NotificationStatus.objects.get_or_create(status='NEW')
