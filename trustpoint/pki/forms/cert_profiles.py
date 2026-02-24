@@ -240,7 +240,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
 
     def _build_subject_fields_from_sample(self, subject: dict[str, Any]) -> None:
         """Build subject fields based on sample values."""
-        profile_subject = self.profile.get('subj', {})
+        profile_subject = self.profile.get('subject', {})
 
         for field_name, sample_value in subject.items():
             if field_name in CERT_PROFILE_KEYWORDS:
@@ -288,7 +288,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
 
     def _build_san_fields_from_sample(self, san: dict[str, Any]) -> None:
         """Build SAN fields based on sample values."""
-        profile_extensions = self.profile.get('ext', {})
+        profile_extensions = self.profile.get('extensions', {})
         profile_san = profile_extensions.get('subject_alternative_name', profile_extensions.get('san', {}))
 
         for field_name, sample_value in san.items():

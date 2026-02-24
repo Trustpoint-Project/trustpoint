@@ -624,11 +624,11 @@ class TestProfileBasedFormFieldBuilder:
         
         profile = {
             'type': 'cert_profile',
-            'subj': {
-                'cn': {'required': True, 'mutable': True},
-                'o': {'required': False, 'mutable': True}
+            'subject': {
+                'common_name': {'required': True, 'mutable': True},
+                'organization_name': {'required': False, 'mutable': True}
             },
-            'ext': {
+            'extensions': {
                 'subject_alternative_name': {
                     'dns_names': {'required': False, 'mutable': True}
                 }
@@ -640,13 +640,13 @@ class TestProfileBasedFormFieldBuilder:
         builder = ProfileBasedFormFieldBuilder(profile)
         fields = builder.build_all_fields()
 
-        assert 'cn' in fields
-        assert 'o' in fields
+        assert 'common_name' in fields
+        assert 'organization_name' in fields
         assert 'dns_names' in fields
         assert 'days' in fields
 
         # Check required field
-        assert fields['cn'].required is True
+        assert fields['common_name'].required is True
         assert fields['days'].required is True
 
         # Check initial values
@@ -719,30 +719,30 @@ class TestProfileBasedFormFieldBuilder:
         
         profile = {
             'type': 'cert_profile',
-            'subj': {
-                'cn': {'required': True},
-                'o': {'mutable': False, 'value': 'TestOrg'}
+            'subject': {
+                'common_name': {'required': True},
+                'organization_name': {'mutable': False, 'value': 'TestOrg'}
             }
         }
         builder = ProfileBasedFormFieldBuilder(profile)
         sample_subject = {
-            'cn': 'CHANGEME_common_name',
-            'o': 'TestOrg',
-            'ou': 'TestUnit'
+            'common_name': 'CHANGEME_common_name',
+            'organization_name': 'TestOrg',
+            'organizational_unit_name': 'TestUnit'
         }
         builder._build_subject_fields_from_sample(sample_subject)
 
-        assert 'cn' in builder.fields
-        assert 'o' in builder.fields
-        assert 'ou' in builder.fields
+        assert 'common_name' in builder.fields
+        assert 'organization_name' in builder.fields
+        assert 'organizational_unit_name' in builder.fields
 
         # CHANGEME should result in empty initial value
-        assert builder.fields['cn'].initial == ''
-        assert builder.fields['cn'].required is True
+        assert builder.fields['common_name'].initial == ''
+        assert builder.fields['common_name'].required is True
 
         # Fixed value should be set
-        assert builder.fields['o'].initial == 'TestOrg'
-        assert builder.fields['o'].disabled is True  # mutable=False
+        assert builder.fields['organization_name'].initial == 'TestOrg'
+        assert builder.fields['organization_name'].disabled is True  # mutable=False
 
     @patch('pki.forms.cert_profiles.JSONProfileVerifier')
     def test_build_san_fields_from_sample(self, mock_verifier_class):
@@ -752,7 +752,7 @@ class TestProfileBasedFormFieldBuilder:
         
         profile = {
             'type': 'cert_profile',
-            'ext': {
+            'extensions': {
                 'subject_alternative_name': {
                     'dns_names': {'required': True},
                     'ip_addresses': {'mutable': False, 'value': ['192.168.1.1']}
@@ -843,16 +843,19 @@ class TestCertificateIssuanceForm:
         mock_verifier = Mock()
         mock_verifier_class.return_value = mock_verifier
         
+        profile = {
+            'type': 'cert_profile',
+            'subject': {'common_name': {'required': True}},
+            'extensions': {},
+            'validity': {'days': 365}
+        }
+        # Mock get_profile to return the normalized profile
+        mock_verifier.get_profile.return_value = profile
+        
         mock_builder = Mock()
         mock_builder.fields = {'cn': Mock()}
         mock_builder_class.return_value = mock_builder
         
-        profile = {
-            'type': 'cert_profile',
-            'subj': {'cn': {'required': True}},
-            'ext': {},
-            'validity': {'days': 365}
-        }
         form = CertificateIssuanceForm(profile)
 
         assert form.profile == profile
