@@ -8,10 +8,6 @@ class Migration(migrations.Migration):
 
     initial = True
 
-    dependencies = [
-        ('notifications', '0001_initial'),
-    ]
-
     operations = [
         migrations.CreateModel(
             name='AppVersion',
@@ -65,7 +61,6 @@ class Migration(migrations.Migration):
                 ('security_mode', models.CharField(choices=[('0', 'Testing env'), ('1', 'Basic'), ('2', 'Medium'), ('3', 'High'), ('4', 'Highest')], default='1', max_length=6)),
                 ('auto_gen_pki', models.BooleanField(default=False)),
                 ('auto_gen_pki_key_algorithm', models.CharField(choices=[('RSA2048SHA256', 'RSA2048'), ('RSA4096SHA256', 'RSA4096'), ('SECP256R1SHA256', 'SECP256R1')], default='RSA2048SHA256', max_length=24)),
-                ('notification_config', models.OneToOneField(help_text='Notification configuration associated with this security level.', null=True, on_delete=django.db.models.deletion.CASCADE, related_name='security_config', to='notifications.notificationconfig')),
             ],
         ),
     ]
