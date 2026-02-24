@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import secrets
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives import hashes
@@ -11,6 +12,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django_q.tasks import schedule  # type: ignore[import-untyped]
 from django_stubs_ext.db.models import TypedModelMeta
 from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 
@@ -91,6 +93,34 @@ class DeviceModel(CustomDeleteActionModel):
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
+    opc_gds_push_enable_periodic_update = models.BooleanField(
+        _('Enable Periodic Certificate and Trustlist Update'),
+        default=False,
+        blank=True,
+        null=False,
+        help_text=_(
+            'When enabled, the server certificate and trustlist will be automatically '
+            'renewed at the specified interval.'
+        ),
+    )
+    opc_gds_push_renewal_interval = models.PositiveIntegerField(
+        _('Renewal Interval (hours)'),
+        default=168,
+        blank=True,
+        null=False,
+        help_text=_(
+            'Number of hours between each automatic server certificate and trustlist renewal. Minimum 1 hour.'
+        ),
+    )
+    opc_gds_push_last_update_scheduled_at = models.DateTimeField(
+        _('Last Periodic Update Scheduled At'),
+        null=True,
+        blank=True,
+        help_text=_(
+            'Timestamp of the most recent scheduled periodic server certificate and trustlist update.'
+        ),
+    )
+
     def __str__(self) -> str:
         """Returns a human-readable string representation."""
         return f'DeviceModel(common_name={self.common_name})'
@@ -126,9 +156,33 @@ class DeviceModel(CustomDeleteActionModel):
             if not self.opc_server_port or self.opc_server_port == 0:
                 error_messages['opc_server_port'] = 'OPC UA GDS Push devices must have a valid OPC server port.'
 
+            if self.opc_gds_push_enable_periodic_update and self.opc_gds_push_renewal_interval < 1:
+                error_messages['opc_gds_push_renewal_interval'] = (
+                    'Renewal interval must be at least 1 hour.'
+                )
+
         if error_messages:
             raise ValidationError(error_messages)
 
+    def schedule_next_gds_push_update(self) -> None:
+        """Schedule the next periodic GDS Push server certificate and trustlist update using Django-Q2.
+
+        Creates a one-off scheduled task in Django-Q2 that will execute at the calculated time
+        based on the configured renewal interval. Does nothing when periodic updates are disabled
+        or the device is not of type OPC UA GDS Push.
+        """
+        scheduled_time = timezone.now() + timedelta(hours=self.opc_gds_push_renewal_interval)
+
+        schedule(
+            'devices.tasks.perform_gds_push_update',
+            self.pk,
+            schedule_type='O',
+            next_run=scheduled_time,
+            name=f'gds_push_update_{self.pk}_{scheduled_time.timestamp()}',
+        )
+
+        self.opc_gds_push_last_update_scheduled_at = scheduled_time
+        self.save(update_fields=['opc_gds_push_last_update_scheduled_at'])
 
 class IssuedCredentialModel(CustomDeleteActionModel):
     """Model for all credentials and certificates that have been issued or requested by the Trustpoint."""

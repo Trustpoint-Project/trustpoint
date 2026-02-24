@@ -2,13 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
 
 import pytest
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from django import forms
 from django.core.files.uploadedfile import SimpleUploadedFile
 from management.models import KeyStorageConfig
@@ -28,10 +24,8 @@ from pki.forms import (
     get_private_key_location_from_config,
 )
 from pki.models import DevIdRegistration
-from pki.models.cert_profile import CertificateProfileModel
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
-from pki.util.cert_profile import JSONProfileVerifier
 
 
 class TestGetPrivateKeyLocationFromConfig:

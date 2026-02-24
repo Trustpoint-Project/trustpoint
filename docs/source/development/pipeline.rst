@@ -2,58 +2,128 @@
 Request Pipeline
 ================
 
+Overview
+========
 
-Request Context Module Diagram
-==============================
+The request pipeline processes incoming PKI requests (EST, CMP) through a series of composable stages, each responsible for a specific aspect of request handling. The architecture uses the **Composite Pattern** throughout to allow flexible composition of validation, parsing, authentication, and authorization logic.
 
-This diagram illustrates the `RequestContext` class, its attributes, and its methods for managing request-specific data within the system.
+For a comprehensive overview of the credential architecture and component organization, see :doc:`./architecture/credentials`.
 
-### UML Diagram:
+**Pipeline Stages:**
+
+1. **HTTP Request Validation** - Validates HTTP-level attributes (headers, content-type, payload size)
+2. **Message Parsing** - Parses and validates protocol-specific message content
+3. **Authentication** - Verifies the authenticity of credentials presented by the client
+4. **Authorization** - Determines what operations are permitted for the authenticated request
+5. **Request Processing** - Processes the request to issue certificates or perform other PKI operations
+6. **Response Generation** - Generates a protocol-specific response
+
+Each stage uses the Composite Pattern with a base component interface, allowing individual components to be composed into more complex operations.
+
+
+Request Pipeline Flow
+=====================
+
+The following diagram shows how requests flow through the entire pipeline:
 
 .. plantuml::
 
     @startuml
-    ' Representation of the RequestContext class.
-    class RequestContext {
-        + raw_message: HttpRequest | None
-        + parsed_message: CertificateSigningRequest | PKIMessage | None
-        + operation: str | None
-        + protocol: str | None
-        + cert_profile_str: str | None
-        + est_encoding: str | None
-        + domain_str: str | None
-        + domain: DomainModel | None
-        + device: DeviceModel | None
-        + cert_requested: CertificateSigningRequest | None
-        + est_username: str | None
-        + est_password: str | None
-        + cmp_shared_secret: str | None
-        + client_certificate: x509.Certificate | None
-        + client_intermediate_certificate: list[x509.Certificate] | None
-        --
-        + to_dict(): dict[str, Any]
-        + clear(): None
-    }
-
-    ' Dependencies and related models.
-    class HttpRequest
-    class CertificateSigningRequest
-    class PKIMessage
-    class DomainModel
-    class DeviceModel
-    class x509.Certificate
-
-    ' Relationships.
-    RequestContext --> HttpRequest : "raw_message"
-    RequestContext --> CertificateSigningRequest : "parsed_message/cert_requested"
-    RequestContext --> PKIMessage : "parsed_message"
-    RequestContext --> DomainModel : "domain"
-    RequestContext --> DeviceModel : "device"
-    RequestContext --> x509.Certificate : "client_certificate"
-    RequestContext --> x509.Certificate : "client_intermediate_certificate"
-
+    start
+    :Receive HTTP Request;
+    :HTTP Validation;
+    if (Valid?) then (yes)
+    else (no)
+        :Return HTTP Error;
+        stop
+    endif
+    :Message Parsing;
+    if (Valid?) then (yes)
+    else (no)
+        :Return Parse Error;
+        stop
+    endif
+    :Authentication;
+    if (Authentic?) then (yes)
+    else (no)
+        :Return Auth Error;
+        stop
+    endif
+    :Authorization;
+    if (Authorized?) then (yes)
+    else (no)
+        :Return Auth Error;
+        stop
+    endif
+    :Process Request;
+    if (Success?) then (yes)
+    else (no)
+        :Return Processing Error;
+        stop
+    endif
+    :Generate Response;
+    :Return Response;
+    stop
     @enduml
 
+
+Request Context Hierarchy
+=========================
+
+The RequestContext hierarchy carries state through the entire pipeline:
+
+.. plantuml::
+
+    @startuml
+    ' Base context for all request types.
+    class BaseRequestContext {
+        + raw_message: HttpRequest
+        + protocol: str
+        + operation: str
+        + domain_str: str
+        + cert_profile_str: str
+        --
+        + domain: DomainModel | None
+        + device: DeviceModel | None
+    }
+
+    ' Validation request contexts.
+    class EstBaseRequestContext {
+        + est_username: str | None
+        + est_password: str | None
+        + client_certificate: x509.Certificate | None
+        + client_intermediate_certificate: list[x509.Certificate] | None
+    }
+
+    class CmpBaseRequestContext {
+        + parsed_message: rfc4210.PKIMessage | None
+        + cmp_shared_secret: str | None
+        + client_certificate: x509.Certificate | None
+    }
+
+    ' Certificate request contexts.
+    class EstCertificateRequestContext {
+        + cert_requested: x509.CertificateSigningRequest | None
+        + est_encoding: str | None
+    }
+
+    class CmpCertificateRequestContext {
+        + parsed_message: rfc4210.PKIMessage
+    }
+
+    ' Revocation request contexts.
+    class CmpRevocationRequestContext {
+        + parsed_message: rfc4210.PKIMessage
+    }
+
+    ' Relationships.
+    BaseRequestContext <|-- EstBaseRequestContext
+    BaseRequestContext <|-- CmpBaseRequestContext
+    EstBaseRequestContext <|-- EstCertificateRequestContext
+    CmpBaseRequestContext <|-- CmpCertificateRequestContext
+    CmpBaseRequestContext <|-- CmpRevocationRequestContext
+
+    @enduml
 
 
 HTTP Request Validator Module Diagram
@@ -387,3 +457,30 @@ Authorization Module Diagram
 
     @enduml
 
+
+Key Concepts
+============
+
+**Composite Pattern**
+    Each pipeline stage (validation, parsing, authentication, authorization) uses the Composite Pattern with a base component interface. This allows individual components to be composed into more complex operations, enabling flexible configuration of what rules apply to each protocol and operation.
+
+**Request Context**
+    The RequestContext object carries state through the entire pipeline. Different context types (EstCertificateRequestContext, CmpBaseRequestContext, etc.) extend BaseRequestContext to provide protocol-specific attributes while maintaining a consistent interface.
+
+**ParsingComponent**
+    Parsing components sequentially process the request context, extracting and validating message content. Examples include:
+
+    - EstAuthorizationHeaderParsing: Extracts HTTP Basic Auth credentials
+    - EstPkiMessageParsing: Parses PKCS#10 CSR
+    - CmpPkiMessageParsing: Parses CMP PKIMessage
+    - DomainParsing: Resolves domain identifier to DomainModel
+    - CertProfileParsing: Resolves certificate profile
+
+**AuthenticationComponent**
+    Authentication components verify the authenticity of credentials. Unlike authorization, authentication does NOT determine device identity; that happens during authorization. Authentication simply validates that the provided credentials are valid.
+
+**AuthorizationComponent**
+    Authorization components determine what operations are allowed. They access the fully populated RequestContext (including domain and device information) to make authorization decisions.
+
+**Error Handling**
+    Each stage can raise exceptions with appropriate error messages. Errors are caught at the view level and converted to protocol-specific error responses (EST error messages or CMP PKIFailureInfo).

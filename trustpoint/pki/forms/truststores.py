@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, NoReturn, cast
 
+from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
@@ -18,7 +19,7 @@ from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from util.field import UniqueNameValidator, get_certificate_name
 
 if TYPE_CHECKING:
-    from cryptography import x509
+    from pki.models.ca import CaModel
 
 
 class TruststoreAddForm(forms.Form):
@@ -122,11 +123,16 @@ class TruststoreAddForm(forms.Form):
             if TruststoreModel.objects.filter(unique_name=unique_name).exists():
                 self._raise_validation_error('Truststore with the provided name already exists.')
 
+            intended_usage_enum = TruststoreModel.IntendedUsage(int(intended_usage))
+            validate_and_create_ca_chain(certs, intended_usage_enum)
+
             trust_store_model = self.save_trust_store(
                 unique_name=unique_name,
-                intended_usage=TruststoreModel.IntendedUsage(int(intended_usage)),
+                intended_usage=intended_usage_enum,
                 certificates=certs,
             )
+        except ValidationError:
+            raise
         except Exception:  # noqa: BLE001
             self._raise_validation_error('Failed to save the Truststore.')
 
@@ -157,6 +163,181 @@ class TruststoreAddForm(forms.Form):
             trust_store_order_model.save()
 
         return trust_store_model
+
+
+def validate_and_create_ca_chain(
+    certificates: list[x509.Certificate], intended_usage: TruststoreModel.IntendedUsage
+) -> CaModel | None:
+    """Validate certificate chain and create keyless CA models for intermediates.
+
+    Args:
+        certificates: List of certificates in the truststore (order: leaf to root or root to leaf)
+        intended_usage: The intended usage of the truststore
+
+    Returns:
+        The issuing CA (parent of the leaf certificate), or None if not ISSUING_CA_CHAIN
+
+    Raises:
+        ValidationError: If the chain is invalid or incomplete for ISSUING_CA_CHAIN usage
+    """
+    if intended_usage != TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN:
+        return None
+
+    if not certificates:
+        raise ValidationError(_('Truststore for Issuing CA Chain cannot be empty.'))
+
+    sorted_certs = _sort_certificate_chain(certificates)
+
+    if not sorted_certs:
+        raise ValidationError(
+            _('Unable to validate certificate chain. The certificates do not form a valid chain.')
+        )
+
+    if not _validate_chain_integrity(sorted_certs):
+        raise ValidationError(
+            _('Invalid certificate chain. Each certificate must be signed by the next certificate in the chain.')
+        )
+
+    last_cert = sorted_certs[-1]
+    if last_cert.issuer != last_cert.subject:
+        raise ValidationError(
+            _('Incomplete certificate chain. The chain must end with a self-signed root CA certificate.')
+        )
+
+    parent_ca = None
+    issuer_ca = None
+
+    for cert in reversed(sorted_certs[1:]):
+        ca_model = _create_or_get_keyless_ca(cert, parent_ca)
+        parent_ca = ca_model
+        if issuer_ca is None:
+            issuer_ca = ca_model
+
+    return issuer_ca
+
+
+def _sort_certificate_chain(certificates: list[x509.Certificate]) -> list[x509.Certificate]:
+    """Sort certificates from leaf to root based on issuer/subject relationships.
+
+    Args:
+        certificates: Unsorted list of certificates
+
+    Returns:
+        Sorted list from leaf to root, or empty list if chain cannot be constructed
+    """
+    if len(certificates) == 1:
+        return certificates
+
+    cert_by_subject: dict[bytes, x509.Certificate] = {}
+    for cert in certificates:
+        cert_by_subject[cert.subject.public_bytes()] = cert
+
+    issuer_subjects = {cert.issuer.public_bytes() for cert in certificates}
+    leaf_candidates = [
+        cert for cert in certificates if cert.subject.public_bytes() not in issuer_subjects
+    ]
+
+    if not leaf_candidates:
+        leaf_candidates = [certificates[0]]
+
+    for leaf in leaf_candidates:
+        chain = [leaf]
+        current = leaf
+
+        while True:
+            issuer_subject = current.issuer.public_bytes()
+            if issuer_subject == current.subject.public_bytes():
+                return chain
+            if issuer_subject not in cert_by_subject:
+                break
+            next_cert = cert_by_subject[issuer_subject]
+            if next_cert in chain:
+                break
+            chain.append(next_cert)
+            current = next_cert
+
+            if len(chain) > len(certificates):
+                # Safety check
+                break
+
+    return []
+
+
+def _validate_chain_integrity(sorted_certs: list[x509.Certificate]) -> bool:
+    """Validate that each certificate is properly signed by the next certificate.
+
+    Args:
+        sorted_certs: Certificates sorted from leaf to root
+
+    Returns:
+        True if chain is valid, False otherwise
+    """
+    for i in range(len(sorted_certs) - 1):
+        cert = sorted_certs[i]
+        issuer_cert = sorted_certs[i + 1]
+
+        if cert.issuer.public_bytes() != issuer_cert.subject.public_bytes():
+            return False
+
+    return True
+
+
+def _create_or_get_keyless_ca(cert: x509.Certificate, parent_ca: CaModel | None = None) -> CaModel:
+    """Create or get a keyless CA model for the given certificate.
+
+    Args:
+        cert: The certificate to create a CA for
+        parent_ca: The parent CA in the hierarchy (the CA that issued this certificate)
+
+    Returns:
+        The created or existing CA model
+    """
+    from pki.models.ca import CaModel  # noqa: PLC0415
+
+    sha256_fingerprint = cert.fingerprint(algorithm=hashes.SHA256()).hex().upper()
+
+    existing_ca = CaModel.objects.filter(certificate__sha256_fingerprint=sha256_fingerprint).first()
+    if existing_ca:
+        if parent_ca and not existing_ca.parent_ca:
+            existing_ca.parent_ca = parent_ca
+            existing_ca.save(update_fields=['parent_ca'])
+        return existing_ca
+
+    try:
+        cert_model = CertificateModel.objects.get(sha256_fingerprint=sha256_fingerprint)
+    except CertificateModel.DoesNotExist:
+        cert_model = CertificateModel.save_certificate(cert)
+
+
+    try:
+        cn_attrs = cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
+        if cn_attrs:
+            cn_value = cn_attrs[0].value
+            # Decode bytes to string if necessary
+            common_name = cn_value.decode('utf-8') if isinstance(cn_value, bytes) else cn_value
+        else:
+            msg = 'Common Name (CN) is mandatory for CA certificates.'
+            raise ValidationError(msg)
+    except AttributeError as exc:
+        msg = f'Failed to extract Common Name (CN) from certificate: {exc}'
+        raise ValidationError(msg) from exc
+
+    unique_name = common_name
+    counter = 1
+    while CaModel.objects.filter(unique_name=unique_name).exists():
+        unique_name = f'{common_name}-{counter}'
+        counter += 1
+
+    ca = CaModel(
+        unique_name=unique_name,
+        ca_type=CaModel.CaTypeChoice.KEYLESS,
+        certificate=cert_model,
+        parent_ca=parent_ca,
+        is_active=True
+    )
+    ca.save()
+
+    return ca
 
 
 class TruststoreDownloadForm(forms.Form):

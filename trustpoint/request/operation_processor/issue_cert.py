@@ -10,8 +10,16 @@ from trustpoint_core.oid import SignatureSuite
 from devices.issuer import CredentialSaver
 from devices.models import IssuedCredentialModel
 from management.models import TlsSettings
+from pki.models import CaModel
 from pki.util.keys import is_supported_public_key
-from request.request_context import BaseCertificateRequestContext, BaseRequestContext, HttpBaseRequestContext
+from request.clients.est_client import EstClient
+from request.request_context import (
+    BaseCertificateRequestContext,
+    BaseRequestContext,
+    EstCertificateRequestContext,
+    HttpBaseRequestContext,
+)
+from trustpoint.logger import LoggerMixin
 
 from .base import AbstractOperationProcessor
 
@@ -23,14 +31,37 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
     """Operation processor for issuing certificates."""
 
     def process_operation(self, context: BaseRequestContext) -> None:
-        """Process the certificate issuance operation."""
+        """Process the certificate issuance operation.
+
+        Routes to the appropriate certificate issuance processor based on the
+        domain's issuing CA configuration (local, remote issuing CA, or remote RA).
+        """
         if not isinstance(context, BaseCertificateRequestContext):
             exc_msg = 'Certificate issuance requires a subclass of BaseCertificateRequestContext.'
             raise TypeError(exc_msg)
         if context.enrollment_request and not context.enrollment_request.is_valid():
             return None
-        # decide which processor to use based on domain configuration
+
         if context.domain and context.domain.issuing_ca:
+            issuing_ca = context.domain.issuing_ca
+
+            # Remote Issuing CAs
+            if issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
+                processor: (
+                    LocalCaCertificateIssueProcessor | RemoteCaCertificateIssueProcessor
+                ) = LocalCaCertificateIssueProcessor()
+                return processor.process_operation(context)
+            if issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_CMP:
+                processor = LocalCaCertificateIssueProcessor()
+                return processor.process_operation(context)
+            # Remote RAs - forward requests to remote CA via RA
+            if issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+                processor = RemoteCaCertificateIssueProcessor(ca_type='est')
+                return processor.process_operation(context)
+            if issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA:
+                processor = RemoteCaCertificateIssueProcessor(ca_type='cmp')
+                return processor.process_operation(context)
+            # Local CAs
             processor = LocalCaCertificateIssueProcessor()
             return processor.process_operation(context)
 
@@ -98,6 +129,9 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             raise TypeError(err_msg)
 
         issuing_credential = ca.get_credential()
+        if not issuing_credential:
+            err_msg = 'Issuing CA does not have a credential'
+            raise ValueError(err_msg)
         issuer_certificate = issuing_credential.get_certificate()
         context.issuer_credential = issuing_credential
 
@@ -184,3 +218,189 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             cert_profile_disp_name,
         )
         context.issued_certificate = signed_cert
+
+
+class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
+    """Operation processor for issuing certificates via a remote CA."""
+
+    def __init__(self, ca_type: str = 'est') -> None:
+        """Initialize the remote CA certificate issue processor.
+
+        Args:
+            ca_type: The type of remote CA ('est' or 'cmp'). Defaults to 'est'.
+        """
+        self.ca_type = ca_type
+
+    def process_operation(self, context: BaseRequestContext) -> None:
+        """Process the certificate issuance operation via a remote CA.
+
+        This processor forwards the certificate signing request to a remote
+        issuing CA using the appropriate protocol (EST or CMP).
+
+        Args:
+            context: The certificate request context.
+
+        Raises:
+            TypeError: If context is not a BaseCertificateRequestContext.
+            ValueError: If required context fields are missing or invalid.
+        """
+        if not isinstance(context, BaseCertificateRequestContext):
+            exc_msg = 'Certificate issuance requires a subclass of BaseCertificateRequestContext.'
+            raise TypeError(exc_msg)
+
+        if not context.device:
+            exc_msg = 'Device must be set in the context to issue a certificate.'
+            raise ValueError(exc_msg)
+
+        if not context.domain:
+            exc_msg = 'Domain must be set in the context to issue a certificate.'
+            raise ValueError(exc_msg)
+
+        if not context.domain.issuing_ca:
+            exc_msg = 'Domain must have an associated issuing CA.'
+            raise ValueError(exc_msg)
+
+        if not context.cert_requested:
+            exc_msg = 'Certificate request must be set in the context to issue a certificate.'
+            raise ValueError(exc_msg)
+
+        if self.ca_type == 'est':
+            self._process_est_enrollment(context)
+        elif self.ca_type == 'cmp':
+            exc_msg = 'CMP remote certificate issuance is not yet implemented.'
+            raise NotImplementedError(exc_msg)
+        else:
+            exc_msg = f'Unknown remote CA type: {self.ca_type}'
+            raise ValueError(exc_msg)
+
+    def _validate_est_enrollment_config(self, issuing_ca: CaModel) -> None:
+        """Validate EST enrollment configuration.
+
+        Args:
+            issuing_ca: The issuing CA model.
+
+        Raises:
+            ValueError: If any required configuration is missing or invalid.
+        """
+        if issuing_ca.ca_type not in (CaModel.CaTypeChoice.REMOTE_ISSUING_EST, CaModel.CaTypeChoice.REMOTE_EST_RA):
+            exc_msg = f'Expected REMOTE_ISSUING_EST or REMOTE_EST_RA, got {issuing_ca.get_ca_type_display()}'
+            raise ValueError(exc_msg)
+
+        if not issuing_ca.remote_host:
+            exc_msg = 'Remote EST host is not configured for the issuing CA.'
+            raise ValueError(exc_msg)
+
+        if not issuing_ca.remote_port:
+            exc_msg = 'Remote EST port is not configured for the issuing CA.'
+            raise ValueError(exc_msg)
+
+        if not issuing_ca.remote_path:
+            exc_msg = 'Remote EST path is not configured for the issuing CA.'
+            raise ValueError(exc_msg)
+
+        if not issuing_ca.chain_truststore:
+            exc_msg = 'Chain truststore is not configured for the issuing CA.'
+            raise ValueError(exc_msg)
+
+    def _build_est_context(
+        self, context: BaseCertificateRequestContext, issuing_ca: CaModel
+    ) -> EstCertificateRequestContext:
+        """Build EST certificate request context.
+
+        Args:
+            context: The base certificate request context.
+            issuing_ca: The issuing CA model.
+
+        Returns:
+            The EST certificate request context.
+        """
+        est_password = None
+        if issuing_ca.no_onboarding_config:
+            est_password = issuing_ca.no_onboarding_config.est_password
+
+        return EstCertificateRequestContext(
+            operation='simpleenroll',
+            protocol='est',
+            domain=context.domain,
+            device=context.device,
+            certificate_profile_model=context.certificate_profile_model,
+            cert_profile_str=context.cert_profile_str,
+            cert_requested=context.cert_requested,
+            est_server_host=issuing_ca.remote_host,
+            est_server_port=issuing_ca.remote_port,
+            est_server_path=issuing_ca.remote_path,
+            est_username=issuing_ca.est_username,
+            est_password=est_password,
+            est_server_truststore=issuing_ca.chain_truststore,
+        )
+
+    def _process_est_enrollment(self, context: BaseCertificateRequestContext) -> None:
+        """Process certificate issuance via remote EST CA.
+
+        Args:
+            context: The certificate request context.
+
+        Raises:
+            ValueError: If EST server configuration is invalid or enrollment fails.
+            EstClientError: If communication with the EST server fails.
+        """
+        if context.domain is None:
+            exc_msg = 'Domain must be set in the certificate request context.'
+            raise ValueError(exc_msg)
+
+        issuing_ca = context.domain.issuing_ca
+        if not issuing_ca:
+            exc_msg = 'Issuing CA must be set in the domain.'
+            raise ValueError(exc_msg)
+
+        self._validate_est_enrollment_config(issuing_ca)
+
+        est_context = self._build_est_context(context, issuing_ca)
+
+        csr = context.cert_requested
+        if isinstance(csr, x509.CertificateBuilder):
+            exc_msg = 'Cannot extract CSR from CertificateBuilder for EST enrollment.'
+            raise TypeError(exc_msg)
+        if csr is None:
+            exc_msg = 'Certificate request is required for EST enrollment.'
+            raise ValueError(exc_msg)
+
+        est_client = EstClient(est_context)
+        try:
+            issued_cert = est_client.simple_enroll(csr)
+        except Exception as e:
+            exc_msg = f'EST enrollment failed: {e!s}'
+            raise ValueError(exc_msg) from e
+
+        if issuing_ca.chain_truststore is None:
+            exc_msg = 'Chain truststore is required for EST enrollment.'
+            raise ValueError(exc_msg)
+
+        ca_chain = [
+            cert.certificate.get_certificate_serializer().as_crypto()
+            for cert in issuing_ca.chain_truststore.truststoreordermodel_set.order_by('order')
+        ]
+
+        common_names = issued_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+        cn = common_names[0].value if common_names else '(no CN set)'
+        common_name = cn.decode() if isinstance(cn, bytes) else cn
+
+        credential_type, cert_profile_disp_name = self._get_credential_type_for_template(context)
+        if context.device is None:
+            exc_msg = 'Device is required for saving credentials.'
+            raise ValueError(exc_msg)
+
+        saver = CredentialSaver(device=context.device, domain=context.domain)
+        saver.save_keyless_credential(
+            issued_cert,
+            ca_chain,
+            common_name,
+            credential_type,
+            cert_profile_disp_name,
+        )
+
+        context.issued_certificate = issued_cert
+        self.logger.info(
+            'Successfully issued certificate via remote EST CA: %s',
+            issuing_ca.unique_name
+        )

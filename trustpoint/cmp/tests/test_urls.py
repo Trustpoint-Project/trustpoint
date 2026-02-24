@@ -1,6 +1,5 @@
 """Tests for CMP URL configuration."""
 
-import pytest
 from django.urls import resolve, reverse
 
 

@@ -3,14 +3,9 @@
 from behave import runner, then, when, given
 from bs4 import BeautifulSoup
 import os
-from pki.forms import (
-    IssuingCaAddFileImportPkcs12Form,
-)
-from django.core.files.uploadedfile import SimpleUploadedFile
+
 from trustpoint_core.serializer import (
-    CertificateCollectionSerializer,
     CertificateSerializer,
-    CredentialSerializer,
     PrivateKeySerializer,
 )
 from cryptography import x509

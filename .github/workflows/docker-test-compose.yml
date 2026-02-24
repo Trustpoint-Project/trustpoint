@@ -22,7 +22,7 @@ jobs:
       #   --build : forces a rebuild of the images.
       #   --wait  : waits for the services to be up and running.
       - name: Run Docker compose
-        uses: hoverkraft-tech/compose-action@v2.4.3
+        uses: hoverkraft-tech/compose-action@v2.5.0
         with:
           compose-file: "./docker-compose.yml"
           up-flags: "--build --wait"

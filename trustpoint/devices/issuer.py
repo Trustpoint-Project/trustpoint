@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime
 import re
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING, NoReturn, get_args
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
@@ -139,6 +139,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
 
                 return existing_issued_credential
 
+            # Always create a new credential for this device
             credential_model = CredentialModel.save_keyless_credential(
                 certificate=certificate,
                 certificate_chain=certificate_chain,
@@ -305,7 +306,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
             'serial_number': device.serial_number,
         }
 
-    def _raise_value_error(self, message: str) -> None:
+    def _raise_value_error(self, message: str) -> NoReturn:
         """Raises a ValueError with the given message.
 
         Args:
@@ -316,7 +317,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
         """
         raise ValueError(message)
 
-    def _raise_type_error(self, message: str) -> None:
+    def _raise_type_error(self, message: str) -> NoReturn:
         """Raises a TypeError with the given message.
 
         Args:
@@ -354,6 +355,9 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
         )
         try:
             issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+            if not issuing_credential:
+                error_msg = 'Issuing CA does not have a credential'
+                self._raise_value_error(error_msg)
             issuer_certificate = issuing_credential.get_certificate()
             algorithm_identifier = SignatureSuite.from_certificate(
                 issuer_certificate
@@ -362,7 +366,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
             if hash_algorithm_enum is None:
                 err_msg = 'Failed to get hash algorithm.'
                 self._raise_value_error(err_msg)
-            hash_algorithm = hash_algorithm_enum.hash_algorithm()  # type: ignore[union-attr]
+            hash_algorithm = hash_algorithm_enum.hash_algorithm()
 
             if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
                 err_msg = (
@@ -371,7 +375,7 @@ class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):
                 )
                 self._raise_type_error(err_msg)
 
-            allowed_hash_algorithm: AllowedCertSignHashAlgos = hash_algorithm  # type: ignore[assignment]
+            allowed_hash_algorithm: AllowedCertSignHashAlgos = hash_algorithm
 
             one_day = datetime.timedelta(days=1)
 
@@ -467,6 +471,9 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
         """
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+        if not issuing_credential:
+            error_msg = 'Issuing CA does not have a credential'
+            raise ValueError(error_msg)
 
         san_uri = re.sub(r'[^a-zA-Z0-9_.-]', '', common_name) + '.alt'
         certificate = self._build_certificate(
@@ -509,6 +516,9 @@ class LocalTlsClientCredentialIssuer(BaseTlsCredentialIssuer):
             The issued TLS client certificate.
         """
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+        if not issuing_credential:
+            error_msg = 'Issuing CA does not have a credential'
+            raise ValueError(error_msg)
 
         san_uri = re.sub(r'[^a-zA-Z0-9_.-]', '', common_name) + '.alt'
         certificate = self._build_certificate(
@@ -582,6 +592,9 @@ class LocalTlsServerCredentialIssuer(BaseTlsCredentialIssuer):
         """
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+        if not issuing_credential:
+            error_msg = 'Issuing CA does not have a credential'
+            raise ValueError(error_msg)
 
         san_extension = self._build_san_extension(ipv4_addresses, ipv6_addresses, domain_names)
 
@@ -630,6 +643,9 @@ class LocalTlsServerCredentialIssuer(BaseTlsCredentialIssuer):
             The issued TLS server certificate.
         """
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+        if not issuing_credential:
+            error_msg = 'Issuing CA does not have a credential'
+            raise ValueError(error_msg)
 
         san_extension = self._build_san_extension(ipv4_addresses, ipv6_addresses, domain_names)
 
@@ -675,6 +691,9 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
         """
         private_key = KeyGenerator.generate_private_key(domain=self.domain)
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+        if not issuing_credential:
+            error_msg = 'Issuing CA does not have a credential'
+            raise ValueError(error_msg)
 
         extensions: list[tuple[x509.ExtensionType, bool]] = [
             (x509.BasicConstraints(ca=False, path_length=None), True)
@@ -753,6 +772,9 @@ class LocalDomainCredentialIssuer(BaseTlsCredentialIssuer):
             extensions.extend(extra_extensions)
 
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+        if not issuing_credential:
+            error_msg = 'Issuing CA does not have a credential'
+            raise ValueError(error_msg)
 
         certificate = self._build_certificate(
             common_name=self._pseudonym,
@@ -859,6 +881,9 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
     ) -> IssuedCredentialModel:
         """Issues an OPC UA server credential (certificate + private key) following OPC UA security standards."""
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+        if not issuing_credential:
+            error_msg = 'Issuing CA does not have a credential'
+            raise ValueError(error_msg)
 
         self._validate_application_uri(application_uri)
 
@@ -912,6 +937,9 @@ class OpcUaServerCredentialIssuer(BaseTlsCredentialIssuer):
     ) -> IssuedCredentialModel:
         """Issues an OPC UA server certificate (no private key) following OPC UA security standards."""
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+        if not issuing_credential:
+            error_msg = 'Issuing CA does not have a credential'
+            raise ValueError(error_msg)
         self._validate_application_uri(application_uri)
         if isinstance(application_uri, list):
             application_uri = application_uri[0]
@@ -1001,6 +1029,9 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
     ) -> IssuedCredentialModel:
         """Issues an OPC UA client credential (certificate + private key) following OPC UA security standards."""
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+        if not issuing_credential:
+            error_msg = 'Issuing CA does not have a credential'
+            raise ValueError(error_msg)
         self._validate_application_uri(application_uri)
         if isinstance(application_uri, list):
             application_uri = application_uri[0]
@@ -1041,6 +1072,9 @@ class OpcUaClientCredentialIssuer(BaseTlsCredentialIssuer):
     ) -> IssuedCredentialModel:
         """Issues an OPC UA client certificate (no private key) following OPC UA security standards."""
         issuing_credential = self.domain.get_issuing_ca_or_value_error().get_credential()
+        if not issuing_credential:
+            error_msg = 'Issuing CA does not have a credential'
+            raise ValueError(error_msg)
         self._validate_application_uri(application_uri)
         if isinstance(application_uri, list):
             application_uri = application_uri[0]

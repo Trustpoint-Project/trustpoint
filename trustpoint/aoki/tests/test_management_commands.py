@@ -1,12 +1,9 @@
 """Tests for AOKI management commands."""
 
-from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 from cryptography import x509
 from django.core.management import call_command
-from pki.util.x509 import CertificateGenerator
 
 
 class TestAokiGenTestCertsCommand:

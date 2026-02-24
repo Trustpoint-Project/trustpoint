@@ -1,8 +1,7 @@
 """Test suite for security mixins."""
-from unittest.mock import Mock, patch
 
 from django.contrib import messages
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpResponse
 from django.test import RequestFactory, TestCase
 from django.views import View
 from management.models import SecurityConfig

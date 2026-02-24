@@ -9,7 +9,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from datetime import datetime, timedelta, UTC
 from django.core.exceptions import ValidationError
 
-from pki.models.certificate import CertificateModel
 from pki.models.truststore import TruststoreModel
 from pki.services.certificate import CertificateService
 from pki.services.truststore import TruststoreService
