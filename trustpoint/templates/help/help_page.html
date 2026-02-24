@@ -2,6 +2,7 @@
 {% load i18n %}
 {% load static %}
 {% load csrf_token_filter %}
+{% load crispy_forms_filters %}
 
 {% block head %}
     <script src="{% static 'js/copy_clipboard.js' %}"></script>
@@ -16,6 +17,22 @@
             </div>
         </div>
         <div class="card-body">
+            <form method="get" class="row g-2 align-items-end mb-2">
+              <div class="col-auto ms-1">
+                <label for="{{ form.host_ip.id_for_label }}" class="form-label">
+                  {% trans 'Host IP' %}
+                </label>
+              </div>
+              <div class="col-auto ms-1">
+                {{ form.host_ip }}
+              </div>
+              <div class="col-auto ms-1">
+                <button type="submit" class="btn btn-primary">
+                  {% trans 'Update' %}
+                </button>
+              </div>
+            </form>
+            <hr>
             {% for section in help_page.sections %}
                 <div{% if section.css_id %} id="{{ section.css_id }}"{% endif %}{% if section.css_class %} class="{{ section.css_class }}"{% endif %}{% if section.hidden %} hidden{% endif %}>
                     <h2>{{ section.heading }}</h2>

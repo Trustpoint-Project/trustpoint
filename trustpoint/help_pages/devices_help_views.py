@@ -6,6 +6,7 @@ import json
 from typing import TYPE_CHECKING, override
 
 from cryptography import x509
+from django.contrib import messages
 from django.http import Http404
 from django.urls import reverse
 from django.utils import timezone
@@ -30,8 +31,8 @@ from help_pages.commands import (
     EstClientCertificateCommandBuilder,
     EstUsernamePasswordCommandBuilder,
 )
+from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
-from management.models import TlsSettings
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -59,13 +60,13 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
     page_name: str
     strategy: HelpPageStrategy
 
-    def _make_context(self) -> HelpContext:
+    def _make_context(self, host_ip: str) -> HelpContext:
         device = self.object
         domain = getattr(device, 'domain', None)
         if not domain:
             raise Http404(_('No domain is configured for this device.'))
 
-        host_base = f'https://{TlsSettings.get_first_ipv4_address()}:{self.request.META.get("SERVER_PORT", "443")}'
+        host_base = f'https://{host_ip}:{self.request.META.get("SERVER_PORT", "443")}'
         cred_count = IssuedCredentialModel.objects.filter(device=device).count()
 
         public_key_info = domain.public_key_info
@@ -101,7 +102,18 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
         if not self.strategy:
             err_msg = _('No strategy configured.')
             raise RuntimeError(err_msg)
-        help_context = self._make_context()
+        form = IpAddressForm(self.request.GET or None)
+        host_ip = '127.0.0.1'
+        if form.is_bound and form.is_valid():
+            host_ip = form.cleaned_data['host_ip']
+        elif form.is_bound:
+            messages.error(self.request, 'Given IP address is not valid. Setting to 127.0.0.1')
+            form = IpAddressForm(initial={'host_ip': host_ip})
+        else:
+            form = IpAddressForm(initial={'host_ip': host_ip})
+
+        help_context = self._make_context(host_ip)
+
         sections, heading = self.strategy.build_sections(help_context=help_context)
 
         context['help_page'] = HelpPage(heading=heading, sections=sections)
@@ -109,6 +121,7 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
         context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
         context['ValueRenderType_HTML'] = ValueRenderType.HTML.value
         context['clm_url'] = f'{self.page_category}:{self.page_name}_certificate_lifecycle_management'
+        context['form'] = form
         return context
 
 
