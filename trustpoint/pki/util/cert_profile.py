@@ -528,3 +528,8 @@ class JSONProfileVerifier:
     def get_sample_request(self) -> dict[str, Any]:
         """Generate a sample certificate request that conforms to the profile."""
         return self._apply_profile_rules_sample({}, self.profile_dict)
+
+    def get_profile(self) -> dict[str, Any]:
+        """Get the profile as a dictionary."""
+        return self.profile_dict
+
