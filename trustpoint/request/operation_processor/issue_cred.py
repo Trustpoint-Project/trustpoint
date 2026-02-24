@@ -34,6 +34,4 @@ class CredentialIssueProcessor(AbstractOperationProcessor, LoggerMixin):
             private_key = KeyGenerator.generate_private_key(domain=context.domain)
             context.private_key = private_key
             context.cert_requested = context.cert_requested.public_key(private_key.as_crypto().public_key())
-            self.logger.warning('Generated private key for credential issuance.')
-        self.logger.warning('Processing credential issuance by delegating to certificate issuance processor.')
         CertificateIssueProcessor().process_operation(context)

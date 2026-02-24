@@ -411,7 +411,6 @@ class CertificateIssuanceForm(forms.Form):
         Returns:
             CertificateBuilder ready for signing
         """
-        #raise ValueError('Test Error')
         cert_request = self._form_data_to_json_request()
 
         validated_request = self.verifier.apply_profile_to_request(cert_request)

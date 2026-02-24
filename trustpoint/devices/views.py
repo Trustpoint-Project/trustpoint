@@ -27,7 +27,7 @@ from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy, ngettext
 from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
-from django.views.generic.edit import FormView
+from django.views.generic.edit import FormMixin, FormView
 from django.views.generic.list import ListView
 from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
@@ -57,7 +57,6 @@ from devices.forms import (
 from devices.issuer import (
     BaseTlsCredentialIssuer,
     LocalDomainCredentialIssuer,
-    LocalProfileCredentialIssuer,
 )
 from devices.models import (
     DeviceModel,
@@ -1273,7 +1272,7 @@ class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboarding
 
 
 class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCredentialIssuer](
-    PageContextMixin, DetailView[DeviceModel]
+    PageContextMixin, FormMixin[forms.Form], DetailView[DeviceModel]
 ):
     """Base view for all credential issuance views."""
 
@@ -1612,11 +1611,11 @@ class OpcUaGdsPushTruststoreAssociationView(
 
 
 class AbstractIssueProfileCredentialView(
-    AbstractIssueCredentialView[CertificateIssuanceForm, LocalProfileCredentialIssuer]
+    AbstractIssueCredentialView[CertificateIssuanceForm, BaseTlsCredentialIssuer]
 ):
     """View to issue a new certificate profile credential."""
 
-    issuer_class = LocalProfileCredentialIssuer
+    issuer_class = BaseTlsCredentialIssuer
     friendly_name = 'Certificate Profile Credential'
 
     page_name: str
@@ -1643,19 +1642,24 @@ class AbstractIssueProfileCredentialView(
         context['profile_dict'] = self.get_form_kwargs()['profile']
         return context
 
-    def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
+    def form_invalid(self, form: forms.Form) -> HttpResponse:
         """Handle the case where the form is invalid."""
         for field, errors in form.errors.items():
             for error in errors:
                 messages.error(self.request, f'{field}: {error}')
         return super().form_invalid(form)
 
-    def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
+    def form_valid(self, form: forms.Form) -> HttpResponse:
         """Handle the case where the form is valid."""
+        if not isinstance(form, CertificateIssuanceForm):
+            err_msg = 'Invalid form type. Expected CertificateIssuanceForm.'
+            messages.error(self.request, err_msg)
+            return self.form_invalid(form)
         try:
             self.cert_builder = form.get_certificate_builder()
         except ValueError as e:
-            messages.error(self.request, _('Error generating certificate builder: {error}').format(error=str(e)))
+            messages.error(self.request,
+                           gettext_lazy('Error generating certificate builder: {error}').format(error=str(e)))
             return self.form_invalid(form)
 
         messages.success(
