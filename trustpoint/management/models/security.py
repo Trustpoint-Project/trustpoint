@@ -1,17 +1,33 @@
 """Security Configuration Model."""
 from __future__ import annotations
 
-from typing import Any, ClassVar
+import json
+from typing import ClassVar
 
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from trustpoint_core.oid import HashAlgorithm, NamedCurve
 
 from management.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 
 class SecurityConfig(models.Model):
-    """Security Configuration model."""
+    """Security Configuration model.
+
+    Stores the active security level together with the three security thresholds
+    that belong to it:
+
+    * :attr:`rsa_minimum_key_size` — minimum acceptable RSA key size in bits.
+    * :attr:`weak_ecc_curve_oids` — JSON list of :class:`trustpoint_core.oid.NamedCurve`
+      OID strings that are considered weak at the current level.
+    * :attr:`weak_signature_algorithm_oids` — JSON list of
+      :class:`trustpoint_core.oid.HashAlgorithm` OID strings considered weak.
+
+    Calling :meth:`apply_security_settings` writes these values into the singleton
+    :class:`~management.models.NotificationConfig` so that the rest of the system
+    (notification checks, certificate verifiers) can read them from one place.
+    """
 
     class SecurityModeChoices(models.TextChoices):
         """Types of security modes."""
@@ -22,55 +38,117 @@ class SecurityConfig(models.Model):
         HIGH = '3', _('High')
         HIGHEST = '4', _('Highest')
 
-    security_mode = models.CharField(max_length=6, choices=SecurityModeChoices, default=SecurityModeChoices.LOW)
+    # ------------------------------------------------------------------
+    # Choices derived from trustpoint_core.oid enums
+    # ------------------------------------------------------------------
+
+    class NamedCurveChoices(models.TextChoices):
+        """Selectable ECC curve OIDs sourced from :class:`trustpoint_core.oid.NamedCurve`."""
+
+        SECP192R1 = NamedCurve.SECP192R1.dotted_string, _('SECP192R1')
+        SECP224R1 = NamedCurve.SECP224R1.dotted_string, _('SECP224R1')
+        SECP256K1 = NamedCurve.SECP256K1.dotted_string, _('SECP256K1')
+        SECP256R1 = NamedCurve.SECP256R1.dotted_string, _('SECP256R1')
+        SECP384R1 = NamedCurve.SECP384R1.dotted_string, _('SECP384R1')
+        SECP521R1 = NamedCurve.SECP521R1.dotted_string, _('SECP521R1')
+        BRAINPOOLP256R1 = NamedCurve.BRAINPOOLP256R1.dotted_string, _('BrainpoolP256R1')
+        BRAINPOOLP384R1 = NamedCurve.BRAINPOOLP384R1.dotted_string, _('BrainpoolP384R1')
+        BRAINPOOLP512R1 = NamedCurve.BRAINPOOLP512R1.dotted_string, _('BrainpoolP512R1')
+
+    class HashAlgorithmChoices(models.TextChoices):
+        """Selectable hash/signature algorithm OIDs from :class:`trustpoint_core.oid.HashAlgorithm`."""
+
+        MD5 = HashAlgorithm.MD5.dotted_string, _('MD5')
+        SHA1 = HashAlgorithm.SHA1.dotted_string, _('SHA-1')
+        SHA224 = HashAlgorithm.SHA224.dotted_string, _('SHA-224')
+        SHA256 = HashAlgorithm.SHA256.dotted_string, _('SHA-256')
+        SHA384 = HashAlgorithm.SHA384.dotted_string, _('SHA-384')
+        SHA512 = HashAlgorithm.SHA512.dotted_string, _('SHA-512')
+
+    # ------------------------------------------------------------------
+    # Model fields
+    # ------------------------------------------------------------------
+
+    security_mode = models.CharField(
+        max_length=6,
+        choices=SecurityModeChoices,
+        default=SecurityModeChoices.LOW,
+    )
 
     auto_gen_pki = models.BooleanField(default=False)
     auto_gen_pki_key_algorithm = models.CharField(
-        max_length=24, choices=AutoGenPkiKeyAlgorithm, default=AutoGenPkiKeyAlgorithm.RSA2048
+        max_length=24,
+        choices=AutoGenPkiKeyAlgorithm,
+        default=AutoGenPkiKeyAlgorithm.RSA2048,
     )
 
-    NOTIFICATION_CONFIGURATIONS: ClassVar[dict[str, dict[str, Any]]] = {
-        SecurityModeChoices.DEV: {
+    rsa_minimum_key_size = models.PositiveIntegerField(
+        default=2048,
+        help_text=_('Minimum RSA key size in bits that certificates must meet.'),
+    )
 
+    weak_ecc_curve_oids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=_(
+            'JSON list of ECC curve OIDs (from trustpoint_core.oid.NamedCurve) '
+            'considered weak at the current security level.'
+        ),
+    )
+
+    weak_signature_algorithm_oids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=_(
+            'JSON list of hash algorithm OIDs (from trustpoint_core.oid.HashAlgorithm) '
+            'considered weak at the current security level.'
+        ),
+    )
+
+    # ------------------------------------------------------------------
+    # Default configurations keyed by mode — used by _apply_*_defaults
+    # and get_settings_preview_json.
+    # ------------------------------------------------------------------
+
+    _MODE_DEFAULTS: ClassVar[dict[str, dict[str, object]]] = {
+        SecurityModeChoices.DEV: {
             'rsa_minimum_key_size': 1024,
-            'weak_ecc_curves': [],
-            'weak_signature_algorithms': [],
+            'weak_ecc_curve_oids': [],
+            'weak_signature_algorithm_oids': [],
         },
         SecurityModeChoices.LOW: {
             'rsa_minimum_key_size': 1024,
-            'weak_ecc_curves': [],
-            'weak_signature_algorithms': [],
+            'weak_ecc_curve_oids': [],
+            'weak_signature_algorithm_oids': [],
         },
         SecurityModeChoices.MEDIUM: {
             'rsa_minimum_key_size': 2048,
-            'weak_ecc_curves': [
-            ],
-            'weak_signature_algorithms': [
-                WeakSignatureAlgorithm.SignatureChoices.MD5,
-                WeakSignatureAlgorithm.SignatureChoices.SHA1,
+            'weak_ecc_curve_oids': [],
+            'weak_signature_algorithm_oids': [
+                HashAlgorithmChoices.MD5,
+                HashAlgorithmChoices.SHA1,
             ],
         },
         SecurityModeChoices.HIGH: {
             'rsa_minimum_key_size': 3072,
-            'weak_ecc_curves': [
-            ],
-            'weak_signature_algorithms': [
-                WeakSignatureAlgorithm.SignatureChoices.MD5,
-                WeakSignatureAlgorithm.SignatureChoices.SHA1,
-                WeakSignatureAlgorithm.SignatureChoices.SHA224,
+            'weak_ecc_curve_oids': [],
+            'weak_signature_algorithm_oids': [
+                HashAlgorithmChoices.MD5,
+                HashAlgorithmChoices.SHA1,
+                HashAlgorithmChoices.SHA224,
             ],
         },
         SecurityModeChoices.HIGHEST: {
             'rsa_minimum_key_size': 4096,
-            'weak_ecc_curves': [
-                WeakECCCurve.ECCCurveChoices.SECP160R1,
-                WeakECCCurve.ECCCurveChoices.SECP192R1,
-                WeakECCCurve.ECCCurveChoices.SECP224R1,
+            'weak_ecc_curve_oids': [
+                NamedCurveChoices.SECP192R1,
+                NamedCurveChoices.SECP224R1,
+                NamedCurveChoices.SECP256K1,
             ],
-            'weak_signature_algorithms': [
-                WeakSignatureAlgorithm.SignatureChoices.MD5,
-                WeakSignatureAlgorithm.SignatureChoices.SHA1,
-                WeakSignatureAlgorithm.SignatureChoices.SHA224,
+            'weak_signature_algorithm_oids': [
+                HashAlgorithmChoices.MD5,
+                HashAlgorithmChoices.SHA1,
+                HashAlgorithmChoices.SHA224,
             ],
         },
     }
@@ -79,24 +157,64 @@ class SecurityConfig(models.Model):
         """Output as string."""
         return f'{self.security_mode}'
 
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     def apply_security_settings(self) -> None:
-        """Apply appropriate configuration values based on the security mode."""
-        if self.security_mode:
-            notification_config = NotificationConfig.get()
+        """Reset thresholds to the minimum requirements for the current mode.
 
-            config_values = self.NOTIFICATION_CONFIGURATIONS.get(self.security_mode, {})
+        Reads the minimum requirements from :attr:`_MODE_DEFAULTS`, writes them onto
+        this instance and saves it, then propagates the values to the singleton
+        :class:`~management.models.NotificationConfig` so that notification checks
+        and certificate verifiers remain functional.
 
-            notification_config.rsa_minimum_key_size = config_values.get(
-                'rsa_minimum_key_size', notification_config.rsa_minimum_key_size
-            )
+        :raises ValueError: If :attr:`security_mode` is not a recognised mode.
+        """
+        if not self.security_mode:
+            return
 
-            weak_ecc_curve_oids = config_values.get('weak_ecc_curves', [])
-            weak_signature_algorithm_oids = config_values.get('weak_signature_algorithms', [])
+        defaults = self._MODE_DEFAULTS.get(self.security_mode)
+        if defaults is None:
+            msg = f'No minimum requirements defined for security mode: {self.security_mode}'
+            raise ValueError(msg)
 
-            weak_ecc_curves = WeakECCCurve.objects.filter(oid__in=weak_ecc_curve_oids)
-            weak_signature_algorithms = WeakSignatureAlgorithm.objects.filter(oid__in=weak_signature_algorithm_oids)
+        self.rsa_minimum_key_size = defaults['rsa_minimum_key_size']  # type: ignore[assignment]
+        self.weak_ecc_curve_oids = list(defaults['weak_ecc_curve_oids'])  # type: ignore[arg-type]
+        self.weak_signature_algorithm_oids = list(defaults['weak_signature_algorithm_oids'])  # type: ignore[arg-type]
+        self.save(update_fields=['rsa_minimum_key_size', 'weak_ecc_curve_oids', 'weak_signature_algorithm_oids'])
 
-            notification_config.weak_ecc_curves.set(weak_ecc_curves)
-            notification_config.weak_signature_algorithms.set(weak_signature_algorithms)
+        # Sync thresholds into NotificationConfig so notification checks work unchanged.
+        notification_config = NotificationConfig.get()
+        notification_config.rsa_minimum_key_size = self.rsa_minimum_key_size
+        notification_config.weak_ecc_curves.set(
+            WeakECCCurve.objects.filter(oid__in=self.weak_ecc_curve_oids)
+        )
+        notification_config.weak_signature_algorithms.set(
+            WeakSignatureAlgorithm.objects.filter(oid__in=self.weak_signature_algorithm_oids)
+        )
+        notification_config.save(update_fields=['rsa_minimum_key_size'])
 
-            notification_config.save()
+    @classmethod
+    def get_settings_preview_json(cls) -> str:
+        """Return a JSON string of each mode's display-friendly threshold values for the settings JS.
+
+        :returns: JSON-encoded ``{mode_value: {field: display_value, ...}, ...}``.
+        """
+        ecc_labels = dict(cls.NamedCurveChoices.choices)
+        sig_labels = dict(cls.HashAlgorithmChoices.choices)
+
+        preview: dict[str, dict[str, object]] = {}
+        for mode, defaults in cls._MODE_DEFAULTS.items():
+            preview[mode] = {
+                'rsa_minimum_key_size': defaults['rsa_minimum_key_size'],
+                'weak_ecc_curves': [
+                    str(ecc_labels.get(oid, oid)) for oid in defaults['weak_ecc_curve_oids']  # type: ignore[union-attr]
+                ],
+                'weak_signature_algorithms': [
+                    str(sig_labels.get(oid, oid)) for oid in defaults['weak_signature_algorithm_oids']  # type: ignore[union-attr]
+                ],
+            }
+        return json.dumps(preview)
+
+
