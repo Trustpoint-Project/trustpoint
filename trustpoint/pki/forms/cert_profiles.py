@@ -51,9 +51,10 @@ def check_validity_days_against_security_config(total_days: float) -> None:
     except SecurityConfig.DoesNotExist:
         return
     except SecurityConfig.MultipleObjectsReturned:
-        cfg = SecurityConfig.objects.order_by('pk').first()
-        if cfg is None:
+        cfg_or_none = SecurityConfig.objects.order_by('pk').first()
+        if cfg_or_none is None:
             return
+        cfg = cfg_or_none
 
     max_days: int | None = cfg.max_cert_validity_days
     if max_days is None:

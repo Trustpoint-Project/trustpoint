@@ -906,9 +906,10 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
         except SecurityConfig.DoesNotExist:
             return validity_float
         except SecurityConfig.MultipleObjectsReturned:
-            cfg = SecurityConfig.objects.order_by('pk').first()
-            if cfg is None:
+            cfg_or_none = SecurityConfig.objects.order_by('pk').first()
+            if cfg_or_none is None:
                 return validity_float
+            cfg = cfg_or_none
 
         max_days: int | None = cfg.max_crl_validity_days
         if max_days is not None:
