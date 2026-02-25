@@ -18,10 +18,10 @@ class SecurityConfig(models.Model):
     that belong to it:
 
     * :attr:`rsa_minimum_key_size` — minimum acceptable RSA key size in bits.
-    * :attr:`weak_ecc_curve_oids` — JSON list of :class:`trustpoint_core.oid.NamedCurve`
-      OID strings that are considered weak at the current level.
-    * :attr:`weak_signature_algorithm_oids` — JSON list of
-      :class:`trustpoint_core.oid.HashAlgorithm` OID strings considered weak.
+    * :attr:`not_permitted_ecc_curve_oids` — JSON list of :class:`trustpoint_core.oid.NamedCurve`
+      OID strings that are not permitted at the current level.
+    * :attr:`not_permitted_signature_algorithm_oids` — JSON list of
+      :class:`trustpoint_core.oid.HashAlgorithm` OID strings that are not permitted.
 
     Calling :meth:`apply_security_settings` writes these values into the singleton
     :class:`~management.models.NotificationConfig` so that the rest of the system
@@ -86,21 +86,21 @@ class SecurityConfig(models.Model):
         help_text=_('Minimum RSA key size in bits that certificates must meet.'),
     )
 
-    weak_ecc_curve_oids = models.JSONField(
+    not_permitted_ecc_curve_oids = models.JSONField(
         default=list,
         blank=True,
         help_text=_(
             'JSON list of ECC curve OIDs (from trustpoint_core.oid.NamedCurve) '
-            'considered weak at the current security level.'
+            'not permitted at the current security level.'
         ),
     )
 
-    weak_signature_algorithm_oids = models.JSONField(
+    not_permitted_signature_algorithm_oids = models.JSONField(
         default=list,
         blank=True,
         help_text=_(
             'JSON list of hash algorithm OIDs (from trustpoint_core.oid.HashAlgorithm) '
-            'considered weak at the current security level.'
+            'not permitted at the current security level.'
         ),
     )
 
@@ -112,26 +112,26 @@ class SecurityConfig(models.Model):
     _MODE_DEFAULTS: ClassVar[dict[str, dict[str, object]]] = {
         SecurityModeChoices.DEV: {
             'rsa_minimum_key_size': 1024,
-            'weak_ecc_curve_oids': [],
-            'weak_signature_algorithm_oids': [],
+            'not_permitted_ecc_curve_oids': [],
+            'not_permitted_signature_algorithm_oids': [],
         },
         SecurityModeChoices.LOW: {
             'rsa_minimum_key_size': 1024,
-            'weak_ecc_curve_oids': [],
-            'weak_signature_algorithm_oids': [],
+            'not_permitted_ecc_curve_oids': [],
+            'not_permitted_signature_algorithm_oids': [],
         },
         SecurityModeChoices.MEDIUM: {
             'rsa_minimum_key_size': 2048,
-            'weak_ecc_curve_oids': [],
-            'weak_signature_algorithm_oids': [
+            'not_permitted_ecc_curve_oids': [],
+            'not_permitted_signature_algorithm_oids': [
                 HashAlgorithmChoices.MD5,
                 HashAlgorithmChoices.SHA1,
             ],
         },
         SecurityModeChoices.HIGH: {
             'rsa_minimum_key_size': 3072,
-            'weak_ecc_curve_oids': [],
-            'weak_signature_algorithm_oids': [
+            'not_permitted_ecc_curve_oids': [],
+            'not_permitted_signature_algorithm_oids': [
                 HashAlgorithmChoices.MD5,
                 HashAlgorithmChoices.SHA1,
                 HashAlgorithmChoices.SHA224,
@@ -139,12 +139,12 @@ class SecurityConfig(models.Model):
         },
         SecurityModeChoices.HIGHEST: {
             'rsa_minimum_key_size': 4096,
-            'weak_ecc_curve_oids': [
+            'not_permitted_ecc_curve_oids': [
                 NamedCurveChoices.SECP192R1,
                 NamedCurveChoices.SECP224R1,
                 NamedCurveChoices.SECP256K1,
             ],
-            'weak_signature_algorithm_oids': [
+            'not_permitted_signature_algorithm_oids': [
                 HashAlgorithmChoices.MD5,
                 HashAlgorithmChoices.SHA1,
                 HashAlgorithmChoices.SHA224,
@@ -179,9 +179,13 @@ class SecurityConfig(models.Model):
             raise ValueError(msg)
 
         self.rsa_minimum_key_size = defaults['rsa_minimum_key_size']  # type: ignore[assignment]
-        self.weak_ecc_curve_oids = list(defaults['weak_ecc_curve_oids'])  # type: ignore[arg-type]
-        self.weak_signature_algorithm_oids = list(defaults['weak_signature_algorithm_oids'])  # type: ignore[arg-type]
-        self.save(update_fields=['rsa_minimum_key_size', 'weak_ecc_curve_oids', 'weak_signature_algorithm_oids'])
+        self.not_permitted_ecc_curve_oids = list(defaults['not_permitted_ecc_curve_oids'])  # type: ignore[arg-type]
+        self.not_permitted_signature_algorithm_oids = list(defaults['not_permitted_signature_algorithm_oids'])  # type: ignore[arg-type]
+        self.save(update_fields=[
+            'rsa_minimum_key_size',
+            'not_permitted_ecc_curve_oids',
+            'not_permitted_signature_algorithm_oids',
+        ])
 
     @classmethod
     def get_settings_preview_json(cls) -> str:
@@ -196,11 +200,11 @@ class SecurityConfig(models.Model):
         for mode, defaults in cls._MODE_DEFAULTS.items():
             preview[mode] = {
                 'rsa_minimum_key_size': defaults['rsa_minimum_key_size'],
-                'weak_ecc_curves': [
-                    str(ecc_labels.get(oid, oid)) for oid in defaults['weak_ecc_curve_oids']  # type: ignore[union-attr]
+                'not_permitted_ecc_curves': [
+                    str(ecc_labels.get(oid, oid)) for oid in defaults['not_permitted_ecc_curve_oids']  # type: ignore[union-attr]
                 ],
-                'weak_signature_algorithms': [
-                    str(sig_labels.get(oid, oid)) for oid in defaults['weak_signature_algorithm_oids']  # type: ignore[union-attr]
+                'not_permitted_signature_algorithms': [
+                    str(sig_labels.get(oid, oid)) for oid in defaults['not_permitted_signature_algorithm_oids']  # type: ignore[union-attr]
                 ],
             }
         return json.dumps(preview)

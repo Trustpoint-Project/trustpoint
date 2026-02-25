@@ -506,10 +506,10 @@ class CertificateVerifier:
 
         if isinstance(public_key, ec.EllipticCurvePublicKey):
             curve_name = public_key.curve.name
-            for weak_curve_oid in security_config.weak_ecc_curve_oids:
+            for not_permitted_curve_oid in security_config.not_permitted_ecc_curve_oids:
                 # Resolve the OID to a NamedCurve to get its ossl_curve_name for comparison
                 try:
-                    named_curve = NamedCurve.from_dotted_string(weak_curve_oid)
+                    named_curve = NamedCurve.from_dotted_string(not_permitted_curve_oid)
                 except (KeyError, StopIteration):
                     continue
                 if named_curve.ossl_curve_name == curve_name:
@@ -598,7 +598,7 @@ class CertificateVerifier:
 
         signature_algorithm_oid = certificate.signature_algorithm_oid
 
-        for weak_algo_oid in security_config.weak_signature_algorithm_oids:
+        for weak_algo_oid in security_config.not_permitted_signature_algorithm_oids:
             # Compare the certificate's signature algorithm OID against the stored weak OIDs
             if weak_algo_oid == str(signature_algorithm_oid):
                 hash_algo = certificate.signature_hash_algorithm
