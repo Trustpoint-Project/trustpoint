@@ -29,7 +29,7 @@ class SettingsViewTest(TestCase):
         # Create security config
         self.security_config = SecurityConfig.objects.create(
             id=1,
-            security_mode=SecurityConfig.SecurityModeChoices.LOW,
+            security_mode=SecurityConfig.SecurityModeChoices.BROWNFIELD,
             auto_gen_pki=False,
         )
 
@@ -96,8 +96,8 @@ class SettingsViewTest(TestCase):
         config_json = json.loads(context['notification_configurations_json'])
         self.assertIsInstance(config_json, dict)
         # Should have entries for all security modes
-        self.assertIn(SecurityConfig.SecurityModeChoices.DEV, config_json)
-        self.assertIn(SecurityConfig.SecurityModeChoices.LOW, config_json)
+        self.assertIn(SecurityConfig.SecurityModeChoices.LAB, config_json)
+        self.assertIn(SecurityConfig.SecurityModeChoices.BROWNFIELD, config_json)
 
     @patch.object(SecurityConfig, 'apply_security_settings')
     def test_form_valid_saves_and_applies_settings(self, mock_apply):
@@ -118,8 +118,8 @@ class SettingsViewTest(TestCase):
         mock_sec = Mock()
         self.view.sec = mock_sec
         
-        # Change from LOW (1) to HIGH (3)
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.LOW
+        # Change from BROWNFIELD (1) to HARDENED (3)
+        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
         self.security_config.save()
         
         form = Mock(spec=SecurityConfigForm)
@@ -127,13 +127,13 @@ class SettingsViewTest(TestCase):
         form.instance.pk = 1
         form.changed_data = ['security_mode']
         form.cleaned_data = {
-            'security_mode': SecurityConfig.SecurityModeChoices.HIGH
+            'security_mode': SecurityConfig.SecurityModeChoices.HARDENED
         }
         form.save = Mock()
         
         self.view.form_valid(form)
         
-        mock_sec.reset_settings.assert_called_once_with(SecurityConfig.SecurityModeChoices.HIGH)
+        mock_sec.reset_settings.assert_called_once_with(SecurityConfig.SecurityModeChoices.HARDENED)
 
     @patch('management.security.features.AutoGenPkiFeature.enable')
     @patch.object(SecurityConfig, 'apply_security_settings')

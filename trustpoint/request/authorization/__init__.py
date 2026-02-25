@@ -7,6 +7,7 @@ from .base import (
     DevOwnerIDAuthorization,
     DomainScopeValidation,
     ProtocolAuthorization,
+    SecurityConfigAuthorization,
 )
 from .cmp import CmpAuthorization
 from .est import EstAuthorization
@@ -22,4 +23,5 @@ __all__ = [
     'EstAuthorization',
     'ManualAuthorization',
     'ProtocolAuthorization',
+    'SecurityConfigAuthorization',
 ]

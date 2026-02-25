@@ -160,6 +160,8 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         old_conf = SecurityConfig.objects.get(pk=form.instance.pk) if form.instance.pk else None
         form.save()
 
+        # Always sync all policy-threshold fields to the current mode's defaults.
+        # This also corrects any stale DB values that pre-date a defaults change.
         if 'security_mode' in form.changed_data:
             old_value = getattr(old_conf, 'security_mode', None) if old_conf else None
             new_value = form.cleaned_data.get('security_mode')
@@ -175,7 +177,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
             if new_int > old_int:
                 self.sec.reset_settings(new_value)
 
-            form.instance.apply_security_settings()
+        form.instance.apply_security_settings()
 
         if 'auto_gen_pki' in form.changed_data:
             old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None

@@ -477,6 +477,9 @@ class CertificateVerifier:
 
         if isinstance(public_key, rsa.RSAPublicKey):
             minimum_key_size = security_config.rsa_minimum_key_size
+            if minimum_key_size is None:
+                msg = 'RSA keys are not permitted by the active security policy.'
+                raise ValueError(msg)
             if public_key.key_size < minimum_key_size:
                 err_msg = (
                     f'RSA certificate key size ({public_key.key_size} bits) is below the minimum '
