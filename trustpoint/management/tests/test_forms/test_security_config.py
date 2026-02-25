@@ -126,14 +126,18 @@ class SecurityConfigFormTest(TestCase):
         self.assertIn('security_mode', form.data)
 
     def test_all_security_modes(self):
-        """Test form accepts all security mode choices."""
+        """Test form field accepts all security mode choices."""
+        self.config.security_mode = SecurityConfig.SecurityModeChoices.CRITICAL
+        self.config.save()
+
         for mode in SecurityConfig.SecurityModeChoices:
+            instance = SecurityConfig.objects.get(pk=self.config.pk)
             form_data = {
                 'security_mode': mode,
                 'auto_gen_pki': False,
                 'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
             }
-            form = SecurityConfigForm(data=form_data, instance=self.config)
+            form = SecurityConfigForm(data=form_data, instance=instance)
             self.assertTrue(form.is_valid(), f"Form should be valid for mode {mode}")
 
     def test_form_helper_layout(self):
