@@ -4,10 +4,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.hashes import SHA256
-from django.contrib.messages import get_messages
-from django.http import HttpRequest
 from django.test import RequestFactory
 from django.urls import reverse
 from trustpoint_core.serializer import CertificateSerializer, CredentialSerializer, PrivateKeySerializer

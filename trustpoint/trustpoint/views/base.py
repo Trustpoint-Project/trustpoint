@@ -268,7 +268,8 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 
     def get_pks_path(self) -> str:
         """Retrieve the primary key path from the URL parameters."""
-        return str(self.kwargs.get('pks'))
+        pks = self.kwargs.get('pks')
+        return str(pks) if pks is not None else ''
 
     def get_queryset(self) -> models.QuerySet[Any, Any]:
         """Retrieve a queryset based on primary keys provided in the URL."""
@@ -290,6 +291,12 @@ class PrimaryKeyQuerysetFromUrlMixin(PrimaryKeyListFromPrimaryKeyString):
 class BulkDeleteView(MultipleObjectTemplateResponseMixin, PrimaryKeyQuerysetFromUrlMixin, BaseBulkDeleteView):
     """View for bulk deletion of objects."""
     model: type[models.Model]
+
+    def get_queryset(self) -> models.QuerySet[Any, Any]:
+        """Return queryset for bulk delete. If no pks provided, return empty queryset."""
+        if not self.get_pks_path():
+            return self.model.objects.none()  # type: ignore[attr-defined, no-any-return]
+        return super().get_queryset()
 
 
 THRESHOLD_LOGGER_HTTP_STATUS: int = 400

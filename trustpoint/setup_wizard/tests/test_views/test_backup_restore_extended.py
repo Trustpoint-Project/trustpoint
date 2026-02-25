@@ -1,7 +1,6 @@
 """Tests for BackupRestoreView and related functionality."""
 
 import subprocess
-from io import BytesIO
 from unittest.mock import Mock, patch
 
 import pytest
@@ -9,7 +8,6 @@ from django.contrib.messages import get_messages
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
 
-from setup_wizard.forms import BackupRestoreForm
 from setup_wizard.views import BackupRestoreView
 
 

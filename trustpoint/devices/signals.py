@@ -6,7 +6,7 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
 from devices.models import DeviceModel
-from request.request_context import RequestContext
+from request.request_context import BaseRequestContext
 from request.workflow_handler import WorkflowHandler
 from workflows.events import Events
 
@@ -23,7 +23,7 @@ def _trigger_device_events(sender: ModelBase, instance: DeviceModel, *, created:
 
     # 1) Device created
     if created:
-        ctx = RequestContext(
+        ctx = BaseRequestContext(  # Prob. better not to use Workflow Pipeline here (or add DeviceEventRequestContext)
             event=Events.device_created,
             device=instance,
             domain=instance.domain,
@@ -38,7 +38,7 @@ def _trigger_device_events(sender: ModelBase, instance: DeviceModel, *, created:
     new = instance.domain_id
 
     if old != new and new is not None:
-        ctx = RequestContext(
+        ctx = BaseRequestContext(
             event=Events.device_onboarded,
             device=instance,
             domain=instance.domain,
@@ -46,3 +46,36 @@ def _trigger_device_events(sender: ModelBase, instance: DeviceModel, *, created:
             operation='onboarded',
         )
         handler.handle(ctx)
+
+
+@receiver(post_save, sender=DeviceModel)
+def schedule_gds_push_update_on_enable(
+    sender: ModelBase,  # noqa: ARG001
+    instance: DeviceModel,
+    *,
+    created: bool,
+    update_fields: frozenset[str] | None,
+    **kwargs: Any,  # noqa: ARG001
+) -> None:
+    """Schedule a GDS Push periodic update when the feature is toggled on for a device.
+
+    Mirrors the CRL cycle scheduling pattern: whenever ``opc_gds_push_enable_periodic_update``
+    is flipped to ``True`` via a save with explicit ``update_fields``, the first update is
+    immediately scheduled via Django-Q2.
+
+    Args:
+        sender: The model class.
+        instance: The DeviceModel instance that was saved.
+        created: Whether the instance was just created.
+        update_fields: The fields that were updated, or None if not specified.
+        **kwargs: Additional keyword arguments.
+    """
+    if created:
+        return
+
+    if (
+        update_fields
+        and 'opc_gds_push_enable_periodic_update' in update_fields
+        and instance.opc_gds_push_enable_periodic_update
+    ):
+        instance.schedule_next_gds_push_update()

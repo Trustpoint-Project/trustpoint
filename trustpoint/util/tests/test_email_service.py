@@ -19,7 +19,6 @@ def locmem_email_backend(settings: Any) -> None:
 @pytest.fixture
 def templates_dir(settings: Any, tmp_path: Any) -> Any:
     """Provide a clean temporary template directory and point Django to it."""
-    from pathlib import Path
     from copy import deepcopy
     
     tdir = tmp_path / 'templates'

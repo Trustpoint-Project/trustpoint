@@ -3,7 +3,6 @@
 from typing import Any
 
 import pytest
-from django import forms
 
 from devices.forms import CredentialDownloadForm, BrowserLoginForm
 from devices.models import RemoteDeviceCredentialDownloadModel
@@ -142,7 +141,7 @@ class TestOnboardingCreateFormExceptionHandling:
         domain = device_instance['domain']
         
         # Import OnboardingPkiProtocol for the correct enum
-        from devices.models import OnboardingPkiProtocol
+        from onboarding.models import OnboardingPkiProtocol
         
         form_data = {
             'common_name': 'test-invalid-protocol',

@@ -8,6 +8,7 @@ from typing import Any
 from django.utils.translation import gettext as _
 
 from util.email import normalize_addresses
+from util.validation import ValidationError, validate_webhook_url
 from workflows.events import Events
 from workflows.services.executors.factory import StepExecutorFactory
 
@@ -34,10 +35,6 @@ def _is_dotpath(s: str) -> bool:
 def _is_bare_var_path(s: str) -> bool:
     """Bare variable path (no 'vars.'), at least one segment, dot-separated."""
     return _is_dotpath(s)
-
-
-def _is_http_url(s: str) -> bool:
-    return isinstance(s, str) and s.strip().lower().startswith(('http://', 'https://'))
 
 
 def _known_event_triples() -> set[tuple[str, str, str]]:
@@ -177,8 +174,11 @@ def _validate_webhook_basic_fields(
     """URL, method, headers, body for webhook step."""
     # url
     url = (params.get('url') or '').strip()
-    if not _is_http_url(url):
-        _error(errors, _('Step #%s (Webhook): url is required and must start with http:// or https://.') % idx)
+
+    try:
+        validate_webhook_url(url)
+    except ValidationError as exc:
+        _error(errors, _('Step #%s (Webhook): %s') % (idx, exc))
 
     # method
     method = (params.get('method') or 'POST').upper()

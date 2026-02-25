@@ -1,7 +1,7 @@
 """Python steps file for R_103."""
 
 from behave import given, runner, then, when
-from pki.models import IssuingCaModel, DomainModel
+from pki.models import CaModel, DomainModel
 from bs4 import BeautifulSoup
 
 
@@ -14,7 +14,7 @@ def step_domain_exists(context: runner.Context, domain_name: str, ca_name: str) 
         domain_name: The name of the domain.
         ca_name: The name of the issuing ca.
     """
-    issuing_ca = IssuingCaModel.objects.get(unique_name=ca_name)
+    issuing_ca = CaModel.objects.get(unique_name=ca_name)
     assert issuing_ca.unique_name == ca_name, f"Issuing CA with name {ca_name} not found"
     
     domain, created = DomainModel.objects.get_or_create(unique_name=domain_name)
@@ -35,7 +35,7 @@ def step_fill_domain_details(context: runner.Context, name: str, ca_name: str) -
         name (str): The name of the domain.
         ca_name (str): The name of the issuing ca.
     """
-    ca = IssuingCaModel.objects.get(unique_name=ca_name)
+    ca = CaModel.objects.get(unique_name=ca_name)
 
     assert ca.unique_name == ca_name, f"Issuing CA {ca_name} doesn't exist."
     # Prepare POST data

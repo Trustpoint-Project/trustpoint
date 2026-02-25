@@ -5,7 +5,6 @@ from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.hashes import SHA256
 from django.db import IntegrityError
-from django.utils import timezone
 from trustpoint_core.serializer import CredentialSerializer, CertificateSerializer, PrivateKeySerializer
 
 from management.models import KeyStorageConfig

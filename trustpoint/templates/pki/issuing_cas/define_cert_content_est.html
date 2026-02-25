@@ -1,0 +1,74 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+<div class="card">
+
+    <div class="card-header">
+        <div class="">
+            <h1>{% trans 'Define Certificate Content for' %} "{{ issuing_ca.unique_name }}"</h1>
+            <p class="text-muted">{% trans 'Using profile:' %} {{ cert_profile.display_name|default:cert_profile.unique_name }}</p>
+        </div>
+    </div>
+    <form method="post">
+        <div class="card-body">
+            <div class="tp-card-centered-content">
+                {% csrf_token %}
+                {% for error in form.non_field_errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+                {% if form.fields %}
+                    <h2>{% trans 'Subject' %}</h2>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list">
+                        {% for field in form %}
+                            {% if field.name in 'common_name,organization_name,organizational_unit_name,country_name,state_or_province_name,locality_name,email_address' %}
+                                <div>
+                                    <div>{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</div>
+                                    <div>{{ field }}</div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    <h2>{% trans 'Subject Alternative Name' %}</h2>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list">
+                        {% for field in form %}
+                            {% if field.name in 'dns_names,ip_addresses,rfc822_names,uris' %}
+                                <div>
+                                    <div>{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</div>
+                                    <div>{{ field }}</div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    <h2>{% trans 'Validity' %}</h2>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list">
+                        {% for field in form %}
+                            {% if field.name in 'days,hours,minutes,seconds' %}
+                                <div>
+                                    <div>{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</div>
+                                    <div>{{ field }}</div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p>{% trans 'No fields available for this profile.' %}</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between">
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url 'pki:issuing_cas' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+            </div>
+            <div class="tp-card-btn-footer m-1">
+                <button type="submit" class="btn btn-primary">{% trans 'Continue to Request Certificate' %}</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+{% endblock content %}

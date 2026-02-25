@@ -18,18 +18,27 @@
   </div>
 
   {# --- Footer actions from main --- #}
-  <div class="card-footer d-flex justify-content-between tp-sticky-footer">
-    <div class="tp-card-btn-footer m-1">
-      <button type="button" class="btn btn-danger tp-table-select-btn me-2"
-              data-tp-url="{{ device_revoke_url }}">{% trans 'Revoke selected' %}</button>
-      <button type="button" class="btn btn-danger tp-table-select-btn me-2"
-              data-tp-url="{{ device_delete_url }}">{% trans 'Delete selected' %}</button>
-    </div>
-    <div class="m-1">
+  <div class="card-footer d-flex flex-column flex-md-row justify-content-between tp-sticky-footer">
+   <div class="m-1 d-flex flex-wrap gap-2">
+    <button type="button" class="btn btn-danger tp-table-select-btn me-2"
+            data-tp-url="{{ device_revoke_url }}">
+      {% trans 'Revoke selected' %}
+    </button>
+
+    <button type="button" class="btn btn-danger tp-table-select-btn me-2"
+            data-tp-url="{{ device_delete_url }}">
+      {% trans 'Delete selected' %}
+    </button>
+  </div>
+
+  <div class="m-1 d-flex flex-wrap justify-content-md-end gap-2">
+      <a class="btn btn-primary" href="{% url new_onboarding_url %}">
+      {% trans "Add Onboarding" %}
+    </a>
       <a class="btn btn-primary" href="{% url create_url %}">
-        {% trans "Create new Device" %}
-      </a>
-    </div>
+      {% trans "Create New Device" %}
+    </a>
+
   </div>
 </div>
 

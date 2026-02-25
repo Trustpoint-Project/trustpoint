@@ -1,19 +1,16 @@
 """Comprehensive tests for demo data and restore views."""
 
-import subprocess
 from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.messages import get_messages
 from django.test import RequestFactory
 
-from pki.models import CredentialModel, IssuingCaModel
+from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard import SetupWizardState
-from setup_wizard.forms import EmptyForm
 from setup_wizard.views import (
-    SetupWizardDemoDataView,
-    BackupRestoreView
+    SetupWizardDemoDataView
 )
 
 
@@ -128,6 +125,7 @@ class TestTrustStoreDownload:
         
         mock_credential = Mock(spec=CredentialModel)
         mock_credential.certificate = mock_certificate
+        mock_credential.certificate_or_error = mock_certificate
         
         mock_active = Mock(spec=ActiveTrustpointTlsServerCredentialModel)
         mock_active.credential = mock_credential
@@ -164,6 +162,7 @@ class TestTrustStoreDownload:
         
         mock_credential = Mock(spec=CredentialModel)
         mock_credential.certificate = mock_certificate
+        mock_credential.certificate_or_error = mock_certificate
         
         mock_active = Mock(spec=ActiveTrustpointTlsServerCredentialModel)
         mock_active.credential = mock_credential
@@ -197,6 +196,7 @@ class TestTrustStoreDownload:
         
         mock_credential = Mock(spec=CredentialModel)
         mock_credential.certificate = mock_certificate
+        mock_credential.certificate_or_error = mock_certificate
         
         mock_active = Mock(spec=ActiveTrustpointTlsServerCredentialModel)
         mock_active.credential = mock_credential

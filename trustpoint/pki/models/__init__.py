@@ -18,7 +18,8 @@ from .extension import (
     SubjectAlternativeNameExtension,
 )
 from .certificate import CertificateModel, RevokedCertificateModel
-from .issuing_ca import IssuingCaModel
+from .crl import CrlModel
+from .ca import CaModel
 from .credential import (CredentialAlreadyExistsError,
                          CredentialModel,
                          CertificateChainOrderModel,
@@ -31,16 +32,17 @@ from .truststore import TruststoreModel, TruststoreOrderModel
 
 __all__ = [
     'AttributeTypeAndValue',
+    'CaModel',
     'CertificateExtension',
     'CertificateModel',
     'CertificateProfileModel',
     'CredentialAlreadyExistsError',
     'CredentialModel',
+    'CrlModel',
     'DevIdRegistration',
     'DomainAllowedCertificateProfileModel',
     'DomainModel',
     'GeneralNameIpAddress',
-    'IssuingCaModel',
     'OwnerCredentialModel',
     'PKCS11Key',
     'RevokedCertificateModel',

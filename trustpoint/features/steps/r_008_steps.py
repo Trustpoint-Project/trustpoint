@@ -3,18 +3,13 @@
 from behave import runner, then, when, given
 from bs4 import BeautifulSoup
 import os
-from pki.forms import (
-    IssuingCaAddFileImportPkcs12Form,
-)
-from django.core.files.uploadedfile import SimpleUploadedFile
+
 from trustpoint_core.serializer import (
-    CertificateCollectionSerializer,
     CertificateSerializer,
-    CredentialSerializer,
     PrivateKeySerializer,
 )
 from cryptography import x509
-from pki.models import CertificateModel, IssuingCaModel
+from pki.models import CertificateModel, CaModel
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -180,7 +175,7 @@ def step_when_pkcs12_file_import(context: runner.Context, name: str) -> None:  #
         values = [td.get_text(strip=True) for td in tds]
 
         assert "test_CA" in values, f"Issuing CA test doesn't exist"
-        context.issuing_ca = IssuingCaModel.objects.get(unique_name=name)
+        context.issuing_ca = CaModel.objects.get(unique_name=name)
 
 @when('the admin uploads a broken PKCS12 issuing CA file')
 def step_when_pkcs12_file_import(context: runner.Context) -> None:  # noqa: ARG001
@@ -292,7 +287,7 @@ def step_given_ca_no_cert(context: runner.Context, name: str) -> None:  # noqa: 
     Args:
         context (runner.Context): Behave context.
     """
-    ca_subject_public_bytes = context.issuing_ca.credential.certificate.subject_public_bytes
+    ca_subject_public_bytes = context.issuing_ca.credential.certificate_or_error.subject_public_bytes
     queryset = CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude (subject_public_bytes=ca_subject_public_bytes)
     assert not queryset.exists(), f"Issuing CA {name} has associated certificates"
 

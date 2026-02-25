@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 
 from pki.models.domain import DomainModel
-from pki.models.issuing_ca import IssuingCaModel
+from pki.models import CaModel
 from management.models import KeyStorageConfig
 from pki.util.x509 import CertificateGenerator
 
@@ -49,14 +49,14 @@ def ec_private_key() -> ec.EllipticCurvePrivateKey:
 
 CA_COMMON_NAME = 'Root CA'
 UNIQUE_NAME = CA_COMMON_NAME.replace(' ', '_').lower()
-CA_TYPE = IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
+CA_TYPE = CaModel.CaTypeChoice.LOCAL_UNPROTECTED
 
 DOMAIN_UNIQUE_NAME = 'domain_name'
 
 
 @pytest.fixture
 def issuing_ca_instance() -> dict[str, Any]:
-    """Fixture for a testing IssuingCaModel instance."""
+    """Fixture for a testing CaModel instance."""
     # Ensure crypto storage config exists for encrypted fields
     KeyStorageConfig.get_or_create_default()
     
@@ -74,7 +74,7 @@ def domain_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
     priv_key = issuing_ca_instance.get('priv_key')
     cert = issuing_ca_instance.get('cert')
     if (
-        not isinstance(issuing_ca, IssuingCaModel)
+        not isinstance(issuing_ca, CaModel)
         or not isinstance(cert, x509.Certificate)
         or not isinstance(priv_key, RSAPrivateKey)
     ):

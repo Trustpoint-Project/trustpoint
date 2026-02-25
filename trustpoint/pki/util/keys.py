@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, get_args
+from typing import TYPE_CHECKING, cast, get_args
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
     from trustpoint_core.crypto_types import PrivateKey
 
+    from pki.models.credential import CredentialModel
     from pki.models.domain import DomainModel
 
 
@@ -64,7 +65,7 @@ class KeyGenerator:
         if not domain.issuing_ca:
             exc_msg = 'Domain does not have an issuing CA associated.'
             raise ValueError(exc_msg)
-        issuing_ca_cert = domain.issuing_ca.credential.get_certificate_serializer().as_crypto()
+        issuing_ca_cert = cast('CredentialModel', domain.issuing_ca.credential).get_certificate_serializer().as_crypto()
         return PrivateKeySerializer(KeyPairGenerator.generate_key_pair_for_certificate(issuing_ca_cert))
 
 
@@ -84,10 +85,12 @@ class CryptographyUtils:
         if isinstance(private_key, rsa.RSAPrivateKey):
             return hashes.SHA256()
         if isinstance(private_key, ec.EllipticCurvePrivateKey):
-            if isinstance(private_key.curve, ec.SECP256R1):
+            if isinstance(private_key.curve, (ec.SECP192R1, ec.SECP224R1, ec.SECP256R1, ec.SECP256K1)):
                 return hashes.SHA256()
             if isinstance(private_key.curve, ec.SECP384R1):
                 return hashes.SHA384()
+            if isinstance(private_key.curve, ec.SECP521R1):
+                return hashes.SHA512()
 
         err_msg = 'A suitable hash algorithm is not yet specified for the given private key type.'
         raise ValueError(err_msg)

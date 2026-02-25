@@ -1,7 +1,6 @@
 """Comprehensive tests for SetupWizardHsmSetupView dispatch and form handling."""
 
-import subprocess
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.messages import get_messages

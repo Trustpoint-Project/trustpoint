@@ -105,9 +105,8 @@
 
         <div>
             <table class="table">
-                <thead>
+              <thead>
                 <tr>
-                    <!-- <th id="checkbox-column"><input type="checkbox"/></th> -->
                     <th>
                         <a href="#" onclick="updateQueryParam(event, 'sort', 'notification_type')">
                             {% trans 'Type' %}
@@ -126,7 +125,7 @@
                     </th>
                     <th>{% trans 'Actions' %}</th>
                 </tr>
-                </thead>
+              </thead>
                 <tbody>
                 {% for notification in notifications %}
                     <tr>

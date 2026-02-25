@@ -107,7 +107,6 @@ def test_pre_delete_issued_credential(credential_instance: dict[str, Any], devic
     """Test the `pre_delete` method for IssuedCredentialModel."""
     device = device_instance['device']
     credential = credential_instance['credential']
-    credential.save()
 
     issued_credential = IssuedCredentialModel.objects.create(
         common_name='Credential To Delete',

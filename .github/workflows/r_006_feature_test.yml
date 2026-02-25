@@ -10,3 +10,5 @@ on:
 jobs:
   backup-and-restore:
     uses: ./.github/workflows/backup-restore.yml
+    permissions:
+      contents: read

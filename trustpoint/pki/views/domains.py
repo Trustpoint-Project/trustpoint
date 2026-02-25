@@ -16,16 +16,19 @@ from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import viewsets
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import (
+    CaModel,
     CertificateModel,
     CertificateProfileModel,
     DevIdRegistration,
     DomainModel,
-    IssuingCaModel,
 )
 from pki.models.truststore import TruststoreModel
+from pki.serializer.domain import DomainSerializer
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -67,13 +70,19 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
     ignore_url = reverse_lazy('pki:domains')
 
     def get_form(self, _form_class: Any = None) -> Any:
-        """Override get_form to filter out autogen root CAs."""
+        """Override get_form to filter out keyless CAs and autogen root CAs.
+
+        Only issuing CAs (those with credentials that can sign certificates) should be assignable to domains.
+        """
         form = super().get_form()
-        # Filter out autogen root CAs
-        form.fields['issuing_ca'].queryset = IssuingCaModel.objects.exclude(  # type: ignore[attr-defined]
-            issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
-        ).filter(is_active=True)
-        # Remove empty "---------" choice
+        form.fields['issuing_ca'].queryset = CaModel.objects.filter(  # type: ignore[attr-defined]
+            is_active=True
+        ).exclude(
+            ca_type__in=[
+                CaModel.CaTypeChoice.AUTOGEN_ROOT,
+                CaModel.CaTypeChoice.KEYLESS,
+            ]
+        )
         form.fields['issuing_ca'].empty_label = None  # type: ignore[attr-defined]
         del form.fields['is_active']
         return form
@@ -193,6 +202,14 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
     template_name = 'pki/domains/confirm_delete.html'
     context_object_name = 'domains'
 
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
+        queryset = self.get_queryset()
+        if not queryset.exists():
+            messages.error(request, _('No domains selected for deletion.'))
+            return HttpResponseRedirect(self.success_url)
+        return super().get(request, *args, **kwargs)
+
     def form_valid(self, form: Form) -> HttpResponse:
         """Attempt to delete domains if the form is valid."""
         queryset = self.get_queryset()
@@ -225,8 +242,11 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data."""
         context = super().get_context_data(**kwargs)
-        context['domain'] = self.get_domain()
+        domain = self.get_domain()
+        context['domain'] =domain
         truststore_id = self.kwargs.get('truststore_id')
+        if not truststore_id:
+            truststore_id = self.request.GET.get('truststore_id')
         if truststore_id:
             context['truststore'] = self.get_truststore(truststore_id)
         else:
@@ -238,8 +258,11 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         """Initialize the form with default values."""
         initial = super().get_initial()
         domain = self.get_domain()
-        initial['domain'] = domain
+        if domain:
+            initial['domain'] = domain
         truststore_id = self.kwargs.get('truststore_id')
+        if not truststore_id:
+            truststore_id = self.request.GET.get('truststore_id')
         if truststore_id:
             initial['truststore'] = self.get_truststore(truststore_id)
         else:
@@ -252,26 +275,40 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
         form_kwargs['initial'] = self.get_initial()
         return form_kwargs
 
-    def get_domain(self) -> DomainModel:
-        """Fetch the domain based on the primary key passed in the URL."""
-        try:
-            pk = self.kwargs.get('pk')
-            return DomainModel.objects.get(pk=pk)
-        except DomainModel.DoesNotExist as e:
-            exc_msg = 'This Domain does not exist.'
-            raise Http404(exc_msg) from e
+    def get_domain(self) -> DomainModel | None:
+        """Get domain from URL pk (GET) or form data (POST)."""
+        pk = self.kwargs.get('pk')
+        if pk:
+            try:
+                return DomainModel.objects.get(pk=pk)
+            except DomainModel.DoesNotExist as err:
+                msg = 'Domain does not exist.'
+                raise Http404(msg) from err
+        if self.request.method == 'POST':
+            domain_id = self.request.POST.get('domain')
+            if domain_id:
+                try:
+                    return DomainModel.objects.get(pk=domain_id)
+                except (DomainModel.DoesNotExist, ValueError) as err:
+                    msg = 'Domain does not exist.'
+                    raise Http404(msg) from err
+
+        return None
+
+
 
     def get_truststore(self, truststore_id: int) -> TruststoreModel:
-        """Fetch the domain based on the primary key passed in the URL."""
+        """Fetch the truststore based on the primary key passed in the URL."""
         try:
             return TruststoreModel.objects.get(pk=truststore_id)
         except TruststoreModel.DoesNotExist as e:
-            exc_msg = 'This Domain does not exist.'
+            exc_msg = 'This Truststore does not exist.'
             raise Http404(exc_msg) from e
 
     def form_valid(self, form: DevIdRegistrationForm) -> HttpResponse:
         """Handle the case where the form is valid."""
         dev_id_registration = form.save()
+        self.object = dev_id_registration
         messages.success(
             self.request,
             _('Successfully created DevID registration pattern {name}.').format(name=dev_id_registration.unique_name),
@@ -280,8 +317,10 @@ class DevIdRegistrationCreateView(DomainContextMixin, FormView[DevIdRegistration
 
     def get_success_url(self) -> str:
         """Return the URL to redirect to upon successful form submission."""
-        domain = self.get_domain()
-        return cast('str', reverse_lazy('pki:domains-config', kwargs={'pk': domain.id}))
+        if self.kwargs.get('pk'):
+            domain = get_object_or_404(DomainModel, pk=self.kwargs['pk'])
+            return cast('str', reverse_lazy('pki:domains-config', kwargs={'pk': domain.id}))
+        return cast('str', reverse_lazy('devices:devices'))
 
 
 class DevIdRegistrationDeleteView(DomainContextMixin, DeleteView[DevIdRegistration, Any]):
@@ -307,7 +346,12 @@ class DevIdMethodSelectView(DomainContextMixin, FormView[DevIdAddMethodSelectFor
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data."""
         context = super().get_context_data(**kwargs)
-        context['domain'] = get_object_or_404(DomainModel, id=self.kwargs.get('pk'))
+        pk = self.kwargs.get('pk')
+
+        if pk:
+            context['domain'] = DomainModel.objects.get(pk=pk)
+        else:
+            context['domain'] = None
         return context
 
     def form_valid(self, form: DevIdAddMethodSelectForm) -> HttpResponseRedirect:
@@ -340,11 +384,12 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
         if domain.issuing_ca is None:
             msg = 'Domain has no issuing CA configured.'
             raise Http404(msg)
-        # PyCharm TypeChecker issue - this passes mypy
-        # noinspection PyTypeChecker
+        if domain.issuing_ca.credential is None:
+            msg = 'Issuing CA has no credential configured.'
+            raise Http404(msg)
         # TODO(AlexHx8472): This must be limited to the actual domain.  # noqa: FIX002
         return CertificateModel.objects.filter(
-            issuer_public_bytes=domain.issuing_ca.credential.certificate.subject_public_bytes
+            issuer_public_bytes=domain.issuing_ca.credential.certificate_or_error.subject_public_bytes
         )
 
     def get_domain(self) -> DomainModel:
@@ -372,4 +417,24 @@ class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdR
         context['pk'] = self.object.pk
 
         return context
+
+@extend_schema(tags=['Domain'])
+@extend_schema_view(
+    list=extend_schema(description='Retrieve a list of all domains.'),
+    retrieve=extend_schema(description='Retrieve a single domain by id.'),
+    create=extend_schema(description='Create a domain.'),
+    update=extend_schema(description='Update an existing domain.'),
+    partial_update=extend_schema(description='Partially update an existing domain.'),
+    destroy=extend_schema(description='Delete a domain.')
+)
+class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
+    """ViewSet for managing Domain instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+
+    queryset = DomainModel.objects.all()
+    serializer_class = DomainSerializer
+
 

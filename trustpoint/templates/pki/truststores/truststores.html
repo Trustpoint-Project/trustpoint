@@ -7,6 +7,9 @@
         <div class="card-header">
             <h1>{% trans 'Truststores' %}</h1>
         </div>
+
+        {% include 'pki/truststores/table_filter.html' with table_url='pki:truststores' %}
+
         <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%;">
             <table class="table">
                 <thead>

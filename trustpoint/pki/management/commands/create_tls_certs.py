@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import datetime
 import ipaddress
-import subprocess
 from pathlib import Path
 
 from cryptography import x509
@@ -25,10 +24,9 @@ class Command(BaseCommand):
     def handle(self, *_args: tuple[str], **_kwargs: dict[str, str]) -> None:
         """Executes the command."""
         one_day = datetime.timedelta(1, 0, 0)
-        ipv4_addresses = subprocess.check_output(['hostname', '-I']).decode().strip()  # noqa: S603, S607
-        # ipv4_addresses = '10.10.0.5 10.10.4.89'  # noqa: ERA001
-        ipv4_addresses_list = ipv4_addresses.split(' ')
-        ipv4_addresses_list.append('127.0.0.1')
+        
+        ipv4_addresses_list = ['127.0.0.1', '192.168.88.10']
+        
         basic_constraints_extension = x509.BasicConstraints(ca=False, path_length=None)
         key_usage_extension = x509.KeyUsage(
             digital_signature=True,

@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import abc
-from collections import Counter
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from django.http import Http404
 from django.urls import reverse
@@ -16,14 +15,15 @@ from django.utils.translation import gettext_lazy as _
 
 from help_pages.commands import KeyGenCommandBuilder
 from help_pages.help_section import HelpRow, HelpSection, ValueRenderType
+from pki.models.domain import DomainAllowedCertificateProfileModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 
 if TYPE_CHECKING:
     from trustpoint_core import oid
 
     from devices.models import DeviceModel
-    from pki.models import DevIdRegistration
-    from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
+    from pki.models import CredentialModel, DevIdRegistration
+    from pki.models.domain import DomainModel
 
 
 # --------------------------------------------------- Base Classes ----------------------------------------------------
@@ -108,27 +108,14 @@ def build_profile_select_section(app_cert_profiles: list[DomainAllowedCertificat
     Returns:
         The profile select section.
     """
-    display_names = [
-        profile.certificate_profile.display_name
-        for profile in app_cert_profiles
-        if profile.certificate_profile.display_name
-    ]
-    display_name_counts = Counter(display_names)
     options = mark_safe('')
-    for i, profile in enumerate(app_cert_profiles):
-        name = profile.alias or profile.certificate_profile.unique_name
-        display_name = profile.certificate_profile.display_name
-
-        if display_name and display_name_counts.get(display_name, 0) > 1:
-            title = f'{display_name} - {profile.certificate_profile.unique_name}'
-        else:
-            title = display_name or name
-
+    profile_list = DomainAllowedCertificateProfileModel.get_list_of_display_names(app_cert_profiles)
+    for i, (_profile_id, display_name, unique_name) in enumerate(profile_list):
         options += format_html(
             '<option value="{}"{}>{}</option>',
-            name,
+            unique_name,
             ' selected' if i == 0 else '',
-            title,
+            display_name,
         )
 
     if not options:
@@ -194,7 +181,7 @@ def build_cmp_signer_trust_store_section(domain: DomainModel) -> HelpSection:
     if not issuing_ca:
         err_msg = 'Issuing CA not configured'
         raise ValueError(err_msg)
-    root_ca_model = issuing_ca.credential.get_last_in_chain()
+    root_ca_model = cast('CredentialModel', issuing_ca.credential).get_last_in_chain()
     if not root_ca_model:
         err_msg = 'No Root CA certificate found.'
         raise ValueError(err_msg)

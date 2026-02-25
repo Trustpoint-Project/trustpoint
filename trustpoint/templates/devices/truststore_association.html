@@ -1,0 +1,63 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+
+    <form method="POST" autocomplete="off" id="associationForm">
+        {% csrf_token %}
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h1>{% trans 'Associate Trust Store' %}</h1>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="tp-card-centered-content">
+                    <h2>{% trans 'Trust Store Association' %}</h2>
+                    <p>{% trans 'Select a trust store to associate with this device\'s onboarding configuration.' %}</p>
+                    <hr>
+                    {{ form|crispy }}
+                    <button type="button" class="btn btn-secondary ms-2" data-bs-toggle="modal" data-bs-target="#truststoreImportModal">
+                        {% trans 'Import new Truststore' %}
+                    </button>
+                </div>
+
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'devices:opc_ua_gds_push_certificate_lifecycle_management' pk=device.pk %}" class="btn btn-secondary">{% trans "Skip" %}</a>
+                    <button type="submit" class="btn btn-primary">{% trans "Associate Trust Store" %}</button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- Truststore Import Modal -->
+    <div class="modal fade" id="truststoreImportModal" tabindex="-1" aria-labelledby="truststoreImportModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form method="POST" enctype="multipart/form-data" id="importForm">
+                    {% csrf_token %}
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="truststoreImportModalLabel">{% trans 'Import Truststore' %}</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="tp-card-centered-content">
+                            <h2>{% trans 'File Import' %}</h2>
+                            <hr>
+                            {{ import_form|crispy }}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{% trans 'Cancel' %}</button>
+                        <button type="submit" class="btn btn-primary">{% trans 'Add new Truststore' %}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+{% endblock content %}
