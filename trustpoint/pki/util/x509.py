@@ -510,7 +510,6 @@ class CertificateVerifier:
         if isinstance(public_key, ec.EllipticCurvePublicKey):
             curve_name = public_key.curve.name
             for not_permitted_curve_oid in security_config.not_permitted_ecc_curve_oids:
-                # Resolve the OID to a NamedCurve to get its ossl_curve_name for comparison
                 try:
                     named_curve = NamedCurve.from_dotted_string(not_permitted_curve_oid)
                 except (KeyError, StopIteration):

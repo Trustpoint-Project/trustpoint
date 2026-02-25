@@ -151,15 +151,7 @@ class IssuingCaImportMixin:
         self, unique_name: str | None, cert: x509.Certificate, credential_serializer: CredentialSerializer,
         chain: list[x509.Certificate] | None = None,
     ) -> CaModel:
-        """Finalizes the creation of the Issuing CA after validation.
-
-        Creates the CA, attaches a :class:`NoOnboardingConfigModel` with all available
-        no-onboarding PKI protocols enabled, and checks the created CA against the
-        current security configuration before persisting the association.
-
-        Returns:
-            The newly created :class:`CaModel` instance.
-        """
+        """Finalizes the creation of the Issuing CA after validation."""
         if not unique_name:
             unique_name = get_certificate_name(cert)
 

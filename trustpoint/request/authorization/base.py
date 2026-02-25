@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, ClassVar
+from typing import ClassVar
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
@@ -10,12 +10,10 @@ from cryptography.x509.base import CertificateBuilder
 from trustpoint_core.oid import HashAlgorithm, NamedCurve
 
 from aoki.views import AokiServiceMixin
+from management.models import SecurityConfig
 from request.profile_validator import ProfileValidator
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin
-
-if TYPE_CHECKING:
-    from management.models import SecurityConfig
 
 _CertRequest = x509.CertificateSigningRequest | CertificateBuilder
 
@@ -199,8 +197,6 @@ class SecurityConfigAuthorization(AuthorizationComponent, LoggerMixin):
             if isinstance(context.cert_requested, (x509.CertificateSigningRequest, CertificateBuilder))
             else None
         )
-
-        from management.models import SecurityConfig  # noqa: PLC0415
 
         try:
             cfg: SecurityConfig = SecurityConfig.objects.get()

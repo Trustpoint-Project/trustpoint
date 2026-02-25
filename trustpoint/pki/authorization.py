@@ -1,17 +1,4 @@
-"""Security-policy authorization checks for PKI objects (CAs and certificates).
-
-All checks are expressed as *strategies* that follow the same ``check(subject, cfg)``
-interface used in :mod:`onboarding.authorization`.  A single convenience class
-(:class:`PkiSecurityAuthorization`) runs all checks at once against the live
-:class:`~management.models.SecurityConfig` singleton.
-
-Checks implemented:
-* :class:`_AllowSelfSignedCaStrategy`         - rejects self-signed CAs when the policy forbids them.
-* :class:`_MaxCrlValidityStrategy`             - rejects CRL validity settings that exceed the policy limit.
-* :class:`_RsaMinimumKeySizeStrategy`          - rejects RSA keys below the policy minimum (or all RSA if ``None``).
-* :class:`_NotPermittedEccCurvesStrategy`      - rejects ECC curves listed in the policy block-list.
-* :class:`_NotPermittedSignatureAlgorithmsStrategy` - rejects signature algorithms whose hash is block-listed.
-"""
+"""Security-policy authorization checks for PKI objects (CAs and certificates)."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -19,17 +6,12 @@ from typing import TYPE_CHECKING, Protocol
 
 from trustpoint_core.oid import AlgorithmIdentifier, PublicKeyAlgorithmOid
 
+from management.models import SecurityConfig
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
-    from management.models import SecurityConfig
     from pki.models.ca import CaModel
     from pki.models.certificate import CertificateModel
-
-
-# ---------------------------------------------------------------------------
-# Structural protocol types
-# ---------------------------------------------------------------------------
 
 class HasCaModel(Protocol):
     """Structural type satisfied by :class:`~pki.models.ca.CaModel`.
@@ -41,17 +23,10 @@ class HasCaModel(Protocol):
     @property
     def ca_certificate_model(self) -> CertificateModel | None:
         """Return the :class:`~pki.models.certificate.CertificateModel` for this CA, or ``None``."""
-        ...
 
     @property
     def crl_validity_hours(self) -> float:
         """Return the configured CRL validity in hours."""
-        ...
-
-
-# ---------------------------------------------------------------------------
-# Abstract strategy base
-# ---------------------------------------------------------------------------
 
 class PkiCheckStrategy(ABC):
     """Abstract base for a single PKI security-policy check."""
@@ -67,11 +42,6 @@ class PkiCheckStrategy(ABC):
         Raises:
             ValueError: If the CA violates the policy.
         """
-
-
-# ---------------------------------------------------------------------------
-# Concrete strategies
-# ---------------------------------------------------------------------------
 
 class _AllowSelfSignedCaStrategy(PkiCheckStrategy, LoggerMixin):
     """Rejects self-signed CAs when :attr:`SecurityConfig.allow_self_signed_ca` is ``False``."""
@@ -140,10 +110,7 @@ class _MaxCrlValidityStrategy(PkiCheckStrategy, LoggerMixin):
 
 
 class _RsaMinimumKeySizeStrategy(PkiCheckStrategy, LoggerMixin):
-    """Rejects CA certificates that use an RSA key below :attr:`SecurityConfig.rsa_minimum_key_size`.
-
-    When ``rsa_minimum_key_size`` is ``None`` the policy disallows RSA entirely.
-    """
+    """Rejects CA certificates that use an RSA key below :attr:`SecurityConfig.rsa_minimum_key_size`."""
 
     def check(self, ca: CaModel, cfg: SecurityConfig) -> None:
         """Check the CA certificate's RSA key size against the policy minimum."""
@@ -242,15 +209,7 @@ class _NotPermittedEccCurvesStrategy(PkiCheckStrategy, LoggerMixin):
 
 
 class _NotPermittedSignatureAlgorithmsStrategy(PkiCheckStrategy, LoggerMixin):
-    """Rejects CA certificates whose signature hash algorithm appears in the policy block-list.
-
-    :attr:`SecurityConfig.not_permitted_signature_algorithm_oids` stores
-    :class:`~trustpoint_core.oid.HashAlgorithm` OIDs.  The CA certificate's
-    ``signature_algorithm_oid`` is an :class:`~trustpoint_core.oid.AlgorithmIdentifier`
-    OID (hash + key algorithm combined).  This strategy resolves the
-    ``AlgorithmIdentifier`` to its constituent ``HashAlgorithm`` and then
-    compares the hash OID against the block-list.
-    """
+    """Rejects CA certificates whose signature hash algorithm appears in the policy block-list."""
 
     def check(self, ca: CaModel, cfg: SecurityConfig) -> None:
         """Check the CA certificate's signature hash algorithm against the policy block-list."""
@@ -305,34 +264,11 @@ class _NotPermittedSignatureAlgorithmsStrategy(PkiCheckStrategy, LoggerMixin):
             hash_algo.name,
         )
 
-
-# ---------------------------------------------------------------------------
-# Public authorization facade
-# ---------------------------------------------------------------------------
-
 class PkiSecurityAuthorization(LoggerMixin):
-    """Runs all PKI security-policy checks against the active :class:`~management.models.SecurityConfig`.
-
-    Checks performed (in order):
-
-    1. :class:`_AllowSelfSignedCaStrategy`              - self-signed certificate allowed?
-    2. :class:`_MaxCrlValidityStrategy`                  - CRL validity within the policy limit?
-    3. :class:`_RsaMinimumKeySizeStrategy`               - RSA key size meets the minimum?
-    4. :class:`_NotPermittedEccCurvesStrategy`           - ECC curve not block-listed?
-    5. :class:`_NotPermittedSignatureAlgorithmsStrategy` - signature hash not block-listed?
-
-    Usage::
-
-        PkiSecurityAuthorization().check(issuing_ca)
-    """
+    """Runs all PKI security-policy checks against the active :class:`~management.models.SecurityConfig`."""
 
     def __init__(self, strategies: list[PkiCheckStrategy] | None = None) -> None:
-        """Initialise with the default strategy set, or a custom list for testing.
-
-        Args:
-            strategies: Optional override list of :class:`PkiCheckStrategy` instances.
-                        Defaults to all five built-in strategies.
-        """
+        """Initialise with the default strategy set, or a custom list for testing."""
         self._strategies: list[PkiCheckStrategy] = strategies or [
             _AllowSelfSignedCaStrategy(),
             _MaxCrlValidityStrategy(),
@@ -342,20 +278,7 @@ class PkiSecurityAuthorization(LoggerMixin):
         ]
 
     def check(self, ca: CaModel) -> None:
-        """Run all PKI policy checks against *ca*.
-
-        Loads the active :class:`~management.models.SecurityConfig` once and
-        passes it to every strategy.  If no config exists the check is skipped
-        with a warning.
-
-        Args:
-            ca: The :class:`~pki.models.ca.CaModel` to validate.
-
-        Raises:
-            ValueError: On the first strategy that finds a policy violation.
-        """
-        from management.models import SecurityConfig  # noqa: PLC0415
-
+        """Run all PKI policy checks against *ca*."""
         try:
             cfg: SecurityConfig = SecurityConfig.objects.get()
         except SecurityConfig.DoesNotExist:

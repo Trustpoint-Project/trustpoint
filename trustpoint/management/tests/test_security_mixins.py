@@ -120,7 +120,6 @@ class SecurityLevelMixinRedirectTest(TestCase):
             def get(self, request):
                 return HttpResponse('Allowed')
 
-        # Set to BROWNFIELD where AutoGenPkiFeature is allowed
         self.security_config.security_mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
         self.security_config.save()
 
@@ -218,7 +217,6 @@ class SecurityLevelMixinRedirectTest(TestCase):
             def get(self, request):
                 return HttpResponse('Allowed')
 
-        # Set to BROWNFIELD where AutoGenPkiFeature is allowed
         self.security_config.security_mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
         self.security_config.save()
 
@@ -243,7 +241,6 @@ class SecurityLevelMixinRedirectTest(TestCase):
             def post(self, request):
                 return HttpResponse('Posted')
 
-        # Set to BROWNFIELD where AutoGenPkiFeature is allowed
         self.security_config.security_mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
         self.security_config.save()
 
@@ -268,7 +265,6 @@ class SecurityLevelMixinRedirectTest(TestCase):
             def get(self, request, pk, slug=None):
                 return HttpResponse(f'pk={pk}, slug={slug}')
 
-        # Set to BROWNFIELD where AutoGenPkiFeature is allowed
         self.security_config.security_mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
         self.security_config.save()
 
