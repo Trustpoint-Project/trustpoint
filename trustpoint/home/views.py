@@ -282,10 +282,6 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         if expiring_device_counts:
             dashboard_data['expiring_device_counts'] = expiring_device_counts
 
-        expired_device_counts = self.get_expired_device_counts()
-        if expired_device_counts:
-            dashboard_data['expired_device_counts'] = expired_device_counts
-
         expiring_issuing_ca_counts = self.get_expiring_issuing_ca_counts()
         if expiring_issuing_ca_counts:
             dashboard_data['expiring_issuing_ca_counts'] = expiring_issuing_ca_counts
@@ -373,12 +369,13 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         """
         device_os_counts = {str(status): 0 for _, status in OnboardingStatus.choices}
         try:
+            device_counts_exipring = self.get_expiring_device_counts()
+            device_counts_exipred = self.get_expired_device_counts()
             device_os_qr = (
                 DeviceModel.objects.filter(created_at__gt=start_date, onboarding_config__isnull=False)
                 .values('onboarding_config__onboarding_status')
                 .annotate(count=Count('onboarding_config__onboarding_status'))
             )
-
             protocol_mapping = {key: str(value) for key, value in OnboardingStatus.choices}
             device_os_counts = {
                 protocol_mapping[item['onboarding_config__onboarding_status']]:
@@ -387,6 +384,8 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
             for protocol in protocol_mapping.values():
                 device_os_counts.setdefault(protocol, 0)
+            device_os_counts.update(device_counts_exipring)
+            device_os_counts.update(device_counts_exipred)
             device_os_counts['total'] = sum(device_os_counts.values())
         except Exception as exception:
             err_msg = f'Error occurred in device count by onboarding protocol query: {exception}'
@@ -479,6 +478,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         today = timezone.make_aware(datetime.combine(timezone.now().date(), datetime.min.time()))
         issuing_ca_counts = {}
         try:
+            expiring_issuing_ca_counts = self.get_expiring_issuing_ca_counts()
             issuing_ca_counts = IssuingCaModel.objects.aggregate(
                 total=Count('id'),
                 active=Count(
@@ -494,6 +494,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                     )
                 ),
             )
+            issuing_ca_counts.update(expiring_issuing_ca_counts)
         except Exception as exception:
             err_msg = f'Error occurred in issuing ca count query: {exception}'
             self.logger.exception(err_msg)
@@ -732,31 +733,6 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         return expiring_device_counts
 
-    def get_expired_device_counts(self) -> dict[str, Any]:
-        """Fetch expired device counts from database.
-
-        Returns:
-            It returns counts of devices with expired certificates.
-        """
-        now = timezone.now()
-        last_7_days = now - timedelta(days=7)
-        expired_device_counts = {}
-        try:
-            expired_device_counts = {
-                'total_expired': DeviceModel.objects.filter(
-                    issued_credentials__credential__certificate__not_valid_after__lt=now
-                ).distinct().count(),
-                'expired_in_last_7_days': DeviceModel.objects.filter(
-                    issued_credentials__credential__certificate__not_valid_after__gte=last_7_days,
-                    issued_credentials__credential__certificate__not_valid_after__lt=now
-                ).distinct().count(),
-            }
-        except Exception as exception:
-            err_msg = f'Error occurred in expired device count query: {exception}'
-            self.logger.exception(err_msg)
-
-        return expired_device_counts
-
     def get_expiring_issuing_ca_counts(self) -> dict[str, Any]:
         """Fetch expiring issuing CA counts from database.
 
@@ -784,4 +760,23 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         return expiring_issuing_ca_counts
 
+    def get_expired_device_counts(self) -> dict[str, Any]:
+        """Fetch expired device counts from database.
 
+        Returns:
+            It returns counts of expired devices.
+        """
+        now = timezone.now()
+        expired_device_counts = {}
+        try:
+            expired_device_counts = {
+                'expired': DeviceModel.objects.filter(
+                    issued_credentials__credential__certificate__not_valid_after__lt=now
+                )
+                .count()
+            }
+        except Exception as exception:
+            err_msg = f'Error occurred in expired device count query: {exception}'
+            self.logger.exception(err_msg)
+
+        return expired_device_counts

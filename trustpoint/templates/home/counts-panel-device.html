@@ -9,12 +9,16 @@
 
 <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3">
   <div class="col">
-    {% include 'home/card_active_device.html' %}
+    {% url 'devices:devices' as device_url %}
+    {% include 'home/dashboard_card.html' with title="Active Devices" card_type="active" identifier="active_devices" dataset="device_counts" link_url="device_url" %}
   </div>
   <div class="col">
-    {% include 'home/card_expiring_device.html' %}
+    {% include 'home/dashboard_card.html' with title="Expiring Devices" card_type="expiring" identifier="expiring_devices" dataset="device_counts" %}
   </div>
   <div class="col">
-    {% include 'home/card_expired_device.html' %}
+    {% include 'home/dashboard_card.html' with title="Expired Devices" card_type="expired" identifier="expired_devices" dataset="device_counts" %}
+  </div>
+  <div class="col">
+    {% include 'home/dashboard_card.html' with title="Pending Devices" card_type="expired" identifier="pending_devices" dataset="device_counts" %}
   </div>
 </div>

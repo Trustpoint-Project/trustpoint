@@ -1,14 +1,20 @@
 /* Count Cards CSS classes*/
 .card-count-active-container{
     background-color: var(--trustpoint-ci);
+    color: #ffffff;
+    border: 0;
 }
 
 .card-count-expired-container{
     color: var(--bs-gray);
+    border: 1px solid;
 }
 
 .card-count-expiring-container{
     background-color: #96C3FF;
+    color: #ffffff;
+    border: 0;
+    font-weight: 450;
 }
 
 .card-count-btn-link{
@@ -31,8 +37,6 @@
     column-gap: .5rem;
     top: -5px;
   }
-
-
 
 /* bar chart css */
 .bar-chart-card-container {
@@ -113,4 +117,3 @@
 .donut-chart-container{
     height: 320px;
 }
-
