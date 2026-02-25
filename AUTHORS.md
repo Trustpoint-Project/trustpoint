@@ -43,6 +43,7 @@ Full Name is required, all other fields are optional.
 * Ibrahim Almountaka Sambare (ibrahimsambare) <ibrahim.realmountaka A campus-schwarzwald.de> - Campus Schwarzwald / ESILV Paris
 * Kevin Rohn (KevinRohn)
 * Mario Kemper
+* Marvin Siegel 
 * Mohammad Zeeshan
 * Omkar Joglekar
 * Rohit Bohara

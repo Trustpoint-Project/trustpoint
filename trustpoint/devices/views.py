@@ -4,9 +4,10 @@ import abc
 import asyncio
 import datetime
 import io
+import json
 import zipfile
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import Any, ClassVar, cast
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -18,7 +19,7 @@ from django.core.paginator import Paginator
 from django.db.models import Q, QuerySet
 from django.http import FileResponse, Http404, HttpResponse, HttpResponseBase, HttpResponseRedirect
 from django.http.request import HttpRequest
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.decorators import method_decorator
 from django.utils.html import format_html
@@ -26,7 +27,7 @@ from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy, ngettext
 from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
-from django.views.generic.edit import FormView
+from django.views.generic.edit import FormMixin, FormView
 from django.views.generic.list import ListView
 from drf_spectacular.utils import extend_schema
 from rest_framework import viewsets
@@ -43,11 +44,7 @@ from devices.forms import (
     CredentialDownloadForm,
     DeleteDevicesForm,
     IssueDomainCredentialForm,
-    IssueOpcUaClientCredentialForm,
     IssueOpcUaGdsPushDomainCredentialForm,
-    IssueOpcUaServerCredentialForm,
-    IssueTlsClientCredentialForm,
-    IssueTlsServerCredentialForm,
     NoOnboardingCreateForm,
     OnboardingCreateForm,
     OpcUaGdsPushCreateForm,
@@ -55,12 +52,11 @@ from devices.forms import (
     RevokeDevicesForm,
     RevokeIssuedCredentialForm,
 )
+
+# noinspection PyUnresolvedReferences
 from devices.issuer import (
+    BaseTlsCredentialIssuer,
     LocalDomainCredentialIssuer,
-    LocalTlsClientCredentialIssuer,
-    LocalTlsServerCredentialIssuer,
-    OpcUaClientCredentialIssuer,
-    OpcUaServerCredentialIssuer,
 )
 from devices.models import (
     DeviceModel,
@@ -77,12 +73,18 @@ from onboarding.models import (
     OnboardingStatus,
 )
 from pki.forms import TruststoreAddForm
+from pki.forms.cert_profiles import CertificateIssuanceForm
 from pki.models.ca import CaModel
+from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
 from pki.models.credential import CredentialModel
+from pki.models.domain import DomainAllowedCertificateProfileModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
+from request.authorization import ManualAuthorization
 from request.gds_push import GdsPushService
 from request.gds_push.gds_push_service import GdsPushError
+from request.operation_processor.issue_cred import CredentialIssueProcessor
+from request.request_context import ManualCredentialRequestContext
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -93,12 +95,6 @@ from trustpoint.page_context import (
 from trustpoint.settings import UIConfig
 from util.mult_obj_views import get_primary_keys_from_str_as_list_of_ints
 
-if TYPE_CHECKING:
-    import ipaddress
-
-# noinspection PyUnresolvedReferences
-from devices.issuer import BaseTlsCredentialIssuer
-
 DeviceWithoutDomainErrorMsg = gettext_lazy('Device does not have an associated domain.')
 NamedCurveMissingForEccErrorMsg = gettext_lazy('Failed to retrieve named curve for ECC algorithm.')
 ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
@@ -107,14 +103,6 @@ ActiveTrustpointTlsServerCredentialModelMissingErrorMsg = gettext_lazy(
 
 # This only occurs if no domain is configured
 PublicKeyInfoMissingErrorMsg = DeviceWithoutDomainErrorMsg
-
-# TODO(Air): This must be removed in the future makeing use of the profile engine  # noqa: FIX002
-ALLOWED_APP_CRED_PROFILES = [
-    {'profile': 'tls-server', 'label': 'TLS-Server Certficate'},
-    {'profile': 'tls-client', 'label': 'TLS-Client Certificate'},
-    {'profile': 'opc-ua-server', 'label': 'OPC-UA-Server Certificate'},
-    {'profile': 'opc-ua-client', 'label': 'OPC-UA-Client Certificate'},
-]
 
 # -------------------------------------------------- Main Table Views --------------------------------------------------
 
@@ -1121,25 +1109,21 @@ class AbstractSelectCertificateProfileNewApplicationCredentialView(PageContextMi
         """
         context = super().get_context_data(**kwargs)
 
-        context['certificate_profiles'] = ALLOWED_APP_CRED_PROFILES
+        domain = self.object.domain
+        if not domain:
+            err_msg = gettext_lazy('No domain is configured for this device.')
+            raise ValueError(err_msg)
 
-        for profile in context['certificate_profiles']:
-            if profile['profile'] == 'tls-client':
-                profile['url'] = (
-                    f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_tls_client_credential'
-                )
-            elif profile['profile'] == 'tls-server':
-                profile['url'] = (
-                    f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_tls_server_credential'
-                )
-            elif profile['profile'] == 'opc-ua-client':
-                profile['url'] = (
-                    f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_opc_ua_client_credential'
-                )
-            elif profile['profile'] == 'opc-ua-server':
-                profile['url'] = (
-                    f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_opc_ua_server_credential'
-                )
+        allowed_app_profiles = list(
+            domain.get_allowed_cert_profiles().exclude(certificate_profile__unique_name='domain_credential'))
+        profile_list = DomainAllowedCertificateProfileModel.get_list_of_display_names(allowed_app_profiles)
+
+        context['cert_profile_list'] = {}
+        for (profile_id, display_name, _unique_name) in profile_list:
+            context['cert_profile_list'][profile_id] = display_name
+
+        context['profile_issuance_url'] = \
+            f'{self.page_category}:{self.page_name}_certificate_lifecycle_management_issue_profile_credential'
 
         return context
 
@@ -1287,8 +1271,8 @@ class OpcUaGdsPushOnboardingIssueNewApplicationCredentialView(AbstractOnboarding
         )
 
 
-class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: BaseTlsCredentialIssuer](
-    PageContextMixin, DetailView[DeviceModel]
+class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCredentialIssuer](
+    PageContextMixin, FormMixin[forms.Form], DetailView[DeviceModel]
 ):
     """Base view for all credential issuance views."""
 
@@ -1298,7 +1282,7 @@ class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: Ba
     context_object_name = 'device'
     template_name = 'devices/credentials/issue_application_credential.html'
 
-    form_class: type[BaseCredentialForm]
+    form_class: type[forms.Form]
     issuer_class: type[IssuerClass]
     friendly_name: str
 
@@ -1322,7 +1306,7 @@ class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: Ba
         return context
 
     def get_form_kwargs(self) -> dict[str, Any]:
-        """This method ads the concerning device model to the form kwargs and returns them.
+        """This method adds the concerning device model to the form kwargs and returns them.
 
         Returns:
             The form kwargs including the concerning device model.
@@ -1330,11 +1314,13 @@ class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: Ba
         if self.object.domain is None:
             raise Http404(DeviceWithoutDomainErrorMsg)
 
-        form_kwargs = {
-            'initial': self.issuer_class.get_fixed_values(device=self.object, domain=self.object.domain),
-            'prefix': None,
-            'device': self.object,
-        }
+        form_kwargs = {}
+        if not issubclass(self.form_class, CertificateIssuanceForm):
+            form_kwargs = {
+                'initial': self.issuer_class.get_fixed_values(device=self.object, domain=self.object.domain),
+                'prefix': None,
+                'device': self.object,
+            }
 
         if self.request.method == 'POST':
             form_kwargs.update({'data': self.request.POST})
@@ -1342,12 +1328,12 @@ class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: Ba
         return form_kwargs
 
     @abc.abstractmethod
-    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+    def issue_credential(self, device: DeviceModel, form: forms.Form) -> IssuedCredentialModel:
         """Abstract method to issue a credential.
 
         Args:
             device: The device to be associated with the new credential.
-            cleaned_data: The validated form data.
+            form: The form instance containing the validated data.
 
         Returns:
             The IssuedCredentialModel object that was created and saved.
@@ -1368,10 +1354,13 @@ class AbstractIssueCredentialView[FormClass: BaseCredentialForm, IssuerClass: Ba
         form = self.form_class(**self.get_form_kwargs())
 
         if form.is_valid():
-            credential = self.issue_credential(device=self.object, cleaned_data=form.cleaned_data)
-            messages.success(
-                request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
-            )
+            try:
+                credential = self.issue_credential(device=self.object, form=form)
+                messages.success(
+                    request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
+                )
+            except Exception as e:  # noqa: BLE001
+                messages.error(request, f'Failed to issue {self.friendly_name}: {e}')
             return HttpResponseRedirect(
                 reverse_lazy(
                     f'devices:{self.page_name}_certificate_lifecycle_management', kwargs={'pk': self.get_object().id}
@@ -1391,12 +1380,12 @@ class AbstractIssueDomainCredentialView(
     issuer_class = LocalDomainCredentialIssuer
     friendly_name = 'Domain Credential'
 
-    def issue_credential(self, device: DeviceModel, _cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+    def issue_credential(self, device: DeviceModel, _form: forms.Form) -> IssuedCredentialModel:
         """Issue a domain credential for the device.
 
         Args:
             device: The device to issue the credential for.
-            _cleaned_data: The validated form data is discarded.
+            _form: The form instance containing the validated data.
 
         Returns:
             The issued credential model.
@@ -1427,12 +1416,12 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
     form_class = IssueOpcUaGdsPushDomainCredentialForm
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
-    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
+    def issue_credential(self, device: DeviceModel, form: forms.Form) -> IssuedCredentialModel:
         """Issues a domain credential for the device with OPC UA specific extensions.
 
         Args:
             device: The device to be associated with the new credential.
-            cleaned_data: The validated form data.
+            form: The form instance containing the validated data.
 
         Returns:
             The IssuedCredentialModel object that was created and saved.
@@ -1441,7 +1430,7 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
             raise Http404(DeviceWithoutDomainErrorMsg)
 
         issuer = self.issuer_class(device=device, domain=device.domain)
-        application_uri = cast('str', cleaned_data.get('application_uri'))
+        application_uri = cast('str', form.cleaned_data.get('application_uri'))
 
         opc_ua_extensions = [
             (
@@ -1477,7 +1466,7 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
         form = self.form_class(**self.get_form_kwargs())
 
         if form.is_valid():
-            credential = self.issue_credential(device=self.object, cleaned_data=form.cleaned_data)
+            credential = self.issue_credential(device=self.object, form=form)
             messages.success(
                 request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
             )
@@ -1621,189 +1610,107 @@ class OpcUaGdsPushTruststoreAssociationView(
         )
 
 
-class AbstractIssueTlsClientCredentialView(
-    AbstractIssueCredentialView[IssueTlsClientCredentialForm, LocalTlsClientCredentialIssuer]
+class AbstractIssueProfileCredentialView(
+    AbstractIssueCredentialView[CertificateIssuanceForm, BaseTlsCredentialIssuer]
 ):
-    """View to issue a new TLS client credential."""
+    """View to issue a new certificate profile credential."""
 
-    form_class = IssueTlsClientCredentialForm
-    issuer_class = LocalTlsClientCredentialIssuer
-    friendly_name = 'TLS client credential'
+    issuer_class = BaseTlsCredentialIssuer
+    friendly_name = 'Certificate Profile Credential'
 
     page_name: str
 
-    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
-        """Issues an TLS client credential.
+    template_name = 'pki/cert_profiles/issuance.html'
+    form_class = CertificateIssuanceForm
 
-        Args:
-            device: The device to be associated with the new credential.
-            cleaned_data: The validated form data.
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Dispatch the request, ensuring the profile exists."""
+        self.profile = get_object_or_404(CertificateProfileModel, pk=kwargs['profile_id'])
+        return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
 
-        Returns:
-            The IssuedCredentialModel object that was created and saved.
-        """
-        common_name = cast('str', cleaned_data.get('common_name'))
-        validity = cast('int', cleaned_data.get('validity'))
-        if not device.domain:
-            raise Http404(DeviceWithoutDomainErrorMsg)
-        issuer = self.issuer_class(device=device, domain=device.domain)
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Get form kwargs, including the profile."""
+        kwargs = super().get_form_kwargs()
+        raw_profile = json.loads(self.profile.profile_json)
+        kwargs['profile'] = raw_profile
+        return kwargs
 
-        return issuer.issue_tls_client_credential(common_name=common_name, validity_days=validity)
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add additional context data."""
+        context = super().get_context_data(**kwargs)
+        context['profile'] = self.profile
+        context['profile_dict'] = self.get_form_kwargs()['profile']
+        return context
 
+    def form_invalid(self, form: forms.Form) -> HttpResponse:
+        """Handle the case where the form is invalid."""
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(self.request, f'{field}: {error}')
+        return super().form_invalid(form)
 
-class DeviceIssueTlsClientCredentialView(AbstractIssueTlsClientCredentialView):
-    """Issue a new TLS client credential within the devices section."""
+    def form_valid(self, form: forms.Form) -> HttpResponse:
+        """Handle the case where the form is valid."""
+        if not isinstance(form, CertificateIssuanceForm):
+            err_msg = 'Invalid form type. Expected CertificateIssuanceForm.'
+            messages.error(self.request, err_msg)
+            return self.form_invalid(form)
+        try:
+            self.cert_builder = form.get_certificate_builder()
+        except ValueError as e:
+            messages.error(self.request,
+                           gettext_lazy('Error generating certificate builder: {error}').format(error=str(e)))
+            return self.form_invalid(form)
 
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsIssueTlsClientCredentialView(AbstractIssueTlsClientCredentialView):
-    """Issue a new TLS client credential within the devices section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
-class AbstractIssueTlsServerCredentialView(
-    AbstractIssueCredentialView[IssueTlsServerCredentialForm, LocalTlsServerCredentialIssuer]
-):
-    """View to issue a new TLS server credential."""
-
-    form_class = IssueTlsServerCredentialForm
-    issuer_class = LocalTlsServerCredentialIssuer
-    friendly_name = 'TLS server credential'
-
-    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
-        """Issues an TLS server credential.
-
-        Args:
-            device: The device to be associated with the new credential.
-            cleaned_data: The validated form data.
-
-        Returns:
-            The IssuedCredentialModel object that was created and saved.
-        """
-        common_name = cast('str', cleaned_data.get('common_name'))
-        if not common_name:
-            err_msg = 'Common name is missing. Cannot issue credential.'
-            raise Http404(err_msg)
-        if not device.domain:
-            raise Http404(DeviceWithoutDomainErrorMsg)
-        issuer = self.issuer_class(device=device, domain=device.domain)
-        return issuer.issue_tls_server_credential(
-            common_name=common_name,
-            ipv4_addresses=cast('list[ipaddress.IPv4Address]', cleaned_data.get('ipv4_addresses')),
-            ipv6_addresses=cast('list[ipaddress.IPv6Address]', cleaned_data.get('ipv6_addresses')),
-            domain_names=cast('list[str]', cleaned_data.get('domain_names')),
-            san_critical=False,
-            validity_days=cast('int', cleaned_data.get('validity')),
+        messages.success(
+            self.request,
+            gettext_lazy('Certificate builder generated successfully.'),
         )
+        return HttpResponseRedirect(reverse_lazy('pki:cert_profiles'))
 
-
-class DeviceIssueTlsServerCredentialView(AbstractIssueTlsServerCredentialView):
-    """Issues a TLS server credenital within the devices section."""
-
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsIssueTlsServerCredentialView(AbstractIssueTlsServerCredentialView):
-    """Issues a TLS server credenital within the devices section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-
-
-class AbstractIssueOpcUaClientCredentialView(
-    AbstractIssueCredentialView[IssueOpcUaClientCredentialForm, OpcUaClientCredentialIssuer]
-):
-    """View to issue a new OPC UA client credential."""
-
-    form_class = IssueOpcUaClientCredentialForm
-    issuer_class = OpcUaClientCredentialIssuer
-    friendly_name = 'OPC UA client credential'
-
-    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
-        """Issues an OPC UA client credential.
+    def issue_credential(self, device: DeviceModel, form: forms.Form
+                         ) -> IssuedCredentialModel:
+        """Issues a credential based on the selected certificate profile.
 
         Args:
             device: The device to be associated with the new credential.
-            cleaned_data: The validated form data.
+            form: The form instance containing the validated data.
 
         Returns:
             The IssuedCredentialModel object that was created and saved.
         """
+        if not isinstance(form, CertificateIssuanceForm):
+            err_msg = 'Invalid form type. Expected CertificateIssuanceForm.'
+            raise TypeError(err_msg)
+        cert_builder = form.get_certificate_builder()
         if not device.domain:
             raise Http404(DeviceWithoutDomainErrorMsg)
-        issuer = self.issuer_class(device=device, domain=device.domain)
-        return issuer.issue_opc_ua_client_credential(
-            common_name=cast('str', cleaned_data.get('common_name')),
-            application_uri=cast('str', cleaned_data.get('application_uri')),
-            validity_days=cast('int', cleaned_data.get('validity')),
+
+        ctx = ManualCredentialRequestContext(
+            device=device,
+            domain=device.domain,
+            cert_profile_str=self.profile.unique_name,
+            cert_requested=cert_builder,
         )
+        ManualAuthorization().authorize(ctx)
+        CredentialIssueProcessor().process_operation(ctx)
+        if not ctx.issued_credential:
+            err_msg = 'Issued credential not in context.'
+            raise ValueError(err_msg)
+        return ctx.issued_credential
 
 
-class DeviceIssueOpcUaClientCredentialView(AbstractIssueOpcUaClientCredentialView):
-    """Issues an OPC UA client credential within the devices section."""
+class DeviceIssueProfileCredentialView(AbstractIssueProfileCredentialView):
+    """Issue a new certificate profile credential within the devices section."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
 
-class OpcUaGdsIssueOpcUaClientCredentialView(AbstractIssueOpcUaClientCredentialView):
-    """Issues an OPC UA client credential within the devices section."""
+class OpcUaGdsIssueProfileCredentialView(AbstractIssueProfileCredentialView):
+    """Issue a new certificate profile credential within the devices section."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
-
-class AbstractIssueOpcUaServerCredentialView(
-    AbstractIssueCredentialView[IssueOpcUaServerCredentialForm, OpcUaServerCredentialIssuer]
-):
-    """View to issue a new OPC UA server credential."""
-
-    form_class = IssueOpcUaServerCredentialForm
-    issuer_class = OpcUaServerCredentialIssuer
-    friendly_name = 'OPC UA server credential'
-
-    def issue_credential(self, device: DeviceModel, cleaned_data: dict[str, Any]) -> IssuedCredentialModel:
-        """Issues an OPC UA server credential.
-
-        Args:
-            device: The device to be associated with the new credential.
-            cleaned_data: The validated form data.
-
-        Returns:
-            The IssuedCredentialModel object that was created and saved.
-        """
-        common_name = cast('str', cleaned_data.get('common_name'))
-        if not common_name:
-            err_msg = 'Common name is missing. Cannot issue credential.'
-            raise Http404(err_msg)
-        if not device.domain:
-            raise Http404(DeviceWithoutDomainErrorMsg)
-        issuer = self.issuer_class(device=device, domain=device.domain)
-
-        ipv4_addresses: list[ipaddress.IPv4Address] = cleaned_data.get('ipv4_addresses', [])
-        ipv6_addresses: list[ipaddress.IPv6Address] = cleaned_data.get('ipv6_addresses', [])
-        domain_names: list[str] = cleaned_data.get('domain_names', [])
-        validity_days: int = cleaned_data.get('validity', 0)
-
-        return issuer.issue_opc_ua_server_credential(
-            common_name=common_name,
-            application_uri=cast('str', cleaned_data.get('application_uri')),
-            ipv4_addresses=ipv4_addresses,
-            ipv6_addresses=ipv6_addresses,
-            domain_names=domain_names,
-            validity_days=validity_days,
-        )
-
-
-class DeviceIssueOpcUaServerCredentialView(AbstractIssueOpcUaServerCredentialView):
-    """Issues an OPC UA server credential within the devices section."""
-
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-
-class OpcUaGdsIssueOpcUaServerCredentialView(AbstractIssueOpcUaServerCredentialView):
-    """Issues an OPC UA server credential within the devices section."""
-
-    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
 
 
 #  -------------------------------- Certificate Lifecycle Management - Token Auth Mixin --------------------------------
