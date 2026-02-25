@@ -75,7 +75,7 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
         self.instance.display_name = json_dict.get('display_name', '')
         return json.dumps(json_dict)
 
-class ProfileBasedFormFieldBuilder:
+class ProfileBasedFormFieldBuilder(LoggerMixin):
     """Django form field builder that leverages JSONProfileVerifier.
 
     This builder uses JSONProfileVerifier.get_sample_request() to understand the
@@ -102,6 +102,7 @@ class ProfileBasedFormFieldBuilder:
         'locality_name': 'Locality (L)',
         'emailAddress': 'Email Address',
         'email_address': 'Email Address',
+        'serial_number': 'Serial Number',
     }
 
     SAN_LABELS: ClassVar[dict[str, str]] = {
@@ -134,7 +135,7 @@ class ProfileBasedFormFieldBuilder:
         This leverages JSONProfileVerifier.get_sample_request() to understand
         the profile structure, eliminating manual parsing.
         """
-        sample_request = self.verifier.get_sample_request()
+        sample_request = self.profile # Use the normalized profile for field generation
 
         self._build_fields_from_sample(sample_request)
 
@@ -143,7 +144,7 @@ class ProfileBasedFormFieldBuilder:
     def _build_fields_from_sample(self, sample_request: dict[str, Any]) -> None:
         """Build form fields based on the sample request structure."""
         subject = sample_request.get('subject', {})
-        profile_subject = self.profile.get('subj', {})
+        profile_subject = self.profile.get('subject', {})
 
         if profile_subject.get('allow') == '*':
             self._build_all_subject_fields(profile_subject)
@@ -153,7 +154,7 @@ class ProfileBasedFormFieldBuilder:
         extensions = sample_request.get('extensions', {})
         if extensions:
             san = extensions.get('subject_alternative_name', {})
-            profile_extensions = self.profile.get('ext', {})
+            profile_extensions = self.profile.get('extensions', {})
             profile_san = profile_extensions.get('subject_alternative_name', profile_extensions.get('san', {}))
 
             if isinstance(profile_san, dict) and profile_san.get('allow') == '*':
@@ -239,7 +240,7 @@ class ProfileBasedFormFieldBuilder:
 
     def _build_subject_fields_from_sample(self, subject: dict[str, Any]) -> None:
         """Build subject fields based on sample values."""
-        profile_subject = self.profile.get('subj', {})
+        profile_subject = self.profile.get('subject', {})
 
         for field_name, sample_value in subject.items():
             if field_name in CERT_PROFILE_KEYWORDS:
@@ -287,7 +288,7 @@ class ProfileBasedFormFieldBuilder:
 
     def _build_san_fields_from_sample(self, san: dict[str, Any]) -> None:
         """Build SAN fields based on sample values."""
-        profile_extensions = self.profile.get('ext', {})
+        profile_extensions = self.profile.get('extensions', {})
         profile_san = profile_extensions.get('subject_alternative_name', profile_extensions.get('san', {}))
 
         for field_name, sample_value in san.items():
@@ -368,7 +369,7 @@ class ProfileBasedFormFieldBuilder:
             )
 
 
-class CertificateIssuanceForm(forms.Form):
+class CertificateIssuanceForm(LoggerMixin, forms.Form):
     """Form for certificate issuance based on a certificate profile.
 
     This form dynamically generates fields based on a certificate profile and
@@ -398,8 +399,8 @@ class CertificateIssuanceForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.profile = profile
         self.verifier = JSONProfileVerifier(profile)
-
-        field_builder = ProfileBasedFormFieldBuilder(profile)
+        self.profile = self.verifier.get_profile()  # Normalize profile to ensure consistent field generation
+        field_builder = ProfileBasedFormFieldBuilder(self.profile)
         self.fields = field_builder.build_all_fields()
 
     def get_certificate_builder(self) -> CertificateBuilder:

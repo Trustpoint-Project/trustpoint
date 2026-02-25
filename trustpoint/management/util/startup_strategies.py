@@ -16,7 +16,7 @@ from django.core.management import call_command
 from django.utils.translation import gettext as _
 from packaging.version import Version
 
-from management.models import AppVersion, KeyStorageConfig, PKCS11Token
+from management.models import AppVersion, KeyStorageConfig, NotificationConfig, PKCS11Token
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from pki.models import PKCS11Key
 from pki.models.credential import CredentialModel
@@ -408,6 +408,9 @@ class StandardInitializationStrategy(InitializationStrategy):
         with io.StringIO() as fake_out:
             call_command('compilemessages', '-l', 'de', '-l', 'en', stdout=fake_out)
 
+        # Initialize notifications
+        self._initialize_notifications(context)
+
         # Setup TLS if requested
         if with_tls:
             context.output.write('Preparing TLS certificate...')
@@ -426,6 +429,29 @@ class StandardInitializationStrategy(InitializationStrategy):
             self.tls_strategy.generate_and_save_tls_credential(context)
 
         context.output.write(context.output.success('Trustpoint initialization complete'))
+
+    @staticmethod
+    def _initialize_notifications(context: StartupContext) -> None:
+        """Enable notifications and schedule the first notification check.
+
+        Ensures that ``NotificationConfig.enabled`` is ``True`` so the
+        ``init_notifications`` management command will not exit early, then
+        delegates scheduling to that command.
+
+        Args:
+            context: The startup context used for log output.
+        """
+        context.output.write('Initializing notifications...')
+        try:
+            notification_config = NotificationConfig.get()
+            if not notification_config.enabled:
+                notification_config.enabled = True
+                notification_config.save(update_fields=['enabled'])
+                context.output.write('Notifications enabled')
+            call_command('init_notifications')
+            context.output.write('Notification scheduling initialized')
+        except Exception as e:  # noqa: BLE001
+            context.output.write(f'Warning: Could not initialize notifications: {e}')
 
     def _raise_runtime_error(self, error_msg: str) -> None:
         """Raise a RuntimeError.

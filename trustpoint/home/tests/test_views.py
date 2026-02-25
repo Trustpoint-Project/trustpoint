@@ -8,7 +8,7 @@ from django.core.management.base import CommandError
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
-from notifications.models import NotificationModel, NotificationStatus
+from management.models import NotificationModel, NotificationStatus
 from pki.models import CertificateModel, CertificateProfileModel, CaModel
 
 from ..views import (

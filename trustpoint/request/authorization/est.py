@@ -1,4 +1,4 @@
-"""Provides the 'EstAuthentication' class using the Composite pattern for modular EST authorization."""
+"""Provides the 'EstAuthorization' class using the Composite pattern for modular EST authorization."""
 from request.request_context import BaseRequestContext, EstBaseRequestContext
 from trustpoint.logger import LoggerMixin
 
@@ -52,7 +52,7 @@ class EstAuthorization(CompositeAuthorization):
         """Initialize the composite authorization handler with the default set of components.
 
         Args:
-            allowed_operations: List of allowed CMP operations. Defaults to ['cr', 'ir'] if not provided.
+            allowed_operations: List of allowed EST operations. Defaults to ['cr', 'ir'] if not provided.
         """
         super().__init__()
 

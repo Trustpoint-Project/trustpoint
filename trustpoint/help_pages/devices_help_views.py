@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, override
 from cryptography import x509
 from django.http import Http404
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
 from django.views.generic.detail import DetailView
@@ -41,6 +42,8 @@ from trustpoint.page_context import (
 
 if TYPE_CHECKING:
     from typing import Any
+
+    from pki.models import CaModel
 
 
 # --------------------------------------------------- Base Classes ----------------------------------------------------
@@ -882,6 +885,63 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             ],
         )
 
+    def _build_ca_hierarchy_html(self, ca_chain: list[CaModel]) -> tuple[str, bool]:
+        """Build HTML representation of CA hierarchy and check for missing CRLs.
+
+        Args:
+            ca_chain: List of CA models in reverse order.
+
+        Returns:
+            Tuple of (hierarchy_html, has_missing_crl).
+        """
+        hierarchy_html = (
+            '<div style="font-family: monospace;">'
+            '<strong>Certificate Authority Hierarchy:</strong><br>'
+        )
+
+        has_missing_crl = False
+        for idx, ca in enumerate(ca_chain):
+            try:
+                if not ca.ca_certificate_model:
+                    continue
+                cert_serializer = ca.ca_certificate_model.get_certificate_serializer()
+                cert_crypto = cert_serializer.as_crypto()
+
+                common_name = cert_crypto.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
+                if common_name:
+                    value = common_name[0].value
+                    cn_value = value.decode('utf-8') if isinstance(value, bytes) else value
+                else:
+                    cn_value = ca.unique_name
+
+                crl_status = 'MISSING'
+                crl_link = ''
+                if ca.crl_pem:
+                    try:
+                        x509.load_pem_x509_crl(ca.crl_pem.encode())
+                        active_crl = ca.get_active_crl()
+                        if active_crl:
+                            crl_detail_url = reverse('pki:crl-detail', kwargs={'pk': active_crl.pk})
+                            crl_link = f'<a href="{crl_detail_url}" target="_blank">CRL</a> '
+                        crl_status = 'OK'
+                    except (ValueError, TypeError):
+                        crl_status = 'INVALID'
+                else:
+                    has_missing_crl = True
+
+                ca_detail_url = reverse('pki:issuing_cas-detail', kwargs={'pk': ca.pk})
+                indent = '&nbsp;' * (idx * 4)
+                hierarchy_html += (
+                    f'{indent}└─ <a href="{ca_detail_url}" target="_blank">{cn_value}</a> '
+                    f'[{crl_link}{crl_status}]<br>'
+                )
+
+            except (ValueError, TypeError, AttributeError):
+                continue
+
+        hierarchy_html += '</div>'
+        return hierarchy_html, has_missing_crl
+
     def _build_ca_hierarchy_section(self, device: DeviceModel) -> HelpSection:
         """Build the CA hierarchy section with certificate chain information."""
         if not (device.domain and device.domain.issuing_ca):
@@ -900,52 +960,10 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             ca_chain = device.domain.issuing_ca.get_ca_chain_from_truststore()
             ca_chain = list(reversed(ca_chain))
 
-            hierarchy_html = (
-                '<div style="font-family: monospace;">'
-                '<strong>Certificate Authority Hierarchy:</strong><br>'
-            )
-
-            has_missing_crl = False
-            for idx, ca in enumerate(ca_chain):
-                try:
-                    cert_serializer = ca.ca_certificate_model.get_certificate_serializer()
-                    cert_crypto = cert_serializer.as_crypto()
-
-                    common_name = cert_crypto.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
-                    if common_name:
-                        value = common_name[0].value
-                        cn_value = value.decode('utf-8') if isinstance(value, bytes) else value
-                    else:
-                        cn_value = ca.unique_name
-
-                    crl_status = 'MISSING'
-                    crl_link = ''
-                    if ca.crl_pem:
-                        try:
-                            x509.load_pem_x509_crl(ca.crl_pem.encode())
-                            active_crl = ca.get_active_crl()
-                            if active_crl:
-                                crl_detail_url = reverse('pki:crl-detail', kwargs={'pk': active_crl.pk})
-                                crl_link = f'<a href="{crl_detail_url}" target="_blank">CRL</a> '
-                            crl_status = 'OK'
-                        except (ValueError, TypeError):
-                            crl_status = 'INVALID'
-                    else:
-                        has_missing_crl = True
-
-                    ca_detail_url = reverse('pki:issuing_cas-detail', kwargs={'pk': ca.pk})
-                    indent = '&nbsp;' * (idx * 4)
-                    hierarchy_html += (
-                        f'{indent}└─ <a href="{ca_detail_url}" target="_blank">{cn_value}</a> '
-                        f'[{crl_link}{crl_status}]<br>'
-                    )
-
-                except (ValueError, TypeError, AttributeError):
-                    continue
-
-            hierarchy_html += '</div>'
+            hierarchy_html, has_missing_crl = self._build_ca_hierarchy_html(ca_chain)
 
             rows = [
+
                 HelpRow(
                     _non_lazy('Certificate Chain'),
                     hierarchy_html,
@@ -1018,12 +1036,109 @@ class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):
             ],
         )
 
+    def _build_renewal_settings_section(self, device: DeviceModel) -> HelpSection:
+        """Build the periodic server certificate and trustlist renewal settings section.
+
+        Renders an inline HTML form that posts to the cert-renewal-settings endpoint,
+        allowing the user to enable/disable periodic renewal and configure the interval.
+        Both the server certificate and the trustlist are updated on each renewal cycle.
+        When periodic updates are enabled, the section also shows when the next update
+        is scheduled to run.
+
+        :param device: The OPC UA GDS Push device instance.
+        :return: A HelpSection containing the renewal configuration form.
+        """
+        renewal_url = reverse(
+            'devices:devices_cert_renewal_settings',
+            kwargs={'pk': device.pk}
+        )
+
+        enabled = device.opc_gds_push_enable_periodic_update
+        interval = device.opc_gds_push_renewal_interval
+        next_run = device.opc_gds_push_last_update_scheduled_at
+
+        checked_attr = 'checked' if enabled else ''
+
+        if enabled and next_run is not None:
+            now = timezone.now()
+            if next_run > now:
+                next_run_html = (
+                    f'<span class="badge bg-success me-2">Enabled</span>'
+                    f'<span>{next_run.strftime("%Y-%m-%d %H:%M UTC")}</span>'
+                )
+            else:
+                next_run_html = (
+                    '<span class="badge bg-warning text-dark me-2">Pending</span>'
+                    '<span>Scheduled — awaiting worker execution</span>'
+                )
+        elif enabled:
+            next_run_html = (
+                '<span class="badge bg-secondary me-2">Enabled</span>'
+                '<span>Not yet scheduled — save settings to schedule the first update</span>'
+            )
+        else:
+            next_run_html = '<span class="badge bg-secondary">Disabled</span>'
+
+        form_html = (
+            f'<form method="post" action="{renewal_url}">'
+            'CSRF_TOKEN_PLACEHOLDER'
+            '<div class="mb-3">'
+            '<div class="form-check form-switch mb-2">'
+            f'  <input class="form-check-input" type="checkbox" role="switch" '
+            f'         id="enablePeriodicRenewal" name="opc_gds_push_enable_periodic_update" {checked_attr}>'
+            f'  <label class="form-check-label" for="enablePeriodicRenewal">'
+            f'    Enable Periodic Server Certificate &amp; Trustlist Renewal'
+            f'  </label>'
+            '</div>'
+            '<label for="renewalInterval" class="form-label mt-2">Renewal Interval (hours)</label>'
+            f'<input type="number" class="form-control" id="renewalInterval" '
+            f'       name="opc_gds_push_renewal_interval" min="1" value="{interval}" '
+            '       style="max-width: 200px;">'
+            '<div class="form-text text-muted">'
+            '  How often the server certificate and trustlist are automatically renewed. Minimum 1 hour.'
+            '</div>'
+            '</div>'
+            '<button type="submit" class="btn btn-primary">Save Renewal Settings</button>'
+            '</form>'
+        )
+
+        return HelpSection(
+            _non_lazy('Periodic Server Certificate & Trustlist Renewal'),
+            [
+                HelpRow(
+                    _non_lazy('Next Scheduled Update'),
+                    next_run_html,
+                    ValueRenderType.HTML,
+                ),
+                HelpRow(
+                    _non_lazy('Renewal Configuration'),
+                    form_html,
+                    ValueRenderType.HTML,
+                ),
+            ],
+        )
+
+
+class OpcUaGdsPushApplicationCertificateStrategy(OpcUaGdsPushOnboardingStrategy):
+    """Strategy for the OPC UA GDS Push application certificate help page.
+
+    Extends the base onboarding strategy with a periodic server certificate
+    renewal configuration section.
+    """
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        sections, heading = super().build_sections(help_context=help_context)
+        device = help_context.get_device_or_http_404()
+        sections.append(self._build_renewal_settings_section(device))
+        return sections, heading
+
 
 class OpcUaGdsPushApplicationCertificateHelpView(BaseHelpView):
     """Help view for OPC UA GDS Push application certificates."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-    strategy = OpcUaGdsPushOnboardingStrategy()
+    strategy = OpcUaGdsPushApplicationCertificateStrategy()
 
 
 class OpcUaGdsPushOnboardingHelpView(BaseHelpView):

@@ -8,7 +8,6 @@ from django.urls import reverse
 from management.forms import SecurityConfigForm
 from management.models import LoggingConfig, SecurityConfig
 from management.views.settings import ChangeLogLevelView, LOG_LEVELS, SettingsView
-from notifications.models import NotificationConfig
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 
@@ -20,20 +19,18 @@ class SettingsViewTest(TestCase):
         self.factory = RequestFactory()
         self.view = SettingsView()
         self.view.request = self.factory.get('/settings/')
-        
+
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
         setattr(self.view.request, 'session', 'session')
         messages_storage = FallbackStorage(self.view.request)
         setattr(self.view.request, '_messages', messages_storage)
-        
-        # Create notification config
-        self.notification_config = NotificationConfig.objects.create()
+
+        # Create security config
         self.security_config = SecurityConfig.objects.create(
             id=1,
             security_mode=SecurityConfig.SecurityModeChoices.LOW,
             auto_gen_pki=False,
-            notification_config=self.notification_config,
         )
 
     def test_template_name(self):
@@ -63,12 +60,11 @@ class SettingsViewTest(TestCase):
     def test_get_form_kwargs_creates_config_if_missing(self):
         """Test get_form_kwargs creates SecurityConfig if it doesn't exist."""
         SecurityConfig.objects.all().delete()
-        
+
         form_kwargs = self.view.get_form_kwargs()
-        
+
         self.assertIn('instance', form_kwargs)
         self.assertIsInstance(form_kwargs['instance'], SecurityConfig)
-        self.assertIsNotNone(form_kwargs['instance'].notification_config)
 
     def test_get_context_data_includes_page_info(self):
         """Test get_context_data includes page category and name."""

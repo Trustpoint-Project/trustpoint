@@ -139,66 +139,18 @@ urlpatterns = [
     path(
         (
             'certificate-lifecycle-management/<int:pk>'
-            '/no-onboarding/issue-application-credential/manual/issue-tls-client-credential/'
+            '/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/'
         ),
-        views.DeviceIssueTlsClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_client_credential',
+        views.DeviceIssueProfileCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_profile_credential',
     ),
     path(
         (
             'opc-ua-gds/certificate-lifecycle-management/<int:pk>'
-            '/no-onboarding/issue-application-credential/manual/issue-tls-client-credential/'
+            '/no-onboarding/issue-application-credential/manual/profile/<int:profile_id>/'
         ),
-        views.OpcUaGdsIssueTlsClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_client_credential',
-    ),
-    path(
-        (
-            'certificate-lifecycle-management/<int:pk>'
-            '/no-onboarding/issue-application-credential/manual/issue-tls-server-credential/'
-        ),
-        views.DeviceIssueTlsServerCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_server_credential',
-    ),
-    path(
-        (
-            'opc-ua-gds/certificate-lifecycle-management/<int:pk>'
-            '/no-onboarding/issue-application-credential/manual/issue-tls-server-credential/'
-        ),
-        views.OpcUaGdsIssueTlsServerCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_tls_server_credential',
-    ),
-    path(
-        (
-            'certificate-lifecycle-management/<int:pk>'
-            '/no-onboarding/issue-application-credential/manual/issue-opc-ua-client-credential/'
-        ),
-        views.DeviceIssueOpcUaClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_client_credential',
-    ),
-    path(
-        (
-            'opc-ua-gds/certificate-lifecycle-management/<int:pk>'
-            '/no-onboarding/issue-application-credential/manual/issue-opc-ua-client-credential/'
-        ),
-        views.OpcUaGdsIssueOpcUaClientCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_client_credential',
-    ),
-    path(
-        (
-            'certificate-lifecycle-management/<int:pk>'
-            '/no-onboarding/issue-application-credential/manual/issue-opc-ua-server-credential/'
-        ),
-        views.DeviceIssueOpcUaServerCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_server_credential',
-    ),
-    path(
-        (
-            'opc-ua-gds/certificate-lifecycle-management/<int:pk>'
-            '/no-onboarding/issue-application-credential/manual/issue-opc-ua-server-credential/'
-        ),
-        views.OpcUaGdsIssueOpcUaServerCredentialView.as_view(),
-        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_opc_ua_server_credential',
+        views.OpcUaGdsIssueProfileCredentialView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_certificate_lifecycle_management_issue_profile_credential',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/cmp-shared-secret/',
@@ -380,6 +332,11 @@ urlpatterns = [
         'opc-ua-gds-push/<int:pk>/update-server-certificate/',
         views.OpcUaGdsPushUpdateServerCertificateView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_update_server_certificate',
+    ),
+    path(
+        'opc-ua-gds-push/<int:pk>/cert-renewal-settings/',
+        views.OpcUaGdsPushCertRenewalSettingsView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_cert_renewal_settings',
     ),
     path(
         'credential-download/browser/<int:pk>/cancel',

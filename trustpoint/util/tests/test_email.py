@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Any, cast
 
 import pytest
 from django.core import mail
-from django.core.mail.message import EmailMultiAlternatives
 from django.template.loader import get_template
 from util.email import (
     EmailPayload,

@@ -13,7 +13,6 @@ dependencies = [
     "crispy-bootstrap5~=2025.4",
     "cryptography>=46.0.1",
     "django>=6.0.2,<7",
-    "django-behave>=0.1.6",
     "django-crispy-forms~=2.3",
     "django-dbbackup>=5.0.0",
     "django-filter~=25.1",
@@ -36,7 +35,8 @@ dependencies = [
     "trustpoint-core==0.3.1",
     "types-paramiko>=3.5.0.20250516",
     "zeroconf>=0.148,<0.149",
-    "asyncua>=1.1.5"
+    "asyncua>=1.1.5",
+    "django-q2>=1.9.0",
 ]
 
 [dependency-groups]
@@ -102,7 +102,7 @@ ignore = [
     # TODO(AlexHx8472): We should use this in the future:
     "TD003",
 ]
-exclude = ["**/migrations/*", "**/manage.py", "**/tests/*", "**/management/commands/*", "**/features/*", "**/conftest.py"]
+    exclude = ["**/migrations/*", "**/manage.py", "**/tests/*", "**/management/commands/*", "**/features/*", "**/conftest.py"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**/**.py" = ["S101"]
