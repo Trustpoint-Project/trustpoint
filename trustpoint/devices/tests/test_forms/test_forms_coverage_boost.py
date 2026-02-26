@@ -117,7 +117,7 @@ class TestBrowserLoginFormExtended:
         device = device_instance['device']
         
         # Create a RemoteDeviceCredentialDownloadModel for this credential
-        download_model = RemoteDeviceCredentialDownloadModel.objects.create(
+        RemoteDeviceCredentialDownloadModel.objects.create(
             issued_credential_model=issued_credential,
             device=device
         )

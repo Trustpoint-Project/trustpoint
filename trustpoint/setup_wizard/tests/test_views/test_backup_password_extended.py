@@ -290,7 +290,7 @@ class TestSetupWizardBackupPasswordViewFormValid:
         form = BackupPasswordForm(data={})
         form.is_valid()  # Will be invalid due to missing data
         
-        response = self.view.form_invalid(form)
+        self.view.form_invalid(form)
         
         messages_list = list(get_messages(request))
         assert any('correct the errors' in str(m).lower() for m in messages_list)

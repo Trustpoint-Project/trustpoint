@@ -132,7 +132,7 @@ class TestDeviceViewSetAPI:
         device_instance: dict[str, Any]
     ) -> None:
         """Test API list endpoint for devices."""
-        device = device_instance['device']
+        device_instance['device']
         
         # API endpoint
         url = '/api/devices/'
