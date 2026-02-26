@@ -261,6 +261,12 @@ a.tp-primary:focus, a.tp-primary:hover, a.tp-primary:active,
     justify-content: center;
 }
 
+#tp-version a {
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+}
+
 /* ----- Main content and cards ----- */
 
 .tp-main {
