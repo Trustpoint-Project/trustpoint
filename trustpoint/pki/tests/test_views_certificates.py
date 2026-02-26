@@ -293,7 +293,7 @@ class TestCertificateMultipleDownloadView:
     def test_get_context_data_includes_pks_path(self, rf: RequestFactory, admin_user, issuing_ca_instance):
         """Test that pks_path is included in context data."""
         issuing_ca = issuing_ca_instance['issuing_ca']
-        issuing_ca_instance['cert']
+
         
         # Use the certificate from the issuing CA
         cert1 = issuing_ca.credential.certificate
