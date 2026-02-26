@@ -83,6 +83,7 @@ urlpatterns += [
     ),
     path('', base.IndexView.as_view()),
     path('workflows/', include('workflows.urls', namespace='workflows')),
+    path('discovery/', include('discovery.urls')),
 
     # API URLs
     path('api/', include('devices.api_urls')),
