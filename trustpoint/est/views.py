@@ -103,8 +103,8 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
 
         try:
             # TODO (FHK): Implement a more robust way to allow the issuance of Issuing CA certificates  # noqa: FIX002
-            # Allow CA certificate requests if using the issuing_ca profile
-            allow_ca_cert = cert_profile == 'issuing_ca'
+            # Allow CA certificate requests if using the issuing_ca or dev_owner_id profile
+            allow_ca_cert = cert_profile in ('issuing_ca', 'dev_owner_id')
 
             ctx = EstCertificateRequestContext(
                 raw_message=request,

@@ -1003,11 +1003,27 @@ class IDevIDReferenceModel(models.Model):
     """Model to store the string referencing an IDevID certificate.
 
     Obtained from the SAN of the DevOwnerID certificate.
+
+    The ``idevid_ref`` field holds the raw ``dev-owner:`` URI embedded in the DevOwnerID SAN.
+    ``dev_owner_id_certificate`` points to the :class:`~pki.models.certificate.CertificateModel`
+    of the DevOwnerID certificate whose SAN contained this reference, so the details view can
+    display the DevOwnerID certificate information without a fragile fingerprint-string lookup.
     """
     dev_owner_id = models.ForeignKey(
         'OwnerCredentialModel', related_name='idevid_ref_set', on_delete=models.CASCADE
     )
     idevid_ref = models.CharField(max_length=255, verbose_name=_('IDevID Identifier'))
+    dev_owner_id_certificate = models.ForeignKey(
+        CertificateModel,
+        verbose_name=_('DevOwnerID Certificate'),
+        on_delete=models.SET_NULL,
+        related_name='idevid_refs',
+        null=True,
+        blank=True,
+        help_text=_(
+            'The DevOwnerID certificate whose SAN contained this IDevID reference.'
+        ),
+    )
 
     def __str__(self) -> str:
         """Returns a human-readable string that represents this IDevIDRefSanModel entry."""
@@ -1258,10 +1274,15 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
             owner_credential=owner_credential,
         )
 
+        # credential_model.certificate is the DevOwnerID CertificateModel; link it on each
+        # IDevIDReferenceModel so the details view can show certificate info without a
+        # fragile fingerprint-based lookup.
+        dev_owner_id_cert_model = credential_model.certificate
         for idevid_ref in idevid_refs:
             IDevIDReferenceModel.objects.create(
                 dev_owner_id=owner_credential,
                 idevid_ref=idevid_ref,
+                dev_owner_id_certificate=dev_owner_id_cert_model,
             )
 
         return owner_credential

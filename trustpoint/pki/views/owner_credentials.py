@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING, Any
 
+from cryptography import x509
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
@@ -29,7 +30,7 @@ from pki.forms import (
 from pki.models import OwnerCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel
-from pki.models.credential import CredentialModel, PrimaryCredentialCertificate
+from pki.models.credential import CredentialModel, IDevIDReferenceModel, PrimaryCredentialCertificate
 from pki.util.cert_profile import ProfileValidationError
 from request.clients import EstClient, EstClientError
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
@@ -84,27 +85,19 @@ class OwnerCredentialDetailView(LoggerMixin, OwnerCredentialContextMixin, Detail
 
     # add idevid refs to the context
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the issued certificates to the context.
+        """Adds the IDevID reference list to the context.
 
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data()
-
-        Returns:
-            The context to render the page.
+        Each entry in ``idevid_refs`` is an :class:`~pki.models.credential.IDevIDReferenceModel`
+        instance.  The ``dev_owner_id_certificate`` FK on each ref points directly to the
+        :class:`~pki.models.certificate.CertificateModel` of the DevOwnerID certificate whose
+        SAN contained this reference (or ``None`` for locally uploaded credentials where the
+        certificate was not stored separately), so no extra DB lookup is needed here.
         """
         context = super().get_context_data(**kwargs)
         owner_credential = self.get_object()
-        idevid_refs: list[dict[str,str]] = []
-        if owner_credential:
-            idevid_refs.extend(
-                {
-                    'idevid_subj_sn': ref.idevid_subject_serial_number,
-                    'idevid_x509_sn': ref.idevid_x509_serial_number,
-                    'idevid_sha256_fingerprint': ref.idevid_sha256_fingerprint,
-                } for ref in owner_credential.idevid_ref_set.all()
-            )
-
-        context['idevid_refs'] = idevid_refs
+        context['idevid_refs'] = list(
+            owner_credential.idevid_ref_set.select_related('dev_owner_id_certificate').all()
+        )
         return context
 
 
@@ -526,6 +519,33 @@ class OwnerCredentialDefineCertContentEstView(
         named_curve = NamedCurve[curve_name.upper()]
         return PublicKeyInfo(public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC, named_curve=named_curve)
 
+    def _delete_orphan_pending_credentials(self, exclude_pk: int | None) -> None:
+        """Delete all key-only (certificate-less) DEV_OWNER_ID credentials for this owner.
+
+        These are credentials created during a previous "define cert content" visit that
+        were never enrolled (the user navigated away or the session expired).  Keeping
+        them creates confusing "Pending enrollment" rows in the CLM.
+
+        Args:
+            exclude_pk: If given, the credential with this pk is kept (it is the one
+                currently in use by the active session).
+        """
+        qs = IssuedCredentialModel.objects.filter(
+            owner_credential=self.owner_credential,
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            credential__certificate__isnull=True,
+        )
+        if exclude_pk is not None:
+            qs = qs.exclude(pk=exclude_pk)
+        for orphan in qs.select_related('credential'):
+            try:
+                credential = orphan.credential
+                orphan.delete()
+                if credential is not None:
+                    credential.delete()
+            except Exception:  # noqa: BLE001
+                self.logger.warning('Could not delete orphan pending credential pk=%s', orphan.pk)
+
     def _create_pending_issued_credential(self) -> IssuedCredentialModel:
         """Generate a fresh key pair and create a key-only IssuedCredentialModel.
 
@@ -579,9 +599,15 @@ class OwnerCredentialDefineCertContentEstView(
                     issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
                     credential__certificate__isnull=True,
                 )
+                # Delete any other orphan pending credentials (from even older aborted sessions)
+                self._delete_orphan_pending_credentials(exclude_pk=existing_pk)
             except IssuedCredentialModel.DoesNotExist:
+                self._delete_orphan_pending_credentials(exclude_pk=None)
                 self.pending_issued = self._create_pending_issued_credential()
         else:
+            # Clean up any leftover key-only credentials from previous aborted sessions
+            # before creating the new one.
+            self._delete_orphan_pending_credentials(exclude_pk=None)
             self.pending_issued = self._create_pending_issued_credential()
 
         return super().dispatch(request, *args, **kwargs)  # type: ignore[return-value]
@@ -677,8 +703,15 @@ class OwnerCredentialRequestCertEstView(
                 request_data['subj'][field] = value
         for field in ('dns_names', 'ip_addresses', 'rfc822_names', 'uris'):
             value = cert_content_data.get(field)
-            if value is not None:
-                request_data['ext']['subject_alternative_name'][field] = value
+            if value:
+                # The value may be a comma-separated string (directly from the form) or already
+                # a list (after a JSON session round-trip). Normalise to list in both cases.
+                if isinstance(value, list):
+                    items = [v.strip() for v in value if str(v).strip()]
+                else:
+                    items = [v.strip() for v in str(value).split(',') if v.strip()]
+                if items:
+                    request_data['ext']['subject_alternative_name'][field] = items
         for field in ('days', 'hours', 'minutes', 'seconds'):
             value = cert_content_data.get(field)
             if value is not None:
@@ -809,6 +842,27 @@ class OwnerCredentialRequestCertEstView(
         cn = cert_model.common_name or owner_credential.unique_name
         pending_issued.common_name = cn
         pending_issued.save(update_fields=['common_name'])
+
+        # Extract IDevID references from the SAN of the issued DevOwnerID certificate
+        # and persist them so the list view can display the correct count.
+        # Each URI with the "dev-owner:" scheme encodes the IDevID identity.
+        # cert_model is the DevOwnerID CertificateModel just saved above, so we link it
+        # directly on the IDevIDReferenceModel to avoid fingerprint-based lookups later.
+        try:
+            san_ext = cert_obj.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+            for san in san_ext.value:
+                if isinstance(san, x509.UniformResourceIdentifier) and san.value.startswith('dev-owner:'):
+                    IDevIDReferenceModel.objects.get_or_create(
+                        dev_owner_id=owner_credential,
+                        idevid_ref=san.value,
+                        defaults={'dev_owner_id_certificate': cert_model},
+                    )
+        except x509.ExtensionNotFound:
+            self.logger.warning(
+                'Issued DevOwnerID certificate for "%s" has no SAN extension; '
+                'no IDevID references stored.',
+                owner_credential.unique_name,
+            )
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Perform the EST enrollment and redirect to the CLM view."""
