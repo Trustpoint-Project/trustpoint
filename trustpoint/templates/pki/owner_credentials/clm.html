@@ -1,0 +1,92 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h2 class="mb-0">
+            {% trans "DevOwnerID" %}: <strong>{{ owner_credential.unique_name }}</strong>
+        </h2>
+    </div>
+    <div class="card-body">
+        <p><strong>{% trans "Remote Host" %}:</strong> {{ owner_credential.remote_host|default:"—" }}</p>
+        <p><strong>{% trans "Remote Port" %}:</strong> {{ owner_credential.remote_port|default:"—" }}</p>
+        <p><strong>{% trans "Remote Path" %}:</strong> {{ owner_credential.remote_path|default:"—" }}</p>
+        {% if owner_credential.est_username %}
+        <p><strong>{% trans "EST Username" %}:</strong> {{ owner_credential.est_username }}</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h1>{% trans "Certificate Lifecycle Management" %}</h1>
+    </div>
+    <div class="card-body">
+
+        <div class="p-3">
+            <h2>{% trans "Issued Credentials" %}</h2>
+        </div>
+        <hr>
+
+        <div>
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>
+                            <a href="#" onclick="updateQueryParam(event, 'sort', 'common_name')">
+                                {% trans 'Common Name (CN)' %}
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#" onclick="updateQueryParam(event, 'sort', 'issued_using_cert_profile')">
+                                {% trans 'Certificate Profile' %}
+                            </a>
+                        </th>
+                        <th>
+                            <a href="#" onclick="updateQueryParam(event, 'sort', 'created_at')">
+                                {% trans 'Issued at' %}
+                            </a>
+                        </th>
+                        <th>{% trans 'Expiration date' %}</th>
+                        <th>{% trans 'Expires in' %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cred in issued_credentials %}
+                    <tr>
+                        <td>
+                            {% if cred.credential.certificate %}
+                            <a href="{% url 'pki:certificate-detail' cred.credential.certificate.pk %}">
+                                {{ cred.common_name }}
+                            </a>
+                            {% else %}
+                            {{ cred.common_name }}
+                            {% endif %}
+                        </td>
+                        <td>{{ cred.issued_using_cert_profile }}</td>
+                        <td>{{ cred.created_at }}</td>
+                        <td>{{ cred.expiration_date }}</td>
+                        <td>{{ cred.expires_in }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="text-center">
+                            {% trans 'No credentials have been issued to this DevOwnerID yet.' %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+    <div class="card-footer d-flex justify-content-between align-items-center mt-3">
+        <div class="tp-card-btn-footer m-1">
+            <a href="{% url 'pki:owner_credentials' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}

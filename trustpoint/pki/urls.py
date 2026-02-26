@@ -284,6 +284,11 @@ urlpatterns = [
         owner_credentials.OwnerCredentialTruststoreAssociationView.as_view(),
         name='owner_credentials-truststore-association',
     ),
+    path(
+        'owner-credentials/clm/<int:pk>/',
+        owner_credentials.OwnerCredentialCLMView.as_view(),
+        name='owner_credentials-clm',
+    ),
     re_path(
         r'^owner-credentials/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         owner_credentials.OwnerCredentialBulkDeleteConfirmView.as_view(),

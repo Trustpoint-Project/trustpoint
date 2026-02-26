@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import datetime
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.shortcuts import get_object_or_404
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
@@ -15,6 +17,7 @@ from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 from trustpoint_core.serializer import PrivateKeySerializer
 
+from devices.models import IssuedCredentialModel
 from pki.forms import (
     OwnerCredentialAddRequestEstNoOnboardingForm,
     OwnerCredentialAddRequestEstOnboardingForm,
@@ -22,6 +25,7 @@ from pki.forms import (
     OwnerCredentialTruststoreAssociationForm,
 )
 from pki.models import OwnerCredentialModel
+from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
@@ -32,6 +36,7 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
+    from django.db.models import QuerySet
     from django.forms import Form
 
 
@@ -257,7 +262,6 @@ class OwnerCredentialTruststoreAssociationView(
 
     def get_owner_credential(self) -> OwnerCredentialModel:
         """Get the OwnerCredentialModel from the URL pk."""
-        from django.shortcuts import get_object_or_404  # noqa: PLC0415
         return get_object_or_404(OwnerCredentialModel, pk=self.kwargs['pk'])
 
     def get_form_kwargs(self) -> dict[str, Any]:
@@ -344,6 +348,43 @@ class OwnerCredentialTruststoreAssociationView(
             ),
         )
         return HttpResponseRedirect(reverse_lazy('pki:owner_credentials'))
+
+
+class OwnerCredentialCLMView(OwnerCredentialContextMixin, DetailView[OwnerCredentialModel]):
+    """Certificate Lifecycle Management view for a DevOwnerID credential."""
+
+    http_method_names = ('get',)
+    model = OwnerCredentialModel
+    template_name = 'pki/owner_credentials/clm.html'
+    context_object_name = 'owner_credential'
+
+    @staticmethod
+    def _get_expires_in(record: IssuedCredentialModel) -> str:
+        """Returns a human-readable string of the time remaining until the credential expires."""
+        cert = record.credential.certificate_or_error
+        if cert.certificate_status != CertificateModel.CertificateStatus.OK:
+            return str(cert.certificate_status.label)
+        now = datetime.datetime.now(datetime.UTC)
+        expire_timedelta = cert.not_valid_after - now
+        days = expire_timedelta.days
+        hours, remainder = divmod(expire_timedelta.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f'{days} days, {hours}:{minutes:02d}:{seconds:02d}'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds issued credentials with computed display fields to the context."""
+        context = super().get_context_data(**kwargs)
+        issued_creds: QuerySet[IssuedCredentialModel] = IssuedCredentialModel.objects.filter(
+            owner_credential=self.object
+        ).select_related('credential__certificate')
+
+        for cred in issued_creds:
+            cred.expires_in = self._get_expires_in(cred)  # type: ignore[attr-defined]
+            cred.expiration_date = cred.credential.certificate_or_error.not_valid_after  # type: ignore[attr-defined]
+
+        context['issued_credentials'] = issued_creds
+        context['back_url'] = reverse_lazy('pki:owner_credentials')
+        return context
 
 
 class OwnerCredentialBulkDeleteConfirmView(OwnerCredentialContextMixin, BulkDeleteView):
