@@ -82,6 +82,7 @@ PUBLIC_PATHS = [
     '/rest',
     '/aoki',
     '/crl',
+    '/setup-wizard'
 ]
 
 
@@ -300,6 +301,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'trustpoint.middleware.Workflow2InlineDrainMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
+    'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
