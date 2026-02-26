@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import uuid
+
 from pathlib import Path
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -20,7 +20,7 @@ from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
 from trustpoint_core.oid import KeyPairGenerator, PublicKeyAlgorithmOid, PublicKeyInfo
 from trustpoint_core.serializer import CredentialSerializer
-from pki.util.x509 import CertificateGenerator
+
 
 from .base_commands import CertificateCreationCommandMixin
 
