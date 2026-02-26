@@ -16,7 +16,6 @@ from setup_wizard.views import (
     SetupWizardImportTlsServerCredentialMethodSelectView,
     SetupWizardImportTlsServerCredentialPkcs12View,
     SetupWizardImportTlsServerCredentialSeparateFilesView,
-    SetupWizardRestoreOptionsView,
     SetupWizardSelectTlsServerCredentialView,
     SetupWizardSetupModeView,
     SetupWizardTlsServerCredentialApplyCancelView,
@@ -26,12 +25,18 @@ from setup_wizard.views import (
 app_name = 'setup_wizard'
 urlpatterns = [
     path('', views.SetupWizardInitialView.as_view(), name='index'),
-    # path('backup-restore', )
     path(
         'create-super-user',
         views.SetupWizardCreateSuperUserView.as_view(),
         name='create_super_user'
-    )
+    ),
+    path(
+        'restore-backup/',
+        views.SetupWizardRestoreBackupView.as_view(),
+        name='restore_backup',
+    ),
+    # path('restore/', BackupRestoreView.as_view(), name='restore'),
+
     # path(
     #     'crypto-storage-setup/',
     #     SetupWizardCryptoStorageView.as_view(),
@@ -78,11 +83,7 @@ urlpatterns = [
     #     SetupWizardGenerateTlsServerCredentialView.as_view(),
     #     name='generate_tls_server_credential',
     # ),
-    # path(
-    #     'restore_options/',
-    #     SetupWizardRestoreOptionsView.as_view(),
-    #     name='restore_options',
-    # ),
+    
     # path(
     #     'tls-server-credential-apply/',
     #     SetupWizardTlsServerCredentialApplyView.as_view(),
