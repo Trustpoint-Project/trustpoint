@@ -140,6 +140,13 @@ class _RsaMinimumKeySizeStrategy(PkiCheckStrategy, LoggerMixin):
             self.logger.warning('_RsaMinimumKeySizeStrategy: %s', msg)
             raise ValueError(msg)
 
+        if min_size == 0:
+            self.logger.debug(
+                '_RsaMinimumKeySizeStrategy: CA "%s" — no minimum key size enforced; check passed.',
+                ca.unique_name,
+            )
+            return
+
         key_size: int = cert_model.spki_key_size
         if key_size < min_size:
             msg = (

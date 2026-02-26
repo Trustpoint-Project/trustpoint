@@ -225,7 +225,12 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
             A response rendering the form with errors.
         """
         messages.error(self.request, _('Error saving the configuration'))
-        return self.render_to_response(self.get_context_data(form=form))
+        extra: dict[str, Any] = {'form': form}
+        if hasattr(form, '_violations'):
+            extra['policy_violations'] = form._violations  # noqa: SLF001
+            extra['policy_violations_mode_label'] = form._violations_mode_label  # noqa: SLF001
+            form.errors.pop('__all__', None)
+        return self.render_to_response(self.get_context_data(**extra))
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Build the context dictionary for rendering the settings page.

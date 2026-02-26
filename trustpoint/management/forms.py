@@ -127,16 +127,10 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 
         violations = self.instance.check_mode_transition(new_mode)
         if violations:
-            bullet_list = '\n'.join(f'• {v}' for v in violations)
-            raise ValidationError(
-                _(
-                    'Cannot switch to %(mode)s: the following existing data violates '
-                    'the new policy:\n%(violations)s'
-                ) % {
-                    'mode': SecurityConfig.SecurityModeChoices(new_mode).label,
-                    'violations': bullet_list,
-                }
-            )
+            self._violations = violations
+            self._violations_mode_label = SecurityConfig.SecurityModeChoices(new_mode).label
+            msg = ''
+            raise ValidationError(msg, code='policy_violation')
         return cleaned_data
 
 

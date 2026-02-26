@@ -269,7 +269,7 @@ class SecurityConfigAuthorization(AuthorizationComponent, LoggerMixin):
                 self.logger.warning('SecurityConfigAuthorization: %s', msg)
                 raise ValueError(msg)
             key_size = public_key.key_size
-            if key_size < min_size:
+            if min_size > 0 and key_size < min_size:
                 msg = (
                     f'RSA key size {key_size} bits is below the minimum of '
                     f'{min_size} bits required by the active security policy.'

@@ -32,6 +32,8 @@ class Command(BaseCommand):
             return
 
         rsa_minimum_key_size = config.rsa_minimum_key_size
+        if not rsa_minimum_key_size:
+            return
         insufficient_key_certificates = CertificateModel.objects.filter(
             spki_algorithm_oid='1.2.840.113549.1.1.1',
             spki_key_size__lt=rsa_minimum_key_size,

@@ -989,4 +989,49 @@ input[readonly].readonly-field {
     pointer-events: none;
 }
 
+/* ----- Settings page ----- */
+
+.tp-settings-layout {
+    padding: 1.5rem;
+}
+
+.tp-settings-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+    margin-bottom: 1.5rem;
+}
+
+.tp-settings-tab-link {
+    padding: 0.4rem 1.1rem;
+    border-radius: 0.375rem;
+    color: var(--bs-emphasis-color);
+    font-weight: 500;
+    text-decoration: none;
+    border: 1px solid var(--bs-border-color);
+    background-color: var(--bs-secondary-bg);
+    transition: background-color 0.15s, border-color 0.15s;
+}
+
+.tp-settings-tab-link:hover,
+.tp-settings-tab-link:focus {
+    color: var(--bs-emphasis-color);
+    background-color: var(--bs-tertiary-bg);
+    border-color: var(--bs-secondary-color);
+}
+
+.tp-settings-tab-link.active {
+    color: #fff;
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+}
+
+.tp-settings-panel {
+    display: none;
+}
+
+.tp-settings-panel.active {
+    display: block;
+}
+
 /* ----- Testing ----- */
