@@ -48,12 +48,6 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
     from django.forms import Form
 
-
-_OWNER_CREDENTIAL_ADD_METHODS = [
-    'local_file_import',
-]
-
-
 class OwnerCredentialContextMixin(ContextDataMixin):
     """Mixin which adds context_data for the PKI -> Issuing CAs pages."""
 
@@ -274,7 +268,7 @@ class OwnerCredentialTruststoreAssociationView(
                 truststore = TruststoreModel.objects.get(pk=truststore_id)
                 kwargs.setdefault('initial', {})['trust_store'] = truststore
             except TruststoreModel.DoesNotExist:
-                pass
+                pass  # Invalid truststore_id in query param — skip pre-selection silently.
         return kwargs
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -685,7 +679,7 @@ class OwnerCredentialRequestCertEstView(
                     issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
                 )
             except IssuedCredentialModel.DoesNotExist:
-                pass
+                pass  # pk no longer valid; fall through to raise ValueError below.
         msg = _('No pending DevOwnerID credential found. Please re-define the certificate content.')
         raise ValueError(msg)
 
