@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.contrib.auth.middleware import LoginRequiredMiddleware
 from django.shortcuts import redirect
 from django.urls import reverse
 
@@ -19,31 +18,40 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse, HttpResponseBase
 
 
-# TODO(AlexHx8472): Stubs not yet available in django-stubs.  # noqa: FIX002
-# TODO(AlexHx8472): We may want to contribute them to the project.  # noqa: FIX002
-class TrustpointLoginRequiredMiddleware(LoggerMixin, LoginRequiredMiddleware):
-    """Middleware that redirects all unauthenticated requests to a login page."""
+class TrustpointLoginRequiredMiddleware(LoggerMixin):
+    """Redirect all unauthenticated requests to login, except for public paths."""
 
-    def process_view(
-        self,
-        request: HttpRequest,
-        view_func: Callable[..., Any],
-        view_args: tuple[Any, ...],
-        view_kwargs: dict[str, Any],
-    ) -> None | HttpResponseBase:
-        """Allow unauthenticated access to public paths, else redirect to login page."""
-        self.logger.critical('whoop')
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        """Initialize the middleware.
+
+        Args:
+            get_response: The next middleware/view callable in the Django chain.
+        """
+        self.get_response = get_response
+        self.login_path = reverse('users:login')
+
+    def __call__(self, request: HttpRequest) -> HttpResponseBase:
+        """Handle an incoming request and apply redirects to login, if required.
+
+        Args:
+            request: The Django HTTP request.
+
+        Returns:
+            A redirect response when access is not allowed, otherwise the normal
+            downstream response.
+        """
         authenticated = request.user.is_authenticated
-        has_allowed_prefix = any(request.path_info.startswith(path) for path in settings.PUBLIC_PATHS)
-        self.logger.critical(f'authenticated: {authenticated}')
-        self.logger.critical(f'path: {request.path_info}')
-        self.logger.critical(f'has allowed prefix:: {has_allowed_prefix}')
-        # TODO: setup wizard paths.
+        path = request.path_info
 
-        if not authenticated and has_allowed_prefix:
-            return None
+        public = any(path.startswith(p) for p in settings.PUBLIC_PATHS)
 
-        return super().process_view(request, view_func, view_args, view_kwargs)
+        if not authenticated and public:
+            return self.get_response(request)
+
+        if not authenticated:
+            return redirect(self.login_path)
+
+        return self.get_response(request)
 
 
 class SetupWizardRedirectMiddleware(LoggerMixin):
@@ -79,6 +87,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
             '/setup-wizard/',
             '/setup-wizard/create-super-user',
             '/setup-wizard/create-super-user/',
+            '/setup-wizard/restore-backup/'
         )
         self.ALLOWED_NO_USER_EXISTS_WIZARD_NOT_COMPLETED_REDIRECT_PATH = reverse('setup_wizard:index')
 

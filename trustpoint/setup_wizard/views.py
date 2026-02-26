@@ -693,7 +693,7 @@ class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView[EmptyForm])
             self.logger.exception(err_msg)
             return redirect('setup_wizard:select_tls_server_credential', permanent=False)
 
-class SetupWizardRestoreOptionsView(TemplateView):
+class SetupWizardRestoreBackupView(TemplateView):
     """View for the restore option during initialization.
 
     Attributes:
@@ -702,7 +702,7 @@ class SetupWizardRestoreOptionsView(TemplateView):
     """
 
     http_method_names = ('get',)
-    template_name = 'setup_wizard/restore_options.html'
+    template_name = 'setup_wizard/restore_backup.html'
 
     def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests for the initial setup wizard page.
@@ -721,8 +721,6 @@ class SetupWizardRestoreOptionsView(TemplateView):
         """
         if not DOCKER_CONTAINER:
             return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
 
         return super().get(*args, **kwargs)
 
