@@ -61,7 +61,7 @@ class DashboardViewTests(TestCase):
         view = DashboardView()
         view.request = request
         view.kwargs = {}
-        result = view.get_queryset()
+        view.get_queryset()
 
         # Verify filter was called (don't check exact queryset as it may differ)
         assert mock_filter.called

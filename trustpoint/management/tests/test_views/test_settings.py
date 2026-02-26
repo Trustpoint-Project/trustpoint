@@ -203,7 +203,7 @@ class SettingsViewTest(TestCase):
         form.save = Mock()
         
         with patch.object(SecurityConfig, 'apply_security_settings'):
-            response = self.view.form_valid(form)
+            self.view.form_valid(form)
         
         messages_list = list(get_messages(self.view.request))
         self.assertTrue(any('missing' in str(msg).lower() for msg in messages_list))
@@ -221,7 +221,7 @@ class SettingsViewTest(TestCase):
         form.save = Mock()
         
         with patch.object(SecurityConfig, 'apply_security_settings'):
-            response = self.view.form_valid(form)
+            self.view.form_valid(form)
         
         messages_list = list(get_messages(self.view.request))
         self.assertTrue(any('missing' in str(msg).lower() for msg in messages_list))
@@ -230,7 +230,7 @@ class SettingsViewTest(TestCase):
         """Test form_invalid displays error message."""
         form = Mock(spec=SecurityConfigForm)
         
-        with patch.object(self.view, 'render_to_response') as mock_render:
+        with patch.object(self.view, 'render_to_response'):
             self.view.form_invalid(form)
         
         messages_list = list(get_messages(self.view.request))
@@ -294,7 +294,7 @@ class ChangeLogLevelViewTest(TestCase):
         
         original_level = logging.getLogger().getEffectiveLevel()
         
-        response = self.view.post(request)
+        self.view.post(request)
         
         # Logger should not be changed
         self.assertEqual(logging.getLogger().getEffectiveLevel(), original_level)

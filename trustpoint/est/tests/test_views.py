@@ -275,7 +275,7 @@ def test_process_enrollment_validation_failure(
 
 def test_est_simple_enrollment_view_csrf_exempt():
     """Test that EstSimpleEnrollmentView has CSRF exemption."""
-    view = EstSimpleEnrollmentView()
+    EstSimpleEnrollmentView()
     # Check that the view class has csrf_exempt decorator applied
     assert hasattr(EstSimpleEnrollmentView, 'dispatch')
 
@@ -315,7 +315,7 @@ def test_est_simple_reenrollment_view_event():
 
 def test_est_simple_reenrollment_view_csrf_exempt():
     """Test that EstSimpleReEnrollmentView has CSRF exemption."""
-    view = EstSimpleReEnrollmentView()
+    EstSimpleReEnrollmentView()
     assert hasattr(EstSimpleReEnrollmentView, 'dispatch')
 
 
@@ -448,7 +448,7 @@ def test_est_simple_reenrollment_view_post_authentication_failure(
 
 def test_est_cacerts_view_csrf_exempt():
     """Test that EstCACertsView has CSRF exemption."""
-    view = EstCACertsView()
+    EstCACertsView()
     assert hasattr(EstCACertsView, 'dispatch')
 
 
@@ -597,7 +597,7 @@ def test_est_cacerts_view_get_headers_removed(request_factory, mock_domain):
             view = EstCACertsView.as_view()
             request = request_factory.get('/est/cacerts/test_domain')
             
-            response = view(request, domain='test_domain')
+            view(request, domain='test_domain')
             
             # Verify delete was called for both headers
             assert mock_response_instance.__delitem__.call_count >= 2
@@ -610,7 +610,7 @@ def test_est_cacerts_view_get_headers_removed(request_factory, mock_domain):
 
 def test_est_csrattrs_view_csrf_exempt():
     """Test that EstCsrAttrsView has CSRF exemption."""
-    view = EstCsrAttrsView()
+    EstCsrAttrsView()
     assert hasattr(EstCsrAttrsView, 'dispatch')
 
 

@@ -109,7 +109,7 @@ class TestClientCertificateAuthenticationExtended:
         device_instance: dict[str, Any]
     ) -> None:
         """Test authentication fails when certificate is not found in database."""
-        device = device_instance['device']
+
         domain = device_instance['domain']
         
         # Create a certificate that's not in the database

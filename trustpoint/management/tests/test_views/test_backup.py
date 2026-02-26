@@ -328,7 +328,7 @@ class BackupManageViewTest(TestCase):
             remote_directory='/path/'
         )
 
-        response = self.client.post(self.url, {'create_sftp_backup': ''})
+        self.client.post(self.url, {'create_sftp_backup': ''})
         
         call_args = mock_client.upload_file.call_args
         self.assertEqual(call_args[0][1], '/path/backup_test.dump.gz')
@@ -360,7 +360,7 @@ class BackupManageViewTest(TestCase):
             remote_directory='/path'
         )
 
-        response = self.client.post(self.url, {'create_sftp_backup': ''})
+        self.client.post(self.url, {'create_sftp_backup': ''})
         
         call_args = mock_client.upload_file.call_args
         self.assertEqual(call_args[0][1], '/path/backup_test2.dump.gz')
