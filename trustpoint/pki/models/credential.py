@@ -33,6 +33,8 @@ if TYPE_CHECKING:
     from django.db.models import QuerySet
     from trustpoint_core.crypto_types import PrivateKey
 
+    from devices.models import IssuedCredentialModel
+
 
 __all__ = [
     'CertificateChainOrderModel',
@@ -1013,25 +1015,36 @@ class IDevIDReferenceModel(models.Model):
 
     @property
     def idevid_subject_serial_number(self) -> str:
-        """Returns the IDevID Subject Serial Number from the SAN of the DevOwnerID certificate."""
+        """Returns the IDevID Subject Serial Number from the SAN of the DevOwnerID certificate.
+
+        The stored ``idevid_ref`` format is ``dev-owner:<subj_sn>.<x509_sn>.<sha256_fingerprint>``.
+        This property strips the ``dev-owner:`` scheme prefix and returns the first segment.
+        """
         try:
-            return self.idevid_ref.split('.')[0]
+            # Remove 'dev-owner:' prefix before splitting
+            return self.idevid_ref.removeprefix('dev-owner:').split('.')[0]
         except IndexError:
             return ''
 
     @property
     def idevid_x509_serial_number(self) -> str:
-        """Returns the IDevID X.509 Serial Number from the SAN of the DevOwnerID certificate."""
+        """Returns the IDevID X.509 Serial Number from the SAN of the DevOwnerID certificate.
+
+        Second dot-separated segment after stripping the ``dev-owner:`` prefix.
+        """
         try:
-            return self.idevid_ref.split('.')[2]
+            return self.idevid_ref.removeprefix('dev-owner:').split('.')[1]
         except IndexError:
             return ''
 
     @property
     def idevid_sha256_fingerprint(self) -> str:
-        """Returns the IDevID SHA256 Fingerprint from the SAN of the DevOwnerID certificate."""
+        """Returns the IDevID SHA256 Fingerprint from the SAN of the DevOwnerID certificate.
+
+        Third dot-separated segment after stripping the ``dev-owner:`` prefix.
+        """
         try:
-            return self.idevid_ref.split('.')[3]
+            return self.idevid_ref.removeprefix('dev-owner:').split('.')[2]
         except IndexError:
             return ''
 
@@ -1040,29 +1053,38 @@ class IDevIDReferenceModel(models.Model):
 class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
     """Device owner credential model.
 
-    This model is a wrapper to store a DevOwnerID Credential for use by devices to trust the Trustpoint.
+    This model is a wrapper to manage a DevOwnerID for use by devices to trust the Trustpoint.
+
+    The actual DevOwnerID certificate is stored as an ``IssuedCredentialModel`` with
+    ``issued_credential_type=DEV_OWNER_ID`` pointing back to this model.
 
     Supports two acquisition modes:
-    - File upload: credential is stored directly (no remote fields required).
-    - Remote CA enrollment: credential is obtained by requesting a certificate from a remote CA,
-      in which case remote_host, remote_port, remote_path, est_username, onboarding_config /
-      no_onboarding_config and chain_truststore are used.
+    - File upload / Manual: a ``NoOnboardingConfigModel`` with ``MANUAL`` protocol is created.
+    - Remote CA enrollment: ``no_onboarding_config`` (EST username/password) or
+      ``onboarding_config`` (EST IDevID) is set together with the remote_* fields.
     """
+
+    class OwnerCredentialTypeChoice(models.IntegerChoices):
+        """How the DevOwnerID certificate is acquired.
+
+        - ``LOCAL``: uploaded as a file or generated locally (no remote CA).
+        - ``REMOTE_EST``: enrolled from a remote CA via EST (RFC 7030).
+        - ``REMOTE_CMP``: enrolled from a remote CA via CMP (RFC 4210 / 9483).
+        """
+
+        LOCAL = 0, _('Local')
+        REMOTE_EST = 1, _('Remote EST')
+        REMOTE_CMP = 2, _('Remote CMP')
 
     unique_name = models.CharField(
         verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
     )
-    credential: models.OneToOneField[CredentialModel] = models.OneToOneField(
-        CredentialModel, related_name='dev_owner_ids', on_delete=models.PROTECT)
 
-    chain_truststore = models.OneToOneField(
-        'pki.TruststoreModel',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='owner_credential',
-        verbose_name=_('Chain Truststore'),
-        help_text=_('The truststore containing the full certificate chain for this DevOwnerID.')
+    owner_credential_type = models.IntegerField(
+        verbose_name=_('Credential Type'),
+        choices=OwnerCredentialTypeChoice,
+        default=OwnerCredentialTypeChoice.LOCAL,
+        help_text=_('How the DevOwnerID certificate is acquired.')
     )
 
     remote_host = models.CharField(
@@ -1096,6 +1118,14 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         help_text=_('Username for EST authentication when enrolling from a remote CA.')
     )
 
+    key_type = models.CharField(
+        verbose_name=_('Key Type'),
+        max_length=32,
+        blank=True,
+        default='ECC-SECP256R1',
+        help_text=_('Cryptographic key type used for all DevOwnerID key pairs (e.g. RSA-2048, ECC-SECP256R1).')
+    )
+
     onboarding_config = models.ForeignKey(
         'onboarding.OnboardingConfigModel',
         related_name='owner_credentials',
@@ -1113,40 +1143,68 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         verbose_name=_('No Onboarding Config'),
-        help_text=_('No-onboarding configuration used for remote CA enrollment.')
+        help_text=_('No-onboarding configuration (manual or EST username/password).')
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
-
     def __str__(self) -> str:
-        """Returns a human-readable string that represents this OwnerCredentialModel entry.
-
-        Returns:
-            str: Human-readable string that represents this OwnerCredentialModel entry.
-        """
+        """Returns a human-readable string that represents this OwnerCredentialModel entry."""
         return self.unique_name
 
     def __repr__(self) -> str:
         """Returns a string representation of the OwnerCredentialModel instance."""
         return f'OwnerCredentialModel(unique_name={self.unique_name})'
 
+    @property
+    def dev_owner_id_credentials(self) -> QuerySet[IssuedCredentialModel]:
+        """Returns all DevOwnerID IssuedCredentialModel instances for this owner credential, newest first.
+
+        An OwnerCredentialModel may accumulate multiple DevOwnerID credentials over time,
+        e.g. after re-enrollment or renewal rounds.
+        """
+        from devices.models import IssuedCredentialModel  # noqa: PLC0415 (avoid circular import at module level)
+
+        return (
+            self.issued_credentials  # type: ignore[attr-defined]
+            .filter(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID)
+            .select_related('credential__certificate')
+            .order_by('-created_at')
+        )
+
+    @property
+    def dev_owner_id_credential(self) -> IssuedCredentialModel | None:
+        """Returns the most recently created DevOwnerID IssuedCredentialModel, or ``None``.
+
+        Use :attr:`dev_owner_id_credentials` when you need the full set of credentials.
+        """
+        return self.dev_owner_id_credentials.first()
+
     @classmethod
     def create_new_owner_credential(
         cls,
         unique_name: str,
         credential_serializer: CredentialSerializer,
+        no_onboarding_config: Any | None = None,
     ) -> OwnerCredentialModel:
-        """Creates a new owner credential model and returns it.
+        """Creates a new OwnerCredentialModel with the DevOwnerID stored as IssuedCredentialModel.
+
+        The DevOwnerID certificate (with optional chain and private key) is stored in a
+        ``CredentialModel`` and wrapped in an ``IssuedCredentialModel`` of type ``DEV_OWNER_ID``.
+        If no ``no_onboarding_config`` is provided a new ``NoOnboardingConfigModel`` with
+        protocol ``MANUAL`` is created automatically.
 
         Args:
-            unique_name: The unique name that will be used to identify the Owner Credential.
-            credential_serializer:
-                The credential as CredentialSerializer instance.
+            unique_name: Unique human-readable name for this owner credential.
+            credential_serializer: The DevOwnerID credential (cert + optional key + chain).
+            no_onboarding_config: Optional pre-created ``NoOnboardingConfigModel`` to attach.
 
         Returns:
-            OwnerCredentialModel: The newly created owner credential model.
+            OwnerCredentialModel: The newly created instance.
         """
+        from devices.models import IssuedCredentialModel  # noqa: PLC0415
+        from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol  # noqa: PLC0415
+
         # Extract the IDevID references from the SAN of the DevOwnerID certificate
         # Reference URI format: 'dev-owner:<IDevID_Subj_SN>.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>'
         idevid_refs: set[str] = set()
@@ -1161,37 +1219,57 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(err_msg) from e
 
         for san in san_extension.value:
-            if isinstance(san, x509.UniformResourceIdentifier):
-                san_uri_str = san.value
-                if san_uri_str.startswith('dev-owner:'):
-                    idevid_refs.add(san_uri_str)
+            if isinstance(san, x509.UniformResourceIdentifier) and san.value.startswith('dev-owner:'):
+                idevid_refs.add(san.value)
         if not idevid_refs:
             raise ValidationError(_(
                 'The provided certificate is not a valid DevOwnerID; '
                 'it does not contain a valid IDevID reference in the SAN.'
             ))
 
-        credential_type = CredentialModel.CredentialTypeChoice.DEV_OWNER_ID
+        # Derive common_name from the certificate subject CN (or fall back to unique_name)
+        from util.field import get_certificate_name  # noqa: PLC0415
+        common_name = get_certificate_name(owner_cert) or unique_name
 
-        credential_model = CredentialModel.save_credential_serializer(
-            credential_serializer=credential_serializer, credential_type=credential_type
-        )
+        # Create a MANUAL NoOnboardingConfig if none is given
+        if no_onboarding_config is None:
+            no_onboarding_config = NoOnboardingConfigModel(
+                pki_protocols=NoOnboardingPkiProtocol.MANUAL,
+            )
+            no_onboarding_config.save()
 
         owner_credential = cls(
             unique_name=unique_name,
-            credential=credential_model,
+            no_onboarding_config=no_onboarding_config,
+            owner_credential_type=cls.OwnerCredentialTypeChoice.LOCAL,
         )
         owner_credential.save()
+
+        # Store the DevOwnerID as an IssuedCredentialModel
+        credential_model = CredentialModel.save_credential_serializer(
+            credential_serializer=credential_serializer,
+            credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
+        )
+        IssuedCredentialModel.objects.create(
+            common_name=common_name,
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_using_cert_profile='dev_owner_id',
+            credential=credential_model,
+            owner_credential=owner_credential,
+        )
+
         for idevid_ref in idevid_refs:
             IDevIDReferenceModel.objects.create(
                 dev_owner_id=owner_credential,
-                idevid_ref=idevid_ref
+                idevid_ref=idevid_ref,
             )
 
         return owner_credential
 
     def post_delete(self) -> None:
-        """Deletes the credential of this owner credential after deleting it."""
-        self.logger.debug('Deleting credential of owner credential %s', self)
-        self.credential.delete()
+        """Deletes all issued credentials and the onboarding config on deletion."""
+        self.logger.debug('Deleting issued credentials of owner credential %s', self)
+        for issued in self.issued_credentials.all():  # type: ignore[attr-defined]
+            issued.credential.delete()
+
 

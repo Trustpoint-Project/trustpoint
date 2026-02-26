@@ -18,15 +18,23 @@
             <div class="tp-kvp-list">
                 <div>
                     <div>{% trans 'Unique Name' %}</div>
-                    <div>{{ issuing_ca.unique_name }}</div>
+                    <div>{{ owner_credential.unique_name }}</div>
                 </div>
                 <div>
                     <div>{% trans 'Serial Number' %}</div>
-                    <div>{{ owner_credential.credential.certificate.serial_number }}</div>
+                    <div>
+                        {% with cert=owner_credential.dev_owner_id_credential.credential.certificate %}
+                        {% if cert %}
+                            <a href="{% url 'pki:certificate-detail' pk=cert.pk %}">{{ cert.serial_number }}</a>
+                        {% else %}
+                            <span class="text-muted">{% trans 'Pending enrollment' %}</span>
+                        {% endif %}
+                        {% endwith %}
+                    </div>
                 </div>
                 <div>
                     <div>{% trans 'Fingerprint (SHA256)' %}</div>
-                    <div>{{ owner_credential.credential.certificate.sha256_fingerprint }}</div>
+                    <div>{{ owner_credential.dev_owner_id_credential.credential.certificate.sha256_fingerprint|default:"—" }}</div>
                 </div>
                 <div>
                     <div>{% trans 'Valid for number of IDevIDs' %}</div>

@@ -289,6 +289,21 @@ urlpatterns = [
         owner_credentials.OwnerCredentialCLMView.as_view(),
         name='owner_credentials-clm',
     ),
+    path(
+        'owner-credentials/define-cert-content-est/<int:pk>/',
+        owner_credentials.OwnerCredentialDefineCertContentEstView.as_view(),
+        name='owner_credentials-define-cert-content-est',
+    ),
+    path(
+        'owner-credentials/request-cert-est/<int:pk>/',
+        owner_credentials.OwnerCredentialRequestCertEstView.as_view(),
+        name='owner_credentials-request-cert-est',
+    ),
+    path(
+        'owner-credentials/<int:owner_pk>/issued-credential/<int:pk>/delete/',
+        owner_credentials.IssuedCredentialDeleteView.as_view(),
+        name='owner_credentials-issued-credential-delete',
+    ),
     re_path(
         r'^owner-credentials/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         owner_credentials.OwnerCredentialBulkDeleteConfirmView.as_view(),

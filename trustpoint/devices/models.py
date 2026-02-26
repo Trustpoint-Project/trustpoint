@@ -195,6 +195,7 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
         DOMAIN_CREDENTIAL = 0, _('Domain Credential')
         APPLICATION_CREDENTIAL = 1, _('Application Credential')
+        DEV_OWNER_ID = 2, _('DevOwnerID')
 
     id = models.AutoField(primary_key=True)
 

@@ -1,0 +1,82 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h1>{% trans 'Issue DevOwnerID Certificate for' %} "{{ owner_credential.unique_name }}"</h1>
+        <p class="text-muted">{% trans 'Using profile:' %} {{ cert_profile.display_name|default:cert_profile.unique_name }}</p>
+    </div>
+    <form method="post">
+        <div class="card-body">
+            <div class="tp-card-centered-content">
+                {% csrf_token %}
+                {% for error in form.non_field_errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+                {% if form.fields %}
+                    <h2>{% trans 'Subject' %}</h2>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list">
+                        {% for field in form %}
+                            {% if field.name in 'common_name,organization_name,organizational_unit_name,country_name,state_or_province_name,locality_name,email_address' %}
+                                <div>
+                                    <div>{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</div>
+                                    <div>{{ field }}</div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    <h2>{% trans 'Subject Alternative Name' %}</h2>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list">
+                        {% for field in form %}
+                            {% if field.name in 'dns_names,ip_addresses,rfc822_names,uris' %}
+                                <div>
+                                    <div>{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</div>
+                                    <div>
+                                        {{ field }}
+                                        {% if field.name == 'uris' %}
+                                        <small class="form-text text-muted">
+                                            {% blocktrans %}
+                                            One URI per line. The DevOwnerID profile requires at least one URI
+                                            referencing an IDevID in the format:<br>
+                                            <code>dev-owner:&lt;IDevID_Subject_SN&gt;.&lt;IDevID_X509_SN&gt;.&lt;IDevID_SHA256_Fingerprint&gt;</code><br>
+                                            Example: <code>dev-owner:SN-12345678.0123456789ABCDEF.AA:BB:CC:DD:EE:FF</code>
+                                            {% endblocktrans %}
+                                        </small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                    <h2>{% trans 'Validity' %}</h2>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list">
+                        {% for field in form %}
+                            {% if field.name in 'days,hours,minutes,seconds' %}
+                                <div>
+                                    <div>{{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}</div>
+                                    <div>{{ field }}</div>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p>{% trans 'No fields available for this profile.' %}</p>
+                {% endif %}
+            </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between">
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url 'pki:owner_credentials-clm' pk=owner_credential.pk %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+            </div>
+            <div class="tp-card-btn-footer m-1">
+                <button type="submit" class="btn btn-primary">{% trans 'Continue to Request Certificate' %}</button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock content %}

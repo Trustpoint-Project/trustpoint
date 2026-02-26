@@ -10,11 +10,24 @@
         </h2>
     </div>
     <div class="card-body">
+        <p><strong>{% trans "Type" %}:</strong> {{ owner_credential.get_owner_credential_type_display }}</p>
+        <p><strong>{% trans "Key Type" %}:</strong> {{ owner_credential.key_type|default:"—" }}</p>
+        {% if owner_credential.owner_credential_type != 0 %}
         <p><strong>{% trans "Remote Host" %}:</strong> {{ owner_credential.remote_host|default:"—" }}</p>
         <p><strong>{% trans "Remote Port" %}:</strong> {{ owner_credential.remote_port|default:"—" }}</p>
         <p><strong>{% trans "Remote Path" %}:</strong> {{ owner_credential.remote_path|default:"—" }}</p>
         {% if owner_credential.est_username %}
         <p><strong>{% trans "EST Username" %}:</strong> {{ owner_credential.est_username }}</p>
+        {% endif %}
+        <p><strong>{% trans "TLS Trust Store" %}:</strong>
+            {% with ts=owner_credential.no_onboarding_config.trust_store %}
+            {% if ts %}
+                <a href="{% url 'pki:truststore-detail' pk=ts.pk %}">{{ ts.unique_name }}</a>
+            {% else %}
+                <span class="text-muted">{% trans "Not configured" %}</span>
+            {% endif %}
+            {% endwith %}
+        </p>
         {% endif %}
     </div>
 </div>
@@ -26,7 +39,13 @@
     <div class="card-body">
 
         <div class="p-3">
-            <h2>{% trans "Issued Credentials" %}</h2>
+            <h2>
+                {% if owner_credential.owner_credential_type == 0 %}
+                    {% trans "Uploaded DevOwnerIDs" %}
+                {% else %}
+                    {% trans "Issued DevOwnerIDs" %}
+                {% endif %}
+            </h2>
         </div>
         <hr>
 
@@ -51,6 +70,7 @@
                         </th>
                         <th>{% trans 'Expiration date' %}</th>
                         <th>{% trans 'Expires in' %}</th>
+                        <th>{% trans 'Actions' %}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -69,10 +89,24 @@
                         <td>{{ cred.created_at }}</td>
                         <td>{{ cred.expiration_date }}</td>
                         <td>{{ cred.expires_in }}</td>
+                        <td class="text-nowrap">
+                            {% if not cred.credential.certificate %}
+                            <a href="{% url 'pki:owner_credentials-request-cert-est' pk=owner_credential.pk %}"
+                               class="btn btn-primary tp-table-btn me-1"
+                               title="{% trans 'Resume enrollment' %}">
+                                {% trans 'Resume' %}
+                            </a>
+                            {% endif %}
+                            <a href="{% url 'pki:owner_credentials-issued-credential-delete' owner_pk=owner_credential.pk pk=cred.pk %}"
+                               class="btn btn-danger tp-table-btn"
+                               title="{% trans 'Delete credential' %}">
+                                {% trans 'Delete' %}
+                            </a>
+                        </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center">
+                        <td colspan="6" class="text-center">
                             {% trans 'No credentials have been issued to this DevOwnerID yet.' %}
                         </td>
                     </tr>
@@ -86,6 +120,13 @@
         <div class="tp-card-btn-footer m-1">
             <a href="{% url 'pki:owner_credentials' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
         </div>
+        {% if owner_credential.owner_credential_type != 0 %}
+        <div class="tp-card-btn-footer m-1">
+            <a href="{% url 'pki:owner_credentials-define-cert-content-est' pk=owner_credential.pk %}" class="btn btn-primary">
+                {% trans 'Issue DevOwnerID' %}
+            </a>
+        </div>
+        {% endif %}
     </div>
 </div>
 
