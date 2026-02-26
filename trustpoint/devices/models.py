@@ -14,7 +14,6 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_q.tasks import schedule  # type: ignore[import-untyped]
 from django_stubs_ext.db.models import TypedModelMeta
-from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 
 from onboarding.models import (
     AbstractPkiProtocolModel,
@@ -185,7 +184,11 @@ class DeviceModel(CustomDeleteActionModel):
         self.save(update_fields=['opc_gds_push_last_update_scheduled_at'])
 
 class IssuedCredentialModel(CustomDeleteActionModel):
-    """Model for all credentials and certificates that have been issued or requested by the Trustpoint."""
+    """Model for all credentials and certificates that have been issued or requested by the Trustpoint.
+
+    Exactly one of ``device``, ``ca``, or ``owner_credential`` must be set to identify the owner
+    of this credential.  ``domain`` remains optional and is only required for device credentials.
+    """
 
     class IssuedCredentialType(models.IntegerChoices):
         """The type of the credential."""
@@ -209,10 +212,36 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         blank=False,
     )
     device = models.ForeignKey(
-        'devices.DeviceModel', verbose_name=_('Device'), on_delete=models.PROTECT, related_name='issued_credentials'
+        'devices.DeviceModel',
+        verbose_name=_('Device'),
+        on_delete=models.PROTECT,
+        related_name='issued_credentials',
+        null=True,
+        blank=True,
     )
     domain = models.ForeignKey(
-        DomainModel, verbose_name=_('Domain'), on_delete=models.PROTECT, related_name='issued_credentials'
+        DomainModel,
+        verbose_name=_('Domain'),
+        on_delete=models.PROTECT,
+        related_name='issued_credentials',
+        null=True,
+        blank=True,
+    )
+    ca = models.ForeignKey(
+        'pki.CaModel',
+        verbose_name=_('CA'),
+        on_delete=models.PROTECT,
+        related_name='issued_credentials',
+        null=True,
+        blank=True,
+    )
+    owner_credential = models.ForeignKey(
+        'pki.OwnerCredentialModel',
+        verbose_name=_('Owner Credential'),
+        on_delete=models.PROTECT,
+        related_name='issued_credentials',
+        null=True,
+        blank=True,
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
@@ -222,13 +251,23 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
     def __str__(self) -> str:
         """Returns a human-readable string representation."""
-        return f'IssuedCredentialModel(common_name={common_name})'
+        return f'IssuedCredentialModel(common_name={self.common_name})'
+
+    def clean(self) -> None:
+        """Validate that exactly one owner (device, ca, or owner_credential) is set."""
+        owners = [self.device_id, self.ca_id, self.owner_credential_id]
+        set_count = sum(1 for o in owners if o is not None)
+        if set_count == 0:
+            raise ValidationError(_('One of device, ca, or owner_credential must be set.'))
+        if set_count > 1:
+            raise ValidationError(_('Only one of device, ca, or owner_credential may be set.'))
 
     def revoke(self) -> None:
         """Revokes all active certificates associated with this credential."""
-        if self.domain.issuing_ca is None:
+        domain = self.domain
+        if domain is None or domain.issuing_ca is None:
             return
-        ca = self.domain.issuing_ca
+        ca = domain.issuing_ca
         cert: CertificateModel
         for cert in self.credential.certificates.all():
             status = cert.certificate_status

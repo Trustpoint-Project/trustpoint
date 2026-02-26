@@ -1041,6 +1041,12 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
     """Device owner credential model.
 
     This model is a wrapper to store a DevOwnerID Credential for use by devices to trust the Trustpoint.
+
+    Supports two acquisition modes:
+    - File upload: credential is stored directly (no remote fields required).
+    - Remote CA enrollment: credential is obtained by requesting a certificate from a remote CA,
+      in which case remote_host, remote_port, remote_path, est_username, onboarding_config /
+      no_onboarding_config and chain_truststore are used.
     """
 
     unique_name = models.CharField(
@@ -1048,6 +1054,67 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
     )
     credential: models.OneToOneField[CredentialModel] = models.OneToOneField(
         CredentialModel, related_name='dev_owner_ids', on_delete=models.PROTECT)
+
+    chain_truststore = models.OneToOneField(
+        'pki.TruststoreModel',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='owner_credential',
+        verbose_name=_('Chain Truststore'),
+        help_text=_('The truststore containing the full certificate chain for this DevOwnerID.')
+    )
+
+    remote_host = models.CharField(
+        verbose_name=_('Remote Host'),
+        max_length=253,
+        blank=True,
+        default='',
+        help_text=_('The hostname or IP address of the remote CA used to enroll this DevOwnerID.')
+    )
+
+    remote_port = models.PositiveIntegerField(
+        verbose_name=_('Remote Port'),
+        blank=True,
+        null=True,
+        help_text=_('The port number of the remote CA.')
+    )
+
+    remote_path = models.CharField(
+        verbose_name=_('Remote Path'),
+        max_length=255,
+        blank=True,
+        default='',
+        help_text=_('The path on the remote CA endpoint.')
+    )
+
+    est_username = models.CharField(
+        verbose_name=_('EST Username'),
+        max_length=128,
+        blank=True,
+        default='',
+        help_text=_('Username for EST authentication when enrolling from a remote CA.')
+    )
+
+    onboarding_config = models.ForeignKey(
+        'onboarding.OnboardingConfigModel',
+        related_name='owner_credentials',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name=_('Onboarding Config'),
+        help_text=_('Onboarding configuration used for remote CA enrollment.')
+    )
+
+    no_onboarding_config = models.ForeignKey(
+        'onboarding.NoOnboardingConfigModel',
+        related_name='owner_credentials',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name=_('No Onboarding Config'),
+        help_text=_('No-onboarding configuration used for remote CA enrollment.')
+    )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 

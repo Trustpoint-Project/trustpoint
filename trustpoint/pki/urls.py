@@ -256,8 +256,33 @@ urlpatterns = [
     ),
     path(
         'owner-credentials/add/',
-        owner_credentials.OwnerCredentialAddView.as_view(),
+        owner_credentials.OwnerCredentialAddMethodSelectView.as_view(),
         name='owner_credentials-add',
+    ),
+    path(
+        'owner-credentials/add/file-import/',
+        owner_credentials.OwnerCredentialFileImportView.as_view(),
+        name='owner_credentials-add-file_import',
+    ),
+    path(
+        'owner-credentials/add/est/',
+        owner_credentials.OwnerCredentialAddRequestEstMethodSelectView.as_view(),
+        name='owner_credentials-add-est',
+    ),
+    path(
+        'owner-credentials/add/est/no-onboarding/',
+        owner_credentials.OwnerCredentialAddRequestEstNoOnboardingView.as_view(),
+        name='owner_credentials-add-est-no-onboarding',
+    ),
+    path(
+        'owner-credentials/add/est/onboarding/',
+        owner_credentials.OwnerCredentialAddRequestEstOnboardingView.as_view(),
+        name='owner_credentials-add-est-onboarding',
+    ),
+    path(
+        'owner-credentials/truststore-association/<int:pk>/',
+        owner_credentials.OwnerCredentialTruststoreAssociationView.as_view(),
+        name='owner_credentials-truststore-association',
     ),
     re_path(
         r'^owner-credentials/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',

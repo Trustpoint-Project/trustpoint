@@ -13,9 +13,16 @@ from django.utils.translation import gettext as _
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
+from trustpoint_core.serializer import PrivateKeySerializer
 
-from pki.forms import OwnerCredentialFileImportForm
+from pki.forms import (
+    OwnerCredentialAddRequestEstNoOnboardingForm,
+    OwnerCredentialAddRequestEstOnboardingForm,
+    OwnerCredentialFileImportForm,
+    OwnerCredentialTruststoreAssociationForm,
+)
 from pki.models import OwnerCredentialModel
+from pki.models.credential import CredentialModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -26,6 +33,11 @@ from trustpoint.views.base import (
 
 if TYPE_CHECKING:
     from django.forms import Form
+
+
+_OWNER_CREDENTIAL_ADD_METHODS = [
+    'local_file_import',
+]
 
 
 class OwnerCredentialContextMixin(ContextDataMixin):
@@ -83,10 +95,29 @@ class OwnerCredentialDetailView(LoggerMixin, OwnerCredentialContextMixin, Detail
         return context
 
 
-class OwnerCredentialAddView(OwnerCredentialContextMixin, FormView[OwnerCredentialFileImportForm]):
+class OwnerCredentialAddMethodSelectView(OwnerCredentialContextMixin, FormView[OwnerCredentialFileImportForm]):
+    """View to select the method for adding a new DevOwnerID."""
+
+    template_name = 'pki/owner_credentials/add/method_select.html'
+    # Use the file-import form as a lightweight stand-in so FormView machinery is satisfied.
+    form_class = OwnerCredentialFileImportForm
+
+    def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Render the method selection page (no form processing needed)."""
+        return self.render_to_response(self.get_context_data())
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Redirect based on the chosen method."""
+        method = request.POST.get('method_select')
+        if method == 'local_file_import':
+            return HttpResponseRedirect(reverse_lazy('pki:owner_credentials-add-file_import'))
+        return HttpResponseRedirect(reverse_lazy('pki:owner_credentials-add'))
+
+
+class OwnerCredentialFileImportView(OwnerCredentialContextMixin, FormView[OwnerCredentialFileImportForm]):
     """View to import a DevOwnerID from separate PEM files."""
 
-    template_name = 'pki/owner_credentials/add.html'
+    template_name = 'pki/owner_credentials/add/file_import.html'
     form_class = OwnerCredentialFileImportForm
     success_url = reverse_lazy('pki:owner_credentials')
 
@@ -100,6 +131,219 @@ class OwnerCredentialAddView(OwnerCredentialContextMixin, FormView[OwnerCredenti
         if action == 'add_with_truststore':
             return HttpResponseRedirect(reverse('pki:truststores-add'))
         return super().form_valid(form)
+
+
+# Keep old name as alias so any external references continue to work
+OwnerCredentialAddView = OwnerCredentialFileImportView
+
+
+class OwnerCredentialAddRequestEstMethodSelectView(
+    OwnerCredentialContextMixin, FormView[OwnerCredentialFileImportForm]
+):
+    """View to select between onboarding and no-onboarding for EST-based DevOwnerID enrollment."""
+
+    template_name = 'pki/owner_credentials/add/est_method_select.html'
+    form_class = OwnerCredentialFileImportForm
+
+    def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Render the EST method selection page."""
+        return self.render_to_response(self.get_context_data())
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Redirect based on whether onboarding or no-onboarding is chosen."""
+        method = request.POST.get('method_select')
+        if method == 'no_onboarding':
+            return HttpResponseRedirect(reverse_lazy('pki:owner_credentials-add-est-no-onboarding'))
+        if method == 'onboarding':
+            return HttpResponseRedirect(reverse_lazy('pki:owner_credentials-add-est-onboarding'))
+        return HttpResponseRedirect(reverse_lazy('pki:owner_credentials-add-est'))
+
+
+class OwnerCredentialAddRequestEstNoOnboardingView(
+    OwnerCredentialContextMixin, FormView[OwnerCredentialAddRequestEstNoOnboardingForm]
+):
+    """View to request a DevOwnerID via EST using username/password (no IDevID onboarding)."""
+
+    template_name = 'pki/owner_credentials/add/est_request.html'
+    form_class = OwnerCredentialAddRequestEstNoOnboardingForm
+    success_url = reverse_lazy('pki:owner_credentials')
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add heading context."""
+        context = super().get_context_data(**kwargs)
+        context['form_title'] = _('Request DevOwnerID via EST — No Onboarding (Username / Password)')
+        context['back_url'] = reverse_lazy('pki:owner_credentials-add-est')
+        return context
+
+    def form_valid(self, form: OwnerCredentialAddRequestEstNoOnboardingForm) -> HttpResponse:
+        """Save a CredentialModel (key only) + OwnerCredentialModel, then redirect to truststore association."""
+        private_key_pem = PrivateKeySerializer(form.cleaned_data['_private_key']).as_pkcs8_pem().decode()
+
+        credential_model = CredentialModel.objects.create(
+            credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
+            private_key=private_key_pem,
+            certificate=None,
+        )
+
+        owner_credential = OwnerCredentialModel.objects.create(
+            unique_name=form.cleaned_data['unique_name'],
+            credential=credential_model,
+            no_onboarding_config=form.cleaned_data['_no_onboarding_config'],
+            remote_host=form.cleaned_data['_remote_host'],
+            remote_port=form.cleaned_data['_remote_port'],
+            remote_path=form.cleaned_data['_remote_path'],
+            est_username=form.cleaned_data['_est_username'],
+        )
+        messages.success(
+            self.request,
+            _(
+                'DevOwnerID configuration "{name}" saved. '
+                'Now associate the TLS server certificate trust store.'
+            ).format(name=owner_credential.unique_name),
+        )
+        return HttpResponseRedirect(
+            reverse('pki:owner_credentials-truststore-association', kwargs={'pk': owner_credential.pk})
+        )
+
+    def form_invalid(self, form: OwnerCredentialAddRequestEstNoOnboardingForm) -> HttpResponse:
+        """Show form-level errors as Django messages."""
+        for error in form.non_field_errors():
+            messages.error(self.request, error)
+        return super().form_invalid(form)
+
+
+class OwnerCredentialAddRequestEstOnboardingView(
+    OwnerCredentialContextMixin, FormView[OwnerCredentialAddRequestEstOnboardingForm]
+):
+    """View to request a DevOwnerID via EST using IDevID-based onboarding (mTLS client certificate)."""
+
+    template_name = 'pki/owner_credentials/add/est_request.html'
+    form_class = OwnerCredentialAddRequestEstOnboardingForm
+    success_url = reverse_lazy('pki:owner_credentials')
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add heading context."""
+        context = super().get_context_data(**kwargs)
+        context['form_title'] = _('Request DevOwnerID via EST — Onboarding (IDevID)')
+        context['back_url'] = reverse_lazy('pki:owner_credentials-add-est')
+        return context
+
+    def form_valid(self, form: OwnerCredentialAddRequestEstOnboardingForm) -> HttpResponse:
+        """Store the prepared config and show success."""
+        messages.success(
+            self.request,
+            _(
+                'EST onboarding configuration for DevOwnerID "{name}" saved. '
+                'Step 1: the IDevID will be used to request a client certificate from the remote EST server. '
+                'Step 2: that client certificate will then be used to request the DevOwnerID.'
+            ).format(name=form.cleaned_data['unique_name']),
+        )
+        return super().form_valid(form)
+
+    def form_invalid(self, form: OwnerCredentialAddRequestEstOnboardingForm) -> HttpResponse:
+        """Show form-level errors as Django messages."""
+        for error in form.non_field_errors():
+            messages.error(self.request, error)
+        return super().form_invalid(form)
+
+
+class OwnerCredentialTruststoreAssociationView(
+    OwnerCredentialContextMixin, FormView[OwnerCredentialTruststoreAssociationForm]
+):
+    """View for associating a TLS truststore with a DevOwnerID EST no-onboarding configuration."""
+
+    form_class = OwnerCredentialTruststoreAssociationForm
+    template_name = 'pki/owner_credentials/truststore_association.html'
+
+    def get_owner_credential(self) -> OwnerCredentialModel:
+        """Get the OwnerCredentialModel from the URL pk."""
+        from django.shortcuts import get_object_or_404  # noqa: PLC0415
+        return get_object_or_404(OwnerCredentialModel, pk=self.kwargs['pk'])
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Pass the OwnerCredentialModel instance to the form."""
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = self.get_owner_credential()
+        truststore_id = self.request.GET.get('truststore_id')
+        if truststore_id:
+            from pki.models.truststore import TruststoreModel  # noqa: PLC0415
+            try:
+                truststore = TruststoreModel.objects.get(pk=truststore_id)
+                kwargs.setdefault('initial', {})['trust_store'] = truststore
+            except TruststoreModel.DoesNotExist:
+                pass
+        return kwargs
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle both association and truststore-import form submissions."""
+        if 'trust_store_file' in request.FILES:
+            return self._handle_import(request)
+        return super().post(request, *args, **kwargs)
+
+    def _handle_import(self, request: HttpRequest) -> HttpResponse:
+        """Import a truststore from the modal form and redirect back with its id pre-selected."""
+        from pki.forms import TruststoreAddForm  # noqa: PLC0415
+        from pki.models.truststore import TruststoreModel  # noqa: PLC0415
+
+        import_form = TruststoreAddForm(request.POST, request.FILES)
+        owner_credential = self.get_owner_credential()
+
+        if import_form.is_valid():
+            truststore = import_form.cleaned_data['truststore']
+            if truststore.intended_usage != TruststoreModel.IntendedUsage.TLS:
+                usage_name = TruststoreModel.IntendedUsage(TruststoreModel.IntendedUsage.TLS).label
+                import_form.add_error(
+                    'intended_usage',
+                    _('Only "{usage}" truststores can be associated here.').format(usage=usage_name),
+                )
+                context = self.get_context_data()
+                context['import_form'] = import_form
+                return self.render_to_response(context)
+
+            messages.success(
+                request,
+                _('Successfully imported truststore {name}.').format(name=truststore.unique_name),
+            )
+            return HttpResponseRedirect(
+                reverse(
+                    'pki:owner_credentials-truststore-association',
+                    kwargs={'pk': owner_credential.pk},
+                ) + f'?truststore_id={truststore.pk}'
+            )
+
+        context = self.get_context_data()
+        context['import_form'] = import_form
+        return self.render_to_response(context)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the owner credential and import form to the context."""
+        from pki.forms import TruststoreAddForm  # noqa: PLC0415
+        from pki.models.truststore import TruststoreModel  # noqa: PLC0415
+
+        context = super().get_context_data(**kwargs)
+        owner_credential = self.get_owner_credential()
+        context['owner_credential'] = owner_credential
+
+        import_form = TruststoreAddForm()
+        intended_usage_field = import_form.fields['intended_usage']
+        intended_usage_field.choices = [  # type: ignore[union-attr]
+            choice for choice in intended_usage_field.choices  # type: ignore[union-attr]
+            if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.TLS
+        ]
+        context['import_form'] = import_form
+        return context
+
+    def form_valid(self, form: OwnerCredentialTruststoreAssociationForm) -> HttpResponse:
+        """Associate the selected truststore and redirect to the credential list."""
+        form.save()
+        owner_credential = self.get_owner_credential()
+        messages.success(
+            self.request,
+            _('Successfully associated TLS truststore with DevOwnerID "{name}".').format(
+                name=owner_credential.unique_name
+            ),
+        )
+        return HttpResponseRedirect(reverse_lazy('pki:owner_credentials'))
 
 
 class OwnerCredentialBulkDeleteConfirmView(OwnerCredentialContextMixin, BulkDeleteView):

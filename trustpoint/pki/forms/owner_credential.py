@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import NoReturn
+from typing import Any, NoReturn
 
 from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -15,6 +16,13 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
+from onboarding.models import (
+    NoOnboardingConfigModel,
+    NoOnboardingPkiProtocol,
+    OnboardingConfigModel,
+    OnboardingPkiProtocol,
+    OnboardingProtocol,
+)
 from pki.models import OwnerCredentialModel
 from pki.models.certificate import CertificateModel
 from trustpoint.logger import LoggerMixin
@@ -227,3 +235,246 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
         except Exception as exception:
             err_msg = str(exception)
             raise ValidationError(err_msg) from exception
+
+
+class OwnerCredentialTruststoreAssociationForm(forms.Form):
+    """Form for associating a TLS truststore with a DevOwnerID's NoOnboardingConfig.
+
+    Only TLS-intended truststores are shown, because the truststore is used to
+    verify the remote EST server's HTTPS certificate.
+    """
+
+    trust_store = forms.ModelChoiceField(
+        queryset=None,  # set in __init__
+        empty_label='----------',
+        required=True,
+        label=_('TLS Trust Store'),
+        help_text=_('Select a TLS trust store to verify the remote EST server certificate'),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialise the form with the OwnerCredentialModel instance."""
+        from pki.models.truststore import TruststoreModel  # noqa: PLC0415
+
+        self.instance: OwnerCredentialModel = kwargs.pop('instance')
+        super().__init__(*args, **kwargs)
+
+        trust_store_field = self.fields['trust_store']
+        trust_store_field.queryset = TruststoreModel.objects.filter(  # type: ignore[union-attr]
+            intended_usage=TruststoreModel.IntendedUsage.TLS
+        )
+
+        # Pre-select the already-associated truststore if one exists
+        if self.instance.no_onboarding_config and self.instance.no_onboarding_config.trust_store:
+            trust_store_field.initial = self.instance.no_onboarding_config.trust_store  # type: ignore[union-attr]
+
+    def save(self) -> None:
+        """Save the selected truststore to the owner credential's no-onboarding config."""
+        if not self.instance.no_onboarding_config:
+            raise forms.ValidationError(_('Expected OwnerCredentialModel with a no_onboarding_config.'))
+
+        self.instance.no_onboarding_config.trust_store = self.cleaned_data['trust_store']
+        self.instance.no_onboarding_config.full_clean()
+        self.instance.no_onboarding_config.save()
+
+
+_KEY_TYPE_CHOICES = [
+    ('RSA-2048', 'RSA 2048'),
+    ('RSA-3072', 'RSA 3072'),
+    ('RSA-4096', 'RSA 4096'),
+    ('ECC-SECP256R1', 'ECC SECP256R1'),
+    ('ECC-SECP384R1', 'ECC SECP384R1'),
+    ('ECC-SECP521R1', 'ECC SECP521R1'),
+]
+
+
+class _OwnerCredentialEstBaseMixin(LoggerMixin, forms.Form):
+    """Shared fields and key-generation logic for EST-based DevOwnerID enrollment forms."""
+
+    unique_name = forms.CharField(
+        max_length=100,
+        label=_('[Optional] Unique Name'),
+        widget=forms.TextInput(attrs={'autocomplete': 'nope'}),
+        required=False,
+        validators=[UniqueNameValidator()],
+    )
+
+    remote_host = forms.CharField(
+        max_length=253,
+        label=_('EST Server Host'),
+        help_text=_('Hostname or IP address of the remote EST server'),
+    )
+
+    remote_port = forms.IntegerField(
+        label=_('EST Server Port'),
+        initial=443,
+        min_value=1,
+        max_value=65535,
+    )
+
+    remote_path = forms.CharField(
+        max_length=255,
+        label=_('EST Server Path'),
+        initial='/.well-known/est/simpleenroll',
+        help_text=_('Path component of the EST enrollment endpoint'),
+    )
+
+    key_type = forms.ChoiceField(
+        label=_('Key Type'),
+        choices=_KEY_TYPE_CHOICES,
+        initial='RSA-2048',
+        help_text=_('Cryptographic key type and size for the generated keypair'),
+    )
+
+    def _generate_private_key(self, key_type: str) -> Any:
+        """Generate a private key according to the selected key_type choice string."""
+        if key_type.startswith('RSA-'):
+            key_size = int(key_type.split('-')[1])
+            public_key_info = PublicKeyInfo(
+                public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA,
+                key_size=key_size,
+            )
+        else:
+            curve_name = key_type.split('-', 1)[1]
+            named_curve = NamedCurve[curve_name.upper()]
+            public_key_info = PublicKeyInfo(
+                public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC,
+                named_curve=named_curve,
+            )
+        return KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info)
+
+    def _resolve_unique_name(self, unique_name: str | None, host: str) -> str:
+        """Return the given unique_name, or derive one from the remote host."""
+        if unique_name:
+            return unique_name
+        # Fall back to host-based name; ensure uniqueness
+        base = host
+        candidate = base
+        counter = 1
+        while OwnerCredentialModel.objects.filter(unique_name=candidate).exists():
+            candidate = f'{base}-{counter}'
+            counter += 1
+        return candidate
+
+
+class OwnerCredentialAddRequestEstNoOnboardingForm(_OwnerCredentialEstBaseMixin):
+    """Form for requesting a DevOwnerID certificate via EST with username/password (no IDevID onboarding).
+
+    Generates a keypair locally, then enrolls with the remote EST server using
+    HTTP Basic authentication.  On success the credential is stored and linked
+    to the OwnerCredentialModel together with a NoOnboardingConfigModel.
+    """
+
+    est_username = forms.CharField(
+        max_length=128,
+        label=_('EST Username'),
+        help_text=_('Username for EST Basic authentication'),
+    )
+
+    est_password = forms.CharField(
+        label=_('EST Password'),
+        widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
+        help_text=_('Password for EST Basic authentication'),
+    )
+
+    def clean(self) -> dict[str, Any]:
+        """Validate and save the owner credential via EST no-onboarding enrollment."""
+        cleaned_data: dict[str, Any] = super().clean() or {}
+
+        unique_name = cleaned_data.get('unique_name')
+        remote_host = cleaned_data.get('remote_host')
+        est_username = cleaned_data.get('est_username')
+        est_password = cleaned_data.get('est_password')
+        key_type = cleaned_data.get('key_type', 'RSA-2048')
+        remote_port = cleaned_data.get('remote_port', 443)
+        remote_path = cleaned_data.get('remote_path', '/.well-known/est/simpleenroll')
+
+        if not remote_host or not est_username or not est_password:
+            return cleaned_data
+
+        unique_name = self._resolve_unique_name(unique_name, remote_host)
+        if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
+            raise ValidationError(_('An owner credential with this name already exists.'))
+
+        cleaned_data['unique_name'] = unique_name
+
+        private_key = self._generate_private_key(key_type)
+
+        no_onboarding_config = NoOnboardingConfigModel(
+            pki_protocols=NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
+            est_password=est_password,
+        )
+        no_onboarding_config.save()
+
+        cleaned_data['_private_key'] = private_key
+        cleaned_data['_no_onboarding_config'] = no_onboarding_config
+        cleaned_data['_remote_host'] = remote_host
+        cleaned_data['_remote_port'] = remote_port
+        cleaned_data['_remote_path'] = remote_path
+        cleaned_data['_est_username'] = est_username
+
+        return cleaned_data
+
+
+class OwnerCredentialAddRequestEstOnboardingForm(_OwnerCredentialEstBaseMixin):
+    """Form for requesting a DevOwnerID certificate via EST with IDevID-based onboarding.
+
+    The device authenticates to the remote EST server using its manufacturer-issued
+    IDevID certificate (mTLS client certificate).  A trust store for verifying the
+    EST server's TLS certificate must be associated after this step.
+    """
+
+    idevid_trust_store = forms.ModelChoiceField(
+        queryset=None,  # set in __init__
+        required=False,
+        empty_label=_('(none - skip server verification)'),
+        label=_('IDevID Manufacturer Truststore'),
+        help_text=_(
+            'Optional: truststore containing the manufacturer CA to verify the EST server during IDevID enrollment'
+        ),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialise queryset for the trust store choice field."""
+        super().__init__(*args, **kwargs)
+        from pki.models.truststore import TruststoreModel  # noqa: PLC0415
+        self.fields['idevid_trust_store'].queryset = TruststoreModel.objects.filter(  # type: ignore[union-attr]
+            intended_usage=TruststoreModel.IntendedUsage.IDEVID
+        )
+
+    def clean(self) -> dict[str, Any]:
+        """Validate and prepare the owner credential via EST IDevID onboarding."""
+        cleaned_data: dict[str, Any] = super().clean() or {}
+
+        unique_name = cleaned_data.get('unique_name')
+        remote_host = cleaned_data.get('remote_host')
+        key_type = cleaned_data.get('key_type', 'RSA-2048')
+        remote_port = cleaned_data.get('remote_port', 443)
+        remote_path = cleaned_data.get('remote_path', '/.well-known/est/simpleenroll')
+        idevid_trust_store = cleaned_data.get('idevid_trust_store')
+
+        if not remote_host:
+            return cleaned_data
+
+        unique_name = self._resolve_unique_name(unique_name, remote_host)
+        if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
+            raise ValidationError(_('An owner credential with this name already exists.'))
+
+        cleaned_data['unique_name'] = unique_name
+
+        private_key = self._generate_private_key(key_type)
+
+        onboarding_config = OnboardingConfigModel(
+            pki_protocols=OnboardingPkiProtocol.EST,
+            onboarding_protocol=OnboardingProtocol.EST_IDEVID,
+            idevid_trust_store=idevid_trust_store,
+        )
+        onboarding_config.save()
+
+        cleaned_data['_private_key'] = private_key
+        cleaned_data['_onboarding_config'] = onboarding_config
+        cleaned_data['_remote_host'] = remote_host
+        cleaned_data['_remote_port'] = remote_port
+        cleaned_data['_remote_path'] = remote_path
+
+        return cleaned_data
