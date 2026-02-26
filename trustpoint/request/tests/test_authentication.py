@@ -118,7 +118,7 @@ class TestClientCertificateAuthentication:
 
     def test_authenticate_invalid_credential(self, domain_credential_est_onboarding, rsa_private_key):
         """Test authentication with invalid credential."""
-        domain_credential_est_onboarding['device']
+
 
         invalid_cert = x509.CertificateBuilder().subject_name(
             x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Invalid Certificate')])
