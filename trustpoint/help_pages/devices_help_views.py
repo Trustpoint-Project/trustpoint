@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 from typing import TYPE_CHECKING, override
 
@@ -33,6 +34,7 @@ from help_pages.commands import (
 )
 from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
+from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -43,6 +45,8 @@ from trustpoint.page_context import (
 
 if TYPE_CHECKING:
     from typing import Any
+
+    from pki.models.credential import CredentialModel
 
 
 # --------------------------------------------------- Base Classes ----------------------------------------------------
@@ -102,15 +106,36 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
         if not self.strategy:
             err_msg = _('No strategy configured.')
             raise RuntimeError(err_msg)
-        form = IpAddressForm(self.request.GET or None)
+        ips = []
+        try:
+            active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
+            credential_model: CredentialModel | None = active_tls.credential
+
+            if not credential_model:
+                messages.error(self.request, 'Active TLS has no credential')
+            else:
+                cert = credential_model.get_certificate_serializer().as_crypto()
+                san = cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+                ips = [
+                    str(entry.value)
+                    for entry in san.value
+                    if isinstance(entry, x509.IPAddress) and isinstance(entry.value, ipaddress.IPv4Address)
+                ]
+        except ActiveTrustpointTlsServerCredentialModel.DoesNotExist:
+            messages.error(self.request, 'Active TLS record not found')
+        except AttributeError as e:
+            messages.error(self.request, f'Invalid credential or certificate: {e}')
+        except ValueError as e:
+            messages.error(self.request, f'Certificate parsing error: {e}')
         host_ip = '127.0.0.1'
+        if not ips:
+            ips.append(host_ip)
+        data = self.request.GET.dict()
+        form = IpAddressForm(ip_choices=ips, data=data or None, initial={'host_ip': host_ip})
         if form.is_bound and form.is_valid():
             host_ip = form.cleaned_data['host_ip']
         elif form.is_bound:
             messages.error(self.request, 'Given IP address is not valid. Setting to 127.0.0.1')
-            form = IpAddressForm(initial={'host_ip': host_ip})
-        else:
-            form = IpAddressForm(initial={'host_ip': host_ip})
 
         help_context = self._make_context(host_ip)
 
