@@ -4,9 +4,8 @@ from unittest.mock import Mock, patch
 
 from django.http import Http404
 from django.test import RequestFactory, TestCase
-from django.urls import reverse
 
-from pki.models import DevIdRegistration, CaModel
+from pki.models import CaModel
 from ..help_section import ValueRenderType
 from ..pki_help_views import (
     BaseHelpView,

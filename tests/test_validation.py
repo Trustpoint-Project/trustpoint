@@ -2,7 +2,7 @@
 
 import pytest
 
-from trustpoint.util.validation import (
+from util.validation import (
     ValidationError,
     validate_application_uri,
     validate_common_name_characters,

@@ -151,9 +151,9 @@ DOCKER_CONTAINER = False
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = not DOCKER_CONTAINER
 ADMIN_ENABLED = bool(DEBUG)
-DEVELOPMENT_ENV = True
+DEVELOPMENT_ENV = DEBUG
 
 
 
@@ -265,7 +265,6 @@ INSTALLED_APPS = [
     'signer.apps.SignerConfig',
     'aoki.apps.AokiConfig',
     'management.apps.ManagementConfig',
-    'notifications.apps.NotificationsConfig',
     'trustpoint_core',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -279,13 +278,13 @@ INSTALLED_APPS = [
     'dbbackup',
     'workflows.apps.WorkflowsConfig',
     'rest_framework',
-    'drf_yasg',
+    'drf_spectacular',
+    'django_q',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
     INSTALLED_APPS.append('django_extensions')
     INSTALLED_APPS.append('behave_django')
-    TEST_RUNNER = 'django_behave.runner.DjangoBehaveTestSuiteRunner'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -427,18 +426,30 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 
-SWAGGER_SETTINGS = {
-    'SECURITY_DEFINITIONS': {
-        'Bearer': {
-            'type': 'apiKey',
-            'description': 'Enter JWT token as: Bearer {token}',
-            'name': 'Authorization',
-            'in': 'header',
-        }
-    },
-    'USE_SESSION_AUTH': False,  # disables Django login in Swagger UI
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Trustpoint APIs',
+    'DESCRIPTION': 'API documentation for Trustpoint project',
+    'VERSION': 'v0.0.5',
 }
 
 SWAGGER_USE_COMPAT_RENDERERS = False
+
+TASKS = {
+    'default': {
+        'BACKEND': 'django.tasks.backends.immediate.ImmediateBackend',
+    }
+}
+
+Q_CLUSTER = {
+    'name': 'trustpoint',
+    'workers': 2,
+    'recycle': 500,
+    'timeout': 120,
+    'retry': 360,
+    'queue_limit': 50,
+    'bulk': 10,
+    'orm': 'default',
+}

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cryptography import x509
@@ -9,7 +10,9 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django_q.tasks import schedule  # type: ignore[import-untyped]
 from trustpoint_core import oid
 
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
@@ -26,7 +29,8 @@ if TYPE_CHECKING:
     from django.db.models.query import QuerySet
     from trustpoint_core.serializer import CredentialSerializer
 
-
+# Minimum CRL cycle interval: approximately 5 minutes (0.0833 hours)
+MIN_CRL_CYCLE_INTERVAL_HOURS = 0.0833
 class CaModel(LoggerMixin, CustomDeleteActionModel):
     """Generic CA Model representing any Certificate Authority.
 
@@ -158,6 +162,14 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         help_text=_('The path on the remote PKI')
     )
 
+    est_username = models.CharField(
+        verbose_name=_('EST Username'),
+        max_length=128,
+        blank=True,
+        default='',
+        help_text=_('Username for EST authentication')
+    )
+
     onboarding_config = models.ForeignKey(
         'onboarding.OnboardingConfigModel',
         related_name='remote_cas',
@@ -178,6 +190,31 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         help_text=_('No-onboarding configuration for remote CA connection')
     )
 
+    crl_cycle_enabled = models.BooleanField(
+        _('Enable CRL Cycle Updates'),
+        default=False,
+        help_text=_('Enable automatic periodic CRL generation for this CA')
+    )
+
+    crl_cycle_interval_hours = models.FloatField(
+        _('CRL Cycle Interval (hours)'),
+        default=24.0,
+        help_text=_('The interval in hours between CRL generations (minimum ~5 minutes)')
+    )
+
+    crl_validity_hours = models.FloatField(
+        _('CRL Validity (hours)'),
+        default=24.0,
+        help_text=_('The validity period in hours for generated CRLs (nextUpdate field)')
+    )
+
+    last_crl_generation_started_at = models.DateTimeField(
+        _('Last CRL Generation Started'),
+        null=True,
+        blank=True,
+        help_text=_('Timestamp when the last CRL generation task was started')
+    )
+
     class Meta:
         """Meta options for CaModel."""
 
@@ -188,9 +225,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=(
-                    models.Q(certificate__isnull=False, credential__isnull=True, ca_type=-1) |
-                    models.Q(certificate__isnull=True, credential__isnull=False, ca_type__in=[0, 1, 2, 3, 6, 7]) |
-                    models.Q(certificate__isnull=True, credential__isnull=True, ca_type__in=[4, 5])
+                    models.Q(ca_type=-1, certificate__isnull=False, credential__isnull=True) |
+                    models.Q(ca_type__in=[4, 5], credential__isnull=True) |
+                    models.Q(ca_type__in=[0, 1, 2, 3, 6, 7], certificate__isnull=True, credential__isnull=False)
                 ),
                 name='ca_mode_constraint',
                 violation_error_message=_('Invalid CA configuration')
@@ -209,70 +246,78 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """Returns a string representation of the CaModel instance."""
         return f'CaModel({self.unique_name})'
 
+
     @property
     def is_issuing_ca(self) -> bool:
         """Returns True if this is an issuing CA (can issue certificates)."""
-        return self.credential is not None
+        return self.ca_type not in (
+            self.CaTypeChoice.KEYLESS,
+            self.CaTypeChoice.REMOTE_CMP_RA,
+            self.CaTypeChoice.REMOTE_EST_RA,
+        )
+
 
     @property
     def is_keyless_ca(self) -> bool:
-        """Returns True if this is a keyless CA (certificate only, no private key)."""
-        return self.certificate is not None
+        """Returns True if this is a keyless CA, or a remote RA with a certificate."""
+        return (
+            self.certificate is not None and
+            self.ca_type in (
+                self.CaTypeChoice.KEYLESS,
+                self.CaTypeChoice.REMOTE_CMP_RA,
+                self.CaTypeChoice.REMOTE_EST_RA,
+            )
+        )
+
 
     @property
     def common_name(self) -> str:
-        """Returns common name."""
+        """Returns common name, or a placeholder if missing."""
         if self.is_keyless_ca:
-            if self.certificate is None:
-                msg = 'Certificate is None for keyless CA'
-                raise ValueError(msg)
-            return self.certificate.common_name
-        if self.credential is None:
-            msg = 'Credential is None for issuing CA'
-            raise ValueError(msg)
-        return self.credential.certificate.common_name
+            if self.certificate is not None:
+                return self.certificate.common_name
+            return f'{self.unique_name} (Certificate missing)'
+        if self.credential is not None:
+            if self.credential.certificate is not None:
+                return self.credential.certificate_or_error.common_name
+            return f'{self.unique_name} (Certificate pending)'
+        return f'{self.unique_name} (Credential missing)'
+
 
     @property
     def subject_public_bytes(self) -> bytes:
-        """Returns the subject public bytes from the CA certificate."""
+        """Returns the subject public bytes from the CA certificate, or b'' if missing."""
         if self.is_keyless_ca:
-            if self.certificate is None:
-                msg = 'Certificate is None for keyless CA'
-                raise ValueError(msg)
-            return bytes.fromhex(self.certificate.subject_public_bytes)
-        if self.credential is None:
-            msg = 'Credential is None for issuing CA'
-            raise ValueError(msg)
-        return bytes.fromhex(self.credential.certificate.subject_public_bytes)
+            if self.certificate is not None:
+                return bytes.fromhex(self.certificate.subject_public_bytes)
+            return b''
+        if self.credential is not None and self.credential.certificate is not None:
+            return bytes.fromhex(self.credential.certificate_or_error.subject_public_bytes)
+        return b''
+
 
     @property
-    def ca_certificate_model(self) -> CertificateModel:
-        """Returns the CA certificate model for both issuing and keyless CAs."""
-        if self.is_issuing_ca:
-            if self.credential is None:
-                msg = 'Credential is None for issuing CA'
-                raise ValueError(msg)
-            return self.credential.certificate
-        if self.is_keyless_ca:
-            if self.certificate is None:
-                msg = 'Certificate is None for keyless CA'
-                raise ValueError(msg)
+    def ca_certificate_model(self) -> CertificateModel | None:
+        """Returns the CA certificate model for both issuing and keyless CAs, or None if missing."""
+        if self.is_issuing_ca and self.credential is not None and self.credential.certificate is not None:
+            return self.credential.certificate_or_error
+        if self.is_keyless_ca and self.certificate is not None:
             return self.certificate
-        msg = 'CA has neither credential nor certificate'
-        raise ValueError(msg)
+        return None
 
-    def get_certificate(self) -> x509.Certificate:
-        """Returns the CA certificate (crypto object) for both issuing and keyless CAs."""
-        return self.ca_certificate_model.get_certificate_serializer().as_crypto()
 
-    def get_credential(self) -> CredentialModel:
-        """Returns the credential for issuing CAs. Raises ValueError for keyless CAs."""
+    def get_certificate(self) -> x509.Certificate | None:
+        """Returns the CA certificate (crypto object) for both issuing and keyless CAs, or None if missing."""
+        cert_model = self.ca_certificate_model
+        if cert_model is not None:
+            return cert_model.get_certificate_serializer().as_crypto()
+        return None
+
+
+    def get_credential(self) -> CredentialModel | None:
+        """Returns the credential for issuing CAs, or None if not present."""
         if self.is_keyless_ca:
-            msg = 'Cannot get credential from keyless CA'
-            raise ValueError(msg)
-        if self.credential is None:
-            msg = 'Credential is None for issuing CA'
-            raise ValueError(msg)
+            return None
         return self.credential
 
     def get_ca_chain_from_truststore(self) -> list[CaModel]:
@@ -336,9 +381,41 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         active_crl = self.get_active_crl()
         return active_crl.crl_pem if active_crl else ''
 
+    @property
+    def next_crl_generation_scheduled_at(self) -> datetime.datetime | None:
+        """Returns when the next CRL generation is scheduled.
+
+        Returns:
+            datetime | None: The scheduled time for the next CRL generation, or None if not enabled or not scheduled.
+        """
+        if not self.crl_cycle_enabled:
+            return None
+        return self.last_crl_generation_started_at
+
     def clean(self) -> None:
         """Validates that exactly one of certificate or credential is set."""
         super().clean()
+        if (
+            self.crl_cycle_enabled
+            and self.crl_cycle_interval_hours
+            and float(self.crl_cycle_interval_hours) < MIN_CRL_CYCLE_INTERVAL_HOURS
+        ):
+            raise ValidationError(
+                {'crl_cycle_interval_hours': _('CRL cycle interval must be at least 5 minutes')}
+            )
+        if self.crl_validity_hours and float(self.crl_validity_hours) < 1.0:
+            raise ValidationError(
+                {'crl_validity_hours': _('CRL validity period must be at least 1 hour')}
+            )
+        if (
+            self.crl_cycle_enabled
+            and self.crl_cycle_interval_hours
+            and self.crl_validity_hours
+            and float(self.crl_cycle_interval_hours) > float(self.crl_validity_hours)
+        ):
+            raise ValidationError(
+                {'crl_cycle_interval_hours': _('CRL cycle interval must not exceed the CRL validity period')}
+            )
         if self.ca_type in (self.CaTypeChoice.REMOTE_EST_RA, self.CaTypeChoice.REMOTE_CMP_RA):
             self._clean_remote_non_issuing_ca()
         elif self.ca_type in (self.CaTypeChoice.REMOTE_ISSUING_EST, self.CaTypeChoice.REMOTE_ISSUING_CMP):
@@ -348,8 +425,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
 
     def _clean_remote_non_issuing_ca(self) -> None:
         """Validates remote non-issuing CA fields."""
-        if self.certificate is not None or self.credential is not None:
-            raise ValidationError(_('Remote CAs cannot have certificate or credential.'))
+        if self.credential is not None:
+            raise ValidationError(_('Remote CAs cannot have credential.'))
+        if self.pk is not None and self.certificate is None:
+            raise ValidationError(_('Remote CAs must have certificate set.'))
         if not self.remote_host:
             raise ValidationError(_('Remote host must be set for remote CAs.'))
         if self.remote_port is None:
@@ -365,7 +444,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         """Validates remote issuing CA fields."""
         if self.certificate is not None:
             raise ValidationError(_('Remote issuing CAs cannot have certificate set.'))
-        if self.credential is None:
+        # Allow credential to be None for unsaved instances (will be set in form save method)
+        if self.pk is not None and self.credential is None:
             raise ValidationError(_('Remote issuing CAs must have credential set.'))
         if self.ca_type is None:
             raise ValidationError(_('ca_type must be set for remote issuing CAs.'))
@@ -375,7 +455,9 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(_('Remote port must be set for remote issuing CAs.'))
         if not self.remote_path:
             raise ValidationError(_('Remote path must be set for remote issuing CAs.'))
-        if not (self.onboarding_config or self.no_onboarding_config):
+        if self.ca_type == self.CaTypeChoice.REMOTE_ISSUING_EST and not self.est_username:
+            raise ValidationError(_('EST username must be set for remote EST issuing CAs.'))
+        if self.pk is not None and not (self.onboarding_config or self.no_onboarding_config):
             raise ValidationError(_('Either onboarding or no-onboarding config must be set for remote issuing CAs.'))
         if self.onboarding_config and self.no_onboarding_config:
             raise ValidationError(_('Only one onboarding config can be set for remote issuing CAs.'))
@@ -391,7 +473,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.certificate is not None and self.ca_type != self.CaTypeChoice.KEYLESS:
             raise ValidationError(_('ca_type must be KEYLESS for keyless CAs.'))
         # Remote fields should not be set for local/keyless CAs
-        if (self.remote_host or self.remote_port is not None or self.remote_path or
+        if (self.remote_host or self.remote_port is not None or self.remote_path or self.est_username or
             self.onboarding_config or self.no_onboarding_config):
             raise ValidationError(_('Remote fields can only be set for remote CAs.'))
 
@@ -450,6 +532,102 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return keyless_ca
 
     @classmethod
+    @classmethod
+    def _validate_ca_certificate(cls, ca_cert: x509.Certificate) -> None:
+        """Validate that the certificate is suitable for use as a CA.
+
+        Args:
+            ca_cert: The certificate to validate.
+
+        Raises:
+            ValidationError: If the certificate is not a valid CA certificate.
+        """
+        try:
+            bc_extension = ca_cert.extensions.get_extension_for_class(x509.BasicConstraints)
+        except x509.ExtensionNotFound as e:
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid CA certificate; '
+                    'it does not contain a Basic Constraints extension.'
+                )
+            ) from e
+        if not bc_extension.value.ca:
+            raise ValidationError(
+                _(
+                    'The provided certificate is not a valid CA certificate; '
+                    'it is an End Entity certificate.'
+                )
+            )
+
+    @classmethod
+    def _generate_unique_name(cls, ca_cert: x509.Certificate) -> str:
+        """Generate a unique name from the CA certificate.
+
+        Args:
+            ca_cert: The CA certificate.
+
+        Returns:
+            The generated unique name.
+
+        Raises:
+            ValidationError: If unable to generate a unique name.
+        """
+        from cryptography.x509.oid import NameOID  # noqa: PLC0415
+
+        try:
+            cn_attrs = ca_cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+            return str(cn_attrs[0].value) if cn_attrs else 'CA'
+        except Exception:  # noqa: BLE001
+            return 'CA'
+
+    @classmethod
+    def _validate_ca_type(cls, ca_type: CaModel.CaTypeChoice) -> None:
+        """Validate that the CA type is supported for issuing CAs.
+
+        Args:
+            ca_type: The CA type to validate.
+
+        Raises:
+            ValueError: If the CA type is not supported.
+        """
+        ca_types = (
+            cls.CaTypeChoice.AUTOGEN_ROOT,
+            cls.CaTypeChoice.AUTOGEN,
+            cls.CaTypeChoice.LOCAL_UNPROTECTED,
+            cls.CaTypeChoice.LOCAL_PKCS11,
+            cls.CaTypeChoice.REMOTE_ISSUING_EST,
+            cls.CaTypeChoice.REMOTE_ISSUING_CMP,
+        )
+        if ca_type not in ca_types:
+            exc_msg = f'CA Type {ca_type} is not supported for issuing CAs.'
+            raise ValueError(exc_msg)
+
+    @classmethod
+    def _create_chain_truststore(cls, issuing_ca: CaModel) -> TruststoreModel:
+        """Create and populate a truststore for the CA chain.
+
+        Args:
+            issuing_ca: The issuing CA model.
+
+        Returns:
+            The created truststore model.
+        """
+        chain = issuing_ca.get_hierarchy_path()
+        cert_models = [ca.ca_certificate_model for ca in chain]
+        truststore = TruststoreModel.objects.create(
+            unique_name=f'{issuing_ca.unique_name}_chain',
+            intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN,
+        )
+        for idx, cert in enumerate(cert_models):
+            if cert:  # Only add non-None certificates
+                TruststoreOrderModel.objects.create(
+                    order=idx,
+                    certificate=cert,
+                    trust_store=truststore
+                )
+        return truststore
+
+    @classmethod
     def create_new_issuing_ca(
         cls,
         credential_serializer: CredentialSerializer,
@@ -479,48 +657,16 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if ca_type is None:
             msg = 'Must specify ca_type parameter.'
             raise ValueError(msg)
+
         ca_cert = credential_serializer.certificate
         if not ca_cert:
             raise ValidationError(_('The provided credential is not a valid CA; it does not contain a certificate.'))
 
-        # Auto-generate unique_name from certificate if not provided
-        if unique_name is None:
-            from cryptography.x509.oid import NameOID  # noqa: PLC0415
-            try:
-                cn_attrs = ca_cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
-                unique_name = str(cn_attrs[0].value) if cn_attrs else 'CA'
-            except Exception:  # noqa: BLE001
-                unique_name = 'CA'
-        if unique_name is None:
-            raise ValidationError(_('Unable to generate unique name for CA.'))
-        try:
-            bc_extension = ca_cert.extensions.get_extension_for_class(x509.BasicConstraints)
-        except x509.ExtensionNotFound as e:
-            raise ValidationError(
-                _(
-                    'The provided certificate is not a valid CA certificate; '
-                    'it does not contain a Basic Constraints extension.'
-                )
-            ) from e
-        if not bc_extension.value.ca:
-            raise ValidationError(
-                _(
-                    'The provided certificate is not a valid CA certificate; '
-                    'it is an End Entity certificate.'
-                )
-            )
+        cls._validate_ca_certificate(ca_cert)
+        cls._validate_ca_type(ca_type)
 
-        ca_types = (
-            cls.CaTypeChoice.AUTOGEN_ROOT,
-            cls.CaTypeChoice.AUTOGEN,
-            cls.CaTypeChoice.LOCAL_UNPROTECTED,
-            cls.CaTypeChoice.LOCAL_PKCS11,
-            cls.CaTypeChoice.REMOTE_ISSUING_EST,
-            cls.CaTypeChoice.REMOTE_ISSUING_CMP,
-        )
-        if ca_type not in ca_types:
-            exc_msg = f'CA Type {ca_type} is not supported for issuing CAs.'
-            raise ValueError(exc_msg)
+        if unique_name is None:
+            unique_name = cls._generate_unique_name(ca_cert)
 
         credential_model = CredentialModel.save_credential_serializer(
             credential_serializer=credential_serializer, credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA
@@ -534,18 +680,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         )
         issuing_ca.save()
 
-        chain = issuing_ca.get_hierarchy_path()
-        cert_models = [ca.ca_certificate_model for ca in chain]
-        truststore = TruststoreModel.objects.create(
-            unique_name=f'{unique_name}_chain',
-            intended_usage=TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN,
-        )
-        for idx, cert in enumerate(cert_models):
-            TruststoreOrderModel.objects.create(
-                order=idx,
-                certificate=cert,
-                trust_store=truststore
-            )
+        truststore = cls._create_chain_truststore(issuing_ca)
         issuing_ca.chain_truststore = truststore
         issuing_ca.save(update_fields=['chain_truststore'])
 
@@ -592,21 +727,25 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return True
 
     @property
-    def signature_suite(self) -> oid.SignatureSuite:
-        """The signature suite for the CA public key certificate."""
+
+    def signature_suite(self) -> oid.SignatureSuite | None:
+        """The signature suite for the CA public key certificate, or None if missing."""
         if self.is_keyless_ca:
-            if self.certificate is None:
-                msg = 'Certificate is None for keyless CA'
-                raise ValueError(msg)
-            return oid.SignatureSuite.from_certificate(self.certificate.get_certificate_serializer().as_crypto())
-        if self.credential is None:
-            msg = 'Credential is None for issuing CA'
-            raise ValueError(msg)
-        return oid.SignatureSuite.from_certificate(self.credential.get_certificate_serializer().as_crypto())
+            if self.certificate is not None:
+                return oid.SignatureSuite.from_certificate(self.certificate.get_certificate_serializer().as_crypto())
+            return None
+        if self.credential is not None and self.credential.certificate is not None:
+            return oid.SignatureSuite.from_certificate(self.credential.get_certificate_serializer().as_crypto())
+        return None
 
     @property
-    def public_key_info(self) -> oid.PublicKeyInfo:
-        """The public key info for the CA certificate's public key."""
+    def public_key_info(self) -> oid.PublicKeyInfo | None:
+        """The public key info for the CA certificate's public key.
+
+        Returns None if the CA doesn't have a certificate yet (e.g., remote CA pending).
+        """
+        if self.signature_suite is None:
+            return None
         return self.signature_suite.public_key_info
 
     def get_issued_certificates(self) -> QuerySet[CertificateModel, CertificateModel]:
@@ -620,12 +759,14 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             that were issued by a different CA with the same subject name.
 
         Returns:
-            QuerySet: Certificates issued by this CA.
+            QuerySet: Certificates issued by this CA, or empty queryset for RAs/keyless CAs.
         """
-        if self.credential is None:
-            msg = 'Credential is None for issuing CA'
-            raise ValueError(msg)
-        ca_subject_public_bytes = self.credential.certificate.subject_public_bytes
+        # RAs and keyless CAs don't issue certificates themselves
+        if self.is_keyless_ca or self.credential is None:
+            return CertificateModel.objects.none()
+        if self.credential.certificate is None:
+            return CertificateModel.objects.none()
+        ca_subject_public_bytes = self.credential.certificate_or_error.subject_public_bytes
 
         # do not return self-signed CA certificate
         return CertificateModel.objects.filter(issuer_public_bytes=ca_subject_public_bytes).exclude(
@@ -684,6 +825,34 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if not active_crl:
             return None
         return active_crl.get_crl_as_crypto()
+
+    def schedule_next_crl_generation(self) -> None:
+        """Schedule the next CRL generation task for this CA using Django-Q2.
+
+        Creates a scheduled task in Django-Q2 that will execute at the calculated time.
+        The task will automatically trigger CRL generation without manual intervention.
+        """
+        if not self.crl_cycle_enabled:
+            self.logger.debug('CRL cycle not enabled for CA %s, skipping scheduling', self.unique_name)
+            return
+
+        scheduled_time = timezone.now() + timedelta(hours=self.crl_cycle_interval_hours)
+
+        schedule(
+            'pki.tasks.generate_crl_for_ca',
+            self.id,
+            schedule_type='O',
+            next_run=scheduled_time,
+            name=f'crl_gen_{self.unique_name}_{scheduled_time.timestamp()}'
+        )
+
+        self.last_crl_generation_started_at = scheduled_time
+        self.save(update_fields=['last_crl_generation_started_at'])
+        self.logger.info(
+            'Next CRL generation for CA %s scheduled for %s via Django-Q2',
+            self.unique_name,
+            scheduled_time
+        )
 
     # ===== Hierarchy Methods =====
 
@@ -754,6 +923,10 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         if self.parent_ca is not None:
             return False
 
+        if not self.ca_certificate_model:
+            msg = f'Cannot determine if CA {self.unique_name} is a root CA: no certificate model'
+            raise ValueError(msg)
+
         try:
             ca_cert = self.ca_certificate_model.get_certificate_serializer().as_crypto()
         except (AttributeError, ValueError) as err:
@@ -778,7 +951,7 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             RevokedCertificateModel.objects.create(certificate=cert, revocation_reason=reason, ca=self)
 
         self.logger.info('All %i certificates issued by CA %s have been revoked.', qs.count(), self.unique_name)
-        self.issue_crl()
+        self.issue_crl(crl_validity_hours=int(self.crl_validity_hours))
 
     def pre_delete(self) -> None:
         """Checks for unexpired certificates issued by this CA and child CAs before deleting it.
@@ -813,5 +986,11 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             if self.credential:
                 self.credential.delete()
 
-
-IssuingCaModel = CaModel
+    @property
+    def display_not_valid_after(self) -> datetime.datetime | None:
+        """Returns the not valid after date for display purposes."""
+        if self.credential and self.credential.certificate:
+            return self.credential.certificate.not_valid_after
+        if self.certificate:
+            return self.certificate.not_valid_after
+        return None

@@ -5,9 +5,7 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 from unittest.mock import Mock, patch
 
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
-from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID
 from django.urls import reverse
 from rest_framework import status

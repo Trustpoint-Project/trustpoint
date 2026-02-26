@@ -48,7 +48,7 @@ class Command(BaseCommand, LoggerMixin):
 
         success_count = 0
         for ca in issuing_cas:
-            if ca.issue_crl():
+            if ca.issue_crl(crl_validity_hours=int(ca.crl_validity_hours)):
                 self.log_and_stdout(f'CRL issued successfully for CA: {ca.unique_name}')
                 success_count += 1
             else:

@@ -2,175 +2,202 @@
 Credentials - Architecture
 ==========================
 
+Overview
+--------
+
+The **CredentialModel** is the central abstraction for managing certificates and private keys in Trustpoint. It supports multiple credential types (TLS Server, Root CA, Issuing CA, Issued Credentials, DevOwnerID, Signer) and can store keys either directly in the database or in hardware security modules (HSM) via PKCS#11.
+
+The credential architecture manages the lifecycle from issuance through validation, storage, and deployment to devices.
 
 
-General Message Flow
---------------------
+CredentialModel Types
+---------------------
 
-.. uml::
+The ``CredentialTypeChoice`` enum defines the purpose and restrictions of each credential:
 
-   :Message;
-   :Http validation - HttpRequestValidator;
-   :Message parsing - RequestMessageParser -> parsed message;
-   :Request Authentication - Authenticator -> DeviceModel object;
-   :Request Authorization - Authorizer;
-   :Message normalization, if required - CsrAdapter;
-   :Certificate profile handling - JsonProfileValidator;
-   :Message processing - OperationProcessor -> PKI result (e.g., issued certificate);
-   :Response generation - MessageResponder -> HttpResponse;
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
 
-
-HttpRequestValidator
---------------------
-
-These classes validate the http attributes for requests, e.g. content-types, body size etc.
-
-
-.. uml::
-
-   HttpRequestValidator <|-- EstHttpRequestValidator
-   HttpRequestValidator <|-- CmpHttpRequestValidator
-
-   abstract HttpRequestValidator {
-      +<<validate>>(request : HttpRequest) : Boolean
-   }
-
-   class EstHttpRequestValidator {
-      +validate(request : HttpRequest) : Boolean
-   }
-
-   class CmpHttpRequestValidator {
-      +validate(request : HttpRequest) : Boolean
-   }
+   * - Type
+     - Purpose
+   * - **TRUSTPOINT_TLS_SERVER**
+     - Trustpoint's own TLS server certificate for HTTPS
+   * - **ROOT_CA**
+     - Root certificate authority (self-signed, trusted anchor)
+   * - **ISSUING_CA**
+     - Intermediate issuing CA (signed by root, issues device credentials)
+   * - **ISSUED_CREDENTIAL**
+     - Device credentials issued by Trustpoint (LDevID, application certificates)
+   * - **DEV_OWNER_ID**
+     - Device Owner ID certificates (see :doc:`../../devices/aoki`)
+   * - **SIGNER**
+     - Signing authority for hash-and-sign operations
 
 
+Core Storage Model
+------------------
 
-RequestMessageParser
---------------------
+CredentialModel stores:
 
-These classes parse PKI messages, e.g., CSRs and CMP messages.
+.. list-table::
+   :header-rows: 1
+   :widths: 30 70
 
-.. uml::
-
-   RequestMessageParser <|-- EstMessageParser
-   RequestMessageParser <|-- CmpMessageParser
-   
-   abstract RequestMessageParser<M> {
-      +<<parse>>(message : Bytes) : M
-   }
-
-   class EstMessageParser<CertificateSigningRequest> {
-      +parse(message : Bytes) : CertificateSigningRequest
-   }
-
-   class CmpMessageParser<rfc4210.PKIMessage> {
-      +parse(message : Bytes) : rfc4210.PKIMessage
-   }
+   * - Field
+     - Purpose
+   * - **credential_type**
+     - One of the CredentialTypeChoice values above
+   * - **private_key** (PEM)
+     - Encrypted private key stored in database (for software keys)
+   * - **pkcs11_private_key**
+     - Reference to private key in HSM/token (for PKCS#11 keys)
+   * - **certificate**
+     - Primary certificate (ForeignKey to CertificateModel)
+   * - **certificates**
+     - All certificates in the credential (ManyToMany via PrimaryCredentialCertificate)
+   * - **certificate_chain**
+     - Ordered chain of issuing CA certificates (ManyToMany via CertificateChainOrderModel)
 
 
-Authentication
---------------
+Primary Certificate vs Certificate Chain
+-----------------------------------------
 
-The Authentication classes explicitly only handle the authentication, that is, they check if the authentication method applied to the request is
-allowed and validate it. If all checks were successfull, the corresponding DeviceModel is returned.
+Each credential has a **primary certificate** (the leaf/end-entity certificate) and an optional **certificate chain** (issuing CA certificates up the trust path):
 
 .. uml::
 
-   Authenticator <|-- EstAuthenticator
-   Authenticator <|-- CmpAuthenticator
-
-   abstract Authenticator<M, A> {
-      +<<Authenticator>>(allowed_methods : List[A]) : Authenticator
-      +<<authenticate>>(message : M, request : HttpRequest) : DeviceModel
+   CredentialModel {
+      + certificate: CertificateModel (primary/leaf)
+      + certificates: [CertificateModel] (via PrimaryCredentialCertificate)
+      + certificate_chain: [CertificateModel] (ordered, via CertificateChainOrderModel)
    }
 
-   class EstAuthenticator<Csr, EstAuthMethods> {
-      +EstAuthentictor(allowed_methods : List[EstAuthMethods])
-      +authenticate(message : Csr, request : HttpRequest) : DeviceModel
+   PrimaryCredentialCertificate {
+      + credential: CredentialModel
+      + certificate: CertificateModel (OneToOne)
+      + is_primary: bool
    }
 
-   enum EstAuthMethods {
-      USERNAME_AND_PASSWORD
-      CLIENT_CERTIFICATE
+   CertificateChainOrderModel {
+      + credential: CredentialModel
+      + certificate: CertificateModel
+      + order: int
    }
 
-   class CmpAuthenticator<rfc4210.PKIMessage, CmpAuthMethods> {
-      +CmpAuthenticator(allowed_methods : List[CmpAuthMethods])
-      +authenticate(message : rfc4210.PKIMessage, request: HttpRequest) : DeviceModel
-   }
+The **primary certificate** (``certificate`` field) is the credential's active end-entity certificate. When a new certificate is issued or renewed, it becomes the new primary, and the old one is retained for revocation handling.
 
-   Enum CmpAuthMethods {
-      SHARED_SECRET
-      CLIENT_CERTIFICATE
-   }
+The **certificate chain** preserves issuing CA certificates in order, enabling certificate chain construction for protocols like EST (which require the full chain in PKCS#7 format).
 
 
-Authorization
--------------
+IssuedCredentialModel - Device Credentials
+--------------------------------------------
 
-The Authorizers will determine if the requested action is generally allowed to be performed by the DeviceModel object. This will not include any template checks etc.
-The is_authorized method shall return true if the operation is allowed, and it shall raise an exception with an appropriate error message if not rather then just
-return a plain false value.
+The ``IssuedCredentialModel`` bridges credentials to devices. It represents a credential issued to a specific device within a specific domain:
 
-.. note::
+.. code-block:: python
 
-   Depending on the operation, multiple Authenticators may be invoked and used for the same request.
-
-.. uml::
-
-   Authorizer <|-- EstAuthorizer
-   Authorizer <|-- CmpAuthorizer
-   Authorizer <|-- CertTemplateAuthorizer
-
-   abstract Authorizer<O> {
-      +<<is_authorized>>(cls, device : DeviceModel, operation : O) : Boolean
-   }
-
-   class EstAuthorizer<EstOperation> {
-      +<<is_authorized>>(cls, device : DeviceModel, operation : EstOperation) : Boolean
-   }
-
-   enum EstOperation {
-      SIMPLE_ENROLL
-      SIMPLE_RE_ENROLL
-   }
-
-   class CmpAuthorizer<CmpOperation> {
-      +<<is_authorized>>(cls, device : DeviceModel, operation : CmpOperation) : Boolean
-   }
-
-   enum CmpOperation {
-      IR
-      CR
-   }
-
-   class CertTemplateAuthorizer<CertTemplate> {
-      +<<is_authorized>>(cls, device : DeviceModel, template : CertTemplate) : Boolean
-   }
-
-   enum CertTemplate {
-      HTTPS_CLIENT
-      HTTPS_SERVER
-      OPC_UA_CLIENT
-      OPC_UA_SERVER
-   }
+   class IssuedCredentialModel(models.Model):
+       # Link to the credential (OneToOne)
+       credential = OneToOneField(CredentialModel)
+       
+       # Link to the device (ForeignKey)
+       device = ForeignKey(DeviceModel)
+       
+       # Link to the domain
+       domain = ForeignKey(DomainModel)
+       
+       # Metadata
+       common_name: str
+       issued_credential_type: DOMAIN_CREDENTIAL | APPLICATION_CREDENTIAL
+       issued_using_cert_profile: str
+       created_at: DateTimeField
 
 
-CsrAdapter
-----------
+Credential Types - IssuedCredentialModel
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This class is an implementation of the adapter pattern so that the same code for handling certificate requests can be used.
+**DOMAIN_CREDENTIAL**
+   The device's identity credential (LDevID) used to authenticate and enroll for application credentials. Typically the first credential issued during device onboarding. Used for EST client-certificate authentication or CMP authentication.
+
+**APPLICATION_CREDENTIAL**
+   Operational credentials for specific use cases (TLS Client, TLS Server, OPC UA). Issued after device authentication with a domain credential. Multiple application credentials can be issued to the same device.
 
 
-.. uml::
+Lifecycle: From Issuance to Deployment
+--------------------------------------
 
-   class CsrAdapter {
-      +not_valid_after
-      +not_valid_before
-      +subject
-      +<and so on>
-      
-      +get_extensions() -> List
-   }
+1. **Credential Issuance** → Certificate is generated/signed by the issuing CA
+2. **Database Storage** → ``CredentialModel`` created with primary certificate
+3. **Issued Credential Record** → ``IssuedCredentialModel`` links credential to device/domain
+4. **Device Retrieval** → Device downloads credential via EST, CMP, or manual download
+5. **Renewal/Rekeying** → New certificate becomes primary, old retained for transition
+6. **Revocation** → Certificate marked as revoked in CRL, old credentials cleaned up
+
+
+PrimaryCredentialCertificate - Chain Management
+------------------------------------------------
+
+The ``PrimaryCredentialCertificate`` model manages which certificates belong to a credential:
+
+- One credential can have **multiple certificates** (e.g., during renewal)
+- The **primary** flag identifies the active/current certificate
+- When a new certificate is added, it automatically becomes primary
+- Old certificates are retained for validation of client certificates during transitions
+
+
+CertificateChainOrderModel - CA Chain Ordering
+-----------------------------------------------
+
+The ``CertificateChainOrderModel`` preserves the order of issuing CA certificates:
+
+- Ordered as: leaf certificate → intermediate CAs → root CA
+- Required for EST `/cacerts` responses (PKCS#7 chain format)
+- Prevents ambiguity when multiple possible chains exist
+
+
+Credential Validation
+---------------------
+
+CredentialModel provides validation methods:
+
+**is_valid_issued_credential()**
+   Checks if credential meets requirements for deployment:
+   - Type must be ISSUED_CREDENTIAL
+   - Primary certificate must exist
+   - Primary certificate status must be OK (not expired, revoked, etc.)
+
+**IssuedCredentialModel.is_valid_domain_credential()**
+   Checks if a domain credential is valid for issuing application credentials:
+   - Must be DOMAIN_CREDENTIAL type
+   - Underlying credential must pass ``is_valid_issued_credential()``
+   - Certificate must be OK status
+
+
+Private Key Storage Options
+----------------------------
+
+**Database Storage (Software Keys)**
+   - Private key stored as encrypted PEM in ``private_key`` field
+   - Fast, suitable for CA credentials
+   - Encrypted using Trustpoint's key encryption mechanism
+
+**HSM/PKCS#11 Storage**
+   - Private key stored in hardware security module (TPM, SoftHSM, etc.)
+   - ``pkcs11_private_key`` field references the ``PKCS11Key`` model
+   - Higher security for sensitive credentials
+   - Requires HSM configuration and PIN management
+
+The ``PKCS11Key`` model stores references:
+
+.. code-block:: python
+
+   class PKCS11Key(models.Model):
+       token_label: str  # HSM token identifier
+       key_label: str    # Key identifier within token
+       key_type: RSA | EC | AES
+       created_at: DateTimeField
+
+For request pipeline details and component architecture, see :doc:`../workflow`.
 
 

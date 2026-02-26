@@ -4,11 +4,6 @@ import base64
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
-from django.http import HttpRequest
 from django.test import RequestFactory
 from pki.models.domain import DomainModel
 from request.request_context import EstCertificateRequestContext

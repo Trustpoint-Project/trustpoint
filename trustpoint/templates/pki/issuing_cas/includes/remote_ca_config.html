@@ -1,0 +1,63 @@
+{% load i18n %}
+
+{% if issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_EST_RA or issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_CMP_RA or issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_EST or issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_CMP %}
+<h3>{% trans 'Remote CA Configuration' %}</h3>
+<hr class="hr-m">
+<div class="tp-kvp-list">
+    <div>
+        <div>{% trans 'Remote Host' %}</div>
+        <div>{{ issuing_ca.remote_host }}</div>
+    </div>
+    <div>
+        <div>{% trans 'Remote Port' %}</div>
+        <div>{{ issuing_ca.remote_port }}</div>
+    </div>
+    <div>
+        <div>{% trans 'Remote Path' %}</div>
+        <div>{{ issuing_ca.remote_path }}</div>
+    </div>
+    {% if issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_EST or issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_EST_RA %}
+    <div>
+        <div>{% trans 'EST Username' %}</div>
+        <div>{{ issuing_ca.est_username }}</div>
+    </div>
+    {% endif %}
+        <div>
+        <div>{% trans 'PKI Protocols' %}</div>
+        <div>
+            {% if issuing_ca.no_onboarding_config.get_pki_protocols %}
+                {% for pki_protocol in issuing_ca.no_onboarding_config.get_pki_protocols %}
+                    <div>{{ pki_protocol.label }}</div>
+                {% endfor %}
+            {% else %}
+                <span class="text-muted">{% trans 'None' %}</span>
+            {% endif %}
+        </div>
+    </div>
+        {% if issuing_ca.no_onboarding_config.trust_store %}
+    <div>
+        <div>{% trans 'Trust Store' %}</div>
+        <div>
+            <a href="{% url 'pki:truststore-detail' pk=issuing_ca.no_onboarding_config.trust_store.id %}">
+                {{ issuing_ca.no_onboarding_config.trust_store.unique_name }}
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+
+{% if issuing_ca.chain_truststore %}
+<div class="tp-kvp-list">
+    <div>
+        <div>{% trans 'CA Chain Truststore' %}</div>
+        <div>
+            <a href="{% url 'pki:truststore-detail' pk=issuing_ca.chain_truststore.id %}">
+                {{ issuing_ca.chain_truststore.unique_name }}
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}

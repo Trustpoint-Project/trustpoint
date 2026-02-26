@@ -11,3 +11,4 @@ class PkiConfig(AppConfig):
 
     def ready(self) -> None:
         """PKI app initialization."""
+        import pki.signals as _  # noqa: F401, PLC0415

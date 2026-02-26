@@ -50,7 +50,8 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
         # or B) the client_certificate is the domain credential for the device the cert was issued to.
         try:
             signer_credential = IssuedCredentialModel.get_credential_for_certificate(context.client_certificate)
-            if signer_credential.credential.certificate.serial_number == str(context.cert_serial_number):
+            signer_cert = signer_credential.credential.certificate_or_error
+            if signer_cert.serial_number == str(context.cert_serial_number):
                 context.credential_to_revoke = signer_credential
                 self.logger.debug('Revocation authorized: Self-revocation of credential %s',
                                   context.credential_to_revoke.common_name)

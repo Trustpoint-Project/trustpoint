@@ -1,5 +1,5 @@
 """Test suite for security manager."""
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from django.test import TestCase
 from management.models import SecurityConfig

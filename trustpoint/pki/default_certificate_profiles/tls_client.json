@@ -11,6 +11,9 @@
     "ext": {
         "basic_constraints": {
             "ca": false
+        },
+        "subject_alternative_name": {
+            "allow": "*"
         }
     },
     "validity": {

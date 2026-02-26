@@ -86,13 +86,18 @@ def _validate_webhook_scheme_and_host(parsed: ParseResult) -> None:
         raise ValidationError(msg)
 
 
-def _validate_webhook_port(parsed: ParseResult) -> None:
-    """Validate URL port number for SSRF prevention."""
+def _validate_port(parsed: ParseResult, *, allow_dangerous_ports: bool = False) -> None:
+    """Validate URL port number for SSRF prevention.
+
+    Args:
+        parsed: Parsed URL object.
+        allow_dangerous_ports: Whether to allow ports typically used by other services.
+    """
     if parsed.port is None:
         return
 
-    if parsed.port in DANGEROUS_PORTS:
-        msg = f'Webhook URL port {parsed.port} is not allowed.'
+    if not allow_dangerous_ports and parsed.port in DANGEROUS_PORTS:
+        msg = f'Port {parsed.port} is not allowed.'
         raise ValidationError(msg)
 
     allowed_ports = STANDARD_HTTP_PORTS if parsed.scheme == 'http' else STANDARD_HTTPS_PORTS
@@ -102,28 +107,70 @@ def _validate_webhook_port(parsed: ParseResult) -> None:
         raise ValidationError(msg)
 
 
-def _validate_webhook_hostname_and_ip(hostname: str) -> None:
-    """Validate hostname and resolve to safe IP addresses."""
+def _validate_hostname_and_ip(
+    hostname: str,
+    *,
+    allow_localhost: bool = False,
+    skip_dns_resolution: bool = False
+) -> None:
+    """Validate hostname and resolve to safe IP addresses.
+
+    Args:
+        hostname: The hostname or IP address to validate.
+        allow_localhost: Whether to allow localhost/loopback addresses.
+        skip_dns_resolution: Whether to skip DNS resolution and IP blocking checks.
+    """
+    _check_localhost_forbidden(hostname, allow_localhost=allow_localhost)
+
+    if skip_dns_resolution:
+        _validate_hostname_format_only(hostname)
+        return
+
+    _resolve_and_check_ips(hostname, allow_localhost=allow_localhost)
+
+
+def _check_localhost_forbidden(hostname: str, *, allow_localhost: bool) -> None:
+    """Check if localhost is forbidden."""
     # ruff: noqa: S104
-    if hostname.lower() in ('localhost', '127.0.0.1', '::1', '0.0.0.0', '0:0:0:0:0:0:0:0'):
-        msg = 'Webhook URL cannot target localhost or loopback addresses.'
+    localhost_names = ('localhost', '127.0.0.1', '::1', '0.0.0.0', '0:0:0:0:0:0:0:0')
+    if not allow_localhost and hostname.lower() in localhost_names:
+        msg = 'Hostname cannot target localhost or loopback addresses.'
         raise ValidationError(msg)
 
+
+def _validate_hostname_format_only(hostname: str) -> None:
+    """Validate hostname format when skipping DNS resolution."""
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        if not re.match(r'^[a-zA-Z0-9.-]+$', hostname):
+            msg = 'Invalid hostname format.'
+            raise ValidationError(msg) from None
+        if hostname.startswith('.') or hostname.endswith('.') or '..' in hostname:
+            msg = 'Invalid hostname format.'
+            raise ValidationError(msg) from None
+
+
+def _resolve_and_check_ips(hostname: str, *, allow_localhost: bool) -> None:
+    """Resolve hostname and check resolved IPs for safety."""
     try:
         ip_addresses = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
         for addr_info in ip_addresses:
             ip_str = addr_info[4][0]
             ip = ipaddress.ip_address(ip_str)
 
+            if allow_localhost and ip.is_loopback:
+                continue
+
             if _is_ip_blocked(ip):
-                msg = f'Webhook URL cannot target blocked IP address: {ip_str}'
+                msg = f'Hostname cannot target blocked IP address: {ip_str}'
                 raise ValidationError(msg)
 
     except socket.gaierror:
-        msg = f'Webhook URL hostname could not be resolved: {hostname}'
+        msg = f'Hostname could not be resolved: {hostname}'
         raise ValidationError(msg) from None
     except ValueError as exc:
-        msg = f'Webhook URL contains invalid IP address: {exc}'
+        msg = f'Invalid IP address: {exc}'
         raise ValidationError(msg) from exc
 
 
@@ -141,11 +188,48 @@ def validate_webhook_url(url: str) -> None:
     parsed = urlparse(url)
 
     _validate_webhook_scheme_and_host(parsed)
-    _validate_webhook_port(parsed)
+    _validate_port(parsed, allow_dangerous_ports=False)
 
     hostname = parsed.hostname
     if not hostname:
         msg = 'Webhook URL must have a valid hostname.'
         raise ValidationError(msg)
 
-    _validate_webhook_hostname_and_ip(hostname)
+    _validate_hostname_and_ip(hostname, allow_localhost=False)
+
+
+def _validate_remote_path(path: str) -> None:
+    """Validate that the remote path is a safe URL path."""
+    if not path.startswith('/'):
+        msg = 'Remote path must start with "/".'
+        raise ValidationError(msg)
+
+    if '..' in path:
+        msg = 'Remote path cannot contain ".." (directory traversal).'
+        raise ValidationError(msg)
+
+    if not re.match(r'^/[a-zA-Z0-9._/-]*$', path):
+        msg = 'Remote path contains invalid characters.'
+        raise ValidationError(msg)
+
+
+def validate_remote_ca_connection(host: str, port: int | None, path: str, *, allow_localhost: bool = True) -> None:
+    """Validate remote CA connection parameters for safety.
+
+    Args:
+        host: The hostname or IP address of the remote CA.
+        port: The port number (can be None for default).
+        path: The URL path for the CA endpoint.
+        allow_localhost: Whether to allow localhost connections (default True for testing).
+    """
+    _validate_hostname_and_ip(host, allow_localhost=allow_localhost, skip_dns_resolution=True)
+
+    if port is not None:
+        if port in DANGEROUS_PORTS:
+            msg = f'Port {port} is not allowed for remote CA connections.'
+            raise ValidationError(msg)
+        if not (1 <= port <= MAX_PORT):
+            msg = f'Port {port} is out of valid range (1-{MAX_PORT}).'
+            raise ValidationError(msg)
+
+    _validate_remote_path(path)

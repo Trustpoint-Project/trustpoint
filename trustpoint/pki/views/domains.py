@@ -16,17 +16,19 @@ from django.views.generic import DeleteView
 from django.views.generic.detail import DetailView
 from django.views.generic.edit import CreateView, FormView
 from django.views.generic.list import ListView
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import viewsets
 
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import (
     CaModel,
     CertificateModel,
     CertificateProfileModel,
-    CredentialModel,
     DevIdRegistration,
     DomainModel,
 )
 from pki.models.truststore import TruststoreModel
+from pki.serializer.domain import DomainSerializer
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -68,13 +70,19 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
     ignore_url = reverse_lazy('pki:domains')
 
     def get_form(self, _form_class: Any = None) -> Any:
-        """Override get_form to filter out autogen root CAs."""
+        """Override get_form to filter out keyless CAs and autogen root CAs.
+
+        Only issuing CAs (those with credentials that can sign certificates) should be assignable to domains.
+        """
         form = super().get_form()
-        # Filter out autogen root CAs
-        form.fields['issuing_ca'].queryset = CaModel.objects.exclude(  # type: ignore[attr-defined]
-            ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT
-        ).filter(is_active=True)
-        # Remove empty "---------" choice
+        form.fields['issuing_ca'].queryset = CaModel.objects.filter(  # type: ignore[attr-defined]
+            is_active=True
+        ).exclude(
+            ca_type__in=[
+                CaModel.CaTypeChoice.AUTOGEN_ROOT,
+                CaModel.CaTypeChoice.KEYLESS,
+            ]
+        )
         form.fields['issuing_ca'].empty_label = None  # type: ignore[attr-defined]
         del form.fields['is_active']
         return form
@@ -376,11 +384,12 @@ class IssuedCertificatesView(ContextDataMixin, ListView[CertificateModel]):
         if domain.issuing_ca is None:
             msg = 'Domain has no issuing CA configured.'
             raise Http404(msg)
-        # PyCharm TypeChecker issue - this passes mypy
-        # noinspection PyTypeChecker
+        if domain.issuing_ca.credential is None:
+            msg = 'Issuing CA has no credential configured.'
+            raise Http404(msg)
         # TODO(AlexHx8472): This must be limited to the actual domain.  # noqa: FIX002
         return CertificateModel.objects.filter(
-            issuer_public_bytes=cast('CredentialModel', domain.issuing_ca.credential).certificate.subject_public_bytes
+            issuer_public_bytes=domain.issuing_ca.credential.certificate_or_error.subject_public_bytes
         )
 
     def get_domain(self) -> DomainModel:
@@ -408,4 +417,24 @@ class OnboardingMethodSelectIdevidHelpView(DomainContextMixin, DetailView[DevIdR
         context['pk'] = self.object.pk
 
         return context
+
+@extend_schema(tags=['Domain'])
+@extend_schema_view(
+    list=extend_schema(description='Retrieve a list of all domains.'),
+    retrieve=extend_schema(description='Retrieve a single domain by id.'),
+    create=extend_schema(description='Create a domain.'),
+    update=extend_schema(description='Update an existing domain.'),
+    partial_update=extend_schema(description='Partially update an existing domain.'),
+    destroy=extend_schema(description='Delete a domain.')
+)
+class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
+    """ViewSet for managing Domain instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+
+    queryset = DomainModel.objects.all()
+    serializer_class = DomainSerializer
+
 

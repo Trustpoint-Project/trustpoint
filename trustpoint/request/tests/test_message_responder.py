@@ -250,7 +250,7 @@ class TestEstCertificateMessageResponder:
 
         assert context.http_response_status == 200
         assert context.http_response_content_type == 'application/pkcs7-mime; smime-type=certs-only'
-        assert isinstance(context.http_response_content, bytes)
+        assert isinstance(context.http_response_content, str)
         assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED
 
     def test_build_response_without_onboarding_config(

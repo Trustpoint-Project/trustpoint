@@ -1577,6 +1577,11 @@ class SetupWizardImportTlsServerCredentialPkcs12View(LoggerMixin, FormView[TlsAd
                         self.logger.warning('No old TLS credential found with id: %s', old_credential_id)
                 except Exception as e:  # noqa: BLE001
                     self.logger.warning('Failed to delete old TLS credential %s: %s', old_credential_id, e)
+            if tls_certificate.certificate is None:
+                err_msg = 'TLS certificate has no certificate model.'
+                messages.add_message(self.request, messages.ERROR, err_msg)
+                self.logger.error(err_msg)
+                return redirect('setup_wizard:setup_mode', permanent=False)
             self.logger.info(
                 'Activated TLS credential: %s, certificate: %s',
                 tls_certificate.id, tls_certificate.certificate.id
@@ -1685,6 +1690,11 @@ class SetupWizardImportTlsServerCredentialSeparateFilesView(
                         self.logger.warning('No old TLS credential found with id: %s', old_credential_id)
                 except Exception as e:  # noqa: BLE001
                     self.logger.warning('Failed to delete old TLS credential %s: %s', old_credential_id, e)
+            if tls_certificate.certificate is None:
+                err_msg = 'TLS certificate has no certificate model.'
+                messages.add_message(self.request, messages.ERROR, err_msg)
+                self.logger.error(err_msg)
+                return redirect('setup_wizard:setup_mode', permanent=False)
             self.logger.info(
                 'Activated TLS credential: %s, certificate: %s',
                 tls_certificate.id, tls_certificate.certificate.id
@@ -1900,7 +1910,7 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
 
         try:
-            serializer = trustpoint_tls_server_credential_model.certificate.get_certificate_serializer()
+            serializer = trustpoint_tls_server_credential_model.certificate_or_error.get_certificate_serializer()
             trust_store, content_type = self._get_trust_store_and_content_type(file_format, serializer)
         except Exception:
             err_msg = f'Error generating {file_format} trust store.'
@@ -2093,8 +2103,6 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
             else:
                 messages.add_message(self.request, messages.ERROR, 'Invalid option selected for demo data setup.')
                 return redirect('setup_wizard:demo_data', permanent=False)
-
-            call_command('execute_all_notifications')
 
         except subprocess.CalledProcessError as exception:
             err_msg = (

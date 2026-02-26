@@ -1,6 +1,5 @@
 """Tests for AOKI URL configuration."""
 
-import pytest
 from django.urls import resolve, reverse
 
 

@@ -1,5 +1,4 @@
 """Test suite for key_storage views."""
-from unittest.mock import Mock, patch
 
 from django.contrib.messages import get_messages
 from django.test import RequestFactory, TestCase

@@ -10,7 +10,6 @@ from devices.forms import (
     IssueTlsServerCredentialForm,
     IssueOpcUaClientCredentialForm,
     IssueOpcUaServerCredentialForm,
-    ApplicationUriFormMixin,
 )
 
 

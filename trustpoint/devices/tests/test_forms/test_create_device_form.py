@@ -6,8 +6,6 @@ import pytest
 
 from devices.forms import NoOnboardingCreateForm
 from devices.models import DeviceModel
-from onboarding.models import OnboardingStatus
-
 
 @pytest.mark.django_db
 def test_create_device_form_valid_data(domain_instance: dict[str, Any]) -> None:

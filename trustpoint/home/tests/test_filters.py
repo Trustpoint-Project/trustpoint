@@ -1,11 +1,10 @@
 """Test cases for home app filters."""
 
-from datetime import timedelta
 from unittest.mock import Mock, patch
 
 from django.test import TestCase
 from django.utils import timezone
-from notifications.models import NotificationModel
+from management.models import NotificationModel
 
 from ..filters import NotificationFilter
 

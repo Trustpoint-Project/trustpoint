@@ -3,17 +3,14 @@
 import pytest
 from unittest import mock
 
-from devices.issuer import LocalDomainCredentialIssuer
 
-from devices.models import DeviceModel
 
-from management.models import KeyStorageConfig, PKCS11Token
+from management.models import KeyStorageConfig
 
 from pki.auto_gen_pki import AutoGenPki
 
 from pki.models import CertificateModel, DomainModel, CaModel
 
-from pki.models.credential import CredentialModel, PKCS11Key
 
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 

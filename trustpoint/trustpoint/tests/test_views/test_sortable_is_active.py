@@ -1,8 +1,6 @@
 """Tests for SortableTableMixin with is_active field."""
-from typing import Any
 
 from django.db import models
-from django.db.models import QuerySet
 from django.http import HttpRequest
 from django.test import RequestFactory, TestCase
 

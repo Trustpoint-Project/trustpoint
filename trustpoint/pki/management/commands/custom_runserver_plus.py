@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from typing import Callable
 
 from django_extensions.management.commands.runserver_plus import Command as RunServerPlusCommand
 from pki.models import CredentialModel
@@ -27,7 +26,7 @@ class Command(RunServerPlusCommand):
             cert_pem = cert_file.read()
         certificate_serializer = CertificateSerializer.from_pem(cert_pem)
 
-        with open(key_file_path) as key_file:
+        with open(key_file_path, 'rb') as key_file:
             key_pem = key_file.read()
         key_serializer = PrivateKeySerializer.from_pem(key_pem)
 

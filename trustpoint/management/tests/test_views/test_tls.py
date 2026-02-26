@@ -2,7 +2,7 @@
 from unittest.mock import Mock, patch
 
 from django.contrib.messages import get_messages
-from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.exceptions import ValidationError
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
@@ -16,7 +16,7 @@ from management.views.tls import (
     TlsSettingsContextMixin,
     TlsView,
 )
-from pki.models import CertificateModel, CredentialModel, GeneralNameIpAddress
+from pki.models import CertificateModel, CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.forms import StartupWizardTlsCertificateForm
 

@@ -8,25 +8,30 @@ import os
 import re
 import tarfile
 import zipfile
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from django.http import Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import render
 from django.utils.translation import gettext as _
 from django.views.generic import TemplateView, View
 from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
+from drf_spectacular.utils import extend_schema
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
 
+from management.serializer.logging import LoggingSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
 from trustpoint.settings import DATE_FORMAT, LOG_DIR_PATH
 from trustpoint.views.base import SortableTableFromListMixin
 
 if TYPE_CHECKING:
-    from pathlib import Path
-    from typing import Any
 
     from django.http import HttpRequest
+    from rest_framework.request import Request
 
 
 _LOG_FILENAME_RE = re.compile(r'^trustpoint\.log(?:\.\d+)?$')
@@ -292,3 +297,115 @@ class LoggingFilesDownloadMultipleView(PageContextMixin, LoggerMixin, View):
         response = HttpResponse(bytes_io.getvalue(), content_type='application/gzip')
         response['Content-Disposition'] = 'attachment; filename=trustpoint-logs.tar.gz'
         return response
+
+@extend_schema(tags=['Logging'])
+class LoggingViewSet(viewsets.GenericViewSet[Any]):
+    """ViewSet for managing Backup instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+    serializer_class = LoggingSerializer
+    filter_backends = ()
+
+    @action(detail=False, methods=['get'])
+    def list_files(self, _request: Request) -> Response:
+        """Retrieve detailed info for all log files."""
+        if not LOG_DIR_PATH.exists():
+            return Response({'error': 'Log files not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        files_info = []
+        all_files = [file.name for file in LOG_DIR_PATH.iterdir()]
+        valid_log_files = [f for f in all_files if re.compile(r'^trustpoint\.log(?:\.\d+)?$').match(f)]
+        for filename in valid_log_files:
+            file_path = LOG_DIR_PATH / Path(filename)
+            if file_path.is_file():
+                stat = file_path.stat()
+                files_info.append({
+                    'name': filename,
+                    'size': stat.st_size,
+                    'modified': datetime.datetime.fromtimestamp(stat.st_mtime, tz=datetime.UTC)
+                })
+
+        serializer = self.get_serializer(files_info, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path=r'download/(?P<file_name>[^/]+)')
+    def download(self, _request: Request, file_name: str) -> FileResponse | Response:
+        """Download a log file by name.
+
+        /logs/download/trustpoint.log/
+        """
+        if not file_name:
+            return Response(
+                {'error': "Missing 'file_name' path parameter"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Prevent path traversal
+        safe_file_name = Path(file_name)
+        file_path = LOG_DIR_PATH / safe_file_name
+        if not file_path.exists() or not file_path.is_file():
+            return Response(
+                {'error': 'File not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        return FileResponse(
+            file_path.read_text(encoding='utf-8', errors='backslashreplace'),
+            as_attachment=True,
+            filename=file_name
+        )
+
+    @action(
+        detail=False,
+        methods=['delete'],
+        url_path=r'delete/(?P<file_name>[^/]+)'
+    )
+    def delete(self, _request: Request, file_name: str) -> Response:
+        """Delete a log file by name.
+
+        DELETE /logs/delete/trustpoint.log/
+        """
+        if not file_name:
+            return Response(
+                {'error': 'File name is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Validate file name against allowed log file pattern
+        if not re.compile(r'^trustpoint\.log(?:\.\d+)?$').match(file_name):
+            return Response(
+                {'error': 'Invalid file name'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Prevent path traversal by restricting to a filename within LOG_DIR_PATH
+        safe_file_name = Path(file_name).name
+        log_root = LOG_DIR_PATH.resolve()
+        file_path = (log_root / safe_file_name).resolve()
+
+        # Ensure the resolved file path is within the log directory
+        if log_root not in file_path.parents:
+            return Response(
+                {'error': 'Invalid file name'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not file_path.exists() or not file_path.is_file():
+            return Response(
+                {'error': 'File not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            file_path.unlink()
+            return Response(
+                {'message': f"File '{safe_file_name}' deleted successfully"},
+                status=status.HTTP_200_OK
+            )
+        except Exception: # noqa: BLE001
+            return Response(
+                {'error': 'An internal error occurred while deleting the file.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

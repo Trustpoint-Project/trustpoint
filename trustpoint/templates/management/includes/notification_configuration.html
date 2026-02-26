@@ -1,0 +1,51 @@
+{% load i18n %}
+{% load static %}
+{% load crispy_forms_filters %}
+
+<div class="accordion-item">
+    <h2 class="accordion-header">
+        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseNotifications" aria-expanded="false" aria-controls="collapseNotifications">
+            {% trans "Notification Configuration" %}
+        </button>
+    </h2>
+    <div id="collapseNotifications" class="accordion-collapse collapse" data-bs-parent="#accordionSettings">
+        <div class="accordion-body">
+            <div class="card">
+                <div class="card-body pt-4 pb-4">
+                    {% if notification_config.enabled and notification_config.notification_cycle_enabled %}
+                    <div class="alert alert-info mb-3" role="alert">
+                        <i class="bi bi-clock me-2"></i>
+                        <strong>{% trans "Next Notification Check:" %}</strong>
+                        {% if notification_config.next_notification_check_scheduled_at %}
+                            {{ notification_config.next_notification_check_scheduled_at|date:"Y-m-d H:i:s" }}
+                        {% else %}
+                            <span class="text-muted">{% trans "Not yet scheduled" %}</span>
+                        {% endif %}
+                    </div>
+                    {% elif notification_config.enabled and not notification_config.notification_cycle_enabled %}
+                    <div class="alert alert-warning mb-3" role="alert">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        {% trans "Notifications are enabled but automatic notification checks are not scheduled." %}
+                    </div>
+                    {% endif %}
+                    
+                    <form method="POST" enctype="multipart/form-data" id="notification_configuration">
+                        {% csrf_token %}
+                        <input type="hidden" name="notification_configuration" value="1">
+                        <fieldset class="form-group tp-form-group">
+                            {% crispy notification_form %}
+                        </fieldset>
+                    </form>
+                </div>
+
+                <div class="card-footer d-flex justify-content-between">
+                    <div class="tp-card-btn-footer m-1">
+                        <button class="btn btn-primary" type="submit" form="notification_configuration">
+                            {% trans "Save" %}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

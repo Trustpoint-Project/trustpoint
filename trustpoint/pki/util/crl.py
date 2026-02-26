@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from cryptography.hazmat.primitives.asymmetric import ec, rsa
     from cryptography.x509 import CertificateRevocationList
 
-    from pki.models.ca import IssuingCaModel
+    from pki.models.ca import CaModel
 
 
 def generate_empty_crl(
@@ -54,7 +54,7 @@ def generate_empty_crl(
 
 
 def generate_crl_with_revoked_certs(
-    issuing_ca: IssuingCaModel,
+    issuing_ca: CaModel,
     crl_validity_hours: int = 24,
 ) -> CertificateRevocationList:
     """Generate a CRL with revoked certificates for an issuing CA.
@@ -79,7 +79,7 @@ def generate_crl_with_revoked_certs(
         raise ValueError(msg)
 
     crl_issued_at = timezone.now()
-    ca_subject = issuing_ca.credential.certificate.get_certificate_serializer().as_crypto().subject
+    ca_subject = issuing_ca.credential.certificate_or_error.get_certificate_serializer().as_crypto().subject
 
     latest_crl = issuing_ca.get_latest_crl()
     next_crl_number = (latest_crl.crl_number + 1) if latest_crl and latest_crl.crl_number else 1
