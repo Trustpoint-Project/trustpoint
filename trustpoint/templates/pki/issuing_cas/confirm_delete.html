@@ -16,28 +16,30 @@
             <div class="card-body">
                 <div class="tp-card-centered-content">
                     {% for issuing_ca in issuing_cas %}
-                        <h2>({{ forloop.counter }}) {% trans 'Issuing CA' %}: {{ issuing_ca.credential.certificate.common_name }}</h2>
+                        <h2>({{ forloop.counter }}) {% trans 'Issuing CA' %}: {{ issuing_ca.ca_certificate_model.common_name|default:issuing_ca.unique_name }}</h2>
                         <hr class="hr-m">
                         <div class="tp-kvp-list">
                             <div>
                                 <div>{% trans 'Issuing CA Certificate' %}</div>
                                 <div>
-                                    <a href="{% url 'pki:certificate-detail' pk=issuing_ca.credential.certificate.id %}">
-                                        {% if issuing_ca.credential.certificate.common_name %}
-                                            CN: {{ issuing_ca.credential.certificate.common_name }}
+                                    {% if issuing_ca.ca_certificate_model %}
+                                    <a href="{% url 'pki:certificate-detail' pk=issuing_ca.ca_certificate_model.id %}">
+                                        {% if issuing_ca.ca_certificate_model.common_name %}
+                                            CN: {{ issuing_ca.ca_certificate_model.common_name }}
                                         {% else %}
                                             {% trans 'Issuing CA Certificate' %}
                                         {% endif %}
                                     </a>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div>
                                 <div>{% trans 'Serial Number' %}</div>
-                                <div>{{ issuing_ca.credential.certificate.serial_number }}</div>
+                                <div>{{ issuing_ca.ca_certificate_model.serial_number|default:"-" }}</div>
                             </div>
                             <div>
                                 <div>Fingerprint (SHA256)</div>
-                                <div>{{ issuing_ca.credential.certificate.sha256_fingerprint }}</div>
+                                <div>{{ issuing_ca.ca_certificate_model.sha256_fingerprint|default:"-" }}</div>
                             </div>
                         </div>
                     {% endfor %}

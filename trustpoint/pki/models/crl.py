@@ -145,6 +145,10 @@ class CrlModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(_('Failed to parse the CRL. It may be corrupted or invalid.')) from e
 
         if ca is not None:
+            if not ca.ca_certificate_model:
+                raise ValidationError(
+                    _('The CA does not have a valid certificate model.')
+                )
             ca_cert = ca.ca_certificate_model.get_certificate_serializer().as_crypto()
 
             # Check if CRL issuer matches CA subject

@@ -4,7 +4,7 @@ from devices.models import DeviceModel
 from django.http import Http404
 from django.test import TestCase
 from django.test.client import RequestFactory
-from notifications.models import NotificationModel
+from management.models import NotificationModel
 
 from trustpoint.views.base import ListInDetailView
 

@@ -3,6 +3,7 @@ from abc import abstractmethod
 from typing import get_args
 
 from cryptography import x509
+from cryptography.hazmat.primitives import hashes
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 
@@ -61,13 +62,16 @@ class EstCsrSignProcessor(LoggerMixin, AbstractOperationProcessor):
         signing_credential = self._get_signing_credential(context)
         csr = context.cert_requested
 
-        signature_suite = SignatureSuite.from_certificate(signing_credential.get_certificate())
-        hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm
-        if hash_algorithm_enum is None:
-            err_msg = 'Failed to get hash algorithm from signing certificate.'
-            raise ValueError(err_msg)
-
-        hash_algorithm = hash_algorithm_enum.hash_algorithm()
+        # Determine hash algorithm
+        if signing_credential.certificate:
+            signature_suite = SignatureSuite.from_certificate(signing_credential.get_certificate())
+            hash_algorithm_enum = signature_suite.algorithm_identifier.hash_algorithm
+            if hash_algorithm_enum is None:
+                err_msg = 'Failed to get hash algorithm from signing certificate.'
+                raise ValueError(err_msg)
+            hash_algorithm = hash_algorithm_enum.hash_algorithm()
+        else:
+            hash_algorithm = hashes.SHA256()
 
         if not isinstance(hash_algorithm, get_args(AllowedCertSignHashAlgos)):
             err_msg = (
@@ -85,10 +89,13 @@ class EstCsrSignProcessor(LoggerMixin, AbstractOperationProcessor):
         private_key = signing_credential.get_private_key_serializer().as_crypto()
         self._signed_csr = csr_builder.sign(private_key=private_key, algorithm=hash_algorithm)
 
-        self.logger.info(
-            'Signed CSR for EST with credential: %s',
-            signing_credential.get_certificate().subject.rfc4514_string()
-        )
+        if signing_credential.certificate:
+            self.logger.info(
+                'Signed CSR for EST with credential: %s',
+                signing_credential.get_certificate().subject.rfc4514_string()
+            )
+        else:
+            self.logger.info('Signed CSR for EST with credential (certificate pending)')
 
     def get_signed_csr(self) -> x509.CertificateSigningRequest:
         """Get the signed CSR.
@@ -127,6 +134,9 @@ class EstCaCsrSignProcessor(EstCsrSignProcessor):
 
             ca = context.domain.get_issuing_ca_or_value_error()
             context.issuer_credential = ca.get_credential()
+            if not context.issuer_credential:
+                exc_msg = 'Issuing CA does not have a credential'
+                raise ValueError(exc_msg)
 
         return context.issuer_credential
 

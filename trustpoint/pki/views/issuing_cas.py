@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import binascii
 from base64 import b64decode
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, cast
 
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec, rsa  # noqa: TC002
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
@@ -46,14 +47,16 @@ from pki.forms import (
 )
 from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
-from pki.models.credential import PrimaryCredentialCertificate
+from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.truststore import TruststoreModel
-from pki.serializer import IssuingCaSerializer
+from pki.serializer.issuing_ca import IssuingCaSerializer
 from pki.util.cert_profile import ProfileValidationError
 from request.clients import EstClient, EstClientError
+from request.clients.cmp_client import CmpClient, CmpClientError
+from request.message_builder.cmp import CmpMessageBuilder
 from request.operation_processor.csr_build import ProfileAwareCsrBuilder
 from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
-from request.request_context import EstCertificateRequestContext
+from request.request_context import CmpCertificateRequestContext, EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -63,12 +66,20 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
-    from typing import ClassVar
-
     from django.db.models import QuerySet
-    from django.forms import Form
+    from django.forms import ChoiceField, Form
     from django.http import HttpRequest
     from rest_framework.request import Request
+
+
+class CmpContextParams(NamedTuple):
+    """Parameters for creating a CMP certificate request context."""
+    subject: x509.Name
+    public_key: rsa.RSAPublicKey | ec.EllipticCurvePublicKey
+    private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
+    recipient_name: str
+    extensions: list[x509.Extension[x509.ExtensionType]] | None
+    sender_kid: int | None
 
 
 class IssuingCaContextMixin(ContextDataMixin):
@@ -220,13 +231,6 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
                 )
         return kwargs
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add the CA and import form to the context."""
-        context = super().get_context_data(**kwargs)
-        context['ca'] = self.get_ca()
-        context['import_form'] = TruststoreAddForm()
-        return context
-
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle both association and import form submissions."""
         if 'trust_store_file' in request.FILES:
@@ -236,15 +240,30 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
     def _handle_import(self, request: HttpRequest) -> HttpResponse:
         """Handle truststore import from modal."""
         import_form = TruststoreAddForm(request.POST, request.FILES)
+        ca = self.get_ca()
 
         if import_form.is_valid():
             truststore = import_form.cleaned_data['truststore']
+
+            expected_usage = self._get_expected_truststore_usage(ca)
+            if truststore.intended_usage != expected_usage:
+                usage_name = TruststoreModel.IntendedUsage(expected_usage).label
+                import_form.add_error(
+                    'intended_usage',
+                    _('For this CA configuration, only "{usage}" truststores are allowed.').format(
+                        usage=usage_name
+                    )
+                )
+                context = self.get_context_data()
+                context['import_form'] = import_form
+                return self.render_to_response(context)
+
             messages.success(
                 request,
                 _('Successfully imported truststore {name}.').format(name=truststore.unique_name),
             )
             return HttpResponseRedirect(
-                reverse('pki:issuing_cas-truststore-association', kwargs={'pk': self.get_ca().pk}) +
+                reverse('pki:issuing_cas-truststore-association', kwargs={'pk': ca.pk}) +
                 f'?truststore_id={truststore.id}'
             )
 
@@ -252,16 +271,129 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
         context['import_form'] = import_form
         return self.render_to_response(context)
 
+    def _get_expected_truststore_usage(self, ca: CaModel) -> int:
+        """Get the expected truststore intended_usage for the given CA type and state.
+
+        Args:
+            ca: The CA model instance
+
+        Returns:
+            The expected IntendedUsage value
+        """
+        if ca.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+            return TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+
+        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+            # Step 1: CA chain, Step 2: TLS cert
+            if not ca.certificate:
+                return TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+            return TruststoreModel.IntendedUsage.TLS
+
+        # Default for other EST CAs
+        return TruststoreModel.IntendedUsage.TLS
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the CA and import form to the context."""
+        context = super().get_context_data(**kwargs)
+        ca = self.get_ca()
+        context['ca'] = ca
+        import_form = TruststoreAddForm()
+        intended_usage_field = cast('ChoiceField', import_form.fields['intended_usage'])
+
+        # Filter choices based on CA type
+        if ca.ca_type in [CaModel.CaTypeChoice.REMOTE_ISSUING_CMP, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+            # Only allow ISSUING_CA_CHAIN for CMP RAs
+            intended_usage_field.choices = [
+                choice for choice in intended_usage_field.choices  # type: ignore[union-attr]
+                if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+            ]
+        elif ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+            if not ca.certificate:
+                # Step 1: CA chain
+                intended_usage_field.choices = [
+                    choice for choice in intended_usage_field.choices  # type: ignore[union-attr]
+                    if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN
+                ]
+            else:
+                # Step 2: TLS cert
+                intended_usage_field.choices = [
+                    choice for choice in intended_usage_field.choices  # type: ignore[union-attr]
+                    if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.TLS
+                ]
+
+        context['import_form'] = import_form
+        # Add flag to differentiate between EST and CMP/RA for helpful hints
+        context['is_cmp'] = ca.ca_type in [
+            CaModel.CaTypeChoice.REMOTE_ISSUING_CMP,
+            CaModel.CaTypeChoice.REMOTE_CMP_RA
+        ]
+        context['is_est_ra'] = ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA
+        context['est_ra_step'] = 1 if (context['is_est_ra'] and not ca.certificate) else 2
+        return context
+
+    def _handle_ra_certificate_extraction(self, ca: CaModel) -> bool:
+        """Extract RA certificate and parent from CA chain truststore.
+
+        Args:
+            ca: The CA model instance (must be an RA type)
+
+        Returns:
+            True if this was a CA chain association (requiring TLS cert next for EST RA), False otherwise
+        """
+        if not (ca.no_onboarding_config and ca.no_onboarding_config.trust_store):
+            return False
+
+        truststore = ca.no_onboarding_config.trust_store
+
+        if truststore.intended_usage != TruststoreModel.IntendedUsage.ISSUING_CA_CHAIN:
+            return False
+
+        if not truststore.truststoreordermodel_set.exists():
+            return False
+
+        first_cert_order = truststore.truststoreordermodel_set.order_by('order').first()
+        if not first_cert_order:
+            return False
+
+        ca.certificate = first_cert_order.certificate
+
+        cert_orders = list(truststore.truststoreordermodel_set.order_by('order'))
+        if len(cert_orders) >= 2:  # noqa: PLR2004
+            issuer_cert = cert_orders[1].certificate
+            issuer_ca = CaModel.objects.filter(certificate=issuer_cert).first()
+            if issuer_ca:
+                ca.parent_ca = issuer_ca
+
+        ca.chain_truststore = truststore
+
+        ca.save(update_fields=['certificate', 'parent_ca', 'chain_truststore'])
+        return True
+
     def form_valid(self, form: IssuingCaTruststoreAssociationForm) -> HttpResponse:
         """Handle successful form submission."""
         form.save()
         ca = self.get_ca()
+
+        if ca.ca_type in [CaModel.CaTypeChoice.REMOTE_EST_RA, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+            is_ca_chain = self._handle_ra_certificate_extraction(ca)
+
+            if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA and is_ca_chain:
+                messages.success(
+                    self.request,
+                    _('Successfully associated CA chain. Now please associate the TLS server certificate.')
+                )
+                return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+
         messages.success(
             self.request,
             _('Successfully associated truststore with Issuing CA {name}.').format(name=ca.unique_name)
         )
         if ca.ca_type == CaModel.CaTypeChoice.REMOTE_ISSUING_EST:
             return redirect('pki:issuing_cas-define-cert-content-est', pk=ca.pk)
+        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_EST_RA:
+            return redirect('pki:issuing_cas-config', pk=ca.pk)
+        if ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA:
+            return redirect('pki:issuing_cas-config', pk=ca.pk)
         return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
 
 
@@ -338,6 +470,21 @@ class IssuingCaDefineCertContentEstView(IssuingCaDefineCertContentMixin, FormVie
         return _('Certificate content defined. Please proceed to request the certificate via EST.')
 
 
+
+class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
+    """Mixin for CMP RA configuration views."""
+
+    def form_valid(self, form: IssuingCaAddRequestCmpForm) -> HttpResponse:
+        """Handle successful CMP RA configuration submission."""
+        ca = form.save(is_ra_mode=True)
+        messages.success(
+            self.request,  # type: ignore[attr-defined]
+            _('Successfully configured CMP RA {name}. Please associate a trust store.').format(name=ca.unique_name)
+        )
+        return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+
+
+
 class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddRequestCmpForm]):
     """View to request an Issuing CA certificate using CMP."""
 
@@ -354,6 +501,36 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
             ),
         )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+
+
+class RemoteRaAddRequestCmpView(RemoteRaAddRequestCmpMixin, FormView[IssuingCaAddRequestCmpForm]):
+    """View to configure a remote CMP RA (Registration Authority)."""
+
+    form_class = IssuingCaAddRequestCmpForm
+    template_name = 'pki/issuing_cas/add/cmp_ra.html'
+
+
+class RemoteRaAddRequestEstMixin(IssuingCaContextMixin):
+    """Mixin for EST RA configuration views."""
+
+    def form_valid(self, form: IssuingCaAddRequestEstForm) -> HttpResponse:
+        """Handle successful EST RA configuration submission."""
+        ca = form.save(is_ra_mode=True)
+        messages.success(
+            self.request,  # type: ignore[attr-defined]
+            _('Successfully configured EST RA {name}. Please associate the CA chain trust store.').format(
+                name=ca.unique_name
+            )
+        )
+        return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
+
+
+
+class RemoteRaAddRequestEstView(RemoteRaAddRequestEstMixin, FormView[IssuingCaAddRequestEstForm]):
+    """View to configure a remote EST RA (Registration Authority)."""
+
+    form_class = IssuingCaAddRequestEstForm
+    template_name = 'pki/issuing_cas/add/est_ra.html'
 
 
 class IssuingCaDefineCertContentCmpView(IssuingCaDefineCertContentMixin, FormView[CertificateIssuanceForm]):
@@ -395,19 +572,38 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
         """
         context = super().get_context_data(**kwargs)
         issuing_ca = self.get_object()
-        if issuing_ca.credential and issuing_ca.credential.certificate:
-            credential = issuing_ca.credential
-            issuer_public_bytes = credential.certificate_or_error.subject_public_bytes
+
+        ca_cert = issuing_ca.ca_certificate_model
+        if ca_cert:
+            issuer_public_bytes = ca_cert.subject_public_bytes
             issued_certificates = CertificateModel.objects.filter(issuer_public_bytes=issuer_public_bytes)
         else:
             issued_certificates = CertificateModel.objects.none()
+
         context['issued_certificates'] = issued_certificates
         context['active_crl'] = issuing_ca.get_active_crl()
 
         if 'crl_cycle_form' not in context:
             context['crl_cycle_form'] = IssuingCaCrlCycleForm(instance=issuing_ca)
 
+
+        if issuing_ca.is_issuing_ca and issuing_ca.credential:
+            context['certificate_chain'] = issuing_ca.credential.ordered_certificate_chain_queryset
+        elif issuing_ca.chain_truststore:
+            if issuing_ca.ca_type in [CaModel.CaTypeChoice.REMOTE_EST_RA, CaModel.CaTypeChoice.REMOTE_CMP_RA]:
+                context['certificate_chain'] = issuing_ca.chain_truststore.truststoreordermodel_set.filter(
+                    order__gt=0
+                ).order_by('order')
+            else:
+                context['certificate_chain'] = issuing_ca.chain_truststore.truststoreordermodel_set.order_by('order')
+        else:
+            context['certificate_chain'] = []
+
         return context
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
+        return super().get(request, *args, **kwargs)
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle POST request to update CRL cycle settings."""
@@ -723,6 +919,388 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         """Get the not implemented message for CMP."""
         return _('CMP certificate request not yet implemented.')
 
+    def _perform_cmp_enrollment(
+        self,
+        ca: CaModel,
+        cert_content_data: dict[str, Any],
+        request: HttpRequest,
+        *,
+        sender_kid: int | None = None,
+    ) -> None:
+        """Perform the CMP enrollment process."""
+        cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
+
+        request_data = self._build_request_data_from_form(cert_content_data)
+        self.logger.info('Built request data: %s', request_data)
+
+        context = CmpCertificateRequestContext(
+            operation='certification',
+            protocol='cmp',
+            domain=None,
+            cert_profile_str='issuing_ca',
+            certificate_profile_model=cert_profile,
+            allow_ca_certificate_request=True,
+            cmp_server_host=ca.remote_host,
+            cmp_server_port=ca.remote_port,
+            cmp_server_path=ca.remote_path,
+            cmp_shared_secret=(
+                ca.no_onboarding_config.cmp_shared_secret
+                if ca.no_onboarding_config else None
+            ),
+            cmp_server_truststore=(
+                ca.no_onboarding_config.trust_store
+                if ca.no_onboarding_config else None
+            ),
+        )
+
+        context.request_data = request_data
+        context.owner_credential = ca.credential
+
+        csr_builder = ProfileAwareCsrBuilder()
+        csr_builder.process_operation(context)
+        csr = csr_builder.get_csr()
+
+        if not csr.subject or len(csr.subject) == 0:
+            msg = 'CSR does not have a subject - cannot build CMP request'
+            raise ValueError(msg)
+
+        self.logger.info('CSR subject: %s', csr.subject.rfc4514_string())
+
+        csr_subject = csr.subject
+        csr_public_key = csr.public_key()
+        csr_extensions = list(csr.extensions) if csr.extensions else None
+
+        self.logger.info('CSR has %d extensions', len(csr.extensions) if csr.extensions else 0)
+
+        recipient_name = self._get_recipient_name_from_truststore(ca)
+
+        private_key = self._load_private_key(ca)
+
+        cmp_params = CmpContextParams(
+            subject=csr_subject,
+            public_key=cast('rsa.RSAPublicKey | ec.EllipticCurvePublicKey', csr_public_key),
+            private_key=private_key,
+            recipient_name=recipient_name,
+            extensions=csr_extensions,
+            sender_kid=sender_kid,
+        )
+
+        cmp_context = self._create_cmp_context(ca, cmp_params)
+
+        cmp_builder = CmpMessageBuilder()
+        cmp_builder.build(cmp_context)
+
+        pki_message = cmp_context.parsed_message
+
+        cmp_client = CmpClient(cmp_context)
+        issued_cert, chain_certs = cmp_client.send_and_extract_certificate(
+            pki_message,
+            add_shared_secret_protection=True,
+        )
+
+        self._save_cmp_certificates(ca, issued_cert, chain_certs)
+
+        del request.session[f'cert_content_data_{ca.pk}']
+
+    def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
+        """Build request data structure from form data.
+
+        Args:
+            cert_content_data: Form data containing certificate fields.
+
+        Returns:
+            Request data in the format expected by the profile verifier.
+        """
+        self.logger.info('Building request data from: %s', cert_content_data)
+        request_data: dict[str, Any] = {
+            'subj': {},
+            'ext': {
+                'subject_alternative_name': {}
+            },
+            'validity': {}
+        }
+
+        # Subject fields
+        required_subject_fields = ['common_name', 'organization_name', 'country_name', 'state_or_province_name']
+        for field_name in required_subject_fields:
+            value = cert_content_data.get(field_name)
+            if value:
+                request_data['subj'][field_name] = value
+
+        # SAN fields
+        san_fields = {
+            'dns_names': 'dns_names',
+            'ip_addresses': 'ip_addresses',
+            'rfc822_names': 'rfc822_names',
+            'uris': 'uris'
+        }
+
+        for profile_key, form_key in san_fields.items():
+            value = cert_content_data.get(form_key)
+            if value is not None:
+                request_data['ext']['subject_alternative_name'][profile_key] = value
+
+        # Validity fields
+        validity_fields = ['days', 'hours', 'minutes', 'seconds']
+        for field in validity_fields:
+            value = cert_content_data.get(field)
+            if value is not None:
+                request_data['validity'][field] = int(value)
+
+        return request_data
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle POST request to request certificate via CMP."""
+        ca = self.get_object()
+
+        cert_content_key = f'cert_content_data_{ca.pk}'
+        cert_content_data = request.session.get(cert_content_key)
+
+        self.logger.info('Cert content data for CA %s: %s', ca.pk, cert_content_data)
+
+        if not cert_content_data:
+            messages.error(
+                request,
+                _(
+                    'Certificate content data not found. '
+                    'Please define the certificate content first.'
+                )
+            )
+            return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
+
+        # Extract optional sender_kid from the form
+        sender_kid_raw = request.POST.get('sender_kid', '').strip()
+        sender_kid: int | None = int(sender_kid_raw) if sender_kid_raw else None
+
+        try:
+            self._perform_cmp_enrollment(ca, cert_content_data, request, sender_kid=sender_kid)
+            messages.success(
+                request,
+                _('Successfully enrolled certificate for Issuing CA {name} via CMP.').format(name=ca.unique_name)
+            )
+            return redirect('pki:issuing_cas-config', pk=ca.pk)
+        except (ValueError, KeyError, ProfileValidationError) as exc:
+            messages.error(request, _('Failed to build certificate request: {error}').format(error=str(exc)))
+            return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
+        except CertificateProfileModel.DoesNotExist:
+            messages.error(request, _('Certificate profile "issuing_ca" not found.'))
+            return redirect('pki:issuing_cas-define-cert-content-cmp', pk=ca.pk)
+        except CmpClientError as exc:
+            self.logger.exception('CMP client error during certificate enrollment')
+            messages.error(
+                request,
+                _('Failed to enroll certificate via CMP: {error}').format(error=str(exc))
+            )
+            return redirect(self.redirect_url_name, pk=ca.pk)
+        except Exception as exc:
+            self.logger.exception('Unexpected error during CMP certificate enrollment')
+            messages.error(
+                request,
+                _('Unexpected error during certificate enrollment: {error}').format(error=str(exc))
+            )
+            return redirect(self.redirect_url_name, pk=ca.pk)
+
+    def _get_recipient_name_from_truststore(self, ca: CaModel) -> str:
+        """Extract recipient name from the CA's truststore."""
+        if not ca.no_onboarding_config or not ca.no_onboarding_config.trust_store:
+            msg = 'No truststore configured for CMP CA - recipient name cannot be determined'
+            raise ValueError(msg)
+
+        try:
+            truststore_certs = ca.no_onboarding_config.trust_store.truststoreordermodel_set.order_by('order')
+            if not truststore_certs.exists():
+                msg = 'Truststore contains no certificates - cannot determine recipient name'
+                raise ValueError(msg)
+
+            first_cert_model = truststore_certs.first().certificate  # type: ignore[union-attr]
+            ca_cert = first_cert_model.get_certificate_serializer().as_crypto()
+            recipient_name = ca_cert.subject.rfc4514_string()
+            self.logger.info('Using recipient name from truststore: %s', recipient_name)
+        except (AttributeError, IndexError) as e:
+            msg = f'Failed to extract recipient name from truststore: {e}'
+            raise ValueError(msg) from e
+        else:
+            return recipient_name
+
+    def _load_private_key(self, ca: CaModel) -> rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey:
+        """Load the private key from the CA's credential."""
+        if not ca.credential or not ca.credential.private_key:
+            msg = 'No private key available for CA credential'
+            raise ValueError(msg)
+
+        return cast(
+            'rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey',
+            serialization.load_pem_private_key(
+                ca.credential.private_key.encode(),
+                password=None,
+            ),
+        )
+
+    def _create_cmp_context(
+        self,
+        ca: CaModel,
+        params: CmpContextParams,
+    ) -> CmpCertificateRequestContext:
+        """Create the CMP certificate request context."""
+        return CmpCertificateRequestContext(
+            protocol='cmp',
+            operation='certification',
+            cmp_server_host=ca.remote_host,
+            cmp_server_port=ca.remote_port,
+            cmp_server_path=ca.remote_path,
+            cmp_shared_secret=(
+                ca.no_onboarding_config.cmp_shared_secret
+                if ca.no_onboarding_config else None
+            ),
+            cmp_server_truststore=(
+                ca.no_onboarding_config.trust_store
+                if ca.no_onboarding_config else None
+            ),
+            request_data={
+                'subject': params.subject,
+                'public_key': params.public_key,
+                'private_key': params.private_key,
+                'recipient_name': params.recipient_name,
+                'extensions': params.extensions,
+                'use_initialization_request': False,
+                'add_pop': True,
+                'prepare_shared_secret_protection': True,
+                'sender_kid': params.sender_kid,
+            },
+        )
+
+    def _save_cmp_certificates(
+        self,
+        ca: CaModel,
+        issued_cert: x509.Certificate,
+        chain_certs: list[x509.Certificate],
+    ) -> None:
+        """Save the issued certificate and chain certificates."""
+        cert_model = CertificateModel.save_certificate(issued_cert)
+
+        chain_ca_models = []
+        for chain_cert in chain_certs:
+            existing_ca = self._find_existing_ca_for_certificate(chain_cert)
+            if existing_ca:
+                chain_ca_models.append(existing_ca)
+            else:
+                cn_attrs = chain_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)
+                cn = cn_attrs[0].value if cn_attrs else 'unknown'
+                keyless_ca = CaModel.create_keyless_ca(
+                    unique_name=str(cn),
+                    certificate_obj=chain_cert,
+                    parent_ca=None,
+                )
+                chain_ca_models.append(keyless_ca)
+                self.logger.info('Created keyless CA %s for chain certificate', keyless_ca.unique_name)
+
+        self._build_ca_hierarchy(chain_ca_models)
+
+        issuer_ca = self._find_issuer_ca(issued_cert, chain_ca_models)
+        if issuer_ca:
+            ca.parent_ca = issuer_ca
+            ca.save()
+            self.logger.info('Set parent CA %s for issuing CA %s', issuer_ca.unique_name, ca.unique_name)
+
+        if ca.credential:
+            ca.credential.certificate = cert_model
+            ca.credential.save()
+            self._build_certificate_chain_for_credential(ca.credential, ca.parent_ca)
+        else:
+            credential = CredentialModel(
+                credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+                certificate=cert_model,
+                private_key=ca.credential.private_key if ca.credential else '',
+            )
+            credential.save()
+            credential.certificates.add(cert_model)
+            PrimaryCredentialCertificate.objects.create(
+                credential=credential,
+                certificate=cert_model,
+                is_primary=True
+            )
+            ca.credential = credential
+            ca.save()
+            self._build_certificate_chain_for_credential(credential, ca.parent_ca)
+
+    def _build_ca_hierarchy(
+        self,
+        chain_ca_models: list[CaModel],
+    ) -> None:
+        """Build the CA hierarchy by setting parent-child relationships."""
+        ca_by_subject = {}
+        for ca in chain_ca_models:
+            cert = ca.get_certificate()
+            if cert:
+                ca_by_subject[cert.subject.public_bytes().hex()] = ca
+
+        for ca in chain_ca_models:
+            cert = ca.get_certificate()
+            if not cert:
+                continue
+            issuer_subject_bytes = cert.issuer.public_bytes().hex()
+            if issuer_subject_bytes in ca_by_subject:
+                parent_ca = ca_by_subject[issuer_subject_bytes]
+                if parent_ca not in (ca, ca.parent_ca):
+                    ca.parent_ca = parent_ca
+                    ca.save()
+                    self.logger.info('Set parent CA %s for CA %s', parent_ca.unique_name, ca.unique_name)
+
+    def _find_issuer_ca(
+        self,
+        issued_cert: x509.Certificate,
+        chain_ca_models: list[CaModel],
+    ) -> CaModel | None:
+        """Find the CA that issued the certificate."""
+        issuer_subject_bytes = issued_cert.issuer.public_bytes().hex()
+        for ca in chain_ca_models:
+            ca_cert = ca.get_certificate()
+            if ca_cert and ca_cert.subject.public_bytes().hex() == issuer_subject_bytes:
+                return ca
+        return None
+
+    def _build_certificate_chain_for_credential(self, credential: CredentialModel, parent_ca: CaModel | None) -> None:
+        """Build the certificate chain for the credential."""
+        if not parent_ca or not credential.certificate:
+            return
+        chain = []
+        current: CaModel | None = parent_ca
+        while current:
+            if current.certificate:
+                chain.append(current.certificate)
+            current = current.parent_ca
+        credential.certificatechainordermodel_set.all().delete()
+        primary_cert = credential.certificate
+        for i, cert in enumerate(chain):
+            CertificateChainOrderModel.objects.create(
+                credential=credential, certificate=cert, order=i, primary_certificate=primary_cert
+            )
+
+    def _find_existing_ca_for_certificate(self, cert: x509.Certificate) -> CaModel | None:
+        """Find an existing CA that has the given certificate."""
+        # TODO(FHK): comparing the subject public bytes is not sufficient  # noqa: FIX002
+        for existing_ca in CaModel.objects.filter(certificate__isnull=False):
+            try:
+                ca_cert = existing_ca.get_certificate()
+                if ca_cert and (ca_cert.subject.public_bytes() == cert.subject.public_bytes() and
+                    ca_cert.issuer.public_bytes() == cert.issuer.public_bytes()):
+                    return existing_ca
+            except (AttributeError, ValueError) as e:
+                self.logger.debug('Error checking existing keyless CA certificate: %s', e)
+                continue
+
+        for existing_ca in CaModel.objects.filter(credential__isnull=False):
+            try:
+                ca_cert = existing_ca.get_certificate()
+                if ca_cert and (ca_cert.subject.public_bytes() == cert.subject.public_bytes() and
+                    ca_cert.issuer.public_bytes() == cert.issuer.public_bytes()):
+                    return existing_ca
+            except (AttributeError, ValueError) as e:
+                self.logger.debug('Error checking existing issuing CA certificate: %s', e)
+                continue
+
+        return None
+
 
 class KeylessCaConfigView(LoggerMixin, KeylessCaContextMixin, DetailView[CaModel]):
     """View to display the details of a Keyless CA."""
@@ -799,9 +1377,14 @@ class IssuingCaDetailView(IssuingCaContextMixin, DetailView[CaModel]):
     context_object_name = 'issuing_ca'
 
     def get_queryset(self) -> QuerySet[CaModel, CaModel]:
-        """Return only issuing CAs."""
+        """Return only issuing CAs (excluding RAs and keyless CAs)."""
         return super().get_queryset().exclude(
-            ca_type__in=[CaModel.CaTypeChoice.KEYLESS, CaModel.CaTypeChoice.AUTOGEN_ROOT]
+            ca_type__in=[
+                CaModel.CaTypeChoice.KEYLESS,
+                CaModel.CaTypeChoice.AUTOGEN_ROOT,
+                CaModel.CaTypeChoice.REMOTE_EST_RA,
+                CaModel.CaTypeChoice.REMOTE_CMP_RA,
+            ]
         )
 
 

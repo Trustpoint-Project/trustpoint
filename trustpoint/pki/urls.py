@@ -139,6 +139,16 @@ urlpatterns = [
         name='issuing_cas-add-request-cmp',
     ),
     path(
+        'issuing-cas/add/cmp-ra/',
+        issuing_cas.RemoteRaAddRequestCmpView.as_view(),
+        name='issuing_cas-add-cmp-ra',
+    ),
+    path(
+        'issuing-cas/add/est-ra/',
+        issuing_cas.RemoteRaAddRequestEstView.as_view(),
+        name='issuing_cas-add-est-ra',
+    ),
+    path(
         'issuing-cas/truststore-association/<int:pk>/',
         issuing_cas.IssuingCaTruststoreAssociationView.as_view(),
         name='issuing_cas-truststore-association',
