@@ -157,7 +157,17 @@
                     </form>
 
                 </div>
-                <div id="tp-version">v{{ APP_VERSION }}</div>
+                <div id="tp-version">
+                    {% if "dev" in APP_VERSION %}
+                        v{{ APP_VERSION }}
+                    {% else %}
+                        <a href="https://github.com/Trustpoint-Project/trustpoint/releases/tag/v{{ APP_VERSION }}"
+                            target="_blank"
+                            rel="noopener noreferrer">
+                            v{{ APP_VERSION }}
+                        </a>
+                    {% endif %}
+                </div>
             </div>
         </nav>
 
