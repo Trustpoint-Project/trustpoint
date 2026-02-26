@@ -80,6 +80,7 @@ PUBLIC_PATHS = [
     '/.well-known/est',
     '/aoki',
     '/crl',
+    '/setup-wizard'
 ]
 
 
@@ -294,6 +295,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
+    'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]

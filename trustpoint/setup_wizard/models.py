@@ -53,14 +53,14 @@ class SetupWizardCompletedModel(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
-    @property
-    def setup_wizard_completed(self) -> bool:
-        """Return whether the setup wizard has been completed.
+    @classmethod
+    def setup_wizard_completed(cls) -> bool:
+        """Class-level check.
 
         Returns:
-            True if the setup wizard was completed, False otherwise.
+            False if row does not exist or setup_completed_at is NULL, True otherwise.
         """
-        return self.setup_completed_at is not None
+        return cls.objects.filter(pk=cls.SINGLETON_ID, setup_completed_at__isnull=False).exists()
 
     def clean(self) -> None:
         """Validate model state.

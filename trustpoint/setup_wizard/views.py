@@ -138,6 +138,7 @@ class SetupWizardInitialView(LoggerMixin, TemplateView):
             HttpResponse: A redirect response to the appropriate setup wizard page
                           or the login page if the setup is not in a Docker container.
         """
+        self.logger.critical('In View')
         if not DOCKER_CONTAINER:
             return redirect('users:login', permanent=False)
 
