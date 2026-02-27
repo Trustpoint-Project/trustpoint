@@ -187,7 +187,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         )
         device.full_clean()
         device.save()
-        self.log_and_stdout(f'Created device "{DEVICE_COMMON_NAME}" with EST password "{EST_PASSWORD}".')
+        self.log_and_stdout(f'Created device "{DEVICE_COMMON_NAME}".')
         return device
 
     def _get_or_create_tls_truststore(self) -> TruststoreModel:
