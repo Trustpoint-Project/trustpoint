@@ -10,6 +10,7 @@ from cryptography.x509.base import CertificateBuilder
 from trustpoint_core.oid import HashAlgorithm, NamedCurve
 
 from aoki.views import AokiServiceMixin
+from devices.models import IssuedCredentialModel
 from management.models import SecurityConfig
 from request.profile_validator import ProfileValidator
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
@@ -130,6 +131,54 @@ class DomainScopeValidation(AuthorizationComponent, LoggerMixin):
             'Domain scope validation successful: Device %s authorized for domain %s',
             authenticated_device.common_name, requested_domain
         )
+
+
+class OnboardingDomainCredentialAuthorization(AuthorizationComponent, LoggerMixin):
+    """Ensures that a device requiring onboarding has a valid domain credential first."""
+
+    _DOMAIN_CREDENTIAL_PROFILES: frozenset[str] = frozenset({
+        'domain_credential',
+    })
+
+    def authorize(self, context: BaseRequestContext) -> None:
+        """Reject enrollment when the onboarding device lacks a valid domain credential."""
+        if not isinstance(context, BaseCertificateRequestContext):
+            return
+
+        device = context.device
+        if device is None or device.onboarding_config is None:
+            return
+
+        profile_model = context.certificate_profile_model
+        if profile_model is None:
+            return
+
+        if profile_model.unique_name in self._DOMAIN_CREDENTIAL_PROFILES:
+            return
+
+        domain_creds = IssuedCredentialModel.objects.filter(
+            device=device,
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+            credential__certificate__isnull=False,
+        ).select_related('credential__certificate')
+
+        has_valid = any(cred.is_valid_domain_credential()[0] for cred in domain_creds)
+
+        if not has_valid:
+            error_message = (
+                f"Device '{device.common_name}' requires onboarding but has no valid domain credential. "
+                f"A domain credential must be issued before enrolling for profile "
+                f"'{profile_model.unique_name}'."
+            )
+            self.logger.warning(
+                'Onboarding domain credential authorization failed for device %s: '
+                'no valid domain credential found',
+                device.common_name,
+            )
+            context.http_response_content = error_message
+            context.http_response_status = 403
+            raise ValueError(error_message)
+
 
 
 class DevOwnerIDAuthorization(AuthorizationComponent, LoggerMixin):

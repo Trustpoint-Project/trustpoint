@@ -6,6 +6,7 @@ from .base import (
     CompositeAuthorization,
     DevOwnerIDAuthorization,
     DomainScopeValidation,
+    OnboardingDomainCredentialAuthorization,
     ProtocolAuthorization,
     SecurityConfigAuthorization,
 )
@@ -22,6 +23,7 @@ __all__ = [
     'DomainScopeValidation',
     'EstAuthorization',
     'ManualAuthorization',
+    'OnboardingDomainCredentialAuthorization',
     'ProtocolAuthorization',
     'SecurityConfigAuthorization',
 ]
