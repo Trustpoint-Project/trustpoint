@@ -72,6 +72,9 @@ RUN uv pip install gunicorn[gevent]
 USER root
 
 
+RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log && \
+    chown -R www-data:www-data /var/www/html/trustpoint/trustpoint/media && \
+    chmod -R 755 /var/www/html/trustpoint/trustpoint/media
 
 # Sets DEBUG = False and DOCKER_CONTAINER = True in the Django settings
 RUN sed -i '/DEBUG = True/s/True/False/' trustpoint/trustpoint/settings.py && \
