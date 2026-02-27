@@ -6,7 +6,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from management.models import NotificationConfig, NotificationModel, NotificationStatus
+from management.models import NotificationModel, NotificationStatus, SecurityConfig
 from pki.models import CertificateModel
 
 
@@ -27,9 +27,13 @@ class Command(BaseCommand):
 
     def _check_for_insufficient_key_length(self) -> None:
         """Task to check if any certificates are using insufficient key lengths."""
-        config = NotificationConfig.get()
+        config = SecurityConfig.objects.first()
+        if config is None:
+            return
 
         rsa_minimum_key_size = config.rsa_minimum_key_size
+        if not rsa_minimum_key_size:
+            return
         insufficient_key_certificates = CertificateModel.objects.filter(
             spki_algorithm_oid='1.2.840.113549.1.1.1',
             spki_key_size__lt=rsa_minimum_key_size,

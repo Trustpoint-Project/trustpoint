@@ -23,7 +23,6 @@ class Migration(migrations.Migration):
                 ('last_notification_check_started_at', models.DateTimeField(blank=True, help_text='Timestamp when the last notification check task was started', null=True, verbose_name='Last Notification Check Started')),
                 ('cert_expiry_warning_days', models.PositiveIntegerField(default=30, help_text="Number of days before a certificate's expiration to trigger a 'Certificate Expiring' warning.")),
                 ('issuing_ca_expiry_warning_days', models.PositiveIntegerField(default=30, help_text="Number of days before an issuing CA's certificate expiration to trigger a warning.")),
-                ('rsa_minimum_key_size', models.PositiveIntegerField(default=2048, help_text='Minimum RSA key size (in bits) that certificates must meet to avoid being flagged as insecure.')),
             ],
             options={
                 'verbose_name': 'Notification Configuration',
@@ -57,6 +56,66 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('oid', models.CharField(choices=[('1.2.840.113549.2.5', 'MD5'), ('1.3.14.3.2.26', 'SHA-1'), ('2.16.840.1.101.3.4.2.4', 'SHA-224')], max_length=64, unique=True)),
             ],
+        ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='allow_auto_gen_pki',
+            field=models.BooleanField(default=False, help_text='Allow enabling the auto-generated PKI feature.'),
+        ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='allow_ca_issuance',
+            field=models.BooleanField(default=False, help_text='Allow issuance of certificates with BasicConstraints ca=True.'),
+        ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='allow_self_signed_ca',
+            field=models.BooleanField(default=False, help_text='Allow self-signed CAs to be imported with credentials.'),
+        ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='max_cert_validity_days',
+            field=models.PositiveIntegerField(blank=True, default=None, help_text='Maximum certificate validity period in days. Set to null for no limit.', null=True),
+        ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='max_crl_validity_days',
+            field=models.PositiveIntegerField(blank=True, default=None, help_text='Maximum CRL validity period in days. Set to null for no limit.', null=True),
+        ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='not_permitted_ecc_curve_oids',
+            field=models.JSONField(blank=True, default=list, help_text='JSON list of ECC curve OIDs (from trustpoint_core.oid.NamedCurve) not permitted at the current security level.'),
+        ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='not_permitted_signature_algorithm_oids',
+            field=models.JSONField(blank=True, default=list, help_text='JSON list of hash algorithm OIDs (from trustpoint_core.oid.HashAlgorithm) not permitted at the current security level.'),
+        ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='permitted_no_onboarding_pki_protocols',
+            field=models.JSONField(blank=True, default=list, help_text='JSON list of allowed NoOnboardingPkiProtocol integer values (bitmask flags: CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16).'),
+        ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='permitted_onboarding_protocols',
+            field=models.JSONField(blank=True, default=list, help_text='JSON list of allowed OnboardingProtocol integer values (MANUAL=0, CMP_IDEVID=1, CMP_SHARED_SECRET=2, EST_IDEVID=3, EST_USERNAME_PASSWORD=4, AOKI=5, BRSKI=6, OPC_GDS_PUSH=7).'),
+        ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='require_physical_hsm',
+            field=models.BooleanField(default=False, help_text='Require key storage to use a physical HSM (KeyStorageConfig.StorageType.PHYSICAL_HSM).'),
+        ),
+        migrations.AddField(
+            model_name='securityconfig',
+            name='rsa_minimum_key_size',
+            field=models.PositiveIntegerField(blank=True, default=2048, help_text='Minimum RSA key size in bits that certificates must meet. Set to 0 to allow any RSA key size. Set to null to disallow RSA entirely.', null=True),
+        ),
+        migrations.AlterField(
+            model_name='securityconfig',
+            name='security_mode',
+            field=models.CharField(choices=[('0', 'Lab / Development'), ('1', 'Brownfield Compatible'), ('2', 'Industrial Standard'), ('3', 'Hardened Production'), ('4', 'Critical Infrastructure')], default='1', max_length=6),
         ),
         migrations.CreateModel(
             name='NotificationModel',

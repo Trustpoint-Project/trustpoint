@@ -15,6 +15,7 @@ from .base import (
     DevOwnerIDAuthorization,
     DomainScopeValidation,
     ProtocolAuthorization,
+    SecurityConfigAuthorization,
 )
 
 
@@ -170,3 +171,4 @@ class CmpAuthorization(CompositeAuthorization):
         self.add(DevOwnerIDAuthorization())
         self.add(ProtocolAuthorization(['cmp']))
         self.add(CmpOperationAuthorization(allowed_operations))
+        self.add(SecurityConfigAuthorization())

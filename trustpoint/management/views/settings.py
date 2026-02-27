@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from typing import TYPE_CHECKING
 
@@ -10,13 +9,12 @@ from django.contrib import messages
 from django.core.management import call_command
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
-from django.utils.encoding import force_str
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic.edit import FormView
 
 from management.forms import NotificationConfigForm, SecurityConfigForm
-from management.models import LoggingConfig, NotificationConfig, SecurityConfig, WeakECCCurve, WeakSignatureAlgorithm
+from management.models import LoggingConfig, NotificationConfig, SecurityConfig
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
 from pki.util.keys import AutoGenPkiKeyAlgorithm
@@ -177,7 +175,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
             if new_int > old_int:
                 self.sec.reset_settings(new_value)
 
-            form.instance.apply_security_settings()
+        form.instance.apply_security_settings()
 
         if 'auto_gen_pki' in form.changed_data:
             old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
@@ -227,7 +225,12 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
             A response rendering the form with errors.
         """
         messages.error(self.request, _('Error saving the configuration'))
-        return self.render_to_response(self.get_context_data(form=form))
+        extra: dict[str, Any] = {'form': form}
+        if hasattr(form, '_violations'):
+            extra['policy_violations'] = form._violations  # noqa: SLF001
+            extra['policy_violations_mode_label'] = form._violations_mode_label  # noqa: SLF001
+            form.errors.pop('__all__', None)
+        return self.render_to_response(self.get_context_data(**extra))
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Build the context dictionary for rendering the settings page.
@@ -248,21 +251,8 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'management'
         context['page_name'] = 'settings'
-        notification_configurations = SecurityConfig.NOTIFICATION_CONFIGURATIONS
 
-        for settings in notification_configurations.values():
-            ecc_choices = dict(WeakECCCurve.ECCCurveChoices.choices)
-            signature_choices = dict(WeakSignatureAlgorithm.SignatureChoices.choices)
-
-            settings['weak_ecc_curves'] = [
-                force_str(ecc_choices.get(oid, oid)) for oid in settings.get('weak_ecc_curves', [])
-            ]
-
-            settings['weak_signature_algorithms'] = [
-                force_str(signature_choices.get(oid, oid)) for oid in settings.get('weak_signature_algorithms', [])
-            ]
-
-        context['notification_configurations_json'] = json.dumps(notification_configurations)
+        context['notification_configurations_json'] = SecurityConfig.get_settings_preview_json()
         context['loglevels'] = LOG_LEVELS
         current_level_num = logging.getLogger().getEffectiveLevel()
         context['current_loglevel'] = logging.getLevelName(current_level_num)

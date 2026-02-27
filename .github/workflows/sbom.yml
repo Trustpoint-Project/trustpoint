@@ -23,7 +23,7 @@ jobs:
 
     - name: Install Syft
       run: |
-        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.42.1
     
     - name: Build Trustpoint Docker image
       run: docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .

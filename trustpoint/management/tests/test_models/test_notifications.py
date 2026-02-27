@@ -13,7 +13,6 @@ from management.models import (
 )
 
 DEFAULT_EXPIRY_WARNING_DAYS = 30
-DEFAULT_RSA_KEY_SIZE = 2048
 EXPECTED_STATUS_COUNT = 2
 
 
@@ -218,7 +217,6 @@ def test_notification_config_defaults() -> None:
 
     assert config.cert_expiry_warning_days == DEFAULT_EXPIRY_WARNING_DAYS
     assert config.issuing_ca_expiry_warning_days == DEFAULT_EXPIRY_WARNING_DAYS
-    assert config.rsa_minimum_key_size == DEFAULT_RSA_KEY_SIZE
 
     config2 = NotificationConfig.get()
     assert config == config2
