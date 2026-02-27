@@ -369,10 +369,11 @@ class NoOnboardingCreateForm(forms.Form):
 
     def _render_pki_protocols_switches(self, field_name: str) -> str:
         """Renders PKI protocol switches as HTML."""
-        field = self.fields[field_name]
+        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
         html_parts = ['<div class="mt-2">']
 
-        for value, label in field.choices:
+        for choice in field.widget.choices:
+            value, label = choice[0], choice[1]
             checked = str(value) in (self.initial.get(field_name, []) or [])
             html_parts.append(
                 f'<div class="form-check form-switch mb-2">'
@@ -500,10 +501,11 @@ class OnboardingCreateForm(forms.Form):
 
     def _render_pki_protocols_switches(self, field_name: str) -> str:
         """Renders PKI protocol switches as HTML."""
-        field = self.fields[field_name]
+        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
         html_parts = ['<div class="mt-2">']
 
-        for value, label in field.choices:
+        for choice in field.widget.choices:
+            value, label = choice[0], choice[1]
             checked = str(value) in (self.initial.get(field_name, []) or [])
             html_parts.append(
                 f'<div class="form-check form-switch mb-2">'
