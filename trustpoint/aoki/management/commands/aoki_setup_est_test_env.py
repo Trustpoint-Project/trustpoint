@@ -95,7 +95,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         self.log_and_stdout('\n=== AOKI EST test environment ready ===')
         self.log_and_stdout(f'  CA:           {CA_UNIQUE_NAME}')
         self.log_and_stdout(f'  Domain:       {DOMAIN_UNIQUE_NAME}')
-        self.log_and_stdout(f'  Device:       {DEVICE_COMMON_NAME}  (EST password: [redacted])'
+        self.log_and_stdout(f'  Device:       {DEVICE_COMMON_NAME}  (EST password: [redacted])')
         self.log_and_stdout(f'  Truststore:   {TRUSTSTORE_UNIQUE_NAME}')
         self.log_and_stdout(f'  OwnerCred:    {OWNER_CRED_UNIQUE_NAME}')
         self.log_and_stdout(f'    host:       {REMOTE_HOST}:{REMOTE_PORT}')
