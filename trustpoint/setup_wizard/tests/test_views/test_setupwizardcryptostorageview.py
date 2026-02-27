@@ -283,7 +283,7 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
         self.assertEqual(KeyStorageConfig.objects.count(), 0)
 
         self.client.force_login(self.user)
-        response = self.client.post(self.url, data=form_data)
+        self.client.post(self.url, data=form_data)
 
         # Verify config was created
         self.assertEqual(KeyStorageConfig.objects.count(), 1)
@@ -366,14 +366,14 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
         # Use client test instead of direct view instantiation to avoid request attribute issues
         with patch('setup_wizard.views.SetupWizardCryptoStorageView.logger') as mock_logger:
             self.client.force_login(self.user)
-            response = self.client.post(self.url, data=form_data)
+            self.client.post(self.url, data=form_data)
 
             # Verify logger was called for successful operation
             mock_logger.info.assert_called_with('Crypto storage configured with type: %s', 'software')
 
     def test_script_parameters_format(self):
         """Test that storage type values are passed correctly to the script."""
-        view = SetupWizardCryptoStorageView()
+        SetupWizardCryptoStorageView()
 
         # Test that enum values are converted to lowercase for script execution
         test_cases = [

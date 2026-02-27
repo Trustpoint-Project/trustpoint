@@ -52,7 +52,7 @@ class TestAokiGenTestCertsCommand:
             
             # Load IDevID and OwnerID certificates
             with (tmp_path / 'idevid.pem').open('rb') as f:
-                idevid_cert = x509.load_pem_x509_certificate(f.read())
+                x509.load_pem_x509_certificate(f.read())
             
             with (tmp_path / 'owner_id.pem').open('rb') as f:
                 owner_cert = x509.load_pem_x509_certificate(f.read())

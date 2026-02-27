@@ -189,7 +189,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
         setattr(request, '_messages', messages_storage)
 
         view = TestView.as_view()
-        response = view(request)
+        view(request)
 
         # Check that error message was added
         all_messages = list(messages.get_messages(request))

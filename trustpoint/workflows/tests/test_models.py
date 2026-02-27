@@ -378,9 +378,9 @@ class TestWorkflowScope:
         )
         
         # Create scopes for different CAs
-        scope1 = WorkflowScope.objects.create(workflow=workflow, ca_id=1)
-        scope2 = WorkflowScope.objects.create(workflow=workflow, ca_id=2)
-        scope3 = WorkflowScope.objects.create(workflow=workflow, ca_id=3)
+        WorkflowScope.objects.create(workflow=workflow, ca_id=1)
+        WorkflowScope.objects.create(workflow=workflow, ca_id=2)
+        WorkflowScope.objects.create(workflow=workflow, ca_id=3)
         
         assert workflow.scopes.count() == 3
 

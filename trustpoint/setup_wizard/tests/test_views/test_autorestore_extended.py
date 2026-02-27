@@ -83,7 +83,7 @@ class TestBackupAutoRestorePasswordViewFormValid:
         with patch.object(self.view, 'form_invalid') as mock_form_invalid:
             mock_form_invalid.return_value = Mock(status_code=200)
             
-            response = self.view.form_valid(form)
+            self.view.form_valid(form)
             
             mock_form_invalid.assert_called_once_with(form)
 
@@ -112,7 +112,7 @@ class TestBackupAutoRestorePasswordViewFormValid:
         with patch.object(self.view, 'form_invalid') as mock_form_invalid:
             mock_form_invalid.return_value = Mock(status_code=200)
             
-            response = self.view.form_valid(form)
+            self.view.form_valid(form)
             
             mock_form_invalid.assert_called_once_with(form)
             messages_list = list(get_messages(request))
@@ -146,7 +146,7 @@ class TestBackupAutoRestorePasswordViewFormValid:
             with patch.object(self.view, '_map_exit_code_to_message') as mock_map:
                 mock_map.return_value = 'Script failed'
                 
-                response = self.view.form_valid(form)
+                self.view.form_valid(form)
                 
                 mock_form_invalid.assert_called_once_with(form)
                 messages_list = list(get_messages(request))
@@ -178,7 +178,7 @@ class TestBackupAutoRestorePasswordViewFormValid:
         with patch.object(self.view, 'form_invalid') as mock_form_invalid:
             mock_form_invalid.return_value = Mock(status_code=200)
             
-            response = self.view.form_valid(form)
+            self.view.form_valid(form)
             
             mock_form_invalid.assert_called_once_with(form)
             messages_list = list(get_messages(request))
@@ -210,7 +210,7 @@ class TestBackupAutoRestorePasswordViewFormValid:
         with patch.object(self.view, 'form_invalid') as mock_form_invalid:
             mock_form_invalid.return_value = Mock(status_code=200)
             
-            response = self.view.form_valid(form)
+            self.view.form_valid(form)
             
             mock_form_invalid.assert_called_once_with(form)
             messages_list = list(get_messages(request))
@@ -245,7 +245,7 @@ class TestBackupAutoRestorePasswordViewFormInvalid:
         with patch('django.views.generic.FormView.form_invalid') as mock_parent:
             mock_parent.return_value = Mock(status_code=200)
             
-            response = self.view.form_invalid(form)
+            self.view.form_invalid(form)
             
             messages_list = list(get_messages(request))
             assert any('correct the errors below' in str(m) for m in messages_list)

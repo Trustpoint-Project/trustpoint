@@ -149,7 +149,7 @@ class TestKeyGenerator:
         real_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         mock_generate.return_value = real_private_key
         
-        result = KeyGenerator.generate_private_key(mock_domain)
+        KeyGenerator.generate_private_key(mock_domain)
         
         # Verify the chain of calls
         mock_credential.get_certificate_serializer.assert_called_once()
