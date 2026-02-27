@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from cryptography import x509
 from django.contrib import messages
@@ -45,10 +45,8 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
     from django.db.models import QuerySet
-    from django.forms import Form
+    from django.forms import ChoiceField, Form
 
 class OwnerCredentialContextMixin(ContextDataMixin):
     """Mixin which adds context_data for the PKI -> Issuing CAs pages."""
@@ -343,8 +341,9 @@ class OwnerCredentialTruststoreAssociationView(
         context['owner_credential'] = owner_credential
 
         import_form = TruststoreAddForm()
-        raw_choices: Iterable[Any] = import_form.fields['intended_usage'].choices  # type: ignore[assignment]
-        import_form.fields['intended_usage'].choices = [
+        intended_usage_field = cast('ChoiceField', import_form.fields['intended_usage'])
+        raw_choices: Any = intended_usage_field.choices
+        intended_usage_field.choices = [
             choice for choice in raw_choices
             if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.TLS
         ]
