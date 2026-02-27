@@ -263,7 +263,7 @@ class OwnerCredentialTruststoreAssociationForm(forms.Form):
         self.instance: OwnerCredentialModel = kwargs.pop('instance')
         super().__init__(*args, **kwargs)
 
-        trust_store_field: forms.ModelChoiceField[Any] = self.trust_store
+        trust_store_field: forms.ModelChoiceField[Any] = self.fields['trust_store']  # type: ignore[assignment]
         trust_store_field.queryset = TruststoreModel.objects.filter(
             intended_usage=TruststoreModel.IntendedUsage.TLS
         )
@@ -271,15 +271,28 @@ class OwnerCredentialTruststoreAssociationForm(forms.Form):
         # Pre-select the already-associated truststore if one exists
         if self.instance.no_onboarding_config and self.instance.no_onboarding_config.trust_store:
             trust_store_field.initial = self.instance.no_onboarding_config.trust_store
+        elif self.instance.onboarding_config and self.instance.onboarding_config.trust_store:
+            trust_store_field.initial = self.instance.onboarding_config.trust_store
 
     def save(self) -> None:
-        """Save the selected truststore to the owner credential's no-onboarding config."""
-        if not self.instance.no_onboarding_config:
-            raise forms.ValidationError(_('Expected OwnerCredentialModel with a no_onboarding_config.'))
+        """Save the selected truststore to the owner credential's config.
 
-        self.instance.no_onboarding_config.trust_store = self.cleaned_data['trust_store']
-        self.instance.no_onboarding_config.full_clean()
-        self.instance.no_onboarding_config.save()
+        For the no-onboarding flow the truststore is written to
+        ``no_onboarding_config.trust_store``.  For the onboarding (IDevID) flow
+        it is written to ``onboarding_config.trust_store`` directly.
+        """
+        if self.instance.no_onboarding_config:
+            self.instance.no_onboarding_config.trust_store = self.cleaned_data['trust_store']
+            self.instance.no_onboarding_config.full_clean()
+            self.instance.no_onboarding_config.save()
+        elif self.instance.onboarding_config:
+            self.instance.onboarding_config.trust_store = self.cleaned_data['trust_store']
+            self.instance.onboarding_config.full_clean()
+            self.instance.onboarding_config.save()
+        else:
+            raise forms.ValidationError(
+                _('Expected OwnerCredentialModel with a no_onboarding_config or onboarding_config.')
+            )
 
 
 _KEY_TYPE_CHOICES = [
@@ -424,28 +437,32 @@ class OwnerCredentialAddRequestEstOnboardingForm(_OwnerCredentialEstBaseMixin):
     """Form for requesting a DevOwnerID certificate via EST with IDevID-based onboarding.
 
     The device authenticates to the remote EST server using its manufacturer-issued
-    IDevID certificate (mTLS client certificate).  A trust store for verifying the
-    EST server's TLS certificate must be associated after this step.
+    IDevID certificate (mTLS client certificate).  The ``remote_path`` field points to
+    the DevOwnerID enrollment endpoint; the additional ``remote_path_domain_credential``
+    field points to the domain-credential enrollment endpoint used during onboarding.
+    After saving, the user associates a TLS trust store via the truststore-association view.
     """
 
-    idevid_trust_store: forms.ModelChoiceField[Any] = forms.ModelChoiceField(
-        queryset=None,  # set in __init__
-        required=False,
-        empty_label=_('(none - skip server verification)'),
-        label=_('IDevID Manufacturer Truststore'),
+    remote_path_domain_credential = forms.CharField(
+        max_length=255,
+        label=_('EST Server Path (Domain Credential)'),
+        initial='/.well-known/est/simpleenroll',
         help_text=_(
-            'Optional: truststore containing the manufacturer CA to verify the EST server during IDevID enrollment'
+            'Path component of the EST enrollment endpoint used to obtain the domain credential'
         ),
     )
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialise queryset for the trust store choice field."""
-        super().__init__(*args, **kwargs)
-        from pki.models.truststore import TruststoreModel  # noqa: PLC0415
-        idevid_field: forms.ModelChoiceField[Any] = self.idevid_trust_store
-        idevid_field.queryset = TruststoreModel.objects.filter(
-            intended_usage=TruststoreModel.IntendedUsage.IDEVID
-        )
+    est_username = forms.CharField(
+        max_length=128,
+        label=_('EST Username'),
+        help_text=_('Username for EST Basic authentication'),
+    )
+
+    est_password = forms.CharField(
+        label=_('EST Password'),
+        widget=forms.PasswordInput(attrs={'autocomplete': 'one-time-code'}),
+        help_text=_('Password for EST Basic authentication'),
+    )
 
     def clean(self) -> dict[str, Any]:
         """Validate and prepare the owner credential via EST IDevID onboarding."""
@@ -453,12 +470,16 @@ class OwnerCredentialAddRequestEstOnboardingForm(_OwnerCredentialEstBaseMixin):
 
         unique_name = cleaned_data.get('unique_name')
         remote_host = cleaned_data.get('remote_host')
+        est_username = cleaned_data.get('est_username')
+        est_password = cleaned_data.get('est_password')
         key_type = cleaned_data.get('key_type', 'RSA-2048')
         remote_port = cleaned_data.get('remote_port', 443)
         remote_path = cleaned_data.get('remote_path', '/.well-known/est/simpleenroll')
-        idevid_trust_store = cleaned_data.get('idevid_trust_store')
+        remote_path_domain_credential = cleaned_data.get(
+            'remote_path_domain_credential', '/.well-known/est/simpleenroll'
+        )
 
-        if not remote_host:
+        if not remote_host or not est_username or not est_password:
             return cleaned_data
 
         unique_name = self._resolve_unique_name(unique_name, remote_host)
@@ -471,8 +492,8 @@ class OwnerCredentialAddRequestEstOnboardingForm(_OwnerCredentialEstBaseMixin):
 
         onboarding_config = OnboardingConfigModel(
             pki_protocols=OnboardingPkiProtocol.EST,
-            onboarding_protocol=OnboardingProtocol.EST_IDEVID,
-            idevid_trust_store=idevid_trust_store,
+            onboarding_protocol=OnboardingProtocol.EST_USERNAME_PASSWORD,
+            est_password=est_password,
         )
         onboarding_config.save()
 
@@ -481,5 +502,7 @@ class OwnerCredentialAddRequestEstOnboardingForm(_OwnerCredentialEstBaseMixin):
         cleaned_data['_remote_host'] = remote_host
         cleaned_data['_remote_port'] = remote_port
         cleaned_data['_remote_path'] = remote_path
+        cleaned_data['_remote_path_domain_credential'] = remote_path_domain_credential
+        cleaned_data['_est_username'] = est_username
 
         return cleaned_data

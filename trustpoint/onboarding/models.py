@@ -157,6 +157,16 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         related_name='idevid_onboarding_configs',
     )
 
+    trust_store = models.ForeignKey(
+        TruststoreModel,
+        verbose_name=_('Trust Store'),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='onboarding_configs',
+        help_text=_('Trust store containing certificates to verify the remote server'),
+    )
+
     opc_trust_store = models.ForeignKey(
         TruststoreModel,
         verbose_name=_('OPC Server Truststore'),

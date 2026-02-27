@@ -19,14 +19,17 @@
         {% if owner_credential.est_username %}
         <p><strong>{% trans "EST Username" %}:</strong> {{ owner_credential.est_username }}</p>
         {% endif %}
+        {% if owner_credential.owner_credential_type == 3 %}
+        <p><strong>{% trans "Remote Path (Domain Credential)" %}:</strong>
+            {{ owner_credential.remote_path_domain_credential|default:"—" }}
+        </p>
+        {% endif %}
         <p><strong>{% trans "TLS Trust Store" %}:</strong>
-            {% with ts=owner_credential.no_onboarding_config.trust_store %}
-            {% if ts %}
-                <a href="{% url 'pki:truststore-detail' pk=ts.pk %}">{{ ts.unique_name }}</a>
+            {% if tls_trust_store %}
+                <a href="{% url 'pki:truststore-detail' pk=tls_trust_store.pk %}">{{ tls_trust_store.unique_name }}</a>
             {% else %}
                 <span class="text-muted">{% trans "Not configured" %}</span>
             {% endif %}
-            {% endwith %}
         </p>
         {% endif %}
     </div>

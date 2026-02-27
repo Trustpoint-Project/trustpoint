@@ -1084,13 +1084,15 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         """How the DevOwnerID certificate is acquired.
 
         - ``LOCAL``: uploaded as a file or generated locally (no remote CA).
-        - ``REMOTE_EST``: enrolled from a remote CA via EST (RFC 7030).
+        - ``REMOTE_EST``: enrolled from a remote CA via EST (RFC 7030) with username/password.
         - ``REMOTE_CMP``: enrolled from a remote CA via CMP (RFC 4210 / 9483).
+        - ``REMOTE_EST_ONBOARDING``: enrolled from a remote CA via EST using IDevID onboarding.
         """
 
         LOCAL = 0, _('Local')
         REMOTE_EST = 1, _('Remote EST')
         REMOTE_CMP = 2, _('Remote CMP')
+        REMOTE_EST_ONBOARDING = 3, _('Remote EST (Onboarding)')
 
     unique_name = models.CharField(
         verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
@@ -1123,7 +1125,18 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         max_length=255,
         blank=True,
         default='',
-        help_text=_('The path on the remote CA endpoint.')
+        help_text=_('The path on the remote CA endpoint (DevOwnerID enrollment).')
+    )
+
+    remote_path_domain_credential = models.CharField(
+        verbose_name=_('Remote Path (Domain Credential)'),
+        max_length=255,
+        blank=True,
+        default='',
+        help_text=_(
+            'The EST path used to obtain the domain credential during onboarding '
+            '(e.g. /.well-known/est/simpleenroll). Only relevant for EST onboarding.'
+        )
     )
 
     est_username = models.CharField(

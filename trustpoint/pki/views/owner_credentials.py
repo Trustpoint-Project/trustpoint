@@ -231,16 +231,33 @@ class OwnerCredentialAddRequestEstOnboardingView(
         return context
 
     def form_valid(self, form: OwnerCredentialAddRequestEstOnboardingForm) -> HttpResponse:
-        """Store the prepared config and show success."""
+        """Save the OwnerCredentialModel with its EST onboarding configuration.
+
+        Creates the ``OwnerCredentialModel`` with all remote-endpoint fields and redirects
+        to the truststore-association step, mirroring the no-onboarding workflow.
+        """
+        owner_credential = OwnerCredentialModel.objects.create(
+            unique_name=form.cleaned_data['unique_name'],
+            onboarding_config=form.cleaned_data['_onboarding_config'],
+            remote_host=form.cleaned_data['_remote_host'],
+            remote_port=form.cleaned_data['_remote_port'],
+            remote_path=form.cleaned_data['_remote_path'],
+            remote_path_domain_credential=form.cleaned_data['_remote_path_domain_credential'],
+            est_username=form.cleaned_data['_est_username'],
+            key_type=form.cleaned_data.get('key_type', 'ECC-SECP256R1'),
+            owner_credential_type=OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING,
+        )
+
         messages.success(
             self.request,
             _(
-                'EST onboarding configuration for DevOwnerID "{name}" saved. '
-                'Step 1: the IDevID will be used to request a client certificate from the remote EST server. '
-                'Step 2: that client certificate will then be used to request the DevOwnerID.'
-            ).format(name=form.cleaned_data['unique_name']),
+                'DevOwnerID onboarding configuration "{name}" saved. '
+                'Now associate the TLS server certificate trust store.'
+            ).format(name=owner_credential.unique_name),
         )
-        return super().form_valid(form)
+        return HttpResponseRedirect(
+            reverse('pki:owner_credentials-truststore-association', kwargs={'pk': owner_credential.pk})
+        )
 
     def form_invalid(self, form: OwnerCredentialAddRequestEstOnboardingForm) -> HttpResponse:
         """Show form-level errors as Django messages."""
@@ -326,8 +343,8 @@ class OwnerCredentialTruststoreAssociationView(
         context['owner_credential'] = owner_credential
 
         import_form = TruststoreAddForm()
-        raw_choices: Iterable[Any] = import_form.intended_usage.choices  # type: ignore[assignment]
-        import_form.intended_usage.choices = [
+        raw_choices: Iterable[Any] = import_form.fields['intended_usage'].choices  # type: ignore[assignment]
+        import_form.fields['intended_usage'].choices = [
             choice for choice in raw_choices
             if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.TLS
         ]
@@ -386,6 +403,15 @@ class OwnerCredentialCLMView(OwnerCredentialContextMixin, DetailView[OwnerCreden
 
         context['issued_credentials'] = issued_creds
         context['back_url'] = reverse_lazy('pki:owner_credentials')
+
+        owner_credential: OwnerCredentialModel = self.object
+        tls_trust_store = None
+        if owner_credential.no_onboarding_config is not None:
+            tls_trust_store = owner_credential.no_onboarding_config.trust_store
+        elif owner_credential.onboarding_config is not None:
+            tls_trust_store = owner_credential.onboarding_config.trust_store
+        context['tls_trust_store'] = tls_trust_store
+
         return context
 
 
