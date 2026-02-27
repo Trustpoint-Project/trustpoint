@@ -442,14 +442,15 @@ class TestEstAuthorization:
         """Test EST authorization initialization with default components."""
         auth = EstAuthorization()
 
-        # Should have 5 components by default
-        assert len(auth.components) == 5
+        # Should have 6 components by default
+        assert len(auth.components) == 6
 
         # Check component types
         component_types = [type(comp).__name__ for comp in auth.components]
         expected_types = [
             'DomainScopeValidation',
             'CertificateProfileAuthorization',
+            'OnboardingDomainCredentialAuthorization',
             'ProtocolAuthorization',
             'EstOperationAuthorization',
             'SecurityConfigAuthorization',
@@ -509,6 +510,7 @@ class TestEstAuthorization:
         context.device = Mock()
         context.device.domain = domain_credential_est_onboarding['domain']
         context.device.common_name = 'test-device'
+        context.device.onboarding_config = None
         context.domain = domain_credential_est_onboarding['domain']
 
         # Should not raise an exception
@@ -524,6 +526,7 @@ class TestEstAuthorization:
         context.cert_profile_str = 'tls_server'
         context.device = Mock()
         context.device.domain = domain_credential_est_onboarding['domain']
+        context.device.onboarding_config = None
         context.domain = domain_credential_est_onboarding['domain']
 
         with pytest.raises(ValueError) as exc_info:
@@ -541,6 +544,7 @@ class TestEstAuthorization:
         context.cert_profile_str = 'tls_server'
         context.device = Mock()
         context.device.domain = domain_credential_est_onboarding['domain']
+        context.device.onboarding_config = None
         context.domain = domain_credential_est_onboarding['domain']
 
         with pytest.raises(ValueError) as exc_info:
