@@ -75,6 +75,7 @@ class CaModelAdmin(admin.ModelAdmin[CaModel]):
                     'crl_cycle_enabled',
                     'crl_cycle_interval_hours',
                     'last_crl_generation_started_at',
+                    'auto_crl_on_revocation_enabled',
                 ),
                 'description': 'Configure automatic periodic CRL generation',
             }

@@ -20,6 +20,7 @@ from devices.models import (
     RemoteDeviceCredentialDownloadModel,
 )
 from devices.utils import validate_application_uri, validate_common_name_characters
+from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import (
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
@@ -408,6 +409,8 @@ class NoOnboardingCreateForm(forms.Form):
         device_model.no_onboarding_config = no_onboarding_config_model
         device_model.full_clean()
 
+        PermittedProtocolsAuthorization().check(device_model)
+
         no_onboarding_config_model.save()
         device_model.save()
 
@@ -525,6 +528,8 @@ class OnboardingCreateForm(forms.Form):
 
         device_model.full_clean()
 
+        PermittedProtocolsAuthorization().check(device_model)
+
         onboarding_config_model.save()
         device_model.save()
 
@@ -627,6 +632,8 @@ class OpcUaGdsPushCreateForm(forms.Form):
         )
 
         device_model.full_clean()
+
+        PermittedProtocolsAuthorization().check(device_model)
 
         onboarding_config_model.save()
         device_model.save()

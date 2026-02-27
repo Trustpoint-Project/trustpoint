@@ -11,7 +11,7 @@ class SecurityConfigFormTest(TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.config = SecurityConfig.objects.create(
-            security_mode=SecurityConfig.SecurityModeChoices.LOW,
+            security_mode=SecurityConfig.SecurityModeChoices.BROWNFIELD,
             auto_gen_pki=False,
             auto_gen_pki_key_algorithm=AutoGenPkiKeyAlgorithm.RSA2048
         )
@@ -43,9 +43,9 @@ class SecurityConfigFormTest(TestCase):
         self.assertIn('data-more-secure', widget_attrs)
 
     def test_form_with_dev_security_mode(self):
-        """Test form with DEV security mode."""
+        """Test form with LAB security mode."""
         form_data = {
-            'security_mode': SecurityConfig.SecurityModeChoices.DEV,
+            'security_mode': SecurityConfig.SecurityModeChoices.LAB,
             'auto_gen_pki': True,
             'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
         }
@@ -53,9 +53,9 @@ class SecurityConfigFormTest(TestCase):
         self.assertTrue(form.is_valid())
 
     def test_form_with_high_security_mode(self):
-        """Test form with HIGH security mode disables auto_gen_pki."""
+        """Test form with HARDENED security mode disables auto_gen_pki."""
         form_data = {
-            'security_mode': SecurityConfig.SecurityModeChoices.HIGH,
+            'security_mode': SecurityConfig.SecurityModeChoices.HARDENED,
             'auto_gen_pki': False,
             'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
         }
@@ -71,7 +71,7 @@ class SecurityConfigFormTest(TestCase):
         # When algorithm field is disabled, it won't be in cleaned_data
         # so we test with a form that excludes the field
         form_data = {
-            'security_mode': SecurityConfig.SecurityModeChoices.LOW,
+            'security_mode': SecurityConfig.SecurityModeChoices.BROWNFIELD,
             'auto_gen_pki': True,
             'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.SECP256R1  # Explicitly set the value
         }
@@ -84,7 +84,7 @@ class SecurityConfigFormTest(TestCase):
         """Test clean method uses the provided algorithm value."""
         # Test that when a valid algorithm is provided, it's used
         form_data = {
-            'security_mode': SecurityConfig.SecurityModeChoices.LOW,
+            'security_mode': SecurityConfig.SecurityModeChoices.BROWNFIELD,
             'auto_gen_pki': True,
             'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
         }
@@ -96,7 +96,7 @@ class SecurityConfigFormTest(TestCase):
     def test_clean_auto_gen_pki_key_algorithm_with_value(self):
         """Test clean method uses provided value when available."""
         form_data = {
-            'security_mode': SecurityConfig.SecurityModeChoices.LOW,
+            'security_mode': SecurityConfig.SecurityModeChoices.BROWNFIELD,
             'auto_gen_pki': True,
             'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA4096
         }
@@ -119,21 +119,25 @@ class SecurityConfigFormTest(TestCase):
     def test_form_initialization_with_data_security_mode(self):
         """Test form initialization considers security_mode from form data."""
         form_data = {
-            'security_mode': SecurityConfig.SecurityModeChoices.HIGHEST,
+            'security_mode': SecurityConfig.SecurityModeChoices.CRITICAL,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
-        # The form should process the HIGHEST security mode
+        # The form should process the CRITICAL security mode
         self.assertIn('security_mode', form.data)
 
     def test_all_security_modes(self):
-        """Test form accepts all security mode choices."""
+        """Test form field accepts all security mode choices."""
+        self.config.security_mode = SecurityConfig.SecurityModeChoices.CRITICAL
+        self.config.save()
+
         for mode in SecurityConfig.SecurityModeChoices:
+            instance = SecurityConfig.objects.get(pk=self.config.pk)
             form_data = {
                 'security_mode': mode,
                 'auto_gen_pki': False,
                 'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
             }
-            form = SecurityConfigForm(data=form_data, instance=self.config)
+            form = SecurityConfigForm(data=form_data, instance=instance)
             self.assertTrue(form.is_valid(), f"Form should be valid for mode {mode}")
 
     def test_form_helper_layout(self):

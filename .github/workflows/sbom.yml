@@ -23,7 +23,7 @@ jobs:
 
     - name: Install Syft
       run: |
-        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin v1.42.1
     
     - name: Build Trustpoint Docker image
       run: docker build -t trustpoint:latest -f docker/trustpoint/Dockerfile .
@@ -43,13 +43,13 @@ jobs:
         ls -lh sbom_spdx.json
 
     - name: Upload CycloneDX SBOM
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: sbom-cyclonedx
         path: sbom_cyclonedx.json
 
     - name: Upload SPDX SBOM
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v7
       with:
         name: sbom-spdx
         path: sbom_spdx.json

@@ -141,11 +141,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         security_config, created = SecurityConfig.objects.get_or_create(
             pk=1,
             defaults={
-                'security_mode': SecurityConfig.SecurityModeChoices.MEDIUM,
+                'security_mode': SecurityConfig.SecurityModeChoices.INDUSTRIAL,
             }
         )
         if created:
-            self.log_and_stdout('Created default SecurityConfig with MEDIUM security mode')
+            self.log_and_stdout('Created default SecurityConfig with INDUSTRIAL security mode')
         else:
             self.log_and_stdout(f'Using existing SecurityConfig with security mode: {security_config.get_security_mode_display()}')
 

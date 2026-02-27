@@ -12,6 +12,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from django_q.models import Schedule  # type: ignore[import-untyped]
 from django_q.tasks import schedule  # type: ignore[import-untyped]
 from trustpoint_core import oid
 
@@ -213,6 +214,12 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         null=True,
         blank=True,
         help_text=_('Timestamp when the last CRL generation task was started')
+    )
+
+    auto_crl_on_revocation_enabled = models.BooleanField(
+        _('Auto-Generate CRL on Revocation'),
+        default=True,
+        help_text=_('Automatically generate a new CRL when a certificate is revoked')
     )
 
     class Meta:
@@ -826,32 +833,38 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             return None
         return active_crl.get_crl_as_crypto()
 
-    def schedule_next_crl_generation(self) -> None:
+    def schedule_next_crl_generation(self, *, post_revocation_crl: bool = False) -> None:
         """Schedule the next CRL generation task for this CA using Django-Q2.
 
         Creates a scheduled task in Django-Q2 that will execute at the calculated time.
         The task will automatically trigger CRL generation without manual intervention.
         """
-        if not self.crl_cycle_enabled:
+        if not self.crl_cycle_enabled and not post_revocation_crl:
             self.logger.debug('CRL cycle not enabled for CA %s, skipping scheduling', self.unique_name)
             return
 
-        scheduled_time = timezone.now() + timedelta(hours=self.crl_cycle_interval_hours)
+        duration = timedelta(seconds=30) if post_revocation_crl else timedelta(hours=self.crl_cycle_interval_hours)
+        scheduled_time = timezone.now() + duration
+
+        base_name = f'crl_gen_{self.unique_name}'
+        # new schedule overrides any existing schedule for this CA
+        Schedule.objects.filter(name__startswith=base_name).delete()
 
         schedule(
             'pki.tasks.generate_crl_for_ca',
             self.id,
             schedule_type='O',
             next_run=scheduled_time,
-            name=f'crl_gen_{self.unique_name}_{scheduled_time.timestamp()}'
+            name=f'{base_name}_{scheduled_time.timestamp()}'
         )
 
         self.last_crl_generation_started_at = scheduled_time
         self.save(update_fields=['last_crl_generation_started_at'])
         self.logger.info(
-            'Next CRL generation for CA %s scheduled for %s via Django-Q2',
+            'Next CRL generation for CA %s scheduled for %s %svia Django-Q2',
             self.unique_name,
-            scheduled_time
+            scheduled_time,
+            '(auto post-revocation) ' if post_revocation_crl else ''
         )
 
     # ===== Hierarchy Methods =====

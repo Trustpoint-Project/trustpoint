@@ -1,5 +1,5 @@
 FROM python:3.12-slim-bookworm
-COPY --from=ghcr.io/astral-sh/uv:0.10.6 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.10.7 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -72,6 +72,11 @@ RUN uv pip install gunicorn[gevent]
 USER root
 
 
+
+RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
+             /var/www/html/trustpoint/trustpoint/collected_static && \
+    chown -R www-data:www-data /var/www/html/trustpoint/trustpoint/ && \
+    chmod -R 755 /var/www/html/trustpoint/trustpoint/
 
 # Sets DEBUG = False and DOCKER_CONTAINER = True in the Django settings
 RUN sed -i '/DEBUG = True/s/True/False/' trustpoint/trustpoint/settings.py && \

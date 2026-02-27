@@ -177,7 +177,7 @@ class HsmSetupMixinTestCase(TestCase):
         mock_token.generate_and_wrap_dek = Mock()
 
         # Mock the logger to avoid issues
-        with patch.object(self.view, 'logger') as mock_logger:
+        with patch.object(self.view, 'logger'):
             self.view._generate_kek_and_dek(mock_token)
 
         # Should still attempt DEK generation
@@ -230,7 +230,7 @@ class HsmSetupMixinTestCase(TestCase):
 
         with patch.object(self.view, 'logger'), patch('setup_wizard.views.redirect') as mock_redirect:
             mock_redirect.return_value = HttpResponseRedirect('/error/')
-            result = self.view._handle_hsm_setup_exception(exc)
+            self.view._handle_hsm_setup_exception(exc)
             mock_redirect.assert_called_once_with('/error/', hsm_type='softhsm', permanent=False)
 
         messages = list(get_messages(self.request))
@@ -248,7 +248,7 @@ class HsmSetupMixinTestCase(TestCase):
 
         with patch('setup_wizard.views.redirect') as mock_redirect:
             mock_redirect.return_value = HttpResponseRedirect('/error/')
-            result = self.view.form_valid(form)
+            self.view.form_valid(form)
             mock_redirect.assert_called_once_with('/error/', hsm_type='physical', permanent=False)
 
         messages = list(get_messages(self.request))
@@ -286,7 +286,7 @@ class HsmSetupMixinTestCase(TestCase):
             mock_get_token.return_value = (mock_token, True)
 
             # Call the method
-            result = self.view.form_valid(form)
+            self.view.form_valid(form)
 
         # Verify the flow
         mock_run_script.assert_called_once_with(

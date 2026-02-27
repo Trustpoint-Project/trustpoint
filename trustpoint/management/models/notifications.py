@@ -485,23 +485,6 @@ class NotificationConfig(models.Model):
         help_text=_("Number of days before an issuing CA's certificate expiration to trigger a warning.")
     )
 
-    rsa_minimum_key_size = models.PositiveIntegerField(
-        default=2048,
-        help_text=_('Minimum RSA key size (in bits) that certificates must meet to avoid being flagged as insecure.')
-    )
-
-    weak_ecc_curves = models.ManyToManyField(
-        WeakECCCurve,
-        blank=True,
-        help_text=_('Select ECC curves considered weak or deprecated.')
-    )
-
-    weak_signature_algorithms = models.ManyToManyField(
-        WeakSignatureAlgorithm,
-        blank=True,
-        help_text=_('Select signature algorithms considered weak or deprecated.')
-    )
-
     class Meta:
         """Meta class configuration."""
         verbose_name = _('Notification Configuration')

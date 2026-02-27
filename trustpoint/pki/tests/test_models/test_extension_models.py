@@ -1355,7 +1355,7 @@ class TestExtendedKeyUsageExtensionSaveFromCrypto:
         from pki.models.extension import ExtendedKeyUsageExtension, KeyPurposeIdModel
         
         # Pre-create a KeyPurposeIdModel
-        existing_kp = KeyPurposeIdModel.objects.create(
+        KeyPurposeIdModel.objects.create(
             oid=ExtendedKeyUsageOID.SERVER_AUTH.dotted_string
         )
         
