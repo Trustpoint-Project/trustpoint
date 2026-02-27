@@ -51,7 +51,10 @@ class AokiServiceMixin:
         if not owner_cred_ref:
             return None
         owner_cred = owner_cred_ref.dev_owner_id
-        return owner_cred.credential
+        issued = owner_cred.dev_owner_id_credential
+        if issued is None:
+            return None
+        return issued.credential
 
 
 class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):

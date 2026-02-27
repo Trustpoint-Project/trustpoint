@@ -1182,7 +1182,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         from devices.models import IssuedCredentialModel  # noqa: PLC0415 (avoid circular import at module level)
 
         return (
-            self.issued_credentials  # type: ignore[attr-defined]
+            self.issued_credentials
             .filter(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID)
             .select_related('credential__certificate')
             .order_by('-created_at')
@@ -1290,7 +1290,7 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
     def post_delete(self) -> None:
         """Deletes all issued credentials and the onboarding config on deletion."""
         self.logger.debug('Deleting issued credentials of owner credential %s', self)
-        for issued in self.issued_credentials.all():  # type: ignore[attr-defined]
+        for issued in self.issued_credentials.all():
             issued.credential.delete()
 
 

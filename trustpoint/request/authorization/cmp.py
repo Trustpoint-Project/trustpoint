@@ -58,22 +58,7 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
                 return
             valid, _reason = signer_credential.is_valid_domain_credential()
             if valid:
-                signer_device = signer_credential.device
-                if signer_device != context.device:
-                    error_message = (
-                        'Unauthorized revocation request: Signer device does not match the device '
-                        'associated with the certificate to be revoked.'
-                    )
-                    self.logger.warning(
-                        'Revocation authorization failed: Signer device does not match target device'
-                    )
-                    self._raise_authorization_error(error_message, context)
-
-                context.credential_to_revoke = IssuedCredentialModel.get_credential_for_serial_number(
-                    context.domain, context.device, context.cert_serial_number
-                )
-                self.logger.info('Revocation authorized: Domain credential revocation of credential %s',
-                                 context.credential_to_revoke.common_name)
+                self._authorize_domain_credential_revocation(context, signer_credential)
                 return
             error_message = (
                 'Unauthorized revocation request: Signer certificate does not match '
@@ -94,6 +79,46 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
         """Raise a ValueError with the given message and sets generic Unauthorized as external response."""
         context.error('Unauthorized', http_status=403, cmp_code=PKIFailureInfo.NOT_AUTHORIZED)
         raise ValueError(message)
+
+    def _authorize_domain_credential_revocation(
+        self, context: CmpRevocationRequestContext, signer_credential: IssuedCredentialModel
+    ) -> None:
+        """Authorize revocation via a domain credential and set credential_to_revoke on the context.
+
+        Verifies that the signer device matches the target device and that device is not None,
+        then resolves the credential to revoke by serial number.
+        """
+        signer_device = signer_credential.device
+        if signer_device != context.device:
+            error_message = (
+                'Unauthorized revocation request: Signer device does not match the device '
+                'associated with the certificate to be revoked.'
+            )
+            self.logger.warning('Revocation authorization failed: Signer device does not match target device')
+            self._raise_authorization_error(error_message, context)
+
+        if context.device is None:
+            error_message = 'Device information is missing. Revocation authorization denied.'
+            self.logger.warning('Revocation authorization failed: Device information is missing')
+            self._raise_authorization_error(error_message, context)
+
+        if context.domain is None:
+            error_message = 'Domain information is missing. Revocation authorization denied.'
+            self.logger.warning('Revocation authorization failed: Domain information is missing')
+            self._raise_authorization_error(error_message, context)
+
+        if context.cert_serial_number is None:
+            error_message = 'Certificate serial number is missing. Revocation authorization denied.'
+            self.logger.warning('Revocation authorization failed: Certificate serial number is missing')
+            self._raise_authorization_error(error_message, context)
+
+        context.credential_to_revoke = IssuedCredentialModel.get_credential_for_serial_number(
+            context.domain, context.device, context.cert_serial_number
+        )
+        self.logger.info(
+            'Revocation authorized: Domain credential revocation of credential %s',
+            context.credential_to_revoke.common_name,
+        )
 
 
 class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):

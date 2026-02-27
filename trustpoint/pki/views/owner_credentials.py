@@ -45,6 +45,8 @@ from trustpoint.views.base import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from django.db.models import QuerySet
     from django.forms import Form
 
@@ -102,8 +104,9 @@ class OwnerCredentialAddMethodSelectView(OwnerCredentialContextMixin, FormView[O
     # Use the file-import form as a lightweight stand-in so FormView machinery is satisfied.
     form_class = OwnerCredentialFileImportForm
 
-    def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Render the method selection page (no form processing needed)."""
+        del request, args, kwargs
         return self.render_to_response(self.get_context_data())
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
@@ -145,8 +148,9 @@ class OwnerCredentialAddRequestEstMethodSelectView(
     template_name = 'pki/owner_credentials/add/est_method_select.html'
     form_class = OwnerCredentialFileImportForm
 
-    def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Render the EST method selection page."""
+        del request, args, kwargs
         return self.render_to_response(self.get_context_data())
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
@@ -206,7 +210,7 @@ class OwnerCredentialAddRequestEstNoOnboardingView(
     def form_invalid(self, form: OwnerCredentialAddRequestEstNoOnboardingForm) -> HttpResponse:
         """Show form-level errors as Django messages."""
         for error in form.non_field_errors():
-            messages.error(self.request, error)
+            messages.error(self.request, str(error))
         return super().form_invalid(form)
 
 
@@ -241,7 +245,7 @@ class OwnerCredentialAddRequestEstOnboardingView(
     def form_invalid(self, form: OwnerCredentialAddRequestEstOnboardingForm) -> HttpResponse:
         """Show form-level errors as Django messages."""
         for error in form.non_field_errors():
-            messages.error(self.request, error)
+            messages.error(self.request, str(error))
         return super().form_invalid(form)
 
 
@@ -322,9 +326,9 @@ class OwnerCredentialTruststoreAssociationView(
         context['owner_credential'] = owner_credential
 
         import_form = TruststoreAddForm()
-        intended_usage_field = import_form.fields['intended_usage']
-        intended_usage_field.choices = [  # type: ignore[union-attr]
-            choice for choice in intended_usage_field.choices  # type: ignore[union-attr]
+        raw_choices: Iterable[Any] = import_form.intended_usage.choices  # type: ignore[assignment]
+        import_form.intended_usage.choices = [
+            choice for choice in raw_choices
             if isinstance(choice, tuple) and choice[0] == TruststoreModel.IntendedUsage.TLS
         ]
         context['import_form'] = import_form

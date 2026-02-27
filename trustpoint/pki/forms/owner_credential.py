@@ -248,7 +248,7 @@ class OwnerCredentialTruststoreAssociationForm(forms.Form):
     verify the remote EST server's HTTPS certificate.
     """
 
-    trust_store = forms.ModelChoiceField(
+    trust_store: forms.ModelChoiceField[Any] = forms.ModelChoiceField(
         queryset=None,  # set in __init__
         empty_label='----------',
         required=True,
@@ -263,14 +263,14 @@ class OwnerCredentialTruststoreAssociationForm(forms.Form):
         self.instance: OwnerCredentialModel = kwargs.pop('instance')
         super().__init__(*args, **kwargs)
 
-        trust_store_field = self.fields['trust_store']
-        trust_store_field.queryset = TruststoreModel.objects.filter(  # type: ignore[union-attr]
+        trust_store_field: forms.ModelChoiceField[Any] = self.trust_store
+        trust_store_field.queryset = TruststoreModel.objects.filter(
             intended_usage=TruststoreModel.IntendedUsage.TLS
         )
 
         # Pre-select the already-associated truststore if one exists
         if self.instance.no_onboarding_config and self.instance.no_onboarding_config.trust_store:
-            trust_store_field.initial = self.instance.no_onboarding_config.trust_store  # type: ignore[union-attr]
+            trust_store_field.initial = self.instance.no_onboarding_config.trust_store
 
     def save(self) -> None:
         """Save the selected truststore to the owner credential's no-onboarding config."""
@@ -428,7 +428,7 @@ class OwnerCredentialAddRequestEstOnboardingForm(_OwnerCredentialEstBaseMixin):
     EST server's TLS certificate must be associated after this step.
     """
 
-    idevid_trust_store = forms.ModelChoiceField(
+    idevid_trust_store: forms.ModelChoiceField[Any] = forms.ModelChoiceField(
         queryset=None,  # set in __init__
         required=False,
         empty_label=_('(none - skip server verification)'),
@@ -442,7 +442,8 @@ class OwnerCredentialAddRequestEstOnboardingForm(_OwnerCredentialEstBaseMixin):
         """Initialise queryset for the trust store choice field."""
         super().__init__(*args, **kwargs)
         from pki.models.truststore import TruststoreModel  # noqa: PLC0415
-        self.fields['idevid_trust_store'].queryset = TruststoreModel.objects.filter(  # type: ignore[union-attr]
+        idevid_field: forms.ModelChoiceField[Any] = self.idevid_trust_store
+        idevid_field.queryset = TruststoreModel.objects.filter(
             intended_usage=TruststoreModel.IntendedUsage.IDEVID
         )
 

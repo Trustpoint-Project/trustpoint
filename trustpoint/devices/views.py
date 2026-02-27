@@ -1356,8 +1356,9 @@ class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCre
         if form.is_valid():
             try:
                 credential = self.issue_credential(device=self.object, form=form)
+                del credential  # result unused beyond this point
                 messages.success(
-                    request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
+                    request, f'Successfully issued {self.friendly_name} for device {self.object.common_name}'
                 )
             except Exception as e:  # noqa: BLE001
                 messages.error(request, f'Failed to issue {self.friendly_name}: {e}')
@@ -1466,9 +1467,9 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
         form = self.form_class(**self.get_form_kwargs())
 
         if form.is_valid():
-            credential = self.issue_credential(device=self.object, form=form)
+            self.issue_credential(device=self.object, form=form)
             messages.success(
-                request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
+                request, f'Successfully issued {self.friendly_name} for device {self.object.common_name}'
             )
             return HttpResponseRedirect(
                 reverse_lazy(
@@ -2424,6 +2425,8 @@ class AbstractBrowserOnboardingOTPView(PageContextMixin, DetailView[IssuedCreden
         """
         credential = self.get_object()
         device = credential.device
+        if device is None:
+            raise Http404
         context = super().get_context_data(**kwargs)
 
         try:
@@ -2607,9 +2610,13 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
         """
         self.object = self.get_object()
 
+        device = self.object.device
+        if device is None:
+            raise Http404
+
         reverse_path = reverse(
             f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
-            kwargs={'pk': self.object.device.pk},
+            kwargs={'pk': device.pk},
         )
 
         revoke_form = self.form_class(self.request.POST)
