@@ -1209,6 +1209,35 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         """
         return self.dev_owner_id_credentials.first()
 
+    @property
+    def domain_credentials(self) -> QuerySet[IssuedCredentialModel]:
+        """Returns all Domain Credential IssuedCredentialModel instances for this owner credential, newest first.
+
+        Domain credentials are obtained during onboarding before the DevOwnerID is enrolled.
+        """
+        from devices.models import IssuedCredentialModel  # noqa: PLC0415 (avoid circular import at module level)
+
+        return (
+            self.issued_credentials
+            .filter(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL)
+            .select_related('credential__certificate')
+            .order_by('-created_at')
+        )
+
+    @property
+    def domain_credential(self) -> IssuedCredentialModel | None:
+        """Returns the most recently created Domain Credential IssuedCredentialModel, or ``None``."""
+        return self.domain_credentials.first()
+
+    @property
+    def has_valid_domain_credential(self) -> bool:
+        """Returns True if there is at least one valid domain credential."""
+        latest = self.domain_credential
+        if latest is None:
+            return False
+        is_valid, _reason = latest.is_valid_domain_credential()
+        return is_valid
+
     @classmethod
     def create_new_owner_credential(
         cls,

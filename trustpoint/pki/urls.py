@@ -300,6 +300,16 @@ urlpatterns = [
         name='owner_credentials-request-cert-est',
     ),
     path(
+        'owner-credentials/define-cert-content-domain-credential-est/<int:pk>/',
+        owner_credentials.OwnerCredentialDefineCertContentDomainCredentialEstView.as_view(),
+        name='owner_credentials-define-cert-content-domain-credential-est',
+    ),
+    path(
+        'owner-credentials/request-domain-credential-est/<int:pk>/',
+        owner_credentials.OwnerCredentialRequestDomainCredentialEstView.as_view(),
+        name='owner_credentials-request-domain-credential-est',
+    ),
+    path(
         'owner-credentials/<int:owner_pk>/issued-credential/<int:pk>/delete/',
         owner_credentials.IssuedCredentialDeleteView.as_view(),
         name='owner_credentials-issued-credential-delete',
