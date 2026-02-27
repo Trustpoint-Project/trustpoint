@@ -212,7 +212,7 @@ class TestDomainConfigView:
         
         messages = list(get_messages(response.wsgi_request))
         # Check if there's a warning about duplicate alias
-        warning_found = any('already in use' in str(msg) or 'unique' in str(msg).lower() for msg in messages)
+        any('already in use' in str(msg) or 'unique' in str(msg).lower() for msg in messages)
         # Note: The actual behavior might vary, so we just check the response is successful
         assert response.status_code == 200
 

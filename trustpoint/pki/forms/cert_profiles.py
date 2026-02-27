@@ -8,8 +8,10 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.safestring import mark_safe
+from django.utils.translation import gettext_lazy as _
 from pydantic import ValidationError as PydanticValidationError
 
+from management.models import SecurityConfig
 from pki.models.cert_profile import CertificateProfileModel
 from pki.util.cert_profile import CERT_PROFILE_KEYWORDS, JSONProfileVerifier
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
@@ -18,6 +20,56 @@ from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from cryptography.x509.base import CertificateBuilder
+
+
+def _validity_days_from_components(
+    days: float | None = None,
+    hours: float | None = None,
+    minutes: float | None = None,
+    seconds: float | None = None,
+    duration_seconds: float | None = None,
+) -> float:
+    """Return the total validity expressed in days from individual time components."""
+    total: float = 0.0
+    if days:
+        total += float(days)
+    if hours:
+        total += float(hours) / 24
+    if minutes:
+        total += float(minutes) / 1440
+    if seconds:
+        total += float(seconds) / 86400
+    if duration_seconds:
+        total += duration_seconds / 86400
+    return total
+
+
+def check_validity_days_against_security_config(total_days: float) -> None:
+    """Raise :class:`~django.core.exceptions.ValidationError` if *total_days* exceeds the policy limit."""
+    try:
+        cfg = SecurityConfig.objects.get()
+    except SecurityConfig.DoesNotExist:
+        return
+    except SecurityConfig.MultipleObjectsReturned:
+        cfg_or_none = SecurityConfig.objects.order_by('pk').first()
+        if cfg_or_none is None:
+            return
+        cfg = cfg_or_none
+
+    max_days: int | None = cfg.max_cert_validity_days
+    if max_days is None:
+        return
+
+    if total_days > float(max_days):
+        raise ValidationError(
+            _(
+                'The requested certificate validity of %(req_days).1f days exceeds the maximum of '
+                '%(max_days)d days permitted by the active security policy.'
+            ) % {
+                'req_days': total_days,
+                'max_days': max_days,
+            }
+        )
 
 class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel]):
     """Form for creating or updating Certificate Profiles.
@@ -56,7 +108,8 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
         """Validates the profile JSON to ensure it is a valid certificate profile.
 
         Raises:
-            ValidationError: If the profile JSON is not a valid certificate profile.
+            ValidationError: If the profile JSON is not a valid certificate profile,
+                or if the configured validity exceeds the security policy limit.
         """
         profile_json = self.cleaned_data['profile_json']
         if type(profile_json) is dict:
@@ -68,14 +121,35 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
                 error_message = f'Invalid JSON format: {e!s}'
                 raise forms.ValidationError(error_message) from e
         try:
-            CertProfilePydanticModel.model_validate(json_dict)
+            validated = CertProfilePydanticModel.model_validate(json_dict)
         except PydanticValidationError as e:
             error_message = f'This JSON is not a valid certificate profile: {e!s}'
             raise forms.ValidationError(error_message) from e
         self.instance.display_name = json_dict.get('display_name', '')
+
+        self._check_validity_against_security_config(validated)
+
         return json.dumps(json_dict)
 
-class ProfileBasedFormFieldBuilder:
+    @staticmethod
+    def _validity_total_days(validated: CertProfilePydanticModel) -> float:
+        """Return the total validity of *validated* expressed in days."""
+        v = validated.validity
+        return _validity_days_from_components(
+            days=v.days,
+            hours=v.hours,
+            minutes=v.minutes,
+            seconds=float(v.seconds) if v.seconds is not None else None,
+            duration_seconds=v.duration.total_seconds() if v.duration is not None else None,
+        )
+
+    @staticmethod
+    def _check_validity_against_security_config(validated: CertProfilePydanticModel) -> None:
+        """Raise ValidationError if the profile's validity exceeds the security policy limit."""
+        total_days = CertProfileConfigForm._validity_total_days(validated)
+        check_validity_days_against_security_config(total_days)
+
+class ProfileBasedFormFieldBuilder(LoggerMixin):
     """Django form field builder that leverages JSONProfileVerifier.
 
     This builder uses JSONProfileVerifier.get_sample_request() to understand the
@@ -102,6 +176,7 @@ class ProfileBasedFormFieldBuilder:
         'locality_name': 'Locality (L)',
         'emailAddress': 'Email Address',
         'email_address': 'Email Address',
+        'serial_number': 'Serial Number',
     }
 
     SAN_LABELS: ClassVar[dict[str, str]] = {
@@ -134,7 +209,7 @@ class ProfileBasedFormFieldBuilder:
         This leverages JSONProfileVerifier.get_sample_request() to understand
         the profile structure, eliminating manual parsing.
         """
-        sample_request = self.verifier.get_sample_request()
+        sample_request = self.profile # Use the normalized profile for field generation
 
         self._build_fields_from_sample(sample_request)
 
@@ -143,7 +218,7 @@ class ProfileBasedFormFieldBuilder:
     def _build_fields_from_sample(self, sample_request: dict[str, Any]) -> None:
         """Build form fields based on the sample request structure."""
         subject = sample_request.get('subject', {})
-        profile_subject = self.profile.get('subj', {})
+        profile_subject = self.profile.get('subject', {})
 
         if profile_subject.get('allow') == '*':
             self._build_all_subject_fields(profile_subject)
@@ -153,7 +228,7 @@ class ProfileBasedFormFieldBuilder:
         extensions = sample_request.get('extensions', {})
         if extensions:
             san = extensions.get('subject_alternative_name', {})
-            profile_extensions = self.profile.get('ext', {})
+            profile_extensions = self.profile.get('extensions', {})
             profile_san = profile_extensions.get('subject_alternative_name', profile_extensions.get('san', {}))
 
             if isinstance(profile_san, dict) and profile_san.get('allow') == '*':
@@ -239,7 +314,7 @@ class ProfileBasedFormFieldBuilder:
 
     def _build_subject_fields_from_sample(self, subject: dict[str, Any]) -> None:
         """Build subject fields based on sample values."""
-        profile_subject = self.profile.get('subj', {})
+        profile_subject = self.profile.get('subject', {})
 
         for field_name, sample_value in subject.items():
             if field_name in CERT_PROFILE_KEYWORDS:
@@ -287,7 +362,7 @@ class ProfileBasedFormFieldBuilder:
 
     def _build_san_fields_from_sample(self, san: dict[str, Any]) -> None:
         """Build SAN fields based on sample values."""
-        profile_extensions = self.profile.get('ext', {})
+        profile_extensions = self.profile.get('extensions', {})
         profile_san = profile_extensions.get('subject_alternative_name', profile_extensions.get('san', {}))
 
         for field_name, sample_value in san.items():
@@ -368,7 +443,7 @@ class ProfileBasedFormFieldBuilder:
             )
 
 
-class CertificateIssuanceForm(forms.Form):
+class CertificateIssuanceForm(LoggerMixin, forms.Form):
     """Form for certificate issuance based on a certificate profile.
 
     This form dynamically generates fields based on a certificate profile and
@@ -398,8 +473,8 @@ class CertificateIssuanceForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.profile = profile
         self.verifier = JSONProfileVerifier(profile)
-
-        field_builder = ProfileBasedFormFieldBuilder(profile)
+        self.profile = self.verifier.get_profile()  # Normalize profile to ensure consistent field generation
+        field_builder = ProfileBasedFormFieldBuilder(self.profile)
         self.fields = field_builder.build_all_fields()
 
     def get_certificate_builder(self) -> CertificateBuilder:
@@ -480,3 +555,15 @@ class CertificateIssuanceForm(forms.Form):
             if value:
                 validity[field_name] = int(value)
         return validity
+
+    def clean(self) -> dict[str, Any]:
+        """Validate the requested certificate validity against the active security policy."""
+        cleaned_data = cast('dict[str, Any]', super().clean())
+        total_days = _validity_days_from_components(
+            days=cleaned_data.get('days'),
+            hours=cleaned_data.get('hours'),
+            minutes=cleaned_data.get('minutes'),
+            seconds=cleaned_data.get('seconds'),
+        )
+        check_validity_days_against_security_config(total_days)
+        return cleaned_data

@@ -8,7 +8,7 @@ from django.core.management.base import CommandError
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
-from notifications.models import NotificationModel, NotificationStatus
+from management.models import NotificationModel, NotificationStatus
 from pki.models import CertificateModel, CertificateProfileModel, CaModel
 
 from ..views import (
@@ -61,7 +61,7 @@ class DashboardViewTests(TestCase):
         view = DashboardView()
         view.request = request
         view.kwargs = {}
-        result = view.get_queryset()
+        view.get_queryset()
 
         # Verify filter was called (don't check exact queryset as it may differ)
         assert mock_filter.called

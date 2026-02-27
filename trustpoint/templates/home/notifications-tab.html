@@ -5,7 +5,7 @@
     <div class="row py-3 px-0 d-flex justify-content-between align-items-center">
         <div class="d-flex align-items-center">
             <h1 class="mb-0">{% trans 'Notifications' %}</h1>
-            <a href="{% url 'notifications:refresh_notifications' %}" class="btn refresh-notifications-button ms-3">
+            <a href="{% url 'management:refresh_notifications' %}" class="btn refresh-notifications-button ms-3">
                 <span class="ms-2">{% trans 'Refresh Notifications' %}</span>
             </a>
         </div>
@@ -144,7 +144,7 @@
                         {% trans 'Details' %}
                     </a></td>
                     <td>
-                        <a href="{% url 'notifications:notification_delete' notification.id %}"
+                        <a href="{% url 'management:notification_delete' notification.id %}"
                            class="btn btn-danger tp-table-btn">
                             {% trans 'Delete' %}
                         </a>

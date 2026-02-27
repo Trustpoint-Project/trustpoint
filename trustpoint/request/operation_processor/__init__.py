@@ -3,10 +3,12 @@
 from .csr_sign import EstCaCsrSignProcessor, EstDeviceCsrSignProcessor
 from .general import OperationProcessor
 from .issue_cert import CertificateIssueProcessor
+from .issue_cred import CredentialIssueProcessor
 from .sign import LocalCaCmpSignatureProcessor
 
 __all__ = [
     'CertificateIssueProcessor',
+    'CredentialIssueProcessor',
     'EstCaCsrSignProcessor',
     'EstDeviceCsrSignProcessor',
     'LocalCaCmpSignatureProcessor',

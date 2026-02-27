@@ -387,7 +387,7 @@ class TestSignedMessageViewSet:
 
     def test_list_signed_messages_ordered_by_created_at(self, authenticated_client, sample_signer):
         """Test list endpoint returns messages ordered by created_at desc."""
-        msg1 = SignedMessageModel.objects.create(
+        SignedMessageModel.objects.create(
             signer=sample_signer,
             hash_value='e' * 64,
             signature='f' * 128
