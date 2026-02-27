@@ -64,7 +64,19 @@ if BUILD_AUTODOCS:
         '*migrations*',
         '*unused*',
         '*conftest.py',
+        '*/migrations/*',
+        '*/__pycache__/*',
     ]  # Exclude features, tests, and related folders from AutoAPI
+    
+    # AutoAPI performance optimizations
+    autoapi_options = [
+        'members',
+        'undoc-members',
+        'show-inheritance',
+    ]
+    autoapi_keep_files = False  # Don't keep intermediate files to save disk I/O
+    autoapi_python_use_implicit_namespaces = True  # Faster namespace resolution
+    autoapi_root = '../../trustpoint'  # Explicit root path
 
 # -- Templates and exclusions -----------------------------------------------
 templates_path = ['_templates']  # Custom templates directory
