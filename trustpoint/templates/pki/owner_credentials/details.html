@@ -27,6 +27,10 @@
                     <div>{% trans 'Associated IDevIDs' %}</div>
                     <div>{{ owner_credential.idevid_ref_set.count }}</div>
                 </div>
+                <div>
+                    <div>{% trans 'Created at' %}</div>
+                    <div>{{ owner_credential.created_at }}</div>
+                </div>
             </div>
         </div>
     </div>
