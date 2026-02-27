@@ -37,7 +37,7 @@ from setup_wizard.forms import (
 )
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
-from trustpoint.settings import DOCKER_CONTAINER
+
 
 if TYPE_CHECKING:
 
@@ -117,11 +117,11 @@ def execute_shell_script(script: Path, *args: str) -> None:
         raise subprocess.CalledProcessError(result.returncode, str(script_path))
 
 
-class SetupWizardInitialView(LoggerMixin, TemplateView):
+class SetupWizardIndexView(LoggerMixin, TemplateView):
     """Initial wizard: Fresh Install vs. Restore Backup."""
 
     http_method_names = ('get',)
-    template_name = 'setup_wizard/setup_mode.html'
+    template_name = 'setup_wizard/index.html'
 
     def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests for the setup mode wizard page.
@@ -139,8 +139,6 @@ class SetupWizardInitialView(LoggerMixin, TemplateView):
                           or the login page if the setup is not in a Docker container.
         """
         self.logger.critical('In View')
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
 
         return super().get(*args, **kwargs)
 
@@ -157,13 +155,6 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
     form_class: type[UserCreationForm[User]] = UserCreationForm
     template_name = 'setup_wizard/create_super_user.html'
     success_url = reverse_lazy('users:login')
-
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Handle request dispatch and wizard state validation."""
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
         """Handle form submission for creating a superuser.
@@ -440,15 +431,6 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
     template_name = 'setup_wizard/crypto_storage_setup.html'
     form_class = KeyStorageConfigForm
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Handle request dispatch and wizard state validation."""
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-
-        return super().dispatch(request, *args, **kwargs)
-
     def form_valid(self, form: KeyStorageConfigForm) -> HttpResponse:
         """Handle valid form submission and determine next step based on storage type."""
         try:
@@ -532,11 +514,6 @@ class SetupWizardHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Handle request dispatch and wizard state validation."""
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-
         hsm_type = kwargs.get('hsm_type')
         if hsm_type not in ['softhsm', 'physical']:
             messages.add_message(
@@ -620,28 +597,6 @@ class SetupWizardSetupModeView(TemplateView):
     http_method_names = ('get',)
     template_name = 'setup_wizard/setup_mode.html'
 
-    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle GET requests for the setup mode wizard page.
-
-        This method validates the current state of the setup wizard and redirects
-        the user to the appropriate page. If the application is not running in a
-        Docker container, the user is redirected to the login page.
-
-        Args:
-            *args (Any): Additional positional arguments.
-            **kwargs (Any): Additional keyword arguments.
-
-        Returns:
-            HttpResponse: A redirect response to the appropriate setup wizard page
-                          or the login page if the setup is not in a Docker container.
-        """
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-
-        return super().get(*args, **kwargs)
-
 class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView[EmptyForm]):
     """View for selecting the TLS server credential during setup."""
 
@@ -651,8 +606,6 @@ class SetupWizardSelectTlsServerCredentialView(LoggerMixin, FormView[EmptyForm])
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Handle request dispatch and wizard state validation."""
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
 
         wizard_state = SetupWizardState.get_current_state()
         if wizard_state != SetupWizardState.WIZARD_SETUP_MODE:
@@ -704,26 +657,6 @@ class SetupWizardRestoreBackupView(TemplateView):
     http_method_names = ('get',)
     template_name = 'setup_wizard/restore_backup.html'
 
-    def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle GET requests for the initial setup wizard page.
-
-        This method validates the current state of the setup wizard and redirects
-        the user to the appropriate page. If the application is not running in a
-        Docker container, the user is redirected to the login page.
-
-        Args:
-            *args (Any): Additional positional arguments.
-            **kwargs (Any): Additional keyword arguments.
-
-        Returns:
-            HttpResponse: A redirect response to the appropriate setup wizard page
-                          or the login page if the setup is not in a Docker container.
-        """
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        return super().get(*args, **kwargs)
-
 class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
     """View for setting up backup password for PKCS#11 token during the setup wizard.
 
@@ -739,9 +672,6 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Handle request dispatch and wizard state validation."""
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
         wizard_state = SetupWizardState.get_current_state()
         if wizard_state != SetupWizardState.WIZARD_BACKUP_PASSWORD:
             self.logger.warning(
@@ -1017,11 +947,6 @@ class AutoRestoreHsmSetupView(HsmSetupMixin, FormView[HsmSetupForm]):
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Handle request dispatch and wizard state validation."""
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-
         hsm_type = kwargs.get('hsm_type')
         if hsm_type not in ['softhsm', 'physical']:
             messages.add_message(
@@ -1205,15 +1130,6 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
     success_url = reverse_lazy('users:login')
     form_class = PasswordAutoRestoreForm
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Handle request dispatch and wizard state validation."""
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-
-        return super().dispatch(request, *args, **kwargs)
-
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data."""
         context = super().get_context_data(**kwargs)
@@ -1388,29 +1304,6 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
     form_class = StartupWizardTlsCertificateForm
     success_url = reverse_lazy('setup_wizard:tls_server_credential_apply')
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Override the dispatch method to enforce wizard state validation.
-
-        This method ensures that the user is redirected appropriately based on the
-        current wizard state. If the application is not running in a Docker container,
-        the user is redirected to the login page.
-
-        Args:
-            request (HttpRequest): The incoming HTTP request.
-            *args (Any): Additional positional arguments.
-            **kwargs (Any): Additional keyword arguments.
-
-        Returns:
-            HttpResponse: A redirect response to the appropriate page or
-                          the next handler in the dispatch chain.
-        """
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-
-        return super().dispatch(request, *args, **kwargs)
-
     def form_valid(self, form: StartupWizardTlsCertificateForm) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential generation.
 
@@ -1484,25 +1377,6 @@ class SetupWizardImportTlsServerCredentialMethodSelectView(TemplateView):
     http_method_names = ('get',)
     template_name = 'setup_wizard/import_method_select.html'
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Override the dispatch method to enforce wizard state validation.
-
-        Args:
-            request (HttpRequest): The incoming HTTP request.
-            *args (Any): Additional positional arguments.
-            **kwargs (Any): Additional keyword arguments.
-
-        Returns:
-            HttpResponse: A redirect response to the appropriate page or
-                          the next handler in the dispatch chain.
-        """
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-
-        return super().dispatch(request, *args, **kwargs)
-
 
 class SetupWizardImportTlsServerCredentialPkcs12View(LoggerMixin, FormView[TlsAddFileImportPkcs12Form]):
     """View for importing TLS Server Credentials using a PKCS#12 file in the setup wizard."""
@@ -1512,24 +1386,6 @@ class SetupWizardImportTlsServerCredentialPkcs12View(LoggerMixin, FormView[TlsAd
     form_class = TlsAddFileImportPkcs12Form
     success_url = reverse_lazy('setup_wizard:tls_server_credential_apply')
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Override the dispatch method to enforce wizard state validation.
-
-        Args:
-            request (HttpRequest): The incoming HTTP request.
-            *args (Any): Additional positional arguments.
-            **kwargs (Any): Additional keyword arguments.
-
-        Returns:
-            HttpResponse: A redirect response to the appropriate page or
-                          the next handler in the dispatch chain.
-        """
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-
-        return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form: TlsAddFileImportPkcs12Form) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential import.
@@ -1624,25 +1480,6 @@ class SetupWizardImportTlsServerCredentialSeparateFilesView(
     template_name = 'setup_wizard/import_tls_server_credential.html'
     form_class = TlsAddFileImportSeparateFilesForm
     success_url = reverse_lazy('setup_wizard:tls_server_credential_apply')
-
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Override the dispatch method to enforce wizard state validation.
-
-        Args:
-            request (HttpRequest): The incoming HTTP request.
-            *args (Any): Additional positional arguments.
-            **kwargs (Any): Additional keyword arguments.
-
-        Returns:
-            HttpResponse: A redirect response to the appropriate page or
-                          the next handler in the dispatch chain.
-        """
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-
-        return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form: TlsAddFileImportSeparateFilesForm) -> HttpResponse:
         """Handle a valid form submission for TLS Server Credential import.
@@ -1766,31 +1603,11 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
         Returns:
             HttpResponse: A redirect response to the appropriate wizard state or the requested page.
         """
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
         file_format = self.kwargs.get('file_format')
         if file_format:
             return self._generate_trust_store_response(file_format)
 
         return super().get(request, *args, **kwargs)
-
-    def post(self, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle POST requests for the TLS Server Credential application view.
-
-        Args:
-            *args (Any): Positional arguments passed to the method.
-            **kwargs (Any): Keyword arguments passed to the method.
-
-        Returns:
-            HttpResponse: A redirect response to the appropriate page based on the wizard state.
-        """
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-
-        return super().post(*args, **kwargs)
 
     def form_valid(self, form: EmptyForm) -> HttpResponse:
         """Process a valid form submission during the TLS Server Credential application.
@@ -1986,22 +1803,6 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
 
     http_method_names = ('get',)
 
-    def get(self, request: HttpRequest) -> HttpResponse:
-        """Handle GET requests for the TLS Server Credential import view.
-
-        Args:
-            request: The HTTP request object.
-
-        Returns:
-            HttpResponse: A redirect to the next step or an error response.
-        """
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-
-        return self._clear_credential_and_certificate_data_and_execute(request)
-
     def _clear_credential_and_certificate_data_and_execute(self, request: HttpRequest) -> HttpResponse:
         """Clear the credential and certificate data and executes the corresponding action suing a shell script.
 
@@ -2075,15 +1876,6 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
     form_class = EmptyForm
     template_name = 'setup_wizard/demo_data.html'
     success_url = reverse_lazy('setup_wizard:create_super_user')
-
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Handle request dispatch and wizard state validation."""
-        if not DOCKER_CONTAINER:
-            return redirect('users:login', permanent=False)
-
-        wizard_state = SetupWizardState.get_current_state()
-
-        return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form: EmptyForm) -> HttpResponse:
         """Handle form submission for demo data setup."""

@@ -24,19 +24,14 @@ from setup_wizard.views import (
 
 app_name = 'setup_wizard'
 urlpatterns = [
-    path('', views.SetupWizardInitialView.as_view(), name='index'),
-    path(
-        'create-super-user',
-        views.SetupWizardCreateSuperUserView.as_view(),
-        name='create_super_user'
-    ),
+    path('', views.SetupWizardIndexView.as_view(), name='index'),
+    path('create-super-user', views.SetupWizardCreateSuperUserView.as_view(), name='create_super_user'),
     path(
         'restore-backup/',
         views.SetupWizardRestoreBackupView.as_view(),
         name='restore_backup',
     ),
     # path('restore/', BackupRestoreView.as_view(), name='restore'),
-
     # path(
     #     'crypto-storage-setup/',
     #     SetupWizardCryptoStorageView.as_view(),
@@ -83,7 +78,6 @@ urlpatterns = [
     #     SetupWizardGenerateTlsServerCredentialView.as_view(),
     #     name='generate_tls_server_credential',
     # ),
-    
     # path(
     #     'tls-server-credential-apply/',
     #     SetupWizardTlsServerCredentialApplyView.as_view(),
@@ -103,5 +97,4 @@ urlpatterns = [
     # path('create-super-user', SetupWizardCreateSuperUserView.as_view(), name='create_super_user'),
     # path('restore/', BackupRestoreView.as_view(), name='restore'),
     # path('auto_restore_password/', BackupAutoRestorePasswordView.as_view(), name='auto_restore_password'),
-
 ]
