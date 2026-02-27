@@ -73,6 +73,11 @@ USER root
 
 
 
+RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
+             /var/www/html/trustpoint/trustpoint/collected_static && \
+    chown -R www-data:www-data /var/www/html/trustpoint/trustpoint/ && \
+    chmod -R 755 /var/www/html/trustpoint/trustpoint/
+
 # Sets DEBUG = False and DOCKER_CONTAINER = True in the Django settings
 RUN sed -i '/DEBUG = True/s/True/False/' trustpoint/trustpoint/settings.py && \
     sed -i '/DOCKER_CONTAINER = False/s/False/True/' trustpoint/trustpoint/settings.py
