@@ -315,18 +315,31 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         :raises DoesNotExist: if no matching issued credential is found.
         """
         cert_fingerprint = cert.fingerprint(hashes.SHA256()).hex().upper()
-        credential = CredentialModel.objects.filter(certificates__sha256_fingerprint=cert_fingerprint).first()
-        if not credential:
+        credentials = CredentialModel.objects.filter(
+            certificates__sha256_fingerprint=cert_fingerprint,
+        )
+        if not credentials.exists():
             error_message = f'No credential found for certificate with fingerprint {cert_fingerprint}'
             raise IssuedCredentialModel.DoesNotExist(error_message)
 
-        try:
-            issued_credential = IssuedCredentialModel.objects.get(credential=credential)
-        except IssuedCredentialModel.DoesNotExist:
-            error_message = f'No issued credential found for certificate with fingerprint {cert_fingerprint}'
-            raise IssuedCredentialModel.DoesNotExist(error_message) from None
+        issued_credentials: list[IssuedCredentialModel] = []
+        for credential in credentials:
+            try:
+                issued_credentials.append(
+                    IssuedCredentialModel.objects.get(credential=credential),
+                )
+            except IssuedCredentialModel.DoesNotExist:
+                continue
 
-        return issued_credential
+        if not issued_credentials:
+            error_message = f'No issued credential found for certificate with fingerprint {cert_fingerprint}'
+            raise IssuedCredentialModel.DoesNotExist(error_message)
+
+        for ic in issued_credentials:
+            if ic.device is not None:
+                return ic
+
+        return issued_credentials[0]
 
     @staticmethod
     def get_credential_for_serial_number(

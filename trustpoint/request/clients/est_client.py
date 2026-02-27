@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import tempfile
+import urllib.parse
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -143,29 +144,14 @@ class EstClient(LoggerMixin):
             return issued_cert
 
     def _write_temp_pem(self, content: str | bytes, suffix: str = '.pem') -> str:
-        """Write PEM content to a temporary file and return its path.
-
-        Args:
-            content: PEM content (str or bytes) to write.
-            suffix: File suffix (default: '.pem').
-
-        Returns:
-            Absolute path to the temporary file.
-        """
+        """Write PEM content to a temporary file and return its path."""
         text = content if isinstance(content, str) else content.decode('utf-8')
         with tempfile.NamedTemporaryFile(mode='w', suffix=suffix, delete=False) as tmp:
             tmp.write(text)
             return tmp.name
 
     def _prepare_ca_bundle(self) -> str:
-        """Write the CA truststore to a temporary PEM file.
-
-        Returns:
-            Path to the temporary CA bundle file.
-
-        Raises:
-            EstClientError: If no truststore is configured.
-        """
+        """Write the CA truststore to a temporary PEM file."""
         if self.context.est_server_truststore is None:
             msg = 'EST server truststore is not configured'
             raise EstClientError(msg)
@@ -173,13 +159,7 @@ class EstClient(LoggerMixin):
         return self._write_temp_pem(ca_pem)
 
     def _prepare_auth(self) -> tuple[tuple[str, str] | None, tuple[str, str] | None, list[str]]:
-        """Prepare authentication parameters for an EST request.
-
-        Returns a 3-tuple of ``(basic_auth, client_cert, temp_files)`` where
-        *temp_files* is a list of paths that must be cleaned up afterwards.
-
-        Client certificate (mTLS) takes priority over username/password.
-        """
+        """Prepare authentication parameters for an EST request."""
         temp_files: list[str] = []
 
         # Prefer mTLS client certificate authentication
@@ -224,6 +204,30 @@ class EstClient(LoggerMixin):
 
         temp_ca_bundle_path = self._prepare_ca_bundle()
         auth, client_cert, auth_temp_files = self._prepare_auth()
+
+        # When using mTLS, also forward the client certificate as an HTTP
+        # header.  In production nginx terminates TLS and sets the
+        # ``SSL_CLIENT_CERT`` header for Django.  The dev server
+        # (``runserver_plus`` / werkzeug) does not do this, so the EST
+        # client explicitly adds the header so the server-side
+        # ``ClientCertificateValidation`` can extract it regardless of the
+        # deployment mode.
+        # The PEM value is URL-encoded (percent-encoded) to avoid illegal
+        # newline characters in the HTTP header value - this mirrors the
+        # nginx ``$ssl_client_cert`` variable behaviour.  The server-side
+        # ``ClientCertificateValidation`` already calls
+        # ``urllib.parse.unquote()`` before parsing the PEM.
+        # NOTE: The header name uses hyphens (``SSL-CLIENT-CERT``) because
+        # werkzeug drops headers whose names contain underscores.  Django's
+        # WSGI layer converts hyphens to underscores, so the header still
+        # arrives as ``HTTP_SSL_CLIENT_CERT`` in ``request.META``.
+        if self.context.est_client_cert_pem:
+            raw_pem = (
+                self.context.est_client_cert_pem
+                if isinstance(self.context.est_client_cert_pem, str)
+                else self.context.est_client_cert_pem.decode('utf-8')
+            )
+            headers['SSL-CLIENT-CERT'] = urllib.parse.quote(raw_pem, safe='')
 
         try:
             response = requests.post(
