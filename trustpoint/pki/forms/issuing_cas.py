@@ -861,6 +861,7 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
             'crl_cycle_enabled',
             'crl_cycle_interval_hours',
             'crl_validity_hours',
+            'auto_crl_on_revocation_enabled',
         ]
 
     crl_cycle_enabled = forms.BooleanField(
@@ -881,6 +882,12 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
         initial=24,
         help_text=_('The validity period in hours for generated CRLs'),
         widget=forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
+    )
+
+    auto_crl_on_revocation_enabled = forms.BooleanField(
+        label=_('Auto-Generate CRL on Revocation'),
+        required=False,
+        help_text=_('Automatically generate a new CRL when a certificate is revoked'),
     )
 
     def clean_crl_cycle_interval_hours(self) -> float:
