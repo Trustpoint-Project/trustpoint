@@ -7,7 +7,7 @@ from typing import Any
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from pki.models import CaModel, CrlModel
+from pki.models import CaModel, CrlModel, RevokedCertificateModel
 
 
 @receiver(post_save, sender=CrlModel)
@@ -58,3 +58,27 @@ def schedule_crl_on_cycle_enable(
     # Check if crl_cycle_enabled was toggled to True
     if update_fields and 'crl_cycle_enabled' in update_fields and instance.crl_cycle_enabled:
         instance.schedule_next_crl_generation()
+
+
+@receiver(post_save, sender=RevokedCertificateModel)
+def schedule_crl_after_revocation(
+    sender: type[RevokedCertificateModel],  # noqa: ARG001
+    instance: RevokedCertificateModel,
+    *,
+    created: bool,
+    **kwargs: Any,  # noqa: ARG001
+) -> None:
+    """Schedule CRL generation after a certificate is revoked.
+
+    Args:
+        sender: The model class.
+        instance: The RevokedCertificateModel instance.
+        created: Whether the instance was created.
+        **kwargs: Additional keyword arguments.
+    """
+    if not created or instance.ca is None:
+        return
+
+    ca = instance.ca
+    if ca.auto_crl_on_revocation_enabled:
+        ca.schedule_next_crl_generation(post_revocation_crl=True)

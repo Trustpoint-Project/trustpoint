@@ -442,16 +442,17 @@ class TestEstAuthorization:
         """Test EST authorization initialization with default components."""
         auth = EstAuthorization()
 
-        # Should have 4 components by default (not 5)
-        assert len(auth.components) == 4
+        # Should have 5 components by default
+        assert len(auth.components) == 5
 
         # Check component types
         component_types = [type(comp).__name__ for comp in auth.components]
         expected_types = [
-            'DomainScopeValidation', 
+            'DomainScopeValidation',
             'CertificateProfileAuthorization',
             'ProtocolAuthorization',
-            'EstOperationAuthorization'
+            'EstOperationAuthorization',
+            'SecurityConfigAuthorization',
         ]
         assert component_types == expected_types
 

@@ -5,6 +5,7 @@ from .base import (
     CompositeAuthorization,
     DomainScopeValidation,
     ProtocolAuthorization,
+    SecurityConfigAuthorization,
 )
 
 
@@ -17,3 +18,4 @@ class ManualAuthorization(CompositeAuthorization):
         self.add(DomainScopeValidation())
         self.add(CertificateProfileAuthorization())
         self.add(ProtocolAuthorization(['manual']))
+        self.add(SecurityConfigAuthorization())

@@ -45,7 +45,9 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         if 'security_mode' in self.data:
             current_mode = self.data['security_mode']
         else:
-            current_mode = self.instance.security_mode if self.instance else SecurityConfig.SecurityModeChoices.LOW
+            current_mode = (
+                self.instance.security_mode if self.instance else SecurityConfig.SecurityModeChoices.BROWNFIELD
+            )
 
         sec_manager = manager.SecurityManager()
         features_not_allowed = sec_manager.get_features_to_disable(current_mode)
@@ -110,6 +112,26 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 return AutoGenPkiKeyAlgorithm(self.instance.auto_gen_pki_key_algorithm)
             return AutoGenPkiKeyAlgorithm.RSA2048
         return AutoGenPkiKeyAlgorithm(form_value)
+
+    def clean(self) -> dict[str, Any]:
+        """Validate that existing data complies with the target security mode."""
+        cleaned_data = cast('dict[str, Any]', super().clean())
+        new_mode = cleaned_data.get('security_mode')
+        if not new_mode or not self.instance or not self.instance.pk:
+            return cleaned_data
+
+        old_mode = self.instance.security_mode
+        # Only validate when moving to a strictly higher (stricter) level.
+        if int(new_mode) <= int(old_mode):
+            return cleaned_data
+
+        violations = self.instance.check_mode_transition(new_mode)
+        if violations:
+            self._violations = violations
+            self._violations_mode_label = SecurityConfig.SecurityModeChoices(new_mode).label
+            msg = ''
+            raise ValidationError(msg, code='policy_violation')
+        return cleaned_data
 
 
 class NotificationConfigForm(forms.ModelForm[NotificationConfig]):

@@ -62,7 +62,7 @@ class AutoGenPkiFeatureTest(TestCase):
         """Set up test fixtures."""
         # Create a SecurityConfig instance
         self.security_config = SecurityConfig.objects.create(
-            security_mode=SecurityConfig.SecurityModeChoices.DEV,
+            security_mode=SecurityConfig.SecurityModeChoices.LAB,
             auto_gen_pki=False,
             auto_gen_pki_key_algorithm=AutoGenPkiKeyAlgorithm.RSA2048,
         )

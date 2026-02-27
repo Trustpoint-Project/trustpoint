@@ -31,7 +31,7 @@ class SecurityManager(LoggerMixin):
         """
         sec_level = self.get_security_level() if target_level is None else target_level
 
-        if sec_level == SecurityConfig.SecurityModeChoices.DEV:
+        if sec_level == SecurityConfig.SecurityModeChoices.LAB:
             return True
 
         # Convert or cast sec_level to actual SecurityModeChoices if needed:
@@ -52,12 +52,12 @@ class SecurityManager(LoggerMixin):
     @classmethod
     def get_features_to_disable(cls, sec_level: str) -> list[SecurityFeature]:
         """Returns a list of features that must be disabled at the given security level."""
-        dev_features = LEVEL_FEATURE_MAP[SecurityConfig.SecurityModeChoices.DEV]
+        lab_features = LEVEL_FEATURE_MAP[SecurityConfig.SecurityModeChoices.LAB]
         level_choice = SecurityConfig.SecurityModeChoices(sec_level)
         valid_features = LEVEL_FEATURE_MAP.get(level_choice, set())
 
         # The difference is the set of features that are NOT allowed at this level.
-        must_disable = dev_features - valid_features
+        must_disable = lab_features - valid_features
         return list(must_disable)
 
     def reset_settings(self, new_sec_mode: str) -> None:
