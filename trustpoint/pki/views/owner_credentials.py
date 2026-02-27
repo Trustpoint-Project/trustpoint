@@ -819,6 +819,65 @@ class OwnerCredentialRequestCertEstView(
     # POST - perform EST enrollment
     # ------------------------------------------------------------------
 
+    def _build_est_context_kwargs(
+        self,
+        owner_credential: OwnerCredentialModel,
+        cert_profile: CertificateProfileModel,
+    ) -> dict[str, Any]:
+        """Build keyword arguments for ``EstCertificateRequestContext``.
+
+        For ``REMOTE_EST`` (no onboarding) → username/password auth,
+        truststore from ``no_onboarding_config``.
+
+        For ``REMOTE_EST_ONBOARDING`` → mTLS with the domain credential,
+        truststore from ``onboarding_config``.
+        """
+        kwargs: dict[str, Any] = {
+            'operation': 'simpleenroll',
+            'protocol': 'est',
+            'domain': None,
+            'cert_profile_str': 'dev_owner_id',
+            'certificate_profile_model': cert_profile,
+            'allow_ca_certificate_request': True,
+            'est_server_host': owner_credential.remote_host,
+            'est_server_port': owner_credential.remote_port,
+            'est_server_path': owner_credential.remote_path,
+        }
+
+        is_onboarding = (
+            owner_credential.owner_credential_type
+            == OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING
+        )
+
+        if is_onboarding:
+            onboarding_config = owner_credential.onboarding_config
+            kwargs['est_server_truststore'] = onboarding_config.trust_store if onboarding_config else None
+
+            # Use the most recent valid domain credential for mTLS
+            domain_cred_issued = owner_credential.domain_credential
+            if domain_cred_issued is None or domain_cred_issued.credential is None:
+                msg = _(
+                    'No domain credential found for this owner credential. '
+                    'Please issue a domain credential first.'
+                )
+                raise ValueError(msg)
+            dc = domain_cred_issued.credential
+            if dc.certificate is None:
+                msg = _(
+                    'The domain credential has no certificate. '
+                    'Please issue a domain credential first.'
+                )
+                raise ValueError(msg)
+            kwargs['est_client_cert_pem'] = dc.certificate.cert_pem
+            kwargs['est_client_key_pem'] = dc.private_key
+        else:
+            no_onboarding = owner_credential.no_onboarding_config
+            kwargs['est_username'] = owner_credential.est_username
+            kwargs['est_password'] = no_onboarding.est_password if no_onboarding else None
+            kwargs['est_server_truststore'] = no_onboarding.trust_store if no_onboarding else None
+
+        return kwargs
+
     def _perform_est_enrollment(
         self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]
     ) -> None:
@@ -841,21 +900,9 @@ class OwnerCredentialRequestCertEstView(
 
         signing_credential = pending_issued.credential  # CredentialModel (key-only so far)
 
-        no_onboarding = owner_credential.no_onboarding_config
-        context = EstCertificateRequestContext(
-            operation='simpleenroll',
-            protocol='est',
-            domain=None,
-            cert_profile_str='dev_owner_id',
-            certificate_profile_model=cert_profile,
-            allow_ca_certificate_request=True,
-            est_server_host=owner_credential.remote_host,
-            est_server_port=owner_credential.remote_port,
-            est_server_path=owner_credential.remote_path,
-            est_username=owner_credential.est_username,
-            est_password=no_onboarding.est_password if no_onboarding else None,
-            est_server_truststore=no_onboarding.trust_store if no_onboarding else None,
-        )
+        # Build EST context with authentication based on the owner credential type
+        est_kwargs = self._build_est_context_kwargs(owner_credential, cert_profile)
+        context = EstCertificateRequestContext(**est_kwargs)
         context.request_data = self._build_request_data(cert_content_data)
         context.owner_credential = signing_credential  # used by EstDeviceCsrSignProcessor
 
@@ -969,7 +1016,8 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
     """Step 1 - Define the certificate content for a new Domain Credential EST enrollment.
 
     Only available for REMOTE_EST_ONBOARDING owner credentials.
-    Uses the ``devownerid_domain_credential`` certificate profile.
+    The user can select any available certificate profile via a dropdown.
+    Defaults to ``devownerid_domain_credential`` when present.
     """
 
     form_class = CertificateIssuanceForm
@@ -1020,13 +1068,38 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
         return IssuedCredentialModel.objects.create(
             common_name=self.owner_credential.unique_name,
             issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
-            issued_using_cert_profile='devownerid_domain_credential',
+            issued_using_cert_profile=self.cert_profile.unique_name,
             credential=credential_model,
             owner_credential=self.owner_credential,
         )
 
+    def _resolve_cert_profile(self, request: HttpRequest) -> CertificateProfileModel | None:
+        """Resolve the certificate profile from the request query parameter or fall back to the default.
+
+        Returns the resolved profile, or ``None`` if no profiles are available.
+        """
+        all_profiles = list(CertificateProfileModel.objects.all().order_by('display_name', 'unique_name'))
+        if not all_profiles:
+            return None
+        self.available_profiles = all_profiles
+
+        selected_pk_str = request.GET.get('cert_profile_pk') or request.POST.get('cert_profile_pk')
+        if selected_pk_str:
+            try:
+                selected_pk = int(selected_pk_str)
+                for profile in all_profiles:
+                    if profile.pk == selected_pk:
+                        return profile
+            except (ValueError, TypeError):
+                pass
+
+        for profile in all_profiles:
+            if profile.unique_name == 'devownerid_domain_credential':
+                return profile
+        return all_profiles[0]
+
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Resolve the OwnerCredentialModel and the devownerid_domain_credential profile."""
+        """Resolve the OwnerCredentialModel and the selected certificate profile."""
         self.owner_credential = get_object_or_404(OwnerCredentialModel, pk=kwargs['pk'])
 
         if (
@@ -1036,14 +1109,14 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
             messages.error(request, _('Domain credentials are only available for EST onboarding configurations.'))
             return redirect('pki:owner_credentials-clm', pk=self.owner_credential.pk)
 
-        try:
-            self.cert_profile = CertificateProfileModel.objects.get(unique_name='devownerid_domain_credential')
-        except CertificateProfileModel.DoesNotExist:
+        resolved_profile = self._resolve_cert_profile(request)
+        if resolved_profile is None:
             messages.error(
                 request,
-                _('Certificate profile "devownerid_domain_credential" not found. Please create it first.'),
+                _('No certificate profiles found. Please create one first.'),
             )
             return redirect('pki:owner_credentials-clm', pk=self.owner_credential.pk)
+        self.cert_profile = resolved_profile
 
         session_key = self._pending_session_key(self.owner_credential)
         existing_pk = (request.session.get(session_key) or {}).get('issued_credential_pk')
@@ -1072,10 +1145,11 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
         return kwargs
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add owner credential and profile to template context."""
+        """Add owner credential, profile and profile list to template context."""
         context = super().get_context_data(**kwargs)
         context['owner_credential'] = self.owner_credential
         context['cert_profile'] = self.cert_profile
+        context['available_profiles'] = self.available_profiles
         return context
 
     def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
@@ -1086,10 +1160,11 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
         return super().form_invalid(form)
 
     def form_valid(self, form: CertificateIssuanceForm) -> HttpResponse:
-        """Store certificate content and pending credential pk in session, then proceed to Step 2."""
+        """Store certificate content, selected profile and pending credential pk in session."""
         session_key = self._pending_session_key(self.owner_credential)
         session_data = dict(form.cleaned_data)
         session_data['issued_credential_pk'] = self.pending_issued.pk
+        session_data['cert_profile_unique_name'] = self.cert_profile.unique_name
         self.request.session[session_key] = session_data
         messages.success(
             self.request,
@@ -1198,10 +1273,10 @@ class OwnerCredentialRequestDomainCredentialEstView(
         else:
             context['has_cert_content'] = False
             context['cert_content_summary'] = None
+
+        profile_name = (cert_content_data or {}).get('cert_profile_unique_name', 'devownerid_domain_credential')
         try:
-            context['cert_profile'] = CertificateProfileModel.objects.get(
-                unique_name='devownerid_domain_credential'
-            )
+            context['cert_profile'] = CertificateProfileModel.objects.get(unique_name=profile_name)
         except CertificateProfileModel.DoesNotExist:
             context['cert_profile'] = None
 
@@ -1220,7 +1295,8 @@ class OwnerCredentialRequestDomainCredentialEstView(
         """
         from cryptography.hazmat.primitives import serialization  # noqa: PLC0415
 
-        cert_profile = CertificateProfileModel.objects.get(unique_name='devownerid_domain_credential')
+        profile_name = cert_content_data.get('cert_profile_unique_name', 'devownerid_domain_credential')
+        cert_profile = CertificateProfileModel.objects.get(unique_name=profile_name)
 
         pending_issued = self._get_pending_issued(owner_credential, cert_content_data)
         if pending_issued.credential is None:
@@ -1234,7 +1310,7 @@ class OwnerCredentialRequestDomainCredentialEstView(
             operation='simpleenroll',
             protocol='est',
             domain=None,
-            cert_profile_str='devownerid_domain_credential',
+            cert_profile_str=profile_name,
             certificate_profile_model=cert_profile,
             allow_ca_certificate_request=False,
             est_server_host=owner_credential.remote_host,
@@ -1278,7 +1354,8 @@ class OwnerCredentialRequestDomainCredentialEstView(
 
         cn = cert_model.common_name or owner_credential.unique_name
         pending_issued.common_name = cn
-        pending_issued.save(update_fields=['common_name'])
+        pending_issued.issued_using_cert_profile = profile_name
+        pending_issued.save(update_fields=['common_name', 'issued_using_cert_profile'])
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Perform the EST enrollment and redirect to the CLM view."""
@@ -1311,7 +1388,11 @@ class OwnerCredentialRequestDomainCredentialEstView(
                 'pki:owner_credentials-define-cert-content-domain-credential-est', pk=owner_credential.pk
             )
         except CertificateProfileModel.DoesNotExist:
-            messages.error(request, _('Certificate profile "devownerid_domain_credential" not found.'))
+            profile_name = (cert_content_data or {}).get('cert_profile_unique_name', 'devownerid_domain_credential')
+            messages.error(
+                request,
+                _('Certificate profile "{name}" not found.').format(name=profile_name),
+            )
             return redirect('pki:owner_credentials-clm', pk=owner_credential.pk)
         except EstClientError as exc:
             self.logger.exception('EST client error during Domain Credential enrollment')

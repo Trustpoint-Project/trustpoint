@@ -65,7 +65,7 @@ REMOTE_HOST = 'localhost'
 REMOTE_PORT = 443
 REMOTE_PATH_DEV_OWNER_ID = f'/.well-known/est/{DOMAIN_UNIQUE_NAME}/dev_owner_id/simpleenroll'
 REMOTE_PATH_DOMAIN_CREDENTIAL = (
-    f'/.well-known/est/{DOMAIN_UNIQUE_NAME}/devownerid_domain_credential/simpleenroll'
+    f'/.well-known/est/{DOMAIN_UNIQUE_NAME}/domain_credential/simpleenroll'
 )
 KEY_TYPE = 'RSA-2048'
 

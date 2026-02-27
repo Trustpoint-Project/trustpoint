@@ -38,6 +38,10 @@
                         <a href="{% url 'pki:truststore-detail' pk=owner_credential.no_onboarding_config.trust_store.pk %}">
                             {{ owner_credential.no_onboarding_config.trust_store.unique_name }}
                         </a>
+                    {% elif owner_credential.onboarding_config.trust_store %}
+                        <a href="{% url 'pki:truststore-detail' pk=owner_credential.onboarding_config.trust_store.pk %}">
+                            {{ owner_credential.onboarding_config.trust_store.unique_name }}
+                        </a>
                     {% else %}
                         <span class="text-muted">{% trans 'Not configured' %}</span>
                     {% endif %}
