@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 
 from cryptography.hazmat.primitives import hashes
 from django import forms
@@ -263,7 +263,7 @@ class OwnerCredentialTruststoreAssociationForm(forms.Form):
         self.instance: OwnerCredentialModel = kwargs.pop('instance')
         super().__init__(*args, **kwargs)
 
-        trust_store_field: forms.ModelChoiceField[Any] = self.trust_store
+        trust_store_field = cast('forms.ModelChoiceField[Any]', self.fields['trust_store'])
         trust_store_field.queryset = TruststoreModel.objects.filter(
             intended_usage=TruststoreModel.IntendedUsage.TLS
         )
