@@ -77,9 +77,8 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         """
         self.get_response = get_response
 
-        self.NOT_ALLOWED_WIZARD_COMPLETED_PATH_PREFIXES = (
-            '/setup-wizard',
-        )
+        self.SETUP_WIZARD_PATH = '/setup-wizard'
+        self.SETUP_WIZARD_REDIRECT = reverse('setup_wizard:index')
         self.NOT_ALLOWED_WIZARD_COMPLETED_PATH_PREFIXES_REDIRECT_PATH = reverse('home:index')
 
         self.ALLOWED_NO_USER_EXISTS_WIZARD_NOT_COMPLETED_PATHS = (
@@ -118,25 +117,34 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
             A redirect response when access is not allowed, otherwise the normal
             downstream response.
         """
+        self.logger.critical(f'Docker: {settings.DOCKER_CONTAINER}')
+        if not settings.DOCKER_CONTAINER and request.path_info.startswith(self.SETUP_WIZARD_PATH):
+            return redirect('users:login', permanent=False)
+
+        if not settings.DOCKER_CONTAINER:
+            return self.get_response(request)
+
         self.logger.critical('SetupWizardRedirectMiddleware')
         # setup_wizard_completed = SetupWizardCompletedModel.setup_wizard_completed
         setup_wizard_completed = False
-        self.logger.critical(setup_wizard_completed)
+        self.logger.critical(f'Wizard completed: {setup_wizard_completed}')
+
+        if setup_wizard_completed is False and not request.path_info.startswith(self.SETUP_WIZARD_PATH):
+            return redirect(self.SETUP_WIZARD_REDIRECT)
 
         if setup_wizard_completed and request.path_info.startswith(self.NOT_ALLOWED_WIZARD_COMPLETED_PATH_PREFIXES):
             return redirect(self.NOT_ALLOWED_WIZARD_COMPLETED_PATH_PREFIXES_REDIRECT_PATH)
 
-        self.logger.critical('here')
         users_exist = get_user_model().objects.exists()
-        self.logger.critical('there')
-        self.logger.critical(users_exist)
+        self.logger.critical(f'User exists: {users_exist}')
         if not setup_wizard_completed \
                 and not users_exist \
                 and request.path_info not in self.ALLOWED_NO_USER_EXISTS_WIZARD_NOT_COMPLETED_PATHS:
             self.logger.critical(f'returning: {self.ALLOWED_NO_USER_EXISTS_WIZARD_NOT_COMPLETED_REDIRECT_PATH}')
             return redirect(self.ALLOWED_NO_USER_EXISTS_WIZARD_NOT_COMPLETED_REDIRECT_PATH)
-        self.logger.critical('nope')
+
         authenticated = request.user.is_authenticated
+        self.logger.critical(f'User authenticated: {authenticated}')
 
         if not setup_wizard_completed \
                 and not authenticated \
