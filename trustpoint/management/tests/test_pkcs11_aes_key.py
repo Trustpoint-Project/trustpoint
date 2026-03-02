@@ -83,22 +83,7 @@ class TestPkcs11AESKey:
             assert aes_key._token == mock_token
             assert aes_key._session == mock_session
 
-    # def test_initialize_with_slot_id(self) -> None:
-    #     """Test _initialize method with specific slot_id."""
-    #     mock_session = Mock()
-    #     mock_token = Mock()
-    #     mock_token.open.return_value = mock_session
-    #     mock_lib = Mock()
-    #     mock_lib.get_token.return_value = mock_token
-    #
-    #     with patch('pkcs11.lib', return_value=mock_lib):
-    #         aes_key = Pkcs11AESKey('/path/to/lib.so', 'test_token', '1234', 'test_aes_key')
-    #         # Set slot_id before initialization
-    #         object.__setattr__(aes_key, '_slot_id', 5)
-    #
-    #         aes_key._initialize()
-    #
-    #         mock_lib.get_token.assert_called_once_with(token_label='test_token', slot_id=5)
+
 
     def test_lazy_initialization_on_load_key(self) -> None:
         """Test that initialization happens lazily when load_key is called."""
