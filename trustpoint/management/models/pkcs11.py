@@ -52,7 +52,7 @@ class PKCS11Token(models.Model, LoggerMixin):
     )
     module_path = models.CharField(
         max_length=255,
-        default='/usr/local/lib/libpkcs11-proxy.so',
+        default='/usr/lib/libpkcs11-proxy.so',
         help_text=_('Path to PKCS#11 module library'),
         verbose_name=_('Module Path')
     )
