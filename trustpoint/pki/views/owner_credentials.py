@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from cryptography import x509
 from django.contrib import messages
@@ -555,7 +555,7 @@ class OwnerCredentialDefineCertContentEstView(
 
     form_class = CertificateIssuanceForm
     template_name = 'pki/owner_credentials/define_cert_content_est.html'
-    available_profiles: ClassVar[list[CertificateProfileModel]] = []
+    available_profiles: list[CertificateProfileModel]
 
     def _pending_session_key(self, owner_credential: OwnerCredentialModel) -> str:
         return f'dev_owner_id_cert_content_{owner_credential.pk}'
@@ -1053,6 +1053,7 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
 
     form_class = CertificateIssuanceForm
     template_name = 'pki/owner_credentials/define_cert_content_domain_credential_est.html'
+    available_profiles: list[CertificateProfileModel]
 
     def _pending_session_key(self, owner_credential: OwnerCredentialModel) -> str:
         return f'domain_credential_cert_content_{owner_credential.pk}'
