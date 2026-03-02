@@ -49,7 +49,7 @@ class DashboardView(SortableTableMixin[NotificationModel], ListView[Notification
 
     template_name = 'home/dashboard.html'
     model = NotificationModel
-    context_object_name = 'notifications'
+    context_object_name = 'management'
     default_sort_param = '-created_at'
     paginate_by = UIConfig.notifications_paginate_by
 
@@ -102,9 +102,9 @@ class DashboardView(SortableTableMixin[NotificationModel], ListView[Notification
         """
         context = super().get_context_data(**kwargs)
 
-        for notification in context['notifications']:
-            notification.type_badge = self._render_notification_type(notification)
-            notification.created = self._render_created_at(notification)
+        #or notification in context['notifications']:
+        #notification.type_badge = self._render_notification_type(notification)
+        #notification.created = self._render_created_at(notification)
 
         context['page_category'] = 'home'
         context['page_name'] = 'dashboard'

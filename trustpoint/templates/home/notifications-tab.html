@@ -6,7 +6,7 @@
         <div class="row d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center">
                 <h1 class="mb-0">{% trans 'Notifications' %}</h1>
-                <a href="{% url 'notifications:refresh_notifications' %}" class="btn refresh-notifications-button ms-3">
+                <a href="{% url 'management:refresh_notifications' %}" class="btn refresh-notifications-button ms-3">
                     <span class="ms-2">{% trans 'Refresh Notifications' %}</span>
                 </a>
             </div>
@@ -141,7 +141,7 @@
                                class="btn btn-link text-body p-0 me-2" title="{% trans 'Details' %}">
                                 <i class="bi bi-info-square fs-5"></i>
                             </a>
-                            <a href="{% url 'notifications:notification_delete' notification.id %}"
+                            <a href="{% url 'management:notification_delete' notification.id %}"
                                class="btn btn-link text-body p-0" title="{% trans 'Delete' %}">
                                 <i class="bi bi-trash fs-5"></i>
                             </a>
