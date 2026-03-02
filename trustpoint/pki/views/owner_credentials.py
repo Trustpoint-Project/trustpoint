@@ -1104,10 +1104,7 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
         )
 
     def _resolve_cert_profile(self, request: HttpRequest) -> CertificateProfileModel | None:
-        """Resolve the certificate profile from the request query parameter or fall back to the default.
-
-        Returns the resolved profile, or ``None`` if no profiles are available.
-        """
+        """Resolve the certificate profile from the request query parameter or fall back to the default."""
         all_profiles = list(CertificateProfileModel.objects.all().order_by('display_name', 'unique_name'))
         if not all_profiles:
             return None
