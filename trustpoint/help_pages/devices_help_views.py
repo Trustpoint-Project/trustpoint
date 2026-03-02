@@ -438,8 +438,7 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
         operation = 'simpleenroll'
         base = help_context.host_est_path
 
-        def _get_enroll_path(cert_profile_name: str) -> str:
-            return f'{base}/{cert_profile_name}/{operation}'
+
 
         summary = HelpSection(
             _non_lazy('Summary'),
