@@ -67,7 +67,7 @@ if BUILD_AUTODOCS:
         '*/migrations/*',
         '*/__pycache__/*',
     ]  # Exclude features, tests, and related folders from AutoAPI
-    
+
     # AutoAPI performance optimizations
     autoapi_options = [
         'members',
