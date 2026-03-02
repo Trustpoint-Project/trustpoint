@@ -439,7 +439,6 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
         base = help_context.host_est_path
 
 
-
         summary = HelpSection(
             _non_lazy('Summary'),
             [
