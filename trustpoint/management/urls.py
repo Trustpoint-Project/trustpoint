@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, help_support, key_storage, logging, notifications, settings, tls
+from .views import IndexView, backup, help_support, key_storage, logging, notifications, settings, tls, user_management
 
 app_name = 'management'
 urlpatterns = [
@@ -65,4 +65,6 @@ urlpatterns = [
     path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
     path('notifications/refresh/', notifications.RefreshNotificationsView.as_view(), name='refresh_notifications'),
     path('notifications/<int:pk>/delete/', notifications.NotificationDeleteView.as_view(), name='notification_delete'),
+    #path('user_management/', user_management.user, name='user_management')
+
 ]
