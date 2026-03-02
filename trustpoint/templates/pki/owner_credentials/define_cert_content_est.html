@@ -12,9 +12,26 @@
         <div class="card-body">
             <div class="tp-card-centered-content">
                 {% csrf_token %}
+                <input type="hidden" name="cert_profile_pk" value="{{ cert_profile.pk }}">
                 {% for error in form.non_field_errors %}
                     <li>{{ error }}</li>
                 {% endfor %}
+                <h2>{% trans 'Certificate Profile' %}</h2>
+                <hr class="hr-m">
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>{% trans 'Profile' %}</div>
+                        <div>
+                            <select id="id_cert_profile_select" class="form-select">
+                                {% for profile in available_profiles %}
+                                    <option value="{{ profile.pk }}" {% if profile.pk == cert_profile.pk %}selected{% endif %}>
+                                        {{ profile.display_name|default:profile.unique_name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
                 {% if form.fields %}
                     <h2>{% trans 'Subject' %}</h2>
                     <hr class="hr-m">
@@ -79,4 +96,13 @@
         </div>
     </form>
 </div>
+
+<script>
+    document.getElementById('id_cert_profile_select').addEventListener('change', function() {
+        const selectedPk = this.value;
+        const url = new URL(window.location.href);
+        url.searchParams.set('cert_profile_pk', selectedPk);
+        window.location.href = url.toString();
+    });
+</script>
 {% endblock content %}

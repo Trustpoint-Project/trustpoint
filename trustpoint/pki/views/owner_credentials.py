@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from cryptography import x509
 from django.contrib import messages
@@ -548,13 +548,14 @@ class OwnerCredentialDefineCertContentEstView(
     created.  Its primary key is stored in the session together with the
     certificate content so that Step 2 can fetch exactly this credential.
 
-    Loads the ``dev_owner_id`` certificate profile, renders the
+    Loads the selected certificate profile (defaulting to ``dev_owner_id``), renders the
     :class:`~pki.forms.CertificateIssuanceForm`, and stores the validated
     field values in the session under ``dev_owner_id_cert_content_<pk>``.
     """
 
     form_class = CertificateIssuanceForm
     template_name = 'pki/owner_credentials/define_cert_content_est.html'
+    available_profiles: ClassVar[list[CertificateProfileModel]] = []
 
     def _pending_session_key(self, owner_credential: OwnerCredentialModel) -> str:
         return f'dev_owner_id_cert_content_{owner_credential.pk}'
@@ -614,27 +615,53 @@ class OwnerCredentialDefineCertContentEstView(
         return RemoteIssuedCredentialModel.objects.create(
             common_name=self.owner_credential.unique_name,
             issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
-            issued_using_cert_profile='dev_owner_id',
+            issued_using_cert_profile=self.cert_profile.unique_name,
             credential=credential_model,
             owner_credential=self.owner_credential,
         )
 
+    def _resolve_cert_profile(self, request: HttpRequest) -> CertificateProfileModel | None:
+        """Resolve the certificate profile from the request query parameter or fall back to the default.
+
+        Returns the resolved profile, or ``None`` if no profiles are available.
+        """
+        all_profiles = list(CertificateProfileModel.objects.all().order_by('display_name', 'unique_name'))
+        if not all_profiles:
+            return None
+        self.available_profiles = all_profiles
+
+        selected_pk_str = request.GET.get('cert_profile_pk') or request.POST.get('cert_profile_pk')
+        if selected_pk_str:
+            try:
+                selected_pk = int(selected_pk_str)
+                for profile in all_profiles:
+                    if profile.pk == selected_pk:
+                        return profile
+            except (ValueError, TypeError):
+                pass
+
+        for profile in all_profiles:
+            if profile.unique_name == 'dev_owner_id':
+                return profile
+        return all_profiles[0]
+
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Resolve the OwnerCredentialModel and the dev_owner_id certificate profile.
+        """Resolve the OwnerCredentialModel and the selected certificate profile.
 
         On each visit a fresh key-only RemoteIssuedCredentialModel is created.  If there
         is already a pending (certificate-less) credential from a previous visit its
         pk is reused so we do not accumulate orphan credentials.
         """
         self.owner_credential = get_object_or_404(OwnerCredentialModel, pk=kwargs['pk'])
-        try:
-            self.cert_profile = CertificateProfileModel.objects.get(unique_name='dev_owner_id')
-        except CertificateProfileModel.DoesNotExist:
+
+        resolved_profile = self._resolve_cert_profile(request)
+        if resolved_profile is None:
             messages.error(
                 request,
-                _('Certificate profile "dev_owner_id" not found. Please create it first.'),
+                _('No certificate profiles found. Please create one first.'),
             )
             return redirect('pki:owner_credentials-clm', pk=self.owner_credential.pk)
+        self.cert_profile = resolved_profile
 
         # Reuse an existing pending (certificate-less) credential if one exists,
         # otherwise generate a fresh key pair and create a new one.
@@ -668,10 +695,11 @@ class OwnerCredentialDefineCertContentEstView(
         return kwargs
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add owner credential and profile to template context."""
+        """Add owner credential, profile and profile list to template context."""
         context = super().get_context_data(**kwargs)
         context['owner_credential'] = self.owner_credential
         context['cert_profile'] = self.cert_profile
+        context['available_profiles'] = self.available_profiles
         return context
 
     def form_invalid(self, form: CertificateIssuanceForm) -> HttpResponse:
@@ -686,6 +714,7 @@ class OwnerCredentialDefineCertContentEstView(
         session_key = self._pending_session_key(self.owner_credential)
         session_data = dict(form.cleaned_data)
         session_data['issued_credential_pk'] = self.pending_issued.pk
+        session_data['cert_profile_unique_name'] = self.cert_profile.unique_name
         self.request.session[session_key] = session_data
         messages.success(
             self.request,
@@ -808,8 +837,9 @@ class OwnerCredentialRequestCertEstView(
         else:
             context['has_cert_content'] = False
             context['cert_content_summary'] = None
+        profile_name = (cert_content_data or {}).get('cert_profile_unique_name', 'dev_owner_id')
         try:
-            context['cert_profile'] = CertificateProfileModel.objects.get(unique_name='dev_owner_id')
+            context['cert_profile'] = CertificateProfileModel.objects.get(unique_name=profile_name)
         except CertificateProfileModel.DoesNotExist:
             context['cert_profile'] = None
         return context
@@ -835,7 +865,7 @@ class OwnerCredentialRequestCertEstView(
             'operation': 'simpleenroll',
             'protocol': 'est',
             'domain': None,
-            'cert_profile_str': 'dev_owner_id',
+            'cert_profile_str': cert_profile.unique_name,
             'certificate_profile_model': cert_profile,
             'allow_ca_certificate_request': True,
             'est_server_host': owner_credential.remote_host,
@@ -887,7 +917,8 @@ class OwnerCredentialRequestCertEstView(
         """
         from cryptography.hazmat.primitives import serialization  # noqa: PLC0415
 
-        cert_profile = CertificateProfileModel.objects.get(unique_name='dev_owner_id')
+        profile_name = cert_content_data.get('cert_profile_unique_name', 'dev_owner_id')
+        cert_profile = CertificateProfileModel.objects.get(unique_name=profile_name)
 
         # Fetch the specific pending IssuedCredentialModel created in Step 1.
         # We use the pk stored in the session to avoid ambiguity when multiple
