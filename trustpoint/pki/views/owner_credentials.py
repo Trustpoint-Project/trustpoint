@@ -638,6 +638,7 @@ class OwnerCredentialDefineCertContentEstView(
                     if profile.pk == selected_pk:
                         return profile
             except (ValueError, TypeError):
+                # Ignore invalid cert_profile_pk values and fall back to the default profile selection.
                 pass
 
         for profile in all_profiles:
@@ -1118,6 +1119,7 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
                     if profile.pk == selected_pk:
                         return profile
             except (ValueError, TypeError):
+                # Ignore invalid cert_profile_pk values and fall back to the default profile selection.
                 pass
 
         for profile in all_profiles:

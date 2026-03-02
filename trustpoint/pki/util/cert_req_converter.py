@@ -152,16 +152,13 @@ class JSONCertRequestConverter:
     @staticmethod
     def _ext_from_json(  # noqa: C901
         json: dict[str, Any],
-        builder: x509.CertificateBuilder,
-        *,
-        allow_ca_cert: bool = False
-    ) -> x509.CertificateBuilder:
+        builder: x509.CertificateBuilder
+        ) -> x509.CertificateBuilder:
         """Processes JSON data to add X.509 certificate extensions to a CertificateBuilder.
 
         Args:
             json: JSON dictionary containing extension data
             builder: Certificate builder to add extensions to
-            allow_ca_cert: Whether to allow CA certificate requests (use for legitimate CA cert enrollment)
 
         Returns:
             Updated certificate builder with extensions added
@@ -246,12 +243,11 @@ class JSONCertRequestConverter:
         )
 
     @staticmethod
-    def from_json(json: dict[str, Any], *, allow_ca_cert: bool = False) -> x509.CertificateBuilder:
+    def from_json(json: dict[str, Any]) -> x509.CertificateBuilder:
         """Convert a JSON request dict to a CertificateBuilder.
 
         Args:
             json: JSON dictionary containing certificate request data
-            allow_ca_cert: Whether to allow CA certificate requests (use for legitimate CA cert enrollment)
 
         Returns:
             Certificate builder with all data from JSON applied
@@ -260,7 +256,7 @@ class JSONCertRequestConverter:
 
         builder = JSONCertRequestConverter._subject_from_json(json, x509.CertificateBuilder())
 
-        builder = JSONCertRequestConverter._ext_from_json(json, builder, allow_ca_cert=allow_ca_cert)
+        builder = JSONCertRequestConverter._ext_from_json(json, builder)
 
         return JSONCertRequestConverter._validity_from_json(json, builder)
 
