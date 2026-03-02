@@ -543,14 +543,14 @@ class TestOpcUaGdsPushCertificateLifecycleManagementSummaryView:
 
 @pytest.mark.django_db
 class TestIssuedCredentialRevocationView:
-    """Test the revocation error messages using mocks."""
+    """Test the revocation error messages if tried to revoke revoked cert."""
 
     def test_revoke_already_revoked_certificate_coverage(
             self,
             admin_client: Client,
             device_instance: dict[str, Any]
     ) -> None:
-        """Mocks the certificate status to REVOKED to hit the error message coverage."""
+        """Mocks the certificate status to REVOKED to hit the error message."""
         device = device_instance['device']
 
         url = reverse('devices:devices_credential_revoke', kwargs={'pk': 1})
