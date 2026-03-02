@@ -539,7 +539,6 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
         return keyless_ca
 
     @classmethod
-    @classmethod
     def _validate_ca_certificate(cls, ca_cert: x509.Certificate) -> None:
         """Validate that the certificate is suitable for use as a CA.
 
