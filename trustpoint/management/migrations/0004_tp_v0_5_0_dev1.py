@@ -27,14 +27,4 @@ class Migration(migrations.Migration):
             name='statuses',
             field=models.ManyToManyField(related_name='notifications', to='management.notificationstatus'),
         ),
-        migrations.AddField(
-            model_name='notificationconfig',
-            name='weak_ecc_curves',
-            field=models.ManyToManyField(blank=True, help_text='Select ECC curves considered weak or deprecated.', to='management.weakecccurve'),
-        ),
-        migrations.AddField(
-            model_name='notificationconfig',
-            name='weak_signature_algorithms',
-            field=models.ManyToManyField(blank=True, help_text='Select signature algorithms considered weak or deprecated.', to='management.weaksignaturealgorithm'),
-        ),
     ]

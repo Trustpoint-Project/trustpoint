@@ -38,9 +38,9 @@ class Command(BaseCommand):
             'check_issuing_ca_validity',
             'check_domain_issuing_ca',
             'check_non_onboarded_devices',
-            'check_for_weak_signature_algorithms',
+            'check_for_not_permitted_signature_algorithms',
             'check_for_insufficient_key_length',
-            'check_for_weak_ecc_curves',
+            'check_for_not_permitted_ecc_curves',
         ]
 
         failed_commands = []

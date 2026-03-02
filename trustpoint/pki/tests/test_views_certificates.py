@@ -131,7 +131,7 @@ class TestIssuingCaCertificateDownloadView:
     def test_download_certificate_as_pem(self, rf: RequestFactory, admin_user, issuing_ca_instance):
         """Test downloading certificate as PEM."""
         issuing_ca = issuing_ca_instance['issuing_ca']
-        cert_obj = issuing_ca_instance['cert']
+
         
         # Use the certificate from the issuing CA
         cert_model = issuing_ca.credential.certificate
@@ -168,7 +168,7 @@ class TestCertificateDownloadView:
     def test_download_summary_without_format(self, client, admin_user, issuing_ca_instance):
         """Test that download summary is displayed when no format is provided."""
         issuing_ca = issuing_ca_instance['issuing_ca']
-        cert_obj = issuing_ca_instance['cert']
+
         
         # Use the certificate from the issuing CA
         cert_model = issuing_ca.credential.certificate
@@ -182,7 +182,7 @@ class TestCertificateDownloadView:
     def test_download_certificate_pem(self, rf: RequestFactory, admin_user, issuing_ca_instance):
         """Test downloading certificate in PEM format."""
         issuing_ca = issuing_ca_instance['issuing_ca']
-        cert_obj = issuing_ca_instance['cert']
+
         
         # Use the certificate from the issuing CA
         cert_model = issuing_ca.credential.certificate
@@ -203,7 +203,7 @@ class TestCertificateDownloadView:
     def test_download_certificate_der(self, rf: RequestFactory, admin_user, issuing_ca_instance):
         """Test downloading certificate in DER format."""
         issuing_ca = issuing_ca_instance['issuing_ca']
-        cert_obj = issuing_ca_instance['cert']
+
         
         # Use the certificate from the issuing CA
         cert_model = issuing_ca.credential.certificate
@@ -223,7 +223,7 @@ class TestCertificateDownloadView:
     def test_download_with_custom_filename(self, rf: RequestFactory, admin_user, issuing_ca_instance):
         """Test downloading with custom filename."""
         issuing_ca = issuing_ca_instance['issuing_ca']
-        cert_obj = issuing_ca_instance['cert']
+
         
         # Use the certificate from the issuing CA
         cert_model = issuing_ca.credential.certificate
@@ -242,7 +242,7 @@ class TestCertificateDownloadView:
     def test_download_uses_common_name_for_filename(self, rf: RequestFactory, admin_user, issuing_ca_instance):
         """Test that common name is used for filename when available."""
         issuing_ca = issuing_ca_instance['issuing_ca']
-        cert_obj = issuing_ca_instance['cert']
+
         
         # Use the certificate from the issuing CA
         cert_model = issuing_ca.credential.certificate
@@ -262,8 +262,7 @@ class TestCertificateDownloadView:
     def test_download_invalid_format_raises_404(self, rf: RequestFactory, admin_user, issuing_ca_instance):
         """Test that invalid format raises Http404."""
         issuing_ca = issuing_ca_instance['issuing_ca']
-        cert_obj = issuing_ca_instance['cert']
-        
+
         # Use the certificate from the issuing CA
         cert_model = issuing_ca.credential.certificate
         
@@ -294,7 +293,7 @@ class TestCertificateMultipleDownloadView:
     def test_get_context_data_includes_pks_path(self, rf: RequestFactory, admin_user, issuing_ca_instance):
         """Test that pks_path is included in context data."""
         issuing_ca = issuing_ca_instance['issuing_ca']
-        cert_obj = issuing_ca_instance['cert']
+
         
         # Use the certificate from the issuing CA
         cert1 = issuing_ca.credential.certificate

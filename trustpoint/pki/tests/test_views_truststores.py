@@ -213,7 +213,7 @@ class TestTruststoreCreateView:
         view = TruststoreCreateView()
         request = factory.get(path)
         view.setup(request)
-        response = view.dispatch(request)
+        view.dispatch(request)
         assert view.for_devid == expected_for_devid
 
 

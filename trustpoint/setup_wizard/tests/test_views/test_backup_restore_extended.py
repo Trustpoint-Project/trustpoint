@@ -34,7 +34,7 @@ class TestBackupRestoreViewPost:
         with patch.object(self.view, '_handle_invalid_form') as mock_invalid:
             mock_invalid.return_value = Mock(status_code=302, url='/login/')
             
-            response = self.view.post(request)
+            self.view.post(request)
             
             mock_invalid.assert_called_once()
 

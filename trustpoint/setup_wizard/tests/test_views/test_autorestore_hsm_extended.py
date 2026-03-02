@@ -155,7 +155,7 @@ class TestAutoRestoreHsmSetupViewDispatch:
         with patch('django.views.generic.FormView.dispatch') as mock_parent:
             mock_parent.return_value = Mock(status_code=200)
             
-            response = self.view.dispatch(request, hsm_type='softhsm')
+            self.view.dispatch(request, hsm_type='softhsm')
             
             mock_parent.assert_called_once()
 

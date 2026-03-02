@@ -14,6 +14,6 @@ uv run python manage.py check_certificate_validity
 uv run python manage.py check_issuing_ca_validity
 uv run python manage.py check_domain_issuing_ca
 uv run python manage.py check_non_onboarded_devices
-uv run python manage.py check_for_weak_signature_algorithms
+uv run python manage.py check_for_not_permitted_signature_algorithms
 uv run python manage.py check_for_insufficient_key_length
-uv run python manage.py check_for_weak_ecc_curves
+uv run python manage.py check_for_not_permitted_ecc_curves
