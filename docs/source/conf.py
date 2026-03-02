@@ -77,7 +77,7 @@ if BUILD_AUTODOCS:
         'show-inheritance',
     ]
     autoapi_keep_files = False  # Don't keep intermediate files to save disk I/O
-    #autoapi_python_use_implicit_namespaces = True  # Faster namespace resolution
+
 
 # -- Templates and exclusions -----------------------------------------------
 templates_path = ['_templates']  # Custom templates directory
