@@ -23,7 +23,7 @@ from onboarding.models import (
     OnboardingPkiProtocol,
     OnboardingProtocol,
 )
-from pki.models import OwnerCredentialModel
+from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.certificate import CertificateModel
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
@@ -134,10 +134,11 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             certificate_serializer.as_crypto().fingerprint(algorithm=hashes.SHA256()).hex()
         )
         if certificate_in_db:
-            from devices.models import IssuedCredentialModel  # noqa: PLC0415
             credential_qs = OwnerCredentialModel.objects.filter(
-                issued_credentials__credential__certificate=certificate_in_db,
-                issued_credentials__issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+                remote_issued_credentials__credential__certificate=certificate_in_db,
+                remote_issued_credentials__issued_credential_type=(
+                    RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID
+                ),
             )
             if credential_qs.exists():
                 credential_in_db = credential_qs[0]

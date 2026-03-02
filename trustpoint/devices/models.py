@@ -184,10 +184,10 @@ class DeviceModel(CustomDeleteActionModel):
         self.save(update_fields=['opc_gds_push_last_update_scheduled_at'])
 
 class IssuedCredentialModel(CustomDeleteActionModel):
-    """Model for all credentials and certificates that have been issued or requested by the Trustpoint.
+    """Model for credentials and certificates issued to a device by the Trustpoint.
 
-    Exactly one of ``device``, ``ca``, or ``owner_credential`` must be set to identify the owner
-    of this credential.  ``domain`` remains optional and is only required for device credentials.
+    Each instance must have a ``device`` FK set.  For credentials owned by a CA or
+    an OwnerCredential, use :class:`RemoteIssuedCredentialModel` instead.
     """
 
     class IssuedCredentialType(models.IntegerChoices):
@@ -195,7 +195,6 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
         DOMAIN_CREDENTIAL = 0, _('Domain Credential')
         APPLICATION_CREDENTIAL = 1, _('Application Credential')
-        DEV_OWNER_ID = 2, _('DevOwnerID')
 
     id = models.AutoField(primary_key=True)
 
@@ -217,28 +216,12 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         verbose_name=_('Device'),
         on_delete=models.PROTECT,
         related_name='issued_credentials',
-        null=True,
-        blank=True,
+        null=False,
+        blank=False,
     )
     domain = models.ForeignKey(
         DomainModel,
         verbose_name=_('Domain'),
-        on_delete=models.PROTECT,
-        related_name='issued_credentials',
-        null=True,
-        blank=True,
-    )
-    ca = models.ForeignKey(
-        'pki.CaModel',
-        verbose_name=_('CA'),
-        on_delete=models.PROTECT,
-        related_name='issued_credentials',
-        null=True,
-        blank=True,
-    )
-    owner_credential = models.ForeignKey(
-        'pki.OwnerCredentialModel',
-        verbose_name=_('Owner Credential'),
         on_delete=models.PROTECT,
         related_name='issued_credentials',
         null=True,
@@ -255,13 +238,9 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         return f'IssuedCredentialModel(common_name={self.common_name})'
 
     def clean(self) -> None:
-        """Validate that exactly one owner (device, ca, or owner_credential) is set."""
-        owners = [self.device_id, self.ca_id, self.owner_credential_id]
-        set_count = sum(1 for o in owners if o is not None)
-        if set_count == 0:
-            raise ValidationError(_('One of device, ca, or owner_credential must be set.'))
-        if set_count > 1:
-            raise ValidationError(_('Only one of device, ca, or owner_credential may be set.'))
+        """Validate that the device FK is set."""
+        if self.device_id is None:
+            raise ValidationError(_('device must be set.'))
 
     def revoke(self) -> None:
         """Revokes all active certificates associated with this credential."""
@@ -315,31 +294,15 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         :raises DoesNotExist: if no matching issued credential is found.
         """
         cert_fingerprint = cert.fingerprint(hashes.SHA256()).hex().upper()
-        credentials = CredentialModel.objects.filter(
-            certificates__sha256_fingerprint=cert_fingerprint,
-        )
-        if not credentials.exists():
-            error_message = f'No credential found for certificate with fingerprint {cert_fingerprint}'
-            raise IssuedCredentialModel.DoesNotExist(error_message)
+        issued_credential = IssuedCredentialModel.objects.filter(
+            credential__certificates__sha256_fingerprint=cert_fingerprint,
+        ).select_related('credential', 'device').first()
 
-        issued_credentials: list[IssuedCredentialModel] = []
-        for credential in credentials:
-            try:
-                issued_credentials.append(
-                    IssuedCredentialModel.objects.get(credential=credential),
-                )
-            except IssuedCredentialModel.DoesNotExist:
-                continue
-
-        if not issued_credentials:
+        if issued_credential is None:
             error_message = f'No issued credential found for certificate with fingerprint {cert_fingerprint}'
             raise IssuedCredentialModel.DoesNotExist(error_message)
 
-        for ic in issued_credentials:
-            if ic.device is not None:
-                return ic
-
-        return issued_credentials[0]
+        return issued_credential
 
     @staticmethod
     def get_credential_for_serial_number(

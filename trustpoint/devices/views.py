@@ -74,10 +74,11 @@ from onboarding.models import (
 )
 from pki.forms import TruststoreAddForm
 from pki.forms.cert_profiles import CertificateIssuanceForm
+from pki.models import RemoteIssuedCredentialModel
 from pki.models.ca import CaModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
-from pki.models.credential import CredentialModel
+from pki.models.credential import CredentialModel, OwnerCredentialModel
 from pki.models.domain import DomainAllowedCertificateProfileModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from request.authorization import ManualAuthorization
@@ -588,6 +589,51 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
 
+    def _get_owner_credential_for_device(self) -> OwnerCredentialModel | None:
+        """Find the OwnerCredentialModel associated with this device.
+
+        The connection is established via the domain credential: the device has an
+        ``IssuedCredentialModel(DOMAIN_CREDENTIAL, device=self.object)`` and the
+        ``OwnerCredentialModel`` has a matching
+        ``RemoteIssuedCredentialModel(DOMAIN_CREDENTIAL, owner_credential=oc)`` that shares
+        the same certificate fingerprint.
+
+        Returns:
+            The associated OwnerCredentialModel, or None if no link exists.
+        """
+        device_domain_cred = IssuedCredentialModel.objects.filter(
+            device=self.object,
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+        ).select_related('credential__certificate').first()
+
+        if device_domain_cred is None or device_domain_cred.credential.certificate is None:
+            return None
+
+        fingerprint = device_domain_cred.credential.certificate.sha256_fingerprint
+        owner_ic = RemoteIssuedCredentialModel.objects.filter(
+            credential__certificates__sha256_fingerprint=fingerprint,
+            owner_credential__isnull=False,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
+        ).select_related('owner_credential').first()
+
+        if owner_ic is None:
+            return None
+        return owner_ic.owner_credential
+
+    def _get_dev_owner_id_credentials_qs(
+        self, owner_credential: OwnerCredentialModel,
+    ) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Return enrolled DevOwnerID credentials for the given owner credential.
+
+        Only credentials that already have a certificate (i.e. successfully enrolled)
+        are returned.
+        """
+        return RemoteIssuedCredentialModel.objects.filter(
+            owner_credential=owner_credential,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+            credential__certificate__isnull=False,
+        ).select_related('credential__certificate').order_by('-created_at')
+
     def get_issued_creds_qs(self) -> QuerySet[IssuedCredentialModel]:
         """Gets a sorted queryset of all IssuedCredentialModels.
 
@@ -625,23 +671,8 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL.value)
         )
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the paginator and credential details to the context.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to use for rendering the clm summary page.
-        """
-        self.issued_creds_qs = self.get_issued_creds_qs()
-        self.domain_credentials_qs = self.get_domain_credentials_qs()
-        self.application_credentials_qs = self.get_application_credentials_qs()
-        context = super().get_context_data(**kwargs)
-
-        context['domain_credentials'] = self.domain_credentials_qs
-        context['application_credentials'] = self.application_credentials_qs
-
+    def _add_credential_pages_to_context(self, context: dict[str, Any]) -> None:
+        """Paginate domain, application and DevOwnerID credentials into the template context."""
         paginator_domain = Paginator(self.domain_credentials_qs, UIConfig.paginate_by)
         page_number_domain = self.request.GET.get('page', 1)
         context['domain_credentials'] = paginator_domain.get_page(page_number_domain)
@@ -661,6 +692,49 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             cred.expires_in = self._get_expires_in(cred)
             cred.expiration_date = cast('datetime.datetime', cred.credential.certificate_or_error.not_valid_after)
             cred.revoke = self._get_revoke_button_html(cred)
+
+        self._add_dev_owner_id_context(context)
+
+    def _add_dev_owner_id_context(self, context: dict[str, Any]) -> None:
+        """Add DevOwnerID credentials linked via the owner credential to the context."""
+        owner_credential = self._get_owner_credential_for_device()
+        context['owner_credential'] = owner_credential
+
+        if owner_credential is None:
+            context['dev_owner_id_credentials'] = []
+            context['is_paginated_d'] = False
+            return
+
+        dev_owner_id_qs = self._get_dev_owner_id_credentials_qs(owner_credential)
+        paginator_doid = Paginator(dev_owner_id_qs, UIConfig.paginate_by)
+        page_number_doid = self.request.GET.get('page-d', 1)
+        context['dev_owner_id_credentials'] = paginator_doid.get_page(page_number_doid)
+        context['is_paginated_d'] = paginator_doid.num_pages > 1
+
+        for cred in context['dev_owner_id_credentials']:
+            cred.expires_in = self._get_expires_in(cred)
+            cred.expiration_date = cast(
+                'datetime.datetime', cred.credential.certificate_or_error.not_valid_after,
+            )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the paginator and credential details to the context.
+
+        Args:
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The context to use for rendering the clm summary page.
+        """
+        self.issued_creds_qs = self.get_issued_creds_qs()
+        self.domain_credentials_qs = self.get_domain_credentials_qs()
+        self.application_credentials_qs = self.get_application_credentials_qs()
+        context = super().get_context_data(**kwargs)
+
+        context['domain_credentials'] = self.domain_credentials_qs
+        context['application_credentials'] = self.application_credentials_qs
+
+        self._add_credential_pages_to_context(context)
 
         context['main_url'] = f'{self.page_category}:{self.page_name}'
         context['issue_app_cred_no_onboarding_url'] = ''

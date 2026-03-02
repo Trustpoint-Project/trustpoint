@@ -43,20 +43,18 @@ def get_mock_truststore(certificates: list[x509.Certificate]) -> MagicMock:
     return ts
 
 
-@patch('pki.models.credential.CredentialModel.objects.filter')
-@patch('devices.models.IssuedCredentialModel.objects.get')
-def test_get_credential_for_certificate(mock_get, mock_filter) -> None:
+@patch('devices.models.IssuedCredentialModel.objects.filter')
+def test_get_credential_for_certificate(mock_filter) -> None:
     """Test the get_credential_for_certificate method."""
     cert_mock = MagicMock()
     cert_mock.fingerprint.return_value = b'sample_fingerprint'
 
     mock_credential = MagicMock()
-    mock_filter.return_value.first.return_value = mock_credential
-
     mock_issued_credential = MagicMock()
     mock_issued_credential.credential = mock_credential
     mock_issued_credential.device = MagicMock()
-    mock_get.return_value = mock_issued_credential
+
+    mock_filter.return_value.select_related.return_value.first.return_value = mock_issued_credential
 
     issued_credential = IssuedCredentialModel.get_credential_for_certificate(cert_mock)
     assert issued_credential == mock_issued_credential

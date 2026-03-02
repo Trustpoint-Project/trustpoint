@@ -19,7 +19,6 @@ from django.views.generic.list import ListView
 from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
 from trustpoint_core.serializer import PrivateKeySerializer
 
-from devices.models import IssuedCredentialModel
 from pki.forms import (
     CertificateIssuanceForm,
     OwnerCredentialAddRequestEstNoOnboardingForm,
@@ -27,7 +26,7 @@ from pki.forms import (
     OwnerCredentialFileImportForm,
     OwnerCredentialTruststoreAssociationForm,
 )
-from pki.models import OwnerCredentialModel
+from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel, PrimaryCredentialCertificate
@@ -372,7 +371,7 @@ class OwnerCredentialCLMView(OwnerCredentialContextMixin, DetailView[OwnerCreden
     context_object_name = 'owner_credential'
 
     @staticmethod
-    def _get_expires_in(record: IssuedCredentialModel) -> str:
+    def _get_expires_in(record: RemoteIssuedCredentialModel) -> str:
         """Returns a human-readable string of the time remaining until the credential expires."""
         cert = record.credential.certificate_or_error
         if cert.certificate_status != CertificateModel.CertificateStatus.OK:
@@ -387,9 +386,9 @@ class OwnerCredentialCLMView(OwnerCredentialContextMixin, DetailView[OwnerCreden
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds issued credentials with computed display fields to the context."""
         context = super().get_context_data(**kwargs)
-        issued_creds: QuerySet[IssuedCredentialModel] = IssuedCredentialModel.objects.filter(
+        issued_creds: QuerySet[RemoteIssuedCredentialModel] = RemoteIssuedCredentialModel.objects.filter(
             owner_credential=self.object,
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
         ).select_related('credential__certificate').order_by('-created_at')
 
         for cred in issued_creds:
@@ -419,9 +418,9 @@ class OwnerCredentialCLMView(OwnerCredentialContextMixin, DetailView[OwnerCreden
         context['is_onboarding'] = is_onboarding
 
         if is_onboarding:
-            domain_creds: QuerySet[IssuedCredentialModel] = IssuedCredentialModel.objects.filter(
+            domain_creds: QuerySet[RemoteIssuedCredentialModel] = RemoteIssuedCredentialModel.objects.filter(
                 owner_credential=self.object,
-                issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
             ).select_related('credential__certificate').order_by('-created_at')
 
             for cred in domain_creds:
@@ -477,8 +476,8 @@ class OwnerCredentialBulkDeleteConfirmView(OwnerCredentialContextMixin, BulkDele
         return response
 
 
-class IssuedCredentialDeleteView(LoggerMixin, OwnerCredentialContextMixin, DetailView[IssuedCredentialModel]):
-    """Confirm and delete a single :class:`~devices.models.IssuedCredentialModel` (DEV_OWNER_ID or DOMAIN_CREDENTIAL).
+class IssuedCredentialDeleteView(LoggerMixin, OwnerCredentialContextMixin, DetailView[RemoteIssuedCredentialModel]):
+    """Confirm and delete a single RemoteIssuedCredentialModel (DEV_OWNER_ID or DOMAIN_CREDENTIAL).
 
     Only credentials owned by an ``OwnerCredentialModel`` are accessible via this view.
     The parent ``OwnerCredentialModel`` is resolved from the URL ``owner_pk`` parameter
@@ -486,26 +485,26 @@ class IssuedCredentialDeleteView(LoggerMixin, OwnerCredentialContextMixin, Detai
     """
 
     http_method_names = ('get', 'post')
-    model = IssuedCredentialModel
+    model = RemoteIssuedCredentialModel
     template_name = 'pki/owner_credentials/confirm_delete_issued_credential.html'
     context_object_name = 'issued_credential'
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Verify the IssuedCredential belongs to the given OwnerCredential."""
+        """Verify the RemoteIssuedCredential belongs to the given OwnerCredential."""
         self.owner_credential = get_object_or_404(OwnerCredentialModel, pk=kwargs['owner_pk'])
-        issued: IssuedCredentialModel = get_object_or_404(
-            IssuedCredentialModel,
+        issued: RemoteIssuedCredentialModel = get_object_or_404(
+            RemoteIssuedCredentialModel,
             pk=kwargs['pk'],
             owner_credential=self.owner_credential,
             issued_credential_type__in=[
-                IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
-                IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+                RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+                RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
             ],
         )
         self.issued_credential = issued
         return super().dispatch(request, *args, **kwargs)  # type: ignore[return-value]
 
-    def get_object(self, queryset: Any = None) -> IssuedCredentialModel:  # noqa: ARG002
+    def get_object(self, queryset: Any = None) -> RemoteIssuedCredentialModel:  # noqa: ARG002
         """Return the pre-fetched issued credential."""
         return self.issued_credential
 
@@ -522,7 +521,7 @@ class IssuedCredentialDeleteView(LoggerMixin, OwnerCredentialContextMixin, Detai
         try:
             issued.pre_delete()
         except Exception as exc:  # broad catch to surface any deletion error to the user
-            self.logger.exception('Failed to delete IssuedCredentialModel pk=%s', issued.pk)
+            self.logger.exception('Failed to delete RemoteIssuedCredentialModel pk=%s', issued.pk)
             messages.error(
                 request,
                 _('Failed to delete credential "{cn}": {error}').format(cn=cn, error=str(exc)),
@@ -580,9 +579,9 @@ class OwnerCredentialDefineCertContentEstView(
             exclude_pk: If given, the credential with this pk is kept (it is the one
                 currently in use by the active session).
         """
-        qs = IssuedCredentialModel.objects.filter(
+        qs = RemoteIssuedCredentialModel.objects.filter(
             owner_credential=self.owner_credential,
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
             credential__certificate__isnull=True,
         )
         if exclude_pk is not None:
@@ -596,11 +595,11 @@ class OwnerCredentialDefineCertContentEstView(
             except Exception:  # noqa: BLE001
                 self.logger.warning('Could not delete orphan pending credential pk=%s', orphan.pk)
 
-    def _create_pending_issued_credential(self) -> IssuedCredentialModel:
-        """Generate a fresh key pair and create a key-only IssuedCredentialModel.
+    def _create_pending_issued_credential(self) -> RemoteIssuedCredentialModel:
+        """Generate a fresh key pair and create a key-only RemoteIssuedCredentialModel.
 
         The key algorithm is taken from ``owner_credential.key_type`` so that every
-        IssuedCredential for a given DevOwnerID always uses the same algorithm.
+        credential for a given DevOwnerID always uses the same algorithm.
         """
         key_type = self.owner_credential.key_type or 'ECC-SECP256R1'
         private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(
@@ -612,9 +611,9 @@ class OwnerCredentialDefineCertContentEstView(
             private_key=private_key_pem,
             certificate=None,
         )
-        return IssuedCredentialModel.objects.create(
+        return RemoteIssuedCredentialModel.objects.create(
             common_name=self.owner_credential.unique_name,
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
             issued_using_cert_profile='dev_owner_id',
             credential=credential_model,
             owner_credential=self.owner_credential,
@@ -623,7 +622,7 @@ class OwnerCredentialDefineCertContentEstView(
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Resolve the OwnerCredentialModel and the dev_owner_id certificate profile.
 
-        On each visit a fresh key-only IssuedCredentialModel is created.  If there
+        On each visit a fresh key-only RemoteIssuedCredentialModel is created.  If there
         is already a pending (certificate-less) credential from a previous visit its
         pk is reused so we do not accumulate orphan credentials.
         """
@@ -643,15 +642,15 @@ class OwnerCredentialDefineCertContentEstView(
         existing_pk = (request.session.get(session_key) or {}).get('issued_credential_pk')
         if existing_pk:
             try:
-                self.pending_issued = IssuedCredentialModel.objects.select_related('credential').get(
+                self.pending_issued = RemoteIssuedCredentialModel.objects.select_related('credential').get(
                     pk=existing_pk,
                     owner_credential=self.owner_credential,
-                    issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
                     credential__certificate__isnull=True,
                 )
                 # Delete any other orphan pending credentials (from even older aborted sessions)
                 self._delete_orphan_pending_credentials(exclude_pk=existing_pk)
-            except IssuedCredentialModel.DoesNotExist:
+            except RemoteIssuedCredentialModel.DoesNotExist:
                 self._delete_orphan_pending_credentials(exclude_pk=None)
                 self.pending_issued = self._create_pending_issued_credential()
         else:
@@ -721,20 +720,20 @@ class OwnerCredentialRequestCertEstView(
 
     def _get_pending_issued(
         self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]
-    ) -> IssuedCredentialModel:
-        """Fetch the pending IssuedCredentialModel whose pk was stored in the session by Step 1.
+    ) -> RemoteIssuedCredentialModel:
+        """Fetch the pending RemoteIssuedCredentialModel whose pk was stored in the session by Step 1.
 
         :raises ValueError: if no matching pending credential is found.
         """
         issued_pk = cert_content_data.get('issued_credential_pk')
         if issued_pk:
             try:
-                return IssuedCredentialModel.objects.select_related('credential').get(
+                return RemoteIssuedCredentialModel.objects.select_related('credential').get(
                     pk=issued_pk,
                     owner_credential=owner_credential,
-                    issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
                 )
-            except IssuedCredentialModel.DoesNotExist:
+            except RemoteIssuedCredentialModel.DoesNotExist:
                 pass  # pk no longer valid; fall through to raise ValueError below.
         msg = _('No pending DevOwnerID credential found. Please re-define the certificate content.')
         raise ValueError(msg)
@@ -1037,9 +1036,9 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
 
     def _delete_orphan_pending_credentials(self, exclude_pk: int | None) -> None:
         """Delete all key-only (certificate-less) DOMAIN_CREDENTIAL credentials for this owner."""
-        qs = IssuedCredentialModel.objects.filter(
+        qs = RemoteIssuedCredentialModel.objects.filter(
             owner_credential=self.owner_credential,
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
             credential__certificate__isnull=True,
         )
         if exclude_pk is not None:
@@ -1053,8 +1052,8 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
             except Exception:  # noqa: BLE001
                 self.logger.warning('Could not delete orphan pending domain credential pk=%s', orphan.pk)
 
-    def _create_pending_issued_credential(self) -> IssuedCredentialModel:
-        """Generate a fresh key pair and create a key-only IssuedCredentialModel for DOMAIN_CREDENTIAL."""
+    def _create_pending_issued_credential(self) -> RemoteIssuedCredentialModel:
+        """Generate a fresh key pair and create a key-only RemoteIssuedCredentialModel for DOMAIN_CREDENTIAL."""
         key_type = self.owner_credential.key_type or 'ECC-SECP256R1'
         private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(
             self._public_key_info_from_key_type(key_type)
@@ -1065,9 +1064,9 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
             private_key=private_key_pem,
             certificate=None,
         )
-        return IssuedCredentialModel.objects.create(
+        return RemoteIssuedCredentialModel.objects.create(
             common_name=self.owner_credential.unique_name,
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
             issued_using_cert_profile=self.cert_profile.unique_name,
             credential=credential_model,
             owner_credential=self.owner_credential,
@@ -1122,14 +1121,14 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
         existing_pk = (request.session.get(session_key) or {}).get('issued_credential_pk')
         if existing_pk:
             try:
-                self.pending_issued = IssuedCredentialModel.objects.select_related('credential').get(
+                self.pending_issued = RemoteIssuedCredentialModel.objects.select_related('credential').get(
                     pk=existing_pk,
                     owner_credential=self.owner_credential,
-                    issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
                     credential__certificate__isnull=True,
                 )
                 self._delete_orphan_pending_credentials(exclude_pk=existing_pk)
-            except IssuedCredentialModel.DoesNotExist:
+            except RemoteIssuedCredentialModel.DoesNotExist:
                 self._delete_orphan_pending_credentials(exclude_pk=None)
                 self.pending_issued = self._create_pending_issued_credential()
         else:
@@ -1194,17 +1193,17 @@ class OwnerCredentialRequestDomainCredentialEstView(
 
     def _get_pending_issued(
         self, owner_credential: OwnerCredentialModel, cert_content_data: dict[str, Any]
-    ) -> IssuedCredentialModel:
-        """Fetch the pending IssuedCredentialModel whose pk was stored in the session by Step 1."""
+    ) -> RemoteIssuedCredentialModel:
+        """Fetch the pending RemoteIssuedCredentialModel whose pk was stored in the session by Step 1."""
         issued_pk = cert_content_data.get('issued_credential_pk')
         if issued_pk:
             try:
-                return IssuedCredentialModel.objects.select_related('credential').get(
+                return RemoteIssuedCredentialModel.objects.select_related('credential').get(
                     pk=issued_pk,
                     owner_credential=owner_credential,
-                    issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+                    issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
                 )
-            except IssuedCredentialModel.DoesNotExist:
+            except RemoteIssuedCredentialModel.DoesNotExist:
                 pass
         msg = _('No pending Domain Credential found. Please re-define the certificate content.')
         raise ValueError(msg)

@@ -29,6 +29,7 @@ from .domain import DomainModel, DomainAllowedCertificateProfileModel
 from .devid_registration import DevIdRegistration
 from .cert_profile import CertificateProfileModel
 from .truststore import TruststoreModel, TruststoreOrderModel
+from .issued_credential import RemoteIssuedCredentialModel
 
 __all__ = [
     'AttributeTypeAndValue',
@@ -45,6 +46,7 @@ __all__ = [
     'GeneralNameIpAddress',
     'OwnerCredentialModel',
     'PKCS11Key',
+    'RemoteIssuedCredentialModel',
     'RevokedCertificateModel',
     'TruststoreModel',
     'TruststoreOrderModel',

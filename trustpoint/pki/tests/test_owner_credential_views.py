@@ -9,10 +9,10 @@ from django.contrib.auth.models import User
 from django.test import Client
 from django.urls import reverse
 
-from devices.models import IssuedCredentialModel
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import OwnerCredentialModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel
+from pki.models import RemoteIssuedCredentialModel
 from pki.models.truststore import TruststoreModel
 
 
@@ -272,9 +272,9 @@ class TestOwnerCredentialCLMView:
         cred = CredentialModel.objects.create(
             credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
         )
-        IssuedCredentialModel.objects.create(
+        RemoteIssuedCredentialModel.objects.create(
             common_name='pending-cred',
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
             credential=cred,
             owner_credential=owner_credential_remote_est,
         )
@@ -300,9 +300,9 @@ class TestIssuedCredentialDeleteView:
         cred = CredentialModel.objects.create(
             credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
         )
-        issued = IssuedCredentialModel.objects.create(
+        issued = RemoteIssuedCredentialModel.objects.create(
             common_name='del-me',
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
             credential=cred,
             owner_credential=owner_credential_remote_est,
         )
@@ -320,9 +320,9 @@ class TestIssuedCredentialDeleteView:
         cred = CredentialModel.objects.create(
             credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
         )
-        issued = IssuedCredentialModel.objects.create(
+        issued = RemoteIssuedCredentialModel.objects.create(
             common_name='del-me',
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
             credential=cred,
             owner_credential=owner_credential_remote_est,
         )
@@ -342,9 +342,9 @@ class TestIssuedCredentialDeleteView:
         cred = CredentialModel.objects.create(
             credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
         )
-        issued = IssuedCredentialModel.objects.create(
+        issued = RemoteIssuedCredentialModel.objects.create(
             common_name='other',
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
             credential=cred,
             owner_credential=other_oc,
         )

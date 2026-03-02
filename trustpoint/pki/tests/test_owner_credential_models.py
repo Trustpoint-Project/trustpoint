@@ -7,10 +7,10 @@ from typing import Any
 import pytest
 from django.core.exceptions import ValidationError
 
-from devices.models import IssuedCredentialModel
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import OwnerCredentialModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel
+from pki.models import RemoteIssuedCredentialModel
 
 
 @pytest.fixture(autouse=True)
@@ -122,14 +122,14 @@ class TestOwnerCredentialModel:
         assert oc.dev_owner_id_credential is None
 
     def test_dev_owner_id_credentials_returns_queryset(self) -> None:
-        """dev_owner_id_credentials returns a queryset of DEV_OWNER_ID issued credentials."""
+        """dev_owner_id_credentials returns a queryset of DEV_OWNER_ID remote issued credentials."""
         oc = OwnerCredentialModel.objects.create(unique_name='oc-with-cred')
         cred = CredentialModel.objects.create(
             credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
         )
-        issued = IssuedCredentialModel.objects.create(
+        issued = RemoteIssuedCredentialModel.objects.create(
             common_name='test-cn',
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
             credential=cred,
             owner_credential=oc,
         )
@@ -143,18 +143,18 @@ class TestOwnerCredentialModel:
         cred1 = CredentialModel.objects.create(
             credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
         )
-        IssuedCredentialModel.objects.create(
+        RemoteIssuedCredentialModel.objects.create(
             common_name='first',
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
             credential=cred1,
             owner_credential=oc,
         )
         cred2 = CredentialModel.objects.create(
             credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
         )
-        issued2 = IssuedCredentialModel.objects.create(
+        issued2 = RemoteIssuedCredentialModel.objects.create(
             common_name='second',
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
             credential=cred2,
             owner_credential=oc,
         )
@@ -162,14 +162,14 @@ class TestOwnerCredentialModel:
         assert oc.dev_owner_id_credential.pk == issued2.pk
 
     def test_post_delete_removes_issued_credentials(self) -> None:
-        """post_delete removes all associated issued credentials."""
+        """post_delete removes all associated remote issued credentials."""
         oc = OwnerCredentialModel.objects.create(unique_name='oc-delete')
         cred = CredentialModel.objects.create(
             credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
         )
-        IssuedCredentialModel.objects.create(
+        RemoteIssuedCredentialModel.objects.create(
             common_name='to-delete',
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
             credential=cred,
             owner_credential=oc,
         )

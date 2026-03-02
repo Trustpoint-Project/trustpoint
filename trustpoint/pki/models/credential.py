@@ -21,6 +21,7 @@ from trustpoint_core.serializer import (
 from management.models import KeyStorageConfig, PKCS11Token
 from management.pkcs11_util import Pkcs11AESKey, Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
 from pki.models import CertificateModel
+from pki.models.issued_credential import RemoteIssuedCredentialModel
 from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
 from util.encrypted_fields import EncryptedCharField
@@ -32,9 +33,6 @@ if TYPE_CHECKING:
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
     from trustpoint_core.crypto_types import PrivateKey
-
-    from devices.models import IssuedCredentialModel
-
 
 __all__ = [
     'CertificateChainOrderModel',
@@ -1186,47 +1184,43 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         return f'OwnerCredentialModel(unique_name={self.unique_name})'
 
     @property
-    def dev_owner_id_credentials(self) -> QuerySet[IssuedCredentialModel]:
-        """Returns all DevOwnerID IssuedCredentialModel instances for this owner credential, newest first.
+    def dev_owner_id_credentials(self) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Returns all DevOwnerID RemoteIssuedCredentialModel instances for this owner credential, newest first.
 
         An OwnerCredentialModel may accumulate multiple DevOwnerID credentials over time,
         e.g. after re-enrollment or renewal rounds.
         """
-        from devices.models import IssuedCredentialModel  # noqa: PLC0415 (avoid circular import at module level)
-
         return (
-            self.issued_credentials
-            .filter(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID)
+            self.remote_issued_credentials
+            .filter(issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID)
             .select_related('credential__certificate')
             .order_by('-created_at')
         )
 
     @property
-    def dev_owner_id_credential(self) -> IssuedCredentialModel | None:
-        """Returns the most recently created DevOwnerID IssuedCredentialModel, or ``None``.
+    def dev_owner_id_credential(self) -> RemoteIssuedCredentialModel | None:
+        """Returns the most recently created DevOwnerID RemoteIssuedCredentialModel, or ``None``.
 
         Use :attr:`dev_owner_id_credentials` when you need the full set of credentials.
         """
         return self.dev_owner_id_credentials.first()
 
     @property
-    def domain_credentials(self) -> QuerySet[IssuedCredentialModel]:
-        """Returns all Domain Credential IssuedCredentialModel instances for this owner credential, newest first.
+    def domain_credentials(self) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Returns all Domain Credential RemoteIssuedCredentialModel instances for this owner credential, newest first.
 
         Domain credentials are obtained during onboarding before the DevOwnerID is enrolled.
         """
-        from devices.models import IssuedCredentialModel  # noqa: PLC0415 (avoid circular import at module level)
-
         return (
-            self.issued_credentials
-            .filter(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL)
+            self.remote_issued_credentials
+            .filter(issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL)
             .select_related('credential__certificate')
             .order_by('-created_at')
         )
 
     @property
-    def domain_credential(self) -> IssuedCredentialModel | None:
-        """Returns the most recently created Domain Credential IssuedCredentialModel, or ``None``."""
+    def domain_credential(self) -> RemoteIssuedCredentialModel | None:
+        """Returns the most recently created Domain Credential RemoteIssuedCredentialModel, or ``None``."""
         return self.domain_credentials.first()
 
     @property
@@ -1235,8 +1229,11 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         latest = self.domain_credential
         if latest is None:
             return False
-        is_valid, _reason = latest.is_valid_domain_credential()
-        return is_valid
+        cert = latest.credential.certificate
+        if cert is None:
+            return False
+        from pki.models.certificate import CertificateModel as CertModel  # noqa: PLC0415
+        return cert.certificate_status == CertModel.CertificateStatus.OK
 
     @classmethod
     def create_new_owner_credential(
@@ -1245,10 +1242,10 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         credential_serializer: CredentialSerializer,
         no_onboarding_config: Any | None = None,
     ) -> OwnerCredentialModel:
-        """Creates a new OwnerCredentialModel with the DevOwnerID stored as IssuedCredentialModel.
+        """Creates a new OwnerCredentialModel with the DevOwnerID stored as RemoteIssuedCredentialModel.
 
         The DevOwnerID certificate (with optional chain and private key) is stored in a
-        ``CredentialModel`` and wrapped in an ``IssuedCredentialModel`` of type ``DEV_OWNER_ID``.
+        ``CredentialModel`` and wrapped in a ``RemoteIssuedCredentialModel`` of type ``DEV_OWNER_ID``.
         If no ``no_onboarding_config`` is provided a new ``NoOnboardingConfigModel`` with
         protocol ``MANUAL`` is created automatically.
 
@@ -1260,7 +1257,6 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         Returns:
             OwnerCredentialModel: The newly created instance.
         """
-        from devices.models import IssuedCredentialModel  # noqa: PLC0415
         from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol  # noqa: PLC0415
 
         # Extract the IDevID references from the SAN of the DevOwnerID certificate
@@ -1303,14 +1299,14 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         )
         owner_credential.save()
 
-        # Store the DevOwnerID as an IssuedCredentialModel
+        # Store the DevOwnerID as a RemoteIssuedCredentialModel
         credential_model = CredentialModel.save_credential_serializer(
             credential_serializer=credential_serializer,
             credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
         )
-        IssuedCredentialModel.objects.create(
+        RemoteIssuedCredentialModel.objects.create(
             common_name=common_name,
-            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DEV_OWNER_ID,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
             issued_using_cert_profile='dev_owner_id',
             credential=credential_model,
             owner_credential=owner_credential,
@@ -1330,9 +1326,9 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         return owner_credential
 
     def post_delete(self) -> None:
-        """Deletes all issued credentials and the onboarding config on deletion."""
-        self.logger.debug('Deleting issued credentials of owner credential %s', self)
-        for issued in self.issued_credentials.all():
+        """Deletes all remote issued credentials and the onboarding config on deletion."""
+        self.logger.debug('Deleting remote issued credentials of owner credential %s', self)
+        for issued in self.remote_issued_credentials.all():
             issued.credential.delete()
 
 
