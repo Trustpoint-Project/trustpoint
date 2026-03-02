@@ -1,0 +1,18 @@
+<div class="mt-2">
+    {% for group, options, index in widget.optgroups %}
+        {% for option in options %}
+            <div class="form-check form-switch mb-2">
+                <input type="checkbox" 
+                       name="{{ widget.name }}" 
+                       value="{{ option.value }}"
+                       id="{{ option.attrs.id }}"
+                       class="form-check-input"
+                       role="switch"
+                       {% if option.attrs.checked %}checked{% endif %}>
+                <label class="form-check-label" for="{{ option.attrs.id }}">
+                    {{ option.label }}
+                </label>
+            </div>
+        {% endfor %}
+    {% endfor %}
+</div>
