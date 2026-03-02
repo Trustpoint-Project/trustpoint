@@ -416,17 +416,16 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         cn = common_names[0].value if common_names else '(no CN set)'
         common_name = cn.decode() if isinstance(cn, bytes) else cn
 
-        credential_type, cert_profile_disp_name = self._get_credential_type_for_template(context)
+        _, cert_profile_disp_name = self._get_credential_type_for_template(context)
         if context.device is None:
             exc_msg = 'Device is required for saving credentials.'
             raise ValueError(exc_msg)
 
         saver = CredentialSaver(device=context.device, domain=context.domain)
-        saver.save_keyless_credential(
+        saver.save_remote_keyless_credential(
             issued_cert,
             ca_chain,
             common_name,
-            credential_type,
             cert_profile_disp_name,
         )
 

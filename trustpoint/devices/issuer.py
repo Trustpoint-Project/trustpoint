@@ -15,6 +15,7 @@ from trustpoint_core.serializer import CredentialSerializer
 from devices.models import DeviceModel, IssuedCredentialModel
 from onboarding.models import OnboardingProtocol, OnboardingStatus
 from pki.models.credential import CredentialModel
+from pki.models.issued_credential import RemoteIssuedCredentialModel
 from pki.util.keys import KeyGenerator
 from trustpoint.logger import LoggerMixin
 
@@ -230,6 +231,69 @@ class CredentialSaver(SaveCredentialToDbMixin):
         """Saves a keyless (i.e. private key stays on requesting device) credential to the database."""
         return self._save_keyless_credential(
             certificate, certificate_chain, common_name, issued_credential_type, cert_profile_disp_name)
+
+    def save_remote_keyless_credential(
+        self,
+        certificate: x509.Certificate,
+        certificate_chain: list[x509.Certificate],
+        common_name: str,
+        issued_using_cert_profile: str,
+    ) -> RemoteIssuedCredentialModel:
+        """Saves a keyless credential issued via a remote/RA CA as a RemoteIssuedCredentialModel."""
+        self.logger.info(
+            "Saving remote keyless credential for device '%s' (ID: %s) "
+            "in domain '%s' - CN: '%s', Profile: %s",
+            self._device.common_name,
+            self._device.pk,
+            self._domain.unique_name,
+            common_name,
+            issued_using_cert_profile,
+        )
+        try:
+            existing = RemoteIssuedCredentialModel.objects.filter(
+                device=self._device,
+                domain=self._domain,
+                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.RA_DEVICE,
+                common_name=common_name,
+            ).first()
+
+            if existing:
+                cred_model = existing.credential
+                cred_model.update_keyless_credential(certificate, certificate_chain)
+                cred_model.save()
+                existing.issued_using_cert_profile = issued_using_cert_profile
+                existing.save()
+                return existing
+
+            credential_model = CredentialModel.save_keyless_credential(
+                certificate=certificate,
+                certificate_chain=certificate_chain,
+                credential_type=CredentialModel.CredentialTypeChoice.ISSUED_CREDENTIAL,
+            )
+            remote_issued = RemoteIssuedCredentialModel(
+                issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.RA_DEVICE,
+                issued_using_cert_profile=issued_using_cert_profile,
+                common_name=common_name,
+                credential=credential_model,
+                device=self._device,
+                domain=self._domain,
+            )
+            remote_issued.save()
+
+        except Exception:
+            self.logger.exception(
+                "Failed to save remote keyless credential for device '%s' (ID: %s)",
+                self._device.common_name,
+                self._device.pk,
+            )
+            raise
+
+        self.logger.info(
+            "Successfully saved RemoteIssuedCredentialModel (ID: %s) for device '%s'",
+            remote_issued.pk,
+            self._device.common_name,
+        )
+        return remote_issued
 
 
 class BaseTlsCredentialIssuer(SaveCredentialToDbMixin):

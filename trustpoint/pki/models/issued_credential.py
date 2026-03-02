@@ -16,13 +16,14 @@ if TYPE_CHECKING:
 
 
 class RemoteIssuedCredentialModel(CustomDeleteActionModel):
-    """Model for credentials issued to a CA or an DevOwnerID."""
+    """Model for credentials issued to a CA, a DevOwnerID, or a device via a remote/RA CA."""
 
     class RemoteIssuedCredentialType(models.IntegerChoices):
         """The type of the credential."""
 
         DOMAIN_CREDENTIAL = 0, _('Domain Credential')
         DEV_OWNER_ID = 2, _('DevOwnerID')
+        RA_DEVICE = 4, _('RA Device')
 
     id = models.AutoField(primary_key=True)
 
@@ -57,6 +58,22 @@ class RemoteIssuedCredentialModel(CustomDeleteActionModel):
         null=True,
         blank=True,
     )
+    device = models.ForeignKey(
+        'devices.DeviceModel',
+        verbose_name=_('Device'),
+        on_delete=models.PROTECT,
+        related_name='remote_issued_credentials',
+        null=True,
+        blank=True,
+    )
+    domain = models.ForeignKey(
+        'pki.DomainModel',
+        verbose_name=_('Domain'),
+        on_delete=models.PROTECT,
+        related_name='remote_issued_credentials',
+        null=True,
+        blank=True,
+    )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
@@ -68,13 +85,13 @@ class RemoteIssuedCredentialModel(CustomDeleteActionModel):
         return f'RemoteIssuedCredentialModel(common_name={self.common_name})'
 
     def clean(self) -> None:
-        """Validate that exactly one owner (ca or owner_credential) is set."""
-        owners = [self.ca_id, self.owner_credential_id]
+        """Validate that exactly one owner (ca, owner_credential, or device) is set."""
+        owners = [self.ca_id, self.owner_credential_id, self.device_id]
         set_count = sum(1 for o in owners if o is not None)
         if set_count == 0:
-            raise ValidationError(_('One of ca or owner_credential must be set.'))
+            raise ValidationError(_('One of ca, owner_credential, or device must be set.'))
         if set_count > 1:
-            raise ValidationError(_('Only one of ca or owner_credential may be set.'))
+            raise ValidationError(_('Only one of ca, owner_credential, or device may be set.'))
 
     def pre_delete(self) -> None:
         """Delete the underlying credential (cascades back to this model)."""
