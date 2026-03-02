@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any
 
 import pytest
-from django.core.exceptions import ValidationError
 
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import OwnerCredentialModel

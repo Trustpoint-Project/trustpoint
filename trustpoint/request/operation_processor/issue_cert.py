@@ -111,21 +111,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             self, context: BaseCertificateRequestContext,
             signed_cert: x509.Certificate, issuing_credential: CredentialModel
         ) -> None:
-        """Save the issued credential to the database and associate it with the device.
-
-        DevOwnerID certificates (profile ``dev_owner_id``) are *not* saved here as a
-        device-side ``IssuedCredentialModel``; the caller (``_perform_est_enrollment``)
-        already persists the certificate directly into the pre-existing
-        ``IssuedCredentialModel(DEV_OWNER_ID)`` that holds the private key.
-        """
-        if (
-            context.certificate_profile_model is not None
-            and context.certificate_profile_model.unique_name == 'dev_owner_id'
-        ):
-            # Only record the issued certificate on the context so the responder can return it.
-            context.issued_certificate = signed_cert
-            return
-
+        """Save the issued credential to the database and associate it with the device."""
         context.domain = cast('DomainModel', context.domain)
         context.device = cast('DeviceModel', context.device)
         common_names = signed_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)

@@ -243,14 +243,10 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
 
 
 class OwnerCredentialTruststoreAssociationForm(forms.Form):
-    """Form for associating a TLS truststore with a DevOwnerID's NoOnboardingConfig.
-
-    Only TLS-intended truststores are shown, because the truststore is used to
-    verify the remote EST server's HTTPS certificate.
-    """
+    """Form for associating a TLS truststore with a DevOwnerID's NoOnboardingConfig."""
 
     trust_store: forms.ModelChoiceField[Any] = forms.ModelChoiceField(
-        queryset=None,  # set in __init__
+        queryset=None,
         empty_label='----------',
         required=True,
         label=_('TLS Trust Store'),
@@ -269,19 +265,13 @@ class OwnerCredentialTruststoreAssociationForm(forms.Form):
             intended_usage=TruststoreModel.IntendedUsage.TLS
         )
 
-        # Pre-select the already-associated truststore if one exists
         if self.instance.no_onboarding_config and self.instance.no_onboarding_config.trust_store:
             trust_store_field.initial = self.instance.no_onboarding_config.trust_store
         elif self.instance.onboarding_config and self.instance.onboarding_config.trust_store:
             trust_store_field.initial = self.instance.onboarding_config.trust_store
 
     def save(self) -> None:
-        """Save the selected truststore to the owner credential's config.
-
-        For the no-onboarding flow the truststore is written to
-        ``no_onboarding_config.trust_store``.  For the onboarding (IDevID) flow
-        it is written to ``onboarding_config.trust_store`` directly.
-        """
+        """Save the selected truststore to the owner credential's config."""
         if self.instance.no_onboarding_config:
             self.instance.no_onboarding_config.trust_store = self.cleaned_data['trust_store']
             self.instance.no_onboarding_config.full_clean()
@@ -376,12 +366,7 @@ class _OwnerCredentialEstBaseMixin(LoggerMixin, forms.Form):
 
 
 class OwnerCredentialAddRequestEstNoOnboardingForm(_OwnerCredentialEstBaseMixin):
-    """Form for requesting a DevOwnerID certificate via EST with username/password (no IDevID onboarding).
-
-    Generates a keypair locally, then enrolls with the remote EST server using
-    HTTP Basic authentication.  On success the credential is stored and linked
-    to the OwnerCredentialModel together with a NoOnboardingConfigModel.
-    """
+    """Form for requesting a DevOwnerID certificate via EST with username/password."""
 
     est_username = forms.CharField(
         max_length=128,
@@ -435,14 +420,7 @@ class OwnerCredentialAddRequestEstNoOnboardingForm(_OwnerCredentialEstBaseMixin)
 
 
 class OwnerCredentialAddRequestEstOnboardingForm(_OwnerCredentialEstBaseMixin):
-    """Form for requesting a DevOwnerID certificate via EST with IDevID-based onboarding.
-
-    The device authenticates to the remote EST server using its manufacturer-issued
-    IDevID certificate (mTLS client certificate).  The ``remote_path`` field points to
-    the DevOwnerID enrollment endpoint; the additional ``remote_path_domain_credential``
-    field points to the domain-credential enrollment endpoint used during onboarding.
-    After saving, the user associates a TLS trust store via the truststore-association view.
-    """
+    """Form for requesting a DevOwnerID certificate via EST with IDevID-based onboarding."""
 
     remote_path_domain_credential = forms.CharField(
         max_length=255,

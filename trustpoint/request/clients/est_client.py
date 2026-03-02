@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs7
 
 from trustpoint.logger import LoggerMixin
+from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
     from cryptography import x509
@@ -205,23 +206,11 @@ class EstClient(LoggerMixin):
         temp_ca_bundle_path = self._prepare_ca_bundle()
         auth, client_cert, auth_temp_files = self._prepare_auth()
 
-        # When using mTLS, also forward the client certificate as an HTTP
-        # header.  In production nginx terminates TLS and sets the
-        # ``SSL_CLIENT_CERT`` header for Django.  The dev server
-        # (``runserver_plus`` / werkzeug) does not do this, so the EST
-        # client explicitly adds the header so the server-side
-        # ``ClientCertificateValidation`` can extract it regardless of the
-        # deployment mode.
-        # The PEM value is URL-encoded (percent-encoded) to avoid illegal
-        # newline characters in the HTTP header value - this mirrors the
-        # nginx ``$ssl_client_cert`` variable behaviour.  The server-side
-        # ``ClientCertificateValidation`` already calls
-        # ``urllib.parse.unquote()`` before parsing the PEM.
-        # NOTE: The header name uses hyphens (``SSL-CLIENT-CERT``) because
-        # werkzeug drops headers whose names contain underscores.  Django's
-        # WSGI layer converts hyphens to underscores, so the header still
-        # arrives as ``HTTP_SSL_CLIENT_CERT`` in ``request.META``.
-        if self.context.est_client_cert_pem:
+        if self.context.est_client_cert_pem and not DOCKER_CONTAINER:
+            # When using mTLS, also forward the client certificate as an HTTP
+            # header.  In production nginx terminates TLS and sets the
+            # ``SSL_CLIENT_CERT`` header for Django.  The dev server
+            # (``runserver_plus``) does not do this,
             raw_pem = (
                 self.context.est_client_cert_pem
                 if isinstance(self.context.est_client_cert_pem, str)

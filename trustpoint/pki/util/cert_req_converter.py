@@ -73,11 +73,6 @@ class JSONCertRequestConverter:
                 eku = [ExtendedKeyUsageOid(oid.dotted_string).name.lower() for oid in ext.value]
                 req_ext['extended_key_usage'] = {'usages': eku, 'critical': ext.critical}
             elif isinstance(ext.value, x509.BasicConstraints):
-                if ext.value.ca:
-                    # If requesting CAs is required, implement additional safeguards first
-                    # (only if {"ca": true} is explicitly set in the profile)
-                    exc_msg = 'Safeguard: Requesting CA certificates is not allowed.'
-                    raise ValueError(exc_msg)
                 bc: dict[str, Any] = {'ca': ext.value.ca, 'critical': ext.critical}
                 if ext.value.path_length is not None:
                     bc['path_length'] = ext.value.path_length
@@ -193,11 +188,6 @@ class JSONCertRequestConverter:
                 builder = builder.add_extension(x509.ExtendedKeyUsage(eku_oids), critical=critical)
             elif ext_name == 'basic_constraints':
                 ca = ext_value.get('ca', False)
-                if ca and not allow_ca_cert:
-                    # Safeguard: CA certificate requests are blocked by default
-                    # Use allow_ca_certificate_request flag in context for legitimate CA cert requests
-                    exc_msg = 'Safeguard: Requesting CA certificates is not allowed.'
-                    raise ValueError(exc_msg)
                 builder = builder.add_extension(
                     x509.BasicConstraints(
                         ca=ca,

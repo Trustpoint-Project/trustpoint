@@ -137,12 +137,7 @@ class CsrBuilder(LoggerMixin, AbstractOperationProcessor):
 
     @staticmethod
     def _iter_san_field(value: str | list[str]) -> list[str]:
-        """Return a list of non-empty stripped items from a SAN field value.
-
-        Accepts either a comma-separated string or an already-split list so that
-        callers further up the stack (e.g. profile verifier) can pass lists while
-        form-sourced data may still arrive as a plain string.
-        """
+        """Return a list of non-empty stripped items from a SAN field value."""
         if isinstance(value, list):
             return [str(v).strip() for v in value if str(v).strip()]
         return [v.strip() for v in str(value).split(',') if v.strip()]

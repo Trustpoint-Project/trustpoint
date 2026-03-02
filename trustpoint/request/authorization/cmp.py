@@ -85,11 +85,7 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
     def _authorize_domain_credential_revocation(
         self, context: CmpRevocationRequestContext, signer_credential: IssuedCredentialModel
     ) -> None:
-        """Authorize revocation via a domain credential and set credential_to_revoke on the context.
-
-        Verifies that the signer device matches the target device and that device is not None,
-        then resolves the credential to revoke by serial number.
-        """
+        """Authorize revocation via a domain credential and set credential_to_revoke on the context."""
         signer_device = signer_credential.device
         if signer_device != context.device:
             error_message = (

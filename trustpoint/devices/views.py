@@ -590,17 +590,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
     page_name: str
 
     def _get_owner_credential_for_device(self) -> OwnerCredentialModel | None:
-        """Find the OwnerCredentialModel associated with this device.
-
-        The connection is established via the domain credential: the device has an
-        ``IssuedCredentialModel(DOMAIN_CREDENTIAL, device=self.object)`` and the
-        ``OwnerCredentialModel`` has a matching
-        ``RemoteIssuedCredentialModel(DOMAIN_CREDENTIAL, owner_credential=oc)`` that shares
-        the same certificate fingerprint.
-
-        Returns:
-            The associated OwnerCredentialModel, or None if no link exists.
-        """
+        """Find the OwnerCredentialModel associated with this device."""
         device_domain_cred = IssuedCredentialModel.objects.filter(
             device=self.object,
             issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
@@ -623,11 +613,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
     def _get_dev_owner_id_credentials_qs(
         self, owner_credential: OwnerCredentialModel,
     ) -> QuerySet[RemoteIssuedCredentialModel]:
-        """Return enrolled DevOwnerID credentials for the given owner credential.
-
-        Only credentials that already have a certificate (i.e. successfully enrolled)
-        are returned.
-        """
+        """Return enrolled DevOwnerID credentials for the given owner credential."""
         return RemoteIssuedCredentialModel.objects.filter(
             owner_credential=owner_credential,
             issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
@@ -718,14 +704,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             )
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the paginator and credential details to the context.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to use for rendering the clm summary page.
-        """
+        """Adds the paginator and credential details to the context."""
         self.issued_creds_qs = self.get_issued_creds_qs()
         self.domain_credentials_qs = self.get_domain_credentials_qs()
         self.application_credentials_qs = self.get_application_credentials_qs()

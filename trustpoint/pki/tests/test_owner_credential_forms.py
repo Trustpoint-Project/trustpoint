@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -11,7 +10,6 @@ from django.core.exceptions import ValidationError
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.forms.owner_credential import (
     OwnerCredentialAddRequestEstNoOnboardingForm,
-    OwnerCredentialAddRequestEstOnboardingForm,
     OwnerCredentialTruststoreAssociationForm,
     _OwnerCredentialEstBaseMixin,
 )

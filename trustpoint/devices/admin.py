@@ -2,8 +2,6 @@
 
 from django.contrib import admin
 
-from pki.models import RemoteIssuedCredentialModel
-
 from .models import (
     DeviceModel,
     IssuedCredentialModel,
@@ -33,13 +31,8 @@ class OnboardingConfigModelAdmin(admin.ModelAdmin[OnboardingConfigModel]):
     """Registers the OnboardingConfigModelAdmin with Django Admin."""
 
 
-class RemoteIssuedCredentialModelAdmin(admin.ModelAdmin[RemoteIssuedCredentialModel]):
-    """Registers the RemoteIssuedCredentialModelAdmin with Django Admin."""
-
-
 admin.site.register(DeviceModel, DeviceModelAdmin)
 admin.site.register(IssuedCredentialModel, IssuedCredentialModelAdmin)
 admin.site.register(RemoteDeviceCredentialDownloadModel, RemoteDeviceCredentialDownloadModelAdmin)
 admin.site.register(NoOnboardingConfigModel, NoOnboardingConfigModelAdmin)
 admin.site.register(OnboardingConfigModel, OnboardingConfigModelAdmin)
-admin.site.register(RemoteIssuedCredentialModel, RemoteIssuedCredentialModelAdmin)

@@ -16,11 +16,7 @@ if TYPE_CHECKING:
 
 
 class RemoteIssuedCredentialModel(CustomDeleteActionModel):
-    """Model for credentials issued to a CA or an OwnerCredential (not directly to a device).
-
-    This covers DevOwnerID and domain credentials linked to an :class:`~pki.models.credential.OwnerCredentialModel`,
-    as well as (future) credentials linked to a :class:`~pki.models.CaModel`.
-    """
+    """Model for credentials issued to a CA or an DevOwnerID."""
 
     class RemoteIssuedCredentialType(models.IntegerChoices):
         """The type of the credential."""

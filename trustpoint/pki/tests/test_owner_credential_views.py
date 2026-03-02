@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
 
 import pytest
 from django.contrib.auth.models import User
@@ -13,7 +12,6 @@ from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.models import OwnerCredentialModel
 from pki.models.credential import CredentialModel, IDevIDReferenceModel
 from pki.models import RemoteIssuedCredentialModel
-from pki.models.truststore import TruststoreModel
 
 
 @pytest.fixture(autouse=True)
