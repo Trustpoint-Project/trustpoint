@@ -64,7 +64,7 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
     page_name: str
     strategy: HelpPageStrategy
 
-    def _make_context(self, host_ip: str) -> HelpContext:
+    def _make_context(self, host_ip: str = '127.0.0.1') -> HelpContext:
         device = self.object
         domain = getattr(device, 'domain', None)
         if not domain:
