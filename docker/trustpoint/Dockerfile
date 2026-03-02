@@ -23,13 +23,21 @@ RUN apt-get update && \
         gettext \
         cron \
         locales \
-        postgresql-client \
         git \
         build-essential \
         cmake \
         libssl-dev \
         libseccomp-dev \
-        && rm -rf /var/lib/apt/lists/*
+        curl \
+        ca-certificates \
+        gnupg
+
+# Install postgres v18 client
+RUN curl -fSsL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] http://apt.postgresql.org/pub/repos/apt/ bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+    apt-get update && \
+    apt-get install -y postgresql-client-18 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Clone and build pkcs11-proxy
 RUN git clone https://github.com/SUNET/pkcs11-proxy.git /tmp/pkcs11-proxy && \
