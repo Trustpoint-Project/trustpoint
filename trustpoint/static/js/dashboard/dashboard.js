@@ -339,7 +339,12 @@ const noDataImagePlugin = {
 }
 
 function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
-  const colors = ['#0B5ED7', '#86B7FE', '#E9ECEF'];
+  const colorMap = {
+    active: '#0B5ED7',      // Blue
+    pending: '#CFE2FF',     // Light Blue
+    expiring: '#DC3545',    // Red
+    expired: '#E9ECEF'      // Gray
+  };
   const showLegend = true;
   const {
     centerText = 'Certificates',
@@ -347,8 +352,18 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
   } = options;
 
 
-  const { active, expiring, expired, total } = data;
+  const { active, pending, expiring, expired, total } = data;
   const hasData = total > 0;
+  
+  const hasPending = pending > 0;
+  const chartDataArray = hasPending 
+    ? [active, pending, expiring, expired]
+    : [active, expiring, expired];
+  
+  const dataKeys = hasPending 
+    ? ['active', 'pending', 'expiring', 'expired']
+    : ['active', 'expiring', 'expired'];
+  const chartColors = dataKeys.map(key => colorMap[key]);
   
   const centerTextPlugin = {
     id: `centerText${chartInstanceName}`,
@@ -393,8 +408,8 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
     data: {
       labels: labels,
       datasets: [{
-        data: [active, expiring, expired],
-        backgroundColor: colors,
+        data: chartDataArray,
+        backgroundColor: chartColors,
         borderColor: 'transparent',
         borderRadius: 5,
         spacing: 3
@@ -525,15 +540,40 @@ function initializeDonutChart(identifier, datasetName, chartTitle) {
     const sourceData = today[datasetName] || {};
 
     if (!Array.isArray(sourceData)) {
+      const isDeviceChart = chartTitle.toLowerCase().includes('device');
+      
       chartData = {
         active: sourceData.active || sourceData.Onboarded || 0,
+        pending: sourceData.pending || 0,
         expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0),
         expired: sourceData.expired || 0,
         total: sourceData.total || 0
       };
+      
+      if (!isDeviceChart) {
+        chartData.pending = 0;
+        chartData.total = chartData.active + chartData.expiring + chartData.expired;
+      }
+      
+      const labelMap = isDeviceChart ? {
+        active: 'Active Devices',
+        pending: 'Pending Devices',
+        expiring: 'Expiring Devices',
+        expired: 'Expired Devices'
+      } : {
+        active: 'Active Certificates',
+        pending: 'Pending Certificates',
+        expiring: 'Expiring Certificates',
+        expired: 'Expired Certificates'
+      };
+      
+      const dataKeys = isDeviceChart 
+        ? ['active', 'pending', 'expiring', 'expired']
+        : ['active', 'expiring', 'expired'];
+      
       chartOptions = {
         centerText: chartTitle,
-        labels: Object.keys(chartData).filter(key => key !== 'total')
+        labels: dataKeys.map(key => labelMap[key])
       };
     }
     

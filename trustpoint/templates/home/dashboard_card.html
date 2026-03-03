@@ -79,7 +79,7 @@
     if (type === 'expiring') {
       const today_delta_24 = dataToday.expiring_in_1_day || 0;
       const today_delta_7 = dataToday.expiring_in_7_days || 0;
-      const today_total = dataToday.expired || 0;
+      const today_total = today_delta_24 + today_delta_7;
 
       const week_delta_24 = dataWeek.expiring_in_1_day || 0;
       const week_delta_7 = dataWeek.expiring_in_7_days || 0;
