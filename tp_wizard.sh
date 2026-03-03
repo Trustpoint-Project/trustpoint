@@ -269,7 +269,7 @@ start_postgres(){
   log "Starting PostgreSQL..."
   docker run -d --name "$name" --network "$NET" \
     -p "${DB_PORT}:5432" \
-    -v "${VOL_DB}:/var/lib/postgresql/data" \
+    -v "${VOL_DB}:/var/lib/postgresql" \
     -e "POSTGRES_DB=$DB_NAME" \
     -e "POSTGRES_USER=$DB_USER" \
     -e "POSTGRES_PASSWORD=$DB_PASS" \

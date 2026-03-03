@@ -2723,6 +2723,7 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
                 return redirect(reverse_path)
             if status == CertificateModel.CertificateStatus.REVOKED:
                 msg = gettext_lazy('Certificate is already revoked. Cannot revoke a revoked certificate again.')
+                messages.error(self.request, msg)
                 return redirect(reverse_path)
             revoked_successfully, _ = DeviceCredentialRevocation.revoke_certificate(self.object.id, revocation_reason)
             if revoked_successfully:
