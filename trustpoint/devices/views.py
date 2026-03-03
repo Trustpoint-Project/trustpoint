@@ -583,11 +583,21 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
 
     default_sort_param = 'common_name'
     issued_creds_qs: QuerySet[IssuedCredentialModel]
-    domain_credentials_qs: QuerySet[IssuedCredentialModel]
-    application_credentials_qs: QuerySet[IssuedCredentialModel]
+    remote_issued_creds_qs: QuerySet[RemoteIssuedCredentialModel]
+    domain_credentials_qs: QuerySet[IssuedCredentialModel] | QuerySet[RemoteIssuedCredentialModel]
+    application_credentials_qs: QuerySet[IssuedCredentialModel] | QuerySet[RemoteIssuedCredentialModel]
 
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
+
+    _RA_CA_TYPES = (CaModel.CaTypeChoice.REMOTE_EST_RA, CaModel.CaTypeChoice.REMOTE_CMP_RA)
+
+    def _is_ra_domain(self) -> bool:
+        """Return True if the device's domain uses a remote RA CA (EST or CMP)."""
+        device = self.object
+        if not device.domain or not device.domain.issuing_ca:
+            return False
+        return device.domain.issuing_ca.ca_type in self._RA_CA_TYPES
 
     def _get_owner_credential_for_device(self) -> OwnerCredentialModel | None:
         """Find the OwnerCredentialModel associated with this device."""
@@ -631,27 +641,43 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         sort_param = self.request.GET.get('sort', self.default_sort_param)
         return issued_creds_qs.order_by(sort_param)
 
-    def get_domain_credentials_qs(self) -> QuerySet[IssuedCredentialModel]:
-        """Gets a sorted queryset of all IssuedCredentialModels that are domain credentials.
+    def get_remote_issued_creds_qs(self) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Gets a sorted queryset of all RemoteIssuedCredentialModels for RA-issued certs."""
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        return RemoteIssuedCredentialModel.objects.filter(
+            device=self.object,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.RA_DEVICE,
+        ).select_related('credential__certificate', 'domain').order_by(sort_param)
 
-        self.get_issued_creds_qs() must be called first!
+    def get_domain_credentials_qs(
+        self,
+    ) -> QuerySet[IssuedCredentialModel] | QuerySet[RemoteIssuedCredentialModel]:
+        """Gets domain credentials — from RemoteIssuedCredentialModel for RA domains, otherwise IssuedCredentialModel.
+
+        self.get_issued_creds_qs() or self.get_remote_issued_creds_qs() must be called first!
 
         Returns:
-            Sorted queryset of all IssuedCredentialModels that are domain credentials
+            Sorted queryset of domain credentials.
         """
+        if self._is_ra_domain():
+            return self.remote_issued_creds_qs.none()
         return self.issued_creds_qs.filter(
             Q(device=self.object)
             & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL.value)
         )
 
-    def get_application_credentials_qs(self) -> QuerySet[IssuedCredentialModel]:
-        """Gets a sorted queryset of all IssuedCredentialModels that are application credentials.
+    def get_application_credentials_qs(
+        self,
+    ) -> QuerySet[IssuedCredentialModel] | QuerySet[RemoteIssuedCredentialModel]:
+        """Gets application credentials — from RemoteIssuedCredentialModel for RA domains.
 
-            self.get_issued_creds_qs() must be called first!
+        self.get_issued_creds_qs() or self.get_remote_issued_creds_qs() must be called first!
 
         Returns:
-            Sorted queryset of all IssuedCredentialModels that are application credentials.
+            Sorted queryset of application credentials.
         """
+        if self._is_ra_domain():
+            return self.remote_issued_creds_qs
         return self.issued_creds_qs.filter(
             Q(device=self.object)
             & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL.value)
@@ -669,15 +695,17 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['application_credentials'] = paginator_application.get_page(page_number_application)
         context['is_paginated_a'] = paginator_application.num_pages > 1
 
+        is_ra = self._is_ra_domain()
+
         for cred in context['domain_credentials']:
             cred.expires_in = self._get_expires_in(cred)
             cred.expiration_date = cast('datetime.datetime', cred.credential.certificate_or_error.not_valid_after)
-            cred.revoke = self._get_revoke_button_html(cred)
+            cred.revoke = self._get_revoke_button_html(cred) if not is_ra else ''
 
         for cred in context['application_credentials']:
             cred.expires_in = self._get_expires_in(cred)
             cred.expiration_date = cast('datetime.datetime', cred.credential.certificate_or_error.not_valid_after)
-            cred.revoke = self._get_revoke_button_html(cred)
+            cred.revoke = self._get_revoke_button_html(cred) if not is_ra else ''
 
         self._add_dev_owner_id_context(context)
 
@@ -706,6 +734,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Adds the paginator and credential details to the context."""
         self.issued_creds_qs = self.get_issued_creds_qs()
+        self.remote_issued_creds_qs = self.get_remote_issued_creds_qs()
         self.domain_credentials_qs = self.get_domain_credentials_qs()
         self.application_credentials_qs = self.get_application_credentials_qs()
         context = super().get_context_data(**kwargs)
@@ -838,11 +867,11 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         return self.get_no_onboarding_form()
 
     @staticmethod
-    def _get_expires_in(record: IssuedCredentialModel) -> str:
+    def _get_expires_in(record: IssuedCredentialModel | RemoteIssuedCredentialModel) -> str:
         """Gets the remaining time until the credential expires as human-readable string.
 
         Args:
-            record: The corresponding IssuedCredentialModel.
+            record: The corresponding IssuedCredentialModel or RemoteIssuedCredentialModel.
 
         Returns:
             The remaining time until the credential expires as human-readable string.
@@ -857,15 +886,17 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         minutes, seconds = divmod(remainder, 60)
         return f'{days} days, {hours}:{minutes:02d}:{seconds:02d}'
 
-    def _get_revoke_button_html(self, record: IssuedCredentialModel) -> str:
+    def _get_revoke_button_html(self, record: IssuedCredentialModel | RemoteIssuedCredentialModel) -> str:
         """Gets the HTML for the revoke button in the devices table.
 
         Args:
-            record: The corresponding DeviceModel.
+            record: The corresponding IssuedCredentialModel or RemoteIssuedCredentialModel.
 
         Returns:
             The HTML of the hyperlink for the revoke button.
         """
+        if not isinstance(record, IssuedCredentialModel):
+            return ''
         cert = record.credential.certificate_or_error
         if cert.certificate_status == CertificateModel.CertificateStatus.REVOKED:
             return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', gettext_lazy('Revoked'))

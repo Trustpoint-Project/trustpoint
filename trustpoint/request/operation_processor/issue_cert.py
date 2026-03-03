@@ -147,6 +147,10 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
                 cert_profile_disp_name,
             )
         context.issued_certificate = signed_cert
+        context.issued_certificate_chain = [
+            issuing_credential.get_certificate(),
+            *issuing_credential.get_certificate_chain(),
+        ]
 
     def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0915 - Core pipeline orchestration requires multiple validation and conditional paths
         """Process the certificate issuance operation."""
@@ -349,6 +353,12 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         if issuing_ca.no_onboarding_config:
             est_password = issuing_ca.no_onboarding_config.est_password
 
+        tls_truststore = (
+            issuing_ca.no_onboarding_config.trust_store
+            if issuing_ca.no_onboarding_config and issuing_ca.no_onboarding_config.trust_store
+            else issuing_ca.chain_truststore
+        )
+
         return EstCertificateRequestContext(
             operation='simpleenroll',
             protocol='est',
@@ -362,7 +372,7 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             est_server_path=issuing_ca.remote_path,
             est_username=issuing_ca.est_username,
             est_password=est_password,
-            est_server_truststore=issuing_ca.chain_truststore,
+            est_server_truststore=tls_truststore,
         )
 
     def _process_est_enrollment(self, context: BaseCertificateRequestContext) -> None:
@@ -430,6 +440,7 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         )
 
         context.issued_certificate = issued_cert
+        context.issued_certificate_chain = ca_chain
         self.logger.info(
             'Successfully issued certificate via remote EST CA: %s',
             issuing_ca.unique_name
