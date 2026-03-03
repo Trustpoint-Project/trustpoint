@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import tempfile
+import urllib.parse
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -12,6 +13,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs7
 
 from trustpoint.logger import LoggerMixin
+from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
     from cryptography import x509
@@ -142,6 +144,40 @@ class EstClient(LoggerMixin):
             )
             return issued_cert
 
+    def _write_temp_pem(self, content: str | bytes, suffix: str = '.pem') -> str:
+        """Write PEM content to a temporary file and return its path."""
+        text = content if isinstance(content, str) else content.decode('utf-8')
+        with tempfile.NamedTemporaryFile(mode='w', suffix=suffix, delete=False) as tmp:
+            tmp.write(text)
+            return tmp.name
+
+    def _prepare_ca_bundle(self) -> str:
+        """Write the CA truststore to a temporary PEM file."""
+        if self.context.est_server_truststore is None:
+            msg = 'EST server truststore is not configured'
+            raise EstClientError(msg)
+        ca_pem = self.context.est_server_truststore.get_certificate_collection_serializer().as_pem()
+        return self._write_temp_pem(ca_pem)
+
+    def _prepare_auth(self) -> tuple[tuple[str, str] | None, tuple[str, str] | None, list[str]]:
+        """Prepare authentication parameters for an EST request."""
+        temp_files: list[str] = []
+
+        # Prefer mTLS client certificate authentication
+        if self.context.est_client_cert_pem and self.context.est_client_key_pem:
+            self.logger.debug('Using mTLS client certificate authentication')
+            cert_path = self._write_temp_pem(self.context.est_client_cert_pem)
+            key_path = self._write_temp_pem(self.context.est_client_key_pem)
+            temp_files.extend([cert_path, key_path])
+            return None, (cert_path, key_path), temp_files
+
+        # Fall back to HTTP Basic Authentication
+        if self.context.est_username and self.context.est_password:
+            self.logger.debug('Using HTTP Basic Authentication for user: %s', self.context.est_username)
+            return (self.context.est_username, self.context.est_password), None, temp_files
+
+        return None, None, temp_files
+
     def simple_enroll(self, csr: CertificateSigningRequest) -> x509.Certificate:
         """Perform simple enrollment by sending a CSR to the EST server.
 
@@ -167,19 +203,20 @@ class EstClient(LoggerMixin):
             'Accept': 'application/pkcs7-mime',
         }
 
-        auth = None
-        if self.context.est_username and self.context.est_password:
-            auth = (self.context.est_username, self.context.est_password)
-            self.logger.debug('Using HTTP Basic Authentication for user: %s', self.context.est_username)
+        temp_ca_bundle_path = self._prepare_ca_bundle()
+        auth, client_cert, auth_temp_files = self._prepare_auth()
 
-        # Create temporary CA bundle file for requests
-        if self.context.est_server_truststore is None:
-            msg = 'EST server truststore is not configured'
-            raise EstClientError(msg)
-        ca_bundle_pem = self.context.est_server_truststore.get_certificate_collection_serializer().as_pem()
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False) as temp_file:
-            temp_file.write(ca_bundle_pem.decode('utf-8'))
-            temp_ca_bundle_path = temp_file.name
+        if self.context.est_client_cert_pem and not DOCKER_CONTAINER:
+            # When using mTLS, also forward the client certificate as an HTTP
+            # header.  In production nginx terminates TLS and sets the
+            # ``SSL_CLIENT_CERT`` header for Django.  The dev server
+            # (``runserver_plus``) does not do this,
+            raw_pem = (
+                self.context.est_client_cert_pem
+                if isinstance(self.context.est_client_cert_pem, str)
+                else self.context.est_client_cert_pem.decode('utf-8')
+            )
+            headers['SSL-CLIENT-CERT'] = urllib.parse.quote(raw_pem, safe='')
 
         try:
             response = requests.post(
@@ -187,6 +224,7 @@ class EstClient(LoggerMixin):
                 data=csr_data,
                 headers=headers,
                 auth=auth,
+                cert=client_cert,
                 verify=temp_ca_bundle_path,
                 timeout=self.timeout,
             )
@@ -208,6 +246,8 @@ class EstClient(LoggerMixin):
             return issued_cert
         finally:
             Path(temp_ca_bundle_path).unlink()
+            for path in auth_temp_files:
+                Path(path).unlink(missing_ok=True)
 
     def get_ca_certs(self) -> list[x509.Certificate]:
         """Retrieve CA certificates from the EST server.

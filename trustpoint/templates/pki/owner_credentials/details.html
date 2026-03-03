@@ -1,57 +1,81 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
-{% load crispy_forms_filters %}
 
 {% block content %}
 
-<div class="card">
-
+<!-- General info card -->
+<div class="card mb-4">
     <div class="card-header">
-        <div class="">
-            <h1>{% trans "DevOwnerID Details" %}</h1>
-        </div>
+        <h1>{% trans "DevOwnerID Details" %}</h1>
     </div>
     <div class="card-body">
         <div class="tp-card-centered-content">
-            <h2>{% trans 'General' %}</h2>
-            <hr class="hr-m">
             <div class="tp-kvp-list">
                 <div>
                     <div>{% trans 'Unique Name' %}</div>
-                    <div>{{ issuing_ca.unique_name }}</div>
+                    <div>{{ owner_credential.unique_name }}</div>
                 </div>
                 <div>
-                    <div>{% trans 'Serial Number' %}</div>
-                    <div>{{ owner_credential.credential.certificate.serial_number }}</div>
+                    <div>{% trans 'Type' %}</div>
+                    <div>{{ owner_credential.get_owner_credential_type_display }}</div>
                 </div>
                 <div>
-                    <div>{% trans 'Fingerprint (SHA256)' %}</div>
-                    <div>{{ owner_credential.credential.certificate.sha256_fingerprint }}</div>
+                    <div>{% trans 'Key Type' %}</div>
+                    <div>{{ owner_credential.key_type|default:"—" }}</div>
                 </div>
                 <div>
-                    <div>{% trans 'Valid for number of IDevIDs' %}</div>
+                    <div>{% trans 'Associated IDevIDs' %}</div>
                     <div>{{ owner_credential.idevid_ref_set.count }}</div>
                 </div>
-            </div>
-            <h2>{% trans 'Associated IDevIDs' %}</h2>
-            <hr class="hr-m">
-            {% for idevid_ref in idevid_refs %}
-                <div class="tp-kvp-list">
-                    <div>
-                        <div>{% trans 'Serial Number (Subject)' %}</div>
-                        <div>{{ idevid_ref.idevid_subj_sn }}</div>
-                    </div>
-                    <div>
-                        <div>{% trans 'X.509 Serial Number' %}</div>
-                        <div>{{ idevid_ref.idevid_x509_sn }}</div>
-                    </div>
-                    <div>
-                        <div>{% trans 'Fingerprint (SHA256)' %}</div>
-                        <div>{{ idevid_ref.idevid_sha256_fingerprint }}</div>
-                    </div>
+                <div>
+                    <div>{% trans 'Created at' %}</div>
+                    <div>{{ owner_credential.created_at }}</div>
                 </div>
-            {% endfor %}
+            </div>
         </div>
+    </div>
+</div>
+
+<!-- Associated IDevIDs table card -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="mb-0">{% trans 'Associated IDevIDs' %}</h2>
+    </div>
+    <div class="card-body p-0">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th class="text-nowrap">{% trans 'Subject Serial Number' %}</th>
+                    <th class="text-nowrap">{% trans 'X.509 Serial Number' %}</th>
+                    <th class="text-nowrap">{% trans 'SHA-256 Fingerprint' %}</th>
+                    <th class="text-nowrap">{% trans 'Certificate' %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ref in idevid_refs %}
+                <tr>
+                    <td>{{ ref.idevid_subject_serial_number|default:"—" }}</td>
+                    <td>{{ ref.idevid_x509_serial_number|default:"—" }}</td>
+                    <td class="small text-break">{{ ref.idevid_sha256_fingerprint|default:"—" }}</td>
+                    <td>
+                        {% if ref.dev_owner_id_certificate %}
+                            <a href="{% url 'pki:certificate-detail' pk=ref.dev_owner_id_certificate.pk %}">
+                                {{ ref.dev_owner_id_certificate.serial_number }}
+                            </a>
+                        {% else %}
+                            <span class="text-muted">{% trans 'Not in store' %}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-3">
+                        {% trans 'No IDevID references associated with this DevOwnerID.' %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
     <div class="card-footer d-flex">
         <div class="tp-card-btn-footer m-1">

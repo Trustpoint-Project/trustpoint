@@ -158,6 +158,10 @@ class EstBaseRequestContext(HttpBaseRequestContext):
     est_server_path: str | None = None
     est_server_truststore: TruststoreModel | None = None
 
+    # Client certificate (mTLS) authentication — used instead of username/password
+    est_client_cert_pem: str | None = None
+    est_client_key_pem: str | None = None
+
 @dataclass(kw_only=True)
 class CmpBaseRequestContext(HttpBaseRequestContext):
     """Shared context for all CMP requests.

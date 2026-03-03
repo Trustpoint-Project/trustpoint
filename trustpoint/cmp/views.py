@@ -84,9 +84,6 @@ class CmpRequestView(LoggerMixin, View):
         if not cert_profile:
             cert_profile = 'domain_credential'
 
-        # Allow CA certificate requests if using the issuing_ca profile
-        allow_ca_cert = cert_profile == 'issuing_ca'
-
         ctx: BaseRequestContext
         try:
             ctx = CmpCertificateRequestContext(
@@ -95,7 +92,6 @@ class CmpRequestView(LoggerMixin, View):
                 protocol='cmp',
                 operation=operation,
                 cert_profile_str=cert_profile,
-                allow_ca_certificate_request=allow_ca_cert,
         )
         except Exception:
             err_msg = 'Failed to set up CMP request context.'
