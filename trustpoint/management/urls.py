@@ -43,6 +43,11 @@ urlpatterns = [
         tls.TlsAddFileImportSeparateFilesView.as_view(),
         name='tls-add-file_import-separate_files',
     ),
+    re_path(
+        r'^tls/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
+        tls.TlsBulkDeleteConfirmView.as_view(),
+        name='tls-delete_confirm',
+    ),
     path('tls/activate/<int:pk>', tls.ActivateTlsServerView.as_view(), name='activate-tls'),
     path(
         'backups/',
