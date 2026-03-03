@@ -56,7 +56,7 @@ if BUILD_AUTODOCS:
         '../../trustpoint',
     ]
     autodoc_typehints = 'description'  # Display type hints in descriptions
-    autoapi_ignore_patterns = [
+    autoapi_ignore = [
         '*features*',
         '*tests*',
         '*testing*',
@@ -64,7 +64,20 @@ if BUILD_AUTODOCS:
         '*migrations*',
         '*unused*',
         '*conftest.py',
+        '*/migrations/*',
+        '*/__pycache__/*',
+        '*/tests/*',
+        '*/features/*',
     ]  # Exclude features, tests, and related folders from AutoAPI
+
+    # AutoAPI performance optimizations
+    autoapi_options = [
+        'members',
+        'undoc-members',
+        'show-inheritance',
+    ]
+    autoapi_keep_files = False  # Don't keep intermediate files to save disk I/O
+
 
 # -- Templates and exclusions -----------------------------------------------
 templates_path = ['_templates']  # Custom templates directory
