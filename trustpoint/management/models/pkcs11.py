@@ -291,14 +291,10 @@ class PKCS11Token(models.Model, LoggerMixin):
             try:
                 session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
             except pkcs11.UserAlreadyLoggedIn:
-                # If user is already logged in, logout and try again
-                self.logger.debug('User already logged in to token %s, logging out and retrying', self.label)
-                try:
-                    pkcs11_token.logout()
-                except Exception as logout_error:  # noqa: BLE001
-                    self.logger.warning('Failed to logout before reopening session: %s', logout_error)
-                # Retry opening the session
-                session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
+                # If user is already logged in, reuse the existing session without logging out
+                # This avoids unnecessary session disruption
+                self.logger.debug('User already logged in to token %s, reusing existing session', self.label)
+                session = pkcs11_token.open(rw=True)
 
             wrap_key = session.get_key(
                 key_type=pkcs11.KeyType.AES,
@@ -553,12 +549,7 @@ class PKCS11Token(models.Model, LoggerMixin):
         try:
             session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
         except pkcs11.UserAlreadyLoggedIn:
-            self.logger.debug('User already logged in to token %s, logging out and retrying', self.label)
-            try:
-                pkcs11_token.logout()
-            except Exception as logout_error:  # noqa: BLE001
-                self.logger.warning('Failed to logout before reopening session: %s', logout_error)
-            session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
+            session = pkcs11_token.open(rw=True)
 
         wrap_key = session.get_key(
             key_type=pkcs11.KeyType.AES,
