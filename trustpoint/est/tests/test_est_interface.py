@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from cryptography import x509
-from devices.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel
 from django.test import RequestFactory
 from pki.util.idevid import IDevIDAuthenticator
 from pki.util.x509 import ClientCertificateAuthenticationError

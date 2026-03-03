@@ -11,7 +11,6 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer
 from devices.models import (
     DeviceModel,
-    IssuedCredentialModel,
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
     OnboardingConfigModel,
@@ -22,7 +21,7 @@ from devices.models import (
 from django.http import HttpRequest
 from django.test.client import RequestFactory
 from management.models import KeyStorageConfig
-from pki.models import CertificateModel, CredentialModel
+from pki.models import CertificateModel, CredentialModel, IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
 from pki.models import CaModel
