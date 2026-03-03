@@ -6,7 +6,7 @@ import pytest
 from cryptography.x509 import SubjectAlternativeName, UniformResourceIdentifier
 
 from devices.issuer import OpcUaClientCredentialIssuer
-from devices.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel
 
 
 @pytest.mark.django_db

@@ -16,7 +16,6 @@ from django.utils.translation import gettext_lazy as _
 
 from devices.models import (
     DeviceModel,
-    IssuedCredentialModel,
     RemoteDeviceCredentialDownloadModel,
 )
 from devices.utils import validate_application_uri, validate_common_name_characters
@@ -29,6 +28,7 @@ from onboarding.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
+from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel

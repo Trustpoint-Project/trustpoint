@@ -60,7 +60,6 @@ from devices.issuer import (
 )
 from devices.models import (
     DeviceModel,
-    IssuedCredentialModel,
     RemoteDeviceCredentialDownloadModel,
 )
 from devices.revocation import DeviceCredentialRevocation
@@ -74,7 +73,7 @@ from onboarding.models import (
 )
 from pki.forms import TruststoreAddForm
 from pki.forms.cert_profiles import CertificateIssuanceForm
-from pki.models import RemoteIssuedCredentialModel
+from pki.models import IssuedCredentialModel, RemoteIssuedCredentialModel
 from pki.models.ca import CaModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel

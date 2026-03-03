@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     from trustpoint_core.serializer import PrivateKeySerializer
 
     from cmp.util import PKIFailureInfo
-    from devices.models import DeviceModel, IssuedCredentialModel
-    from pki.models import CertificateProfileModel, CredentialModel, DomainModel, TruststoreModel
+    from devices.models import DeviceModel
+    from pki.models import CertificateProfileModel, CredentialModel, DomainModel, IssuedCredentialModel, TruststoreModel
     from workflows.events import Event
     from workflows.models import EnrollmentRequest
 

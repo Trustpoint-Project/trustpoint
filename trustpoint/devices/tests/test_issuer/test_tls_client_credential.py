@@ -8,7 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509 import SubjectAlternativeName, UniformResourceIdentifier
 
 from devices.issuer import LocalTlsClientCredentialIssuer
-from devices.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel
 
 
 @pytest.mark.django_db

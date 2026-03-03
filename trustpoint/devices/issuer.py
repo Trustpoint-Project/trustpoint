@@ -12,10 +12,9 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
 
-from devices.models import DeviceModel, IssuedCredentialModel
 from onboarding.models import OnboardingProtocol, OnboardingStatus
 from pki.models.credential import CredentialModel
-from pki.models.issued_credential import RemoteIssuedCredentialModel
+from pki.models.issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
 from pki.util.keys import KeyGenerator
 from trustpoint.logger import LoggerMixin
 
@@ -24,6 +23,7 @@ if TYPE_CHECKING:
 
     from trustpoint_core.crypto_types import PublicKey
 
+    from devices.models import DeviceModel
     from pki.models.domain import DomainModel
 
 

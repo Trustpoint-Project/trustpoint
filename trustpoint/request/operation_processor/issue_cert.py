@@ -9,9 +9,8 @@ from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
 
 from devices.issuer import CredentialSaver
-from devices.models import DeviceModel, IssuedCredentialModel
 from management.models import TlsSettings
-from pki.models import CaModel
+from pki.models import CaModel, IssuedCredentialModel
 from pki.models.credential import CredentialModel
 from pki.util.keys import is_supported_public_key
 from request.clients.est_client import EstClient
@@ -29,6 +28,7 @@ from .base import AbstractOperationProcessor
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
+    from devices.models import DeviceModel
     from pki.models.domain import DomainModel
 
 

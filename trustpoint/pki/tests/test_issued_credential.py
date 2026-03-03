@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from pki.models import CredentialModel, RevokedCertificateModel
 
-from devices.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel
 
 
 @pytest.mark.django_db
