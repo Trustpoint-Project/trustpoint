@@ -102,9 +102,10 @@ class DashboardView(SortableTableMixin[NotificationModel], ListView[Notification
         """
         context = super().get_context_data(**kwargs)
 
-        #or notification in context['notifications']:
-        #notification.type_badge = self._render_notification_type(notification)
-        #notification.created = self._render_created_at(notification)
+        for notification in context['management']:
+            notification.type_badge = self._render_notification_type(notification)
+            notification.created = self._render_created_at(notification)
+
 
         context['page_category'] = 'home'
         context['page_name'] = 'dashboard'
