@@ -546,30 +546,18 @@ class PKCS11Token(models.Model, LoggerMixin):
             )
 
     def _open_session_and_get_wrap_key(self) -> tuple[pkcs11.Session, pkcs11.Key]:
-        """Open a PKCS#11 session and retrieve the AES wrapping key for this token.
-
-        Handles the case where a user is already logged in by logging out and retrying.
-
-        Returns:
-            tuple[pkcs11.Session, pkcs11.Key]: An open PKCS#11 session and the AES wrapping key.
-
-        Raises:
-            RuntimeError: If unable to open a session or retrieve the wrapping key.
-        """
+        """Open a PKCS#11 session and retrieve the AES wrapping key for this token."""
         pkcs11_lib = pkcs11.lib(self.module_path)
         pkcs11_token = pkcs11_lib.get_token(token_label=self.label)
 
-        # Try to open a session with the user PIN, handling if already logged in
         try:
             session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
         except pkcs11.UserAlreadyLoggedIn:
-            # If user is already logged in, logout and try again
             self.logger.debug('User already logged in to token %s, logging out and retrying', self.label)
             try:
                 pkcs11_token.logout()
             except Exception as logout_error:  # noqa: BLE001
                 self.logger.warning('Failed to logout before reopening session: %s', logout_error)
-            # Retry opening the session
             session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
 
         wrap_key = session.get_key(
