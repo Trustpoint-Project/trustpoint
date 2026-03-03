@@ -363,7 +363,16 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
   const dataKeys = hasPending 
     ? ['active', 'pending', 'expiring', 'expired']
     : ['active', 'expiring', 'expired'];
-  const chartColors = dataKeys.map(key => colorMap[key]);
+  const chartColors = dataKeys.map(key => {
+    // Use light pink gradient for expiring instead of blue
+    if (key === 'expiring') {
+      return '#FFE8E8'; // Light pink for expiring
+    }
+    return colorMap[key];
+  });
+  
+  // Create border colors - light pink for expiring, transparent for others
+  const borderColors = dataKeys.map(key => key === 'expiring' ? '#FFB3B3' : 'transparent');
   
   const centerTextPlugin = {
     id: `centerText${chartInstanceName}`,
@@ -410,7 +419,8 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
       datasets: [{
         data: chartDataArray,
         backgroundColor: chartColors,
-        borderColor: 'transparent',
+        borderColor: borderColors,
+        borderWidth: 2,
         borderRadius: 5,
         spacing: 3
       }]

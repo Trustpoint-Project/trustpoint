@@ -11,9 +11,9 @@
 }
 
 .card-count-expiring-container{
-    background-color: #DC3545;
-    color: #ffffff;
-    border: 0;
+    background: linear-gradient(135deg, #FFF5F5 0%, #FFE8E8 100%);
+    color: #1a1a1a;
+    border: 1px solid #FFB3B3;
     font-weight: 450;
 }
 
