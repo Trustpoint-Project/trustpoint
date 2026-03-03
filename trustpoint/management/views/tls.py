@@ -6,6 +6,9 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.db import transaction
+from django.db.models import ProtectedError
+from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
@@ -24,8 +27,10 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.forms import StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import BulkDeleteView
 
 if TYPE_CHECKING:
+    from django.forms import Form
     from django.http import HttpRequest, HttpResponse
 
 
@@ -275,6 +280,63 @@ class TlsAddFileImportSeparateFilesView(
             _('Successfully added TLS-Server Credential.'),
         )
         return super().form_valid(form)
+
+class TlsBulkDeleteConfirmView(TlsSettingsContextMixin, BulkDeleteView):
+    """View to confirm the deletion of multiple TLS certificates."""
+
+    model = CertificateModel
+    success_url = reverse_lazy('management:tls')
+    ignore_url = reverse_lazy('management:tls')
+    template_name = 'management/tls/confirm_delete.html'
+    context_object_name = 'certificates'
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
+        queryset = self.get_queryset()
+        if not queryset.exists():
+            messages.error(request, _('No TLs certificates selected for deletion.'))
+            return HttpResponseRedirect(self.success_url)
+        return super().get(request, *args, **kwargs)
+
+    def form_valid(self, _form: Form) -> HttpResponse:
+        """Attempt to delete tls certificates if the form is valid."""
+        queryset = self.get_queryset()
+        try:
+            active_credential = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
+        except ActiveTrustpointTlsServerCredentialModel.DoesNotExist:
+            active_credential = None
+        if active_credential and active_credential.credential and (cert := active_credential.credential.certificate):
+            cert_ids = list(queryset.values_list('id', flat=True))
+            active_id = cert.id
+            if active_id in cert_ids:
+                cert_ids.remove(active_id)
+                queryset = queryset.exclude(id=active_id)
+                messages.warning(
+                    self.request, _('Cannot delete the active TLS certificate.')
+                )
+                if len(cert_ids) == 0:
+                    return redirect(self.get_success_url())
+        try:
+            with transaction.atomic():
+                # Delete all related credentials first
+                CredentialModel.objects.filter(
+                    certificate__in=queryset
+                ).delete()
+                # Delete certificates
+                delete_count = queryset.count()
+                queryset.delete()
+        except ProtectedError:
+            messages.error(
+                self.request, _('Cannot delete the TLS certificate(s) because they are referenced by other objects.')
+            )
+            return HttpResponseRedirect(self.success_url)
+        except ValidationError as exc:
+            messages.error(self.request, exc.message)
+            return HttpResponseRedirect(self.success_url)
+
+        messages.success(self.request, _('Successfully deleted {count} TLS certificate(s).').format(count=delete_count))
+
+        return redirect(self.get_success_url())
 
 class ActivateTlsServerView(View, LoggerMixin):
     """Activate a TLS server certificate."""

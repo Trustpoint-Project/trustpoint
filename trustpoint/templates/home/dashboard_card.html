@@ -1,0 +1,112 @@
+{% load static %}
+
+<div class="card rounded-5 h-100
+    {% if card_type == 'active' %}
+        card-count-active-container
+    {% elif card_type == 'expiring' %}
+        card-count-expiring-container
+    {% elif card_type == 'expired' %}
+        card-count-expired-container
+    {% endif %}
+">
+  <div class="card-body p-4 d-flex flex-column justify-content-between">
+    <div class="d-flex justify-content-between align-items-start mb-4">
+      <h6 class="fs-5 mb-0">{{ title }}</h6>
+      
+      {% if link_url %}
+      <button
+        class="btn btn-outline-light btn-sm rounded-circle d-inline-flex align-items-center justify-content-center p-0 card-count-btn-link"
+        onclick="window.location.href = '{{ link_url }}'">
+        <i class="bi bi-arrow-up-right"></i>
+      </button>
+      {% endif %}
+    </div>
+
+    <div class="d-flex align-items-end">
+      <p id="total_count_{{ identifier }}" class="fw-bold display-3 lh-1 mb-0 me-2"></p>
+
+      {% if card_type == 'active' %}
+      <span class="d-inline-flex align-items-center border border-white rounded-3 px-2 py-1 lh-1 position-relative card-count-delta">
+        <span id="delta_count_{{ identifier }}" class="small me-1 lh-1"></span>
+        <i class="bi bi-caret-up-fill fs-6 lh-1"></i>
+      </span>
+    
+      {% elif card_type == 'expiring' %}
+      <div class="d-grid align-content-center position-relative card-count-expiring-delta">
+        <span class="small text-end">24 Hours</span>
+        <span class="d-inline-flex align-items-center border border-white rounded-3 px-2 py-1 lh-1">
+          <span id="delta_count_24_{{ identifier }}" class="small lh-1"></span>
+          <i class="bi bi-caret-up-fill ms-1"></i>
+        </span>
+        <span class="small text-end">7 Days</span>
+        <span class="d-inline-flex align-items-center border border-white rounded-3 px-2 py-1 lh-1">
+          <span id="delta_count_7_{{ identifier }}" class="small lh-1"></span>
+          <i class="bi bi-caret-up-fill ms-1"></i>
+        </span>
+      </div>
+
+
+      {% elif card_type == 'expired' %}
+      <span class="d-inline-flex align-items-center border rounded-3 px-2 py-1 lh-1 position-relative card-count-delta">
+        <span id="delta_count_{{ identifier }}" class="small me-1 lh-1"></span>
+        <i class="bi bi-caret-up-fill fs-6 lh-1"></i>
+      </span>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('dashboardData', (event) => {
+    const today = event.detail.today;
+    const week = event.detail.week;
+
+    const uniqueId = "{{ identifier }}";
+    const type = "{{ card_type }}";
+    const dataset = "{{ dataset }}";
+
+    let dataToday;
+    let dataWeek;
+
+    if (!today || !week) return;
+
+    if (!today[dataset] || !week[dataset]) return;
+
+    dataToday = today[dataset];
+    dataWeek = week[dataset];
+
+    if (type === 'expiring') {
+      const today_delta_24 = dataToday.expiring_in_1_day || 0;
+      const today_delta_7 = dataToday.expiring_in_7_days || 0;
+      const today_total = today_delta_24 + today_delta_7;
+
+      // Hide the card if there are no expiring items
+      if (today_total === 0) {
+        const cardElement = document.querySelector(`[id^="total_count_${uniqueId}"]`)?.closest('.card');
+        if (cardElement && cardElement.parentElement) {
+          cardElement.parentElement.style.display = 'none';
+        }
+        return;
+      }
+
+      // Display current window counts, not change since last week
+      document.getElementById(`total_count_${uniqueId}`).textContent = today_total;
+      document.getElementById(`delta_count_24_${uniqueId}`).textContent = today_delta_24;
+      document.getElementById(`delta_count_7_${uniqueId}`).textContent = today_delta_7;
+
+      // Show positive counts (no delta icon needed for expiring cards)
+      updateDeltaIcon(`delta_count_24_${uniqueId}`, today_delta_24);
+      updateDeltaIcon(`delta_count_7_${uniqueId}`, today_delta_7);
+
+    } else {
+      const currentVal = dataToday[type] || 0;
+      const pastVal = dataWeek[type] || 0;
+      const delta = currentVal - pastVal;
+
+      document.getElementById(`total_count_${uniqueId}`).textContent = currentVal;
+      document.getElementById(`delta_count_${uniqueId}`).textContent = delta;
+      updateDeltaIcon(`delta_count_${uniqueId}`, delta);
+    }
+  });
+</script>

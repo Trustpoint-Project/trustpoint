@@ -38,7 +38,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('label', models.CharField(help_text='Token label in SoftHSM', max_length=100, unique=True, verbose_name='Label')),
                 ('slot', models.PositiveIntegerField(help_text='Slot number in SoftHSM', verbose_name='Slot')),
-                ('module_path', models.CharField(default='/usr/local/lib/libpkcs11-proxy.so', help_text='Path to PKCS#11 module library', max_length=255, verbose_name='Module Path')),
+                ('module_path', models.CharField(default='/usr/lib/libpkcs11-proxy.so', help_text='Path to PKCS#11 module library', max_length=255, verbose_name='Module Path')),
                 ('encrypted_dek', models.BinaryField(blank=True, help_text='Symmetric key encrypted by the PKCS#11 private key', max_length=512, null=True, verbose_name='Encrypted Data Encryption Key (DEK)')),
                 ('bek_encrypted_dek', models.BinaryField(blank=True, help_text='Symmetric key encrypted by the PKCS#11 private key', max_length=512, null=True, verbose_name='Encrypted Data Encryption Key (DEK)')),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),

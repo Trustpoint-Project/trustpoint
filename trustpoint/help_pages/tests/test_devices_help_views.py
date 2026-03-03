@@ -1,4 +1,6 @@
 """Test cases for devices help views."""
+import ipaddress
+from cryptography import x509
 
 from unittest.mock import Mock, patch
 
@@ -34,12 +36,10 @@ class BaseHelpViewTests(TestCase):
         self.view = BaseHelpView()
 
     @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
-    @patch('help_pages.devices_help_views.TlsSettings.get_first_ipv4_address')
     def test_make_context_success(
-        self, mock_get_ip: Mock, mock_filter: Mock
+        self, mock_filter: Mock
     ) -> None:
         """Test _make_context creates HelpContext successfully."""
-        mock_get_ip.return_value = '192.168.1.1'
         mock_queryset = Mock()
         mock_queryset.count.return_value = 2
         mock_filter.return_value = mock_queryset
@@ -57,7 +57,7 @@ class BaseHelpViewTests(TestCase):
         request.META['SERVER_PORT'] = '8443'
         self.view.request = request
 
-        context = self.view._make_context()
+        context = self.view._make_context('192.168.1.1')
 
         assert context.domain == mock_domain
         assert context.domain_unique_name == 'test-domain'
@@ -99,12 +99,12 @@ class BaseHelpViewTests(TestCase):
             self.view._make_context()
 
     @patch('help_pages.devices_help_views.IssuedCredentialModel.objects.filter')
-    @patch('help_pages.devices_help_views.TlsSettings.get_first_ipv4_address')
+    @patch('help_pages.devices_help_views.ActiveTrustpointTlsServerCredentialModel.objects.get'
+    )
     def test_get_context_data_success(
-        self, mock_get_ip: Mock, mock_filter: Mock
+        self, mock_get: Mock, mock_filter: Mock
     ) -> None:
         """Test get_context_data builds help page successfully."""
-        mock_get_ip.return_value = '192.168.1.1'
         mock_filter.return_value.count.return_value = 1
 
         mock_domain = Mock()
@@ -117,6 +117,18 @@ class BaseHelpViewTests(TestCase):
 
         mock_strategy = Mock()
         mock_strategy.build_sections.return_value = ([], 'Test Heading')
+
+        mock_ip = Mock(spec=x509.IPAddress)
+        mock_ip.value = ipaddress.IPv4Address("192.168.1.1")
+        mock_san = Mock()
+        mock_san.value = [mock_ip]
+        mock_cert = Mock()
+        mock_cert.extensions.get_extension_for_class.return_value = mock_san
+        mock_credential = Mock()
+        mock_credential.get_certificate_serializer.return_value.as_crypto.return_value = mock_cert
+        mock_active_tls = Mock()
+        mock_active_tls.credential = mock_credential
+        mock_get.return_value = mock_active_tls
 
         self.view.object = mock_device
         self.view.strategy = mock_strategy
