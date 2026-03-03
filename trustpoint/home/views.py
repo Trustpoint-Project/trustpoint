@@ -440,8 +440,12 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             cert_counts = CertificateModel.objects.aggregate(
                 total=Count('id'),
                 active=Count('id', filter=Q(not_valid_after__gt=next_7_days)),
-                expiring_in_7_days=Count('id', filter=Q(not_valid_after__gt=now, not_valid_after__lte=next_7_days)),
-                expiring_in_1_day=Count('id', filter=Q(not_valid_after__gt=now, not_valid_after__lte=next_1_day)),
+                expiring_in_1_day=Count(
+                    'id', filter=Q(not_valid_after__gt=now, not_valid_after__lte=next_1_day)
+                ),
+                expiring_in_7_days=Count(
+                    'id', filter=Q(not_valid_after__gt=next_1_day, not_valid_after__lte=next_7_days)
+                ),
                 expired=Count('id', filter=Q(not_valid_after__lte=now)),
             )
         except Exception as exception:
@@ -790,6 +794,8 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         Returns:
             It returns counts of issuing CAs with expiring certificates.
+            expiring_in_1_day: 0-24 hours
+            expiring_in_7_days: 24h-7 days (excluding the 24-hour window)
         """
         now = timezone.now()
         next_7_days = now + timedelta(days=7)
@@ -797,14 +803,14 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         expiring_issuing_ca_counts = {}
         try:
             expiring_issuing_ca_counts = {
-                'expiring_in_24_hours': CaModel.objects.filter(
+                'expiring_in_1_day': CaModel.objects.filter(
                     credential__certificate__not_valid_after__gt=now,
                     credential__certificate__not_valid_after__lte=next_24_hours
-                ).count(),
+                ).distinct().count(),
                 'expiring_in_7_days': CaModel.objects.filter(
-                    credential__certificate__not_valid_after__gt=now,
+                    credential__certificate__not_valid_after__gt=next_24_hours,
                     credential__certificate__not_valid_after__lte=next_7_days
-                ).count(),
+                ).distinct().count(),
             }
         except Exception as exception:
             err_msg = f'Error occurred in expiring issuing CA count query: {exception}'

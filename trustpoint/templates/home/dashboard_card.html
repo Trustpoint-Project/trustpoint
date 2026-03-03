@@ -81,18 +81,14 @@
       const today_delta_7 = dataToday.expiring_in_7_days || 0;
       const today_total = today_delta_24 + today_delta_7;
 
-      const week_delta_24 = dataWeek.expiring_in_1_day || 0;
-      const week_delta_7 = dataWeek.expiring_in_7_days || 0;
-
-      const change_delta_24 = today_delta_24 - week_delta_24;
-      const change_delta_7 = today_delta_7 - week_delta_7;
-
+      // Display current window counts, not change since last week
       document.getElementById(`total_count_${uniqueId}`).textContent = today_total;
-      document.getElementById(`delta_count_24_${uniqueId}`).textContent = change_delta_24;
-      document.getElementById(`delta_count_7_${uniqueId}`).textContent = change_delta_7;
+      document.getElementById(`delta_count_24_${uniqueId}`).textContent = today_delta_24;
+      document.getElementById(`delta_count_7_${uniqueId}`).textContent = today_delta_7;
 
-      updateDeltaIcon(`delta_count_24_${uniqueId}`, change_delta_24);
-      updateDeltaIcon(`delta_count_7_${uniqueId}`, change_delta_7);
+      // Show positive counts (no delta icon needed for expiring cards)
+      updateDeltaIcon(`delta_count_24_${uniqueId}`, today_delta_24);
+      updateDeltaIcon(`delta_count_7_${uniqueId}`, today_delta_7);
 
     } else {
       const currentVal = dataToday[type] || 0;
