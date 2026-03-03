@@ -325,7 +325,6 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
         return issued_credential
 
-
 class RemoteDeviceCredentialDownloadModel(models.Model):
     """Model to associate a credential model with an OTP and token for unauthenticated remoted download."""
 

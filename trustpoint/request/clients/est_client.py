@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import requests
-from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs7
 
@@ -17,6 +16,7 @@ from trustpoint.logger import LoggerMixin
 from trustpoint.settings import DOCKER_CONTAINER
 
 if TYPE_CHECKING:
+    from cryptography import x509
     from cryptography.x509 import CertificateSigningRequest
 
     from request.request_context import EstBaseRequestContext
