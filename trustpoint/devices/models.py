@@ -14,7 +14,6 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django_q.tasks import schedule  # type: ignore[import-untyped]
 from django_stubs_ext.db.models import TypedModelMeta
-from pyasn1_modules.rfc3280 import common_name  # type: ignore[import-untyped]
 
 from onboarding.models import (
     AbstractPkiProtocolModel,
@@ -185,7 +184,11 @@ class DeviceModel(CustomDeleteActionModel):
         self.save(update_fields=['opc_gds_push_last_update_scheduled_at'])
 
 class IssuedCredentialModel(CustomDeleteActionModel):
-    """Model for all credentials and certificates that have been issued or requested by the Trustpoint."""
+    """Model for credentials and certificates issued to a device by the Trustpoint.
+
+    Each instance must have a ``device`` FK set.  For credentials owned by a CA or
+    an OwnerCredential, use :class:`RemoteIssuedCredentialModel` instead.
+    """
 
     class IssuedCredentialType(models.IntegerChoices):
         """The type of the credential."""
@@ -209,10 +212,20 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         blank=False,
     )
     device = models.ForeignKey(
-        'devices.DeviceModel', verbose_name=_('Device'), on_delete=models.PROTECT, related_name='issued_credentials'
+        'devices.DeviceModel',
+        verbose_name=_('Device'),
+        on_delete=models.PROTECT,
+        related_name='issued_credentials',
+        null=False,
+        blank=False,
     )
     domain = models.ForeignKey(
-        DomainModel, verbose_name=_('Domain'), on_delete=models.PROTECT, related_name='issued_credentials'
+        DomainModel,
+        verbose_name=_('Domain'),
+        on_delete=models.PROTECT,
+        related_name='issued_credentials',
+        null=True,
+        blank=True,
     )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
@@ -222,13 +235,19 @@ class IssuedCredentialModel(CustomDeleteActionModel):
 
     def __str__(self) -> str:
         """Returns a human-readable string representation."""
-        return f'IssuedCredentialModel(common_name={common_name})'
+        return f'IssuedCredentialModel(common_name={self.common_name})'
+
+    def clean(self) -> None:
+        """Validate that the device FK is set."""
+        if self.device_id is None:
+            raise ValidationError(_('device must be set.'))
 
     def revoke(self) -> None:
         """Revokes all active certificates associated with this credential."""
-        if self.domain.issuing_ca is None:
+        domain = self.domain
+        if domain is None or domain.issuing_ca is None:
             return
-        ca = self.domain.issuing_ca
+        ca = domain.issuing_ca
         cert: CertificateModel
         for cert in self.credential.certificates.all():
             status = cert.certificate_status
@@ -275,16 +294,13 @@ class IssuedCredentialModel(CustomDeleteActionModel):
         :raises DoesNotExist: if no matching issued credential is found.
         """
         cert_fingerprint = cert.fingerprint(hashes.SHA256()).hex().upper()
-        credential = CredentialModel.objects.filter(certificates__sha256_fingerprint=cert_fingerprint).first()
-        if not credential:
-            error_message = f'No credential found for certificate with fingerprint {cert_fingerprint}'
-            raise IssuedCredentialModel.DoesNotExist(error_message)
+        issued_credential = IssuedCredentialModel.objects.filter(
+            credential__certificates__sha256_fingerprint=cert_fingerprint,
+        ).select_related('credential', 'device').first()
 
-        try:
-            issued_credential = IssuedCredentialModel.objects.get(credential=credential)
-        except IssuedCredentialModel.DoesNotExist:
+        if issued_credential is None:
             error_message = f'No issued credential found for certificate with fingerprint {cert_fingerprint}'
-            raise IssuedCredentialModel.DoesNotExist(error_message) from None
+            raise IssuedCredentialModel.DoesNotExist(error_message)
 
         return issued_credential
 

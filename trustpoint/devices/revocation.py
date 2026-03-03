@@ -26,6 +26,6 @@ class DeviceCredentialRevocation:
             return False, 'The certificate is already revoked.'
 
         RevokedCertificateModel.objects.create(
-            certificate=primary_cert, revocation_reason=reason, ca=issued_credential.domain.issuing_ca
+            certificate=primary_cert, revocation_reason=reason, ca=issued_credential.domain.issuing_ca  # type: ignore[union-attr]
         )
         return True, 'Certificate successfully revoked.'

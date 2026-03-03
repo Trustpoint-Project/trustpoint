@@ -135,20 +135,24 @@ class CsrBuilder(LoggerMixin, AbstractOperationProcessor):
 
         return san_names
 
+    @staticmethod
+    def _iter_san_field(value: str | list[str]) -> list[str]:
+        """Return a list of non-empty stripped items from a SAN field value."""
+        if isinstance(value, list):
+            return [str(v).strip() for v in value if str(v).strip()]
+        return [v.strip() for v in str(value).split(',') if v.strip()]
+
     def _add_dns_names(
         self,
         san: dict[str, Any],
         san_names: list[DNSName | IPAddress | RFC822Name | UniformResourceIdentifier],
     ) -> None:
         """Add DNS names to the SAN list."""
-        dns_names_str = san.get('dns_names')
-        if not dns_names_str:
+        dns_names_val = san.get('dns_names')
+        if not dns_names_val:
             return
 
-        for dns_name_raw in dns_names_str.split(','):
-            dns_name_clean = dns_name_raw.strip()
-            if dns_name_clean:
-                san_names.append(x509.DNSName(dns_name_clean))
+        san_names.extend(x509.DNSName(n) for n in self._iter_san_field(dns_names_val))
 
     def _add_ip_addresses(
         self,
@@ -156,15 +160,11 @@ class CsrBuilder(LoggerMixin, AbstractOperationProcessor):
         san_names: list[DNSName | IPAddress | RFC822Name | UniformResourceIdentifier],
     ) -> None:
         """Add IP addresses to the SAN list."""
-        ip_addresses_str = san.get('ip_addresses')
-        if not ip_addresses_str:
+        ip_addresses_val = san.get('ip_addresses')
+        if not ip_addresses_val:
             return
 
-        for ip_addr_raw in ip_addresses_str.split(','):
-            ip_addr_clean = ip_addr_raw.strip()
-            if not ip_addr_clean:
-                continue
-
+        for ip_addr_clean in self._iter_san_field(ip_addresses_val):
             try:
                 ip_obj = IPv4Address(ip_addr_clean) if '.' in ip_addr_clean else IPv6Address(ip_addr_clean)
                 san_names.append(x509.IPAddress(ip_obj))
@@ -177,14 +177,11 @@ class CsrBuilder(LoggerMixin, AbstractOperationProcessor):
         san_names: list[DNSName | IPAddress | RFC822Name | UniformResourceIdentifier],
     ) -> None:
         """Add RFC822 names (email addresses) to the SAN list."""
-        rfc822_names_str = san.get('rfc822_names')
-        if not rfc822_names_str:
+        rfc822_names_val = san.get('rfc822_names')
+        if not rfc822_names_val:
             return
 
-        for email_addr_raw in rfc822_names_str.split(','):
-            email_addr_clean = email_addr_raw.strip()
-            if email_addr_clean:
-                san_names.append(x509.RFC822Name(email_addr_clean))
+        san_names.extend(x509.RFC822Name(e) for e in self._iter_san_field(rfc822_names_val))
 
     def _add_uris(
         self,
@@ -192,14 +189,11 @@ class CsrBuilder(LoggerMixin, AbstractOperationProcessor):
         san_names: list[DNSName | IPAddress | RFC822Name | UniformResourceIdentifier],
     ) -> None:
         """Add URIs to the SAN list."""
-        uris_str = san.get('uris')
-        if not uris_str:
+        uris_val = san.get('uris')
+        if not uris_val:
             return
 
-        for uri_addr_raw in uris_str.split(','):
-            uri_addr_clean = uri_addr_raw.strip()
-            if uri_addr_clean:
-                san_names.append(x509.UniformResourceIdentifier(uri_addr_clean))
+        san_names.extend(x509.UniformResourceIdentifier(u) for u in self._iter_san_field(uris_val))
 
     def _get_private_key(self, context: BaseCertificateRequestContext) -> CertificateIssuerPrivateKeyTypes:
         """Get the private key to sign the CSR.
