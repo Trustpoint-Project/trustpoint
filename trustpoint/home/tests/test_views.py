@@ -334,7 +334,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
     def test_get_expired_device_counts(self) -> None:
         """Test get_expired_device_counts method."""
         with patch.object(DeviceModel.objects, 'filter') as mock_filter:
-            mock_filter.return_value.count.return_value = 2
+            mock_filter.return_value.distinct.return_value.count.return_value = 2
             result = self.view.get_expired_device_counts()
 
         assert 'expired' in result
