@@ -93,7 +93,7 @@ def create_signer_for_domain(
     """Creates a signer certificate for a domain using the domain's issuing CA."""
     issuing_ca_private_key = issuing_ca.credential.get_private_key_serializer().as_crypto()
     issuing_ca_cert = issuing_ca.credential.get_certificate_serializer().as_crypto()
-    issuing_ca_cn = issuing_ca.common_name
+
 
     if isinstance(issuing_ca_private_key, rsa.RSAPrivateKey):
         key_size = issuing_ca_private_key.key_size

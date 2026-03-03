@@ -16,7 +16,7 @@ def load_request() -> bytes:
 
     loaded_csr = x509.load_pem_x509_csr(raw_pem_csr)
     abc = base64.b64encode(loaded_csr.public_bytes(encoding=serialization.Encoding.DER))
-    x = base64.b64decode(abc)
+
     return abc
 
 
