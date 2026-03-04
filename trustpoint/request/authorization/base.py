@@ -10,8 +10,8 @@ from cryptography.x509.base import CertificateBuilder
 from trustpoint_core.oid import HashAlgorithm, NamedCurve
 
 from aoki.views import AokiServiceMixin
-from devices.models import IssuedCredentialModel
 from management.models import SecurityConfig
+from pki.models import IssuedCredentialModel
 from request.profile_validator import ProfileValidator
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin

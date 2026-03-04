@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 
 from devices.issuer import LocalDomainCredentialIssuer
-from devices.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel
 from onboarding.models import OnboardingStatus
 
 

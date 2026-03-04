@@ -3,13 +3,13 @@
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel
 from django.core.management.base import CommandError
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from management.models import NotificationModel, NotificationStatus
-from pki.models import CertificateModel, CertificateProfileModel, CaModel
+from pki.models import CertificateModel, CertificateProfileModel, CaModel, IssuedCredentialModel
 
 from ..views import (
     AddDomainsAndDevicesView,

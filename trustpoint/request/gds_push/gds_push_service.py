@@ -17,8 +17,7 @@ from cryptography.x509 import KeyUsage
 from cryptography.x509.oid import ExtendedKeyUsageOID, ExtensionOID
 from django.db import IntegrityError
 
-from devices.models import IssuedCredentialModel
-from pki.models import CertificateModel, TruststoreOrderModel
+from pki.models import CertificateModel, IssuedCredentialModel, TruststoreOrderModel
 from pki.models.certificate import RevokedCertificateModel
 from request.operation_processor import CertificateIssueProcessor
 from request.profile_validator import ProfileValidator

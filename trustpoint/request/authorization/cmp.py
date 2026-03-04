@@ -4,7 +4,7 @@ from typing import Never
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
 from cmp.util import PKIFailureInfo
-from devices.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel
 from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpRevocationRequestContext
 from trustpoint.logger import LoggerMixin
 

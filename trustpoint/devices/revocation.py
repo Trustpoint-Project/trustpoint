@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from devices.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
 
 
