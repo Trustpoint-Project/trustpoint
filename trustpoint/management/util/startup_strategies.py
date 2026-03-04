@@ -208,12 +208,49 @@ class TlsCredentialStrategy(ABC):
     """Abstract base class for TLS credential generation strategies."""
 
     @abstractmethod
-    def generate_and_save_tls_credential(self, context: StartupContext) -> None:
+    def handle_tls_credential(self, context: StartupContext) -> None:
         """Generate and save TLS credentials.
 
         Args:
             context: The startup context with all relevant information.
         """
+
+
+class RecoverTlsCredentialStrategy(TlsCredentialStrategy):
+    """Standard TLS credential generation using TlsServerCredentialGenerator."""
+
+    def handle_tls_credential(self, context: StartupContext) -> None:
+        """Recover TLS credentials from database and save to files."""
+        try:
+            context.output.write('Extracting TLS certificates from database...')
+
+            active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
+            tls_server_credential_model = active_tls.credential
+
+            if not tls_server_credential_model:
+                error_msg = _('TLS credential not found')
+                context.output.write(context.output.error(error_msg))
+                return
+
+            private_key_pem = tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
+            certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
+            trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
+
+            NGINX_KEY_PATH.write_text(private_key_pem)
+            NGINX_CERT_PATH.write_text(certificate_pem)
+
+            # Only write chain file if there's actually a chain (not empty)
+            if trust_store_pem.strip():
+                NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
+            elif NGINX_CERT_CHAIN_PATH.exists():
+                # Remove chain file if it exists but chain is empty
+                NGINX_CERT_CHAIN_PATH.unlink()
+
+            context.output.write(context.output.success('TLS certificates extracted successfully'))
+
+        except (ValueError, KeyError, AttributeError) as e:
+            error_msg = _('Error extracting TLS certificates: %s') % e
+            context.output.write(context.output.error(error_msg))
 
 
 class StandardTlsCredentialStrategy(TlsCredentialStrategy):
@@ -227,7 +264,7 @@ class StandardTlsCredentialStrategy(TlsCredentialStrategy):
         """
         self.save_to_db = save_to_db
 
-    def generate_and_save_tls_credential(self, context: StartupContext) -> None:
+    def handle_tls_credential(self, context: StartupContext) -> None:
         """Generate TLS credentials and save to database and files."""
         context.output.write('Generating TLS Server Credential...')
 
@@ -426,7 +463,7 @@ class StandardInitializationStrategy(InitializationStrategy):
                 context.output.write('Using existing crypto storage configuration')
 
             # Use TLS credential strategy instead of call_command
-            self.tls_strategy.generate_and_save_tls_credential(context)
+            self.tls_strategy.handle_tls_credential(context)
 
         context.output.write(context.output.success('Trustpoint initialization complete'))
 
@@ -620,10 +657,18 @@ class VersionUpgradeStrategy(StartupStrategy):
 class RestoreSoftwareWizardCompletedStrategy(StartupStrategy):
     """Strategy: Software storage + Wizard completed - extract TLS only."""
 
+    def __init__(self, tls_strategy: TlsCredentialStrategy | None = None) -> None:
+        """Initialize with optional TLS credential strategy.
+
+        Args:
+            tls_strategy: The TLS credential strategy to use. Defaults to RecoverTlsCredentialStrategy.
+        """
+        self.tls_strategy = tls_strategy or RecoverTlsCredentialStrategy()
+
     def execute(self, context: StartupContext) -> None:
         """Extract TLS certificates for software storage mode."""
         context.output.write(self.get_description())
-        self.extract_tls_from_database(context)
+        self.tls_strategy.handle_tls_credential(context)
 
     def get_description(self) -> str:
         """Get strategy description."""
@@ -771,21 +816,21 @@ class RestoreSoftwareWizardIncompleteStrategy(StartupStrategy):
         """Initialize with optional TLS credential strategy.
 
         Args:
-            tls_strategy: The TLS credential strategy to use. Defaults to StandardTlsCredentialStrategy.
+            tls_strategy: The TLS credential strategy to use. Defaults to RecoverTlsCredentialStrategy.
         """
-        self.tls_strategy = tls_strategy or StandardTlsCredentialStrategy()
+        self.tls_strategy = tls_strategy or RecoverTlsCredentialStrategy()
 
     def execute(self, context: StartupContext) -> None:
         """Reset wizard to WIZARD_SETUP_CRYPTO_STORAGE state and generate TLS certificates."""
         context.output.write(self.get_description())
         context.output.write('>>> Wizard incomplete - resetting to WIZARD_SETUP_CRYPTO_STORAGE')
-        context.output.write('>>> Generating TLS certificates for wizard setup page')
-        self.tls_strategy.generate_and_save_tls_credential(context)
+        context.output.write('>>> Manage TLS certificates for wizard setup page')
+        self.tls_strategy.handle_tls_credential(context)
         self._reset_wizard_state(context)
 
     def get_description(self) -> str:
         """Get strategy description."""
-        return '>>> SOFTWARE Storage | Wizard INCOMPLETE - RESETTING TO START'
+        return '>>> SOFTWARE Storage | Wizard INCOMPLETE - RESTORING FROM DB'
 
     @staticmethod
     def _reset_wizard_state(context: StartupContext) -> None:
@@ -826,11 +871,19 @@ class RestoreSoftwareWizardIncompleteStrategy(StartupStrategy):
 class RestoreSoftHsmWizardCompletedDekCachedStrategy(StartupStrategy):
     """Strategy: SoftHSM + Wizard completed + DEK cached - extract TLS and unwrap DEK."""
 
+    def __init__(self, tls_strategy: TlsCredentialStrategy | None = None) -> None:
+        """Initialize with optional TLS credential strategy.
+
+        Args:
+            tls_strategy: The TLS credential strategy to use. Defaults to RecoverTlsCredentialStrategy.
+        """
+        self.tls_strategy = tls_strategy or RecoverTlsCredentialStrategy()
+
     def execute(self, context: StartupContext) -> None:
         """Extract TLS certificates and unwrap DEK for application use."""
         context.output.write(self.get_description())
         context.output.write('>>> System already initialized with valid DEK - extracting TLS files')
-        RestoreSoftwareWizardCompletedStrategy.extract_tls_from_database(context)
+        self.tls_strategy.handle_tls_credential(context)
         context.output.write('>>> Unwrapping DEK for application use')
         RestoreSoftwareWizardCompletedStrategy.unwrap_dek_for_token(context)
 
@@ -928,7 +981,7 @@ class RestoreSoftHsmNewKekWizardCompletedStrategy(StartupStrategy):
         context.output.write('>>> Old KEK is unavailable - backup password required')
         context.output.write('>>> Generating temporary TLS certificate for initial access')
 
-        self.tls_strategy.generate_and_save_tls_credential(context)
+        self.tls_strategy.handle_tls_credential(context)
 
         context.output.write('>>> Transitioning to auto restore flow')
         context.output.write('>>> User must provide backup password to:')
@@ -959,8 +1012,8 @@ class RestoreSoftHsmWizardIncompleteDekCachedStrategy(StartupStrategy):
         """Reset wizard to WIZARD_SETUP_CRYPTO_STORAGE state and generate TLS certificates."""
         context.output.write(self.get_description())
         context.output.write('>>> Wizard incomplete - resetting to WIZARD_SETUP_CRYPTO_STORAGE')
-        context.output.write('>>> Generating TLS certificates for wizard setup page')
-        self.tls_strategy.generate_and_save_tls_credential(context)
+        context.output.write('>>> Manage TLS certificates for wizard setup page')
+        self.tls_strategy.handle_tls_credential(context)
         RestoreSoftwareWizardIncompleteStrategy._reset_wizard_state(context)  # noqa: SLF001
 
     def get_description(self) -> str:
@@ -985,8 +1038,8 @@ class RestoreSoftHsmWizardIncompleteDekNotCachedStrategy(StartupStrategy):
         """Reset wizard to WIZARD_SETUP_CRYPTO_STORAGE state and generate TLS certificates."""
         context.output.write(self.get_description())
         context.output.write('>>> Wizard incomplete - resetting to WIZARD_SETUP_CRYPTO_STORAGE')
-        context.output.write('>>> Generating TLS certificates for wizard setup page')
-        self.tls_strategy.generate_and_save_tls_credential(context)
+        context.output.write('>>> Manage TLS certificates for wizard setup page')
+        self.tls_strategy.handle_tls_credential(context)
         RestoreSoftwareWizardIncompleteStrategy._reset_wizard_state(context)  # noqa: SLF001
 
     def get_description(self) -> str:
