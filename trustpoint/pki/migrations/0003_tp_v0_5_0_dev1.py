@@ -10,6 +10,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
+        ('devices', '0003_tp_v0_5_0_dev1'),
         ('onboarding', '0002_tp_v0_5_0_dev1'),
         ('pki', '0002_tp_v0_4_0'),
     ]
@@ -172,6 +173,19 @@ class Migration(migrations.Migration):
             bases=(trustpoint.logger.LoggerMixin, models.Model),
         ),
         migrations.CreateModel(
+            name='IssuedCredentialModel',
+            fields=[
+                ('id', models.AutoField(primary_key=True, serialize=False)),
+                ('common_name', models.CharField(max_length=255, verbose_name='Common Name')),
+                ('issued_credential_type', models.IntegerField(choices=[(0, 'Domain Credential'), (1, 'Application Credential')], verbose_name='Credential Type')),
+                ('issued_using_cert_profile', models.CharField(default='', max_length=255, verbose_name='Issued using Certificate Profile')),
+                ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
+                ('credential', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='issued_credential', to='pki.credentialmodel', verbose_name='Credential')),
+                ('device', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='issued_credentials', to='devices.devicemodel', verbose_name='Device')),
+                ('domain', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='issued_credentials', to='pki.domainmodel', verbose_name='Domain')),
+            ],
+        ),
+        migrations.CreateModel(
             name='RemoteIssuedCredentialModel',
             fields=[
                 ('id', models.AutoField(primary_key=True, serialize=False)),
@@ -181,6 +195,8 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
                 ('ca', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='remote_issued_credentials', to='pki.camodel', verbose_name='CA')),
                 ('credential', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='remote_issued_credential', to='pki.credentialmodel', verbose_name='Credential')),
+                ('device', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='remote_issued_credentials', to='devices.devicemodel', verbose_name='Device')),
+                ('domain', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='remote_issued_credentials', to='pki.domainmodel', verbose_name='Domain')),
                 ('owner_credential', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='remote_issued_credentials', to='pki.ownercredentialmodel', verbose_name='Owner Credential')),
             ],
         ),

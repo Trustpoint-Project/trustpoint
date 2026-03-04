@@ -5,8 +5,8 @@ from typing import Never
 
 from devices.models import (
     DeviceModel,
-    IssuedCredentialModel,
 )
+from pki.models import IssuedCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from request.request_context import BaseRequestContext, HttpBaseRequestContext
 from trustpoint.logger import LoggerMixin

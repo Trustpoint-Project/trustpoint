@@ -168,7 +168,7 @@ class EstUsernamePasswordCommandBuilder:
 
     @staticmethod
     def get_conversion_p7_pem_command(cred_number: int) -> str:
-        """Get the conversion PKCS#7 (DER) to PEM command.
+        """Get the conversion PKCS#7 (base64/PEM) to PEM command.
 
         Args:
             cred_number: The credential number - counter of issued credentials.
@@ -177,8 +177,8 @@ class EstUsernamePasswordCommandBuilder:
             The constructed command.
         """
         return (
-            f'openssl pkcs7 -in certificate-{cred_number}.p7c \\\n'
-            f'-inform DER -print_certs -out  certificate-{cred_number}.pem'
+            f'base64 -d -i certificate-{cred_number}.p7c \\\n'
+            f'| openssl pkcs7 -inform DER -print_certs -out certificate-{cred_number}.pem'
         )
 
     @staticmethod
@@ -220,14 +220,14 @@ class EstUsernamePasswordCommandBuilder:
 
     @staticmethod
     def get_domain_credential_conversion_p7_pem_command() -> str:
-        """Get the domain credential conversion DER to PEM command.
+        """Get the domain credential conversion base64 PKCS#7 to PEM command.
 
         Returns:
              The constructed command.
         """
         return (
-            'openssl pkcs7 -in domain-credential-certificate.p7c \\\n'
-            '-inform DER -print_certs -out  domain-credential-certificate.pem'
+            'base64 -d -i domain-credential-certificate.p7c \\\n'
+            '| openssl pkcs7 -inform DER -print_certs -out domain-credential-certificate.pem'
         )
 
 

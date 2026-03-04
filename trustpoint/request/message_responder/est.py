@@ -78,7 +78,10 @@ class EstCertificateMessageResponder(EstMessageResponder):
             encoding = Encoding.DER
 
         if context.est_encoding == 'pkcs7':
-            cert_bytes = pkcs7.serialize_certificates([context.issued_certificate], encoding=Encoding.DER)
+            chain = [context.issued_certificate]
+            if context.issued_certificate_chain:
+                chain.extend(context.issued_certificate_chain)
+            cert_bytes = pkcs7.serialize_certificates(chain, encoding=Encoding.DER)
         else:
             cert_bytes = context.issued_certificate.public_bytes(encoding=encoding)
 
@@ -93,7 +96,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
             return cert, 'application/x-pem-file'
         # Default to RFC 7030 compliant format: base64-encoded with line wrapping
         b64_cert = base64.b64encode(cert_bytes).decode('utf-8')
-        cert = '\n'.join([b64_cert[i:i + 64] for i in range(0, len(b64_cert), 64)])
+        cert = '\n'.join([b64_cert[i:i + 64] for i in range(0, len(b64_cert), 64)]) + '\n'
         if context.est_encoding == 'base64_der':
             content_type = 'application/pkix-cert'
         else:
@@ -121,6 +124,8 @@ class EstCertificateMessageResponder(EstMessageResponder):
         context.http_response_status = 200
         context.http_response_content = cert
         context.http_response_content_type = content_type
+        if context.est_encoding in {'pkcs7', 'base64_der'}:
+            context.http_response_headers = {'Content-Transfer-Encoding': 'base64'}
 
 
 class EstErrorMessageResponder(EstMessageResponder):

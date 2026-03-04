@@ -16,7 +16,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic.detail import DetailView
 from pydantic import ValidationError as PydanticValidationError
 
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel
 from devices.views import PublicKeyInfoMissingErrorMsg
 from help_pages.base import (
     HelpContext,
@@ -34,6 +34,7 @@ from help_pages.commands import (
 )
 from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
+from pki.models import IssuedCredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from trustpoint.page_context import (

@@ -21,10 +21,10 @@ from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
 from trustpoint_core.oid import NameOid
 
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel
 from management.models import NotificationModel, NotificationStatus
 from onboarding.models import OnboardingProtocol, OnboardingStatus
-from pki.models import CaModel, CertificateModel, CertificateProfileModel
+from pki.models import CaModel, CertificateModel, CertificateProfileModel, IssuedCredentialModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import SortableTableMixin

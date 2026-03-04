@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     from trustpoint_core.serializer import PrivateKeySerializer
 
     from cmp.util import PKIFailureInfo
-    from devices.models import DeviceModel, IssuedCredentialModel
-    from pki.models import CertificateProfileModel, CredentialModel, DomainModel, TruststoreModel
+    from devices.models import DeviceModel
+    from pki.models import CertificateProfileModel, CredentialModel, DomainModel, IssuedCredentialModel, TruststoreModel
     from workflows.events import Event
     from workflows.models import EnrollmentRequest
 
@@ -67,9 +67,13 @@ class BaseRequestContext(LoggerMixin):
         if not isinstance(self, HttpBaseRequestContext):
             exc_msg = 'to_http_response can only be called on HttpBaseRequestContext instances.'
             raise TypeError(exc_msg)
-        return HttpResponse(content=self.http_response_content or b'',
-                            status=self.http_response_status or 500,
-                            content_type=self.http_response_content_type or 'text/plain')
+        response = HttpResponse(content=self.http_response_content or b'',
+                                status=self.http_response_status or 500,
+                                content_type=self.http_response_content_type or 'text/plain')
+        if self.http_response_headers:
+            for header_name, header_value in self.http_response_headers.items():
+                response[header_name] = header_value
+        return response
 
     def narrow(self, child_cls: type[RCT], **extra: Any) -> RCT:
         """Create a new request context of a more specific subclass, copying existing attributes."""
@@ -99,6 +103,7 @@ class BaseCertificateRequestContext(BaseRequestContext):
     cert_profile_str: str | None = None
     cert_requested_profile_validated: CertificateBuilder | None = None
     issued_certificate: x509.Certificate | None = None
+    issued_certificate_chain: list[x509.Certificate] | None = None
 
     certificate_profile_model: CertificateProfileModel | None = None
 
@@ -134,7 +139,7 @@ class HttpBaseRequestContext(BaseRequestContext):
     raw_message: HttpRequest | None = None
 
     http_response_status: int | None = None
-    # consider adding http_response_headers: dict[str, str] | None = None
+    http_response_headers: dict[str, str] | None = None
     http_response_content: bytes | str | None = None
     http_response_content_type: str | None = None
 
