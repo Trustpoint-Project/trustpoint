@@ -673,8 +673,8 @@ workflow:
       rejected_outcome: rejected
 
     stop_ok:
-      type: stop
-      reason: "ok (score=${vars.score})"
+      type: set
+      vars: {}
 
     stop_fail:
       type: stop

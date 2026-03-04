@@ -1,3 +1,4 @@
+# workflows2/integrations/devices.py
 from __future__ import annotations
 
 from typing import Any
@@ -6,6 +7,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from devices.models import DeviceModel
+from workflows2.events.triggers import Triggers
 from workflows2.services.dispatch import EventSource, WorkflowDispatchService
 
 
@@ -14,7 +16,6 @@ def on_device_created(sender: type[DeviceModel], instance: DeviceModel, created:
     if not created:
         return
 
-    # Minimal event payload for now. Expand as needed.
     event = {
         "device": {
             "id": str(instance.id),
@@ -25,13 +26,13 @@ def on_device_created(sender: type[DeviceModel], instance: DeviceModel, created:
     }
 
     source = EventSource(
-        trustpoint=True,  # your system-wide default
+        trustpoint=True,
         domain_id=instance.domain_id,
         device_id=str(instance.id),
     )
 
     WorkflowDispatchService().emit_event(
-        on="device.created",
+        on=Triggers.DEVICE_CREATED,
         event=event,
         source=source,
         initial_vars={},

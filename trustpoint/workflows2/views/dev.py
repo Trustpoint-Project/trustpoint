@@ -109,8 +109,8 @@ workflow:
       default: fail
 
     stop_ok:
-      type: stop
-      reason: Done (ok)
+      type: set
+      vars: {}
 
     stop_fail:
       type: stop

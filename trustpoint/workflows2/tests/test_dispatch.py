@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from django.test import TestCase, override_settings
-from django.utils import timezone
+from django.test import TestCase
 
+from management.models import WorkflowExecutionConfig
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2Job
@@ -26,8 +26,8 @@ workflow:
 
   steps:
     done_ok:
-      type: succeed
-      message: Done
+      type: set
+      vars: {}
 
   flow: []
 """
@@ -45,8 +45,11 @@ class DispatchTests(TestCase):
             ir_hash=ir["meta"]["ir_hash"],
         )
 
-    @override_settings(WORKFLOWS2_RUN_MODE="sync")
     def test_dispatch_creates_instance_for_matching_trigger_sync(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.INLINE
+        cfg.save()
+
         self._store_definition()
 
         svc = WorkflowDispatchService()
@@ -61,8 +64,14 @@ class DispatchTests(TestCase):
         instances[0].refresh_from_db()
         self.assertEqual(instances[0].status, Workflow2Instance.STATUS_SUCCEEDED)
 
-    @override_settings(WORKFLOWS2_RUN_MODE="db")
+        # Single scheduling mechanism: jobs exist even in inline mode (they are just drained).
+        self.assertGreaterEqual(Workflow2Job.objects.filter(instance=instances[0]).count(), 1)
+
     def test_dispatch_creates_instance_for_matching_trigger_db(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.save()
+
         self._store_definition()
 
         svc = WorkflowDispatchService()
@@ -76,7 +85,7 @@ class DispatchTests(TestCase):
         inst = instances[0]
         inst.refresh_from_db()
 
-        # In DB mode, dispatch enqueues; instance is not executed yet.
+        # In QUEUE mode, dispatch enqueues; instance is not executed yet.
         self.assertEqual(inst.status, Workflow2Instance.STATUS_QUEUED)
         self.assertEqual(Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(), 1)
 
@@ -90,6 +99,10 @@ class DispatchTests(TestCase):
         self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
 
     def test_dispatch_ignores_non_matching_trigger(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.save()
+
         self._store_definition()
 
         svc = WorkflowDispatchService()

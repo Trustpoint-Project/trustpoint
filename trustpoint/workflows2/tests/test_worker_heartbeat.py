@@ -3,9 +3,10 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from django.test import TransactionTestCase, override_settings
+from django.test import TransactionTestCase
 from django.utils import timezone
 
+from management.models import WorkflowExecutionConfig
 from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2Job
 from workflows2.services.runtime import WorkflowRuntimeService
 from workflows2.services.worker import Workflow2DbWorker
@@ -28,12 +29,13 @@ class SlowExecutor:
     def execute_single_step(self, *, ir, step_id, run_index, ctx, transitions):
         # Simulate a slow external call that would outlive the lease
         time.sleep(2.0)
-        # terminal succeed
+
+        # Non-terminal step that ends implicitly (next_step=None)
         return FakeRun(
             run_index=run_index,
             step_id=step_id,
-            step_type="stop",
-            status="succeeded",
+            step_type="set",
+            status="ok",
             outcome=None,
             next_step=None,
             vars_delta={},
@@ -45,13 +47,16 @@ class SlowExecutor:
 class WorkerHeartbeatTests(TransactionTestCase):
     reset_sequences = True
 
-    @override_settings(WORKFLOWS2_RUN_MODE="db")
     def test_heartbeat_renews_lease_while_step_runs(self) -> None:
-        # Minimal IR: one step that "succeeds"
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.save()
+
+        # Minimal IR: one step with no transitions => implicit success after it runs
         ir = {
             "workflow": {
                 "start": "a",
-                "steps": {"a": {"type": "stop", "params": {}}},
+                "steps": {"a": {"type": "set", "params": {"vars": {}}}},
                 "transitions": {},
             },
             "trigger": {"on": "x"},

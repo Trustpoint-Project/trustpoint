@@ -1,130 +1,358 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
-{% block content %}
 
+{% block content %}
 <div class="card">
-  <div class="card-header">
-    <h1 class="mb-0">{% trans "Instance" %} {{ inst.id }}</h1>
+  <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <h1 class="mb-0">{% trans "Instance" %}</h1>
+        <span class="badge {{ inst_badge }}">{{ inst.get_status_display }}</span>
+      </div>
+      <div class="text-muted small mt-1">
+        <span class="me-2"><strong>ID:</strong> <code>{{ inst.id }}</code></span>
+        {% if inst.run_id %}
+          <span class="me-2"><strong>{% trans "Run" %}:</strong>
+            <a href="{% url 'workflows2:runs-detail' inst.run_id %}"><code>{{ inst.run_id }}</code></a>
+          </span>
+        {% endif %}
+        <span class="me-2"><strong>{% trans "Definition" %}:</strong>
+          <a href="{% url 'workflows2:definitions_edit' inst.definition.id %}">{{ inst.definition.name }}</a>
+        </span>
+      </div>
+    </div>
+
+    <div class="text-muted small">
+      <div><strong>{% trans "Execution mode" %}:</strong> <code>{{ cfg_mode }}</code></div>
+      <div><strong>{% trans "Current step" %}:</strong> <code>{{ inst.current_step|default:"—" }}</code></div>
+      <div><strong>{% trans "Run count" %}:</strong> {{ inst.run_count }}</div>
+    </div>
   </div>
 
   <div class="card-body">
-    <p><strong>{% trans "Definition" %}:</strong> {{ inst.definition.name }}</p>
-    <p><strong>{% trans "Status" %}:</strong> {{ inst.get_status_display }}</p>
-    <p><strong>{% trans "Current step" %}:</strong> {{ inst.current_step }}</p>
-
-    {# --- ACTIONS --- #}
+    <!-- Actions -->
     <div class="d-flex gap-2 mb-3 flex-wrap">
       <form method="post" action="{% url 'workflows2:instances-run-inline' inst.id %}">
         {% csrf_token %}
-        <button class="btn btn-warning" type="submit">{% trans "Run inline" %}</button>
+        <button class="btn btn-warning" type="submit">
+          <i class="bi bi-play-fill me-1"></i>{% trans "Run inline" %}
+        </button>
       </form>
 
-      {% if inst.status == "paused" %}
+      {% if inst.status == "failed" or inst.status == "paused" %}
         <form method="post" action="{% url 'workflows2:instances-resume' inst.id %}">
           {% csrf_token %}
-          <button class="btn btn-primary" type="submit">{% trans "Resume" %}</button>
+          <button class="btn btn-primary" type="submit">
+            <i class="bi bi-arrow-repeat me-1"></i>{% trans "Retry" %}
+          </button>
         </form>
       {% endif %}
 
       <form method="post" action="{% url 'workflows2:instances-cancel' inst.id %}">
         {% csrf_token %}
-        <button class="btn btn-danger" type="submit">{% trans "Cancel instance" %}</button>
+        <button class="btn btn-danger" type="submit">
+          <i class="bi bi-x-circle me-1"></i>{% trans "Cancel instance" %}
+        </button>
       </form>
     </div>
 
-    {# --- APPROVALS --- #}
+    <!-- Approvals -->
     {% if approvals %}
-      <hr>
-      <h2>{% trans "Approvals" %}</h2>
+      <div class="mb-4">
+        <h2 class="h5 mb-2">{% trans "Approvals" %}</h2>
+        <div class="list-group">
+          {% for a in approvals %}
+            <div class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                <div class="fw-semibold">
+                  {% if a.status == "pending" %}
+                    <span class="badge text-bg-warning">{% trans "Pending" %}</span>
+                  {% else %}
+                    <span class="badge text-bg-secondary">{{ a.get_status_display }}</span>
+                  {% endif %}
+                  <span class="ms-2">{% trans "Step" %}: <code>{{ a.step_id }}</code></span>
+                </div>
+                <div class="text-muted small">
+                  <span class="me-3">{% trans "Created" %}: {{ a.created_at|date:"Y-m-d H:i:s" }}</span>
+                  {% if a.expires_at %}
+                    <span class="me-3">{% trans "Expires" %}: {{ a.expires_at|date:"Y-m-d H:i:s" }}</span>
+                  {% endif %}
+                </div>
+              </div>
 
-      <div class="list-group mb-3">
-        {% for a in approvals %}
-          <div class="list-group-item d-flex justify-content-between align-items-center">
-            <div>
-              <strong>
-                {% if a.status == "pending" %}
-                  {% trans "Pending approval" %}
-                {% else %}
-                  {{ a.get_status_display }}
+              <div class="d-flex gap-2 flex-wrap justify-content-end">
+                {% if a.status == "pending" and inst.status == "awaiting" %}
+                  <form method="post" action="{% url 'workflows2:approvals-resolve' a.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="decision" value="approved">
+                    <button class="btn btn-success" type="submit">{% trans "Approve" %}</button>
+                  </form>
+
+                  <form method="post" action="{% url 'workflows2:approvals-resolve' a.id %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="decision" value="rejected">
+                    <button class="btn btn-danger" type="submit">{% trans "Reject" %}</button>
+                  </form>
                 {% endif %}
-              </strong><br>
 
-              <span class="text-muted">{% trans "Step" %}: {{ a.step_id }}</span><br>
-              <span class="text-muted">{% trans "Created" %}: {{ a.created_at|date:"Y-m-d H:i:s" }}</span>
-              {% if a.expires_at %}
-                <br><span class="text-muted">{% trans "Expires" %}: {{ a.expires_at|date:"Y-m-d H:i:s" }}</span>
-              {% endif %}
+                <a class="btn btn-outline-secondary" href="{% url 'workflows2:approvals-detail' a.id %}">
+                  {% trans "Details" %}
+                </a>
+              </div>
             </div>
-
-            <div class="d-flex gap-2 flex-wrap justify-content-end">
-              {% if a.status == "pending" and inst.status == "awaiting" %}
-                <form method="post" action="{% url 'workflows2:approvals-resolve' a.id %}">
-                  {% csrf_token %}
-                  <input type="hidden" name="decision" value="approved">
-                  <button class="btn btn-success" type="submit">{% trans "Approve" %}</button>
-                </form>
-
-                <form method="post" action="{% url 'workflows2:approvals-resolve' a.id %}">
-                  {% csrf_token %}
-                  <input type="hidden" name="decision" value="rejected">
-                  <button class="btn btn-danger" type="submit">{% trans "Reject" %}</button>
-                </form>
-              {% endif %}
-
-              <a class="btn btn-outline-secondary"
-                 href="{% url 'workflows2:approvals-detail' a.id %}">
-                {% trans "Details" %}
-              </a>
-            </div>
-          </div>
-        {% endfor %}
+          {% endfor %}
+        </div>
       </div>
     {% endif %}
 
-    <hr>
+    <div class="row g-4">
+      <!-- LEFT: Timeline + Jobs -->
+      <div class="col-12 col-lg-8">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <h2 class="h5 mb-0">{% trans "Step Timeline" %}</h2>
+          <span class="text-muted small">
+            {% trans "Showing" %} {{ step_run_items|length }} {% trans "step run(s)" %}
+          </span>
+        </div>
 
-    <h2>{% trans "Vars" %}</h2>
-    <pre style="white-space: pre-wrap;">{{ vars_pretty }}</pre>
+        {% if step_run_items %}
+          <div class="accordion" id="stepTimeline">
+            {% for item in step_run_items %}
+              {% with r=item.r meta=item.meta %}
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="h{{ r.id }}">
+                  <button class="accordion-button {% if not forloop.last %}collapsed{% endif %}" type="button"
+                          data-bs-toggle="collapse"
+                          data-bs-target="#c{{ r.id }}"
+                          aria-expanded="{% if forloop.last %}true{% else %}false{% endif %}"
+                          aria-controls="c{{ r.id }}">
+                    <div class="w-100">
+                      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                          <span class="text-muted">#{{ r.run_index }}</span>
 
-    <h2>{% trans "Event" %}</h2>
-    <pre style="white-space: pre-wrap;">{{ event_pretty }}</pre>
+                          <span class="fw-semibold">
+                            {% if meta.title %}{{ meta.title }}{% else %}<code>{{ r.step_id }}</code>{% endif %}
+                          </span>
 
-    <hr>
+                          <span class="badge text-bg-secondary">{{ r.step_type }}</span>
+                          <span class="badge {{ item.badge }}">{{ r.status }}</span>
 
-    <h2>{% trans "Step History" %}</h2>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>{% trans "Run" %}</th>
-          <th>{% trans "Step" %}</th>
-          <th>{% trans "Type" %}</th>
-          <th>{% trans "Status" %}</th>
-          <th>{% trans "Outcome" %}</th>
-          <th>{% trans "Next" %}</th>
-          <th>{% trans "At" %}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in step_runs %}
-          <tr>
-            <td>{{ r.run_index }}</td>
-            <td>{{ r.step_id }}</td>
-            <td>{{ r.step_type }}</td>
-            <td>{{ r.status }}</td>
-            <td>{{ r.outcome }}</td>
-            <td>{{ r.next_step }}</td>
-            <td>{{ r.created_at|date:"Y-m-d H:i:s" }}</td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="7" class="middle">{% trans "No step runs yet." %}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+                          {% if r.outcome %}
+                            <span class="text-muted small">{% trans "Outcome" %}: <code>{{ r.outcome }}</code></span>
+                          {% endif %}
+
+                          {% if r.next_step %}
+                            <span class="text-muted small">{% trans "Next" %}: <code>{{ r.next_step }}</code></span>
+                          {% endif %}
+                        </div>
+
+                        <div class="text-muted small">
+                          {{ r.created_at|date:"Y-m-d H:i:s" }}
+                        </div>
+                      </div>
+
+                      {% if meta.summary %}
+                        <div class="text-muted small mt-1">
+                          <i class="bi bi-info-circle me-1"></i>{{ meta.summary }}
+                        </div>
+                      {% endif %}
+                    </div>
+                  </button>
+                </h2>
+
+                <div id="c{{ r.id }}" class="accordion-collapse collapse {% if forloop.last %}show{% endif %}"
+                     aria-labelledby="h{{ r.id }}" data-bs-parent="#stepTimeline">
+                  <div class="accordion-body">
+                    {% if meta.description %}
+                      <div class="alert alert-secondary py-2 mb-3">
+                        <div class="small">{{ meta.description }}</div>
+                      </div>
+                    {% endif %}
+
+                    <div class="row g-3">
+                      <div class="col-12 col-md-6">
+                        <div class="card">
+                          <div class="card-header py-2">
+                            <div class="fw-semibold">{% trans "Execution" %}</div>
+                          </div>
+                          <div class="card-body py-2">
+                            <div class="small">
+                              <div><strong>{% trans "Step ID" %}:</strong> <code>{{ r.step_id }}</code></div>
+                              <div><strong>{% trans "Type" %}:</strong> <code>{{ r.step_type }}</code></div>
+                              <div><strong>{% trans "Status" %}:</strong> <code>{{ r.status }}</code></div>
+                              <div><strong>{% trans "Outcome" %}:</strong> <code>{{ r.outcome|default:"—" }}</code></div>
+                              <div><strong>{% trans "Next" %}:</strong> <code>{{ r.next_step|default:"—" }}</code></div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {% if r.error %}
+                          <div class="card mt-3 border-danger">
+                            <div class="card-header py-2 text-bg-danger">
+                              <div class="fw-semibold">{% trans "Error" %}</div>
+                            </div>
+                            <div class="card-body">
+                              <pre class="mb-0" style="white-space: pre-wrap;">{{ r.error }}</pre>
+                            </div>
+                          </div>
+                        {% endif %}
+                      </div>
+
+                      <div class="col-12 col-md-6">
+                        <div class="card">
+                          <div class="card-header py-2">
+                            <div class="fw-semibold">{% trans "Vars written in this step" %}</div>
+                          </div>
+                          <div class="card-body">
+                            {% if item.vars_delta_pretty %}
+                              <pre class="mb-0" style="white-space: pre-wrap;">{{ item.vars_delta_pretty }}</pre>
+                            {% else %}
+                              <div class="text-muted small">
+                                {% trans "No vars_delta recorded for this step." %}
+                              </div>
+                            {% endif %}
+                          </div>
+                        </div>
+
+                        <div class="card mt-3">
+                          <div class="card-header py-2">
+                            <div class="fw-semibold">{% trans "Output" %}</div>
+                          </div>
+                          <div class="card-body">
+                            {% if item.output_pretty %}
+                              <pre class="mb-0" style="white-space: pre-wrap;">{{ item.output_pretty }}</pre>
+                            {% else %}
+                              <div class="text-muted small">{% trans "No output." %}</div>
+                            {% endif %}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="col-12">
+                        <div class="card">
+                          <div class="card-header py-2 d-flex align-items-center justify-content-between">
+                            <div class="fw-semibold">{% trans "Step definition" %}</div>
+                            <div class="text-muted small">
+                              {% if meta.type %}<span class="me-2">{% trans "Type" %}: <code>{{ meta.type }}</code></span>{% endif %}
+                              {% if meta.title %}<span>{% trans "Title" %}: {{ meta.title }}</span>{% endif %}
+                            </div>
+                          </div>
+                          <div class="card-body">
+                            {% if item.params_pretty %}
+                              <pre class="mb-0" style="white-space: pre-wrap;">{{ item.params_pretty }}</pre>
+                            {% else %}
+                              <div class="text-muted small">{% trans "No params available in IR for this step." %}</div>
+                            {% endif %}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+              {% endwith %}
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="alert alert-secondary">
+            <div class="fw-semibold">{% trans "No step history yet." %}</div>
+            <div class="text-muted small">
+              {% trans "If the instance is queued, check Jobs below. If it is failed/paused, retry to execute the failing step again." %}
+            </div>
+          </div>
+        {% endif %}
+
+        <!-- Jobs -->
+        <div class="mt-4">
+          <div class="d-flex align-items-center justify-content-between mb-2">
+            <h2 class="h5 mb-0">{% trans "Jobs" %}</h2>
+            <span class="text-muted small">{% trans "Latest" %} {{ jobs|length }}</span>
+          </div>
+
+          {% if jobs %}
+            <div class="table-responsive">
+              <table class="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th>{% trans "Created" %}</th>
+                    <th>{% trans "Kind" %}</th>
+                    <th>{% trans "Status" %}</th>
+                    <th>{% trans "Run after" %}</th>
+                    <th>{% trans "Attempts" %}</th>
+                    <th>{% trans "Last error" %}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for j in jobs %}
+                    <tr>
+                      <td class="text-muted small">{{ j.created_at|date:"Y-m-d H:i:s" }}</td>
+                      <td><code>{{ j.kind }}</code></td>
+                      <td><span class="badge {% if j.status == 'failed' %}text-bg-danger{% elif j.status == 'done' %}text-bg-success{% elif j.status == 'running' %}text-bg-primary{% else %}text-bg-secondary{% endif %}">{{ j.status }}</span></td>
+                      <td class="text-muted small">{{ j.run_after|date:"Y-m-d H:i:s" }}</td>
+                      <td class="text-muted small">{{ j.attempts }}/{{ j.max_attempts }}</td>
+                      <td style="max-width: 420px;">
+                        {% if j.last_error %}
+                          <div class="small text-danger" style="white-space: pre-wrap;">{{ j.last_error }}</div>
+                        {% else %}
+                          <span class="text-muted small">—</span>
+                        {% endif %}
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="text-muted small">{% trans "No jobs found for this instance." %}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- RIGHT: Vars + Event -->
+      <div class="col-12 col-lg-4">
+        <div class="card">
+          <div class="card-header py-2 d-flex align-items-center justify-content-between">
+            <div class="fw-semibold">{% trans "Vars (current)" %}</div>
+            <span class="text-muted small"><i class="bi bi-braces me-1"></i>JSON</span>
+          </div>
+          <div class="card-body">
+            <pre class="mb-0" style="white-space: pre-wrap;">{{ vars_pretty }}</pre>
+          </div>
+        </div>
+
+        <div class="card mt-3">
+          <div class="card-header py-2 d-flex align-items-center justify-content-between">
+            <div class="fw-semibold">{% trans "Event" %}</div>
+            <span class="text-muted small"><i class="bi bi-braces me-1"></i>JSON</span>
+          </div>
+          <div class="card-body">
+            <pre class="mb-0" style="white-space: pre-wrap;">{{ event_pretty }}</pre>
+          </div>
+        </div>
+
+        <div class="card mt-3">
+          <div class="card-header py-2">
+            <div class="fw-semibold">{% trans "How to read this page" %}</div>
+          </div>
+          <div class="card-body small text-muted">
+            <ul class="mb-0">
+              <li>{% trans "Open a step to see vars_delta, output, error and the step definition." %}</li>
+              <li>{% trans "Vars (current) is the final state after all executed steps." %}</li>
+              <li>{% trans "If a webhook fails (e.g. SSL), you'll see it under Error and also in Jobs." %}</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </div>
   </div>
 
   <div class="card-footer d-flex justify-content-between align-items-center">
-    <a href="{% url 'workflows2:runs-list' %}" class="btn btn-secondary">{% trans "Back" %}</a>
+    <a href="{% url 'workflows2:runs-list' %}" class="btn btn-secondary">
+      <i class="bi bi-arrow-left me-1"></i>{% trans "Back" %}
+    </a>
   </div>
 </div>
-
 {% endblock %}

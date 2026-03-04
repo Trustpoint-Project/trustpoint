@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils import timezone
 
+from management.models import WorkflowExecutionConfig
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Approval, Workflow2Definition, Workflow2Instance, Workflow2Job, Workflow2Run
@@ -13,13 +14,15 @@ from workflows2.services.runtime import WorkflowRuntimeService
 from workflows2.services.worker import Workflow2DbWorker
 
 
+# Approval is NOT allowed on device.created by policy.
+# Therefore these tests use the allow-all test trigger.
 YAML_APPROVAL_REJECT = """
 schema: trustpoint.workflow.v2
 name: Approval Reject Test
 enabled: true
 
 trigger:
-  on: device.created
+  on: workflows2.test
   sources:
     trustpoint: true
 
@@ -33,21 +36,13 @@ workflow:
       rejected_outcome: rejected
       timeout_seconds: 3600
 
-    ok:
-      type: succeed
-      message: ok
-
-    no:
-      type: reject
-      reason: "Denied"
-
   flow:
     - from: approve
       on: approved
-      to: ok
+      to: $end
     - from: approve
       on: rejected
-      to: no
+      to: $reject
 """
 
 
@@ -65,8 +60,8 @@ workflow:
   start: done
   steps:
     done:
-      type: succeed
-      message: ok
+      type: set
+      vars: {}
   flow: []
 """
 
@@ -88,29 +83,27 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
 
         inst = runtime.create_instance(definition=d, event={"device": {"id": "x"}})
-        # run first step -> awaiting (approval)
+
         runtime.run_one_step(inst)
         inst.refresh_from_db()
         self.assertEqual(inst.status, Workflow2Instance.STATUS_AWAITING)
 
         approval = Workflow2Approval.objects.get(instance=inst, step_id="approve")
+
         runtime.resolve_approval(approval=approval, decision="rejected")
-
-        inst.refresh_from_db()
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_RUNNING)
-
-        # next run step should execute "no" reject step
-        runtime.run_one_step(inst)
         inst.refresh_from_db()
         self.assertEqual(inst.status, Workflow2Instance.STATUS_REJECTED)
 
-    @override_settings(WORKFLOWS2_RUN_MODE="db")
     def test_dispatch_creates_run_and_instances_and_awaits(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.save()
+
         self._store_def(YAML_APPROVAL_REJECT, name="A")
 
         svc = WorkflowDispatchService()
         instances = svc.emit_event(
-            on="device.created",
+            on="workflows2.test",
             event={"device": {"common_name": "dev1"}},
             source=EventSource(trustpoint=True),
             idempotency_key="k1",
@@ -121,10 +114,9 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         self.assertIsNotNone(inst.run_id)
 
         run = Workflow2Run.objects.get(id=inst.run_id)
-        self.assertEqual(run.status, Workflow2Run.STATUS_QUEUED)  # jobs queued, not executed yet
+        self.assertEqual(run.status, Workflow2Run.STATUS_QUEUED)
         self.assertEqual(Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(), 1)
 
-        # worker executes one step -> awaiting
         runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
         worker = Workflow2DbWorker(runtime=runtime, lease_seconds=5, batch_limit=5, worker_id="t")
         stats = worker.tick()
@@ -137,6 +129,10 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         self.assertEqual(run.status, Workflow2Run.STATUS_AWAITING)
 
     def test_get_or_create_run_idempotency_returns_same_run(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.save()
+
         self._store_def(YAML_TWO_WORKFLOWS, name="A")
         svc = WorkflowDispatchService()
 
@@ -182,7 +178,7 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         d = self._store_def(YAML_APPROVAL_REJECT, name="A")
         svc = WorkflowDispatchService(executor=WorkflowExecutor())
         run = svc.get_or_create_run(
-            on="device.created",
+            on="workflows2.test",
             event={"device": {"id": "x"}},
             source=EventSource(trustpoint=True),
             idempotency_key="agg",
@@ -191,16 +187,15 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         runtime = svc.runtime
         inst = runtime.create_instance(run=run, definition=d, event={"device": {"id": "x"}})
 
-        # run approval awaiting
         runtime.run_one_step(inst)
         run.refresh_from_db()
         self.assertEqual(run.status, Workflow2Run.STATUS_AWAITING)
 
-        # reject
         approval = Workflow2Approval.objects.get(instance=inst, step_id="approve")
         runtime.resolve_approval(approval=approval, decision="rejected")
 
-        # execute reject step
-        runtime.run_one_step(inst)
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_REJECTED)
+
         run.refresh_from_db()
         self.assertEqual(run.status, Workflow2Run.STATUS_REJECTED)

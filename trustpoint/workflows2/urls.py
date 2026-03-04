@@ -5,12 +5,20 @@ from workflows2.views.approvals import (
     Workflow2ApprovalListView,
     Workflow2ApprovalResolveView,
 )
+from workflows2.views.context_catalog import ContextCatalogView
+from workflows2.views.context_sources import ContextSourcesView
 from workflows2.views.definitions import (
     Workflow2DefinitionCreateView,
     Workflow2DefinitionEditView,
     Workflow2DefinitionListView,
 )
 from workflows2.views.dev import Workflow2DevView
+from workflows2.views.event_catalog import EventCatalogView
+from workflows2.views.format_yaml import FormatYamlView
+from workflows2.views.graph_api import (
+    Workflow2DefinitionGraphView,
+)
+from workflows2.views.graph_from_yaml_api import Workflow2GraphFromYamlView
 from workflows2.views.instances import (
     Workflow2InstanceCancelView,
     Workflow2InstanceDetailView,
@@ -35,6 +43,9 @@ urlpatterns = [
 
     # API
     path('api/triggers/', Workflow2TriggerCatalogView.as_view(), name='api_triggers'),
+    path('api/definitions/<uuid:pk>/graph/', Workflow2DefinitionGraphView.as_view(), name='api_definition_graph'),
+    path("api/event-catalog/", EventCatalogView.as_view(), name="event_catalog"),
+    path("api/graph-from-yaml/", Workflow2GraphFromYamlView.as_view(), name="api_graph_from_yaml"),
 
     # Dev
     path('dev/', Workflow2DevView.as_view(), name='dev'),
@@ -55,4 +66,8 @@ urlpatterns = [
     path('approvals/', Workflow2ApprovalListView.as_view(), name='approvals-list'),
     path('approvals/<uuid:approval_id>/', Workflow2ApprovalDetailView.as_view(), name='approvals-detail'),
     path('approvals/<uuid:approval_id>/resolve/', Workflow2ApprovalResolveView.as_view(), name='approvals-resolve'),
+
+    path("api/context-catalog/", ContextCatalogView.as_view(), name="context_catalog"),
+    path("api/context-sources/", ContextSourcesView.as_view(), name="context_sources"),
+    path("api/format-yaml/", FormatYamlView.as_view(), name="format_yaml"),
 ]

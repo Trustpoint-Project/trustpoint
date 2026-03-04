@@ -1,3 +1,4 @@
+# workflows2/services/definitions.py
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -5,6 +6,7 @@ from typing import Any
 
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.compiler.errors import CompileError
+from workflows2.compiler.yaml_format import format_yaml_text
 from workflows2.models import Workflow2Definition
 
 
@@ -13,11 +15,16 @@ class CompileResult:
     ok: bool
     ir: dict[str, Any] | None
     error: str | None
+    formatted_yaml: str | None
 
 
 class WorkflowDefinitionService:
     """
-    Compile YAML + persist Workflow2Definition.
+    Format YAML + compile + persist Workflow2Definition.
+
+    Design:
+      - UI YAML is canonicalized before compile and before saving to DB.
+      - The DB YAML is the single source of truth (stable formatting).
     """
 
     def __init__(self, *, compiler_version: str = "workflows2-ui") -> None:
@@ -25,12 +32,17 @@ class WorkflowDefinitionService:
 
     def compile_yaml(self, yaml_text: str) -> CompileResult:
         try:
-            ir = compile_workflow_yaml(yaml_text, compiler_version=self.compiler_version)
-            return CompileResult(ok=True, ir=ir, error=None)
-        except CompileError as e:
-            return CompileResult(ok=False, ir=None, error=str(e))
+            formatted = format_yaml_text(yaml_text)
         except Exception as e:  # noqa: BLE001
-            return CompileResult(ok=False, ir=None, error=f"Unexpected error: {e!s}")
+            return CompileResult(ok=False, ir=None, error=f"YAML format failed: {e!s}", formatted_yaml=None)
+
+        try:
+            ir = compile_workflow_yaml(formatted, compiler_version=self.compiler_version)
+            return CompileResult(ok=True, ir=ir, error=None, formatted_yaml=formatted)
+        except CompileError as e:
+            return CompileResult(ok=False, ir=None, error=str(e), formatted_yaml=formatted)
+        except Exception as e:  # noqa: BLE001
+            return CompileResult(ok=False, ir=None, error=f"Unexpected error: {e!s}", formatted_yaml=formatted)
 
     @staticmethod
     def _extract_trigger_on(ir: dict[str, Any]) -> str:
@@ -58,14 +70,14 @@ class WorkflowDefinitionService:
         yaml_text: str,
     ) -> tuple[Workflow2Definition | None, CompileResult]:
         res = self.compile_yaml(yaml_text)
-        if not res.ok or res.ir is None:
+        if not res.ok or res.ir is None or res.formatted_yaml is None:
             return None, res
 
         obj = Workflow2Definition.objects.create(
             name=name.strip(),
             enabled=enabled,
             trigger_on=self._extract_trigger_on(res.ir),
-            yaml_text=yaml_text,
+            yaml_text=res.formatted_yaml,
             ir_json=res.ir,
             ir_hash=self._extract_ir_hash(res.ir),
         )
@@ -80,13 +92,13 @@ class WorkflowDefinitionService:
         yaml_text: str,
     ) -> tuple[Workflow2Definition | None, CompileResult]:
         res = self.compile_yaml(yaml_text)
-        if not res.ok or res.ir is None:
+        if not res.ok or res.ir is None or res.formatted_yaml is None:
             return None, res
 
         definition.name = name.strip()
         definition.enabled = enabled
         definition.trigger_on = self._extract_trigger_on(res.ir)
-        definition.yaml_text = yaml_text
+        definition.yaml_text = res.formatted_yaml
         definition.ir_json = res.ir
         definition.ir_hash = self._extract_ir_hash(res.ir)
         definition.save(update_fields=["name", "enabled", "trigger_on", "yaml_text", "ir_json", "ir_hash"])

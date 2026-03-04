@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import textwrap
 from typing import Any
 from uuid import UUID
 
@@ -29,12 +30,38 @@ class Workflow2DefinitionListView(LoginRequiredMixin, ListView[Workflow2Definiti
 class Workflow2DefinitionCreateView(LoginRequiredMixin, View):
     template_name = "workflows2/definition_editor.html"
 
+    default_yaml = textwrap.dedent("""
+    schema: trustpoint.workflow.v2
+    name: New workflow
+    enabled: true
+
+    trigger:
+    on: device.created
+    sources:
+        trustpoint: true
+        ca_ids: []
+        domain_ids: []
+        device_ids: []
+
+    apply: []
+
+    workflow:
+    start: __STEP_NAME__
+
+    steps:
+        __STEP_NAME__:
+        type: set
+        vars: {}
+
+    flow: []
+    """).strip()
+
     def get(self, request: HttpRequest) -> HttpResponse:
         form = Workflow2DefinitionForm(
             initial={
                 "name": "New workflow",
                 "enabled": True,
-                "yaml_text": '',
+                "yaml_text": self.default_yaml,
             }
         )
         return render(

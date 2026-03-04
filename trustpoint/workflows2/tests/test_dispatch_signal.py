@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from django.test import TestCase, override_settings
+from django.test import TestCase
 
 from devices.models import DeviceModel
+from management.models import WorkflowExecutionConfig
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2Job
@@ -25,8 +26,8 @@ workflow:
 
   steps:
     stop_ok:
-      type: stop
-      reason: Done
+      type: set
+      vars: {}
 
   flow: []
 """
@@ -44,31 +45,34 @@ class DispatchSignalsTests(TestCase):
             ir_hash=ir["meta"]["ir_hash"],
         )
 
-    @override_settings(WORKFLOWS2_RUN_MODE="sync")
     def test_creating_device_triggers_workflow_sync(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.INLINE
+        cfg.save()
+
         self._store_definition()
         self.assertEqual(Workflow2Instance.objects.count(), 0)
 
-        DeviceModel.objects.create(
-            common_name="dev1",
-            serial_number="SN-1",
-        )
+        DeviceModel.objects.create(common_name="dev1", serial_number="SN-1")
 
         self.assertEqual(Workflow2Instance.objects.count(), 1)
         inst = Workflow2Instance.objects.first()
         assert inst is not None
         self.assertEqual(inst.definition.name, "TP device created")
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_STOPPED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
 
-    @override_settings(WORKFLOWS2_RUN_MODE="db")
+        # Because we now always enqueue jobs, sync also creates a job (it is just drained inline).
+        self.assertEqual(Workflow2Job.objects.filter(instance=inst).count(), 1)
+
     def test_creating_device_triggers_workflow_db(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.save()
+
         self._store_definition()
         self.assertEqual(Workflow2Instance.objects.count(), 0)
 
-        DeviceModel.objects.create(
-            common_name="dev1",
-            serial_number="SN-1",
-        )
+        DeviceModel.objects.create(common_name="dev1", serial_number="SN-1")
 
         self.assertEqual(Workflow2Instance.objects.count(), 1)
         inst = Workflow2Instance.objects.first()
@@ -81,4 +85,4 @@ class DispatchSignalsTests(TestCase):
         worker.tick()
 
         inst.refresh_from_db()
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_STOPPED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)

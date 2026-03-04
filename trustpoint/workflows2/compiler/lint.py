@@ -25,19 +25,12 @@ class SchemaLinter:
     This is intentionally NOT a full schema system; it's a guardrail.
     """
 
-    # Top-level YAML keys (v2 draft)
     _TOP_LEVEL_KEYS: set[str] = {"schema", "name", "enabled", "trigger", "apply", "workflow"}
-
-    # Workflow-level keys
     _WORKFLOW_KEYS: set[str] = {"start", "steps", "flow"}
-
-    # Trigger keys
     _TRIGGER_KEYS: set[str] = {"on", "sources"}
     _TRIGGER_SOURCES_KEYS: set[str] = {"trustpoint", "ca_ids", "domain_ids", "device_ids"}
 
-    # Step specs by type: allowed keys inside workflow.steps.<id>
     _STEP_SPECS: dict[str, _StepSpec] = {
-        # shared keys: type, title are allowed everywhere
         "email": _StepSpec(
             allowed_keys={
                 "type",
@@ -89,35 +82,7 @@ class SchemaLinter:
                 "title",
                 "approved_outcome",
                 "rejected_outcome",
-                "timeout_seconds",  # <-- NEW: optional
-            }
-        ),
-        "reject": _StepSpec(  # <-- NEW
-            allowed_keys={
-                "type",
-                "title",
-                "reason",
-            }
-        ),
-        "stop": _StepSpec(
-            allowed_keys={
-                "type",
-                "title",
-                "reason",
-            }
-        ),
-        "succeed": _StepSpec(
-            allowed_keys={
-                "type",
-                "title",
-                "message",  # optional
-            }
-        ),
-        "fail": _StepSpec(
-            allowed_keys={
-                "type",
-                "title",
-                "reason",  # optional (compiler allows None)
+                "timeout_seconds",
             }
         ),
     }
@@ -126,7 +91,6 @@ class SchemaLinter:
         if not isinstance(src, dict):
             raise CompileError("Top-level YAML must be a mapping", path="")
 
-        # unknown top-level keys
         for k in src.keys():
             if k not in self._TOP_LEVEL_KEYS:
                 raise CompileError(
@@ -134,7 +98,6 @@ class SchemaLinter:
                     path=str(k),
                 )
 
-        # workflow keys sanity
         wf = src.get("workflow")
         if isinstance(wf, dict):
             for k in wf.keys():
@@ -144,7 +107,6 @@ class SchemaLinter:
                         path=f"workflow.{k}",
                     )
 
-        # trigger keys sanity
         trig = src.get("trigger")
         if isinstance(trig, dict):
             for k in trig.keys():
@@ -162,7 +124,6 @@ class SchemaLinter:
                             path=f"trigger.sources.{k}",
                         )
 
-        # steps key sanity
         steps = wf.get("steps") if isinstance(wf, dict) else None
         if isinstance(steps, dict):
             for step_id, step in steps.items():
@@ -175,7 +136,6 @@ class SchemaLinter:
         typ = step.get("type")
 
         if not isinstance(typ, str) or not typ.strip():
-            # compiler will produce clearer errors; still keep here.
             return
 
         typ = typ.strip()

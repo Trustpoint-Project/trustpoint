@@ -61,12 +61,12 @@ workflow:
       default: fail
 
     stop_ok:
-      type: stop
-      reason: Done (ok)
+      type: set
+      vars: {}
 
     stop_fail:
-      type: stop
-      reason: Done (fail)
+      type: set
+      vars: {}
 
   flow:
     - from: notify
@@ -84,76 +84,74 @@ workflow:
 
 class CompilerTests(SimpleTestCase):
     def test_compile_valid(self) -> None:
-        ir = compile_workflow_yaml(VALID_YAML, compiler_version='test')
-        self.assertEqual(ir['ir_version'], 'v2')
-        self.assertEqual(ir['trigger']['on'], 'device.created')
-        self.assertTrue(ir['meta']['source_hash'])
-        self.assertTrue(ir['meta']['ir_hash'])
+        ir = compile_workflow_yaml(VALID_YAML, compiler_version="test")
+        self.assertEqual(ir["ir_version"], "v2")
+        self.assertEqual(ir["trigger"]["on"], "device.created")
+        self.assertTrue(ir["meta"]["source_hash"])
+        self.assertTrue(ir["meta"]["ir_hash"])
 
     def test_yaml_key_on_is_not_boolean(self) -> None:
-        # Regression test for YAML 1.1 parsing ("on" becoming boolean True)
-        ir = compile_workflow_yaml(VALID_YAML, compiler_version='test')
-        self.assertEqual(ir['trigger']['on'], 'device.created')
+        ir = compile_workflow_yaml(VALID_YAML, compiler_version="test")
+        self.assertEqual(ir["trigger"]["on"], "device.created")
 
     def test_root_refs_allowed(self) -> None:
-        # `${json(event)}` and `${json(vars)}` must compile
-        ir = compile_workflow_yaml(VALID_YAML, compiler_version='test')
-        body = ir['workflow']['steps']['notify']['params']['body']
+        ir = compile_workflow_yaml(VALID_YAML, compiler_version="test")
+        body = ir["workflow"]["steps"]["notify"]["params"]["body"]
         self.assertIsInstance(body, dict)
-        self.assertEqual(body['kind'], 'template')
+        self.assertEqual(body["kind"], "template")
 
     def test_templates_deep_in_webhook_body(self) -> None:
-        ir = compile_workflow_yaml(VALID_YAML, compiler_version='test')
-        body = ir['workflow']['steps']['call_status']['params']['body']
+        ir = compile_workflow_yaml(VALID_YAML, compiler_version="test")
+        body = ir["workflow"]["steps"]["call_status"]["params"]["body"]
         self.assertIsInstance(body, dict)
-        self.assertIn('nested', body)
-        self.assertIsInstance(body['nested']['msg'], dict)
-        self.assertEqual(body['nested']['msg']['kind'], 'template')
+        self.assertIn("nested", body)
+        self.assertIsInstance(body["nested"]["msg"], dict)
+        self.assertEqual(body["nested"]["msg"]["kind"], "template")
 
     def test_missing_outcome_mapping_errors(self) -> None:
         bad = VALID_YAML.replace(
-            '    - from: route_by_status\n      on: fail\n      to: stop_fail\n',
-            '',
+            "    - from: route_by_status\n      on: fail\n      to: stop_fail\n",
+            "",
         )
         with self.assertRaises(CompileError):
-            compile_workflow_yaml(bad, compiler_version='test')
+            compile_workflow_yaml(bad, compiler_version="test")
 
-    def test_terminal_step_no_outgoing(self) -> None:
-        bad = VALID_YAML + '\n    - from: stop_ok\n      to: stop_fail\n'
+    def test_unknown_flow_to_is_error(self) -> None:
+        bad = VALID_YAML + "\n    - from: stop_ok\n      to: does_not_exist\n"
         with self.assertRaises(CompileError):
-            compile_workflow_yaml(bad, compiler_version='test')
+            compile_workflow_yaml(bad, compiler_version="test")
 
     def test_unknown_top_level_key(self) -> None:
-        bad = VALID_YAML.replace('enabled: true', 'enabled: true\nfoo: 1')
+        bad = VALID_YAML.replace("enabled: true", "enabled: true\nfoo: 1")
         with self.assertRaises(CompileError) as ctx:
-            compile_workflow_yaml(bad, compiler_version='test')
-        self.assertIn('Unknown key', str(ctx.exception))
-        self.assertIn('foo', str(ctx.exception))
+            compile_workflow_yaml(bad, compiler_version="test")
+        self.assertIn("Unknown key", str(ctx.exception))
+        self.assertIn("foo", str(ctx.exception))
 
     def test_unknown_step_key_with_suggestion(self) -> None:
         bad = VALID_YAML.replace('subject: "New device:', 'subjectt: "New device:')
         with self.assertRaises(CompileError) as ctx:
-            compile_workflow_yaml(bad, compiler_version='test')
+            compile_workflow_yaml(bad, compiler_version="test")
         s = str(ctx.exception)
-        self.assertIn('subjectt', s)
-        self.assertIn('Did you mean', s)
+        self.assertIn("subjectt", s)
+        self.assertIn("Did you mean", s)
 
     def test_unknown_webhook_capture_key(self) -> None:
-        bad = VALID_YAML.replace('status_code: vars.http_status', 'statuz_code: vars.http_status')
+        bad = VALID_YAML.replace("status_code: vars.http_status", "statuz_code: vars.http_status")
         with self.assertRaises(CompileError):
-            compile_workflow_yaml(bad, compiler_version='test')
+            compile_workflow_yaml(bad, compiler_version="test")
 
     def test_unknown_step_type_has_good_error(self) -> None:
-        bad = VALID_YAML.replace('type: stop', 'type: stopa', 1)
+        bad = VALID_YAML.replace("type: set", "type: seta", 1)
         with self.assertRaises(CompileError) as ctx:
-            compile_workflow_yaml(bad, compiler_version='test')
+            compile_workflow_yaml(bad, compiler_version="test")
         s = str(ctx.exception)
-        self.assertIn('Unknown step type', s)
-        self.assertIn('stopa', s)
+        self.assertIn("Unknown step type", s)
+        self.assertIn("seta", s)
 
     def test_compute_step_compiles_expr_assignments(self) -> None:
         yaml_text = VALID_YAML.replace(
-            'stop_ok:',
+            "stop_ok:",
             """compute_stuff:
       type: compute
       set:
@@ -164,26 +162,25 @@ class CompilerTests(SimpleTestCase):
 """,
         )
 
-        # also wire the flow to include compute_stuff (between route_by_status and stop_ok for example)
         yaml_text = yaml_text.replace(
-            '    - from: route_by_status\n      on: ok\n      to: stop_ok\n',
-            '    - from: route_by_status\n      on: ok\n      to: compute_stuff\n'
-            '    - from: compute_stuff\n      to: stop_ok\n',
+            "    - from: route_by_status\n      on: ok\n      to: stop_ok\n",
+            "    - from: route_by_status\n      on: ok\n      to: compute_stuff\n"
+            "    - from: compute_stuff\n      to: stop_ok\n",
         )
 
-        ir = compile_workflow_yaml(yaml_text, compiler_version='test')
-        step = ir['workflow']['steps']['compute_stuff']
-        self.assertEqual(step['type'], 'compute')
+        ir = compile_workflow_yaml(yaml_text, compiler_version="test")
+        step = ir["workflow"]["steps"]["compute_stuff"]
+        self.assertEqual(step["type"], "compute")
 
-        set_map = step['params']['set']
-        self.assertIn('vars.total', set_map)
-        self.assertEqual(set_map['vars.total']['kind'], 'expr')
-        self.assertEqual(set_map['vars.total']['expr']['kind'], 'call')
-        self.assertEqual(set_map['vars.total']['expr']['name'], 'add')
+        set_map = step["params"]["set"]
+        self.assertIn("vars.total", set_map)
+        self.assertEqual(set_map["vars.total"]["kind"], "expr")
+        self.assertEqual(set_map["vars.total"]["expr"]["kind"], "call")
+        self.assertEqual(set_map["vars.total"]["expr"]["name"], "add")
 
     def test_compute_requires_single_expr_string(self) -> None:
         yaml_text = VALID_YAML.replace(
-            'stop_ok:',
+            "stop_ok:",
             """compute_stuff:
       type: compute
       set:
@@ -193,17 +190,17 @@ class CompilerTests(SimpleTestCase):
 """,
         )
         yaml_text = yaml_text.replace(
-            '    - from: route_by_status\n      on: ok\n      to: stop_ok\n',
-            '    - from: route_by_status\n      on: ok\n      to: compute_stuff\n'
-            '    - from: compute_stuff\n      to: stop_ok\n',
+            "    - from: route_by_status\n      on: ok\n      to: stop_ok\n",
+            "    - from: route_by_status\n      on: ok\n      to: compute_stuff\n"
+            "    - from: compute_stuff\n      to: stop_ok\n",
         )
 
         with self.assertRaises(CompileError):
-            compile_workflow_yaml(yaml_text, compiler_version='test')
+            compile_workflow_yaml(yaml_text, compiler_version="test")
 
     def test_compute_disallows_non_vars_targets(self) -> None:
         yaml_text = VALID_YAML.replace(
-            'stop_ok:',
+            "stop_ok:",
             """compute_stuff:
       type: compute
       set:
@@ -213,17 +210,17 @@ class CompilerTests(SimpleTestCase):
 """,
         )
         yaml_text = yaml_text.replace(
-            '    - from: route_by_status\n      on: ok\n      to: stop_ok\n',
-            '    - from: route_by_status\n      on: ok\n      to: compute_stuff\n'
-            '    - from: compute_stuff\n      to: stop_ok\n',
+            "    - from: route_by_status\n      on: ok\n      to: stop_ok\n",
+            "    - from: route_by_status\n      on: ok\n      to: compute_stuff\n"
+            "    - from: compute_stuff\n      to: stop_ok\n",
         )
 
         with self.assertRaises(CompileError):
-            compile_workflow_yaml(yaml_text, compiler_version='test')
+            compile_workflow_yaml(yaml_text, compiler_version="test")
 
     def test_expr_disallows_unknown_function(self) -> None:
         yaml_text = VALID_YAML.replace(
-            'stop_ok:',
+            "stop_ok:",
             """compute_stuff:
       type: compute
       set:
@@ -233,10 +230,39 @@ class CompilerTests(SimpleTestCase):
 """,
         )
         yaml_text = yaml_text.replace(
-            '    - from: route_by_status\n      on: ok\n      to: stop_ok\n',
-            '    - from: route_by_status\n      on: ok\n      to: compute_stuff\n'
-            '    - from: compute_stuff\n      to: stop_ok\n',
+            "    - from: route_by_status\n      on: ok\n      to: stop_ok\n",
+            "    - from: route_by_status\n      on: ok\n      to: compute_stuff\n"
+            "    - from: compute_stuff\n      to: stop_ok\n",
         )
 
         with self.assertRaises(CompileError):
-            compile_workflow_yaml(yaml_text, compiler_version='test')
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+    def test_allows_implicit_end_for_non_outcome_step(self) -> None:
+        yaml_text = """\
+schema: trustpoint.workflow.v2
+name: Implicit end
+enabled: true
+
+trigger:
+  on: device.created
+  sources:
+    trustpoint: true
+
+workflow:
+  start: a
+  steps:
+    a:
+      type: set
+      vars: {}
+    b:
+      type: set
+      vars: {}
+  flow:
+    - from: a
+      to: b
+"""
+        ir = compile_workflow_yaml(yaml_text, compiler_version="test")
+        self.assertIn("b", ir["workflow"]["steps"])
+        # b has no outgoing transition -> allowed
+        self.assertNotIn("b", ir["workflow"]["transitions"])

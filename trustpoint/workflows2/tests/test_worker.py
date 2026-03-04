@@ -26,8 +26,8 @@ workflow:
   start: done_ok
   steps:
     done_ok:
-      type: succeed
-      message: Done
+      type: set
+      vars: {}
   flow: []
 """
 

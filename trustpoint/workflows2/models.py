@@ -21,7 +21,7 @@ class Workflow2Definition(models.Model):
     name = models.CharField(max_length=200)
     enabled = models.BooleanField(default=True)
 
-    trigger_on = models.CharField(max_length=100, db_index=True, default="")
+    trigger_on = models.CharField(max_length=100, db_index=True, default='')
 
     yaml_text = models.TextField()
     ir_json = models.JSONField()
@@ -31,42 +31,44 @@ class Workflow2Definition(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["enabled"]),
-            models.Index(fields=["trigger_on"]),
-            models.Index(fields=["ir_hash"]),
+            models.Index(fields=['enabled']),
+            models.Index(fields=['trigger_on']),
+            models.Index(fields=['ir_hash']),
         ]
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.id})"
+        return f'{self.name} ({self.id})'
 
 
 class Workflow2Run(models.Model):
-    """
-    A bundle/run representing one trigger emission that may create N instances.
+    """A bundle/run representing one trigger emission that may create N instances.
     This is what you'll later use for EST gating / UI grouping.
     """
 
-    STATUS_QUEUED = "queued"
-    STATUS_RUNNING = "running"
-    STATUS_AWAITING = "awaiting"
-    STATUS_PAUSED = "paused"
+    STATUS_QUEUED = 'queued'
+    STATUS_RUNNING = 'running'
+    STATUS_AWAITING = 'awaiting'
+    STATUS_PAUSED = 'paused'
 
-    STATUS_SUCCEEDED = "succeeded"
-    STATUS_STOPPED = "stopped"
-    STATUS_REJECTED = "rejected"
-    STATUS_FAILED = "failed"
-    STATUS_CANCELLED = "cancelled"
+    STATUS_SUCCEEDED = 'succeeded'
+    STATUS_STOPPED = 'stopped'
+    STATUS_REJECTED = 'rejected'
+    STATUS_FAILED = 'failed'
+    STATUS_CANCELLED = 'cancelled'
+
+    STATUS_NO_MATCH = 'no_match'
 
     STATUS_CHOICES = [
-        (STATUS_QUEUED, "Queued"),
-        (STATUS_RUNNING, "Running"),
-        (STATUS_AWAITING, "Awaiting"),
-        (STATUS_PAUSED, "Paused"),
-        (STATUS_SUCCEEDED, "Succeeded"),
-        (STATUS_STOPPED, "Stopped"),
-        (STATUS_REJECTED, "Rejected"),
-        (STATUS_FAILED, "Failed"),
-        (STATUS_CANCELLED, "Cancelled"),
+        (STATUS_QUEUED, 'Queued'),
+        (STATUS_RUNNING, 'Running'),
+        (STATUS_AWAITING, 'Awaiting'),
+        (STATUS_PAUSED, 'Paused'),
+        (STATUS_SUCCEEDED, 'Succeeded'),
+        (STATUS_STOPPED, 'Stopped'),
+        (STATUS_REJECTED, 'Rejected'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_CANCELLED, 'Cancelled'),
+        (STATUS_NO_MATCH, 'No match'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -86,14 +88,14 @@ class Workflow2Run(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["trigger_on", "created_at"]),
-            models.Index(fields=["status"]),
-            models.Index(fields=["finalized"]),
-            models.Index(fields=["idempotency_key"]),
+            models.Index(fields=['trigger_on', 'created_at']),
+            models.Index(fields=['status']),
+            models.Index(fields=['finalized']),
+            models.Index(fields=['idempotency_key']),
         ]
 
     def __str__(self) -> str:
-        return f"Run {self.id} ({self.trigger_on}) {self.status}"
+        return f'Run {self.id} ({self.trigger_on}) {self.status}'
 
 
 class Workflow2Instance(models.Model):
@@ -103,28 +105,28 @@ class Workflow2Instance(models.Model):
     This is what users care about.
     """
 
-    STATUS_QUEUED = "queued"
-    STATUS_RUNNING = "running"
-    STATUS_AWAITING = "awaiting"
-    STATUS_PAUSED = "paused"  # requires manual resume after crash/lease expiry
+    STATUS_QUEUED = 'queued'
+    STATUS_RUNNING = 'running'
+    STATUS_AWAITING = 'awaiting'
+    STATUS_PAUSED = 'paused'  # requires manual resume after crash/lease expiry
 
     # Terminal states
-    STATUS_SUCCEEDED = "succeeded"
-    STATUS_STOPPED = "stopped"
-    STATUS_REJECTED = "rejected"
-    STATUS_FAILED = "failed"
-    STATUS_CANCELLED = "cancelled"
+    STATUS_SUCCEEDED = 'succeeded'
+    STATUS_STOPPED = 'stopped'
+    STATUS_REJECTED = 'rejected'
+    STATUS_FAILED = 'failed'
+    STATUS_CANCELLED = 'cancelled'
 
     STATUS_CHOICES = [
-        (STATUS_QUEUED, "Queued"),
-        (STATUS_RUNNING, "Running"),
-        (STATUS_AWAITING, "Awaiting"),
-        (STATUS_PAUSED, "Paused"),
-        (STATUS_SUCCEEDED, "Succeeded"),
-        (STATUS_STOPPED, "Stopped"),
-        (STATUS_REJECTED, "Rejected"),
-        (STATUS_FAILED, "Failed"),
-        (STATUS_CANCELLED, "Cancelled"),
+        (STATUS_QUEUED, 'Queued'),
+        (STATUS_RUNNING, 'Running'),
+        (STATUS_AWAITING, 'Awaiting'),
+        (STATUS_PAUSED, 'Paused'),
+        (STATUS_SUCCEEDED, 'Succeeded'),
+        (STATUS_STOPPED, 'Stopped'),
+        (STATUS_REJECTED, 'Rejected'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_CANCELLED, 'Cancelled'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -132,7 +134,7 @@ class Workflow2Instance(models.Model):
     run = models.ForeignKey(
         Workflow2Run,
         on_delete=models.CASCADE,
-        related_name="instances",
+        related_name='instances',
         null=True,
         blank=True,
     )
@@ -140,7 +142,7 @@ class Workflow2Instance(models.Model):
     definition = models.ForeignKey(
         Workflow2Definition,
         on_delete=models.PROTECT,
-        related_name="instances",
+        related_name='instances',
     )
 
     event_json = models.JSONField()
@@ -158,30 +160,29 @@ class Workflow2Instance(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["status"]),
-            models.Index(fields=["created_at"]),
-            models.Index(fields=["run", "status"]),
+            models.Index(fields=['status']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['run', 'status']),
         ]
 
     def __str__(self) -> str:
-        return f"Instance {self.id} ({self.status})"
+        return f'Instance {self.id} ({self.status})'
 
 
 class Workflow2Approval(models.Model):
-    """
-    Persisted approval request for an approval step.
+    """Persisted approval request for an approval step.
     """
 
-    STATUS_PENDING = "pending"
-    STATUS_APPROVED = "approved"
-    STATUS_REJECTED = "rejected"
-    STATUS_EXPIRED = "expired"
+    STATUS_PENDING = 'pending'
+    STATUS_APPROVED = 'approved'
+    STATUS_REJECTED = 'rejected'
+    STATUS_EXPIRED = 'expired'
 
     STATUS_CHOICES = [
-        (STATUS_PENDING, "Pending"),
-        (STATUS_APPROVED, "Approved"),
-        (STATUS_REJECTED, "Rejected"),
-        (STATUS_EXPIRED, "Expired"),
+        (STATUS_PENDING, 'Pending'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_REJECTED, 'Rejected'),
+        (STATUS_EXPIRED, 'Expired'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -189,7 +190,7 @@ class Workflow2Approval(models.Model):
     instance = models.ForeignKey(
         Workflow2Instance,
         on_delete=models.CASCADE,
-        related_name="approvals",
+        related_name='approvals',
     )
 
     step_id = models.CharField(max_length=200)
@@ -206,12 +207,12 @@ class Workflow2Approval(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["status", "expires_at"]),
-            models.Index(fields=["instance", "step_id"]),
+            models.Index(fields=['status', 'expires_at']),
+            models.Index(fields=['instance', 'step_id']),
         ]
 
     def __str__(self) -> str:
-        return f"Approval {self.id} ({self.status})"
+        return f'Approval {self.id} ({self.status})'
 
 
 class Workflow2StepRun(models.Model):
@@ -222,7 +223,7 @@ class Workflow2StepRun(models.Model):
     instance = models.ForeignKey(
         Workflow2Instance,
         on_delete=models.CASCADE,
-        related_name="runs",
+        related_name='runs',
     )
 
     run_index = models.PositiveIntegerField()
@@ -242,12 +243,12 @@ class Workflow2StepRun(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["instance", "run_index"]),
-            models.Index(fields=["step_id"]),
+            models.Index(fields=['instance', 'run_index']),
+            models.Index(fields=['step_id']),
         ]
 
     def __str__(self) -> str:
-        return f"Run {self.run_index} ({self.step_id})"
+        return f'Run {self.run_index} ({self.step_id})'
 
 
 class Workflow2Job(models.Model):
@@ -256,26 +257,26 @@ class Workflow2Job(models.Model):
     Job status is mechanical (scheduler/worker lifecycle), not the same as instance status.
     """
 
-    KIND_RUN = "run"
-    KIND_RESUME = "resume"
+    KIND_RUN = 'run'
+    KIND_RESUME = 'resume'
 
     KIND_CHOICES = [
-        (KIND_RUN, "Run"),
-        (KIND_RESUME, "Resume"),
+        (KIND_RUN, 'Run'),
+        (KIND_RESUME, 'Resume'),
     ]
 
-    STATUS_QUEUED = "queued"
-    STATUS_RUNNING = "running"
-    STATUS_DONE = "done"
-    STATUS_FAILED = "failed"
-    STATUS_CANCELLED = "cancelled"
+    STATUS_QUEUED = 'queued'
+    STATUS_RUNNING = 'running'
+    STATUS_DONE = 'done'
+    STATUS_FAILED = 'failed'
+    STATUS_CANCELLED = 'cancelled'
 
     STATUS_CHOICES = [
-        (STATUS_QUEUED, "Queued"),
-        (STATUS_RUNNING, "Running"),
-        (STATUS_DONE, "Done"),
-        (STATUS_FAILED, "Failed"),
-        (STATUS_CANCELLED, "Cancelled"),
+        (STATUS_QUEUED, 'Queued'),
+        (STATUS_RUNNING, 'Running'),
+        (STATUS_DONE, 'Done'),
+        (STATUS_FAILED, 'Failed'),
+        (STATUS_CANCELLED, 'Cancelled'),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -283,7 +284,7 @@ class Workflow2Job(models.Model):
     instance = models.ForeignKey(
         Workflow2Instance,
         on_delete=models.CASCADE,
-        related_name="jobs",
+        related_name='jobs',
     )
 
     kind = models.CharField(max_length=16, choices=KIND_CHOICES)
@@ -292,7 +293,7 @@ class Workflow2Job(models.Model):
     run_after = models.DateTimeField(default=timezone.now)
 
     attempts = models.PositiveIntegerField(default=0)
-    max_attempts = models.PositiveIntegerField(default=1)
+    max_attempts = models.PositiveIntegerField(default=0)
     last_error = models.TextField(null=True, blank=True)
 
     locked_until = models.DateTimeField(null=True, blank=True)
@@ -303,9 +304,9 @@ class Workflow2Job(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["status", "run_after"]),
-            models.Index(fields=["locked_until"]),
-            models.Index(fields=["instance", "status"]),
+            models.Index(fields=['status', 'run_after']),
+            models.Index(fields=['locked_until']),
+            models.Index(fields=['instance', 'status']),
         ]
 
     def lease_expired(self) -> bool:
@@ -334,5 +335,36 @@ class Workflow2WorkerHeartbeat(models.Model):
     def beat(cls, worker_id: str) -> None:
         cls.objects.update_or_create(
             worker_id=worker_id,
-            defaults={"last_seen": timezone.now()},
+            defaults={'last_seen': timezone.now()},
         )
+
+
+class Workflow2DefinitionUiState(models.Model):
+    """Editor-only UI layout state (positions, waypoints, viewport).
+    Keyed by (definition, ir_hash) so layout is resilient to workflow changes.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    definition = models.ForeignKey(
+        Workflow2Definition,
+        on_delete=models.CASCADE,
+        related_name='ui_states',
+    )
+
+    ir_hash = models.CharField(max_length=64, db_index=True)
+    version = models.PositiveIntegerField(default=1)
+    state_json = models.JSONField(default=dict)
+
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('definition', 'ir_hash')]
+        indexes = [
+            models.Index(fields=['definition', 'ir_hash']),
+            models.Index(fields=['ir_hash']),
+        ]
+
+    def __str__(self) -> str:
+        return f'UIState {self.definition} {self.ir_hash[:8]}'

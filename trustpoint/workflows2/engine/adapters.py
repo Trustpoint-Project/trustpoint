@@ -40,11 +40,6 @@ class WebhookAdapter(Protocol):
 
 
 class DjangoEmailAdapter:
-    """
-    Uses Django's configured EMAIL_BACKEND.
-    In DEBUG you already use the console backend -> safe for dev.
-    """
-
     def __init__(self, *, default_from_email: str | None = None) -> None:
         self.default_from_email = default_from_email or getattr(settings, "DEFAULT_FROM_EMAIL", None)
 
@@ -74,12 +69,53 @@ class DjangoEmailAdapter:
 class RequestsWebhookAdapter:
     """
     HTTP client adapter using requests.
-    - Sends JSON if body is dict/list, otherwise sends raw data.
-    - Parses JSON response if possible, otherwise returns resp.text.
+
+    TLS verification behavior:
+    - If verify_tls=False: disables TLS verification (not recommended except local dev).
+    - Else if ca_bundle provided: uses that path for verification (PEM file or directory).
+    - Else if env var REQUESTS_CA_BUNDLE or SSL_CERT_FILE is set: uses that.
+    - Else: requests default (certifi).
+
+    Body handling:
+    - dict/list => JSON
+    - otherwise => raw data
+
+    Response handling:
+    - parse JSON if possible; else text
     """
 
-    def __init__(self, *, verify_tls: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        verify_tls: bool = True,
+        ca_bundle: str | None = None,
+    ) -> None:
         self.verify_tls = verify_tls
+        self.ca_bundle = ca_bundle
+
+    def _resolve_verify(self) -> bool | str:
+        import os
+
+        if not self.verify_tls:
+            return False
+
+        # 1) Explicitly passed in
+        if self.ca_bundle:
+            return self.ca_bundle
+
+        # 2) Environment override (very common in containers / corporate environments)
+        env_bundle = os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get("SSL_CERT_FILE")
+        if env_bundle:
+            return env_bundle
+
+        # 3) If system CA bundle exists, prefer it (helps when corp CA is installed to OS store)
+        #    If neither exists, fall back to requests default (certifi).
+        candidates = ("/etc/ssl/cert.pem", "/etc/ssl/certs/ca-certificates.crt", "/etc/ssl/certs")
+        for p in candidates:
+            if os.path.exists(p):
+                return p
+
+        return True  # requests default (certifi)
 
     def request(
         self,
@@ -99,7 +135,7 @@ class RequestsWebhookAdapter:
         kwargs: dict[str, Any] = {
             "headers": headers or {},
             "timeout": timeout_seconds,
-            "verify": self.verify_tls,
+            "verify": self._resolve_verify(),
         }
 
         if body is None:
@@ -109,7 +145,19 @@ class RequestsWebhookAdapter:
         else:
             kwargs["data"] = body
 
-        resp = requests.request(m, url, **kwargs)
+        try:
+            resp = requests.request(m, url, **kwargs)
+        except requests.exceptions.SSLError as e:
+            # Give a targeted hint without disabling TLS.
+            raise RuntimeError(
+                "TLS verification failed while calling webhook.\n"
+                "Fix options:\n"
+                "- Install/update CA certificates in the runtime (container/VM).\n"
+                "- If you're behind a corporate proxy, add the corporate root CA to the OS trust store.\n"
+                "- Or set REQUESTS_CA_BUNDLE=/path/to/ca-bundle.pem (or SSL_CERT_FILE=...).\n"
+                f"Effective verify setting was: {kwargs.get('verify')!r}\n"
+                f"Original error: {e!r}"
+            ) from e
 
         resp_headers = {str(k): str(v) for k, v in resp.headers.items()}
 

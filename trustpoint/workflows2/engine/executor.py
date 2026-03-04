@@ -16,20 +16,19 @@ from .errors import StepExecutionError
 from .eval import eval_condition, eval_expr, render_template
 from .types import ExecutionResult, StepRun
 
-
 OnStepRun = Callable[[StepRun], None]
 
-_TERMINAL_RUN_STATUSES = {"stopped", "failed", "awaiting", "succeeded", "rejected"}
+_TERMINAL_RUN_STATUSES = {"failed", "awaiting", "rejected"}
+_END_TARGETS = {"$end", "$reject"}
 
 
 class WorkflowExecutor:
     """
     Deterministic IR executor.
 
-    IMPORTANT (TrustPoint workflow2):
-      - Approval is DB-driven, NOT blocking.
-      - Therefore the approval step ALWAYS returns status="awaiting"
-        and the RuntimeService is responsible for persisting a Workflow2Approval record.
+    IMPORTANT:
+      - Approval is DB-driven, NOT blocking in executor.run()
+      - The approval step returns status="awaiting"
     """
 
     def __init__(
@@ -137,6 +136,11 @@ class WorkflowExecutor:
                 end_step = step_id
                 break
 
+            if run.next_step is None:
+                status = "succeeded"
+                end_step = step_id
+                break
+
             step_id = run.next_step
 
         else:
@@ -150,8 +154,6 @@ class WorkflowExecutor:
             vars=ctx.vars,
             runs=runs,
         )
-
-    # ------------------- step execution ------------------- #
 
     def _execute_step(
         self,
@@ -177,10 +179,7 @@ class WorkflowExecutor:
             output = self._step_email(step_id, params, ctx)
         elif step_type == "webhook":
             output = self._step_webhook(step_id, params, ctx)
-
         elif step_type == "approval":
-            # DB-driven approval: executor never blocks.
-            # RuntimeService will create Workflow2Approval row and pause instance.
             return StepRun(
                 run_index=run_index,
                 step_id=step_id,
@@ -197,72 +196,25 @@ class WorkflowExecutor:
                 error=None,
                 created_at=_now(),
             )
+        else:
+            raise StepExecutionError(step_id, f'Unknown step type "{step_type}"')
 
-        elif step_type == "reject":
-            output = {"reason": render_template(params.get("reason"), ctx)}
+        next_step = self._choose_next(step_id, outcome, transitions)
+
+        # $reject means "end rejected" without a step
+        if next_step == "$reject":
             return StepRun(
                 run_index=run_index,
                 step_id=step_id,
                 step_type=step_type,
                 status="rejected",
-                outcome=None,
+                outcome=outcome,
                 next_step=None,
                 vars_delta=_delta(vars_before, ctx.vars),
                 output=output,
                 error=None,
                 created_at=_now(),
             )
-
-        elif step_type == "stop":
-            output = {"reason": render_template(params.get("reason"), ctx)}
-            return StepRun(
-                run_index=run_index,
-                step_id=step_id,
-                step_type=step_type,
-                status="stopped",
-                outcome=None,
-                next_step=None,
-                vars_delta=_delta(vars_before, ctx.vars),
-                output=output,
-                error=None,
-                created_at=_now(),
-            )
-
-        elif step_type == "succeed":
-            output = {"message": render_template(params.get("message"), ctx)}
-            return StepRun(
-                run_index=run_index,
-                step_id=step_id,
-                step_type=step_type,
-                status="succeeded",
-                outcome=None,
-                next_step=None,
-                vars_delta=_delta(vars_before, ctx.vars),
-                output=output,
-                error=None,
-                created_at=_now(),
-            )
-
-        elif step_type == "fail":
-            reason_tpl = params.get("reason")
-            output = {"reason": render_template(reason_tpl, ctx) if reason_tpl is not None else None}
-            return StepRun(
-                run_index=run_index,
-                step_id=step_id,
-                step_type=step_type,
-                status="failed",
-                outcome=None,
-                next_step=None,
-                vars_delta=_delta(vars_before, ctx.vars),
-                output=output,
-                error=None,
-                created_at=_now(),
-            )
-
-        else:
-            raise StepExecutionError(step_id, f'Unknown step type "{step_type}"')
-
-        next_step = self._choose_next(step_id, outcome, transitions)
 
         return StepRun(
             run_index=run_index,
@@ -276,8 +228,6 @@ class WorkflowExecutor:
             error=None,
             created_at=_now(),
         )
-
-    # ------------------- built-ins ------------------- #
 
     def _step_set(self, step_id: str, params: dict[str, Any], ctx: RuntimeContext) -> None:
         vars_map = params.get("vars")
@@ -325,8 +275,6 @@ class WorkflowExecutor:
 
         return default
 
-    # ------------------- adapters ------------------- #
-
     def _step_email(self, step_id: str, params: dict[str, Any], ctx: RuntimeContext) -> dict[str, Any]:
         to = params.get("to") or []
         cc = params.get("cc") or []
@@ -352,7 +300,7 @@ class WorkflowExecutor:
         headers = render_template(params.get("headers", {}), ctx)
         body = render_template(params.get("body"), ctx)
         timeout_seconds = params.get("timeout_seconds", 10)
-        capture = params.get("capture", {})
+        capture = params.get("capture", [])
 
         if not isinstance(method, str) or not method:
             raise StepExecutionError(step_id, "Invalid webhook.method")
@@ -362,8 +310,10 @@ class WorkflowExecutor:
             raise StepExecutionError(step_id, "Invalid webhook.headers")
         if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:
             raise StepExecutionError(step_id, "Invalid webhook.timeout_seconds")
-        if not isinstance(capture, dict):
-            raise StepExecutionError(step_id, "Invalid webhook.capture")
+        if capture is None:
+            capture = []
+        if not isinstance(capture, list):
+            raise StepExecutionError(step_id, "Invalid webhook.capture (expected list)")
 
         resp: WebhookResponse = self.webhook.request(
             method=method,
@@ -373,38 +323,79 @@ class WorkflowExecutor:
             timeout_seconds=timeout_seconds,
         )
 
-        for field, target_path in capture.items():
-            if not isinstance(field, str) or not isinstance(target_path, list) or target_path[:1] != ["vars"]:
+        def _get_from_body(path: list[str]) -> Any:
+            cur = resp.body
+            for seg in path:
+                if isinstance(cur, dict) and seg in cur:
+                    cur = cur[seg]
+                else:
+                    return None
+            return cur
+
+        def _get_from_headers(name: str) -> Any:
+            if not isinstance(resp.headers, dict):
+                return None
+            # case-insensitive lookup
+            lower = {str(k).lower(): v for k, v in resp.headers.items()}
+            return lower.get(name.lower())
+
+        for rule in capture:
+            if not isinstance(rule, dict):
                 continue
-            var_name = target_path[1] if len(target_path) > 1 else None
-            if not isinstance(var_name, str) or not var_name:
+            target = rule.get("target")
+            source = rule.get("source")
+
+            if not (isinstance(target, list) and len(target) == 2 and target[0] == "vars" and isinstance(target[1], str) and target[1]):
+                continue
+            var_name = target[1]
+
+            if not (isinstance(source, list) and len(source) >= 1 and isinstance(source[0], str)):
                 continue
 
-            if field == "status_code":
+            src0 = source[0]
+
+            if src0 == "status_code":
                 ctx.vars[var_name] = resp.status_code
-            elif field == "body":
-                ctx.vars[var_name] = resp.body
-            elif field == "headers":
-                ctx.vars[var_name] = resp.headers
+            elif src0 == "body":
+                if len(source) == 1:
+                    ctx.vars[var_name] = resp.body
+                else:
+                    ctx.vars[var_name] = _get_from_body([str(x) for x in source[1:]])
+            elif src0 == "headers":
+                if len(source) == 1:
+                    ctx.vars[var_name] = resp.headers
+                else:
+                    # we compile headers.<name> as ["headers", "<name>"]
+                    ctx.vars[var_name] = _get_from_headers(str(source[1]))
+            else:
+                # unknown capture source => ignore (shouldn't happen if compiler validated)
+                continue
 
         return {"status_code": resp.status_code}
 
-    # ------------------- routing ------------------- #
-
     def _choose_next(self, step_id: str, outcome: str | None, transitions: Any) -> str | None:
         if transitions is None:
-            raise StepExecutionError(step_id, "No outgoing transition")
+            if outcome is None:
+                return None
+            raise StepExecutionError(step_id, f'No route for outcome "{outcome}"')
 
         if not isinstance(transitions, dict) or "kind" not in transitions:
             raise StepExecutionError(step_id, "Invalid transitions format")
 
         kind = transitions.get("kind")
 
+        def _normalize_to(to: str) -> str | None:
+            if to == "$end":
+                return None
+            if to == "$reject":
+                return "$reject"
+            return to
+
         if kind == "linear":
             nxt = transitions.get("to")
             if not isinstance(nxt, str):
                 raise StepExecutionError(step_id, "Invalid linear transition")
-            return nxt
+            return _normalize_to(nxt)
 
         if kind == "by_outcome":
             if outcome is None:
@@ -415,7 +406,7 @@ class WorkflowExecutor:
             nxt = m.get(outcome)
             if not isinstance(nxt, str):
                 raise StepExecutionError(step_id, f'No route for outcome "{outcome}"')
-            return nxt
+            return _normalize_to(nxt)
 
         raise StepExecutionError(step_id, "Unknown transition kind")
 
