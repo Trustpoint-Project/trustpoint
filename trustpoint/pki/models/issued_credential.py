@@ -180,6 +180,7 @@ class RemoteIssuedCredentialModel(CustomDeleteActionModel):
 
         DOMAIN_CREDENTIAL = 0, _('Domain Credential')
         DEV_OWNER_ID = 2, _('DevOwnerID')
+        LOCAL_CA = 3, _('Local CA')
         RA_DEVICE = 4, _('RA Device')
 
     id = models.AutoField(primary_key=True)

@@ -190,7 +190,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.AutoField(primary_key=True, serialize=False)),
                 ('common_name', models.CharField(max_length=255, verbose_name='Common Name')),
-                ('issued_credential_type', models.IntegerField(choices=[(0, 'Domain Credential'), (2, 'DevOwnerID'), (4, 'RA Device')], verbose_name='Credential Type')),
+                ('issued_credential_type', models.IntegerField(choices=[(0, 'Domain Credential'), (2, 'DevOwnerID'), (3, 'CA')], verbose_name='Credential Type')),
                 ('issued_using_cert_profile', models.CharField(default='', max_length=255, verbose_name='Issued using Certificate Profile')),
                 ('created_at', models.DateTimeField(auto_now_add=True, verbose_name='Created')),
                 ('ca', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='remote_issued_credentials', to='pki.camodel', verbose_name='CA')),
