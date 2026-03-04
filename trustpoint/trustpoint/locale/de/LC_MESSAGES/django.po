@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-02-26 08:42+0000\n"
-"PO-Revision-Date: 2025-04-04 08:26+0200\n"
+"PO-Revision-Date: 2026-03-04 14:12+0100\n"
 "Last-Translator: Christian Schwinne <christian.schwinne  AT hshl.de>\n"
 "Language-Team: \n"
 "Language: de\n"
@@ -17,64 +17,59 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
-"X-Generator: Poedit 3.5\n"
+"X-Generator: Poedit 3.8\n"
 
 #: trustpoint/help_pages/base.py:123
 #, fuzzy
 #| msgid "Allow Application Certificates without Domain Credential"
 msgid "No application certificate profiles allowed in domain."
-msgstr "Anwendungszertifikate ohne ein Domain-Credential erlauben"
+msgstr "Es sind keine Zertifikatsprofile zur Löschung ausgewählt."
 
 #: trustpoint/help_pages/base.py:162
-#, fuzzy
-#| msgid "Root CA Certificate"
 msgid "Root CA certificate is missing."
-msgstr "Root CA-Zertifikat"
+msgstr "Das Root-CA-Zertifikat fehlt."
 
 #: trustpoint/help_pages/base.py:167
 #, fuzzy
 #| msgid "Download TLS-Server Trust-Store"
 msgid "Download TLS Trust-Store"
-msgstr "TLS-Server-Truststore herunterladen"
+msgstr "OPC UA Trust Store"
 
 #: trustpoint/help_pages/commands.py:41
 msgid "Unsupported public key algorithm"
 msgstr "Nicht unterstützter öffentlicher Schlüsselalgorithmus"
 
 #: trustpoint/help_pages/devices_help_views.py:68
-#, fuzzy
-#| msgid "No domain credential is issued to this device yet."
 msgid "No domain is configured for this device."
-msgstr "Es ist noch kein Domain-Credential an dieses Gerät ausgestellt."
+msgstr "Für dieses Gerät ist keine Domäne konfiguriert."
 
 #: trustpoint/help_pages/devices_help_views.py:104
 #: trustpoint/help_pages/pki_help_views.py:88
 #, fuzzy
 #| msgid "No Issuing CA configured"
 msgid "No strategy configured."
-msgstr "Keine Issuing CA konfiguriert"
+msgstr "Keine Domain konfiguriert"
 
 #: trustpoint/help_pages/devices_help_views.py:128
 #: trustpoint/help_pages/devices_help_views.py:232
-#, fuzzy
-#| msgid "No domain credential is issued to this device yet."
 msgid "Onboarding is configured for this device."
-msgstr "Es ist noch kein Domain-Credential an dieses Gerät ausgestellt."
+msgstr "Onboarding ist für dieses Gerät konfiguriert."
 
 #: trustpoint/help_pages/devices_help_views.py:368
 #: trustpoint/help_pages/devices_help_views.py:436
 #: trustpoint/help_pages/devices_help_views.py:543
 #: trustpoint/help_pages/devices_help_views.py:641
 #: trustpoint/help_pages/devices_help_views.py:761
+#, fuzzy
 msgid "Onboarding is not configured for this device."
-msgstr ""
+msgstr "Onboarding ist für dieses Gerät konfiguriert."
 
 #: trustpoint/help_pages/pki_help_views.py:56
+#, fuzzy
 msgid "Failed to get domain from DevidRegistration."
-msgstr ""
+msgstr "Fehler beim Abrufen der Domain von DevidRegistration."
 
-#: trustpoint/home/views.py:127
-#: trustpoint/management/models/notifications.py:29
+#: trustpoint/home/views.py:127 trustpoint/management/models/notifications.py:29
 msgid "New"
 msgstr "Neu"
 
@@ -95,19 +90,18 @@ msgid "Key Algorithm for auto-generated PKI"
 msgstr "Schlüsselalgorithmus für automatisch generierte PKI"
 
 #: trustpoint/management/forms.py:171
-#, fuzzy
-#| msgid "Notification Details"
 msgid "Notification Settings"
-msgstr "Benachrichtigungsdetails"
+msgstr "Benachrichtigungseinstellungen"
 
 #: trustpoint/management/forms.py:175
+#, fuzzy
 msgid "Expiry Warning Thresholds"
-msgstr ""
+msgstr "Warnschwellen für Ablaufdatum"
 
 #: trustpoint/management/forms.py:189 trustpoint/management/forms.py:204
 #, python-format
 msgid "Value must be between %(min)d and %(max)d days."
-msgstr ""
+msgstr "Der Wert muss zwischen %(min)d und %(max)d Tagen liegen."
 
 #: trustpoint/management/forms.py:342 trustpoint/signer/forms.py:77
 msgid "PKCS#12 File (.p12, .pfx)"
@@ -118,10 +112,8 @@ msgid "[Optional] PKCS#12 password"
 msgstr "[Optional] PKCS#12-Passwort"
 
 #: trustpoint/management/forms.py:350 trustpoint/management/forms.py:489
-#, fuzzy
-#| msgid "Domain Name"
 msgid "Domain-Name"
-msgstr "Domain-Name"
+msgstr "Domainname"
 
 #: trustpoint/management/forms.py:379
 msgid ""
@@ -135,6 +127,8 @@ msgstr ""
 msgid ""
 "The PKCS#12 password contains invalid data, that cannot be encoded in UTF-8."
 msgstr ""
+"Das PKCS#12-Passwort enthält ungültige Daten, die nicht in UTF-8 kodiert "
+"werden können."
 
 #: trustpoint/management/forms.py:408
 msgid ""
@@ -145,254 +139,245 @@ msgstr ""
 "Passwort falsch oder die Datei beschädigt."
 
 #: trustpoint/management/forms.py:479
-#, fuzzy
-#| msgid "Issuing CA Certificate (.cer, .der, .pem, .p7b, .p7c)"
 msgid "TLS Certificate (.cer, .der, .pem, .p7b, .p7c)"
-msgstr "Issuing CA-Zertifikat (.cer, .der, .pem, .p7b, .p7c)"
+msgstr "TLS-Zertifikat (.cer, .der, .pem, .p7b, .p7c)"
 
 #: trustpoint/management/forms.py:480 trustpoint/signer/forms.py:195
 msgid "[Optional] Certificate Chain (.pem, .p7b, .p7c)."
-msgstr "[Optional] Zertifikatskette (.pem, .p7b, .p7c)."
+msgstr "[Optional] Zertifikatskette (.pem, .p7b, .p7c)"
 
 #: trustpoint/management/forms.py:481 trustpoint/signer/forms.py:197
 msgid "Private Key File (.key, .pem)"
-msgstr "Privater Schlüssel (.key, .pem)"
+msgstr "Private-Key-Datei (.key, .pem)"
 
 #: trustpoint/management/forms.py:485 trustpoint/signer/forms.py:201
 msgid "[Optional] Private Key File Password"
-msgstr "[Optional] Passwort für privaten Schlüssel"
+msgstr "[Optional] Passwort der Private-Key-Datei"
 
 #: trustpoint/management/forms.py:566
-#, fuzzy
-#| msgid "Failed to parse the Issuing CA certificate. Seems to be corrupted."
 msgid "Failed to parse the TLS certificate chain. Seems to be corrupted."
 msgstr ""
-"Die CA-Zertifikatsdatei konnte nicht gelesen werden und ist möglicherweise "
-"beschädigt."
+"Fehler beim Parsen der TLS-Zertifikatskette. Sie scheint beschädigt zu sein."
 
 #: trustpoint/management/forms.py:592
 msgid ""
-"Failed to parse the private key file. Either wrong password or file "
-"corrupted."
+"Failed to parse the private key file. Either wrong password or file corrupted."
 msgstr ""
 "Die private Schlüsseldatei konnte nicht gelesen werden. Entweder ist das "
 "Passwort falsch oder die Datei beschädigt."
 
 #: trustpoint/management/forms.py:659
-#, fuzzy
-#| msgid "The provided OTP is invalid."
 msgid "The provided domain name is invalid."
-msgstr "Das angegebene Einmalpasswort ist ungültig."
+msgstr "Der angegebene Domainname ist ungültig."
 
 #: trustpoint/management/forms.py:690
 #: trustpoint/management/models/key_storage.py:21
+#, fuzzy
 msgid "Storage Type"
-msgstr ""
+msgstr "Software-Speicher"
 
 #: trustpoint/management/forms.py:691
+#, fuzzy
 msgid "Select how cryptographic material should be stored"
-msgstr ""
+msgstr "Wählen Sie, wie kryptografisches Material gespeichert werden soll"
 
 #: trustpoint/management/forms.py:693
 #: trustpoint/templates/management/key_storage.html:31
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:41
 msgid "Software Storage"
-msgstr ""
+msgstr "Software-Speicher"
 
 #: trustpoint/management/forms.py:694
 #: trustpoint/management/models/key_storage.py:14
 #: trustpoint/templates/management/key_storage.html:59
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:63
 msgid "SoftHSM Container"
-msgstr ""
+msgstr "SoftHSM-Container"
 
 #: trustpoint/management/forms.py:695 trustpoint/management/forms.py:731
 #: trustpoint/management/models/key_storage.py:15
 #: trustpoint/templates/management/key_storage.html:87
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:85
 msgid "Physical HSM"
-msgstr ""
+msgstr "Physisches HSM"
 
 #: trustpoint/management/forms.py:730
 msgid "SoftHSM"
-msgstr ""
+msgstr "SoftHSM"
 
 #: trustpoint/management/forms.py:738
-#, fuzzy
-#| msgid "Type"
 msgid "HSM Type"
-msgstr "Art"
+msgstr "HSM Typ"
 
 #: trustpoint/management/forms.py:739
 msgid "Select the type of HSM to configure."
-msgstr ""
+msgstr "Wählen Sie den zu konfigurierenden HSM-Typ aus."
 
 #: trustpoint/management/forms.py:743 trustpoint/setup_wizard/forms.py:133
-#, fuzzy
-#| msgid "Token Created"
 msgid "Token Label"
-msgstr "Token erstellt um"
+msgstr "Token Label"
 
 #: trustpoint/management/forms.py:746
 msgid "Unique label for the PKCS#11 token"
-msgstr ""
+msgstr "Eindeutiges Label für das PKCS#11-Token"
 
 #: trustpoint/management/forms.py:751 trustpoint/setup_wizard/forms.py:125
-#, fuzzy
-#| msgid "Serial Number"
 msgid "Slot Number"
-msgstr "Seriennummer"
+msgstr "Slot Nummer"
 
 #: trustpoint/management/forms.py:753
 msgid "Slot number where the token is located"
-msgstr ""
+msgstr "Slot-Nummer, in der sich das Token befindet"
 
 #: trustpoint/management/forms.py:759 trustpoint/management/models/pkcs11.py:57
 msgid "Module Path"
-msgstr ""
+msgstr "Modulpfad"
 
 #: trustpoint/management/forms.py:762
 msgid "Path to the PKCS#11 module library file"
-msgstr ""
+msgstr "Pfad zur PKCS#11-Modulbibliotheksdatei"
 
 #: trustpoint/management/forms.py:790 trustpoint/setup_wizard/forms.py:195
 msgid "Physical HSM is not yet supported."
-msgstr ""
+msgstr "Physisches HSM wird noch nicht unterstützt."
 
 #: trustpoint/management/forms.py:808
-#, fuzzy
-#| msgid "Credential already exists."
 msgid "A token with this label already exists."
-msgstr "Das Credential existiert bereits."
+msgstr "Ein Token mit diesem Label existiert bereits."
 
 #: trustpoint/management/management/commands/inittrustpoint.py:44
+#, fuzzy
 msgid "Starting setup script..."
-msgstr ""
+msgstr "Start des Setup-Skripts..."
 
 #: trustpoint/management/management/commands/trustpointrestore.py:106
 #: trustpoint/management/management/commands/trustpointrestore.py:169
+#, fuzzy
 msgid "Appversion table not found. DB probably not initialized"
 msgstr ""
+"Appversion-Tabelle nicht gefunden. DB wahrscheinlich nicht initialisiert"
 
 #: trustpoint/management/management/commands/trustpointrestore.py:125
 #: trustpoint/management/util/startup_strategies.py:742
+#, fuzzy
 msgid "TLS credential not found"
-msgstr ""
+msgstr "Keine Backups gefunden."
 
 #: trustpoint/management/management/commands/trustpointrestore.py:173
 #: trustpoint/management/management/commands/update_tls.py:41
+#, fuzzy
 msgid "TLS cert not found in DB"
-msgstr ""
+msgstr "Keine Backups gefunden."
 
 #: trustpoint/management/models/appversion.py:17
+#, fuzzy
 msgid "Container build ID or hash"
-msgstr ""
+msgstr "Truststore-Container-Typ auswählen"
 
 #: trustpoint/management/models/backup.py:21
 msgid "Use SFTP storage"
-msgstr ""
+msgstr "SFTP-Speicher verwenden"
 
 #: trustpoint/management/models/backup.py:23
 msgid "Host"
-msgstr ""
+msgstr "Host"
 
 #: trustpoint/management/models/backup.py:24
 msgid "Port"
-msgstr ""
+msgstr "Port"
 
 #: trustpoint/management/models/backup.py:25
-#, fuzzy
-#| msgid "EST Username"
 msgid "Username"
-msgstr "EST-Nutzername"
+msgstr "Benutzername"
 
 #: trustpoint/management/models/backup.py:31
-#, fuzzy
-#| msgid "Authentication"
 msgid "Authentication Method"
-msgstr "Authentifizierung"
+msgstr "Authentifizierungsmethode"
 
 #: trustpoint/management/models/backup.py:38
 msgid "Password"
 msgstr "Passwort"
 
 #: trustpoint/management/models/backup.py:39
+#, fuzzy
 msgid "Plain-text password for SFTP."
-msgstr ""
+msgstr "SFTP-Backup erstellen"
 
 #: trustpoint/management/models/backup.py:44
 #, fuzzy
 #| msgid "Private Key (PEM)"
 msgid "SSH Private Key (PEM format)"
-msgstr "Privater Schlüssel (PEM)"
+msgstr "Private-Key-Datei (.key, .pem)"
 
 #: trustpoint/management/models/backup.py:45
 #, fuzzy
 #| msgid "Private Key (PEM)"
 msgid "Paste the private key here (PEM)."
-msgstr "Privater Schlüssel (PEM)"
+msgstr "Private-Key-Datei (.key, .pem)"
 
 #: trustpoint/management/models/backup.py:51
 #, fuzzy
 #| msgid "Key Usage"
 msgid "Key Passphrase"
-msgstr "Schlüsselverwendung"
+msgstr "Schlüsselkompromittierung"
 
 #: trustpoint/management/models/backup.py:52
+#, fuzzy
 msgid "Passphrase for the private key, if any."
-msgstr ""
+msgstr "Private-Key-Datei (.key, .pem)"
 
 #: trustpoint/management/models/backup.py:59
+#, fuzzy
 msgid "Remote Directory"
-msgstr ""
+msgstr "Verzeichnisnamen"
 
 #: trustpoint/management/models/backup.py:60
+#, fuzzy
 msgid ""
 "Remote directory (e.g. /backups/) where files should be uploaded. Trailing "
 "slash is optional."
 msgstr ""
+"Remote-Verzeichnis (z. B. /backups/), in das Dateien hochgeladen werden "
+"sollen. Der abschließende Schrägstrich ist optional."
 
 #: trustpoint/management/models/key_storage.py:13
 msgid "Software (No Encryption)"
-msgstr ""
+msgstr "Software (ohne Verschlüsselung)"
 
 #: trustpoint/management/models/key_storage.py:22
+#, fuzzy
 msgid "Type of storage for cryptographic material"
-msgstr ""
+msgstr "Wählen Sie den kryptografischen Schlüsseltyp und die Parameter aus"
 
 #: trustpoint/management/models/key_storage.py:31
 #: trustpoint/templates/management/key_storage.html:122
 #: trustpoint/templates/setup_wizard/hsm_setup.html:32
-#, fuzzy
-#| msgid "Configuration"
 msgid "HSM Configuration"
-msgstr "Konfiguration"
+msgstr "HSM-Konfiguration"
 
 #: trustpoint/management/models/key_storage.py:32
 msgid "Associated HSM token configuration (SoftHSM or Physical HSM)"
-msgstr ""
+msgstr "Zugehörige HSM-Token-Konfiguration (SoftHSM oder physisches HSM)"
 
 #: trustpoint/management/models/key_storage.py:37
-#, fuzzy
-#| msgid "Updated"
 msgid "Last Updated"
-msgstr "Aktualisiert"
+msgstr "Zuletzt aktualisiert"
 
 #: trustpoint/management/models/key_storage.py:42
 #, fuzzy
 #| msgid "PKI Truststore Configuration"
 msgid "Crypto Storage Configuration"
-msgstr "PKI-Truststore-Konfiguration"
+msgstr "Schlüsselspeicher-Konfiguration"
 
 #: trustpoint/management/models/key_storage.py:43
 #, fuzzy
 #| msgid "PKI Truststore Configuration"
 msgid "Crypto Storage Configurations"
-msgstr "PKI-Truststore-Konfiguration"
+msgstr "Schlüsselspeicher-Konfiguration"
 
 #: trustpoint/management/models/logging.py:15
 msgid "Debug"
-msgstr ""
+msgstr "Debug"
 
 #: trustpoint/management/models/logging.py:16
 #: trustpoint/templates/home/notifications-tab.html:38
@@ -587,7 +572,7 @@ msgstr "Test für Zertifikat: {cn}"
 #, python-brace-format
 msgid "Notification for Certificate: Common Name {cn} with Serial Number {sn}"
 msgstr ""
-"Benachrichtigung für Zertifikat: Common Name {cn} mit Seriennummer {sn}"
+"Benachrichtigung für Zertifikat: Allgemeiner Name {cn} mit Seriennummer {sn}"
 
 #: trustpoint/management/models/notifications.py:198
 #, python-brace-format
@@ -606,8 +591,7 @@ msgstr "Testdaten einfügen"
 #: trustpoint/management/models/notifications.py:203
 #, python-brace-format
 msgid ""
-"Click <a href=\"{url}\">here</a> to add test issuing CAs, domains and "
-"devices."
+"Click <a href=\"{url}\">here</a> to add test issuing CAs, domains and devices."
 msgstr ""
 "Nutzen Sie diesen <a href=\"{url}\">Link</a>, um zu Testzwecken Issuing CAs, "
 "Domains und Geräte hinzuzufügen."
@@ -753,8 +737,8 @@ msgstr "Zertifikat von Gerät {device} widerrufen"
 #: trustpoint/management/models/notifications.py:269
 #, python-brace-format
 msgid ""
-"The device {device} has had its certificate revoked. The device may no "
-"longer be trusted."
+"The device {device} has had its certificate revoked. The device may no longer "
+"be trusted."
 msgstr ""
 "Das Zertifikat des Geräts {device} ist widerrufen worden. Dem Gerät darf "
 "nicht mehr vertraut werden."
@@ -767,8 +751,8 @@ msgstr "Zertifikat {common_name} verwendet einen schwachen Signaturalgorithmus"
 #: trustpoint/management/models/notifications.py:273
 #, python-brace-format
 msgid ""
-"The certificate {common_name} is signed using {signature_algorithm}, which "
-"is considered weak."
+"The certificate {common_name} is signed using {signature_algorithm}, which is "
+"considered weak."
 msgstr ""
 "Das Zertifikat {common_name} ist mit {signature_algorithm} signiert, was als "
 "schwach angesehen wird."
@@ -826,24 +810,20 @@ msgstr ""
 #: trustpoint/templates/pki/truststores/truststores.html:30
 #: trustpoint/templates/signer/signers.html:18
 msgid "Created at"
-msgstr "Erstellt um"
+msgstr "Erstellt am"
 
 #: trustpoint/management/models/notifications.py:379
 #: trustpoint/management/models/notifications.py:396
-#, fuzzy
-#| msgid "Custom Message"
 msgid "Custom message not found."
-msgstr "Benutzerdefinierte Nachricht"
+msgstr "Benutzerdefinierte Nachricht nicht gefunden."
 
 #: trustpoint/management/models/notifications.py:384
 msgid "Unknown Notification message type."
 msgstr "Unbekannte Benachrichtigungstextart."
 
 #: trustpoint/management/models/notifications.py:411
-#, fuzzy
-#| msgid "SECP192R1"
 msgid "SECP160R1"
-msgstr "SECP192R1"
+msgstr "SECP160R1"
 
 #: trustpoint/management/models/notifications.py:412
 #: trustpoint/management/models/security.py:76
@@ -863,110 +843,122 @@ msgstr "SECP256K1"
 #: trustpoint/management/models/notifications.py:435
 #: trustpoint/management/models/security.py:89
 msgid "MD5"
-msgstr ""
+msgstr "MD5"
 
 #: trustpoint/management/models/notifications.py:436
 #: trustpoint/management/models/security.py:90
 msgid "SHA-1"
-msgstr ""
+msgstr "SHA-1"
 
 #: trustpoint/management/models/notifications.py:437
 #: trustpoint/management/models/security.py:91
 msgid "SHA-224"
-msgstr ""
+msgstr "SHA-224"
 
 #: trustpoint/management/models/notifications.py:456
 msgid "Enable or disable all notifications globally."
-msgstr ""
+msgstr "Alle Benachrichtigungen global aktivieren oder deaktivieren."
 
 #: trustpoint/management/models/notifications.py:460
-#, fuzzy
-#| msgid "Notification Type:"
 msgid "Enable Notification Cycle Updates"
-msgstr "Benachrichtigungsart:"
+msgstr "Benachrichtigungszyklus-Updates aktivieren"
 
 #: trustpoint/management/models/notifications.py:462
+#, fuzzy
 msgid "Enable automatic periodic notification checks via Django-Q2"
 msgstr ""
+"Aktivieren Sie automatische regelmäßige Benachrichtigungsprüfungen über "
+"Django-Q2."
 
 #: trustpoint/management/models/notifications.py:466
-#, fuzzy
-#| msgid "Notification Details"
 msgid "Notification Cycle Interval (hours)"
-msgstr "Benachrichtigungsdetails"
+msgstr "Benachrichtigungszyklusintervall (Stunden)"
 
 #: trustpoint/management/models/notifications.py:468
+#, fuzzy
 msgid ""
 "The interval in hours between automatic notification checks (default: 5 "
 "minutes)"
 msgstr ""
+"Das Intervall in Stunden zwischen automatischen Benachrichtigungsprüfungen "
+"(Standard: 5 Minuten)"
 
 #: trustpoint/management/models/notifications.py:472
-#, fuzzy
-#| msgid "Notification Details"
 msgid "Last Notification Check Started"
-msgstr "Benachrichtigungsdetails"
+msgstr "Letzte Benachrichtigungsprüfung gestartet"
 
 #: trustpoint/management/models/notifications.py:475
+#, fuzzy
 msgid "Timestamp when the last notification check task was started"
-msgstr ""
+msgstr "Zeitstempel, zu dem die letzte CRL-Generierungsaufgabe gestartet wurde"
 
 #: trustpoint/management/models/notifications.py:480
+#, fuzzy
 msgid ""
 "Number of days before a certificate's expiration to trigger a 'Certificate "
 "Expiring' warning."
 msgstr ""
+"Anzahl der Tage vor Ablauf eines Zertifikats, nach denen eine Warnung "
+"„Zertifikat läuft ab“ ausgelöst wird."
 
 #: trustpoint/management/models/notifications.py:485
+#, fuzzy
 msgid ""
 "Number of days before an issuing CA's certificate expiration to trigger a "
 "warning."
 msgstr ""
+"Anzahl der Tage vor Ablauf des Zertifikats einer ausstellenden "
+"Zertifizierungsstelle, nach denen eine Warnung ausgelöst wird."
 
 #: trustpoint/management/models/notifications.py:490
 #: trustpoint/templates/management/includes/notification_configuration.html:6
-#, fuzzy
-#| msgid "Network Configuration"
 msgid "Notification Configuration"
-msgstr "Netzwerkkonfiguration"
+msgstr "Benachrichtigungseinstellungen"
 
 #: trustpoint/management/models/pkcs11.py:46
 msgid "Token label in SoftHSM"
-msgstr ""
+msgstr "Token-Label in SoftHSM"
 
 #: trustpoint/management/models/pkcs11.py:47
 msgid "Label"
-msgstr ""
+msgstr "Label"
 
 #: trustpoint/management/models/pkcs11.py:50
 msgid "Slot number in SoftHSM"
-msgstr ""
+msgstr "Slot-Nummer in SoftHSM"
 
 #: trustpoint/management/models/pkcs11.py:51
 msgid "Slot"
-msgstr ""
+msgstr "Slot"
 
 #: trustpoint/management/models/pkcs11.py:56
 msgid "Path to PKCS#11 module library"
-msgstr ""
+msgstr "Pfad zur PKCS#11-Modulbibliothek"
 
 #: trustpoint/management/models/pkcs11.py:61
 #: trustpoint/management/models/pkcs11.py:68
+#, fuzzy
 msgid "Encrypted Data Encryption Key (DEK)"
 msgstr ""
+"Softwarebasiertes HSM mit Verschlüsselung und sicherem Schlüsselspeicher"
 
 #: trustpoint/management/models/pkcs11.py:62
 #: trustpoint/management/models/pkcs11.py:69
+#, fuzzy
 msgid "Symmetric key encrypted by the PKCS#11 private key"
 msgstr ""
+"Mit dem privaten Schlüssel PKCS#11 verschlüsselter symmetrischer Schlüssel"
 
 #: trustpoint/management/models/pkcs11.py:78
+#, fuzzy
 msgid "Key Encryption Key (KEK)"
-msgstr ""
+msgstr "Private-Key-Datei (.key, .pem)"
 
 #: trustpoint/management/models/pkcs11.py:79
+#, fuzzy
 msgid "Associated key encryption key stored in this token"
 msgstr ""
+"Softwarebasiertes HSM mit Verschlüsselung und sicherem Schlüsselspeicher"
 
 #: trustpoint/management/models/pkcs11.py:83 trustpoint/signer/models.py:27
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:96
@@ -980,34 +972,35 @@ msgid "Created"
 msgstr "Erstellt"
 
 #: trustpoint/management/models/pkcs11.py:89
-#, fuzzy
-#| msgid "PKCS#12"
 msgid "PKCS#11 Token"
-msgstr "PKCS#12"
+msgstr "PKCS#11 Token"
 
 #: trustpoint/management/models/pkcs11.py:90
 msgid "PKCS#11 Tokens"
-msgstr ""
+msgstr "PKCS#11 Tokens"
 
 #: trustpoint/management/models/security.py:63
+#, fuzzy
 msgid "Lab / Development"
-msgstr ""
+msgstr "Lab / Development"
 
 #: trustpoint/management/models/security.py:64
+#, fuzzy
 msgid "Brownfield Compatible"
-msgstr ""
+msgstr "Brownfield-kompatibel"
 
 #: trustpoint/management/models/security.py:65
 msgid "Industrial Standard"
-msgstr ""
+msgstr "Industriestandard"
 
 #: trustpoint/management/models/security.py:66
+#, fuzzy
 msgid "Hardened Production"
-msgstr ""
+msgstr "Für den Produktivbetrieb empfohlen!"
 
 #: trustpoint/management/models/security.py:67
 msgid "Critical Infrastructure"
-msgstr ""
+msgstr "Kritische Infrastruktur"
 
 #: trustpoint/management/models/security.py:79
 msgid "SECP256R1"
@@ -1023,53 +1016,67 @@ msgstr "SECP521R1"
 
 #: trustpoint/management/models/security.py:82
 msgid "BrainpoolP256R1"
-msgstr ""
+msgstr "BrainpoolP256R1"
 
 #: trustpoint/management/models/security.py:83
 msgid "BrainpoolP384R1"
-msgstr ""
+msgstr "BrainpoolP384R1"
 
 #: trustpoint/management/models/security.py:84
 msgid "BrainpoolP512R1"
-msgstr ""
+msgstr "BrainpoolP512R1"
 
 #: trustpoint/management/models/security.py:92
 msgid "SHA-256"
-msgstr ""
+msgstr "SHA-256"
 
 #: trustpoint/management/models/security.py:93
 msgid "SHA-384"
-msgstr ""
+msgstr "SHA-384"
 
 #: trustpoint/management/models/security.py:94
 msgid "SHA-512"
-msgstr ""
+msgstr "SHA-512"
 
 #: trustpoint/management/models/security.py:120
+#, fuzzy
 msgid ""
 "Minimum RSA key size in bits that certificates must meet. Set to 0 to allow "
 "any RSA key size. Set to null to disallow RSA entirely."
 msgstr ""
+"Mindestgröße des RSA-Schlüssels in Bit, die Zertifikate erfüllen müssen. "
+"Setzen Sie den Wert auf 0, um jede RSA-Schlüsselgröße zuzulassen. Setzen Sie "
+"den Wert auf null, um RSA vollständig zu unterbinden."
 
 #: trustpoint/management/models/security.py:130
+#, fuzzy
 msgid ""
 "JSON list of ECC curve OIDs (from trustpoint_core.oid.NamedCurve) not "
 "permitted at the current security level."
 msgstr ""
+"JSON-Liste der ECC-Kurven-OIDs (aus trustpoint_core.oid.NamedCurve), die auf "
+"der aktuellen Sicherheitsstufe nicht zulässig sind."
 
 #: trustpoint/management/models/security.py:139
+#, fuzzy
 msgid ""
-"JSON list of hash algorithm OIDs (from trustpoint_core.oid.HashAlgorithm) "
-"not permitted at the current security level."
+"JSON list of hash algorithm OIDs (from trustpoint_core.oid.HashAlgorithm) not "
+"permitted at the current security level."
 msgstr ""
+"JSON-Liste der Hash-Algorithmus-OIDs (aus trustpoint_core.oid.HashAlgorithm) "
+"ist auf der aktuellen Sicherheitsstufe nicht zulässig."
 
 #: trustpoint/management/models/security.py:151
 msgid "Maximum certificate validity period in days. Set to null for no limit."
 msgstr ""
+"Maximale Gültigkeitsdauer des Zertifikats in Tagen. Setzen Sie den Wert auf "
+"null, um keine Begrenzung festzulegen."
 
 #: trustpoint/management/models/security.py:161
 msgid "Maximum CRL validity period in days. Set to null for no limit."
 msgstr ""
+"Maximale Gültigkeitsdauer der CRL in Tagen. Setzen Sie den Wert auf null, um "
+"keine Begrenzung festzulegen."
 
 #: trustpoint/management/models/security.py:170
 #, fuzzy
@@ -1087,27 +1094,40 @@ msgid "Allow enabling the auto-generated PKI feature."
 msgstr "Lokale automatisch generierte PKI aktivieren"
 
 #: trustpoint/management/models/security.py:180
+#, fuzzy
 msgid "Allow self-signed CAs to be imported with credentials."
 msgstr ""
+"Erlauben Sie den Import selbstsignierter Zertifizierungsstellen mit "
+"Anmeldeinformationen."
 
 #: trustpoint/management/models/security.py:187
+#, fuzzy
 msgid ""
 "Require key storage to use a physical HSM "
 "(KeyStorageConfig.StorageType.PHYSICAL_HSM)."
 msgstr ""
+"Erfordert die Speicherung von Schlüsseln auf einem physischen HSM "
+"(KeyStorageConfig.StorageType.PHYSICAL_HSM)."
 
 #: trustpoint/management/models/security.py:196
+#, fuzzy
 msgid ""
 "JSON list of allowed NoOnboardingPkiProtocol integer values (bitmask flags: "
 "CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16)."
 msgstr ""
+"JSON-Liste der zulässigen NoOnboardingPkiProtocol-Ganzzahlwerte "
+"(Bitmaskenflags: CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16)."
 
 #: trustpoint/management/models/security.py:205
+#, fuzzy
 msgid ""
 "JSON list of allowed OnboardingProtocol integer values (MANUAL=0, "
 "CMP_IDEVID=1, CMP_SHARED_SECRET=2, EST_IDEVID=3, EST_USERNAME_PASSWORD=4, "
 "AOKI=5, BRSKI=6, OPC_GDS_PUSH=7)."
 msgstr ""
+"JSON-Liste der zulässigen OnboardingProtocol-Ganzzahlwerte (MANUAL=0, "
+"CMP_IDEVID=1, CMP_SHARED_SECRET=2, EST_IDEVID=3, EST_USERNAME_PASSWORD=4, "
+"AOKI=5, BRSKI=6, OPC_GDS_PUSH=7)."
 
 #: trustpoint/management/models/security.py:440
 #, python-format
@@ -1122,16 +1142,16 @@ msgstr ""
 msgid ""
 "%(mode)s requires a Physical HSM but no key storage configuration exists."
 msgstr ""
-"%(mode)s erfordert ein physisches HSM, aber es ist keine "
-"Schlüsselspeicher-Konfiguration vorhanden."
+"%(mode)s erfordert ein physisches HSM, aber es ist keine Schlüsselspeicher-"
+"Konfiguration vorhanden."
 
 #: trustpoint/management/models/security.py:452
 #, python-format
 msgid ""
 "Auto-generated PKI is currently enabled but is not permitted in %(mode)s."
 msgstr ""
-"Die automatisch generierte PKI ist derzeit aktiviert, ist jedoch in "
-"%(mode)s nicht erlaubt."
+"Die automatisch generierte PKI ist derzeit aktiviert, ist jedoch in %(mode)s "
+"nicht erlaubt."
 
 #: trustpoint/management/models/security.py:468
 #, python-format
@@ -1156,8 +1176,8 @@ msgid ""
 "Issuing CA \"%(ca)s\" has an RSA key of %(size)d bits, below the minimum of "
 "%(min)d bits required by %(mode)s."
 msgstr ""
-"Issuing CA \"%(ca)s\" hat einen RSA-Schlüssel mit %(size)d Bit, was unter "
-"dem von %(mode)s geforderten Minimum von %(min)d Bit liegt."
+"Issuing CA \"%(ca)s\" hat einen RSA-Schlüssel mit %(size)d Bit, was unter dem "
+"von %(mode)s geforderten Minimum von %(min)d Bit liegt."
 
 #: trustpoint/management/models/security.py:527
 #, python-format
@@ -1208,11 +1228,11 @@ msgstr ""
 #: trustpoint/management/models/security.py:633
 #, python-format
 msgid ""
-"Device \"%(device)s\" uses onboarding protocol \"%(protocol)s\", which is "
-"not permitted in %(mode)s."
+"Device \"%(device)s\" uses onboarding protocol \"%(protocol)s\", which is not "
+"permitted in %(mode)s."
 msgstr ""
-"Gerät \"%(device)s\" verwendet das Onboarding-Protokoll \"%(protocol)s\", "
-"was in %(mode)s nicht erlaubt ist."
+"Gerät \"%(device)s\" verwendet das Onboarding-Protokoll \"%(protocol)s\", was "
+"in %(mode)s nicht erlaubt ist."
 
 #: trustpoint/management/security/mixins.py:85
 #, python-format
@@ -1220,78 +1240,72 @@ msgid "Your security setting %s does not allow the feature: %s"
 msgstr "Ihre Sicherheitseinstellung %s erlaubt die Funktion nicht: %s"
 
 #: trustpoint/management/util/startup_strategies.py:763
-#, fuzzy, python-format
-#| msgid "Expiring Certificates"
+#, python-format
 msgid "Error extracting TLS certificates: %s"
-msgstr "Ausgelaufene Zertifikate"
+msgstr "Fehler beim Extrahieren von TLS-Zertifikaten: %s"
 
 #: trustpoint/management/views/key_storage.py:20
 #: trustpoint/templates/management/key_storage.html:8
-#, fuzzy
-#| msgid "Network Configuration"
 msgid "Key Storage Configuration"
-msgstr "Netzwerkkonfiguration"
+msgstr "Schlüsselspeicher-Konfiguration"
 
 #: trustpoint/management/views/key_storage.py:39
 #: trustpoint/templates/management/key_storage.html:16
 #, fuzzy
 #| msgid "PKI Truststore Configuration"
 msgid "Key storage configuration not found."
-msgstr "PKI-Truststore-Konfiguration"
+msgstr "Schlüsselspeicher-Konfiguration"
 
 #: trustpoint/management/views/logging.py:163
 #: trustpoint/management/views/logging.py:168
 #: trustpoint/management/views/logging.py:181
 #: trustpoint/templates/pki/issuing_cas/includes/remote_ca_config.html:33
 msgid "None"
-msgstr "None"
+msgstr "Keine"
 
 #: trustpoint/management/views/notifications.py:37
-#, fuzzy
-#| msgid "Successfully deleted {count} Domains."
 msgid "Successfully refreshed notifications."
-msgstr "{count} Domains wurden erfolgreich entfernt."
+msgstr "Benachrichtigungen erfolgreich aktualisiert."
 
 #: trustpoint/management/views/notifications.py:39
-#, python-brace-format
+#, fuzzy, python-brace-format
 msgid "Error refreshing notifications: {}"
-msgstr ""
+msgstr "Keine Benachrichtigungen verfügbar."
 
 #: trustpoint/management/views/notifications.py:63
-#, fuzzy
-#| msgid "Settings updated successfully."
 msgid "Notification deleted successfully."
-msgstr "Die Einstellungen wurden erfolgreich angewendet."
+msgstr "Benachrichtigung erfolgreich gelöscht."
 
 #: trustpoint/management/views/settings.py:95
+#, fuzzy
 msgid "Notifications enabled and notification cycle initialized."
 msgstr ""
+"Benachrichtigungen sind aktiviert, aber automatische "
+"Benachrichtigungsprüfungen sind nicht geplant."
 
 #: trustpoint/management/views/settings.py:100
+#, fuzzy
 msgid "Notification configuration saved and cycle reinitialized."
-msgstr ""
+msgstr "Benachrichtigungseinstellungen erfolgreich gespeichert."
 
 #: trustpoint/management/views/settings.py:106
+#, fuzzy
 msgid "Notifications saved but error initializing notification cycle."
 msgstr ""
+"Benachrichtigungen gespeichert, aber Fehler beim Initialisieren des "
+"Benachrichtigungszyklus."
 
 #: trustpoint/management/views/settings.py:109
-#, fuzzy
-#| msgid "Settings updated successfully."
 msgid "Notification configuration saved successfully."
-msgstr "Die Einstellungen wurden erfolgreich angewendet."
+msgstr "Benachrichtigungseinstellungen erfolgreich gespeichert."
 
 #: trustpoint/management/views/settings.py:114
-#, fuzzy
-#| msgid "Settings updated successfully."
 msgid "Notifications disabled successfully."
-msgstr "Die Einstellungen wurden erfolgreich angewendet."
+msgstr "Benachrichtigungen erfolgreich deaktiviert."
 
 #: trustpoint/management/views/settings.py:119
-#, fuzzy
-#| msgid "Error saving the configuration"
 msgid "Error saving notification configuration"
-msgstr "Beim Speichern der Einstellungen ist ein Fehler aufgetreten"
+msgstr "Fehler beim Speichern der Benachrichtigungseinstellungen"
 
 #: trustpoint/management/views/settings.py:208
 msgid "Your changes were saved successfully."
@@ -1301,13 +1315,12 @@ msgstr "Ihre Änderungen wurden erfolgreich gespeichert."
 msgid "Error saving the configuration"
 msgstr "Beim Speichern der Einstellungen ist ein Fehler aufgetreten"
 
-#: trustpoint/management/views/tls.py:257
-#: trustpoint/management/views/tls.py:275
+#: trustpoint/management/views/tls.py:257 trustpoint/management/views/tls.py:275
 #, fuzzy
 #| msgid "Successfully revoked one active credential."
 #| msgid_plural "Successfully revoked %(count)d active credentials."
 msgid "Successfully added TLS-Server Credential."
-msgstr "Ein aktives Credential wurde erforlgreich widerrufen."
+msgstr "Selbstsignierte TLS-Server-Zugangsdaten generieren"
 
 #: trustpoint/onboarding/enums.py:20
 msgid "Onboarded"
@@ -1315,9 +1328,8 @@ msgstr "Eingebunden"
 
 #: trustpoint/onboarding/enums.py:26
 #, fuzzy
-#| msgid "No Onboarding"
 msgid "Manual Onboarding"
-msgstr "Kein Onboarding"
+msgstr "Onboarding-Konfiguration"
 
 #: trustpoint/onboarding/enums.py:27
 msgid "CMP - IDevID"
@@ -1344,34 +1356,33 @@ msgid "BRSKI"
 msgstr "BRSKI"
 
 #: trustpoint/onboarding/enums.py:33 trustpoint/onboarding/enums.py:42
-#, fuzzy
-#| msgid "OPC UA GDS"
 msgid "OPC - GDS Push"
-msgstr "OPC UA-GDS"
+msgstr "OPC - GDS Push"
 
 #: trustpoint/onboarding/enums.py:40
 msgid "CMP"
-msgstr ""
+msgstr "CMP"
 
 #: trustpoint/onboarding/enums.py:41
 msgid "EST"
-msgstr ""
+msgstr "EST"
 
 #: trustpoint/onboarding/enums.py:49
 #, fuzzy
 #| msgid "CMP - Shared Secret"
 msgid "CMP - Shared Secret (HMAC)"
-msgstr "CMP mit Shared Secret"
+msgstr "Remote-Issuing-CMP"
 
 #: trustpoint/onboarding/enums.py:53
+#, fuzzy
 msgid "Manual"
-msgstr ""
+msgstr "Manuell"
 
 #: trustpoint/onboarding/models.py:92 trustpoint/onboarding/models.py:314
 #, fuzzy
 #| msgid "Pki Protocol"
 msgid "Pki Protocol Bitwise Flag"
-msgstr "PKI-Protokoll"
+msgstr "Die Portnummer der Remote-PKI"
 
 #: trustpoint/onboarding/models.py:97
 #: trustpoint/templates/devices/devices_table.html:32
@@ -1394,37 +1405,33 @@ msgstr "CMP Shared Secret"
 
 #: trustpoint/onboarding/models.py:114
 msgid "OPC User"
-msgstr ""
+msgstr "OPC Benutzer"
 
 #: trustpoint/onboarding/models.py:115
-#, fuzzy
-#| msgid "Password"
 msgid "OPC Password"
-msgstr "Passwort"
+msgstr "OPC Passwort"
 
 #: trustpoint/onboarding/models.py:119
 #: trustpoint/templates/devices/details/sub_details.html:53
+#, fuzzy
 msgid "IDevID Manufacturer Truststore"
-msgstr "IDevID Hersteller-Truststore"
+msgstr "IDevID Hersteller-Trust Store"
 
 #: trustpoint/onboarding/models.py:128
 #, fuzzy
-#| msgid "Add new Truststore"
 msgid "OPC Server Truststore"
-msgstr "Neuen Truststore hinzufügen"
+msgstr "OPC Server Port"
 
 #: trustpoint/onboarding/models.py:321
 #: trustpoint/templates/pki/issuing_cas/includes/remote_ca_config.html:39
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:33
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:37
-#, fuzzy
-#| msgid "Truststore"
 msgid "Trust Store"
-msgstr "Truststore"
+msgstr "Trust Store"
 
 #: trustpoint/onboarding/models.py:326
 msgid "Trust store containing certificates to verify the remote server"
-msgstr ""
+msgstr "Trust Store mit Zertifikaten zur Überprüfung des Remote-Servers"
 
 #: trustpoint/setup_wizard/forms.py:25
 msgid "IPv4-Addresses (comma-separated list)"
@@ -1440,52 +1447,51 @@ msgstr "Domain-Namen (durch Kommata trennen)"
 
 #: trustpoint/setup_wizard/forms.py:115
 msgid "PKCS#11 Module Path"
-msgstr ""
+msgstr "PKCS#11-Modulpfad"
 
 #: trustpoint/setup_wizard/forms.py:116
 msgid "Path to the PKCS#11 module library."
-msgstr ""
+msgstr "Pfad zur PKCS#11-Modulbibliothek."
 
 #: trustpoint/setup_wizard/forms.py:126
 msgid "HSM slot number to use."
-msgstr ""
+msgstr "Zu verwendende HSM-Slotnummer."
 
 #: trustpoint/setup_wizard/forms.py:134
 msgid "Label for the HSM token."
-msgstr ""
+msgstr "Label für das HSM-Token."
 
 #: trustpoint/setup_wizard/forms.py:197
 #, python-format
 msgid "Unsupported HSM type: %(hsm_type)s"
-msgstr ""
+msgstr "Nicht unterstützter HSM-Typ: %(hsm_type)s"
 
 #: trustpoint/setup_wizard/forms.py:237 trustpoint/setup_wizard/forms.py:370
 #: trustpoint/setup_wizard/tests/test_forms/test_backuppasswordform.py:32
 msgid "Enter backup password"
-msgstr ""
+msgstr "Backup-Passwort eingeben"
 
 #: trustpoint/setup_wizard/forms.py:240 trustpoint/setup_wizard/forms.py:321
 #: trustpoint/setup_wizard/forms.py:373
 #: trustpoint/setup_wizard/tests/test_forms/test_backuppasswordform.py:24
 #: trustpoint/setup_wizard/tests/test_forms/test_backuppasswordform.py:240
 #: trustpoint/templates/setup_wizard/restore_options.html:80
-#, fuzzy
-#| msgid "Password"
 msgid "Backup Password"
-msgstr "Passwort"
+msgstr "Backup Passwort"
 
 #: trustpoint/setup_wizard/forms.py:241
 #: trustpoint/setup_wizard/tests/test_forms/test_backuppasswordform.py:25
 #: trustpoint/setup_wizard/tests/test_forms/test_backuppasswordform.py:245
+#, fuzzy
 msgid "Enter a strong password to secure your backup encryption key."
 msgstr ""
+"Geben Sie ein sicheres Passwort ein, um Ihren Backup-"
+"Verschlüsselungsschlüssel zu schützen."
 
 #: trustpoint/setup_wizard/forms.py:248
 #: trustpoint/setup_wizard/tests/test_forms/test_backuppasswordform.py:45
-#, fuzzy
-#| msgid "Confirm Password"
 msgid "Confirm backup password"
-msgstr "Passwort bestätigen"
+msgstr "Backup-Passwort bestätigen"
 
 #: trustpoint/setup_wizard/forms.py:251
 #: trustpoint/setup_wizard/tests/test_forms/test_backuppasswordform.py:38
@@ -1495,10 +1501,8 @@ msgstr "Passwort bestätigen"
 
 #: trustpoint/setup_wizard/forms.py:267 trustpoint/setup_wizard/forms.py:389
 #: trustpoint/setup_wizard/tests/test_forms/test_backuppasswordform.py:110
-#, fuzzy
-#| msgid "This field is required."
 msgid "Password is required."
-msgstr "Dieses Feld ist erforderlich."
+msgstr "Passwort erforderlich."
 
 #: trustpoint/setup_wizard/forms.py:296
 #: trustpoint/setup_wizard/tests/test_forms/test_backuppasswordform.py:173
@@ -1510,76 +1514,79 @@ msgstr "Passwörter stimmen nicht überein."
 #: trustpoint/setup_wizard/forms.py:307
 #: trustpoint/templates/setup_wizard/restore_options.html:72
 msgid "Backup File"
-msgstr ""
+msgstr "Backup-Datei"
 
 #: trustpoint/setup_wizard/forms.py:308
 #: trustpoint/templates/setup_wizard/restore_options.html:75
+#, fuzzy
 msgid "Select the backup file to restore from."
-msgstr ""
+msgstr "Automatische Wiederherstellung – Backup-Passwort eingeben"
 
 #: trustpoint/setup_wizard/forms.py:318
 msgid "Enter backup password (optional)"
-msgstr ""
+msgstr "Backup-Passwort eingeben (optional)"
 
 #: trustpoint/setup_wizard/forms.py:323
 #: trustpoint/templates/setup_wizard/restore_options.html:86
+#, fuzzy
 msgid ""
 "Enter the backup password if the backup was created with DEK encryption. "
 "Leave empty if no password was set."
 msgstr ""
+"Geben Sie das Backup-Passwort ein, wenn das Backup mit DEK-Verschlüsselung "
+"erstellt wurde. Lassen Sie das Feld leer, wenn kein Passwort festgelegt wurde."
 
 #: trustpoint/setup_wizard/forms.py:334
 msgid "No backup file provided."
-msgstr ""
+msgstr "Keine Backup-Datei vorhanden."
 
 #: trustpoint/setup_wizard/forms.py:337
 msgid "Invalid backup file name."
-msgstr ""
+msgstr "Ungültiger Name der Backup-Datei."
 
 #: trustpoint/setup_wizard/forms.py:343
 #, python-format
 msgid "Invalid file type. Allowed types: %(extensions)s"
-msgstr ""
+msgstr "Ungültiger Dateityp. Zulässige Typen: %(extensions)s"
 
 #: trustpoint/setup_wizard/forms.py:349
 msgid "File too large. Maximum size is 100MB."
-msgstr ""
+msgstr "Datei zu groß. Die maximale Größe beträgt 100 MB."
 
 #: trustpoint/setup_wizard/views.py:692
 msgid "Your password can’t be too similar to your other personal information."
 msgstr ""
+"Ihr Passwort darf nicht zu ähnlich zu Ihren anderen persönlichen Daten sein."
 
 #: trustpoint/setup_wizard/views.py:693
-#, fuzzy
-#| msgid "Password must be at least %d characters long."
 msgid "Your password must contain at least 8 characters."
-msgstr "Password muss mindestens %d Zeichen lang sein."
+msgstr "Ihr Passwort muss mindestens 8 Zeichen enthalten."
 
 #: trustpoint/setup_wizard/views.py:694
 msgid "Your password can’t be a commonly used password."
-msgstr ""
+msgstr "Ihr Passwort darf kein häufig verwendetes Passwort sein."
 
 #: trustpoint/setup_wizard/views.py:695
 msgid "Your password can’t be entirely numeric."
-msgstr ""
+msgstr "Ihr Passwort darf nicht ausschließlich aus Zahlen bestehen."
 
 #: trustpoint/setup_wizard/views.py:1157
 msgid "Auto Restore - Enter Backup Password"
-msgstr ""
+msgstr "Automatische Wiederherstellung – Backup-Passwort eingeben"
 
 #: trustpoint/setup_wizard/views.py:1158
 msgid "Enter the backup password to complete the auto restore process."
 msgstr ""
+"Geben Sie das Backup-Passwort ein, um den automatischen "
+"Wiederherstellungsprozess abzuschließen."
 
 #: trustpoint/signer/forms.py:45
 msgid "Select Method"
 msgstr "Methode auswählen"
 
 #: trustpoint/signer/forms.py:47
-#, fuzzy
-#| msgid "Import a new Issuing CA from file"
 msgid "Import a new Signer from file"
-msgstr "Eine neue Issuing CA aus Datei importieren"
+msgstr "Neuen Unterzeichner aus Datei importieren"
 
 #: trustpoint/signer/forms.py:57
 msgid "File Type"
@@ -1596,78 +1603,78 @@ msgid "PEM, PKCS#1, PKCS#7, PKCS#8"
 msgstr "PEM, PKCS#1, PKCS#7, PKCS#8"
 
 #: trustpoint/signer/forms.py:71 trustpoint/signer/forms.py:188
-#, fuzzy
-#| msgid "Organizational Unit Name"
 msgid "[Optional] Unique Name"
-msgstr "Name der Organisationseinheit"
+msgstr "[Optional] Eindeutiger Name"
 
 #: trustpoint/signer/forms.py:122
 msgid "Error reading PKCS#12 file or password."
-msgstr ""
+msgstr "Fehler beim Lesen der PKCS#12-Datei oder des Passworts."
 
 #: trustpoint/signer/forms.py:145
 msgid "Failed to parse PKCS#12 file."
-msgstr ""
+msgstr "Fehler beim Parsen der PKCS#12-Datei."
 
 #: trustpoint/signer/forms.py:193
-#, fuzzy
-#| msgid "Issuing CA Certificate (.cer, .der, .pem, .p7b, .p7c)"
 msgid "Signer Certificate (.cer, .der, .pem, .p7b, .p7c)"
-msgstr "Issuing CA-Zertifikat (.cer, .der, .pem, .p7b, .p7c)"
+msgstr "Unterzeichner-Zertifikat (.cer, .der, .pem, .p7b, .p7c)"
 
 #: trustpoint/signer/forms.py:295
 #, fuzzy
 #| msgid "Failed to parse the Issuing CA certificate. Seems to be corrupted."
 msgid "Failed to parse the signer certificate chain. Seems to be corrupted."
 msgstr ""
-"Die CA-Zertifikatsdatei konnte nicht gelesen werden und ist möglicherweise "
-"beschädigt."
+"Fehler beim Parsen der TLS-Zertifikatskette. Sie scheint beschädigt zu sein."
 
 #: trustpoint/signer/forms.py:377
-#, fuzzy
-#| msgid "Self-Signed"
 msgid "Select Signer"
-msgstr "Selbstsigniert"
+msgstr "Unterzeichner auswählen"
 
 #: trustpoint/signer/forms.py:379
 msgid ""
 "The hash algorithm used for signing will be determined by the selected "
 "signer's certificate."
 msgstr ""
+"Der für die Signatur verwendete Hash-Algorithmus wird durch das Zertifikat "
+"des ausgewählten Unterzeichners bestimmt."
 
 #: trustpoint/signer/forms.py:380
 msgid "Select a signer..."
-msgstr ""
+msgstr "Einen Unterzeichner auswählen..."
 
 #: trustpoint/signer/forms.py:384
 msgid "Enter hash value in hexadecimal format"
-msgstr ""
+msgstr "Geben Sie den Hashwert im Hexadezimalformat ein."
 
 #: trustpoint/signer/forms.py:385
 #: trustpoint/templates/signer/sign_hash_success.html:35
 #: trustpoint/templates/signer/signed_messages.html:19
 #: trustpoint/templates/signer/signed_messages.html:63
 msgid "Hash Value"
-msgstr ""
+msgstr "Hash-Wert"
 
 #: trustpoint/signer/forms.py:387
 msgid "Paste the hash value (hexadecimal format, e.g., a1b2c3d4...)"
-msgstr ""
+msgstr "Fügen Sie den Hashwert ein (Hexadezimalformat, z. B. a1b2c3d4...)."
 
 #: trustpoint/signer/forms.py:403
 msgid "Hash value cannot be empty"
-msgstr ""
+msgstr "Der Hashwert darf nicht leer sein"
 
 #: trustpoint/signer/forms.py:409
 msgid "Invalid hash format. Please provide a valid hexadecimal string."
 msgstr ""
+"Ungültiges Hash-Format. Bitte geben Sie eine gültige Hexadezimalzeichenfolge "
+"ein."
 
 #: trustpoint/signer/forms.py:424
-#, python-format
+#, fuzzy, python-format
 msgid ""
 "Hash value length mismatch. The selected signer uses %(algorithm)s which "
 "expects %(expected)d hexadecimal characters, but got %(actual)d."
 msgstr ""
+"Hashwert-Längenkonflikt. Der ausgewählte Unterzeichner verwendet "
+"%(algorithm)s, erwartet jedoch %(expected)d Hexadezimalzeichen, erhielt "
+"jedoch %(actual)d."
 
 #: trustpoint/signer/models.py:24
 #: trustpoint/templates/devices/details/sub_details.html:139
@@ -1678,8 +1685,7 @@ msgstr ""
 msgid "Active"
 msgstr "Aktiv"
 
-#: trustpoint/signer/models.py:28
-#: trustpoint/templates/pki/crls/details.html:140
+#: trustpoint/signer/models.py:28 trustpoint/templates/pki/crls/details.html:140
 #: trustpoint/templates/pki/issuing_cas/config.html:40
 #: trustpoint/templates/pki/keyless_cas/config.html:20
 #: trustpoint/templates/signer/signer_config.html:20
@@ -1690,7 +1696,7 @@ msgstr "Aktualisiert"
 #, fuzzy, python-brace-format
 #| msgid "Successfully deleted {count} devices."
 msgid "Successfully added Signer {name}."
-msgstr "{count} Geräte wurden erfolgreich entfernt."
+msgstr "DevOwnerID „{name}“ erfolgreich hinzugefügt."
 
 #: trustpoint/signer/views.py:188
 #, fuzzy
@@ -1701,51 +1707,49 @@ msgid ""
 "Cannot delete the selected Signer(s) because they are referenced by other "
 "objects."
 msgstr ""
-"Die ausgewählten Gerät(e) können nicht entfernt werden, da sie noch von "
-"anderen Objekten referenziert werden."
+"Die ausgewählten CRL(s) können nicht gelöscht werden, da sie von anderen "
+"Objekten referenziert werden."
 
 #: trustpoint/signer/views.py:194
 #, fuzzy, python-brace-format
 #| msgid "Successfully deleted {count} devices."
 msgid "Successfully deleted {count} Signer(s)."
-msgstr "{count} Geräte wurden erfolgreich entfernt."
+msgstr "{count} CRL(s) erfolgreich gelöscht."
 
 #: trustpoint/signer/views.py:227
-#, fuzzy
-#| msgid "Unsupported public key algorithm"
 msgid "Unsupported key algorithm."
-msgstr "Nicht unterstützter öffentlicher Schlüsselalgorithmus"
+msgstr "Nicht unterstützter Schlüsselalgorithmus."
 
 #: trustpoint/signer/views.py:240
-#, python-brace-format
+#, fuzzy, python-brace-format
 msgid "Hash successfully signed with signer \"{signer_name}\"."
 msgstr ""
+"Der für die Signatur verwendete Hash-Algorithmus wird durch das Zertifikat "
+"des ausgewählten Unterzeichners bestimmt."
 
 #: trustpoint/signer/views.py:256
-#, python-brace-format
+#, fuzzy, python-brace-format
 msgid "Failed to sign hash: {error}"
-msgstr ""
+msgstr "Fehler beim Importieren der CRL: %(error)s"
 
 #: trustpoint/signer/views.py:278
 #, fuzzy
 #| msgid "No certificates are available."
 msgid "No signature data available."
-msgstr "Es sind keine Zertifikate vorhanden."
+msgstr "Keine Benachrichtigungen verfügbar."
 
 #: trustpoint/templates/devices/add_onboarding_type.html:8
 #, fuzzy
 #| msgid "No Onboarding"
 msgid "Choose Onboarding Mechanism"
-msgstr "Kein Onboarding"
+msgstr "Keine Onboarding-Konfiguration"
 
 #: trustpoint/templates/devices/add_onboarding_type.html:10
 #: trustpoint/templates/devices/create_choose_onboarding.html:10
 #: trustpoint/templates/devices/opc_ua_gds.html:27
 #: trustpoint/templates/devices/opc_ua_gds_push.html:27
-#, fuzzy
-#| msgid "Add new OPC UA GDS"
 msgid "Create new OPC UA GDS"
-msgstr "Neuen OPC UA-GDS hinzufügen"
+msgstr "Neues OPC UA GDS erstellen"
 
 #: trustpoint/templates/devices/add_onboarding_type.html:43
 #: trustpoint/templates/devices/configure.html:18
@@ -1867,10 +1871,8 @@ msgid "Save"
 msgstr "Speichern"
 
 #: trustpoint/templates/devices/confirm_bulk_revoke.html:14
-#, fuzzy
-#| msgid "Confirm Device Deletion"
 msgid "Confirm Device Revokation"
-msgstr "Entfernen des Geräts bestätigen"
+msgstr "Widerrufung des Geräts bestätigen"
 
 #: trustpoint/templates/devices/confirm_bulk_revoke.html:20
 #: trustpoint/templates/devices/confirm_delete.html:15
@@ -1900,15 +1902,14 @@ msgstr "Eindeutiger Name"
 
 #: trustpoint/templates/devices/confirm_bulk_revoke.html:38
 #: trustpoint/templates/devices/confirm_delete.html:33
+#, fuzzy
 msgid "Issued Credentials"
-msgstr "Ausgestellte Credentials"
+msgstr "Ausgestellte Zugangsdaten"
 
 #: trustpoint/templates/devices/confirm_bulk_revoke.html:56
 #: trustpoint/templates/devices/confirm_revoke.html:48
-#, fuzzy
-#| msgid "Delete selected devices"
 msgid "Revokes selected devices"
-msgstr "Ausgewählte Geräte entfernen"
+msgstr "Widerruft ausgewählte Geräte"
 
 #: trustpoint/templates/devices/confirm_delete.html:9
 msgid "Confirm Device Deletion"
@@ -1922,55 +1923,50 @@ msgstr "Ausgewählte Geräte entfernen"
 #, fuzzy
 #| msgid "Domain Credential CSR Generation"
 msgid "Confirm Credential Revokation"
-msgstr "Erstellen des Domain-Credential-CSR"
+msgstr "Widerrufung des Geräts bestätigen"
 
 #: trustpoint/templates/devices/confirm_revoke.html:18
 #, fuzzy
 #| msgid "Credential"
 msgid "Revoke Credential"
-msgstr "Credential"
+msgstr "Ausgewählte widerrufen"
 
 #: trustpoint/templates/devices/create.html:8
 #: trustpoint/templates/devices/create.html:24
 #: trustpoint/templates/devices/create_choose_onboarding.html:8
-#, fuzzy
-#| msgid "Create Device"
 msgid "Create new Device"
-msgstr "Gerät erstellen"
+msgstr "Neues Gerät erstellen"
 
 #: trustpoint/templates/devices/create.html:10
 #: trustpoint/templates/devices/create.html:26
-#, fuzzy
-#| msgid "Add new OPC UA GDS"
 msgid "Create new OPC UA GDS Server"
-msgstr "Neuen OPC UA-GDS hinzufügen"
+msgstr "Neuen OPC UA GDS-Server erstellen"
 
 #: trustpoint/templates/devices/create.html:12
 #: trustpoint/templates/devices/create.html:28
 msgid "Create new OPC UA GDS Push Application"
-msgstr ""
+msgstr "Neue OPC UA GDS Push-Anwendung erstellen"
 
 #: trustpoint/templates/devices/create_choose_onboarding.html:12
-#, fuzzy
-#| msgid "Add new OPC UA GDS"
 msgid "Create new OPC UA GDS Push"
-msgstr "Neuen OPC UA-GDS hinzufügen"
+msgstr "Neuen OPC UA GDS Push erstellen"
 
 #: trustpoint/templates/devices/credentials/certificate_download.html:14
+#, fuzzy
 msgid "Download Issued"
-msgstr "Herunterladen des ausgestellen"
+msgstr "Ausgestellte Zugangsdaten"
 
 #: trustpoint/templates/devices/credentials/certificate_download.html:14
 #, fuzzy
 #| msgid "Application Certificate"
 msgid " Application Certificate"
-msgstr "Anwendungszertifikat"
+msgstr "Zertifizierungsstellen"
 
 #: trustpoint/templates/devices/credentials/certificate_download.html:16
 #, fuzzy
 #| msgid "Download Issued Domain Certificate"
 msgid "Download Issued Domain Credential"
-msgstr "Ausgestelltes Domain-Zertifikat herunterladen"
+msgstr "Wählen Sie die CA aus, die diese CRL ausgestellt hat (optional)"
 
 #: trustpoint/templates/devices/credentials/certificate_download.html:22
 #: trustpoint/templates/devices/credentials/credential_download.html:18
@@ -1999,7 +1995,7 @@ msgstr "Details"
 #: trustpoint/templates/pki/issuing_cas/issuing_cas.html:23
 #: trustpoint/templates/workflows/instance_detail.html:189
 msgid "Common Name"
-msgstr "Common Name"
+msgstr "Allgemeiner Name"
 
 #: trustpoint/templates/devices/credentials/certificate_download.html:48
 #: trustpoint/templates/devices/credentials/credential_download.html:44
@@ -2050,10 +2046,8 @@ msgstr "Zertifikatskette ohne Endgerätezertifikat herunterladen"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:26
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:368
-#, fuzzy
-#| msgid "Details"
 msgid "Show Details"
-msgstr "Details"
+msgstr "Details anzeigen"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:38
 #: trustpoint/templates/pki/domains/config.html:10
@@ -2064,21 +2058,19 @@ msgid "Configuration"
 msgstr "Konfiguration"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:53
-#, fuzzy
-#| msgid "Family Information"
 msgid "Information"
-msgstr "Familieninformation"
+msgstr "Informationen"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:69
 #: trustpoint/templates/workflows/instance_detail.html:194
 #, fuzzy
 #| msgid "Public Key Algorithm"
 msgid "Key Algorithm"
-msgstr "Algorithmus für den öffentlichen Schlüssel"
+msgstr "Nicht unterstützter Schlüsselalgorithmus."
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:74
 msgid "Curve"
-msgstr ""
+msgstr "Kurve"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:80
 #, fuzzy
@@ -2087,97 +2079,92 @@ msgid "Key Size"
 msgstr "Länge des öffentlichen Schlüssels"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:87
-#, fuzzy
-#| msgid "No Issuing CA configured"
 msgid "No issuing CA configured"
-msgstr "Keine Issuing CA konfiguriert"
+msgstr "Keine Issuing CA konfigurieren"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:90
-#, fuzzy
-#| msgid "No domains are configured yet."
 msgid "No domain configured"
-msgstr "Es wurden noch keine Domains konfiguriert."
+msgstr "Keine Domain konfiguriert"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:95
 msgid "Device Type"
 msgstr "Gerätetyp"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:101
+#, fuzzy
 msgid "Discover Server"
-msgstr ""
+msgstr "Serverzertifikat"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:108
 #, fuzzy
 #| msgid "Knowledge Information"
 msgid "Discovered Server Information"
-msgstr "Knowledge Information"
+msgstr "Trustpoint TLS-Server"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:110
-#, fuzzy
-#| msgid "TLS-Server"
 msgid "Server URI"
-msgstr "TLS-Server"
+msgstr "Server-URI"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:111
 msgid "Product URI"
-msgstr ""
+msgstr "Produkt-URI"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:112
 #, fuzzy
 #| msgid "Application"
 msgid "Application Name"
-msgstr "Anwendung"
+msgstr "Name ist erforderlich."
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:114
 #, fuzzy
 #| msgid "Application"
 msgid "Application Type"
-msgstr "Anwendung"
+msgstr "Benachrichtigungstyp:"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:117
-#, fuzzy
-#| msgid "TLS-Server Certificate"
 msgid "Server Certificate"
-msgstr "TLS-Serverzertifikat"
+msgstr "Serverzertifikat"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:117
 msgid "Available"
-msgstr ""
+msgstr "Verfügbar"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:124
 #, fuzzy
 #| msgid "Configuration"
 msgid "Configuration Type"
-msgstr "Konfiguration"
+msgstr "HSM-Konfiguration"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:124
 msgid "No Onboarding"
 msgstr "Kein Onboarding"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:137
+#, fuzzy
 msgid "Certificate Lifecycle Management"
-msgstr "Zertifikatslebenszyklus-Verwaltung"
+msgstr "Löschen des Zertifikatsprofils bestätigen"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:144
+#, fuzzy
 msgid "Issued Domain Credentials"
-msgstr "Ausgestellte Domain-Credentials"
+msgstr "Es wurden keine Zugangsdaten widerrufen."
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:151
 #, fuzzy
 #| msgid "Issued Domain Credentials"
 msgid "Issue new Domain Credential"
-msgstr "Ausgestellte Domain-Credentials"
+msgstr "Neue TLS-Zugangsdaten hinzufügen"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:167
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:285
 #: trustpoint/templates/devices/details/sub_details.html:130
 msgid "Common Name (CN)"
-msgstr "Common Name (CN)"
+msgstr "Allgemeiner Name (CN)"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:172
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:295
 msgid "Issued at"
-msgstr "Ausgestellt um"
+msgstr "Ausgestellt in"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:177
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:299
@@ -2222,28 +2209,30 @@ msgid "Revoke"
 msgstr "Widerrufen"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:212
+#, fuzzy
 msgid "No domain credential is issued to this device yet."
-msgstr "Es ist noch kein Domain-Credential an dieses Gerät ausgestellt."
+msgstr "Für dieses Gerät ist keine Domäne konfiguriert."
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:226
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:245
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:256
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:268
+#, fuzzy
 msgid "Issued Application Credentials"
-msgstr "Ausgestellte Anwendungs-Credentials"
+msgstr "Es wurden keine Zugangsdaten widerrufen."
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:230
 #, fuzzy
 #| msgid "Issue new Application Credentials"
 msgid "Issue new Application Credential"
-msgstr "Neue Anwendungs-Credentials ausstellen"
+msgstr "Neue OPC UA GDS Push-Anwendung erstellen"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:239
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:263
 #, fuzzy
 #| msgid "Issue new Application Credentials"
 msgid "Issue New Application Credential"
-msgstr "Neue Anwendungs-Credentials ausstellen"
+msgstr "Neue OPC UA GDS Push-Anwendung erstellen"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:290
 #: trustpoint/templates/pki/cert_profiles/confirm_delete.html:19
@@ -2252,50 +2241,49 @@ msgstr "Neue Anwendungs-Credentials ausstellen"
 #, fuzzy
 #| msgid "Certificate Policies"
 msgid "Certificate Profile"
-msgstr "Zertifikatsrichtlinien"
+msgstr "Zertifikatsprofil hinzufügen"
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:333
+#, fuzzy
 msgid "No application credentials are issued to this device yet."
 msgstr "Es ist noch kein Anwendungs-Credential an dieses Gerät ausgestellt."
 
 #: trustpoint/templates/devices/credentials/certificate_lifecycle_management.html:361
-#, fuzzy
-#| msgid "Details"
 msgid "Hide Details"
-msgstr "Details"
+msgstr "Details ausblenden"
 
 #: trustpoint/templates/devices/credentials/credential_download.html:64
-#, fuzzy
-#| msgid "Error"
 msgid "Error:"
-msgstr "Fehler"
+msgstr "Fehler:"
 
 #: trustpoint/templates/devices/credentials/credential_download.html:74
-#, fuzzy
-#| msgid "User Password"
 msgid "Suggested Password"
-msgstr "Nutzerpasswort"
+msgstr "Vorgeschlagenes Passwort"
 
 #: trustpoint/templates/devices/credentials/credential_download.html:80
 msgid "Copy"
-msgstr ""
+msgstr "Kopieren"
 
 #: trustpoint/templates/devices/credentials/credential_download.html:84
 msgid ""
 "You can use the suggested password above, or edit it as you wish. Must be at "
 "least 12 characters long."
 msgstr ""
+"Sie können das oben vorgeschlagene Passwort verwenden oder es nach Belieben "
+"ändern. Es muss mindestens 12 Zeichen lang sein."
 
 #: trustpoint/templates/devices/credentials/credential_download.html:88
 #: trustpoint/templates/setup_wizard/backup_password.html:36
 msgid "Important:"
-msgstr ""
+msgstr "Wichtig:"
 
 #: trustpoint/templates/devices/credentials/credential_download.html:88
 msgid ""
-"Make sure you keep the password with you, it will be lost once you leave "
-"this screen"
+"Make sure you keep the password with you, it will be lost once you leave this "
+"screen"
 msgstr ""
+"Bewahren Sie das Passwort gut auf, denn es geht verloren, sobald Sie diesen "
+"Bildschirm verlassen."
 
 #: trustpoint/templates/devices/credentials/credential_download.html:93
 msgid "Download as PKCS#12"
@@ -2315,10 +2303,12 @@ msgstr "Von Gerätebrowser herunterladen"
 
 #: trustpoint/templates/devices/credentials/issue_application_credential.html:13
 #: trustpoint/templates/devices/credentials/issue_application_credential.html:27
+#, fuzzy
 msgid "Issue Application Credential"
 msgstr "Anwndungs-Credential ausstellen"
 
 #: trustpoint/templates/devices/credentials/issue_application_credential.html:18
+#, fuzzy
 msgid "Application Credential Details"
 msgstr "Details zum Anwendungs-Credential"
 
@@ -2327,24 +2317,26 @@ msgstr "Details zum Anwendungs-Credential"
 #, fuzzy
 #| msgid "Issued Domain Credentials"
 msgid "Issue Domain Credential"
-msgstr "Ausgestellte Domain-Credentials"
+msgstr "Zugehörige Domain"
 
 #: trustpoint/templates/devices/credentials/issue_domain_credential.html:18
 #, fuzzy
 #| msgid "Domain Credential"
 msgid "Domain Credential Details"
-msgstr "Domain-Credential"
+msgstr "Keine Domain konfiguriert"
 
 #: trustpoint/templates/devices/credentials/onboarding/browser/login.html:31
+#, fuzzy
 msgid "Trustpoint - Browser Onboarding"
-msgstr "Trustpoint - Browser-Onboarding"
+msgstr "Keine verknüpfte CA von Trustpoint"
 
 #: trustpoint/templates/devices/credentials/onboarding/browser/login.html:41
+#, fuzzy
 msgid "Download credentials"
-msgstr "Credentials herunterladen"
+msgstr "Es wurden keine Zugangsdaten widerrufen."
 
 #: trustpoint/templates/devices/credentials/onboarding/browser/otp_view.html:16
-#, python-format
+#, fuzzy, python-format
 msgid "Credential download authentication for %(device_name)s"
 msgstr "Authentifizierung zum Download des Credentials für %(device_name)s"
 
@@ -2352,31 +2344,30 @@ msgstr "Authentifizierung zum Download des Credentials für %(device_name)s"
 #, fuzzy
 #| msgid "Help - CMP Application Credentials "
 msgid "Help - Application Credential Selection"
-msgstr "Hilfe - CMP Anwendungs-Credentials"
+msgstr "Neue OPC UA GDS Push-Anwendung erstellen"
 
 #: trustpoint/templates/devices/credentials/profile_select.html:15
+#, fuzzy
 msgid "Please select the type of application credential you wish to issue."
 msgstr ""
+"Bitte wählen Sie die Art der Anmeldeinformationen aus, die Sie ausstellen "
+"möchten."
 
 #: trustpoint/templates/devices/details.html:9
-#, fuzzy
-#| msgid "Device details"
 msgid "Device Details"
 msgstr "Gerätedetails"
 
 #: trustpoint/templates/devices/details.html:11
-#, fuzzy
-#| msgid "OPC UA GDS"
 msgid "OPC UA GDS Details"
-msgstr "OPC UA-GDS"
+msgstr "OPC UA GDS Details"
 
 #: trustpoint/templates/devices/details/sub_details.html:13
 msgid "Creation date"
-msgstr "Erstellt"
+msgstr "Erstellungsdatum"
 
 #: trustpoint/templates/devices/details/sub_details.html:17
 msgid "Updated date"
-msgstr "Aktualisiert"
+msgstr "Aktualisierungsdatum"
 
 #: trustpoint/templates/devices/details/sub_details.html:29
 #: trustpoint/templates/devices/details/sub_details.html:109
@@ -2393,8 +2384,9 @@ msgid "PKI Protocol"
 msgstr "PKI-Protokoll"
 
 #: trustpoint/templates/devices/details/sub_details.html:47
+#, fuzzy
 msgid "Domain Credential Onboarding"
-msgstr "Domain-Credential-Onboarding"
+msgstr "Keine Domain konfiguriert"
 
 #: trustpoint/templates/devices/details/sub_details.html:49
 msgid "Yes"
@@ -2427,8 +2419,9 @@ msgstr "Truststore"
 
 #: trustpoint/templates/devices/details/sub_details.html:81
 #: trustpoint/templates/pki/devid_registration/table.html:20
+#, fuzzy
 msgid "Serial Number Pattern"
-msgstr "Format der Seriennummer"
+msgstr "X.509-Seriennummer"
 
 #: trustpoint/templates/devices/details/sub_details.html:100
 #: trustpoint/templates/pki/devid_registration/table.html:42
@@ -2438,16 +2431,16 @@ msgstr "Es sind keine DevID-Registrierungsmuster vorhanden."
 #: trustpoint/templates/devices/details/sub_details.html:115
 #: trustpoint/templates/pki/issuing_cas/details.html:11
 msgid "Issuing CA Details"
-msgstr "Details zur Issuing CA"
+msgstr "Issuing CA-Details"
 
 #: trustpoint/templates/devices/details/sub_details.html:118
 #: trustpoint/templates/pki/domains/domain.html:23
 msgid "Issuing CA Name"
-msgstr "Name der Issuing CA"
+msgstr "Issuing CA-Name"
 
 #: trustpoint/templates/devices/details/sub_details.html:126
 msgid "Issuing CA Type"
-msgstr "Art der Issuing CA"
+msgstr "Issuing CA-Typ"
 
 #: trustpoint/templates/devices/details/sub_details.html:134
 msgid "Last CRL Issued At"
@@ -2482,10 +2475,8 @@ msgstr "Geräte"
 #: trustpoint/templates/devices/devices.html:25
 #: trustpoint/templates/devices/opc_ua_gds.html:21
 #: trustpoint/templates/devices/opc_ua_gds_push.html:21
-#, fuzzy
-#| msgid "Delete selected"
 msgid "Revoke selected"
-msgstr "Auswahl entfernen"
+msgstr "Ausgewählte widerrufen"
 
 #: trustpoint/templates/devices/devices.html:30
 #: trustpoint/templates/devices/opc_ua_gds.html:23
@@ -2498,19 +2489,15 @@ msgstr "Auswahl entfernen"
 #: trustpoint/templates/pki/owner_credentials/owner_credentials.html:62
 #: trustpoint/templates/pki/truststores/truststores.html:72
 msgid "Delete selected"
-msgstr "Auswahl entfernen"
+msgstr "Ausgewählte löschen"
 
 #: trustpoint/templates/devices/devices.html:36
-#, fuzzy
-#| msgid "No Onboarding"
 msgid "Add Onboarding"
-msgstr "Kein Onboarding"
+msgstr "Onboarding hinzufügen"
 
 #: trustpoint/templates/devices/devices.html:39
-#, fuzzy
-#| msgid "Create Device"
 msgid "Create New Device"
-msgstr "Gerät erstellen"
+msgstr "Neues Gerät erstellen"
 
 #: trustpoint/templates/devices/devices_table.html:10
 msgid "Name"
@@ -2530,17 +2517,13 @@ msgid "OPC UA GDS"
 msgstr "OPC UA-GDS"
 
 #: trustpoint/templates/devices/opc_ua_gds_push.html:9
-#, fuzzy
-#| msgid "OPC UA GDS"
 msgid "OPC UA GDS Push"
-msgstr "OPC UA-GDS"
+msgstr "OPC UA GDS Push"
 
 #: trustpoint/templates/devices/table_filter.html:16
 #: trustpoint/templates/pki/truststores/table_filter.html:16
 #: trustpoint/templates/workflows/enrollment_request_table_filter.html:12
 #: trustpoint/templates/workflows/instance_table_filter.html:13
-#, fuzzy
-#| msgid "Filter"
 msgid "Filters"
 msgstr "Filter"
 
@@ -2549,14 +2532,14 @@ msgstr "Filter"
 #: trustpoint/templates/workflows/enrollment_request_table_filter.html:93
 #: trustpoint/templates/workflows/instance_table_filter.html:93
 msgid "Apply"
-msgstr ""
+msgstr "Anwenden"
 
 #: trustpoint/templates/devices/table_filter.html:50
 #: trustpoint/templates/pki/truststores/table_filter.html:43
 #: trustpoint/templates/workflows/enrollment_request_table_filter.html:96
 #: trustpoint/templates/workflows/instance_table_filter.html:96
 msgid "Reset"
-msgstr ""
+msgstr "Zurücksetzen"
 
 #: trustpoint/templates/devices/truststore_association.html:13
 #: trustpoint/templates/devices/truststore_association.html:31
@@ -2572,29 +2555,28 @@ msgstr "Zugehöriger Truststore"
 #, fuzzy
 #| msgid "PKI Truststore Configuration"
 msgid "Trust Store Association"
-msgstr "PKI-Truststore-Konfiguration"
+msgstr "OPC UA Trust Store"
 
 #: trustpoint/templates/devices/truststore_association.html:19
+#, fuzzy
 msgid "Select a trust store to associate with this device\\"
 msgstr ""
+"Wählen Sie einen Truststore aus, der mit dieser  Issuingn CA verknüpft werden "
+"soll"
 
 #: trustpoint/templates/devices/truststore_association.html:23
 #: trustpoint/templates/pki/issuing_cas/truststore_association.html:40
-#, fuzzy
-#| msgid "Upload new Truststore"
 msgid "Import new Truststore"
-msgstr "Neuen Truststore hochladen"
+msgstr "Neuen Truststore importieren"
 
 #: trustpoint/templates/devices/truststore_association.html:30
 msgid "Skip"
-msgstr ""
+msgstr "Überspringen"
 
 #: trustpoint/templates/devices/truststore_association.html:44
 #: trustpoint/templates/pki/issuing_cas/truststore_association.html:61
-#, fuzzy
-#| msgid "Truststore"
 msgid "Import Truststore"
-msgstr "Truststore"
+msgstr "Trust Store importieren"
 
 #: trustpoint/templates/devices/truststore_association.html:49
 #: trustpoint/templates/management/tls/file_import.html:16
@@ -2606,7 +2588,7 @@ msgstr "Truststore"
 #: trustpoint/templates/pki/truststores/add/file_import.html:16
 #: trustpoint/templates/signer/add/file_import.html:16
 msgid "File Import"
-msgstr "Import aus Datei"
+msgstr "Datei importieren"
 
 #: trustpoint/templates/devices/truststore_association.html:56
 #: trustpoint/templates/pki/issuing_cas/truststore_association.html:73
@@ -2626,27 +2608,19 @@ msgstr "Übersicht Zertifikatslebenszyklus-Verwaltung"
 #, fuzzy
 #| msgid "Logging Configuration"
 msgid "Back to Domain Configuration"
-msgstr "Logging-Einstellungen"
+msgstr "Benachrichtigungseinstellungen"
 
 #: trustpoint/templates/home/command_status.html:7
 msgid "Success"
 msgstr "Erfolg"
 
 #: trustpoint/templates/home/notification_confirm_delete.html:7
-#, fuzzy
-#| msgid "Notifications"
 msgid "Delete Notification"
-msgstr "Benachrichtigungen"
+msgstr "Benachrichtigung löschen"
 
 #: trustpoint/templates/home/notification_confirm_delete.html:10
-#, fuzzy
-#| msgid ""
-#| "Are you sure you want to delete the registration pattern <strong>%"
-#| "(name)s</strong>?"
 msgid "Are you sure you want to delete this notification?"
-msgstr ""
-"Möchten Sie das Registrierungsmuster <strong>%(name)s</strong> wirklich "
-"entfernen?"
+msgstr "Möchten Sie diese Benachrichtigung wirklich löschen?"
 
 #: trustpoint/templates/home/notification_confirm_delete.html:17
 #: trustpoint/templates/home/notifications-tab.html:129
@@ -2659,7 +2633,7 @@ msgstr ""
 #: trustpoint/templates/pki/truststores/truststores.html:35
 #: trustpoint/templates/pki/truststores/truststores.html:54
 msgid "Delete"
-msgstr "Entfernen"
+msgstr "Löschen"
 
 #: trustpoint/templates/home/notification_details.html:9
 msgid "Notification Details"
@@ -2667,7 +2641,7 @@ msgstr "Benachrichtigungsdetails"
 
 #: trustpoint/templates/home/notification_details.html:16
 msgid "Notification Type:"
-msgstr "Benachrichtigungsart:"
+msgstr "Benachrichtigungstyp:"
 
 #: trustpoint/templates/home/notification_details.html:37
 msgid "Notification Source:"
@@ -2695,7 +2669,7 @@ msgstr "Nachricht:"
 
 #: trustpoint/templates/home/notification_details.html:105
 msgid "Created At:"
-msgstr "Erstellt um:"
+msgstr "Erstellt am:"
 
 #: trustpoint/templates/home/notification_details.html:119
 msgid "Mark as Solved"
@@ -2707,10 +2681,8 @@ msgid "Notifications"
 msgstr "Benachrichtigungen"
 
 #: trustpoint/templates/home/notifications-tab.html:9
-#, fuzzy
-#| msgid "Notifications"
 msgid "Refresh Notifications"
-msgstr "Benachrichtigungen"
+msgstr "Benachrichtigungen aktualisieren"
 
 #: trustpoint/templates/home/notifications-tab.html:18
 msgid "Filter"
@@ -2742,7 +2714,7 @@ msgstr "Alle"
 #: trustpoint/templates/pki/keyless_cas/config.html:16
 #: trustpoint/templates/workflows/instance_detail.html:140
 msgid "Type"
-msgstr "Art"
+msgstr "Typ"
 
 #: trustpoint/templates/home/notifications-tab.html:119
 msgid "Source"
@@ -2754,114 +2726,99 @@ msgstr "Beschreibung"
 
 #: trustpoint/templates/home/notifications-tab.html:155
 msgid "No notifications available."
-msgstr "Keine Benachrichtigungen vorhanden."
+msgstr "Keine Benachrichtigungen verfügbar."
 
 #: trustpoint/templates/management/backups/manage_backups.html:11
-#, fuzzy
-#| msgid "Lifecycle Management"
 msgid "Local Backup management"
-msgstr "Lebenszyklus-Management"
+msgstr "Verwaltung lokaler Backups"
 
 #: trustpoint/templates/management/backups/manage_backups.html:15
 msgid "Create Local Backup"
-msgstr ""
+msgstr "Lokales Backup erstellen"
 
 #: trustpoint/templates/management/backups/manage_backups.html:29
-#, fuzzy
-#| msgid "Given name"
 msgid "File name"
-msgstr "Vorname"
+msgstr "Dateiname"
 
 #: trustpoint/templates/management/backups/manage_backups.html:39
 msgid "Last modified"
-msgstr ""
+msgstr "Zuletzt geändert"
 
 #: trustpoint/templates/management/backups/manage_backups.html:44
 msgid "Size (KB)"
-msgstr ""
+msgstr "Größe (KB)"
 
 #: trustpoint/templates/management/backups/manage_backups.html:71
-#, fuzzy
-#| msgid "No Truststores found."
 msgid "No backups found."
-msgstr "Es wurden keine Truststores gefunden."
+msgstr "Keine Backups gefunden."
 
 #: trustpoint/templates/management/backups/manage_backups.html:85
-#, fuzzy
-#| msgid "Download selected (tar.gz)"
 msgid "Download (tar.gz)"
-msgstr "Auswahl herunterladen (tar.gz)"
+msgstr "Herunterladen (tar.gz)"
 
 #: trustpoint/templates/management/backups/manage_backups.html:90
-#, fuzzy
-#| msgid "Download selected (zip)"
 msgid "Download (zip)"
-msgstr "Auswahl herunterladen (zip)"
+msgstr "Herunterladen (zip)"
 
 #: trustpoint/templates/management/backups/manage_backups.html:111
 msgid "SFTP Backup"
-msgstr ""
+msgstr "SFTP-Backup"
 
 #: trustpoint/templates/management/backups/manage_backups.html:126
 msgid "Note: Backups will be stored remotely via the SFTP protocol."
-msgstr ""
+msgstr "Hinweis: Backups werden über das SFTP-Protokoll remote gespeichert."
 
 #: trustpoint/templates/management/backups/manage_backups.html:179
 msgid ""
 "Remote directory on SFTP server (e.g. /backups/). Required if using SFTP."
 msgstr ""
+"Remote-Verzeichnis auf dem SFTP-Server (z. B. /backups/). Erforderlich bei "
+"Verwendung von SFTP."
 
 #: trustpoint/templates/management/backups/manage_backups.html:187
 msgid "Test Connection"
-msgstr ""
+msgstr "Verbindung testen"
 
 #: trustpoint/templates/management/backups/manage_backups.html:190
 msgid "Create SFTP Backup"
-msgstr ""
+msgstr "SFTP-Backup erstellen"
 
 #: trustpoint/templates/management/backups/manage_backups.html:199
-#, fuzzy
-#| msgid "Settings"
 msgid "Save Settings"
-msgstr "Einstellungen"
+msgstr "Einstellungen speichern"
 
 #: trustpoint/templates/management/backups/manage_backups.html:202
-#, fuzzy
-#| msgid "Settings"
 msgid "Reset Settings"
-msgstr "Einstellungen"
+msgstr "Einstellungen zurücksetzen"
 
 #: trustpoint/templates/management/includes/language_configuration.html:4
 msgid "Language Configuration"
-msgstr "Spracheinstellungen (Language)"
+msgstr "Spracheinstellungen"
 
 #: trustpoint/templates/management/includes/log_configuration.html:4
 #, fuzzy
-#| msgid "Logging Configuration"
 msgid "Log Configuration"
-msgstr "Logging-Einstellungen"
+msgstr "HSM-Konfiguration"
 
 #: trustpoint/templates/management/includes/notification_configuration.html:11
-#, fuzzy
-#| msgid "Notification Type:"
 msgid "Next Notification Check:"
-msgstr "Benachrichtigungsart:"
+msgstr "Nächste Benachrichtigungsprüfung:"
 
 #: trustpoint/templates/management/includes/notification_configuration.html:15
-#, fuzzy
-#| msgid "Not Yet Valid"
 msgid "Not yet scheduled"
-msgstr "Noch nicht gültig"
+msgstr "Noch nicht geplant"
 
 #: trustpoint/templates/management/includes/notification_configuration.html:21
 msgid ""
-"Notifications are enabled but automatic notification checks are not "
-"scheduled."
+"Notifications are enabled but automatic notification checks are not scheduled."
 msgstr ""
+"Benachrichtigungen sind aktiviert, aber automatische "
+"Benachrichtigungsprüfungen sind nicht geplant."
 
 #: trustpoint/templates/management/includes/security_configuration.html:6
+#, fuzzy
 msgid "Security Configuration"
-msgstr "Sicherheitseinstellungen"
+msgstr "Spracheinstellungen"
 
 #: trustpoint/templates/management/includes/security_configuration.html:12
 #, python-format
@@ -2893,73 +2850,69 @@ msgid "This action is irreversible."
 msgstr "Diese Aktion ist unwiderruflich."
 
 #: trustpoint/templates/management/includes/security_configuration.html:55
-#, fuzzy
-#| msgid "Settings"
 msgid "Setting"
 msgstr "Einstellungen"
 
 #: trustpoint/templates/management/includes/security_configuration.html:56
 msgid "Value"
-msgstr ""
+msgstr "Wert"
 
 #: trustpoint/templates/management/key_storage.html:20
-#, fuzzy
-#| msgid "Family Information"
 msgid "Information:"
-msgstr "Familieninformation"
+msgstr "Informationen:"
 
 #: trustpoint/templates/management/key_storage.html:21
 msgid ""
 "Changing the storage type after initial configuration is not currently "
-"supported. The storage type is set during the initial setup wizard and "
-"cannot be modified afterwards."
+"supported. The storage type is set during the initial setup wizard and cannot "
+"be modified afterwards."
 msgstr ""
+"Das Ändern des Speichertyps nach der Erstkonfiguration wird derzeit nicht "
+"unterstützt. Der Speichertyp wird während des Ersteinrichtungs-Assistenten "
+"festgelegt und kann nachträglich nicht mehr geändert werden."
 
 #: trustpoint/templates/management/key_storage.html:33
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:43
 msgid "Store cryptographic keys in software without encryption"
-msgstr ""
+msgstr "Kryptographische Schlüssel unverschlüsselt in Software speichern"
 
 #: trustpoint/templates/management/key_storage.html:35
 #: trustpoint/templates/management/key_storage.html:63
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:45
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:67
 msgid "Not recommended for production!"
-msgstr ""
+msgstr "Nicht für den Produktivbetrieb empfohlen!"
 
 #: trustpoint/templates/management/key_storage.html:41
 #: trustpoint/templates/management/key_storage.html:69
 #: trustpoint/templates/management/key_storage.html:97
 msgid "Currently Active"
-msgstr ""
+msgstr "Derzeit aktiv"
 
 #: trustpoint/templates/management/key_storage.html:45
 #: trustpoint/templates/management/key_storage.html:73
 #: trustpoint/templates/management/key_storage.html:101
-#, fuzzy
-#| msgid "Active"
 msgid "Not Active"
-msgstr "Aktiv"
+msgstr "Nicht aktiv"
 
 #: trustpoint/templates/management/key_storage.html:61
 msgid "Software-based HSM with encryption and secure key storage"
 msgstr ""
+"Softwarebasiertes HSM mit Verschlüsselung und sicherem Schlüsselspeicher"
 
 #: trustpoint/templates/management/key_storage.html:89
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:87
 msgid "Hardware-based secure cryptographic storage device"
-msgstr ""
+msgstr "Hardwarebasiertes, sicheres kryptographisches Speichergerät"
 
 #: trustpoint/templates/management/key_storage.html:91
 msgid "Recommended for production!"
-msgstr ""
+msgstr "Für den Produktivbetrieb empfohlen!"
 
 #: trustpoint/templates/management/key_storage.html:116
 #: trustpoint/templates/setup_wizard/restore_options.html:92
-#, fuzzy
-#| msgid "Warning"
 msgid "Warning:"
-msgstr "Warnung"
+msgstr "Warnung:"
 
 #: trustpoint/templates/management/key_storage.html:117
 msgid ""
@@ -2967,26 +2920,27 @@ msgid ""
 "for production environments. Cryptographic keys are stored directly in the "
 "database without hardware security module protection."
 msgstr ""
+"Die Software-Speicherung verschlüsselt keine privaten Schlüssel. Dieser Modus "
+"wird für Produktionsumgebungen nicht empfohlen. Kryptografische Schlüssel "
+"werden direkt in der Datenbank gespeichert, ohne Schutz durch ein Hardware-"
+"Sicherheitsmodul."
 
 #: trustpoint/templates/management/key_storage.html:127
-#, fuzzy
-#| msgid "Token Created"
 msgid "Token Label:"
-msgstr "Token erstellt um"
+msgstr "Token Label:"
 
 #: trustpoint/templates/management/key_storage.html:130
-#, fuzzy
-#| msgid "Serial Number"
 msgid "Slot Number:"
-msgstr "Seriennummer"
+msgstr "Slot-Nummer:"
 
 #: trustpoint/templates/management/key_storage.html:133
 msgid "Module Path:"
-msgstr ""
+msgstr "Modulpfad:"
 
 #: trustpoint/templates/management/key_storage.html:140
 msgid "HSM configuration not found. Please configure the HSM token."
 msgstr ""
+"HSM-Konfiguration nicht gefunden. Bitte konfigurieren Sie das HSM-Token."
 
 #: trustpoint/templates/management/logging/logging_files.html:8
 #: trustpoint/templates/management/settings.html:12
@@ -3031,17 +2985,15 @@ msgstr "NTP-Konfiguration"
 
 #: trustpoint/templates/management/settings.html:10
 msgid "Language"
-msgstr "Sprache (Language)"
+msgstr "Sprache"
 
 #: trustpoint/templates/management/settings.html:11
 msgid "Security"
 msgstr "Sicherheit"
 
 #: trustpoint/templates/management/tls.html:8
-#, fuzzy
-#| msgid "Certificates"
 msgid "TLS Certificates"
-msgstr "Zertifikate"
+msgstr "TLS-Zertifikate"
 
 #: trustpoint/templates/management/tls.html:23
 #: trustpoint/templates/pki/certificates/table.html:16
@@ -3079,63 +3031,52 @@ msgstr "Selbstsigniert"
 
 #: trustpoint/templates/management/tls.html:59
 msgid "In Use"
-msgstr ""
+msgstr "In Verwendung"
 
 #: trustpoint/templates/management/tls.html:84
-#, fuzzy
-#| msgid "Active"
 msgid "Activate"
-msgstr "Aktiv"
+msgstr "Aktivieren"
 
 #: trustpoint/templates/management/tls.html:91
-#, fuzzy
-#| msgid "No certificates are available. Add an Issuing CA first."
 msgid "No TLS certificates are available. Add or generate one first."
 msgstr ""
-"Es sind keine Zertifikate verfügbar. Fügen Sie zuerst eine Issuing CA hinzu."
+"Es sind keine TLS-Zertifikate verfügbar. Fügen Sie zunächst eines hinzu oder "
+"generieren Sie eines."
 
 #: trustpoint/templates/management/tls.html:109
-#, fuzzy
-#| msgid "CA Certificate"
 msgid "Add new TLS Certificate"
-msgstr "CA-Zertifikat"
+msgstr "Neues TLS-Zertifikat hinzufügen"
 
 #: trustpoint/templates/management/tls/file_import.html:11
-#, fuzzy
-#| msgid "TLS-Server Credential"
 msgid "Add new TLS-Server Credential"
-msgstr "TLS-Server Credential"
+msgstr "Neue TLS-Server-Zugangsdaten hinzufügen"
 
 #: trustpoint/templates/management/tls/file_import.html:25
-#, fuzzy
-#| msgid "TLS-Client Credential"
 msgid "Add new TLS Credential"
-msgstr "TLS-Client Credential"
+msgstr "Neue TLS-Zugangsdaten hinzufügen"
 
 #: trustpoint/templates/management/tls/generate_tls.html:11
 #: trustpoint/templates/setup_wizard/generate_tls_server_credential.html:31
 #: trustpoint/templates/setup_wizard/generate_tls_server_credential.html:43
 #: trustpoint/templates/setup_wizard/select_tls_server_credential.html:41
 msgid "Generate Self-Signed TLS-Server Credential"
-msgstr "Selbstsigniertes TLS-Server-Credential erzeugen"
+msgstr "Selbstsignierte TLS-Server-Zugangsdaten generieren"
 
 #: trustpoint/templates/management/tls/generate_tls.html:27
 #, fuzzy
 #| msgid "Generate Self-Signed TLS-Server Credential"
 msgid "Generate Self-Signed TLS-Server Credential and Activate"
-msgstr "Selbstsigniertes TLS-Server-Credential erzeugen"
+msgstr "Selbstsignierte TLS-Server-Zugangsdaten generieren"
 
 #: trustpoint/templates/management/tls/method_select.html:11
-#, fuzzy
-#| msgid "Add new Device"
 msgid "Add new TLS"
-msgstr "Neues Gerät hinzufügen"
+msgstr "Neues TLS hinzufügen"
 
 #: trustpoint/templates/management/tls/method_select.html:16
 #, fuzzy
 #| msgid "Import new Issuing CA from file"
 msgid "Import new TLS from file"
-msgstr "Neue Issuing CA aus Datei importieren"
+msgstr "Neuen Unterzeichner aus Datei importieren"
 
 #: trustpoint/templates/management/tls/method_select.html:18
 #: trustpoint/templates/pki/issuing_cas/add/method_select.html:18
@@ -3148,29 +3089,21 @@ msgid "Import From Separate Key and Certificate Files"
 msgstr "Aus seperaten Schlüssel- und Zertifikatsdateien importieren"
 
 #: trustpoint/templates/management/tls/method_select.html:22
-#, fuzzy
-#| msgid "Intermediate CA Certificate"
 msgid "Generate a TLS Certificate"
-msgstr "Zwischen-CA-Zertifikat"
+msgstr "TLS-Zertifikat generieren"
 
 #: trustpoint/templates/management/tls/method_select.html:24
-#, fuzzy
-#| msgid "Intermediate CA Certificate"
 msgid "Generate TLS Certificate"
-msgstr "Zwischen-CA-Zertifikat"
+msgstr "TLS-Zertifikat generieren"
 
 #: trustpoint/templates/pki/cas/cas.html:8
 #: trustpoint/templates/trustpoint/base.html:72
-#, fuzzy
-#| msgid "Certificate Authority (CA)"
 msgid "Certificate Authorities"
-msgstr "Certificate Authority (CA)"
+msgstr "Zertifizierungsstellen"
 
 #: trustpoint/templates/pki/cas/cas.html:10
-#, fuzzy
-#| msgid "Issuing CAs"
 msgid "Show Issuing CAs only"
-msgstr "Issuing CAs"
+msgstr "Nur issuing CAs anzeigen"
 
 #: trustpoint/templates/pki/cas/cas.html:18
 #: trustpoint/templates/pki/crls/crls.html:16
@@ -3178,10 +3111,8 @@ msgstr "Issuing CAs"
 #: trustpoint/templates/pki/crls/download.html:26
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:13
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:13
-#, fuzzy
-#| msgid "Name"
 msgid "CA Name"
-msgstr "Name"
+msgstr "CA-Name"
 
 #: trustpoint/templates/pki/cas/cas.html:21
 #: trustpoint/templates/pki/certificates/components/validity.html:28
@@ -3200,7 +3131,7 @@ msgstr "Nicht gültig nach"
 #: trustpoint/templates/pki/issuing_cas/issuing_cas.html:32
 #: trustpoint/templates/signer/signers.html:17
 msgid "Signature Suite"
-msgstr "Signatur-Suite"
+msgstr "Signaturverfahren"
 
 #: trustpoint/templates/pki/cas/cas.html:23
 #: trustpoint/templates/pki/cert_profiles/cert_profiles.html:43
@@ -3220,10 +3151,8 @@ msgid "Configure"
 msgstr "Konfigurieren"
 
 #: trustpoint/templates/pki/cas/cas.html:91
-#, fuzzy
-#| msgid "No devices have been added yet."
 msgid "No CAs have been added yet."
-msgstr "Es sind noch keine Geräte hinzugefügt worden."
+msgstr "Es wurden noch keine CAs hinzugefügt."
 
 #: trustpoint/templates/pki/cas/cas.html:106
 #: trustpoint/templates/pki/issuing_cas/add/file_import.html:11
@@ -3236,10 +3165,8 @@ msgid "Add new Issuing CA"
 msgstr "Neue Issuing CA hinzufügen"
 
 #: trustpoint/templates/pki/cas/confirm_delete.html:13
-#, fuzzy
-#| msgid "Confirm Issuing CA Deletion"
 msgid "Confirm CA Deletion"
-msgstr "Entfernen der Issuing CA bestätigen"
+msgstr "CA-Löschung bestätigen"
 
 #: trustpoint/templates/pki/cas/confirm_delete.html:19
 #: trustpoint/templates/pki/certificates/components/extensions/basic_constraints_extension.html:17
@@ -3274,53 +3201,41 @@ msgstr "Issuing CA-Zertifikat"
 #: trustpoint/templates/pki/keyless_cas/config.html:37
 #: trustpoint/templates/pki/keyless_cas/config.html:43
 #: trustpoint/templates/pki/keyless_cas/config.html:49
-#, fuzzy
-#| msgid "CA Certificate"
 msgid "Keyless CA Certificate"
-msgstr "CA-Zertifikat"
+msgstr "CA-Zertifikat ohne Schlüssel"
 
 #: trustpoint/templates/pki/cas/confirm_delete.html:73
-#, fuzzy
-#| msgid "Delete selected"
 msgid "Delete selected CAs"
-msgstr "Auswahl entfernen"
+msgstr "Ausgewählte CAs löschen"
 
 #: trustpoint/templates/pki/cert_profiles/add.html:12
 #: trustpoint/templates/pki/cert_profiles/add.html:26
 #: trustpoint/templates/pki/cert_profiles/cert_profiles.html:80
-#, fuzzy
-#| msgid "Certificate Policies"
 msgid "Add new Certificate Profile"
-msgstr "Zertifikatsrichtlinien"
+msgstr "Neues Zertifikatsprofil hinzufügen"
 
 #: trustpoint/templates/pki/cert_profiles/cert_profiles.html:8
 #: trustpoint/templates/trustpoint/base.html:75
-#, fuzzy
-#| msgid "Certificate Policies"
 msgid "Certificate Profiles"
-msgstr "Zertifikatsrichtlinien"
+msgstr "Zertifikatsprofile"
 
 #: trustpoint/templates/pki/cert_profiles/cert_profiles.html:22
-#, fuzzy
-#| msgid "Template Name"
 msgid "Display Name"
-msgstr "Name der Vorlage"
+msgstr "Anzeigename"
 
 #: trustpoint/templates/pki/cert_profiles/cert_profiles.html:26
 #, fuzzy
 #| msgid "Active devices by Domain"
 msgid "Active in Domains"
-msgstr "Aktive Geräte nach Domain"
+msgstr "Derzeit aktiv"
 
 #: trustpoint/templates/pki/cert_profiles/cert_profiles.html:35
-#, fuzzy
-#| msgid "Updated date"
 msgid "Updated at"
-msgstr "Aktualisiert"
+msgstr "Aktualisiert am"
 
 #: trustpoint/templates/pki/cert_profiles/cert_profiles.html:40
 msgid "Is default"
-msgstr ""
+msgstr "Ist Standard"
 
 #: trustpoint/templates/pki/cert_profiles/cert_profiles.html:44
 #, fuzzy
@@ -3330,31 +3245,23 @@ msgstr "Aussteller"
 
 #: trustpoint/templates/pki/cert_profiles/cert_profiles.html:60
 msgid "Edit"
-msgstr ""
+msgstr "Bearbeiten"
 
 #: trustpoint/templates/pki/cert_profiles/cert_profiles.html:61
-#, fuzzy
-#| msgid "Issuer"
 msgid "Issue"
-msgstr "Aussteller"
+msgstr "Problem"
 
 #: trustpoint/templates/pki/cert_profiles/cert_profiles.html:65
-#, fuzzy
-#| msgid "No Truststore has been added yet."
 msgid "No Certificate Profile has been added yet."
-msgstr "Es wurden noch keine Truststores hinzugefügt."
+msgstr "Es wurde noch kein Zertifikatsprofil hinzugefügt."
 
 #: trustpoint/templates/pki/cert_profiles/config.html:12
-#, fuzzy
-#| msgid "Certificate Policies"
 msgid "Add Certificate Profile"
-msgstr "Zertifikatsrichtlinien"
+msgstr "Zertifikatsprofil hinzufügen"
 
 #: trustpoint/templates/pki/cert_profiles/config.html:14
-#, fuzzy
-#| msgid "Certificate Policies"
 msgid "Edit Certificate Profile"
-msgstr "Zertifikatsrichtlinien"
+msgstr "Zertifikatsprofil bearbeiten"
 
 #: trustpoint/templates/pki/cert_profiles/config.html:25
 #: trustpoint/templates/pki/certificates/components/general.html:3
@@ -3369,46 +3276,40 @@ msgid "General"
 msgstr "Allgemein"
 
 #: trustpoint/templates/pki/cert_profiles/config.html:38
+#, fuzzy
 msgid "Is (enabled in new domains by) default"
-msgstr ""
+msgstr "Überprüfungsintervall in Sekunden (Standard: 60)"
 
 #: trustpoint/templates/pki/cert_profiles/config.html:44
 #, fuzzy
-#| msgid "Certificate Details"
 msgid "Profile Details"
-msgstr "Details zum Zertifikat"
+msgstr "Gerätedetails"
 
 #: trustpoint/templates/pki/cert_profiles/confirm_delete.html:13
-#, fuzzy
-#| msgid "Confirm Device Deletion"
 msgid "Confirm Certificate Profile Deletion"
-msgstr "Entfernen des Geräts bestätigen"
+msgstr "Löschen des Zertifikatsprofils bestätigen"
 
 #: trustpoint/templates/pki/cert_profiles/confirm_delete.html:38
-#, fuzzy
-#| msgid "Delete Truststores"
 msgid "Delete Profiles"
-msgstr "Truststores entfernen"
+msgstr "Profile löschen"
 
 #: trustpoint/templates/pki/cert_profiles/domain_table.html:9
 msgid "Allowed"
-msgstr ""
+msgstr "Erlaubt"
 
 #: trustpoint/templates/pki/cert_profiles/domain_table.html:15
 msgid "Alias"
-msgstr ""
+msgstr "Alias"
 
 #: trustpoint/templates/pki/cert_profiles/domain_table.html:28
-#, fuzzy
-#| msgid "There are no Notifications available."
 msgid "There are no Certificate Profiles configured."
-msgstr "Es liegen keine Benachrichtigungen vor."
+msgstr "Es sind keine Zertifikatsprofile konfiguriert."
 
 #: trustpoint/templates/pki/cert_profiles/issuance.html:10
 #, fuzzy
 #| msgid "Certificates Issued"
 msgid "Certificate Issuance for Profile"
-msgstr "Ausgestellte Zertifikate"
+msgstr "Löschen des Zertifikatsprofils bestätigen"
 
 #: trustpoint/templates/pki/cert_profiles/issuance.html:20
 #: trustpoint/templates/pki/certificates/components/profile.html:8
@@ -3425,7 +3326,7 @@ msgstr "Subjekt"
 #: trustpoint/templates/pki/issuing_cas/define_cert_content_cmp.html:34
 #: trustpoint/templates/pki/issuing_cas/define_cert_content_est.html:34
 msgid "Subject Alternative Name"
-msgstr "Subjekt Alternativname (SAN)"
+msgstr "Alternativer Name des Subjekts"
 
 #: trustpoint/templates/pki/cert_profiles/issuance.html:44
 #: trustpoint/templates/pki/issuing_cas/define_cert_content_cmp.html:46
@@ -3439,11 +3340,11 @@ msgstr "Gültigkeit"
 #, fuzzy
 #| msgid "No CRL available for issuing CA %s."
 msgid "No fields available for this profile."
-msgstr "Für die Issuing CA %s ist keine CRL verfügbar."
+msgstr "Keine Benachrichtigungen verfügbar."
 
 #: trustpoint/templates/pki/cert_profiles/issuance.html:64
 msgid "Submit"
-msgstr ""
+msgstr "Absenden"
 
 #: trustpoint/templates/pki/certificates/certificates.html:9
 msgid "Certificates issued by the CA: "
@@ -3460,8 +3361,9 @@ msgid "Download selected"
 msgstr "Auswahl herunterladen"
 
 #: trustpoint/templates/pki/certificates/components/additional.html:3
+#, fuzzy
 msgid "Associated Credential"
-msgstr "Zugehöriges Credential"
+msgstr "Zugehöriger Truststore"
 
 #: trustpoint/templates/pki/certificates/components/additional.html:8
 msgid "Issued to Device"
@@ -3472,10 +3374,12 @@ msgid "Issued via protocol"
 msgstr "Ausgestellt mittels Protokoll"
 
 #: trustpoint/templates/pki/certificates/components/additional.html:16
+#, fuzzy
 msgid "Credential type"
-msgstr "Art des Credentials"
+msgstr "Zugangsdaten"
 
 #: trustpoint/templates/pki/certificates/components/extensions/basic_constraints_extension.html:3
+#, fuzzy
 msgid "Basic Constraints Extension"
 msgstr "Basic Constraints-Erweiterung"
 
@@ -3483,16 +3387,18 @@ msgstr "Basic Constraints-Erweiterung"
 #: trustpoint/templates/pki/certificates/components/extensions/issuer_alternative_name_extension.html:8
 #: trustpoint/templates/pki/certificates/components/extensions/key_usage_extension.html:10
 #: trustpoint/templates/pki/certificates/components/extensions/subject_alternative_name_extension.html:9
+#, fuzzy
 msgid "Extension OID"
-msgstr "Erweiterungs-OID"
+msgstr "OID der Kurve des öffentlichen Schlüssels"
 
 #: trustpoint/templates/pki/certificates/components/extensions/basic_constraints_extension.html:21
 msgid "Path Length Constraint"
 msgstr "Pfadlängenbegrenzung"
 
 #: trustpoint/templates/pki/certificates/components/extensions/issuer_alternative_name_extension.html:5
+#, fuzzy
 msgid "Issuer Alternative Name (IAN) Extension"
-msgstr "Issuer Alternative Name (IAN)-Erweiterung"
+msgstr "Alternativer Name des Subjekts"
 
 #: trustpoint/templates/pki/certificates/components/extensions/issuer_alternative_name_extension.html:17
 msgid "RFC822 Names (IAN)"
@@ -3503,10 +3409,12 @@ msgid "DNS Names (IAN)"
 msgstr "DNS-Namen (IAN)"
 
 #: trustpoint/templates/pki/certificates/components/extensions/issuer_alternative_name_extension.html:39
+#, fuzzy
 msgid "Directory Names (IAN)"
-msgstr "Verzeichnisnamen (IAN)"
+msgstr "Verzeichnisnamen"
 
 #: trustpoint/templates/pki/certificates/components/extensions/issuer_alternative_name_extension.html:50
+#, fuzzy
 msgid "Uniform Resource Identifiers (IAN)"
 msgstr "Uniform Resource Identifiers (IAN)"
 
@@ -3523,36 +3431,44 @@ msgid "Other Names (IAN)"
 msgstr "Andere Namen (IAN)"
 
 #: trustpoint/templates/pki/certificates/components/extensions/key_usage_extension.html:6
+#, fuzzy
 msgid "Key Usage Extension"
-msgstr "Key Usage-Erweiterung"
+msgstr "Verwendungszweck"
 
 #: trustpoint/templates/pki/certificates/components/extensions/key_usage_extension.html:19
+#, fuzzy
 msgid "Digital Signature"
 msgstr "Digitale Signatur"
 
 #: trustpoint/templates/pki/certificates/components/extensions/key_usage_extension.html:23
+#, fuzzy
 msgid "Content Commitment"
 msgstr "Content Commitment"
 
 #: trustpoint/templates/pki/certificates/components/extensions/key_usage_extension.html:27
+#, fuzzy
 msgid "Key Encipherment"
-msgstr "Key Encipherment"
+msgstr "Datenverschlüsselung"
 
 #: trustpoint/templates/pki/certificates/components/extensions/key_usage_extension.html:31
+#, fuzzy
 msgid "Data Encipherment"
-msgstr "Data Encipherment"
+msgstr "Datenverschlüsselung"
 
 #: trustpoint/templates/pki/certificates/components/extensions/key_usage_extension.html:35
+#, fuzzy
 msgid "Key Agreement"
-msgstr "Key Agreement"
+msgstr "Schlüsselkompromittierung"
 
 #: trustpoint/templates/pki/certificates/components/extensions/key_usage_extension.html:39
+#, fuzzy
 msgid "Key Cert Sign"
-msgstr "Key Cert Sign"
+msgstr "Hash-Wert signieren"
 
 #: trustpoint/templates/pki/certificates/components/extensions/key_usage_extension.html:43
+#, fuzzy
 msgid "CRL Sign"
-msgstr "CRL Sign"
+msgstr "CRL-Signatur"
 
 #: trustpoint/templates/pki/certificates/components/extensions/key_usage_extension.html:47
 msgid "Encipher Only"
@@ -3612,8 +3528,9 @@ msgstr "Fingerprint (SHA256)"
 #: trustpoint/templates/pki/certificates/components/signature.html:13
 #: trustpoint/templates/signer/signer_config.html:73
 #: trustpoint/templates/workflows/instance_detail.html:195
+#, fuzzy
 msgid "Signature Algorithm"
-msgstr "Signatur-Algorithmus"
+msgstr "OID des Signatur-Algorithmus"
 
 #: trustpoint/templates/pki/certificates/components/hierarchy.html:3
 msgid "Certificate Hierarchy"
@@ -3624,6 +3541,7 @@ msgid "Issuer"
 msgstr "Aussteller"
 
 #: trustpoint/templates/pki/certificates/components/hierarchy.html:58
+#, fuzzy
 msgid "End-Entity Certificate"
 msgstr "Endeinheits-Zertifikat"
 
@@ -3641,15 +3559,14 @@ msgstr "Zertifikatskette"
 
 #: trustpoint/templates/pki/certificates/components/hierarchy.html:90
 #, fuzzy
-#| msgid "Show all issued certificates"
 msgid "This is a self-signed certificate."
-msgstr "Alle ausgestellten Zertifikate anzeigen"
+msgstr "Selbstsignierte TLS-Server-Zugangsdaten generieren"
 
 #: trustpoint/templates/pki/certificates/components/hierarchy.html:92
 #, fuzzy
 #| msgid "No certificates are available."
 msgid "No parent certificates in database."
-msgstr "Es sind keine Zertifikate vorhanden."
+msgstr "Die übergeordnete CA in der Hierarchie (Aussteller dieser CA)"
 
 #: trustpoint/templates/pki/certificates/components/hierarchy.html:101
 msgid "Number of Issued Certificates"
@@ -3662,10 +3579,8 @@ msgstr "Alle ausgestellten Zertifikate anzeigen"
 
 #: trustpoint/templates/pki/certificates/components/profile.html:3
 #: trustpoint/templates/pki/certificates/details.html:19
-#, fuzzy
-#| msgid "Log file"
 msgid "Profile"
-msgstr "Log-Datei"
+msgstr "Profil"
 
 #: trustpoint/templates/pki/certificates/components/signature.html:4
 #: trustpoint/templates/signer/sign_hash_success.html:40
@@ -3682,40 +3597,46 @@ msgid "Signature Algorithm Padding Scheme"
 msgstr "Padding-Schema des Signaturalgorithmus"
 
 #: trustpoint/templates/pki/certificates/components/signature.html:26
+#, fuzzy
 msgid "Signature Curve OID"
-msgstr "OID der ECC-Kurve des Signaturalgorithmus"
+msgstr "OID der Kurve des öffentlichen Schlüssels"
 
 #: trustpoint/templates/pki/certificates/components/signature.html:33
+#, fuzzy
 msgid "Signature Curve"
-msgstr "ECC-Kurve des Signaturalgorithmus"
+msgstr "Signaturwert"
 
 #: trustpoint/templates/pki/certificates/components/signature.html:39
 #: trustpoint/templates/pki/certificates/components/subject_public_key_info.html:31
 #: trustpoint/templates/pki/issuing_cas/config.html:176
 #: trustpoint/templates/pki/issuing_cas/config.html:249
 #: trustpoint/templates/pki/keyless_cas/config.html:92
+#, fuzzy
 msgid "Signature Algorithm Key Size"
-msgstr "Schlüssellänge des Signaturalgorithmus"
+msgstr "OID des Signatur-Algorithmus"
 
 #: trustpoint/templates/pki/certificates/components/subject_and_names.html:3
 msgid "Certificate Subject and Names"
 msgstr "Zertifikatssubjekt und Namen"
 
 #: trustpoint/templates/pki/certificates/components/subject_public_key_info.html:3
+#, fuzzy
 msgid "Subject Public Key Info"
-msgstr "Öffentliche Schlüsselinfo des Subjekts"
+msgstr "Öffentliche Bytes des Subjekts"
 
 #: trustpoint/templates/pki/certificates/components/subject_public_key_info.html:7
 #: trustpoint/templates/pki/issuing_cas/config.html:152
 #: trustpoint/templates/pki/issuing_cas/config.html:225
 #: trustpoint/templates/pki/keyless_cas/config.html:72
+#, fuzzy
 msgid "Public Key Algorithm OID"
-msgstr "OID des Algorithmus für den öffentlichen Schlüssel"
+msgstr "OID der Kurve des öffentlichen Schlüssels"
 
 #: trustpoint/templates/pki/certificates/components/subject_public_key_info.html:18
 #: trustpoint/templates/pki/issuing_cas/config.html:163
 #: trustpoint/templates/pki/issuing_cas/config.html:236
 #: trustpoint/templates/pki/keyless_cas/config.html:81
+#, fuzzy
 msgid "Public Key Curve OID"
 msgstr "OID der Kurve des öffentlichen Schlüssels"
 
@@ -3723,14 +3644,13 @@ msgstr "OID der Kurve des öffentlichen Schlüssels"
 #: trustpoint/templates/pki/issuing_cas/config.html:170
 #: trustpoint/templates/pki/issuing_cas/config.html:243
 #: trustpoint/templates/pki/keyless_cas/config.html:87
+#, fuzzy
 msgid "Public Key Curve"
-msgstr "ECC-Kurve des öffentlichen Schlüssels"
+msgstr "OID der Kurve des öffentlichen Schlüssels"
 
 #: trustpoint/templates/pki/certificates/components/validity.html:4
-#, fuzzy
-#| msgid "Lifecycle Management"
 msgid "Lifecycle"
-msgstr "Lebenszyklus-Management"
+msgstr "Lebenszyklus"
 
 #: trustpoint/templates/pki/certificates/components/validity.html:8
 msgid "Certificate Status"
@@ -3748,7 +3668,7 @@ msgstr "Nicht gültig vor"
 #: trustpoint/templates/pki/certificates/components/validity.html:32
 #: trustpoint/templates/pki/crls/details.html:83
 msgid "Days Until Expiration"
-msgstr ""
+msgstr "Tage bis zum Ablauf"
 
 #: trustpoint/templates/pki/certificates/components/validity.html:36
 #: trustpoint/templates/pki/certificates/components/validity.html:43
@@ -3759,29 +3679,27 @@ msgstr ""
 #: trustpoint/templates/pki/crls/details.html:100
 #: trustpoint/templates/pki/crls/details.html:109
 msgid "days"
-msgstr ""
+msgstr "Tage"
 
 #: trustpoint/templates/pki/certificates/components/validity.html:38
 #: trustpoint/templates/pki/crls/details.html:90
 msgid "URGENT"
-msgstr ""
+msgstr "DRINGEND"
 
 #: trustpoint/templates/pki/certificates/components/validity.html:44
 #: trustpoint/templates/pki/crls/details.html:96
 msgid "Soon"
-msgstr ""
+msgstr "Bald"
 
 #: trustpoint/templates/pki/certificates/components/validity.html:49
 #: trustpoint/templates/pki/crls/details.html:101
 msgid "Month"
-msgstr ""
+msgstr "Monat"
 
 #: trustpoint/templates/pki/certificates/components/validity.html:58
 #: trustpoint/templates/pki/crls/details.html:110
-#, fuzzy
-#| msgid "Validity"
 msgid "Valid"
-msgstr "Gültigkeit"
+msgstr "Gültig"
 
 #: trustpoint/templates/pki/certificates/details.html:13
 msgid "Certificate Details"
@@ -3791,7 +3709,7 @@ msgstr "Details zum Zertifikat"
 #, fuzzy
 #| msgid "Signature"
 msgid "Key & Signature"
-msgstr "Signatur"
+msgstr "Signaturverfahren"
 
 #: trustpoint/templates/pki/certificates/details.html:28
 #: trustpoint/templates/pki/crls/details.html:27
@@ -3809,23 +3727,20 @@ msgstr "Zusätzlich"
 
 #: trustpoint/templates/pki/certificates/details.html:78
 #: trustpoint/templates/pki/crls/details.html:217
+#, fuzzy
 msgid "Show PEM"
-msgstr ""
+msgstr "Details anzeigen"
 
 #: trustpoint/templates/pki/certificates/details.html:89
-#, fuzzy
-#| msgid "Certificate (PEM)"
 msgid "Certificate PEM"
-msgstr "Zertifikat (PEM)"
+msgstr "Zertifikat PEM"
 
 #: trustpoint/templates/pki/certificates/details.html:91
 #: trustpoint/templates/pki/crls/details.html:230
 #: trustpoint/templates/setup_wizard/restore_options.html:65
 #: trustpoint/templates/signer/signed_messages.html:90
-#, fuzzy
-#| msgid "Closed"
 msgid "Close"
-msgstr "Geschlossen"
+msgstr "Schließen"
 
 #: trustpoint/templates/pki/certificates/download.html:14
 #: trustpoint/templates/pki/certificates/download.html:48
@@ -3851,9 +3766,8 @@ msgstr ""
 
 #: trustpoint/templates/pki/crls/confirm_delete.html:13
 #, fuzzy
-#| msgid "Confirm Device Deletion"
 msgid "Confirm CRL Deletion"
-msgstr "Entfernen des Geräts bestätigen"
+msgstr "CA-Löschung bestätigen"
 
 #: trustpoint/templates/pki/crls/confirm_delete.html:19
 #: trustpoint/templates/pki/crls/download.html:21
@@ -3863,7 +3777,7 @@ msgstr "CRL"
 
 #: trustpoint/templates/pki/crls/confirm_delete.html:19
 msgid "for CA"
-msgstr ""
+msgstr "für CA"
 
 #: trustpoint/templates/pki/crls/confirm_delete.html:27
 #: trustpoint/templates/pki/crls/crls.html:15
@@ -3876,66 +3790,50 @@ msgstr "CRL-Nummer"
 #: trustpoint/templates/pki/crls/crls.html:34
 #: trustpoint/templates/pki/crls/details.html:64
 #: trustpoint/templates/pki/crls/download.html:35
-#, fuzzy
-#| msgid "CRL Number"
 msgid "No number"
-msgstr "CRL-Nummer"
+msgstr "Keine Nummer"
 
 #: trustpoint/templates/pki/crls/confirm_delete.html:37
 #: trustpoint/templates/pki/crls/crls.html:17
 #: trustpoint/templates/pki/crls/details.html:69
 #: trustpoint/templates/pki/crls/download.html:40
-#, fuzzy
-#| msgid "Updated"
 msgid "This Update"
-msgstr "Aktualisiert"
+msgstr "Dieses Update"
 
 #: trustpoint/templates/pki/crls/confirm_delete.html:41
 #: trustpoint/templates/pki/crls/crls.html:18
 #: trustpoint/templates/pki/crls/details.html:73
 #: trustpoint/templates/pki/crls/download.html:44
-#, fuzzy
-#| msgid "Updated"
 msgid "Next Update"
-msgstr "Aktualisiert"
+msgstr "Nächstes Update"
 
 #: trustpoint/templates/pki/crls/confirm_delete.html:46
 #: trustpoint/templates/pki/crls/crls.html:47
 #: trustpoint/templates/pki/crls/details.html:78
 #: trustpoint/templates/pki/crls/details.html:114
 #: trustpoint/templates/pki/crls/download.html:49
-#, fuzzy
-#| msgid "Not Yet Valid"
 msgid "Not set"
-msgstr "Noch nicht gültig"
+msgstr "Nicht festgelegt"
 
 #: trustpoint/templates/pki/crls/confirm_delete.html:51
 #: trustpoint/templates/pki/crls/crls.html:20
 #: trustpoint/templates/pki/crls/details.html:23
 #: trustpoint/templates/pki/crls/details.html:149
 #: trustpoint/templates/pki/crls/download.html:54
-#, fuzzy
-#| msgid "Issued Certificates"
 msgid "Revoked Certificates"
-msgstr "Ausgestellte Zertifikate"
+msgstr "Widerrufene Zertifikate"
 
 #: trustpoint/templates/pki/crls/confirm_delete.html:72
-#, fuzzy
-#| msgid "Delete selected"
 msgid "Delete selected CRLs"
-msgstr "Auswahl entfernen"
+msgstr "Ausgewählte CRLs löschen"
 
 #: trustpoint/templates/pki/crls/crls.html:8
-#, fuzzy
-#| msgid "Certificate Revocation List"
 msgid "Certificate Revocation Lists"
-msgstr "Zertifikatssperrliste"
+msgstr "Zertifikatswiderrufslisten"
 
 #: trustpoint/templates/pki/crls/crls.html:69
-#, fuzzy
-#| msgid "No CRL has been issued yet."
 msgid "No CRLs have been created yet."
-msgstr "Es wurde noch keine Zertifikatssperrliste ausgestellt."
+msgstr "Es wurden noch keine CRLs erstellt."
 
 #: trustpoint/templates/pki/crls/crls.html:84
 #: trustpoint/templates/pki/crls/import.html:5
@@ -3945,7 +3843,7 @@ msgstr "Es wurde noch keine Zertifikatssperrliste ausgestellt."
 #: trustpoint/templates/pki/keyless_cas/config.html:112
 #: trustpoint/templates/pki/keyless_cas/config.html:133
 msgid "Import CRL"
-msgstr ""
+msgstr "CRL importieren"
 
 #: trustpoint/templates/pki/crls/details.html:13
 #: trustpoint/templates/pki/crls/download.html:68
@@ -3953,70 +3851,54 @@ msgstr ""
 #: trustpoint/templates/pki/issuing_cas/config.html:331
 #: trustpoint/templates/pki/keyless_cas/config.html:115
 #: trustpoint/templates/pki/keyless_cas/config.html:136
-#, fuzzy
-#| msgid "Details"
 msgid "CRL Details"
-msgstr "Details"
+msgstr "CRL-Details"
 
 #: trustpoint/templates/pki/crls/details.html:33
-#, fuzzy
-#| msgid "Family Information"
 msgid "CRL Information"
-msgstr "Familieninformation"
+msgstr "CRL-Informationen"
 
 #: trustpoint/templates/pki/crls/details.html:44
-#, fuzzy
-#| msgid "Welcome to Trustpoint!"
 msgid "No linked CA from Trustpoint"
-msgstr "Willkommen bei Trustpoint!"
+msgstr "Keine verknüpfte CA von Trustpoint"
 
 #: trustpoint/templates/pki/crls/details.html:49
 #, fuzzy
-#| msgid "Subject"
 msgid "CA Subject"
 msgstr "Subjekt"
 
 #: trustpoint/templates/pki/crls/details.html:132
-#, fuzzy
-#| msgid "Download Certificates"
 msgid "Total Revoked Certificates"
-msgstr "Zertifikate herunterladen"
+msgstr "Gesamtzahl widerrufener Zertifikate"
 
 #: trustpoint/templates/pki/crls/details.html:156
 msgid "Revocation Date"
 msgstr "Widerrufsdatum"
 
 #: trustpoint/templates/pki/crls/details.html:157
-#, fuzzy
-#| msgid "Reasons"
 msgid "Reason"
-msgstr "Gründe"
+msgstr "Grund"
 
 #: trustpoint/templates/pki/crls/details.html:175
-#, fuzzy
-#| msgid "Unspecified"
 msgid "Not specified"
-msgstr "Ohne Angabe"
+msgstr "Nicht angegeben"
 
 #: trustpoint/templates/pki/crls/details.html:183
-#, fuzzy
-#| msgid "No devices have been added yet."
 msgid "No certificates have been revoked in this CRL."
-msgstr "Es sind noch keine Geräte hinzugefügt worden."
+msgstr "In dieser CRL wurden keine Zertifikate widerrufen."
 
 #: trustpoint/templates/pki/crls/details.html:207
+#, fuzzy
 msgid "No extensions present in this CRL."
-msgstr ""
+msgstr "In dieser CRL sind keine Erweiterungen vorhanden."
 
 #: trustpoint/templates/pki/crls/details.html:228
 msgid "CRL PEM"
-msgstr ""
+msgstr "CRL PEM"
 
 #: trustpoint/templates/pki/crls/download.html:14
-#, fuzzy
-#| msgid "Certificate Revocation List"
 msgid "Download Certificate Revocation List"
-msgstr "Zertifikatssperrliste"
+msgstr "Zertifikatsperrliste herunterladen"
 
 #: trustpoint/templates/pki/crls/download.html:71
 #: trustpoint/templates/pki/issuing_cas/config.html:325
@@ -4029,28 +3911,20 @@ msgid "Download CRL"
 msgstr "CRL herunterladen"
 
 #: trustpoint/templates/pki/crls/download.html:74
-#, fuzzy
-#| msgid "Download as ZIP (PEM)"
 msgid "Download as PEM"
-msgstr "Als ZIP (PEM) herunterladen"
+msgstr "Als PEM herunterladen"
 
 #: trustpoint/templates/pki/crls/download.html:75
-#, fuzzy
-#| msgid "Download CRL"
 msgid "Download as DER"
-msgstr "CRL herunterladen"
+msgstr "Als DER herunterladen"
 
 #: trustpoint/templates/pki/crls/download.html:76
-#, fuzzy
-#| msgid "Download as ZIP (PEM)"
 msgid "Download as PKCS#7 (PEM)"
-msgstr "Als ZIP (PEM) herunterladen"
+msgstr "Als PKCS#7 (PEM) herunterladen"
 
 #: trustpoint/templates/pki/crls/download.html:77
-#, fuzzy
-#| msgid "Download as PKCS#12"
 msgid "Download as PKCS#7 (DER)"
-msgstr "Als PKCS#12 herunterladen"
+msgstr "Als PKCS#7 (DER) herunterladen"
 
 #: trustpoint/templates/pki/devid_registration/add.html:13
 #: trustpoint/templates/pki/domains/details.html:66
@@ -4071,8 +3945,8 @@ msgstr "z. B."
 
 #: trustpoint/templates/pki/devid_registration/add.html:44
 msgid ""
-"Multiple regex variations will be generated based on the structure. "
-"Supported delimiters are [- _ . :]"
+"Multiple regex variations will be generated based on the structure. Supported "
+"delimiters are [- _ . :]"
 msgstr ""
 "Mehrere Regex-Varianten werden basierend auf der Struktur vorgeschlagen. Als "
 "Trennzeichen sind [- _ . :] unterstützt."
@@ -4094,8 +3968,6 @@ msgid "Add DevID Pattern"
 msgstr "DevID-Muster hinzufügen"
 
 #: trustpoint/templates/pki/devid_registration/confirm_delete.html:13
-#, fuzzy
-#| msgid "Confirm DevID Pattern Delete"
 msgid "Confirm DevID Pattern Delete "
 msgstr "Entfernen des DevID-Musters bestätigen"
 
@@ -4118,14 +3990,12 @@ msgstr "Vorhandenen Truststore verwenden"
 
 #: trustpoint/templates/pki/devid_registration/method_select.html:19
 #: trustpoint/templates/pki/devid_registration/method_select.html:21
-#, fuzzy
-#| msgid "Upload new Truststore"
 msgid "Upload a new  Truststore"
 msgstr "Neuen Truststore hochladen"
 
 #: trustpoint/templates/pki/devid_registration/table.html:38
 msgid "Help - Onboard new Device"
-msgstr "Hilfe - Neue Gerät einbinden"
+msgstr "Hilfe – Neues Gerät hinzufügen"
 
 #: trustpoint/templates/pki/domains/add.html:13
 #: trustpoint/templates/pki/domains/add.html:27
@@ -4147,7 +4017,7 @@ msgstr "Geräte in der Domain"
 
 #: trustpoint/templates/pki/domains/config.html:31
 msgid "Total devices"
-msgstr "Alle Geräte"
+msgstr "Gesamtzahl der Geräte"
 
 #: trustpoint/templates/pki/domains/config.html:35
 msgid "Pending devices"
@@ -4182,8 +4052,6 @@ msgid "Create new DevID Registration Pattern"
 msgstr "Neues DevID-Registrierungsmuster erstellen"
 
 #: trustpoint/templates/pki/domains/config.html:96
-#, fuzzy
-#| msgid "Certificate Policies"
 msgid "Allowed Certificate Profiles"
 msgstr "Zertifikatsrichtlinien"
 
@@ -4209,7 +4077,7 @@ msgstr "Details zur Domain"
 #, fuzzy
 #| msgid "Certificate Type"
 msgid "(Certificate pending)"
-msgstr "Zertifikatstyp"
+msgstr "Ausstehende Anfragen"
 
 #: trustpoint/templates/pki/domains/details.html:58
 msgid "No Issuing CA configured"
@@ -4230,18 +4098,18 @@ msgid "No domains are configured yet."
 msgstr "Es wurden noch keine Domains konfiguriert."
 
 #: trustpoint/templates/pki/domains/idevid_method_select.html:11
-#, fuzzy
-#| msgid "Onboarded devices"
 msgid "Onboard a new device with its IDevID"
-msgstr "Eingebundene Geräte"
+msgstr "Ein neues Gerät mit seiner IDevID anmelden"
 
 #: trustpoint/templates/pki/domains/idevid_method_select.html:16
+#, fuzzy
 msgid "Enroll with CMP"
-msgstr ""
+msgstr "Bei CMP anmelden"
 
 #: trustpoint/templates/pki/domains/idevid_method_select.html:18
+#, fuzzy
 msgid "Enroll with EST"
-msgstr ""
+msgstr "Bei EST anmelden"
 
 #: trustpoint/templates/pki/domains/issued_certificates.html:7
 #: trustpoint/templates/pki/issuing_cas/issued_certificates.html:7
@@ -4254,27 +4122,23 @@ msgstr "Zurück zur Domain"
 
 #: trustpoint/templates/pki/issuing_cas/add/cmp_ra.html:11
 #, fuzzy
-#| msgid "Add new OPC UA GDS"
 msgid "Add new CMP RA"
-msgstr "Neuen OPC UA-GDS hinzufügen"
+msgstr "Neuen CMP RA hinzufügen"
 
 #: trustpoint/templates/pki/issuing_cas/add/cmp_ra.html:22
 #, fuzzy
-#| msgid "Created At"
 msgid "Create CMP RA"
-msgstr "Erstellt am"
+msgstr "CMP RA erstellen"
 
 #: trustpoint/templates/pki/issuing_cas/add/est_ra.html:11
 #, fuzzy
-#| msgid "Add new OPC UA GDS"
 msgid "Add new EST RA"
-msgstr "Neuen OPC UA-GDS hinzufügen"
+msgstr "Neue EST RA hinzufügen"
 
 #: trustpoint/templates/pki/issuing_cas/add/est_ra.html:22
 #, fuzzy
-#| msgid "Created At"
 msgid "Create EST RA"
-msgstr "Erstellt am"
+msgstr "CMP RA erstellen"
 
 #: trustpoint/templates/pki/issuing_cas/add/method_select.html:16
 msgid "Import new Issuing CA from file"
@@ -4296,22 +4160,21 @@ msgstr "Issuing CA-Zertifikat mittels CMP anfordern"
 
 #: trustpoint/templates/pki/issuing_cas/add/method_select.html:29
 msgid "Configure a Remote Issuing CA"
-msgstr "Eine externe Issuing CA konfigurieren"
+msgstr "Eine Remote Issuing CA konfigurieren"
 
 #: trustpoint/templates/pki/issuing_cas/add/method_select.html:31
 msgid "Configure A Remote Issuing CA Using EST"
-msgstr "Eine externe Issuing CA mittels EST konfigurieren"
+msgstr "Eine Remote Issuing CA mittels EST konfigurieren"
 
 #: trustpoint/templates/pki/issuing_cas/add/method_select.html:33
 msgid "Configure A Remote Issuing CA Using CMP"
-msgstr "Eine externe Issuing CA mittels CMP konfigurieren"
+msgstr "Eine Remote Issuing CA mittels CMP konfigurieren"
 
 #: trustpoint/templates/pki/issuing_cas/add/request_cmp.html:25
 #: trustpoint/templates/pki/issuing_cas/add/request_est.html:25
 #, fuzzy
-#| msgid "Certificates By Issuing CA"
 msgid "Create Issuing CA"
-msgstr "Zertifikate nach Issuing CA"
+msgstr "Zertifikatskette der  Issuing CA"
 
 #: trustpoint/templates/pki/issuing_cas/config.html:27
 msgid "No associated domains"
@@ -4362,7 +4225,7 @@ msgstr "TLS-Client-Zertifikatsanfrage"
 #, fuzzy
 #| msgid "Certificate Status"
 msgid "Certificate not yet requested"
-msgstr "Zertifikatsstatus"
+msgstr "CMP-Zertifikatsanforderung noch nicht implementiert."
 
 #: trustpoint/templates/pki/issuing_cas/config.html:266
 #: trustpoint/templates/pki/issuing_cas/config.html:306
@@ -4377,14 +4240,14 @@ msgstr "CRL-Aktionen"
 #, fuzzy
 #| msgid "Request Issuing CA Certificate Using EST"
 msgid "Request CA Certificate via EST"
-msgstr "Issuing CA-Zertifikat mittels EST anfordern"
+msgstr "EST-Zertifikatsanforderung noch nicht implementiert."
 
 #: trustpoint/templates/pki/issuing_cas/config.html:283
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:6
 #, fuzzy
 #| msgid "Request Issuing CA Certificate Using CMP"
 msgid "Request CA Certificate via CMP"
-msgstr "Issuing CA-Zertifikat mittels CMP anfordern"
+msgstr "CMP-Zertifikatsanforderung noch nicht implementiert."
 
 #: trustpoint/templates/pki/issuing_cas/config.html:298
 #: trustpoint/templates/pki/issuing_cas/config.html:302
@@ -4393,7 +4256,7 @@ msgstr "Issuing CA-Zertifikat mittels CMP anfordern"
 #, fuzzy
 #| msgid "Management"
 msgid "CRL Management"
-msgstr "Verwaltung"
+msgstr "Verwaltung lokaler Backups"
 
 #: trustpoint/templates/pki/issuing_cas/config.html:316
 msgid "Generate CRL"
@@ -4403,20 +4266,19 @@ msgstr "CRL erstellen"
 #: trustpoint/templates/pki/issuing_cas/config.html:334
 #: trustpoint/templates/pki/keyless_cas/config.html:135
 #: trustpoint/templates/pki/keyless_cas/config.html:138
-#, fuzzy
-#| msgid "No log files available."
 msgid "No CRL available"
-msgstr "Keine Log-Dateien vorhanden."
+msgstr "Keine CRL verfügbar"
 
 #: trustpoint/templates/pki/issuing_cas/config.html:343
+#, fuzzy
 msgid "Show help for downloading CRL via curl"
-msgstr ""
+msgstr "Hilfe zum Herunterladen der CRL über curl anzeigen"
 
 #: trustpoint/templates/pki/issuing_cas/config.html:344
 #, fuzzy
 #| msgid "Download CRL"
 msgid "Download CRL with curl"
-msgstr "CRL herunterladen"
+msgstr "Hilfe zum Herunterladen der CRL über curl anzeigen"
 
 #: trustpoint/templates/pki/issuing_cas/config.html:351
 #: trustpoint/templates/pki/keyless_cas/config.html:105
@@ -4426,26 +4288,26 @@ msgstr "CRL zuletzt ausgestellt"
 
 #: trustpoint/templates/pki/issuing_cas/config.html:355
 msgid "No CRL has been issued yet."
-msgstr "Es wurde noch keine Zertifikatssperrliste ausgestellt."
+msgstr "Es wurde noch keine CRL ausgestellt."
 
 #: trustpoint/templates/pki/issuing_cas/config.html:360
 #, fuzzy
 #| msgid "Configuration"
 msgid "CRL Configuration"
-msgstr "Konfiguration"
+msgstr "HSM-Konfiguration"
 
 #: trustpoint/templates/pki/issuing_cas/config.html:398
-#, python-format
+#, fuzzy, python-format
 msgid ""
 "Next CRL\n"
 "                                generation scheduled for: %(timestamp)s"
-msgstr ""
+msgstr "Zeitstempel, zu dem die letzte CRL-Generierungsaufgabe gestartet wurde"
 
 #: trustpoint/templates/pki/issuing_cas/config.html:402
 #, fuzzy
 #| msgid "Settings"
 msgid "Save CRL Settings"
-msgstr "Einstellungen"
+msgstr "Einstellungen speichern"
 
 #: trustpoint/templates/pki/issuing_cas/confirm_delete.html:13
 msgid "Confirm Issuing CA Deletion"
@@ -4464,56 +4326,51 @@ msgstr "Zertifikatscontainertyp auswählen"
 
 #: trustpoint/templates/pki/issuing_cas/define_cert_content_cmp.html:11
 #: trustpoint/templates/pki/issuing_cas/define_cert_content_est.html:11
+#, fuzzy
 msgid "Using profile:"
-msgstr ""
+msgstr "Zertifikatsprofil hinzufügen"
 
 #: trustpoint/templates/pki/issuing_cas/define_cert_content_cmp.html:68
 #: trustpoint/templates/pki/issuing_cas/define_cert_content_est.html:68
 #, fuzzy
 #| msgid "Attribute Certificate"
 msgid "Continue to Request Certificate"
-msgstr "Attribut-Zertifikat"
+msgstr "Fehler beim Erstellen der Zertifikatsanforderung: {error}"
 
 #: trustpoint/templates/pki/issuing_cas/includes/remote_ca_config.html:4
 #, fuzzy
 #| msgid "Network Configuration"
 msgid "Remote CA Configuration"
-msgstr "Netzwerkkonfiguration"
+msgstr "Ungültige CA-Konfiguration"
 
 #: trustpoint/templates/pki/issuing_cas/includes/remote_ca_config.html:8
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:21
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:21
-#, fuzzy
-#| msgid "Remote"
 msgid "Remote Host"
-msgstr "Extern"
+msgstr "Remote-Host"
 
 #: trustpoint/templates/pki/issuing_cas/includes/remote_ca_config.html:12
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:25
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:25
-#, fuzzy
-#| msgid "Remote"
 msgid "Remote Port"
-msgstr "Extern"
+msgstr "Remote-Port"
 
 #: trustpoint/templates/pki/issuing_cas/includes/remote_ca_config.html:16
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:29
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:29
-#, fuzzy
-#| msgid "Remote"
 msgid "Remote Path"
-msgstr "Extern"
+msgstr "Remote-Pfad"
 
 #: trustpoint/templates/pki/issuing_cas/includes/remote_ca_config.html:21
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:33
 msgid "EST Username"
-msgstr "EST-Nutzername"
+msgstr "EST-Benutzername"
 
 #: trustpoint/templates/pki/issuing_cas/includes/remote_ca_config.html:26
 #, fuzzy
 #| msgid "PKI Protocol"
 msgid "PKI Protocols"
-msgstr "PKI-Protokoll"
+msgstr "Aktivierte PKI-Protokolle"
 
 #: trustpoint/templates/pki/issuing_cas/includes/remote_ca_config.html:53
 #, fuzzy
@@ -4530,8 +4387,9 @@ msgid "Issuing CAs"
 msgstr "Issuing CAs"
 
 #: trustpoint/templates/pki/issuing_cas/issuing_cas.html:10
+#, fuzzy
 msgid "CA hierarchy view"
-msgstr ""
+msgstr "CA-Hierarchieansicht"
 
 #: trustpoint/templates/pki/issuing_cas/issuing_cas.html:63
 msgid "No Issuing CA has been added yet."
@@ -4539,17 +4397,15 @@ msgstr "Es wurde noch keine Issuing CA hinzugefügt."
 
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:17
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:17
-#, fuzzy
-#| msgid "Type"
 msgid "CA Type"
-msgstr "Art"
+msgstr "CA Typ"
 
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:38
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:42
 #, fuzzy
 #| msgid "Configure"
 msgid "Not configured"
-msgstr "Konfigurieren"
+msgstr "Keine Domain konfiguriert"
 
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:47
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:51
@@ -4570,7 +4426,7 @@ msgstr "Subjekt"
 #, fuzzy
 #| msgid "Subject Alternative Name"
 msgid "Subject Alternative Names:"
-msgstr "Subjekt Alternativname (SAN)"
+msgstr "Alternativer Name des Subjekts"
 
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:67
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:71
@@ -4583,7 +4439,7 @@ msgstr "Gültigkeit"
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:76
 #: trustpoint/templates/signer/sign_hash.html:37
 msgid "Note:"
-msgstr ""
+msgstr "Hinweis:"
 
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:72
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:76
@@ -4601,15 +4457,13 @@ msgid "Sender KID"
 msgstr ""
 
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:86
-#, fuzzy
-#| msgid "e.g."
 msgid "e.g. 2"
-msgstr "z. B."
+msgstr "z. B. 2"
 
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:88
 msgid ""
-"Optional. The device primary key used for shared secret authentication on "
-"the CMP server."
+"Optional. The device primary key used for shared secret authentication on the "
+"CMP server."
 msgstr ""
 
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:97
@@ -4617,18 +4471,21 @@ msgstr ""
 #, fuzzy
 #| msgid "Certificate Management"
 msgid "Edit Certificate Content"
-msgstr "Zertifikatsverwaltung"
+msgstr "Zertifikatsprofil bearbeiten"
 
 #: trustpoint/templates/pki/issuing_cas/request_cert_cmp.html:100
 #: trustpoint/templates/pki/issuing_cas/request_cert_est.html:90
 #, fuzzy
 #| msgid "Root CA Certificate"
 msgid "Request CA Certificate"
-msgstr "Root CA-Zertifikat"
+msgstr "CA Zertifikat"
 
 #: trustpoint/templates/pki/issuing_cas/truststore_association.html:19
+#, fuzzy
 msgid "Select a trust store to associate with this Issuing CA."
 msgstr ""
+"Wählen Sie einen Truststore aus, der mit dieser  Issuingn CA verknüpft werden "
+"soll"
 
 #: trustpoint/templates/pki/issuing_cas/truststore_association.html:22
 #, fuzzy
@@ -4638,8 +4495,8 @@ msgstr "CA-Zertifikat"
 
 #: trustpoint/templates/pki/issuing_cas/truststore_association.html:22
 msgid ""
-"Import the Issuing CA certificate of the remote PKI. This certificate is "
-"used to identify the recipient CA and verify responses."
+"Import the Issuing CA certificate of the remote PKI. This certificate is used "
+"to identify the recipient CA and verify responses."
 msgstr ""
 
 #: trustpoint/templates/pki/issuing_cas/truststore_association.html:27
@@ -4647,68 +4504,72 @@ msgid "EST RA - Step 1/2 (CA Chain):"
 msgstr ""
 
 #: trustpoint/templates/pki/issuing_cas/truststore_association.html:27
+#, fuzzy
 msgid ""
 "Import the Issuing CA chain. This establishes the RA certificate and "
 "hierarchy."
 msgstr ""
+"EST RA (Schritt 1/2): Importieren Sie die Zertifikatskette der  Issuing CA. "
+"Dadurch werden das RA-Zertifikat und die Hierarchie erstellt."
 
 #: trustpoint/templates/pki/issuing_cas/truststore_association.html:29
 msgid "EST RA - Step 2/2 (TLS Certificate):"
 msgstr ""
 
 #: trustpoint/templates/pki/issuing_cas/truststore_association.html:29
+#, fuzzy
 msgid ""
 "Import the TLS server certificate. This certificate is used for HTTPS "
 "connection security to the remote EST server."
 msgstr ""
+"EST: Importieren Sie das TLS-Serverzertifikat der Remote-PKI (wird für die "
+"Sicherheit der HTTPS-Verbindung verwendet)."
+
+#: trustpoint/templates/pki/issuing_cas/truststore_association.html:34
+msgid "EST Certificate:"
+msgstr "EST-Zertifikat:"
 
 #: trustpoint/templates/pki/issuing_cas/truststore_association.html:34
 #, fuzzy
-#| msgid "Certificate:"
-msgid "EST Certificate:"
-msgstr "Zertifikat:"
-
-#: trustpoint/templates/pki/issuing_cas/truststore_association.html:34
 msgid ""
-"Import the TLS server certificate of the remote PKI. This certificate is "
-"used for HTTPS connection security."
+"Import the TLS server certificate of the remote PKI. This certificate is used "
+"for HTTPS connection security."
 msgstr ""
+"EST: Importieren Sie das TLS-Serverzertifikat der Remote-PKI (wird für die "
+"Sicherheit der HTTPS-Verbindung verwendet)."
 
 #: trustpoint/templates/pki/keyless_cas/config.html:17
+#, fuzzy
 msgid "Keyless CA"
-msgstr ""
+msgstr " Issuing CA"
 
 #: trustpoint/templates/pki/keyless_cas/config.html:35
 #, fuzzy
 #| msgid "Issuing CA Certificate (This is a self-signed Root CA Certificate)"
 msgid "Keyless CA Certificate (This is a self-signed Root CA Certificate)"
 msgstr ""
-"Issuing CA-Zertifikat (Dies ist ein selbstsigniertes Root CA-Zertifikat)"
+"Unvollständige Zertifikatskette. Die Kette muss mit einem selbstsignierten "
+"Root-CA-Zertifikat enden."
 
 #: trustpoint/templates/pki/keyless_cas/config.html:127
 #, fuzzy
 #| msgid "No CRL has been issued yet."
 msgid "No CRL has been imported yet."
-msgstr "Es wurde noch keine Zertifikatssperrliste ausgestellt."
+msgstr "Es wurde noch keine CRL ausgestellt."
 
 #: trustpoint/templates/pki/keyless_cas/config.html:149
 #, fuzzy
-#| msgid "Back to CA"
 msgid "Back to CAs"
-msgstr "Zurück zur CA"
+msgstr "Ausgewählte CAs löschen"
 
 #: trustpoint/templates/pki/owner_credentials/add.html:11
 #: trustpoint/templates/pki/owner_credentials/owner_credentials.html:66
-#, fuzzy
-#| msgid "Add new Device"
 msgid "Add new DevOwnerID"
-msgstr "Neues Gerät hinzufügen"
+msgstr "Neue DevOwnerID hinzufügen"
 
 #: trustpoint/templates/pki/owner_credentials/add.html:25
-#, fuzzy
-#| msgid "Add Device"
 msgid "Add DevOwnerID"
-msgstr "Gerät hinzufügen"
+msgstr "DevOwnerID hinzufügen"
 
 #: trustpoint/templates/pki/owner_credentials/add.html:26
 #, fuzzy
@@ -4718,26 +4579,24 @@ msgstr "Truststores entfernen"
 
 #: trustpoint/templates/pki/owner_credentials/confirm_delete.html:13
 #, fuzzy
-#| msgid "Confirm Device Deletion"
 msgid "Confirm DevOwnerID Deletion"
-msgstr "Entfernen des Geräts bestätigen"
+msgstr "Löschen des Truststores bestätigen"
 
 #: trustpoint/templates/pki/owner_credentials/confirm_delete.html:19
-#, fuzzy
-#| msgid "Owner"
 msgid "DevOwnerID"
-msgstr "Eigentümer"
+msgstr "DevOwnerID"
 
 #: trustpoint/templates/pki/owner_credentials/confirm_delete.html:23
 #: trustpoint/templates/pki/owner_credentials/confirm_delete.html:29
 #, fuzzy
 #| msgid "User Certificate"
 msgid "DevOwnerID Certificate"
-msgstr "Nutzerzertifikat"
+msgstr "DevOwnerID hinzufügen"
 
 #: trustpoint/templates/pki/owner_credentials/confirm_delete.html:54
+#, fuzzy
 msgid "Delete DevOwnerIDs"
-msgstr ""
+msgstr "DevOwnerIDs"
 
 #: trustpoint/templates/pki/owner_credentials/details.html:11
 #, fuzzy
@@ -4746,47 +4605,42 @@ msgid "DevOwnerID Details"
 msgstr "Gerätedetails"
 
 #: trustpoint/templates/pki/owner_credentials/details.html:32
+#, fuzzy
 msgid "Valid for number of IDevIDs"
-msgstr ""
+msgstr "Gültig für # IDevIDs"
 
 #: trustpoint/templates/pki/owner_credentials/details.html:36
 #, fuzzy
 #| msgid "Associated device"
 msgid "Associated IDevIDs"
-msgstr "Zugehöriges Gerät"
+msgstr "Gültig für # IDevIDs"
 
 #: trustpoint/templates/pki/owner_credentials/details.html:41
 #, fuzzy
 #| msgid "Serial Number"
 msgid "Serial Number (Subject)"
-msgstr "Seriennummer"
+msgstr "X.509-Seriennummer"
 
 #: trustpoint/templates/pki/owner_credentials/details.html:45
-#, fuzzy
-#| msgid "Serial Number"
 msgid "X.509 Serial Number"
-msgstr "Seriennummer"
+msgstr "X.509-Seriennummer"
 
 #: trustpoint/templates/pki/owner_credentials/owner_credentials.html:8
 #: trustpoint/templates/trustpoint/base.html:77
-#, fuzzy
-#| msgid "Owner"
 msgid "DevOwnerIDs"
-msgstr "Eigentümer"
+msgstr "DevOwnerIDs"
 
 #: trustpoint/templates/pki/owner_credentials/owner_credentials.html:31
 msgid "Valid for # IDevIDs"
-msgstr ""
+msgstr "Gültig für # IDevIDs"
 
 #: trustpoint/templates/pki/owner_credentials/owner_credentials.html:51
-#, fuzzy
-#| msgid "No devices have been added yet."
 msgid "No DevOwnerID has been added yet."
-msgstr "Es sind noch keine Geräte hinzugefügt worden."
+msgstr "Es wurde noch keine DevOwnerID hinzugefügt."
 
 #: trustpoint/templates/pki/truststores/confirm_delete.html:11
 msgid "Confirm Truststore Deletion"
-msgstr "Entfernen von Truststores bestätigen"
+msgstr "Löschen des Truststores bestätigen"
 
 #: trustpoint/templates/pki/truststores/confirm_delete.html:22
 msgid "No Truststores selected."
@@ -4798,7 +4652,7 @@ msgstr "Es wurden keine Truststores gefunden."
 
 #: trustpoint/templates/pki/truststores/confirm_delete.html:33
 msgid "Delete Truststores"
-msgstr "Truststores entfernen"
+msgstr "Truststores löschen"
 
 #: trustpoint/templates/pki/truststores/details.html:11
 #: trustpoint/templates/pki/truststores/download_multiple.html:39
@@ -4839,17 +4693,18 @@ msgstr "Es wurden noch keine Truststores hinzugefügt."
 #, fuzzy
 #| msgid "Trustpoint - Logout"
 msgid "Trustpoint - Auto Restore"
-msgstr "Trustpoint - Logout"
+msgstr "Automatische Wiederherstellung – Backup-Passwort eingeben"
 
 #: trustpoint/templates/setup_wizard/auto_restore_password.html:34
 #, fuzzy
 #| msgid "User Password"
 msgid "Enter Backup Password"
-msgstr "Nutzerpasswort"
+msgstr "Backup-Passwort eingeben"
 
 #: trustpoint/templates/setup_wizard/auto_restore_password.html:37
+#, fuzzy
 msgid "Restore Required:"
-msgstr ""
+msgstr "Mit Passwort wiederherstellen"
 
 #: trustpoint/templates/setup_wizard/auto_restore_password.html:38
 msgid ""
@@ -4858,29 +4713,26 @@ msgid ""
 msgstr ""
 
 #: trustpoint/templates/setup_wizard/auto_restore_password.html:50
-#, fuzzy
-#| msgid "User Password"
 msgid "Restore with Password"
-msgstr "Nutzerpasswort"
+msgstr "Mit Passwort wiederherstellen"
 
 #: trustpoint/templates/setup_wizard/backup_password.html:31
 #, fuzzy
 #| msgid "EST Password"
 msgid "Setup Backup Password"
-msgstr "EST-Passwort"
+msgstr "Backup Passwort"
 
 #: trustpoint/templates/setup_wizard/backup_password.html:37
 msgid ""
 "Set up a backup password to protect your Data Encryption Key (DEK). This "
-"allows you to recover your encrypted data even if the HSM becomes "
-"unavailable."
+"allows you to recover your encrypted data even if the HSM becomes unavailable."
 msgstr ""
 
 #: trustpoint/templates/setup_wizard/backup_password.html:57
 #, fuzzy
 #| msgid "EST Password"
 msgid "Set Backup Password"
-msgstr "EST-Passwort"
+msgstr "Backup Passwort"
 
 #: trustpoint/templates/setup_wizard/create_super_user.html:31
 #: trustpoint/templates/setup_wizard/create_super_user.html:41
@@ -4891,23 +4743,27 @@ msgstr "Super-User erstellen"
 #, fuzzy
 #| msgid "Error saving the configuration"
 msgid "Cryptographic Storage Configuration"
-msgstr "Beim Speichern der Einstellungen ist ein Fehler aufgetreten"
+msgstr "Schlüsselspeicher-Konfiguration"
 
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:34
 msgid "Choose how cryptographic material is stored"
 msgstr ""
 
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:52
+#, fuzzy
 msgid "Select Software Storage"
-msgstr ""
+msgstr "Software-Speicher"
 
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:65
+#, fuzzy
 msgid "Software-based HSM with encryption and key storage"
 msgstr ""
+"Softwarebasiertes HSM mit Verschlüsselung und sicherem Schlüsselspeicher"
 
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:74
+#, fuzzy
 msgid "Select SoftHSM"
-msgstr ""
+msgstr "SoftHSM-Container"
 
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:89
 #, fuzzy
@@ -4917,15 +4773,17 @@ msgstr "Sicherheit"
 
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:90
 msgid "Coming Soon"
-msgstr ""
+msgstr "Demnächst verfügbar"
 
 #: trustpoint/templates/setup_wizard/crypto_storage_setup.html:94
+#, fuzzy
 msgid "Select Physical HSM"
-msgstr ""
+msgstr "Physisches HSM"
 
 #: trustpoint/templates/setup_wizard/demo_data.html:31
+#, fuzzy
 msgid "Pre-population with Demo Data"
-msgstr "Anlegen von Demodaten"
+msgstr "Datenverschlüsselung"
 
 #: trustpoint/templates/setup_wizard/demo_data.html:43
 #: trustpoint/templates/setup_wizard/demo_data.html:53
@@ -4933,14 +4791,17 @@ msgid "Continue with Demo Data"
 msgstr "Mit Demodaten fortfahren"
 
 #: trustpoint/templates/setup_wizard/demo_data.html:45
+#, fuzzy
 msgid ""
 "Pre-populate the database with demo data for testing Trustpoint features and "
 "capabilities"
 msgstr ""
+"Die Datenbank mit Demodaten vorab füllen, um die Funktionen und Fähigkeiten "
+"von Trustpoint zu testen."
 
 #: trustpoint/templates/setup_wizard/demo_data.html:47
 msgid "Recommended for Testing"
-msgstr ""
+msgstr "Empfohlen für Tests"
 
 #: trustpoint/templates/setup_wizard/demo_data.html:67
 #: trustpoint/templates/setup_wizard/demo_data.html:77
@@ -4952,14 +4813,15 @@ msgid "Start with an empty database and configure everything manually"
 msgstr ""
 
 #: trustpoint/templates/setup_wizard/demo_data.html:71
+#, fuzzy
 msgid "Production Setup"
-msgstr ""
+msgstr "Für den Produktivbetrieb empfohlen!"
 
 #: trustpoint/templates/setup_wizard/hsm_setup.html:38
 #, fuzzy
 #| msgid "Configuration"
 msgid "SoftHSM Configuration"
-msgstr "Konfiguration"
+msgstr "Ungültige CA-Konfiguration"
 
 #: trustpoint/templates/setup_wizard/hsm_setup.html:39
 msgid ""
@@ -4970,26 +4832,27 @@ msgstr ""
 #, fuzzy
 #| msgid "NTP Configuration"
 msgid "Physical HSM Configuration"
-msgstr "NTP-Konfiguration"
+msgstr "Physisches HSM wird noch nicht unterstützt."
 
 #: trustpoint/templates/setup_wizard/hsm_setup.html:44
 msgid ""
-"Please configure the PKCS#11 module path and token settings for your "
-"physical HSM device."
+"Please configure the PKCS#11 module path and token settings for your physical "
+"HSM device."
 msgstr ""
 
 #: trustpoint/templates/setup_wizard/import_method_select.html:8
 #: trustpoint/templates/setup_wizard/import_tls_server_credential.html:11
 #: trustpoint/templates/setup_wizard/tls_server_credential_apply.html:31
+#, fuzzy
 msgid "Trustpoint - Setup Wizard"
-msgstr "Trustpoint - Einrichtungs-Wizard"
+msgstr "Keine verknüpfte CA von Trustpoint"
 
 #: trustpoint/templates/setup_wizard/import_method_select.html:11
 #: trustpoint/templates/setup_wizard/import_tls_server_credential.html:14
 #, fuzzy
 #| msgid "TLS-Server Credential"
 msgid "Import TLS-Server Credential"
-msgstr "TLS-Server Credential"
+msgstr "Neue TLS-Server-Zugangsdaten hinzufügen"
 
 #: trustpoint/templates/setup_wizard/import_method_select.html:13
 #, fuzzy
@@ -5013,39 +4876,41 @@ msgstr "Aus seperaten Schlüssel- und Zertifikatsdateien importieren"
 #, fuzzy
 #| msgid "Import TLS-Server Credential From File"
 msgid "Import TLS Credential"
-msgstr "TLS-Server Credential aus Datei importieren"
+msgstr "Neue TLS-Zugangsdaten hinzufügen"
 
 #: trustpoint/templates/setup_wizard/restore_options.html:29
 #, fuzzy
 #| msgid "Domain Options"
 msgid "Restore Options"
-msgstr "Domain-Optionen"
+msgstr "Mit Passwort wiederherstellen"
 
 #: trustpoint/templates/setup_wizard/restore_options.html:37
+#, fuzzy
 msgid "Upload Backup File"
-msgstr ""
+msgstr "Keine Backup-Datei vorhanden."
 
 #: trustpoint/templates/setup_wizard/restore_options.html:39
 msgid "Restore your Trustpoint configuration by uploading a backup file."
 msgstr ""
 
 #: trustpoint/templates/setup_wizard/restore_options.html:44
+#, fuzzy
 msgid "Upload Backup"
-msgstr ""
+msgstr "Backup Passwort"
 
 #: trustpoint/templates/setup_wizard/restore_options.html:64
+#, fuzzy
 msgid "Restore Database from Backup"
-msgstr ""
+msgstr "Automatische Wiederherstellung – Backup-Passwort eingeben"
 
 #: trustpoint/templates/setup_wizard/restore_options.html:81
-#, fuzzy
-#| msgid "Additional"
 msgid "optional"
-msgstr "Zusätzlich"
+msgstr "optional"
 
 #: trustpoint/templates/setup_wizard/restore_options.html:84
+#, fuzzy
 msgid "Enter backup password if required"
-msgstr ""
+msgstr "Backup-Passwort eingeben (optional)"
 
 #: trustpoint/templates/setup_wizard/restore_options.html:93
 msgid ""
@@ -5054,12 +4919,14 @@ msgstr ""
 
 #: trustpoint/templates/setup_wizard/restore_options.html:100
 #: trustpoint/templates/setup_wizard/setup_mode.html:63
+#, fuzzy
 msgid "Restore from Backup"
-msgstr ""
+msgstr "Automatische Wiederherstellung – Backup-Passwort eingeben"
 
 #: trustpoint/templates/setup_wizard/select_tls_server_credential.html:31
+#, fuzzy
 msgid "Configure TLS-Server Credential"
-msgstr "TLS-Server-Credential konfigurieren"
+msgstr "Neue TLS-Server-Zugangsdaten hinzufügen"
 
 #: trustpoint/templates/setup_wizard/select_tls_server_credential.html:43
 msgid ""
@@ -5068,28 +4935,26 @@ msgid ""
 msgstr ""
 
 #: trustpoint/templates/setup_wizard/select_tls_server_credential.html:50
-#, fuzzy
-#| msgid "User Certificate"
 msgid "Generate Certificate"
-msgstr "Nutzerzertifikat"
+msgstr "Zertifikat generieren"
 
 #: trustpoint/templates/setup_wizard/select_tls_server_credential.html:61
+#, fuzzy
 msgid "Import TLS-Server Credential From File"
-msgstr "TLS-Server Credential aus Datei importieren"
+msgstr "Neuen Unterzeichner aus Datei importieren"
 
 #: trustpoint/templates/setup_wizard/select_tls_server_credential.html:63
 msgid "Import an existing certificate and private key from files"
 msgstr ""
 
 #: trustpoint/templates/setup_wizard/select_tls_server_credential.html:65
+#, fuzzy
 msgid "Recommended"
-msgstr ""
+msgstr "Empfohlen für Tests"
 
 #: trustpoint/templates/setup_wizard/select_tls_server_credential.html:71
-#, fuzzy
-#| msgid "User Certificate"
 msgid "Import Certificate"
-msgstr "Nutzerzertifikat"
+msgstr "Zertifikat importieren"
 
 #: trustpoint/templates/setup_wizard/setup_mode.html:31
 #, fuzzy
@@ -5101,7 +4966,7 @@ msgstr "Einrichtung"
 #, fuzzy
 #| msgid "Explore the Trustpoint project"
 msgid "Setup Trustpoint from Scratch"
-msgstr "Entdecken Sie das Trustpoint-Forschungsprojekt"
+msgstr "Keine verknüpfte CA von Trustpoint"
 
 #: trustpoint/templates/setup_wizard/setup_mode.html:45
 msgid "Configure a new Trustpoint instance with fresh settings"
@@ -5116,8 +4981,9 @@ msgid "Restore Trustpoint configuration from a previous backup"
 msgstr ""
 
 #: trustpoint/templates/setup_wizard/setup_mode.html:70
+#, fuzzy
 msgid "Restore Backup"
-msgstr ""
+msgstr "Mit Passwort wiederherstellen"
 
 #: trustpoint/templates/setup_wizard/tls_server_credential_apply.html:34
 msgid "Download TLS-Server Trust-Store"
@@ -5138,45 +5004,37 @@ msgstr "TLS-Konfiguration anwenden"
 #: trustpoint/templates/signer/add/file_import.html:11
 #: trustpoint/templates/signer/add/file_import.html:26
 #: trustpoint/templates/signer/add/method_select.html:11
-#, fuzzy
-#| msgid "Add new Device"
 msgid "Add new Signer"
-msgstr "Neues Gerät hinzufügen"
+msgstr "Neuen Unterzeichner hinzufügen"
 
 #: trustpoint/templates/signer/add/file_type_select.html:11
 msgid "Add new Signer - Select File Type"
-msgstr ""
+msgstr "Neuen Unterzeichner hinzufügen – Dateityp auswählen"
 
 #: trustpoint/templates/signer/add/file_type_select.html:16
-#, fuzzy
-#| msgid "Select Truststore File Format"
 msgid "Select the file type for import"
-msgstr "Truststore-Dateityp auswählen"
+msgstr "Wählen Sie den Dateityp für den Import aus"
 
 #: trustpoint/templates/signer/add/method_select.html:16
-#, fuzzy
-#| msgid "Import new Issuing CA from file"
 msgid "Import new Signer from file"
-msgstr "Neue Issuing CA aus Datei importieren"
+msgstr "Neuen Unterzeichner aus Datei importieren"
 
 #: trustpoint/templates/signer/add/method_select.html:18
-#, fuzzy
-#| msgid "Import From PKCS#12 File"
 msgid "Import From File"
-msgstr "Aus PKCS#12-Datei importieren"
+msgstr "Aus Datei importieren"
 
 #: trustpoint/templates/signer/confirm_delete.html:13
 #, fuzzy
 #| msgid "Confirm Device Deletion"
 msgid "Confirm Signer Deletion"
-msgstr "Entfernen des Geräts bestätigen"
+msgstr "Löschen des Truststores bestätigen"
 
 #: trustpoint/templates/signer/confirm_delete.html:19
 #: trustpoint/templates/signer/sign_hash_success.html:27
 #, fuzzy
 #| msgid "Signature"
 msgid "Signer"
-msgstr "Signatur"
+msgstr "Unterzeichner auswählen"
 
 #: trustpoint/templates/signer/confirm_delete.html:27
 #: trustpoint/templates/signer/confirm_delete.html:33
@@ -5185,19 +5043,17 @@ msgstr "Signatur"
 #, fuzzy
 #| msgid "User Certificate"
 msgid "Signer Certificate"
-msgstr "Nutzerzertifikat"
+msgstr "Einen Unterzeichner auswählen..."
 
 #: trustpoint/templates/signer/confirm_delete.html:54
 #, fuzzy
 #| msgid "Delete selected devices"
 msgid "Delete selected Signers"
-msgstr "Ausgewählte Geräte entfernen"
+msgstr "Ausgewählte CRLs löschen"
 
 #: trustpoint/templates/signer/sign_hash.html:11
-#, fuzzy
-#| msgid "Signature Value"
 msgid "Sign Hash Value"
-msgstr "Signatur-Wert"
+msgstr "Hash-Wert signieren"
 
 #: trustpoint/templates/signer/sign_hash.html:16
 msgid ""
@@ -5209,28 +5065,33 @@ msgstr ""
 #, fuzzy
 #| msgid "Signature Algorithm"
 msgid "Hash Algorithm:"
-msgstr "Signatur-Algorithmus"
+msgstr "OID des Signatur-Algorithmus"
 
 #: trustpoint/templates/signer/sign_hash.html:28
+#, fuzzy
 msgid "This algorithm is determined by the selected signer\\"
-msgstr ""
+msgstr "Es sind keine Zertifikatsprofile zur Löschung ausgewählt."
 
 #: trustpoint/templates/signer/sign_hash.html:38
+#, fuzzy
 msgid ""
 "The hash value must be in hexadecimal format without any prefix (e.g., no "
 "\"0x\"). Ensure the hash length matches the signer\\"
 msgstr ""
+"Der Hashwert muss im Hexadezimalformat ohne Präfix (z. B. ohne „0x“) "
+"angegeben werden. Stellen Sie sicher, dass die Hashlänge mit der des "
+"Unterzeichners übereinstimmt."
 
 #: trustpoint/templates/signer/sign_hash.html:46
 #: trustpoint/templates/signer/signers.html:62
 msgid "Sign Hash"
-msgstr ""
+msgstr "Hash signieren"
 
 #: trustpoint/templates/signer/sign_hash_success.html:13
 #, fuzzy
 #| msgid "Signature Suite"
 msgid "Signature Result"
-msgstr "Signatur-Suite"
+msgstr "Signaturverfahren"
 
 #: trustpoint/templates/signer/sign_hash_success.html:18
 #, fuzzy
@@ -5239,28 +5100,29 @@ msgid "Success!"
 msgstr "Erfolg"
 
 #: trustpoint/templates/signer/sign_hash_success.html:19
+#, fuzzy
 msgid "The hash has been successfully signed."
-msgstr ""
+msgstr "Es wurde noch keine DevOwnerID hinzugefügt."
 
 #: trustpoint/templates/signer/sign_hash_success.html:22
 #: trustpoint/templates/signer/signed_messages.html:59
 #, fuzzy
 #| msgid "Signature Value"
 msgid "Signature Details"
-msgstr "Signatur-Wert"
+msgstr "Signaturverfahren"
 
 #: trustpoint/templates/signer/sign_hash_success.html:31
 #, fuzzy
 #| msgid "Signature Algorithm"
 msgid "Hash Algorithm"
-msgstr "Signatur-Algorithmus"
+msgstr "OID des Signatur-Algorithmus"
 
 #: trustpoint/templates/signer/sign_hash_success.html:45
 #: trustpoint/templates/signer/signed_messages.html:73
 #, fuzzy
 #| msgid "Signature Value"
 msgid "Signature (Hexadecimal)"
-msgstr "Signatur-Wert"
+msgstr "Digitale Signatur"
 
 #: trustpoint/templates/signer/sign_hash_success.html:62
 #, fuzzy
@@ -5269,62 +5131,68 @@ msgid "Back to Signers"
 msgstr "Zurück zur Domain"
 
 #: trustpoint/templates/signer/sign_hash_success.html:65
+#, fuzzy
 msgid "Sign Another Hash"
-msgstr ""
+msgstr "Hash-Wert signieren"
 
 #: trustpoint/templates/signer/signed_messages.html:12
+#, fuzzy
 msgid "Signed Messages for"
-msgstr ""
+msgstr "Selbstsigniert"
 
 #: trustpoint/templates/signer/signed_messages.html:21
 msgid "Created At"
 msgstr "Erstellt am"
 
 #: trustpoint/templates/signer/signed_messages.html:39
+#, fuzzy
 msgid "No signed messages found"
-msgstr ""
+msgstr "Benutzerdefinierte Nachricht nicht gefunden."
 
 #: trustpoint/templates/signer/signed_messages.html:48
 #, fuzzy
 #| msgid "Back to Domain"
 msgid "Back to Signer"
-msgstr "Zurück zur Domain"
+msgstr "Unterzeichner auswählen"
 
 #: trustpoint/templates/signer/signer_config.html:77
+#, fuzzy
 msgid "Valid From"
-msgstr ""
+msgstr "Noch nicht gültig"
 
 #: trustpoint/templates/signer/signer_config.html:81
 #, fuzzy
 #| msgid "Validity"
 msgid "Valid Until"
-msgstr "Gültigkeit"
+msgstr "Noch nicht gültig"
 
 #: trustpoint/templates/signer/signer_config.html:86
 #, fuzzy
 #| msgid "Message:"
 msgid "Signed Messages"
-msgstr "Nachricht:"
+msgstr "Selbstsigniert"
 
 #: trustpoint/templates/signer/signer_config.html:90
+#, fuzzy
 msgid "Total Signed Messages"
-msgstr ""
+msgstr "Gesamtzahl widerrufener Zertifikate"
 
 #: trustpoint/templates/signer/signer_config.html:93
+#, fuzzy
 msgid "View Signed Messages"
-msgstr ""
+msgstr "Selbstsigniert"
 
 #: trustpoint/templates/signer/signer_config.html:102
 #, fuzzy
 #| msgid "Back to Domain"
 msgid "Back to Signer List"
-msgstr "Zurück zur Domain"
+msgstr "Einen Unterzeichner auswählen..."
 
 #: trustpoint/templates/signer/signer_config.html:107
 #, fuzzy
 #| msgid "Delete"
 msgid "Delete Signer"
-msgstr "Entfernen"
+msgstr "Unterzeichner auswählen"
 
 #: trustpoint/templates/signer/signers.html:8
 msgid "Signers List"
@@ -5334,13 +5202,11 @@ msgstr ""
 #, fuzzy
 #| msgid "Other Names"
 msgid "Signer Name"
-msgstr "Weitere Namen"
+msgstr "Unterzeichner auswählen"
 
 #: trustpoint/templates/signer/signers.html:19
-#, fuzzy
-#| msgid "Expires in"
 msgid "Expires on"
-msgstr "Läuft aus in"
+msgstr "Läuft ab am"
 
 #: trustpoint/templates/signer/signers.html:20
 #: trustpoint/templates/signer/signers.html:40
@@ -5351,23 +5217,21 @@ msgstr ""
 #, fuzzy
 #| msgid "No Truststores found."
 msgid "No signers found"
-msgstr "Es wurden keine Truststores gefunden."
+msgstr "Keine Backups gefunden."
 
 #: trustpoint/templates/signer/signers.html:58
-#, fuzzy
-#| msgid "Delete selected"
 msgid "Delete Selected"
-msgstr "Auswahl entfernen"
+msgstr "Ausgewählte löschen"
 
 #: trustpoint/templates/signer/signers.html:63
 #, fuzzy
 #| msgid "Add new Device"
 msgid "Add New Signer"
-msgstr "Neues Gerät hinzufügen"
+msgstr "Neuen Unterzeichner hinzufügen"
 
 #: trustpoint/templates/trustpoint/base.html:40
 msgid "Dashboard"
-msgstr "Übersicht"
+msgstr "Dashboard"
 
 #: trustpoint/templates/trustpoint/base.html:65
 msgid "PKI"
@@ -5375,7 +5239,7 @@ msgstr "PKI"
 
 #: trustpoint/templates/trustpoint/base.html:73
 msgid "CRLs"
-msgstr ""
+msgstr "CRLs"
 
 #: trustpoint/templates/trustpoint/base.html:85
 msgid "Signing"
@@ -5403,7 +5267,7 @@ msgstr "Zurück"
 #, fuzzy
 #| msgid "Key Usage"
 msgid "Key Storage"
-msgstr "Schlüsselverwendung"
+msgstr "Schlüsselkompromittierung"
 
 #: trustpoint/templates/trustpoint/base.html:115
 #: trustpoint/templates/trustpoint/base.html:124
@@ -5413,10 +5277,8 @@ msgstr ""
 
 #: trustpoint/templates/trustpoint/base.html:129
 #: trustpoint/templates/workflows/enrollment_request_table.html:8
-#, fuzzy
-#| msgid "Pending devices"
 msgid "Pending Requests"
-msgstr "Ausstehende Geräte"
+msgstr "Ausstehende Anfragen"
 
 #: trustpoint/templates/trustpoint/base.html:139
 msgid "Light theme"
@@ -5428,7 +5290,7 @@ msgstr "Dunkles Theme"
 
 #: trustpoint/templates/trustpoint/base.html:148
 msgid "Help & Support"
-msgstr ""
+msgstr "Hilfe & Support"
 
 #: trustpoint/templates/trustpoint/base.html:155
 msgid "Logout"
@@ -5458,20 +5320,20 @@ msgstr "Erneut einloggen"
 #, fuzzy
 #| msgid "Enrollment"
 msgid "Enrollment Request"
-msgstr "Einbindung"
+msgstr "Keine Anmeldeanfragen."
 
 #: trustpoint/templates/workflows/enrollment_request_detail.html:23
+#, fuzzy
 msgid "Abort request"
-msgstr ""
+msgstr "Ausgewählte abbrechen"
 
 #: trustpoint/templates/workflows/enrollment_request_detail.html:33
 #: trustpoint/templates/workflows/instance_detail.html:46
 msgid "Workflow"
-msgstr ""
+msgstr "Workflow"
 
 #: trustpoint/templates/workflows/enrollment_request_detail.html:34
 #, fuzzy
-#| msgid "Created At"
 msgid "Requested At"
 msgstr "Erstellt am"
 
@@ -5479,10 +5341,8 @@ msgstr "Erstellt am"
 #: trustpoint/templates/workflows/enrollment_request_table.html:31
 #: trustpoint/templates/workflows/instance_detail.html:53
 #: trustpoint/workflows/filters.py:61
-#, fuzzy
-#| msgid "Status"
 msgid "State"
-msgstr "Status"
+msgstr "Zustand"
 
 #: trustpoint/templates/workflows/enrollment_request_detail.html:36
 #: trustpoint/templates/workflows/enrollment_request_table.html:32
@@ -5492,23 +5352,20 @@ msgid "Action"
 msgstr "Anwendung"
 
 #: trustpoint/templates/workflows/enrollment_request_detail.html:58
+#, fuzzy
 msgid "No workflow instances."
-msgstr ""
+msgstr "Keine Workflow-Instanzen."
 
 #: trustpoint/templates/workflows/enrollment_request_table.html:27
 #: trustpoint/templates/workflows/instance_detail.html:107
 #: trustpoint/workflows/filters.py:40
-#, fuzzy
-#| msgid "Pki Protocol"
 msgid "Protocol"
-msgstr "PKI-Protokoll"
+msgstr "Protokoll"
 
 #: trustpoint/templates/workflows/enrollment_request_table.html:28
 #: trustpoint/workflows/filters.py:54
-#, fuzzy
-#| msgid "Template Name"
 msgid "Template"
-msgstr "Name der Vorlage"
+msgstr "Vorlage"
 
 #: trustpoint/templates/workflows/enrollment_request_table.html:70
 msgid "Open"
@@ -5516,34 +5373,29 @@ msgstr ""
 
 #: trustpoint/templates/workflows/enrollment_request_table.html:77
 msgid "No enrollment requests."
-msgstr ""
+msgstr "Keine Anmeldeanfragen."
 
 #: trustpoint/templates/workflows/enrollment_request_table.html:91
-#, fuzzy
-#| msgid "Truststores selected"
 msgid "Approve selected"
-msgstr "Ausgewählte Truststores"
+msgstr "Ausgewählte genehmigen"
 
 #: trustpoint/templates/workflows/enrollment_request_table.html:98
-#, fuzzy
-#| msgid "Delete selected"
 msgid "Reject selected"
-msgstr "Auswahl entfernen"
+msgstr "Ausgewählte ablehnen"
 
 #: trustpoint/templates/workflows/enrollment_request_table.html:102
-#, fuzzy
-#| msgid "Delete selected"
 msgid "Abort selected"
-msgstr "Auswahl entfernen"
+msgstr "Ausgewählte abbrechen"
 
 #: trustpoint/templates/workflows/enrollment_request_table_filter.html:80
 #: trustpoint/templates/workflows/instance_table_filter.html:81
 msgid "Requested between"
-msgstr ""
+msgstr "Angefordert zwischen"
 
 #: trustpoint/templates/workflows/instance_detail.html:8
+#, fuzzy
 msgid "Workflow Instance Details"
-msgstr ""
+msgstr "Gerätedetails"
 
 #: trustpoint/templates/workflows/instance_detail.html:14
 msgid "Summary"
@@ -5553,11 +5405,12 @@ msgstr "Übersicht"
 #, fuzzy
 #| msgid "Enrollment"
 msgid "Enrollment request"
-msgstr "Einbindung"
+msgstr "Keine Anmeldeanfragen."
 
 #: trustpoint/templates/workflows/instance_detail.html:25
+#, fuzzy
 msgid "No enrollment request"
-msgstr ""
+msgstr "Keine Anmeldeanfragen."
 
 #: trustpoint/templates/workflows/instance_detail.html:30
 #, fuzzy
@@ -5567,31 +5420,28 @@ msgstr "Das Zertifikat des Domain-Credentials einbinden"
 
 #: trustpoint/templates/workflows/instance_detail.html:37
 msgid "N/A"
-msgstr ""
+msgstr "N/A"
 
 #: trustpoint/templates/workflows/instance_detail.html:43
+#, fuzzy
 msgid "Instance ID"
-msgstr ""
+msgstr "Gerätebesitzer-ID"
 
 #: trustpoint/templates/workflows/instance_detail.html:58
 msgid "Current step"
 msgstr ""
 
 #: trustpoint/templates/workflows/instance_detail.html:67
-#, fuzzy
-#| msgid "Created at"
 msgid "Requested at"
-msgstr "Erstellt um"
+msgstr "Erstellt am"
 
 #: trustpoint/templates/workflows/instance_detail.html:70
-#, fuzzy
-#| msgid "Updated"
 msgid "Last updated"
-msgstr "Aktualisiert"
+msgstr "Zuletzt aktualisiert"
 
 #: trustpoint/templates/workflows/instance_detail.html:78
 msgid "Request"
-msgstr ""
+msgstr "Anfrage"
 
 #: trustpoint/templates/workflows/instance_detail.html:118
 #: trustpoint/workflows/filters.py:47
@@ -5601,46 +5451,46 @@ msgid "Operation"
 msgstr "Anwendung"
 
 #: trustpoint/templates/workflows/instance_detail.html:133
+#, fuzzy
 msgid "Workflow steps"
-msgstr ""
+msgstr "Workflow"
 
 #: trustpoint/templates/workflows/instance_detail.html:138
 msgid "Step"
 msgstr ""
 
 #: trustpoint/templates/workflows/instance_detail.html:171
+#, fuzzy
 msgid "No step metadata is available for this instance."
 msgstr ""
+"Es sind keine TLS-Zertifikate verfügbar. Fügen Sie zunächst eines hinzu oder "
+"generieren Sie eines."
 
 #: trustpoint/templates/workflows/instance_detail.html:181
-#, fuzzy
-#| msgid "Details"
 msgid "CSR details"
-msgstr "Details"
+msgstr "CSR-Details"
 
 #: trustpoint/templates/workflows/instance_detail.html:192
 msgid "SANs"
-msgstr ""
+msgstr "SANs"
 
 #: trustpoint/templates/workflows/instance_detail.html:199
 #, fuzzy
 #| msgid "No log files available."
 msgid "No CSR data available."
-msgstr "Keine Log-Dateien vorhanden."
+msgstr "Datenverschlüsselung"
 
 #: trustpoint/templates/workflows/instance_detail.html:204
 msgid "CSR PEM"
-msgstr ""
+msgstr "CSR PEM"
 
 #: trustpoint/templates/workflows/instance_detail.html:217
 msgid "Approve"
-msgstr ""
+msgstr "Genehmigen"
 
 #: trustpoint/templates/workflows/instance_detail.html:220
-#, fuzzy
-#| msgid "Rejected"
 msgid "Reject"
-msgstr "Abgelehnt"
+msgstr "Ablehnen"
 
 #: trustpoint/trustpoint/settings.py:244
 msgid "German"
@@ -5651,26 +5501,27 @@ msgid "English"
 msgstr "Englisch"
 
 #: trustpoint/util/email.py:46
+#, fuzzy
 msgid "User Welcome"
-msgstr ""
+msgstr "OPC Benutzer"
 
 #: trustpoint/util/email.py:51
 #, fuzzy
 #| msgid "Delete"
 msgid "User Delete"
-msgstr "Entfernen"
+msgstr "OPC Benutzer"
 
 #: trustpoint/util/email.py:58
 #, fuzzy
 #| msgid "Certificates Issued"
 msgid "Certificate Issued"
-msgstr "Ausgestellte Zertifikate"
+msgstr "Ausgestellte Zugangsdaten"
 
 #: trustpoint/util/email.py:63
 #, fuzzy
 #| msgid "Certificate Hold"
 msgid "Certificate Revoked"
-msgstr "Zertifikat halten"
+msgstr "Widerrufene Zertifikate"
 
 #: trustpoint/util/encrypted_fields.py:24
 msgid "Encrypted text field using PKCS#11 DEK"
@@ -5678,8 +5529,9 @@ msgstr ""
 
 #: trustpoint/util/encrypted_fields.py:79
 #: trustpoint/util/encrypted_fields.py:302
+#, fuzzy
 msgid "No PKCS#11 token configured for encryption."
-msgstr ""
+msgstr "Eindeutiges Label für das PKCS#11-Token"
 
 #: trustpoint/util/encrypted_fields.py:88
 #: trustpoint/util/encrypted_fields.py:311
@@ -5689,15 +5541,15 @@ msgstr ""
 
 #: trustpoint/util/encrypted_fields.py:131
 #: trustpoint/util/encrypted_fields.py:347
-#, python-format
+#, fuzzy, python-format
 msgid "Failed to encrypt field value: %s"
-msgstr ""
+msgstr "Fehler beim Importieren der CRL: %(error)s"
 
 #: trustpoint/util/encrypted_fields.py:176
 #: trustpoint/util/encrypted_fields.py:385
-#, python-format
+#, fuzzy, python-format
 msgid "Failed to decrypt field value: %s"
-msgstr ""
+msgstr "Fehler beim Importieren der CRL: %(error)s"
 
 #: trustpoint/util/encrypted_fields.py:212
 msgid "Encrypted char field using PKCS#11 DEK"
@@ -5710,55 +5562,53 @@ msgid ""
 msgstr ""
 
 #: trustpoint/workflows/filters.py:23
-#, fuzzy
-#| msgid "Search Guide"
 msgid "Search device…"
-msgstr "Suchhilfe"
+msgstr "Gerät suchen…"
 
 #: trustpoint/workflows/filters.py:27
 msgid "Include finalized/aborted requests"
-msgstr ""
+msgstr "Abgeschlossene/ abgebrochene Anfragen einbeziehen"
 
 #: trustpoint/workflows/filters.py:43
 msgid "EST, CMP, …"
-msgstr ""
+msgstr "EST, CMP, …"
 
 #: trustpoint/workflows/filters.py:50
 msgid "simpleenroll, …"
 msgstr ""
 
 #: trustpoint/workflows/filters.py:57
-#, fuzzy
-#| msgid "Template Name"
 msgid "Template…"
-msgstr "Name der Vorlage"
+msgstr "Vorlage..."
 
 #: trustpoint/workflows/filters.py:68
 msgid "Requested from"
-msgstr ""
+msgstr "Angefordert von"
 
 #: trustpoint/workflows/filters.py:75
+#, fuzzy
 msgid "Requested to"
-msgstr ""
+msgstr "Erstellt am"
 
 #: trustpoint/workflows/services/validators.py:96
+#, fuzzy
 msgid "auth must be an object."
-msgstr ""
+msgstr "Die Gültigkeit muss eine positive ganze Zahl sein."
 
 #: trustpoint/workflows/services/validators.py:102
 #, fuzzy
 #| msgid "The EST server requires username and password for authentication."
 msgid "auth.basic requires username and password (strings)."
-msgstr ""
-"Der EST-Server erfordert Nutzername und Passwort zur Authentifizierung."
+msgstr "Der EST-Server erfordert Nutzername und Passwort zur Authentifizierung."
 
 #: trustpoint/workflows/services/validators.py:106
 msgid "auth.bearer requires a non-empty token (string)."
 msgstr ""
 
 #: trustpoint/workflows/services/validators.py:109
+#, fuzzy
 msgid "auth.type must be \"basic\" or \"bearer\"."
-msgstr ""
+msgstr "Die Gültigkeit muss eine positive ganze Zahl sein."
 
 #: trustpoint/workflows/services/validators.py:133
 #, fuzzy, python-format
@@ -5778,8 +5628,7 @@ msgstr ""
 
 #: trustpoint/workflows/services/validators.py:151
 #, python-format
-msgid ""
-"Step #%s (Approval): timeoutSecs must be a positive integer if provided."
+msgid "Step #%s (Approval): timeoutSecs must be a positive integer if provided."
 msgstr ""
 
 #: trustpoint/workflows/services/validators.py:154
@@ -5799,9 +5648,9 @@ msgstr ""
 
 #: trustpoint/workflows/services/validators.py:181
 #: trustpoint/workflows/services/validators.py:218
-#, python-format
+#, fuzzy, python-format
 msgid "Step #%s (Webhook): %s"
-msgstr ""
+msgstr "Wechsel zu %(mode)s nicht möglich:"
 
 #: trustpoint/workflows/services/validators.py:188
 #, python-format
@@ -5809,11 +5658,13 @@ msgid "Step #%s (Webhook): method must be one of %s."
 msgstr ""
 
 #: trustpoint/workflows/services/validators.py:197
-#, python-format
+#, fuzzy, python-format
 msgid ""
 "Step #%s (Webhook): headers must be an object of string keys and string/"
 "number values."
 msgstr ""
+"Schritt #%s (Webhook): Header müssen ein Objekt aus String-Schlüsseln und "
+"String-/Zahlenwerten sein."
 
 #: trustpoint/workflows/services/validators.py:205
 #, python-format
@@ -5822,13 +5673,13 @@ msgstr ""
 
 #: trustpoint/workflows/services/validators.py:207
 #, python-format
-msgid ""
-"Step #%s (Webhook): body must be a string, object, or array if provided."
+msgid "Step #%s (Webhook): body must be a string, object, or array if provided."
 msgstr ""
 
 #: trustpoint/workflows/services/validators.py:218
+#, fuzzy
 msgid "invalid auth"
-msgstr ""
+msgstr "OTP ist ungültig."
 
 #: trustpoint/workflows/services/validators.py:228
 #, python-format
@@ -5855,11 +5706,13 @@ msgid ""
 msgstr ""
 
 #: trustpoint/workflows/services/validators.py:267
-#, python-format
+#, fuzzy, python-format
 msgid ""
 "Step #%s (Webhook): use \"exports\": [ {\"from_path\":\"json.foo\","
 "\"to_path\":\"my.foo\"} ] instead of legacy \"export\" mapping."
 msgstr ""
+"Schritt #%s (Webhook): Verwenden Sie „exports”: [ {\"from_path\":\"json.foo\","
+"\"to_path\":\"my.foo\"} ] anstelle der veralteten „export”-Zuordnung."
 
 #: trustpoint/workflows/services/validators.py:275
 #, python-format
@@ -5874,16 +5727,18 @@ msgstr ""
 #: trustpoint/workflows/services/validators.py:291
 #, python-format
 msgid ""
-"Step #%s (Webhook): export #%s from_path must be one of \"status\", "
-"\"text\", \"json[.path]\" or \"headers[.path]\"."
+"Step #%s (Webhook): export #%s from_path must be one of \"status\", \"text\", "
+"\"json[.path]\" or \"headers[.path]\"."
 msgstr ""
 
 #: trustpoint/workflows/services/validators.py:301
-#, python-format
+#, fuzzy, python-format
 msgid ""
 "Step #%s (Webhook): export #%s to_path must be a variable path like "
 "\"serial_number\" or \"http.status\" (no \"vars.\" prefix)."
 msgstr ""
+"Schritt #%s (Webhook): export #%s to_path muss ein variabler Pfad wie "
+"„serial_number” oder „http.status” sein (ohne das Präfix „vars.”)."
 
 #: trustpoint/workflows/services/validators.py:307
 #, python-format
@@ -5891,27 +5746,25 @@ msgid "Step #%s (Webhook): duplicate to_path \"%s\" in exports."
 msgstr ""
 
 #: trustpoint/workflows/services/validators.py:324
-#, fuzzy
-#| msgid "This field is required."
 msgid "Name is required."
-msgstr "Dieses Feld ist erforderlich."
+msgstr "Name ist erforderlich."
 
 #: trustpoint/workflows/services/validators.py:330
 #, fuzzy
 #| msgid "At least one SAN entry is required."
 msgid "At least one event is required."
-msgstr "Es ist mindestens ein SAN-Eintrag erforderlich."
+msgstr "Dieses Feld ist ein Pflichtfeld."
 
 #: trustpoint/workflows/services/validators.py:336
-#, python-format
+#, fuzzy, python-format
 msgid "Event #%s is not an object."
-msgstr ""
+msgstr "Wechsel zu %(mode)s nicht möglich:"
 
 #: trustpoint/workflows/services/validators.py:344
 #, fuzzy, python-format
 #| msgid "At least one SAN entry is required."
 msgid "Event #%s: handler is required."
-msgstr "Es ist mindestens ein SAN-Eintrag erforderlich."
+msgstr "Dieses Feld ist ein Pflichtfeld."
 
 #: trustpoint/workflows/services/validators.py:351
 #, python-format
@@ -5924,14 +5777,14 @@ msgid "Event #%s: unknown handler/protocol/operation combination."
 msgstr ""
 
 #: trustpoint/workflows/services/validators.py:367
-#, python-format
+#, fuzzy, python-format
 msgid "Step #%s is not an object."
-msgstr ""
+msgstr "Wechsel zu %(mode)s nicht möglich:"
 
 #: trustpoint/workflows/services/validators.py:372
-#, python-format
+#, fuzzy, python-format
 msgid "Step #%s: unknown type \"%s\"."
-msgstr ""
+msgstr "Nicht unterstützter HSM-Typ: %(hsm_type)s"
 
 #: trustpoint/workflows/services/validators.py:377
 #, python-format
@@ -5942,7 +5795,7 @@ msgstr ""
 #, fuzzy
 #| msgid "At least one SAN entry is required."
 msgid "At least one step is required."
-msgstr "Es ist mindestens ein SAN-Eintrag erforderlich."
+msgstr "Dieses Feld ist ein Pflichtfeld."
 
 #: trustpoint/workflows/services/validators.py:409
 #: trustpoint/workflows/services/validators.py:414
@@ -5952,8 +5805,9 @@ msgid "At least one scope (CA/Domain/Device) is required."
 msgstr "Es ist mindestens ein SAN-Eintrag erforderlich."
 
 #: trustpoint/workflows/services/validators.py:417
+#, fuzzy
 msgid "Invalid scopes format."
-msgstr ""
+msgstr "Ungültige CA-Konfiguration"
 
 #: trustpoint/workflows/views.py:972
 #, python-format
@@ -6220,8 +6074,8 @@ msgstr ""
 #~ msgstr "Automatisch neues Gerät anlegen"
 
 #~ msgid ""
-#~ "Automatically create a new device if no device with the same serial "
-#~ "number exists in the database."
+#~ "Automatically create a new device if no device with the same serial number "
+#~ "exists in the database."
 #~ msgstr ""
 #~ "Ein Gerät wird automatisch angelegt, wenn es noch kein Gerät mit der "
 #~ "gleichen Seriennummer in der Datenbank gibt."
@@ -6244,11 +6098,11 @@ msgstr ""
 #~ msgstr "Ein Domain-Credential zur Authentifizierung erlauben"
 
 #~ msgid ""
-#~ "The EST server permits a domain credential issued by the domain Issuing "
-#~ "CA for authentication."
+#~ "The EST server permits a domain credential issued by the domain Issuing CA "
+#~ "for authentication."
 #~ msgstr ""
-#~ "Der EST-Server akzeptiert zur Authentifizierung ein von der Domain-"
-#~ "Issuing CA ausgestelltes Domain-Credential."
+#~ "Der EST-Server akzeptiert zur Authentifizierung ein von der Domain-Issuing "
+#~ "CA ausgestelltes Domain-Credential."
 
 #~ msgid "Allow username:password for Authentication"
 #~ msgstr "Nutzername:Passwort zur Authentifizierung erlauben"
@@ -6480,8 +6334,7 @@ msgstr ""
 
 #~ msgid "Mismatch: Domain Credential Authentication"
 #~ msgstr ""
-#~ "Einstellung stimmt nicht überein: Authentifizierung durch Domain-"
-#~ "Credential"
+#~ "Einstellung stimmt nicht überein: Authentifizierung durch Domain-Credential"
 
 #~ msgid "Generate a Keypair"
 #~ msgstr "Schlüsselpaar erzeugen"
@@ -6507,9 +6360,9 @@ msgstr ""
 #~ "case. Thus, if you are using a different CMP client that requires you to "
 #~ "use the initialization request message type, this will work as well."
 #~ msgstr ""
-#~ "Die CMP-Nachrichtentypen Initialisierung (IR) und Zertifizierung (CR) "
-#~ "sind für diesen Anwendungsfall austauschbar. Wenn Sie also einen anderen "
-#~ "CMP-Client verwenden, der die Verwendung des Message-Typs IR erfordert, "
+#~ "Die CMP-Nachrichtentypen Initialisierung (IR) und Zertifizierung (CR) sind "
+#~ "für diesen Anwendungsfall austauschbar. Wenn Sie also einen anderen CMP-"
+#~ "Client verwenden, der die Verwendung des Message-Typs IR erfordert, "
 #~ "funktioniert dies ebenfalls."
 
 #~ msgid "TLS-Server Certificate Request"
@@ -6720,8 +6573,8 @@ msgstr ""
 #~ "The EST server requires a domain credential issued by the domain Issuing "
 #~ "CA for authentication."
 #~ msgstr ""
-#~ "Der EST-Server erfordert ein Domain-Credential zur Authentifizierung, "
-#~ "dass von der Issuing CA der Domain ausgestellt wurde."
+#~ "Der EST-Server erfordert ein Domain-Credential zur Authentifizierung, dass "
+#~ "von der Issuing CA der Domain ausgestellt wurde."
 
 #~ msgid "Require username:password for Authentication"
 #~ msgstr "Nutzername:Password zur Authentifizierung erfordern "
@@ -7373,14 +7226,13 @@ msgstr ""
 #~ "CA certificate up to the Root CA certificate is required."
 #~ msgstr ""
 #~ "Es konnte keine vollständige Zertifikatskette aus den hochgeladenen "
-#~ "Datei(en) erstellt werden. Bitte stellen Sie sicher, dass die "
-#~ "vollständige Zertifikatskette enthalten ist. Das Zertifikat der Issuing "
-#~ "CA bis zum Root-CA-Zertifikat ist erforderlich."
+#~ "Datei(en) erstellt werden. Bitte stellen Sie sicher, dass die vollständige "
+#~ "Zertifikatskette enthalten ist. Das Zertifikat der Issuing CA bis zum Root-"
+#~ "CA-Zertifikat ist erforderlich."
 
 #~ msgid ""
 #~ "The uploaded file(s) contain multiple possible Issuing CA "
-#~ "certificates.Please make sure that only one single valid chain is "
-#~ "included."
+#~ "certificates.Please make sure that only one single valid chain is included."
 #~ msgstr ""
 #~ "Die hochgeladene(n) Datei(en) enthält/enthalten mehrere mögliche Issuing "
 #~ "CA-Zertifikate; bitte stellen Sie sicher, dass nur eine einzige gültige "
@@ -7388,8 +7240,8 @@ msgstr ""
 
 #~ msgid ""
 #~ "The uploaded file(s) contain multiple certificate chains (cross-signed "
-#~ "certificates). Please make sure to only include a single certificate "
-#~ "chain for the Issuing CA."
+#~ "certificates). Please make sure to only include a single certificate chain "
+#~ "for the Issuing CA."
 #~ msgstr ""
 #~ "Die hochgeladene(n) Datei(en) enthält/enthalten mehrere Zertifikatsketten "
 #~ "(kreuzsignierte Zertifikate). Bitte stellen Sie sicher, dass nur eine "
@@ -7408,8 +7260,8 @@ msgstr ""
 #~ "(Must start with a letter. Can only contain lower case letters, digits, "
 #~ "underscores and hyphens)"
 #~ msgstr ""
-#~ "(nur Kleinbuchstaben, Ziffern, Unterstrich und Bindestrich, muss mit "
-#~ "einem Buchstaben beginnen)"
+#~ "(nur Kleinbuchstaben, Ziffern, Unterstrich und Bindestrich, muss mit einem "
+#~ "Buchstaben beginnen)"
 
 #~ msgid "BSI Technical Guideline TR-02103"
 #~ msgstr "BSI Technische Richtlinie TR-02103"
@@ -7484,8 +7336,8 @@ msgstr ""
 #~ "CA certificate has a Basic Constraints extension stating that the "
 #~ "certificate is not a CA."
 #~ msgstr ""
-#~ "CA-Zertifikat hat eine Basic Constraints-Erweiterung, die besagt, dass "
-#~ "das Zertifikat keine CA ist."
+#~ "CA-Zertifikat hat eine Basic Constraints-Erweiterung, die besagt, dass das "
+#~ "Zertifikat keine CA ist."
 
 #~ msgid ""
 #~ "The Key Usage extension of the CA certificate missing one or more "
@@ -7610,8 +7462,7 @@ msgstr ""
 #~ msgstr "Root CAs"
 
 #~ msgid ""
-#~ "Must start with a letter and only contain letters, numbers and "
-#~ "underscores."
+#~ "Must start with a letter and only contain letters, numbers and underscores."
 #~ msgstr ""
 #~ "Muss mit einem Buchstaben beginnen und darf nur aus Buchstaben, Ziffern, "
 #~ "und Unterstrichen bestehen."

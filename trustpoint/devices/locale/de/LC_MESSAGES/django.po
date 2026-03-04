@@ -6,63 +6,66 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: PACKAGE VERSION\n"
+"Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2026-02-26 08:42+0000\n"
-"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language-Team: LANGUAGE <LL@li.org>\n"
-"Language: \n"
+"PO-Revision-Date: 2026-03-04 14:12+0100\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: de\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Poedit 3.8\n"
 
 #: trustpoint/devices/filters.py:26
 msgid "Search…"
-msgstr ""
+msgstr "Suchen…"
 
 #: trustpoint/devices/filters.py:39
 msgid "Serial…"
-msgstr ""
+msgstr "Seriennummer…"
 
 #: trustpoint/devices/forms.py:72
 msgid "Password"
-msgstr ""
+msgstr "Passwort"
 
 #: trustpoint/devices/forms.py:74
-#, python-format
+#, fuzzy, python-format
 msgid "Must be at least %d characters long."
-msgstr ""
+msgstr "Ihr Passwort muss mindestens 8 Zeichen enthalten."
 
 #: trustpoint/devices/forms.py:94
+#, fuzzy
 msgid "Password is required."
-msgstr ""
+msgstr "Passwort erforderlich."
 
 #: trustpoint/devices/forms.py:97
-#, python-format
+#, fuzzy, python-format
 msgid "Password must be at least %d characters long."
-msgstr ""
+msgstr "Ihr Passwort muss mindestens 8 Zeichen enthalten."
 
 #: trustpoint/devices/forms.py:107 trustpoint/devices/models.py:198
 msgid "Common Name"
-msgstr ""
+msgstr "Allgemeiner Name"
 
 #: trustpoint/devices/forms.py:108
 msgid "Pseudonym"
-msgstr ""
+msgstr "Pseudonym"
 
 #: trustpoint/devices/forms.py:109
+#, fuzzy
 msgid "Domain Component"
-msgstr ""
+msgstr "Zugehörige Domain"
 
 #: trustpoint/devices/forms.py:110
 msgid "Serial Number"
-msgstr ""
+msgstr "Seriennummer"
 
 #: trustpoint/devices/forms.py:111
 msgid "Validity (days)"
-msgstr ""
+msgstr "Gültigkeit (Tage)"
 
 #: trustpoint/devices/forms.py:132
 #, python-format
@@ -71,15 +74,17 @@ msgstr ""
 
 #: trustpoint/devices/forms.py:144
 msgid "Validity must be a positive integer."
-msgstr ""
+msgstr "Die Gültigkeit muss eine positive ganze Zahl sein."
 
 #: trustpoint/devices/forms.py:153
+#, fuzzy
 msgid "IPv4-Addresses (comma-separated list)"
-msgstr ""
+msgstr "Zertifikatsperrliste herunterladen"
 
 #: trustpoint/devices/forms.py:155
+#, fuzzy
 msgid "IPv6-Addresses (comma-separated list)"
-msgstr ""
+msgstr "Zertifikatsperrliste herunterladen"
 
 #: trustpoint/devices/forms.py:157
 msgid "Domain-Names (comma-separated list)"
@@ -87,31 +92,33 @@ msgstr ""
 
 #: trustpoint/devices/forms.py:170
 msgid "Contains an invalid IPv4-Address."
-msgstr ""
+msgstr "Enthält eine ungültige IPv4-Adresse."
 
 #: trustpoint/devices/forms.py:183
 msgid "Contains an invalid IPv6-Address."
-msgstr ""
+msgstr "Enthält eine ungültige IPv6-Adresse."
 
 #: trustpoint/devices/forms.py:197
 msgid "At least one SAN entry is required."
 msgstr ""
 
 #: trustpoint/devices/forms.py:223
+#, fuzzy
 msgid "Application URI"
-msgstr ""
+msgstr "Produkt-URI"
 
 #: trustpoint/devices/forms.py:234
+#, fuzzy
 msgid "Application URI entry is required."
-msgstr ""
+msgstr "Neue OPC UA GDS Push-Anwendung erstellen"
 
 #: trustpoint/devices/forms.py:271
 msgid "This field is required."
-msgstr ""
+msgstr "Dieses Feld ist ein Pflichtfeld."
 
 #: trustpoint/devices/forms.py:273
 msgid "The provided OTP is invalid."
-msgstr ""
+msgstr "Das angegebene OTP ist ungültig."
 
 #: trustpoint/devices/forms.py:288
 msgid "The credential download process is not valid, it may have expired."
@@ -119,17 +126,18 @@ msgstr ""
 
 #: trustpoint/devices/forms.py:293
 msgid "OTP is invalid."
-msgstr ""
+msgstr "OTP ist ungültig."
 
 #: trustpoint/devices/forms.py:343 trustpoint/devices/forms.py:449
 msgid "Enabled PKI Protocols"
-msgstr ""
+msgstr "Aktivierte PKI-Protokolle"
 
 #: trustpoint/devices/forms.py:373 trustpoint/devices/forms.py:481
 #: trustpoint/devices/forms.py:590 trustpoint/devices/forms.py:698
 #: trustpoint/devices/forms.py:910
+#, fuzzy
 msgid "Device with this common name already exists."
-msgstr ""
+msgstr "Ein Token mit diesem Label existiert bereits."
 
 #: trustpoint/devices/forms.py:431
 msgid "Onboarding Protocol"
@@ -138,16 +146,16 @@ msgstr ""
 #: trustpoint/devices/forms.py:546 trustpoint/devices/forms.py:748
 #: trustpoint/devices/models.py:58
 msgid "IP Address"
-msgstr ""
+msgstr "IP Adresse"
 
 #: trustpoint/devices/forms.py:547 trustpoint/devices/forms.py:749
 #: trustpoint/devices/models.py:59
 msgid "OPC Server Port"
-msgstr ""
+msgstr "OPC Server Port"
 
 #: trustpoint/devices/forms.py:551 trustpoint/devices/forms.py:753
 msgid "OPC User"
-msgstr ""
+msgstr "OPC Benutzer"
 
 #: trustpoint/devices/forms.py:552 trustpoint/devices/forms.py:754
 msgid "OPC UA Server security administration user (role: SecurityAdmin)"
@@ -155,21 +163,22 @@ msgstr ""
 
 #: trustpoint/devices/forms.py:557 trustpoint/devices/forms.py:759
 msgid "OPC Password"
-msgstr ""
+msgstr "OPC Passwort"
 
 #: trustpoint/devices/forms.py:684 trustpoint/devices/forms.py:837
 #: trustpoint/devices/forms.py:896
 msgid "Apply Changes"
-msgstr ""
+msgstr "Änderungen übernehmen"
 
 #: trustpoint/devices/forms.py:705 trustpoint/devices/forms.py:845
 #: trustpoint/devices/forms.py:917 trustpoint/devices/forms.py:978
+#, fuzzy
 msgid "Expected DeviceModel that is configured to use onboarding."
-msgstr ""
+msgstr "Onboarding ist für dieses Gerät konfiguriert."
 
 #: trustpoint/devices/forms.py:766 trustpoint/devices/forms.py:956
 msgid "OPC UA Trust Store"
-msgstr ""
+msgstr "OPC UA Trust Store"
 
 #: trustpoint/devices/forms.py:969
 msgid "Associate Trust Store"
@@ -177,23 +186,24 @@ msgstr ""
 
 #: trustpoint/devices/models.py:56 trustpoint/devices/models.py:212
 msgid "Device"
-msgstr ""
+msgstr "Gerät"
 
 #: trustpoint/devices/models.py:57
+#, fuzzy
 msgid "Serial-Number"
-msgstr ""
+msgstr "Seriennummer"
 
 #: trustpoint/devices/models.py:61 trustpoint/devices/models.py:215
 msgid "Domain"
-msgstr ""
+msgstr "Domain"
 
 #: trustpoint/devices/models.py:66
 msgid "Onboarding Config"
-msgstr ""
+msgstr "Onboarding-Konfiguration"
 
 #: trustpoint/devices/models.py:74
 msgid "No Onboarding Config"
-msgstr ""
+msgstr "Keine Onboarding-Konfiguration"
 
 #: trustpoint/devices/models.py:84
 msgid "Generic Device"
@@ -201,39 +211,48 @@ msgstr ""
 
 #: trustpoint/devices/models.py:85
 msgid "OPC UA GDS"
-msgstr ""
+msgstr "OPC UA GDS"
 
 #: trustpoint/devices/models.py:86
 msgid "OPC UA GDS Push"
-msgstr ""
+msgstr "OPC UA GDS Push"
 
 #: trustpoint/devices/models.py:90
+#, fuzzy
 msgid "Device Type"
-msgstr ""
+msgstr "Gerät suchen…"
 
 #: trustpoint/devices/models.py:94 trustpoint/devices/models.py:218
 msgid "Created"
-msgstr ""
+msgstr "Erstellt"
 
 #: trustpoint/devices/models.py:97
+#, fuzzy
 msgid "Enable Periodic Certificate and Trustlist Update"
 msgstr ""
+"Die regelmäßige Erneuerung von Serverzertifikaten und Vertrauenslisten wurde "
+"deaktiviert."
 
 #: trustpoint/devices/models.py:102
 msgid ""
 "When enabled, the server certificate and trustlist will be automatically "
 "renewed at the specified interval."
 msgstr ""
+"Wenn diese Option aktiviert ist, werden das Serverzertifikat und die "
+"Vertrauensliste automatisch in dem angegebenen Intervall erneuert."
 
 #: trustpoint/devices/models.py:107
+#, fuzzy
 msgid "Renewal Interval (hours)"
-msgstr ""
+msgstr "CRL-Zyklusintervall (Stunden)"
 
 #: trustpoint/devices/models.py:112
 msgid ""
 "Number of hours between each automatic server certificate and trustlist "
 "renewal. Minimum 1 hour."
 msgstr ""
+"Anzahl der Stunden zwischen jeder automatischen Erneuerung des "
+"Serverzertifikats und der Vertrauensliste. Mindestens 1 Stunde."
 
 #: trustpoint/devices/models.py:116
 msgid "Last Periodic Update Scheduled At"
@@ -244,78 +263,90 @@ msgid ""
 "Timestamp of the most recent scheduled periodic server certificate and "
 "trustlist update."
 msgstr ""
+"ZeitsteZeitstempel der letzten geplanten regelmäßigen Aktualisierung des "
+"Serverzertifikats und der Vertrauensliste.mpel der letzten geplanten "
+"regelmäßigen Aktualisierung des Serverzertifikats und der Vertrauensliste."
 
 #: trustpoint/devices/models.py:193
+#, fuzzy
 msgid "Domain Credential"
-msgstr ""
+msgstr "Zugehörige Domain"
 
 #: trustpoint/devices/models.py:194
+#, fuzzy
 msgid "Application Credential"
-msgstr ""
+msgstr "Ausgestellte Zugangsdaten"
 
 #: trustpoint/devices/models.py:199
+#, fuzzy
 msgid "Credential Type"
-msgstr ""
+msgstr "Zugangsdaten"
 
 #: trustpoint/devices/models.py:201
+#, fuzzy
 msgid "Issued using Certificate Profile"
-msgstr ""
+msgstr "Löschen des Zertifikatsprofils bestätigen"
 
 #: trustpoint/devices/models.py:205
 msgid "Credential"
-msgstr ""
+msgstr "Zugangsdaten"
 
 #: trustpoint/devices/models.py:320
 msgid "OTP"
-msgstr ""
+msgstr "OTP"
 
 #: trustpoint/devices/models.py:322
 msgid "Attempts"
-msgstr ""
+msgstr "Versuche"
 
 #: trustpoint/devices/models.py:323
 msgid "Download Token"
-msgstr ""
+msgstr "Token Herunterladen"
 
 #: trustpoint/devices/models.py:324
 msgid "Token Created"
-msgstr ""
+msgstr "Token wurde erstellt"
 
 #: trustpoint/devices/views.py:98
+#, fuzzy
 msgid "Device does not have an associated domain."
-msgstr ""
+msgstr "Für dieses Gerät ist keine Domäne konfiguriert."
 
 #: trustpoint/devices/views.py:99
 msgid "Failed to retrieve named curve for ECC algorithm."
 msgstr ""
+"Die benannte Kurve für den ECC-Algorithmus konnte nicht abgerufen werden."
 
 #: trustpoint/devices/views.py:101
 msgid "No active trustpoint TLS server credential found."
-msgstr ""
+msgstr "Keine aktiven TLS-Server-Zugangsdaten für Trustpoint gefunden."
 
 #: trustpoint/devices/views.py:224
 msgid "Manage"
-msgstr ""
+msgstr "Verwalten"
 
 #: trustpoint/devices/views.py:725 trustpoint/devices/views.py:910
+#, fuzzy
 msgid "The device does not have onboarding configured."
-msgstr ""
+msgstr "Onboarding ist für dieses Gerät konfiguriert."
 
 #: trustpoint/devices/views.py:744
+#, fuzzy
 msgid "The object has onboarding configured."
-msgstr ""
+msgstr "Onboarding ist für dieses Gerät konfiguriert."
 
 #: trustpoint/devices/views.py:818
 msgid "Revoked"
-msgstr ""
+msgstr "Widerrufen"
 
 #: trustpoint/devices/views.py:820
 msgid "Revoke"
-msgstr ""
+msgstr "Widerrufen"
 
 #: trustpoint/devices/views.py:988
+#, fuzzy
 msgid "Device is configured for onboarding"
-msgstr ""
+msgstr "Onboarding ist für dieses Gerät konfiguriert."
 
 #: trustpoint/devices/views.py:993
 msgid "CMP with OpenSSL (shared-secret)"
@@ -329,8 +360,10 @@ msgid ""
 msgstr ""
 
 #: trustpoint/devices/views.py:1007
+#, fuzzy
 msgid "EST with OpenSSL and curL (username & password)"
 msgstr ""
+"Bei Remote-EST- Issuing CAs muss ein EST-Benutzername angegeben werden."
 
 #: trustpoint/devices/views.py:1009 trustpoint/devices/views.py:1197
 msgid ""
@@ -339,8 +372,9 @@ msgid ""
 msgstr ""
 
 #: trustpoint/devices/views.py:1022
+#, fuzzy
 msgid "Manual Issuance"
-msgstr ""
+msgstr "Manuelle Ausstellung"
 
 #: trustpoint/devices/views.py:1024
 msgid ""
@@ -350,8 +384,9 @@ msgid ""
 msgstr ""
 
 #: trustpoint/devices/views.py:1057
+#, fuzzy
 msgid "This device is configured for onboarding."
-msgstr ""
+msgstr "Onboarding ist für dieses Gerät konfiguriert."
 
 #: trustpoint/devices/views.py:1063
 msgid ""
@@ -361,20 +396,24 @@ msgstr ""
 
 #: trustpoint/devices/views.py:1069 trustpoint/devices/views.py:1114
 #: trustpoint/devices/views.py:1253
+#, fuzzy
 msgid "No domain is configured for this device."
-msgstr ""
+msgstr "Für dieses Gerät ist keine Domäne konfiguriert."
 
 #: trustpoint/devices/views.py:1174 trustpoint/devices/views.py:1235
+#, fuzzy
 msgid "Device is not configured for onboarding"
-msgstr ""
+msgstr "Onboarding ist für dieses Gerät konfiguriert."
 
 #: trustpoint/devices/views.py:1179
+#, fuzzy
 msgid "CMP with Domain Credential"
-msgstr ""
+msgstr "Keine Domain konfiguriert"
 
 #: trustpoint/devices/views.py:1195
+#, fuzzy
 msgid "EST with Domain Credential"
-msgstr ""
+msgstr "Keine Domain konfiguriert"
 
 #: trustpoint/devices/views.py:1244
 msgid ""
@@ -383,42 +422,51 @@ msgid ""
 msgstr ""
 
 #: trustpoint/devices/views.py:1394
+#, fuzzy
 msgid "Device has no domain configured."
-msgstr ""
+msgstr "Für dieses Gerät ist keine Domäne konfiguriert."
 
 #: trustpoint/devices/views.py:1580
-#, python-format
+#, fuzzy, python-format
 msgid ""
 "Successfully created the Truststore %(name)s with %(count)i certificate."
 msgid_plural ""
 "Successfully created the Truststore %(name)s with %(count)i certificates."
 msgstr[0] ""
+"Der Truststore „%(name)s“ wurde erfolgreich erstellt und enthält %(count)i "
+"Zertifikat."
 msgstr[1] ""
+"Der Truststore „%(name)s“ wurde erfolgreich erstellt und enthält %(count)i "
+"Zertifikate."
 
 #: trustpoint/devices/views.py:1662
 #, python-brace-format
 msgid "Error generating certificate builder: {error}"
-msgstr ""
+msgstr "Fehler beim Erstellen des Zertifikatsgenerators: {error}"
 
 #: trustpoint/devices/views.py:1667
 msgid "Certificate builder generated successfully."
-msgstr ""
+msgstr "Zertifikatsgenerator erfolgreich erstellt."
 
 #: trustpoint/devices/views.py:2099
 msgid "Invalid renewal interval. Please enter a positive integer (hours)."
 msgstr ""
+"Ungültiges Verlängerungsintervall. Bitte geben Sie eine positive ganze Zahl "
+"(Stunden) ein."
 
 #: trustpoint/devices/views.py:2119
 msgid "Periodic server certificate and trustlist renewal disabled."
 msgstr ""
+"Die regelmäßige Erneuerung von Serverzertifikaten und Vertrauenslisten wurde "
+"deaktiviert."
 
 #: trustpoint/devices/views.py:2334 trustpoint/devices/views.py:2373
 msgid "Unknown file format."
-msgstr ""
+msgstr "Unbekanntes Dateiformat."
 
 #: trustpoint/devices/views.py:2549
 msgid "The provided password is not valid."
-msgstr ""
+msgstr "Das angegebene Passwort ist ungültig."
 
 #: trustpoint/devices/views.py:2622
 msgid "Credential is already expired. Cannot revoke expired certificates."
@@ -430,10 +478,10 @@ msgid ""
 msgstr ""
 
 #: trustpoint/devices/views.py:2630 trustpoint/devices/views.py:2786
-#, python-format
+#, fuzzy, python-format
 msgid "Successfully revoked one active credential."
 msgid_plural "Successfully revoked %(count)d active credentials."
-msgstr[0] ""
+msgstr[0] "Keine aktiven TLS-Server-Zugangsdaten für Trustpoint gefunden."
 msgstr[1] ""
 
 #: trustpoint/devices/views.py:2634
@@ -442,7 +490,7 @@ msgstr ""
 
 #: trustpoint/devices/views.py:2709
 msgid "Please select the devices you would like to revoke."
-msgstr ""
+msgstr "Bitte wählen Sie die Geräte aus, die Sie widerrufen möchten."
 
 #: trustpoint/devices/views.py:2745 trustpoint/devices/views.py:2903
 msgid ""
@@ -452,11 +500,11 @@ msgstr ""
 
 #: trustpoint/devices/views.py:2793
 msgid "No credentials were revoked."
-msgstr ""
+msgstr "Es wurden keine Zugangsdaten widerrufen."
 
 #: trustpoint/devices/views.py:2867
 msgid "Please select the devices you would like to delete."
-msgstr ""
+msgstr "Bitte wählen Sie die Geräte aus, die Sie löschen möchten."
 
 #: trustpoint/devices/views.py:2928
 #, python-brace-format
@@ -464,6 +512,8 @@ msgid ""
 "Successfully deleted {count} devices. All corresponding certificates have "
 "been revoked."
 msgstr ""
+"{count} Geräte wurden erfolgreich gelöscht. Alle entsprechenden Zertifikate "
+"wurden widerrufen."
 
 #: trustpoint/devices/views.py:2936
 msgid "Failed to delete DeviceModel records. See logs for more information."
