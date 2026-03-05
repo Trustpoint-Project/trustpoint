@@ -89,6 +89,7 @@ urlpatterns += [
     path('api/', include('pki.api_urls')),
     path('api/', include('signer.api_urls')),
     path('api/', include('management.api_urls')),
+    path('api/', include('agents.urls', namespace='agents')),
 
     # JWT endpoints
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),

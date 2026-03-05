@@ -1,0 +1,59 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+  <div class="card-header">
+    <h1>{% trans 'Create Agent Device' %}</h1>
+  </div>
+
+  <div class="card-body py-3">
+    <div class="d-flex gap-3 mt-3 flex-wrap">
+
+      {# --- 1-to-1 Agent (disabled / coming soon) --- #}
+      <div class="card d-flex flex-column" style="max-width: 400px; width: 100%; opacity: 0.55;">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title"><strong>{% trans '1-to-1 Agent' %}</strong></h5>
+          <hr class="hr-m">
+          <p class="card-text flex-grow-1">
+            {% blocktrans trimmed %}
+              A single automation agent that is exclusively associated with one device.
+              The agent authenticates using a domain credential issued during onboarding.
+            {% endblocktrans %}
+          </p>
+          <button class="btn btn-secondary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;" disabled>
+            {% trans '1-to-1 Agent' %}
+          </button>
+        </div>
+      </div>
+
+      {# --- 1-to-n Agent (WBM) --- #}
+      <div class="card d-flex flex-column" style="max-width: 400px; width: 100%;">
+        <div class="card-body d-flex flex-column">
+          <h5 class="card-title"><strong>{% trans '1-to-n Agent' %}</strong></h5>
+          <hr class="hr-m">
+          <p class="card-text flex-grow-1">
+            {% blocktrans trimmed %}
+              A single agent that manages multiple devices and acts on their behalf.
+              The agent itself holds one domain credential issued during onboarding and
+              requests application credentials for each managed device independently.
+            {% endblocktrans %}
+          </p>
+          <a href="{% url create_one_to_n_url %}"
+             class="btn btn-primary mt-auto w-100"
+             style="max-width: 250px; margin-left: auto; margin-right: auto;">
+            {% trans '1-to-n Agent' %}
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <div class="tp-card-btn-footer m-1">
+      <a href="{% url cancel_url %}" class="btn btn-secondary min-width-20">{% trans 'Cancel' %}</a>
+    </div>
+  </div>
+</div>
+{% endblock content %}

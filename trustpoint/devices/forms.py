@@ -589,6 +589,55 @@ class OnboardingCreateForm(forms.Form):
         return device_model
 
 
+class AgentOnboardingCreateForm(OnboardingCreateForm):
+    """Specialised onboarding form for agent devices.
+
+    The onboarding protocol is fixed to EST - Username & Password and the PKI
+    protocol is fixed to EST.  Both values are submitted as hidden fields so
+    form.save() can read them via cleaned_data without exposing the choices to
+    the user.
+    """
+
+    # Fixed to EST - Username & Password; submitted as hidden input.
+    onboarding_protocol = forms.ChoiceField(
+        choices=[(OnboardingProtocol.EST_USERNAME_PASSWORD.value, OnboardingProtocol.EST_USERNAME_PASSWORD.label)],
+        initial=OnboardingProtocol.EST_USERNAME_PASSWORD,
+        label=_('Onboarding Protocol'),
+        widget=forms.HiddenInput(),
+    )
+
+    # EST is the only allowed PKI protocol for agents — submitted as hidden input.
+    onboarding_pki_protocols = forms.MultipleChoiceField(
+        choices=[(OnboardingPkiProtocol.EST, OnboardingPkiProtocol.EST.label)],
+        initial=[OnboardingPkiProtocol.EST],
+        widget=forms.MultipleHiddenInput(),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the AgentOnboardingCreateForm with fixed EST-only fields."""
+        super().__init__(*args, **kwargs)
+
+        # Ensure hidden fields carry the correct pre-selected values.
+        self.initial['onboarding_protocol'] = str(OnboardingProtocol.EST_USERNAME_PASSWORD.value)
+        self.initial['onboarding_pki_protocols'] = [str(OnboardingPkiProtocol.EST.value)]
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            HTML('<h2>General</h2><hr>'),
+            Field('common_name'),
+            Field('serial_number'),
+            Field('domain'),
+            HTML(
+                '<div class="alert alert-info mt-3" role="alert">'
+                + str(_('Onboarding protocol: EST - Username & Password (fixed). PKI protocol: EST (fixed).'))
+                + '</div>'
+            ),
+            Field('onboarding_protocol'),
+            Field('onboarding_pki_protocols'),
+        )
+
+
 class OpcUaGdsPushCreateForm(forms.Form):
     """Form for OPC UA GDS Push device creation with onboarding."""
 

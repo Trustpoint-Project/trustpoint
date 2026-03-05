@@ -4,6 +4,7 @@ from django.urls import path, re_path
 
 from help_pages import devices_help_views
 from trustpoint.page_context import (
+    DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
 )
@@ -16,6 +17,18 @@ urlpatterns = [
     # Main Pages
     path('', views.DeviceTableView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}'),
     path('opc-ua-gds/', views.OpcUaGdsTableView.as_view(), name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'),
+    path('agents/', views.AgentTableView.as_view(), name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}'),
+    # Agent Create Views
+    path(
+        'agents/create/',
+        views.AgentCreateChooseTypeView.as_view(),
+        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create',
+    ),
+    path(
+        'agents/create/1-to-n/',
+        views.AgentCreateOneToNOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create_one_to_n',
+    ),
     # Create Views
     path(
         'create/', views.DeviceCreateChooseOnboardingView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'

@@ -1,0 +1,91 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block content %}
+
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+  <div class="card-header">
+    <h1>{% trans 'Agents' %}</h1>
+  </div>
+
+  {% include 'devices/table_filter.html' with table_url='devices:agents' %}
+
+  <div class="card-body text-start pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th><input type="checkbox"/></th>
+          <th>{% trans 'Device' %}</th>
+          <th>{% trans 'Type' %}</th>
+          <th>{% trans 'Domain' %}</th>
+          <th>{% trans 'Onboarding Status' %}</th>
+          <th>{% trans 'Agents' %}</th>
+          <th>{% trans 'Certificate Management' %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for device in page_obj %}
+        <tr>
+          <td class="row_checkbox">
+            <input type="checkbox" name="row_checkbox" value="{{ device.id }}"/>
+          </td>
+          <td>{{ device.common_name }}</td>
+          <td>{{ device.get_device_type_display }}</td>
+          <td>
+            {% if device.domain %}
+              <a href="{% url 'pki:domains-detail' device.domain.pk %}">{{ device.domain }}</a>
+            {% else %}
+              <span class="text-muted">{% trans 'No domain' %}</span>
+            {% endif %}
+          </td>
+          <td>{{ device.onboarding_config.get_onboarding_status_display }}</td>
+          <td>
+            {% if device.agent_list %}
+              <ul class="list-unstyled mb-0">
+                {% for agent in device.agent_list %}
+                  <li>
+                    <span class="badge {% if agent.is_active %}bg-success{% else %}bg-secondary{% endif %} me-1">
+                      {% if agent.is_active %}{% trans 'active' %}{% else %}{% trans 'inactive' %}{% endif %}
+                    </span>
+                    {{ agent.name }}
+                    <small class="text-muted">({{ agent.agent_id }})</small>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% else %}
+              <span class="text-muted">{% trans 'No agents registered' %}</span>
+            {% endif %}
+          </td>
+          <td>{{ device.clm_button| safe }}</td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="7" class="text-center">{% trans 'No agent devices have been added yet.' %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% include 'trustpoint/pagination.html' %}
+  </div>
+
+  <div class="card-footer d-flex flex-column flex-md-row justify-content-between tp-sticky-footer">
+    <div class="m-1 d-flex flex-wrap gap-2">
+      <button type="button" class="btn btn-danger tp-table-select-btn me-2"
+              data-tp-url="{{ device_revoke_url }}">
+        {% trans 'Revoke selected' %}
+      </button>
+      <button type="button" class="btn btn-danger tp-table-select-btn me-2"
+              data-tp-url="{{ device_delete_url }}">
+        {% trans 'Delete selected' %}
+      </button>
+    </div>
+    <div class="m-1 d-flex flex-wrap justify-content-md-end gap-2">
+      <a class="btn btn-primary" href="{% url create_url %}">
+        {% trans 'Create Agent Device' %}
+      </a>
+    </div>
+  </div>
+</div>
+
+{% endblock content %}
