@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from django.utils import timezone
 
-from agents.models import WbmCertificateTarget, WbmJob
+from agents.models import AgentCertificateTarget, AgentJob
 from agents.wbm.request_context import WbmAgentRequestContext
 from pki.models import IssuedCredentialModel
 from request.operation_processor.base import AbstractOperationProcessor
@@ -38,7 +38,7 @@ class WbmCheckInProcessor(AbstractOperationProcessor, LoggerMixin):
             raise ValueError(exc_msg)
 
         targets = (
-            WbmCertificateTarget.objects.filter(agent=context.agent, enabled=True)
+            AgentCertificateTarget.objects.filter(agent=context.agent, enabled=True)
             .select_related('device', 'certificate_profile', 'workflow')
         )
 
@@ -54,7 +54,7 @@ class WbmCheckInProcessor(AbstractOperationProcessor, LoggerMixin):
     # -- helpers ---------------------------------------------------------------
 
     @staticmethod
-    def _is_due(target: WbmCertificateTarget) -> bool:
+    def _is_due(target: AgentCertificateTarget) -> bool:
         """Return True if the target needs a certificate push in this cycle."""
         if target.push_requested:
             return True
@@ -82,22 +82,22 @@ class WbmCheckInProcessor(AbstractOperationProcessor, LoggerMixin):
         return days_left < target.renewal_threshold_days
 
     @staticmethod
-    def _create_job(target: WbmCertificateTarget) -> dict[str, Any]:
+    def _create_job(target: AgentCertificateTarget) -> dict[str, Any]:
         """Create a PENDING_CSR job for *target* and return its descriptor dict."""
         # Determine key_spec and subject from the certificate profile.
         profile = target.certificate_profile.profile
         key_spec: str = profile.get('key_algorithm', 'EC_P256')
         subject: dict[str, str] = profile.get('subject', {})
 
-        job = WbmJob.objects.create(
+        job = AgentJob.objects.create(
             target=target,
-            status=WbmJob.Status.PENDING_CSR,
+            status=AgentJob.Status.PENDING_CSR,
             key_spec=key_spec,
             subject=subject,
         )
 
         # Clear the operator-requested flag atomically (no race with other workers).
-        WbmCertificateTarget.objects.filter(pk=target.pk).update(push_requested=False)
+        AgentCertificateTarget.objects.filter(pk=target.pk).update(push_requested=False)
 
         return {
             'job_id': job.pk,

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from django.utils import timezone
 
-from agents.models import WbmJob
+from agents.models import AgentJob
 from agents.wbm.request_context import WbmAgentRequestContext
 from request.operation_processor.base import AbstractOperationProcessor
 from trustpoint.logger import LoggerMixin
@@ -28,12 +28,12 @@ class WbmPushResultProcessor(AbstractOperationProcessor, LoggerMixin):
 
         # Map incoming status string to a known Status choice; default to FAILED.
         raw_status = context.push_result_status or ''
-        valid_statuses = {s.value for s in WbmJob.Status}
-        status = raw_status if raw_status in valid_statuses else WbmJob.Status.FAILED
+        valid_statuses = {s.value for s in AgentJob.Status}
+        status = raw_status if raw_status in valid_statuses else AgentJob.Status.FAILED
 
-        updated = WbmJob.objects.filter(
+        updated = AgentJob.objects.filter(
             pk=context.push_result_job_id,
-            status=WbmJob.Status.IN_PROGRESS,
+            status=AgentJob.Status.IN_PROGRESS,
         ).update(
             status=status,
             result_detail=context.push_result_detail,

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from django.contrib import admin
 
-from agents.models import AgentCertificateTarget, AgentWorkflowDefinition, TrustpointAgent, WbmJob
+from agents.models import AgentCertificateTarget, AgentJob, AgentWorkflowDefinition, TrustpointAgent
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -51,9 +51,9 @@ class AgentCertificateTargetAdmin(admin.ModelAdmin):
         self.message_user(request, f'{updated} target(s) flagged for immediate push.')
 
 
-@admin.register(WbmJob)
-class WbmJobAdmin(admin.ModelAdmin):
-    """Admin for WbmJob."""
+@admin.register(AgentJob)
+class AgentJobAdmin(admin.ModelAdmin):
+    """Admin for AgentJob."""
 
     list_display = ('pk', 'target', 'status', 'key_spec', 'started_at', 'completed_at')
     list_filter = ('status', 'key_spec')

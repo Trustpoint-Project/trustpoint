@@ -244,13 +244,17 @@ class DeviceTableView(AbstractDeviceTableView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
     def get_queryset(self) -> QuerySet[DeviceModel]:
-        """Filter queryset to include all device types (Generic, OPC UA GDS Push) and filtered by UI filters.
+        """Filter queryset to include generic and OPC UA GDS Push devices, excluding all agent types.
 
         Returns:
-            Returns a queryset of all DeviceModels (excluding OPC UA GDS), filtered by UI filters.
+            Returns a queryset of DeviceModels, excluding OPC_UA_GDS and agent types, filtered by UI filters.
         """
         base_qs = super(ListView, self).get_queryset().exclude(
-            device_type=DeviceModel.DeviceType.OPC_UA_GDS
+            device_type__in=[
+                DeviceModel.DeviceType.OPC_UA_GDS,
+                DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+                DeviceModel.DeviceType.AGENT_ONE_TO_N,
+            ]
         )
         return self.apply_filters(base_qs)
 

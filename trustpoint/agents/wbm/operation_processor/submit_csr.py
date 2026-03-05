@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from cryptography import x509
 from cryptography.hazmat.primitives.serialization import Encoding
 
-from agents.models import WbmJob
+from agents.models import AgentJob
 from agents.wbm.request_context import WbmAgentRequestContext
 from request.operation_processor.base import AbstractOperationProcessor
 from request.operation_processor.issue_cert import CertificateIssueProcessor
@@ -54,7 +54,7 @@ class WbmSubmitCsrProcessor(AbstractOperationProcessor, LoggerMixin):
         csr = x509.load_pem_x509_csr(context.submit_csr_csr_pem.encode())
 
         # Store the raw CSR on the job record before attempting issuance.
-        WbmJob.objects.filter(pk=job.pk).update(csr_pem=context.submit_csr_csr_pem)
+        AgentJob.objects.filter(pk=job.pk).update(csr_pem=context.submit_csr_csr_pem)
 
         # Build a minimal EstCertificateRequestContext that CertificateIssueProcessor accepts.
         issue_ctx = EstCertificateRequestContext(
@@ -84,10 +84,10 @@ class WbmSubmitCsrProcessor(AbstractOperationProcessor, LoggerMixin):
         ca_bundle_pem = ''.join(chain_pems)
 
         # Persist the signed certificate and advance the job to IN_PROGRESS.
-        WbmJob.objects.filter(pk=job.pk).update(
+        AgentJob.objects.filter(pk=job.pk).update(
             cert_pem=cert_pem,
             ca_bundle_pem=ca_bundle_pem,
-            status=WbmJob.Status.IN_PROGRESS,
+            status=AgentJob.Status.IN_PROGRESS,
         )
 
         # Refresh the in-memory job so the responder sees the latest values.

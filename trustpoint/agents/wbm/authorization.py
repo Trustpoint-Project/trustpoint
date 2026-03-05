@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from agents.models import WbmJob
+from agents.models import AgentJob
 from agents.wbm.request_context import WbmAgentRequestContext
 from request.authorization.base import AuthorizationComponent
 from trustpoint.logger import LoggerMixin

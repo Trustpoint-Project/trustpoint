@@ -20,7 +20,7 @@
           <th>{% trans 'Type' %}</th>
           <th>{% trans 'Domain' %}</th>
           <th>{% trans 'Onboarding Status' %}</th>
-          <th>{% trans 'Agents' %}</th>
+          <th>{% trans 'Devices' %}</th>
           <th>{% trans 'Certificate Management' %}</th>
         </tr>
       </thead>
@@ -54,7 +54,7 @@
                 {% endfor %}
               </ul>
             {% else %}
-              <span class="text-muted">{% trans 'No agents registered' %}</span>
+              <span class="text-muted">{% trans 'No managed devices' %}</span>
             {% endif %}
           </td>
           <td>{{ device.clm_button| safe }}</td>

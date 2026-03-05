@@ -3,8 +3,8 @@
 Contains:
 - TrustpointAgent: generic identity record for any automation agent
 - AgentWorkflowDefinition: reusable automation profile for executing jobs on managed devices
-- AgentCertificateTarget: one certificate target on a managed device
-- WbmJob: audit record for a single WBM certificate-push operation
+- AgentCertificateTarget: certificate target on a managed device
+- AgentJob: audit record for a single agent certificate-provisioning operation
 """
 
 from __future__ import annotations
@@ -410,14 +410,14 @@ class AgentCertificateTarget(models.Model):
 
 
 # ---------------------------------------------------------------------------
-# WbmJob
+# AgentJob
 # ---------------------------------------------------------------------------
 
-class WbmJob(models.Model):
-    """Audit record for a single WBM certificate-push operation.
+class AgentJob(models.Model):
+    """Audit record for a single agent certificate-provisioning operation.
 
-    Created by Trustpoint when the agent requests a push.
-    Closed when the agent reports the result.
+    Created by Trustpoint when the agent requests to push a certificate to
+    a managed device.  Closed when the agent reports the result.
     """
 
     class Status(models.TextChoices):
@@ -472,11 +472,11 @@ class WbmJob(models.Model):
     result_detail = models.TextField(verbose_name=_('Result Detail'), blank=True)
 
     class Meta:
-        """Meta options for WbmJob."""
+        """Meta options for AgentJob."""
 
-        verbose_name = _('WBM Job')
-        verbose_name_plural = _('WBM Jobs')
+        verbose_name = _('Agent Job')
+        verbose_name_plural = _('Agent Jobs')
 
     def __str__(self) -> str:
         """Return a human-readable representation."""
-        return f'WbmJob({self.pk} {self.status} → {self.target})'
+        return f'AgentJob({self.pk} {self.status} → {self.target})'
