@@ -281,12 +281,12 @@ class TestJSONCertRequestConverterToJson:
         assert 'server_auth' in result['ext']['extended_key_usage']['usages']
         assert 'client_auth' in result['ext']['extended_key_usage']['usages']
 
-    def test_to_json_csr_with_basic_constraints_ca_raises_error(
+    def test_to_json_csr_with_basic_constraints_ca_true(
         self, private_key: rsa.RSAPrivateKey
     ) -> None:
-        """Test to_json with CSR requesting CA certificate raises error."""
+        """Test to_json with a CSR containing BasicConstraints ca=True preserves the value."""
         subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'test.example.com')])
-        
+
         csr = (
             x509.CertificateSigningRequestBuilder()
             .subject_name(subject)
@@ -296,9 +296,12 @@ class TestJSONCertRequestConverterToJson:
             )
             .sign(private_key, hashes.SHA256())
         )
-        
-        with pytest.raises(ValueError, match='Requesting CA certificates is not allowed'):
-            JSONCertRequestConverter.to_json(csr)
+
+        result = JSONCertRequestConverter.to_json(csr)
+
+        assert 'basic_constraints' in result['ext']
+        assert result['ext']['basic_constraints']['ca'] is True
+        assert result['ext']['basic_constraints']['critical'] is True
 
     def test_to_json_with_certificate_builder(self, private_key: rsa.RSAPrivateKey) -> None:
         """Test to_json with CertificateBuilder instead of CSR."""
@@ -451,8 +454,8 @@ class TestJSONCertRequestConverterFromJson:
         
         assert isinstance(builder, x509.CertificateBuilder)
 
-    def test_from_json_with_basic_constraints_ca_raises_error(self) -> None:
-        """Test from_json with CA BasicConstraints raises error."""
+    def test_from_json_with_basic_constraints_ca_true(self) -> None:
+        """Test from_json with ca=True in BasicConstraints passes it through to the builder."""
         json_data = {
             'type': 'cert_request',
             'subject': {'common_name': 'test.example.com'},
@@ -464,9 +467,14 @@ class TestJSONCertRequestConverterFromJson:
             },
             'validity': {'days': 30},
         }
-        
-        with pytest.raises(ValueError, match='Requesting CA certificates is not allowed'):
-            JSONCertRequestConverter.from_json(json_data)
+
+        builder = JSONCertRequestConverter.from_json(json_data)
+
+        assert isinstance(builder, x509.CertificateBuilder)
+        ext = builder._extensions  # noqa: SLF001
+        bc_ext = next(e for e in ext if isinstance(e.value, x509.BasicConstraints))
+        assert bc_ext.value.ca is True
+        assert bc_ext.critical is True
 
     def test_from_json_with_crl_distribution_points(self) -> None:
         """Test from_json with CRL Distribution Points."""

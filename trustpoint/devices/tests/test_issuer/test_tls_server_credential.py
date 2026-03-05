@@ -7,7 +7,7 @@ import pytest
 from cryptography.x509 import DNSName, IPAddress, SubjectAlternativeName
 
 from devices.issuer import LocalTlsServerCredentialIssuer
-from devices.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel
 
 
 @pytest.mark.django_db

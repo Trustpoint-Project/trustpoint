@@ -9,7 +9,6 @@ from cryptography.hazmat.primitives import hashes
 
 from devices.models import (
     DeviceModel,
-    IssuedCredentialModel,
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
     OnboardingConfigModel,
@@ -19,6 +18,7 @@ from request.authentication import (
     ClientCertificateAuthentication,
     IDevIDAuthentication,
 )
+from pki.models import IssuedCredentialModel
 from request.authentication.cmp import CmpSharedSecretAuthentication
 from request.authentication.est import UsernamePasswordAuthentication
 from request.request_context import BaseRequestContext, EstBaseRequestContext, CmpBaseRequestContext, HttpBaseRequestContext

@@ -16,7 +16,6 @@ from django.utils.translation import gettext_lazy as _
 
 from devices.models import (
     DeviceModel,
-    IssuedCredentialModel,
     RemoteDeviceCredentialDownloadModel,
 )
 from devices.utils import validate_application_uri, validate_common_name_characters
@@ -29,6 +28,7 @@ from onboarding.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
+from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
@@ -37,6 +37,12 @@ from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
+
+
+class SwitchCheckboxSelectMultiple(forms.CheckboxSelectMultiple):
+    """Custom CheckboxSelectMultiple widget that renders as Bootstrap switches."""
+
+    template_name = 'widgets/switch_checkbox_select_multiple.html'
 
 PASSWORD_MIN_LENGTH = 12
 OTP_SPLIT_PARTS = 2
@@ -339,8 +345,7 @@ class NoOnboardingCreateForm(forms.Form):
             (NoOnboardingPkiProtocol.MANUAL, NoOnboardingPkiProtocol.MANUAL.label),
         ],
         initial=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
-        widget=forms.CheckboxSelectMultiple,
-        label=_('Enabled PKI Protocols'),
+        widget=SwitchCheckboxSelectMultiple(),
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -349,14 +354,38 @@ class NoOnboardingCreateForm(forms.Form):
 
         self.helper = FormHelper()
         self.helper.form_tag = False
+
+        pki_protocols_html = self._render_pki_protocols_switches('no_onboarding_pki_protocols')
+
         self.helper.layout = Layout(
             HTML('<h2>General</h2><hr>'),
             Field('common_name'),
             Field('serial_number'),
             Field('domain'),
             HTML('<h2 class="mt-5">PKI Protocol Configuration</h2><hr>'),
-            Field('no_onboarding_pki_protocols'),
+            HTML('<label class="form-label">Enabled PKI Protocols</label>'),
+            HTML(pki_protocols_html),
         )
+
+    def _render_pki_protocols_switches(self, field_name: str) -> str:
+        """Renders PKI protocol switches as HTML."""
+        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
+        html_parts = ['<div class="mt-2">']
+
+        for choice in field.widget.choices:
+            value, label = choice[0], choice[1]
+            checked = str(value) in (self.initial.get(field_name, []) or [])
+            html_parts.append(
+                f'<div class="form-check form-switch mb-2">'
+                f'<input type="checkbox" class="form-check-input" role="switch" '
+                f'name="{field_name}" value="{value}" id="id_{field_name}_{value}" '
+                f'{"checked" if checked else ""}>'
+                f'<label class="form-check-label" for="id_{field_name}_{value}">{label}</label>'
+                f'</div>'
+            )
+
+        html_parts.append('</div>')
+        return ''.join(html_parts)
 
     def clean_common_name(self) -> str:
         """Validates the device name, i.e. checks if it is unique.
@@ -445,8 +474,7 @@ class OnboardingCreateForm(forms.Form):
             (OnboardingPkiProtocol.EST, OnboardingPkiProtocol.EST.label),
         ],
         initial=OnboardingPkiProtocol.CMP,
-        widget=forms.CheckboxSelectMultiple,
-        label=_('Enabled PKI Protocols'),
+        widget=SwitchCheckboxSelectMultiple(),
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -455,6 +483,10 @@ class OnboardingCreateForm(forms.Form):
 
         self.helper = FormHelper()
         self.helper.form_tag = False
+
+        # Render the PKI protocols widget manually to avoid crispy-forms label rendering
+        pki_protocols_html = self._render_pki_protocols_switches('onboarding_pki_protocols')
+
         self.helper.layout = Layout(
             HTML('<h2>General</h2><hr>'),
             Field('common_name'),
@@ -463,8 +495,29 @@ class OnboardingCreateForm(forms.Form):
             HTML('<h2 class="mt-5">Onboarding Protocol</h2><hr>'),
             Field('onboarding_protocol'),
             HTML('<h2 class="mt-5">PKI Protocol Configuration</h2><hr>'),
-            Field('onboarding_pki_protocols'),
+            HTML('<label class="form-label">Enabled PKI Protocols</label>'),
+            HTML(pki_protocols_html),
         )
+
+    def _render_pki_protocols_switches(self, field_name: str) -> str:
+        """Renders PKI protocol switches as HTML."""
+        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
+        html_parts = ['<div class="mt-2">']
+
+        for choice in field.widget.choices:
+            value, label = choice[0], choice[1]
+            checked = str(value) in (self.initial.get(field_name, []) or [])
+            html_parts.append(
+                f'<div class="form-check form-switch mb-2">'
+                f'<input type="checkbox" class="form-check-input" role="switch" '
+                f'name="{field_name}" value="{value}" id="id_{field_name}_{value}" '
+                f'{"checked" if checked else ""}>'
+                f'<label class="form-check-label" for="id_{field_name}_{value}">{label}</label>'
+                f'</div>'
+            )
+
+        html_parts.append('</div>')
+        return ''.join(html_parts)
 
     def clean_common_name(self) -> str:
         """Validates the device name, i.e. checks if it is unique.
@@ -678,8 +731,12 @@ class ClmDeviceModelOnboardingForm(forms.Form):
             Field('onboarding_protocol'),
             Field('onboarding_status'),
             HTML('<h2>Enabled PKI-Protocols</h2><hr>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_cmp'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_est'),
+            HTML('</div>'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
         )
@@ -832,7 +889,9 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             Field('onboarding_protocol'),
             Field('onboarding_status'),
             HTML('<h2>Enabled PKI-Protocols</h2><hr>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_opc_gds_push'),
+            HTML('</div>'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
         )
@@ -889,9 +948,15 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
             Field('serial_number'),
             Field('domain'),
             HTML('<h2>Enabled PKI-Protocols</h2><hr>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_cmp'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_est'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_manual'),
+            HTML('</div>'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
         )

@@ -1,0 +1,24 @@
+{
+    "type": "cert_profile",
+    "display_name": "DevOwnerID",
+    "subj": {
+        "allow": "*",
+        "common_name": {"required": true}
+    },
+    "reject_mods": false,
+    "ext": {
+        "basic_constraints": {
+            "ca": true,
+            "critical": true
+        },
+        "subject_alternative_name": {
+            "uris": {
+                "required": true
+            },
+            "critical": true
+        }
+    },
+    "validity": {
+        "days": 3650
+    }
+}

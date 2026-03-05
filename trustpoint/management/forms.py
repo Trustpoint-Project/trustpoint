@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, NoReturn, cast
 
+from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
 from cryptography.x509 import Certificate
@@ -71,7 +72,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             ),
             Fieldset(
                 _('Advanced security settings'),
-                'auto_gen_pki',
+                Field('auto_gen_pki', wrapper_class='form-check form-switch'),
                 'auto_gen_pki_key_algorithm',
             ),
         )
@@ -85,6 +86,8 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         label=_('Enable local auto-generated PKI'),
         widget=forms.CheckboxInput(
             attrs={
+                'class': 'form-check-input',
+                'role': 'switch',
                 'data-sl-defaults': '[true, true, false, false, false]',
                 'data-hide-at-sl': '[false, false, true, true, true]',
                 'data-more-secure': 'false',
@@ -226,7 +229,7 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
             'remote_directory',
         ]
         widgets: ClassVar[dict[str, Any]] = {
-            'enable_sftp_storage': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'enable_sftp_storage': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
             'host': forms.TextInput(attrs={'class': 'form-control'}),
             'port': forms.NumberInput(attrs={'class': 'form-control'}),
             'user': forms.TextInput(attrs={'class': 'form-control'}),
@@ -760,7 +763,7 @@ class PKCS11ConfigForm(forms.Form):
         max_length=255,
         widget=forms.TextInput(attrs={'class': 'form-control'}),
         help_text=_('Path to the PKCS#11 module library file'),
-        initial='/usr/local/lib/libpkcs11-proxy.so',
+        initial='/usr/lib/libpkcs11-proxy.so',
         required=False
     )
 
@@ -785,7 +788,7 @@ class PKCS11ConfigForm(forms.Form):
         if hsm_type == 'softhsm':
             cleaned_data['label'] = 'Trustpoint-SoftHSM'
             cleaned_data['slot'] = 0
-            cleaned_data['module_path'] = '/usr/local/lib/libpkcs11-proxy.so'
+            cleaned_data['module_path'] = '/usr/lib/libpkcs11-proxy.so'
         elif hsm_type == 'physical':
             raise forms.ValidationError(_('Physical HSM is not yet supported.'))
 

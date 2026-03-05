@@ -10,8 +10,8 @@ from cryptography.x509.base import CertificateBuilder
 from trustpoint_core.oid import HashAlgorithm, NamedCurve
 
 from aoki.views import AokiServiceMixin
-from devices.models import IssuedCredentialModel
 from management.models import SecurityConfig
+from pki.models import IssuedCredentialModel
 from request.profile_validator import ProfileValidator
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin
@@ -262,7 +262,14 @@ class SecurityConfigAuthorization(AuthorizationComponent, LoggerMixin):
 
         self._check_key_constraints(csr, cfg)
         self._check_signature_algorithm(csr, cfg)
-        self._check_ca_issuance(csr, cfg)
+
+        profile_validated = context.cert_requested_profile_validated
+        ca_check_target: _CertRequest | None = (
+            profile_validated
+            if isinstance(profile_validated, (x509.CertificateSigningRequest, CertificateBuilder))
+            else csr
+        )
+        self._check_ca_issuance(ca_check_target, cfg)
 
     @staticmethod
     def _get_public_key(

@@ -53,7 +53,7 @@ class HsmSetupMixinTestCase(TestCase):
     def test_validate_hsm_inputs_valid_data(self):
         """Test that valid HSM inputs pass validation."""
         result = self.view._validate_hsm_inputs(
-            '/usr/local/lib/libpkcs11-proxy.so',
+            '/usr/lib/libpkcs11-proxy.so',
             '0',
             'Trustpoint-SoftHSM'
         )
@@ -74,7 +74,7 @@ class HsmSetupMixinTestCase(TestCase):
     def test_validate_hsm_inputs_invalid_slot(self):
         """Test that invalid slot fails validation."""
         result = self.view._validate_hsm_inputs(
-            '/usr/local/lib/libpkcs11-proxy.so',
+            '/usr/lib/libpkcs11-proxy.so',
             'not_a_number',
             'Trustpoint-SoftHSM'
         )
@@ -86,7 +86,7 @@ class HsmSetupMixinTestCase(TestCase):
     def test_validate_hsm_inputs_invalid_label(self):
         """Test that invalid label fails validation."""
         result = self.view._validate_hsm_inputs(
-            '/usr/local/lib/libpkcs11-proxy.so',
+            '/usr/lib/libpkcs11-proxy.so',
             '0',
             'invalid-label!'
         )
@@ -103,7 +103,7 @@ class HsmSetupMixinTestCase(TestCase):
         mock_subprocess.return_value = mock_result
 
         result = self.view._run_hsm_setup_script(
-            '/usr/local/lib/libpkcs11-proxy.so',
+            '/usr/lib/libpkcs11-proxy.so',
             '0',
             'Trustpoint-SoftHSM'
         )
@@ -114,7 +114,7 @@ class HsmSetupMixinTestCase(TestCase):
         # Verify command structure
         call_args = mock_subprocess.call_args[0][0]
         self.assertIn('sudo', call_args)
-        self.assertIn('/usr/local/lib/libpkcs11-proxy.so', call_args)
+        self.assertIn('/usr/lib/libpkcs11-proxy.so', call_args)
         self.assertIn('0', call_args)
         self.assertIn('Trustpoint-SoftHSM', call_args)
         self.assertIn('test_setup', call_args)
@@ -131,7 +131,7 @@ class HsmSetupMixinTestCase(TestCase):
         with patch.object(self.view, '_assign_token_to_crypto_storage') as mock_assign:
             token, created = self.view._get_or_update_token(
                 'softhsm',
-                '/usr/local/lib/libpkcs11-proxy.so',
+                '/usr/lib/libpkcs11-proxy.so',
                 '0',
                 'Trustpoint-SoftHSM'
             )
@@ -241,7 +241,7 @@ class HsmSetupMixinTestCase(TestCase):
         form = Mock()
         form.cleaned_data = {
             'hsm_type': 'physical',
-            'module_path': '/usr/local/lib/libpkcs11-proxy.so',
+            'module_path': '/usr/lib/libpkcs11-proxy.so',
             'slot': 0,
             'label': 'Physical-HSM',
         }
@@ -261,7 +261,7 @@ class HsmSetupMixinTestCase(TestCase):
         form = Mock()
         form.cleaned_data = {
             'hsm_type': 'softhsm',
-            'module_path': '/usr/local/lib/libpkcs11-proxy.so',
+            'module_path': '/usr/lib/libpkcs11-proxy.so',
             'slot': 0,
             'label': 'Trustpoint-SoftHSM',
         }
@@ -290,7 +290,7 @@ class HsmSetupMixinTestCase(TestCase):
 
         # Verify the flow
         mock_run_script.assert_called_once_with(
-            '/usr/local/lib/libpkcs11-proxy.so',
+            '/usr/lib/libpkcs11-proxy.so',
             '0',
             'Trustpoint-SoftHSM'
         )

@@ -60,7 +60,6 @@ from devices.issuer import (
 )
 from devices.models import (
     DeviceModel,
-    IssuedCredentialModel,
     RemoteDeviceCredentialDownloadModel,
 )
 from devices.revocation import DeviceCredentialRevocation
@@ -74,10 +73,11 @@ from onboarding.models import (
 )
 from pki.forms import TruststoreAddForm
 from pki.forms.cert_profiles import CertificateIssuanceForm
+from pki.models import IssuedCredentialModel, RemoteIssuedCredentialModel
 from pki.models.ca import CaModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.certificate import CertificateModel, RevokedCertificateModel
-from pki.models.credential import CredentialModel
+from pki.models.credential import CredentialModel, OwnerCredentialModel
 from pki.models.domain import DomainAllowedCertificateProfileModel
 from pki.models.truststore import TruststoreModel, TruststoreOrderModel
 from request.authorization import ManualAuthorization
@@ -582,11 +582,52 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
 
     default_sort_param = 'common_name'
     issued_creds_qs: QuerySet[IssuedCredentialModel]
-    domain_credentials_qs: QuerySet[IssuedCredentialModel]
-    application_credentials_qs: QuerySet[IssuedCredentialModel]
+    remote_issued_creds_qs: QuerySet[RemoteIssuedCredentialModel]
+    domain_credentials_qs: QuerySet[IssuedCredentialModel] | QuerySet[RemoteIssuedCredentialModel]
+    application_credentials_qs: QuerySet[IssuedCredentialModel] | QuerySet[RemoteIssuedCredentialModel]
 
     page_category = DEVICES_PAGE_CATEGORY
     page_name: str
+
+    _RA_CA_TYPES = (CaModel.CaTypeChoice.REMOTE_EST_RA, CaModel.CaTypeChoice.REMOTE_CMP_RA)
+
+    def _is_ra_domain(self) -> bool:
+        """Return True if the device's domain uses a remote RA CA (EST or CMP)."""
+        device = self.object
+        if not device.domain or not device.domain.issuing_ca:
+            return False
+        return device.domain.issuing_ca.ca_type in self._RA_CA_TYPES
+
+    def _get_owner_credential_for_device(self) -> OwnerCredentialModel | None:
+        """Find the OwnerCredentialModel associated with this device."""
+        device_domain_cred = IssuedCredentialModel.objects.filter(
+            device=self.object,
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+        ).select_related('credential__certificate').first()
+
+        if device_domain_cred is None or device_domain_cred.credential.certificate is None:
+            return None
+
+        fingerprint = device_domain_cred.credential.certificate.sha256_fingerprint
+        owner_ic = RemoteIssuedCredentialModel.objects.filter(
+            credential__certificates__sha256_fingerprint=fingerprint,
+            owner_credential__isnull=False,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL,
+        ).select_related('owner_credential').first()
+
+        if owner_ic is None:
+            return None
+        return owner_ic.owner_credential
+
+    def _get_dev_owner_id_credentials_qs(
+        self, owner_credential: OwnerCredentialModel,
+    ) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Return enrolled DevOwnerID credentials for the given owner credential."""
+        return RemoteIssuedCredentialModel.objects.filter(
+            owner_credential=owner_credential,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+            credential__certificate__isnull=False,
+        ).select_related('credential__certificate').order_by('-created_at')
 
     def get_issued_creds_qs(self) -> QuerySet[IssuedCredentialModel]:
         """Gets a sorted queryset of all IssuedCredentialModels.
@@ -599,49 +640,50 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         sort_param = self.request.GET.get('sort', self.default_sort_param)
         return issued_creds_qs.order_by(sort_param)
 
-    def get_domain_credentials_qs(self) -> QuerySet[IssuedCredentialModel]:
-        """Gets a sorted queryset of all IssuedCredentialModels that are domain credentials.
+    def get_remote_issued_creds_qs(self) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Gets a sorted queryset of all RemoteIssuedCredentialModels for RA-issued certs."""
+        sort_param = self.request.GET.get('sort', self.default_sort_param)
+        return RemoteIssuedCredentialModel.objects.filter(
+            device=self.object,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.RA_DEVICE,
+        ).select_related('credential__certificate', 'domain').order_by(sort_param)
 
-        self.get_issued_creds_qs() must be called first!
+    def get_domain_credentials_qs(
+        self,
+    ) -> QuerySet[IssuedCredentialModel] | QuerySet[RemoteIssuedCredentialModel]:
+        """Gets domain credentials — from RemoteIssuedCredentialModel for RA domains, otherwise IssuedCredentialModel.
+
+        self.get_issued_creds_qs() or self.get_remote_issued_creds_qs() must be called first!
 
         Returns:
-            Sorted queryset of all IssuedCredentialModels that are domain credentials
+            Sorted queryset of domain credentials.
         """
+        if self._is_ra_domain():
+            return self.remote_issued_creds_qs.none()
         return self.issued_creds_qs.filter(
             Q(device=self.object)
             & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL.value)
         )
 
-    def get_application_credentials_qs(self) -> QuerySet[IssuedCredentialModel]:
-        """Gets a sorted queryset of all IssuedCredentialModels that are application credentials.
+    def get_application_credentials_qs(
+        self,
+    ) -> QuerySet[IssuedCredentialModel] | QuerySet[RemoteIssuedCredentialModel]:
+        """Gets application credentials — from RemoteIssuedCredentialModel for RA domains.
 
-            self.get_issued_creds_qs() must be called first!
+        self.get_issued_creds_qs() or self.get_remote_issued_creds_qs() must be called first!
 
         Returns:
-            Sorted queryset of all IssuedCredentialModels that are application credentials.
+            Sorted queryset of application credentials.
         """
+        if self._is_ra_domain():
+            return self.remote_issued_creds_qs
         return self.issued_creds_qs.filter(
             Q(device=self.object)
             & Q(issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL.value)
         )
 
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds the paginator and credential details to the context.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to use for rendering the clm summary page.
-        """
-        self.issued_creds_qs = self.get_issued_creds_qs()
-        self.domain_credentials_qs = self.get_domain_credentials_qs()
-        self.application_credentials_qs = self.get_application_credentials_qs()
-        context = super().get_context_data(**kwargs)
-
-        context['domain_credentials'] = self.domain_credentials_qs
-        context['application_credentials'] = self.application_credentials_qs
-
+    def _add_credential_pages_to_context(self, context: dict[str, Any]) -> None:
+        """Paginate domain, application and DevOwnerID credentials into the template context."""
         paginator_domain = Paginator(self.domain_credentials_qs, UIConfig.paginate_by)
         page_number_domain = self.request.GET.get('page', 1)
         context['domain_credentials'] = paginator_domain.get_page(page_number_domain)
@@ -652,20 +694,68 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['application_credentials'] = paginator_application.get_page(page_number_application)
         context['is_paginated_a'] = paginator_application.num_pages > 1
 
+        is_ra = self._is_ra_domain()
+
         for cred in context['domain_credentials']:
             cred.expires_in = self._get_expires_in(cred)
             cred.expiration_date = cast('datetime.datetime', cred.credential.certificate_or_error.not_valid_after)
-            cred.revoke = self._get_revoke_button_html(cred)
+            cred.revoke = self._get_revoke_button_html(cred) if not is_ra else ''
 
         for cred in context['application_credentials']:
             cred.expires_in = self._get_expires_in(cred)
             cred.expiration_date = cast('datetime.datetime', cred.credential.certificate_or_error.not_valid_after)
-            cred.revoke = self._get_revoke_button_html(cred)
+            cred.revoke = self._get_revoke_button_html(cred) if not is_ra else ''
+
+        self._add_dev_owner_id_context(context)
+
+    def _add_dev_owner_id_context(self, context: dict[str, Any]) -> None:
+        """Add DevOwnerID credentials linked via the owner credential to the context."""
+        owner_credential = self._get_owner_credential_for_device()
+        context['owner_credential'] = owner_credential
+
+        if owner_credential is None:
+            context['dev_owner_id_credentials'] = []
+            context['is_paginated_d'] = False
+            return
+
+        dev_owner_id_qs = self._get_dev_owner_id_credentials_qs(owner_credential)
+        paginator_doid = Paginator(dev_owner_id_qs, UIConfig.paginate_by)
+        page_number_doid = self.request.GET.get('page-d', 1)
+        context['dev_owner_id_credentials'] = paginator_doid.get_page(page_number_doid)
+        context['is_paginated_d'] = paginator_doid.num_pages > 1
+
+        for cred in context['dev_owner_id_credentials']:
+            cred.expires_in = self._get_expires_in(cred)
+            cred.expiration_date = cast(
+                'datetime.datetime', cred.credential.certificate_or_error.not_valid_after,
+            )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Adds the paginator and credential details to the context."""
+        self.issued_creds_qs = self.get_issued_creds_qs()
+        self.remote_issued_creds_qs = self.get_remote_issued_creds_qs()
+        self.domain_credentials_qs = self.get_domain_credentials_qs()
+        self.application_credentials_qs = self.get_application_credentials_qs()
+        context = super().get_context_data(**kwargs)
+
+        context['domain_credentials'] = self.domain_credentials_qs
+        context['application_credentials'] = self.application_credentials_qs
+
+        self._add_credential_pages_to_context(context)
 
         context['main_url'] = f'{self.page_category}:{self.page_name}'
+
+        is_cmp_ra = (
+            self.object.domain
+            and self.object.domain.issuing_ca
+            and self.object.domain.issuing_ca.ca_type == CaModel.CaTypeChoice.REMOTE_CMP_RA
+        )
+        context['is_cmp_ra_domain'] = bool(is_cmp_ra)
+
         context['issue_app_cred_no_onboarding_url'] = ''
         if (
-            self.object.domain
+            not is_cmp_ra
+            and self.object.domain
             and self.object.no_onboarding_config
             and self.object.no_onboarding_config.get_pki_protocols()
         ):
@@ -785,11 +875,11 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         return self.get_no_onboarding_form()
 
     @staticmethod
-    def _get_expires_in(record: IssuedCredentialModel) -> str:
+    def _get_expires_in(record: IssuedCredentialModel | RemoteIssuedCredentialModel) -> str:
         """Gets the remaining time until the credential expires as human-readable string.
 
         Args:
-            record: The corresponding IssuedCredentialModel.
+            record: The corresponding IssuedCredentialModel or RemoteIssuedCredentialModel.
 
         Returns:
             The remaining time until the credential expires as human-readable string.
@@ -804,15 +894,17 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         minutes, seconds = divmod(remainder, 60)
         return f'{days} days, {hours}:{minutes:02d}:{seconds:02d}'
 
-    def _get_revoke_button_html(self, record: IssuedCredentialModel) -> str:
+    def _get_revoke_button_html(self, record: IssuedCredentialModel | RemoteIssuedCredentialModel) -> str:
         """Gets the HTML for the revoke button in the devices table.
 
         Args:
-            record: The corresponding DeviceModel.
+            record: The corresponding IssuedCredentialModel or RemoteIssuedCredentialModel.
 
         Returns:
             The HTML of the hyperlink for the revoke button.
         """
+        if not isinstance(record, IssuedCredentialModel):
+            return ''
         cert = record.credential.certificate_or_error
         if cert.certificate_status == CertificateModel.CertificateStatus.REVOKED:
             return format_html('<a class="btn btn-danger tp-table-btn w-100 disabled">{}</a>', gettext_lazy('Revoked'))
@@ -1356,8 +1448,9 @@ class AbstractIssueCredentialView[FormClass: forms.Form, IssuerClass: BaseTlsCre
         if form.is_valid():
             try:
                 credential = self.issue_credential(device=self.object, form=form)
+                del credential  # result unused beyond this point
                 messages.success(
-                    request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
+                    request, f'Successfully issued {self.friendly_name} for device {self.object.common_name}'
                 )
             except Exception as e:  # noqa: BLE001
                 messages.error(request, f'Failed to issue {self.friendly_name}: {e}')
@@ -1466,9 +1559,9 @@ class OpcUaGdsPushIssueDomainCredentialView(AbstractIssueDomainCredentialView):
         form = self.form_class(**self.get_form_kwargs())
 
         if form.is_valid():
-            credential = self.issue_credential(device=self.object, form=form)
+            self.issue_credential(device=self.object, form=form)
             messages.success(
-                request, f'Successfully issued {self.friendly_name} for device {credential.device.common_name}'
+                request, f'Successfully issued {self.friendly_name} for device {self.object.common_name}'
             )
             return HttpResponseRedirect(
                 reverse_lazy(
@@ -2424,6 +2517,8 @@ class AbstractBrowserOnboardingOTPView(PageContextMixin, DetailView[IssuedCreden
         """
         credential = self.get_object()
         device = credential.device
+        if device is None:
+            raise Http404
         context = super().get_context_data(**kwargs)
 
         try:
@@ -2607,9 +2702,13 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
         """
         self.object = self.get_object()
 
+        device = self.object.device
+        if device is None:
+            raise Http404
+
         reverse_path = reverse(
             f'{self.page_category}:{self.page_name}_certificate_lifecycle_management',
-            kwargs={'pk': self.object.device.pk},
+            kwargs={'pk': device.pk},
         )
 
         revoke_form = self.form_class(self.request.POST)
@@ -2624,6 +2723,7 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
                 return redirect(reverse_path)
             if status == CertificateModel.CertificateStatus.REVOKED:
                 msg = gettext_lazy('Certificate is already revoked. Cannot revoke a revoked certificate again.')
+                messages.error(self.request, msg)
                 return redirect(reverse_path)
             revoked_successfully, _ = DeviceCredentialRevocation.revoke_certificate(self.object.id, revocation_reason)
             if revoked_successfully:

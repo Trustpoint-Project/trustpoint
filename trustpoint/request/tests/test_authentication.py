@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
-from devices.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel
 
 from request.authentication.base import ClientCertificateAuthentication
 from request.authentication.est import UsernamePasswordAuthentication

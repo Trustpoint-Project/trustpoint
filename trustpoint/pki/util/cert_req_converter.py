@@ -73,11 +73,6 @@ class JSONCertRequestConverter:
                 eku = [ExtendedKeyUsageOid(oid.dotted_string).name.lower() for oid in ext.value]
                 req_ext['extended_key_usage'] = {'usages': eku, 'critical': ext.critical}
             elif isinstance(ext.value, x509.BasicConstraints):
-                if ext.value.ca:
-                    # If requesting CAs is required, implement additional safeguards first
-                    # (only if {"ca": true} is explicitly set in the profile)
-                    exc_msg = 'Safeguard: Requesting CA certificates is not allowed.'
-                    raise ValueError(exc_msg)
                 bc: dict[str, Any] = {'ca': ext.value.ca, 'critical': ext.critical}
                 if ext.value.path_length is not None:
                     bc['path_length'] = ext.value.path_length
@@ -157,16 +152,13 @@ class JSONCertRequestConverter:
     @staticmethod
     def _ext_from_json(  # noqa: C901
         json: dict[str, Any],
-        builder: x509.CertificateBuilder,
-        *,
-        allow_ca_cert: bool = False
-    ) -> x509.CertificateBuilder:
+        builder: x509.CertificateBuilder
+        ) -> x509.CertificateBuilder:
         """Processes JSON data to add X.509 certificate extensions to a CertificateBuilder.
 
         Args:
             json: JSON dictionary containing extension data
             builder: Certificate builder to add extensions to
-            allow_ca_cert: Whether to allow CA certificate requests (use for legitimate CA cert enrollment)
 
         Returns:
             Updated certificate builder with extensions added
@@ -193,11 +185,6 @@ class JSONCertRequestConverter:
                 builder = builder.add_extension(x509.ExtendedKeyUsage(eku_oids), critical=critical)
             elif ext_name == 'basic_constraints':
                 ca = ext_value.get('ca', False)
-                if ca and not allow_ca_cert:
-                    # Safeguard: CA certificate requests are blocked by default
-                    # Use allow_ca_certificate_request flag in context for legitimate CA cert requests
-                    exc_msg = 'Safeguard: Requesting CA certificates is not allowed.'
-                    raise ValueError(exc_msg)
                 builder = builder.add_extension(
                     x509.BasicConstraints(
                         ca=ca,
@@ -256,12 +243,11 @@ class JSONCertRequestConverter:
         )
 
     @staticmethod
-    def from_json(json: dict[str, Any], *, allow_ca_cert: bool = False) -> x509.CertificateBuilder:
+    def from_json(json: dict[str, Any]) -> x509.CertificateBuilder:
         """Convert a JSON request dict to a CertificateBuilder.
 
         Args:
             json: JSON dictionary containing certificate request data
-            allow_ca_cert: Whether to allow CA certificate requests (use for legitimate CA cert enrollment)
 
         Returns:
             Certificate builder with all data from JSON applied
@@ -270,7 +256,7 @@ class JSONCertRequestConverter:
 
         builder = JSONCertRequestConverter._subject_from_json(json, x509.CertificateBuilder())
 
-        builder = JSONCertRequestConverter._ext_from_json(json, builder, allow_ca_cert=allow_ca_cert)
+        builder = JSONCertRequestConverter._ext_from_json(json, builder)
 
         return JSONCertRequestConverter._validity_from_json(json, builder)
 

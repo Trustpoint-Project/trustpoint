@@ -15,7 +15,7 @@ class PKCS11TokenTestCase(TestCase):
         self.token = PKCS11Token.objects.create(
             label='TestToken',
             slot=1,
-            module_path='/usr/local/lib/libpkcs11-proxy.so',
+            module_path='/usr/lib/libpkcs11-proxy.so',
         )
 
     def tearDown(self):

@@ -281,6 +281,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'django_q',
+    'drf_yasg'
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
