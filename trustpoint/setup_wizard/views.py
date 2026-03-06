@@ -35,9 +35,9 @@ from setup_wizard.forms import (
     PasswordAutoRestoreForm,
     StartupWizardTlsCertificateForm,
 )
+from setup_wizard.models import SetupWizardCompletedModel
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
-
 
 if TYPE_CHECKING:
 
@@ -52,7 +52,6 @@ from management.nginx_paths import (
 from setup_wizard.state_dir_paths import (
     SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS,
     SCRIPT_WIZARD_BACKUP_PASSWORD,
-    SCRIPT_WIZARD_CREATE_SUPER_USER,
     SCRIPT_WIZARD_DEMO_DATA,
     SCRIPT_WIZARD_SETUP_CRYPTO_STORAGE,
     SCRIPT_WIZARD_SETUP_HSM,
@@ -183,6 +182,10 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
             return redirect('setup_wizard:create_super_user', permanent=False)
+
+        SetupWizardCompletedModel.objects.get_or_create(
+            singleton_id=SetupWizardCompletedModel.SINGLETON_ID
+        )
 
         return super().form_valid(form)
 
