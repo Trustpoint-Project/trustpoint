@@ -7,9 +7,6 @@ from typing import TYPE_CHECKING
 from django.contrib import messages
 from django.contrib.auth.views import LoginView
 
-from setup_wizard import SetupWizardState
-from trustpoint.settings import DOCKER_CONTAINER
-
 if TYPE_CHECKING:
     from typing import Any
 
@@ -35,7 +32,6 @@ class TrustpointLoginView(LoginView):
         for _ in messages.get_messages(self.request):
             pass
 
-        # if not DOCKER_CONTAINER:
         return super().get(request, *args, **kwargs)
 
 
@@ -53,11 +49,4 @@ class TrustpointLoginView(LoginView):
         for _ in messages.get_messages(self.request):
             pass
 
-        # if not DOCKER_CONTAINER:
         return super().post(request, *args, **kwargs)
-
-        # wizard_state = SetupWizardState.get_current_state()
-        # if wizard_state == SetupWizardState.WIZARD_COMPLETED:
-        #     return super().post(request, *args, **kwargs)
-
-        # return StartupWizardRedirect.redirect_by_state(wizard_state)
