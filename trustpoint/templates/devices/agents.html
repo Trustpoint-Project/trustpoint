@@ -45,7 +45,7 @@
           <td>{{ device.onboarding_config.get_onboarding_status_display }}</td>
           <td>
             {% for agent in device.agent_list %}
-              <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-sm btn-outline-primary">
+              <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-sm btn-primary">
                 <i class="fas fa-server"></i> {% trans 'Managed Devices' %}
               </a>
             {% endfor %}
