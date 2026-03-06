@@ -10,6 +10,8 @@
                 <h1>{% trans 'Create new OPC UA GDS Server' %}</h1>
             {% elif page_name == DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY %}
                 <h1>{% trans 'Create new OPC UA GDS Push Application' %}</h1>
+            {% elif page_name == DEVICES_PAGE_AGENTS_SUBCATEGORY %}
+                <h1>{% trans 'Create new 1-to-n Agent' %}</h1>
             {% endif %}
         </div>
         <form method="POST" id="add-device-form">
@@ -26,6 +28,8 @@
                             {% trans 'Create new OPC UA GDS Server' %}
                         {% elif page_name == DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY %}
                             {% trans 'Create new OPC UA GDS Push Application' %}
+                        {% elif page_name == DEVICES_PAGE_AGENTS_SUBCATEGORY %}
+                            {% trans 'Create 1-to-n Agent' %}
                         {% endif %}
                     </button>
                 </div>

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class WbmSubmitCsrAuthorization(AuthorizationComponent, LoggerMixin):
     """Ensure the job referenced in submit-csr belongs to the calling agent.
 
-    Fetches the :class:`~agents.models.WbmJob` and stores it on the context so
+    Fetches the :class:`~agents.models.AgentJob` and stores it on the context so
     the operation processor does not need to repeat the query.
     """
 
@@ -27,10 +27,10 @@ class WbmSubmitCsrAuthorization(AuthorizationComponent, LoggerMixin):
             return
 
         job = (
-            WbmJob.objects.select_related('target__certificate_profile', 'target__device__domain')
+            AgentJob.objects.select_related('target__certificate_profile', 'target__device__domain')
             .filter(
                 pk=context.submit_csr_job_id,
-                status=WbmJob.Status.PENDING_CSR,
+                status=AgentJob.Status.PENDING_CSR,
                 target__agent=context.agent,
             )
             .first()
@@ -52,9 +52,9 @@ class WbmPushResultAuthorization(AuthorizationComponent, LoggerMixin):
         if context.operation != 'push-result':
             return
 
-        exists = WbmJob.objects.filter(
+        exists = AgentJob.objects.filter(
             pk=context.push_result_job_id,
-            status=WbmJob.Status.IN_PROGRESS,
+            status=AgentJob.Status.IN_PROGRESS,
             target__agent=context.agent,
         ).exists()
         if not exists:

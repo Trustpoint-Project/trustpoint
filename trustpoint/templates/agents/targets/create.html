@@ -1,0 +1,164 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <h1 class="mb-0">{% trans "Add Managed Device" %}</h1>
+        <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> {% trans "Back" %}
+        </a>
+    </div>
+
+    <form method="post">
+        <div class="card-body">
+            <div class="tp-card-centered-content">
+                {% csrf_token %}
+
+                {% for error in form.non_field_errors %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                {% endfor %}
+
+                <p class="text-muted mb-3">
+                    {% blocktrans with agent_name=agent.name %}
+                        Adding a device managed by agent <strong>{{ agent_name }}</strong>.
+                        The device will use EST (username/password) for certificate enrolment.
+                    {% endblocktrans %}
+                </p>
+
+                <h2>{% trans "Device Identity" %}</h2>
+                <hr class="hr-m">
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>
+                            {% trans "Common Name" %} <span class="text-danger">*</span>
+                        </div>
+                        <div>
+                            <input type="text"
+                                   class="form-control {% if form.common_name.errors %}is-invalid{% endif %}"
+                                   name="common_name"
+                                   value="{{ form.common_name.value|default:'' }}"
+                                   id="id_common_name"
+                                   required />
+                            {% for error in form.common_name.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                            {% endfor %}
+                            <small class="form-text text-muted">{{ form.common_name.help_text }}</small>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>{% trans "Serial Number" %}</div>
+                        <div>
+                            <input type="text"
+                                   class="form-control {% if form.serial_number.errors %}is-invalid{% endif %}"
+                                   name="serial_number"
+                                   value="{{ form.serial_number.value|default:'' }}"
+                                   id="id_serial_number" />
+                            {% for error in form.serial_number.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>{% trans "IP Address" %}</div>
+                        <div>
+                            <input type="text"
+                                   class="form-control {% if form.ip_address.errors %}is-invalid{% endif %}"
+                                   name="ip_address"
+                                   value="{{ form.ip_address.value|default:'' }}"
+                                   id="id_ip_address" />
+                            {% for error in form.ip_address.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                            {% endfor %}
+                            <small class="form-text text-muted">{{ form.ip_address.help_text }}</small>
+                        </div>
+                    </div>
+                </div>
+
+                <h2>{% trans "Certificate Settings" %}</h2>
+                <hr class="hr-m">
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>
+                            {% trans "Certificate Profile" %} <span class="text-danger">*</span>
+                        </div>
+                        <div>
+                            <select class="form-select {% if form.certificate_profile.errors %}is-invalid{% endif %}"
+                                    name="certificate_profile"
+                                    id="id_certificate_profile"
+                                    required>
+                                <option value="">{{ form.certificate_profile.field.empty_label }}</option>
+                                {% for value, label in form.certificate_profile.field.choices %}
+                                    {% if value %}
+                                        <option value="{{ value }}"
+                                            {% if form.certificate_profile.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>
+                                            {{ label }}
+                                        </option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                            {% for error in form.certificate_profile.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>{% trans "Workflow Definition" %} <span class="text-danger">*</span></div>
+                        <div>
+                            <select class="form-select {% if form.workflow.errors %}is-invalid{% endif %}"
+                                    name="workflow"
+                                    id="id_workflow"
+                                    required>
+                                <option value="">{{ form.workflow.field.empty_label }}</option>
+                                {% for value, label in form.workflow.field.choices %}
+                                    {% if value %}
+                                        <option value="{{ value }}"
+                                            {% if form.workflow.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>
+                                            {{ label }}
+                                        </option>
+                                    {% endif %}
+                                {% endfor %}
+                            </select>
+                            {% for error in form.workflow.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div>
+                        <div>{% trans "Renewal Threshold (days)" %}</div>
+                        <div>
+                            <input type="number"
+                                   class="form-control {% if form.renewal_threshold_days.errors %}is-invalid{% endif %}"
+                                   name="renewal_threshold_days"
+                                   value="{{ form.renewal_threshold_days.value|default:'30' }}"
+                                   id="id_renewal_threshold_days"
+                                   min="0" />
+                            {% for error in form.renewal_threshold_days.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                            {% endfor %}
+                            <small class="form-text text-muted">{{ form.renewal_threshold_days.help_text }}</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+            <div class="m-1">
+                <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-secondary">
+                    {% trans "Cancel" %}
+                </a>
+            </div>
+            <div class="m-1">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save"></i> {% trans "Save Device" %}
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock content %}

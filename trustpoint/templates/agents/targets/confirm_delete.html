@@ -1,0 +1,55 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<form method="POST" autocomplete="off">
+    {% csrf_token %}
+
+    <div class="card">
+        <div class="card-header">
+            <h1>{% trans "Confirm Deletion" %}</h1>
+        </div>
+        <div class="card-body">
+            <div class="tp-card-centered-content">
+                <p class="text-muted">
+                    {% blocktrans with agent_name=agent.name %}
+                        The following devices will be removed from agent <strong>{{ agent_name }}</strong>
+                        and permanently deleted:
+                    {% endblocktrans %}
+                </p>
+                {% for target in targets %}
+                    <h2>({{ forloop.counter }}) {{ target.device.common_name }}</h2>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>{% trans "Serial Number" %}</div>
+                            <div>{{ target.device.serial_number|default:"—" }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans "IP Address" %}</div>
+                            <div>{{ target.device.ip_address|default:"—" }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans "Certificate Profile" %}</div>
+                            <div>{{ target.certificate_profile.unique_name|default:"—" }}</div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+            <div class="m-1">
+                <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-secondary">
+                    {% trans "Cancel" %}
+                </a>
+            </div>
+            <div class="m-1">
+                <button type="submit" class="btn btn-danger">
+                    <i class="fas fa-trash"></i> {% trans "Confirm Delete" %}
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+{% endblock content %}

@@ -320,6 +320,19 @@ class AgentTableView(AbstractDeviceTableView):
         context['page_name'] = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
         device_pks = [d.pk for d in context['devices']]
+
+        # Auto-create a TrustpointAgent for any agent device that doesn't have one yet,
+        # so the "Managed Devices" button is always available.
+        existing_device_ids = set(
+            TrustpointAgent.objects.filter(device_id__in=device_pks).values_list('device_id', flat=True)
+        )
+        for device in context['devices']:
+            if device.pk not in existing_device_ids:
+                TrustpointAgent.objects.create(
+                    name=device.common_name,
+                    device=device,
+                )
+
         agents_qs = (
             TrustpointAgent.objects.filter(device_id__in=device_pks)
             .select_related('device')

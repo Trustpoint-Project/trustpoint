@@ -26,9 +26,9 @@ class TrustpointAgentAdmin(admin.ModelAdmin):
 class AgentWorkflowDefinitionAdmin(admin.ModelAdmin):
     """Admin for AgentWorkflowDefinition."""
 
-    list_display = ('name', 'version', 'vendor', 'device_family', 'is_active')
-    list_filter = ('is_active', 'vendor')
-    search_fields = ('name', 'vendor', 'device_family')
+    list_display = ('name', 'is_active', 'created_at', 'updated_at')
+    list_filter = ('is_active',)
+    search_fields = ('name',)
     readonly_fields = ('created_at', 'updated_at')
 
 

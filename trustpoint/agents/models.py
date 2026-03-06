@@ -222,28 +222,28 @@ class AgentWorkflowDefinition(models.Model):
 
     Defines how the agent should interact with a managed device — for example
     via its Web-Based Management (WBM) interface — in order to push a
-    certificate.  The workflow is expressed as a JSON array of typed steps
-    (e.g. ``goto``, ``click``, ``fill``, ``uploadFile``) and is validated
-    against :data:`WORKFLOW_STEP_SCHEMA` on save.
+    certificate.  The workflow is expressed as a JSON object containing:
+    - Device metadata (vendor, device_family, firmware_hint, version, description)
+    - Array of typed automation steps (e.g. ``goto``, ``click``, ``fill``, ``uploadFile``)
 
+    The profile is validated against :data:`WORKFLOW_STEP_SCHEMA` on save.
     Workflows are intentionally decoupled from credentials and device
     identities so that one definition can be reused across many targets.
     """
 
-    name = models.CharField(verbose_name=_('Name'), max_length=200)
-    vendor = models.CharField(verbose_name=_('Vendor'), max_length=120, blank=True)
-    device_family = models.CharField(verbose_name=_('Device Family'), max_length=120, blank=True)
-    firmware_hint = models.CharField(
-        verbose_name=_('Firmware Hint'),
-        max_length=120,
-        blank=True,
-        help_text=_('Optional firmware version string to help operators select the right profile.'),
+    name = models.CharField(
+        verbose_name=_('Name'),
+        max_length=200,
+        unique=True,
+        help_text=_('Unique identifier for this workflow definition.'),
     )
-    version = models.CharField(verbose_name=_('Version'), max_length=40, default='1.0')
-    description = models.TextField(verbose_name=_('Description'), blank=True)
     profile = models.JSONField(
         verbose_name=_('Workflow Profile'),
-        help_text=_('JSON array of typed automation steps. Validated on save.'),
+        help_text=_(
+            'JSON object containing device metadata and automation steps. '
+            'Metadata fields: vendor, device_family, firmware_hint, version, description. '
+            'Steps array contains typed automation steps.'
+        ),
     )
     is_active = models.BooleanField(
         verbose_name=_('Active'),
@@ -258,20 +258,24 @@ class AgentWorkflowDefinition(models.Model):
     class Meta:
         """Meta options for AgentWorkflowDefinition."""
 
-        unique_together: ClassVar = [('name', 'version')]
         verbose_name = _('Agent Workflow Definition')
         verbose_name_plural = _('Agent Workflow Definitions')
 
     def __str__(self) -> str:
         """Return a human-readable representation."""
-        return f'AgentWorkflowDefinition({self.name} v{self.version})'
+        return f'AgentWorkflowDefinition({self.name})'
 
     def clean(self) -> None:
         """Validate the workflow profile against the step schema."""
+        # Profile should be a dict containing 'steps' array and optional metadata
+        if not isinstance(self.profile, dict):
+            raise ValidationError({'profile': 'Profile must be a JSON object.'})
+
+        steps = self.profile.get('steps', [])
         try:
-            jsonschema.validate(self.profile, WORKFLOW_STEP_SCHEMA)
+            jsonschema.validate(steps, WORKFLOW_STEP_SCHEMA)
         except jsonschema.ValidationError as exc:
-            raise ValidationError({'profile': exc.message}) from exc
+            raise ValidationError({'profile': f'Steps validation error: {exc.message}'}) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -317,6 +321,8 @@ class AgentCertificateTarget(models.Model):
         verbose_name=_('Workflow Definition'),
         on_delete=models.PROTECT,
         related_name='targets',
+        null=True,
+        blank=True,
     )
     # The agent responsible for executing pushes to this target.
     # PROTECT prevents accidental deletion of an agent that still owns active targets.

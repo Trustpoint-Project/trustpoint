@@ -84,12 +84,14 @@ urlpatterns += [
     path('', base.IndexView.as_view()),
     path('workflows/', include('workflows.urls', namespace='workflows')),
 
+    # Web UI Routes
+    path('agents/', include('agents.urls', namespace='agents')),
+
     # API URLs
     path('api/', include('devices.api_urls')),
     path('api/', include('pki.api_urls')),
     path('api/', include('signer.api_urls')),
     path('api/', include('management.api_urls')),
-    path('api/', include('agents.urls', namespace='agents')),
 
     # JWT endpoints
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
