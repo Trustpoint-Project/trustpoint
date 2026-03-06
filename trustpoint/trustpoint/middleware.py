@@ -87,12 +87,9 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
     ALLOWED_NON_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH = reverse('users:login')
 
     ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS = (
-        '/setup-wizard/conifgure',
-        '/setup-wizard/configure/',
-        '/setup-wizard/summary',
-        '/setup-wizard/summary/',
+        '/setup-wizard/fresh-install',
     )
-    ALLOWED_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH = ''
+    ALLOWED_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH = reverse('setup_wizard:select_tls_server_credential')
 
     redirect_dest: str | None = None
 
@@ -149,7 +146,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         # if user is authenticated (wizard not completed), only allow views to finish up the wizard
         if authenticated \
                 and users_exists \
-                and request.path_info not in self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS:
+                and not request.path_info.startswith(self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS):
             self.redirect_dest = self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH
 
         if self.redirect_dest:
