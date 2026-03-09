@@ -774,6 +774,11 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                     f'{self.page_category}:{self.page_name}'
                     '_certificate_lifecycle_management_issue_domain_credential_est_username_password'
                 )
+            elif self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.REST_USERNAME_PASSWORD:
+                issue_domain_cred_onboarding_url = (
+                    f'{self.page_category}:{self.page_name}'
+                    '_certificate_lifecycle_management_issue_domain_credential_rest_username_password'
+                )
             elif self.object.onboarding_config.onboarding_protocol == OnboardingProtocol.OPC_GDS_PUSH:
                 issue_domain_cred_onboarding_url = (
                     f'{self.page_category}:{self.page_name}_onboarding_clm_issue_domain_credential'
@@ -822,6 +827,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             'onboarding_status': OnboardingStatus(self.object.onboarding_config.onboarding_status).label,
             'pki_protocol_cmp': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP),
             'pki_protocol_est': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST),
+            'pki_protocol_rest': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.REST),
         }
 
     def get_no_onboarding_initial(self) -> dict[str, Any]:
@@ -844,6 +850,9 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD
             ),
             'pki_protocol_manual': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.MANUAL),
+            'pki_protocol_rest': self.object.no_onboarding_config.has_pki_protocol(
+                NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD
+            ),
         }
 
     def get_onboarding_form(self) -> forms.Form:
@@ -962,6 +971,7 @@ class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecyc
             and not (
                 device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP)
                 or device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST)
+                or device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.REST)
             )
         ):
             url = reverse('devices:opc_ua_gds_push_certificate_lifecycle_management', kwargs={'pk': device.pk})
@@ -1120,6 +1130,21 @@ class AbstractNoOnboardingIssueNewApplicationCredentialView(PageContextMixin, De
                 'protocol': 'manual',
                 'enabled': self.object.no_onboarding_config.has_pki_protocol(NoOnboardingPkiProtocol.MANUAL),
                 'url': f'{self.page_category}:{self.page_name}_no_onboarding_select_certificate_profile',
+            }
+        )
+
+        sections.append(
+            {
+                'heading': gettext_lazy('REST with curl (username & password)'),
+                'description': gettext_lazy(
+                    'This option will guide you through all steps and commands that are '
+                    'required to issue a new application certificate using REST with curl.'
+                ),
+                'protocol': 'rest-username-password',
+                'enabled': self.object.no_onboarding_config.has_pki_protocol(
+                    NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD
+                ),
+                'url': f'{self.page_category}:{self.page_name}_no_onboarding_rest_username_password_help',
             }
         )
 
@@ -1293,6 +1318,21 @@ class AbstractOnboardingIssueNewApplicationCredentialView(PageContextMixin, Deta
                 'enabled': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.EST),
                 'url': (
                     f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_est_domain_credential'
+                ),
+            }
+        )
+
+        sections.append(
+            {
+                'heading': gettext_lazy('REST with Domain Credential'),
+                'description': gettext_lazy(
+                    'This option will guide you through all steps and commands that are '
+                    'required to issue a new application certificate using REST using curL.'
+                ),
+                'protocol': 'rest',
+                'enabled': self.object.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.REST),
+                'url': (
+                    f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential_rest_domain_credential'
                 ),
             }
         )

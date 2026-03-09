@@ -2,8 +2,10 @@
 
 from .cmp import CmpMessageParser
 from .est import EstMessageParser
+from .rest import RestMessageParser
 
 __all__ = [
     'CmpMessageParser',
     'EstMessageParser',
+    'RestMessageParser',
 ]

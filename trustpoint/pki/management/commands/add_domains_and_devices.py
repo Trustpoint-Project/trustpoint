@@ -337,6 +337,8 @@ class Command(BaseCommand, LoggerMixin):
                             OnboardingProtocol.CMP_IDEVID,
                             OnboardingProtocol.CMP_SHARED_SECRET]:
                         onboarding_pki_protocols = get_random_onboarding_pki_protocols(OnboardingPkiProtocol.CMP)
+                    elif onboarding_protocol == OnboardingProtocol.REST_USERNAME_PASSWORD:
+                        onboarding_pki_protocols = get_random_onboarding_pki_protocols(OnboardingPkiProtocol.REST)
                     else:
                         err_msg = 'Unknown onboarding protocol found.'
                         raise ValueError(err_msg)
@@ -356,7 +358,10 @@ class Command(BaseCommand, LoggerMixin):
                     if onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
                         onboarding_config_model.cmp_shared_secret = _get_secret()
 
-                    if onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
+                    if onboarding_protocol in (
+                        OnboardingProtocol.EST_USERNAME_PASSWORD,
+                        OnboardingProtocol.REST_USERNAME_PASSWORD,
+                    ):
                         onboarding_config_model.est_password = _get_secret()
 
                     onboarding_config_model.full_clean()
@@ -388,6 +393,12 @@ class Command(BaseCommand, LoggerMixin):
                         no_onboarding_config_model.cmp_shared_secret = _get_secret()
 
                     if NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD in no_onboarding_pki_protocols:
+                        no_onboarding_config_model.est_password = _get_secret()
+
+                    if (
+                        NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD in no_onboarding_pki_protocols
+                        and not no_onboarding_config_model.est_password
+                    ):
                         no_onboarding_config_model.est_password = _get_secret()
 
                     no_onboarding_config_model.full_clean()
