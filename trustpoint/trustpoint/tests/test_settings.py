@@ -135,6 +135,7 @@ def test_public_paths():
         '/setup-wizard',
         '/.well-known/cmp',
         '/.well-known/est',
+        '/.well-known/rest',
         '/aoki',
         '/crl'
     ]
