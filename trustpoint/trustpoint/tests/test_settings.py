@@ -137,7 +137,7 @@ def test_public_paths():
         '/.well-known/est',
         '/.well-known/rest',
         '/aoki',
-        '/crl'
+        '/crl',
     ]
     assert isinstance(public_paths, list), 'PUBLIC_PATHS should be a list.'
     assert public_paths == expected_paths, 'PUBLIC_PATHS should match the defined values.'
