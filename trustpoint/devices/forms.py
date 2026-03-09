@@ -1028,7 +1028,6 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
             if self.instance.no_onboarding_config.est_password == '':
                 self.instance.no_onboarding_config.est_password = _get_secret()
 
-        # Clear est_password only if neither EST nor REST is enabled
         est_enabled = self.cleaned_data['pki_protocol_est'] is True
         rest_enabled = self.cleaned_data['pki_protocol_rest'] is True
         if not est_enabled and not rest_enabled:
