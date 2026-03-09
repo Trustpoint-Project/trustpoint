@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2024-11-14 10:44+0100\n"
-"PO-Revision-Date: 2026-03-04 14:12+0100\n"
+"PO-Revision-Date: 2026-03-09 12:51+0100\n"
 "Last-Translator: Christian Schwinne <christian.schwinne  AT hshl.de>\n"
 "Language-Team: \n"
 "Language: de\n"
@@ -21,7 +21,7 @@ msgstr ""
 
 #: .\static\js\dashboard\charts-tab.js:13
 msgid "No data available"
-msgstr "Keine Daten verfügbar"
+msgstr "Datenverschlüsselung"
 
 #: .\static\js\dashboard\charts-tab.js:18
 msgid "Total"
