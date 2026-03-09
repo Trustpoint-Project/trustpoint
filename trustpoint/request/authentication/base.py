@@ -3,12 +3,12 @@
 from abc import ABC, abstractmethod
 from typing import Never
 
-from devices.models import (
-    DeviceModel,
-)
-from pki.models import IssuedCredentialModel
+from cryptography import x509
+
+from devices.models import DeviceModel
+from pki.models import CredentialModel, IssuedCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
-from request.request_context import BaseRequestContext, HttpBaseRequestContext
+from request.request_context import BaseCertificateRequestContext, BaseRequestContext, HttpBaseRequestContext
 from trustpoint.logger import LoggerMixin
 
 
@@ -67,6 +67,135 @@ class ClientCertificateAuthentication(AuthenticationComponent, LoggerMixin):
         if cause:
             raise ValueError(message) from cause
         raise ValueError(message)
+
+
+class ReenrollmentAuthentication(AuthenticationComponent, LoggerMixin):
+    """Handles authentication for reenrollment using an existing Application Credential."""
+
+    def authenticate(self, context: BaseRequestContext) -> None:
+        """Authenticate the client for reenrollment.
+
+        In reenrollment, the client must present a valid certificate that was previously
+        issued by the system. The CSR subject must match the certificate subject, and
+        all certificate extensions (particularly SAN) must match.
+
+        Args:
+            context: The request context. Must be a subclass of BaseCertificateRequestContext.
+
+        Raises:
+            TypeError: If context is not a BaseCertificateRequestContext.
+            ValueError: If authentication fails or validation fails.
+        """
+        if not isinstance(context, BaseCertificateRequestContext):
+            return
+
+        if not self._validate_context(context):
+            return
+
+        if not context.client_certificate:
+            error_message = 'Client certificate is required for reenrollment.'
+            self.logger.warning(error_message)
+            raise ValueError(error_message)
+
+        issued_credential = self._get_issued_credential(context.client_certificate)
+        credential_model: CredentialModel = issued_credential.credential
+
+        if not isinstance(context.cert_requested, x509.CertificateSigningRequest):
+            error_message = 'CSR is not a valid CertificateSigningRequest for reenrollment.'
+            self.logger.warning(error_message)
+            raise TypeError(error_message)
+
+        self._validate_credential(credential_model, context.cert_requested, context.client_certificate)
+        self._validate_certificate_extensions_safe(credential_model, context.client_certificate, context.cert_requested)
+
+        self.logger.info('Successfully authenticated device for reenrollment')
+        context.device = issued_credential.device
+
+    def _validate_context(self, context: BaseCertificateRequestContext) -> bool:
+        """Validate the context for reenrollment."""
+        if not context.client_certificate:
+            return False
+
+        if not isinstance(context.client_certificate, x509.Certificate):
+            error_message = 'Invalid client certificate type for reenrollment.'
+            self.logger.warning(error_message)
+            raise TypeError(error_message)
+
+        if not context.cert_requested:
+            error_message = 'CSR is missing in the context for reenrollment.'
+            self.logger.warning(error_message)
+            raise ValueError(error_message)
+
+        return True
+
+    def _get_issued_credential(self, client_cert: x509.Certificate) -> IssuedCredentialModel:
+        """Retrieve the issued credential for the client certificate."""
+        try:
+            return IssuedCredentialModel.get_credential_for_certificate(client_cert)
+        except IssuedCredentialModel.DoesNotExist:
+            error_message = 'Issued credential not found for client certificate during reenrollment'
+            self.logger.warning(error_message)
+            raise ValueError(error_message) from None
+
+    def _validate_credential(
+        self, credential_model: CredentialModel, csr: x509.CertificateSigningRequest, client_cert: x509.Certificate
+    ) -> None:
+        """Validate the credential model against the CSR and client certificate."""
+        is_valid, reason = credential_model.is_valid_issued_credential()
+        if not is_valid:
+            error_message = f'Invalid client certificate for reenrollment: {reason}'
+            self.logger.warning(error_message)
+            raise ValueError(error_message)
+
+        cert = credential_model.certificate_or_error
+
+        if (
+            not cert.subjects_match(csr.subject) or
+            not cert.subjects_match(client_cert.subject)
+        ):
+            error_message = "CSR/client subject does not match the credential certificate's subject"
+            self.logger.warning(error_message)
+            raise ValueError(error_message)
+
+    def _validate_certificate_extensions(
+        self,
+        credential_cert: x509.Certificate,
+        client_cert: x509.Certificate,
+        csr: x509.CertificateSigningRequest
+    ) -> None:
+        """Validate that certificate extensions match between credential, client cert, and CSR."""
+        try:
+            credential_cert_san = credential_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        except x509.ExtensionNotFound:
+            credential_cert_san = None
+
+        try:
+            csr_san = csr.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        except x509.ExtensionNotFound:
+            csr_san = None
+
+        try:
+            client_san = client_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        except x509.ExtensionNotFound:
+            client_san = None
+
+        if client_san != csr_san or credential_cert_san != csr_san:
+            error_message = 'CSR/client SAN does not match the credential certificate SAN.'
+            raise ValueError(error_message)
+
+    def _validate_certificate_extensions_safe(
+        self, credential_model: CredentialModel, client_cert: x509.Certificate, csr: x509.CertificateSigningRequest
+    ) -> None:
+        """Safely validate certificate extensions."""
+        try:
+            credential_cert = credential_model.certificate_or_error.get_certificate_serializer().as_crypto()
+            self._validate_certificate_extensions(credential_cert, client_cert, csr)
+        except TypeError:
+            raise
+        except Exception as e:
+            self.logger.warning('Certificate extension validation failed: %s', e)
+            error_message = 'Certificate extension validation failed'
+            raise ValueError(error_message) from e
 
 
 class IDevIDAuthentication(AuthenticationComponent, LoggerMixin):

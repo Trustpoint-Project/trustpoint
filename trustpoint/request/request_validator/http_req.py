@@ -2,7 +2,7 @@
 import base64
 import contextlib
 import itertools
-import urllib
+import urllib.parse
 from abc import ABC, abstractmethod
 
 from cryptography import x509
@@ -129,7 +129,14 @@ class ClientCertificateValidation(ValidationComponent, LoggerMixin):
     """Check and optionally process the SSL client certificate from the request headers."""
 
     def validate(self, context: HttpBaseRequestContext) -> None:
-        """Check for the presence of the 'HTTP_SSL_CLIENT_CERT' header and set the cert in the context if present."""
+        """Check for the presence of the 'HTTP_SSL_CLIENT_CERT' header and set the cert in the context if present.
+
+        In production nginx injects the TLS client certificate as ``HTTP_SSL_CLIENT_CERT``
+        (URL-encoded PEM).  On the development server the curl command in the help pages
+        sends the same header manually via ``--header "SSL-CLIENT-CERT: <url-encoded PEM>"``,
+        which Django maps to ``META['HTTP_SSL_CLIENT_CERT']`` automatically.  Both paths
+        are therefore handled identically here.
+        """
         if context.raw_message is None:
             error_message = 'Raw message is missing from the context.'
             self.logger.warning('Client certificate validation failed: Raw message is missing')
@@ -194,7 +201,7 @@ class IntermediateCertificatesValidation(ValidationComponent, LoggerMixin):
                     'Intermediate certificates validation failed: Invalid certificate at position %d - %s', i, e)
                 raise ValueError(error_message) from e
 
-        context.client_intermediate_certificate = intermediate_cas if intermediate_cas else None
+        context.client_intermediate_certificate = intermediate_cas or None
 
         if intermediate_cas:
             self.logger.debug(
@@ -309,3 +316,19 @@ class EstHttpRequestValidator(CompositeValidation):
         self.add(ClientCertificateValidation())
         self.add(IntermediateCertificatesValidation())
         self.add(ContentTransferEncodingValidation())
+
+
+class RestHttpRequestValidator(CompositeValidation):
+    """Validator for REST API certificate enrollment requests.
+
+    Accepts JSON bodies with a PEM or DER/Base64 encoded CSR, authenticated
+    via HTTP Basic Auth (username / password).
+    """
+
+    def __init__(self) -> None:
+        """Initialize the composite validator with the default set of validation components."""
+        super().__init__()
+        self.add(PayloadSizeValidation(max_payload_size=65536))
+        self.add(ContentTypeValidation(expected_content_type='application/json'))
+        self.add(ClientCertificateValidation())
+        self.add(IntermediateCertificatesValidation())

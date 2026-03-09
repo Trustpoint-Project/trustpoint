@@ -78,6 +78,7 @@ PUBLIC_PATHS = [
     '/setup-wizard',
     '/.well-known/cmp',
     '/.well-known/est',
+    '/.well-known/rest',
     '/aoki',
     '/crl',
 ]
@@ -262,6 +263,7 @@ INSTALLED_APPS = [
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
+    'rest_pki.apps.RestPkiConfig',
     'signer.apps.SignerConfig',
     'aoki.apps.AokiConfig',
     'management.apps.ManagementConfig',

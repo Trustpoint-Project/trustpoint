@@ -134,6 +134,19 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_no_onboarding_est_username_password_help',
     ),
     path(
+        'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/rest-username-password/',
+        devices_help_views.DeviceNoOnboardingRestUsernamePasswordHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_rest_username_password_help',
+    ),
+    path(
+        (
+            'opc-ua-gds/certificate-lifecycle-management/<int:pk>'
+            '/no-onboarding/issue-application-credential/rest-username-password/'
+        ),
+        devices_help_views.OpcUaGdsNoOnboardingRestUsernamePasswordHelpView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_no_onboarding_rest_username_password_help',
+    ),
+    path(
         (
             'certificate-lifecycle-management/<int:pk>'
             '/no-onboarding/issue-application-credential/manual/select-certificate-profile'
@@ -195,6 +208,22 @@ urlpatterns = [
         name=(
             f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'
             '_certificate_lifecycle_management_issue_domain_credential_est_username_password'
+        ),
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/rest-username-password/',
+        devices_help_views.DeviceOnboardingDomainCredentialRestUsernamePasswordHelpView.as_view(),
+        name=(
+            f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}'
+            '_certificate_lifecycle_management_issue_domain_credential_rest_username_password'
+        ),
+    ),
+    path(
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/rest-username-password/',
+        devices_help_views.OpcUaGdsOnboardingDomainCredentialRestUsernamePasswordHelpView.as_view(),
+        name=(
+            f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'
+            '_certificate_lifecycle_management_issue_domain_credential_rest_username_password'
         ),
     ),
     path(
@@ -278,6 +307,19 @@ urlpatterns = [
         ),
         devices_help_views.OpcUaGdsApplicationCertificateWithEstDomainCredentialHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_onboarding_clm_issue_application_credential_est_domain_credential',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/rest-domain-credential/',
+        devices_help_views.DeviceApplicationCertificateWithRestDomainCredentialHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_onboarding_clm_issue_application_credential_rest_domain_credential',
+    ),
+    path(
+        (
+            'opc-ua-gds/certificate-lifecycle-management/<int:pk>/'
+            'onboarding/issue-application-credential/rest-domain-credential/'
+        ),
+        devices_help_views.OpcUaGdsApplicationCertificateWithRestDomainCredentialHelpView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_onboarding_clm_issue_application_credential_rest_domain_credential',
     ),
     # Certificate Lifecycle Management - Downloads
     path(

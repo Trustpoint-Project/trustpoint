@@ -32,6 +32,9 @@ def override_makemigrations(cmd_args: list[str]) -> None:
     # override default migration name
     if '--name' not in cmd_args and '-n' not in cmd_args:
         cmd_args.extend(['--name', migration_name])
+    # remove migration header to reduce merge conflicts
+    if '--no-header' not in cmd_args:
+        cmd_args.append('--no-header')
     execute_from_command_line(cmd_args)
     base_path = Path(__file__).resolve().parent.parent.parent.parent
     _check_migration_name_duplicates(migration_name, base_path)
