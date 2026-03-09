@@ -31,6 +31,7 @@ class OnboardingProtocol(models.IntegerChoices):
     AOKI = 5, _('AOKI')
     BRSKI = 6, _('BRSKI')
     OPC_GDS_PUSH = 7, _('OPC - GDS Push')
+    REST_USERNAME_PASSWORD = 8, _('REST - Username & Password')
 
 
 class OnboardingPkiProtocol(models.IntegerChoices):
@@ -40,6 +41,7 @@ class OnboardingPkiProtocol(models.IntegerChoices):
     CMP = 1, _('CMP')
     EST = 2, _('EST')
     OPC_GDS_PUSH = 4, _('OPC - GDS Push')
+    REST = 8, _('REST')
 
 
 class NoOnboardingPkiProtocol(models.IntegerChoices):
@@ -51,3 +53,4 @@ class NoOnboardingPkiProtocol(models.IntegerChoices):
     EST_USERNAME_PASSWORD = 4, _('EST - Username & Password')
     # 8 reserved for EST Client Certificate
     MANUAL = 16, _('Manual')
+    REST_USERNAME_PASSWORD = 32, _('REST - Username & Password')
