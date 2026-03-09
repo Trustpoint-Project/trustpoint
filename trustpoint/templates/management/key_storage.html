@@ -32,12 +32,11 @@
                                 <p class="card-text">
                                     {% trans 'Store cryptographic keys in software without encryption' %}
                                 </p>
+                            </div>
+                            <div class="card-footer bg-transparent border-0 pt-0 pb-3 text-center">
                                 <span class="badge bg-warning mb-3">{% trans 'Not recommended for production!' %}</span>
                                 {% if config.storage_type == 'software' %}
                                     <div class="alert alert-success mt-3">
-                                        <svg class="bi me-2" width="20" height="20" fill="currentColor">
-                                            <use href="{% static 'img/icons.svg' %}#icon-check"></use>
-                                        </svg>
                                         <strong>{% trans 'Currently Active' %}</strong>
                                     </div>
                                 {% else %}
@@ -60,12 +59,11 @@
                                 <p class="card-text">
                                     {% trans 'Software-based HSM with encryption and secure key storage' %}
                                 </p>
+                            </div>
+                            <div class="card-footer bg-transparent border-0 pt-0 pb-3 text-center">
                                 <span class="badge bg-warning mb-3">{% trans 'Not recommended for production!' %}</span>
                                 {% if config.storage_type == 'softhsm' %}
                                     <div class="alert alert-success mt-3">
-                                        <svg class="bi me-2" width="20" height="20" fill="currentColor">
-                                            <use href="{% static 'img/icons.svg' %}#icon-check"></use>
-                                        </svg>
                                         <strong>{% trans 'Currently Active' %}</strong>
                                     </div>
                                 {% else %}
@@ -85,15 +83,14 @@
                                     <use href="{% static 'img/icons.svg' %}#icon-hardware"></use>
                                 </svg>
                                 <h5 class="card-title">{% trans 'Physical HSM' %}</h5>
-                                <p class="card-text">
+                                <p class="card-text mb-3">
                                     {% trans 'Hardware-based secure cryptographic storage device' %}
                                 </p>
+                            </div>
+                            <div class="card-footer bg-transparent border-0 pt-0 pb-3 text-center">
                                 <span class="badge bg-success mb-3">{% trans 'Recommended for production!' %}</span>
                                 {% if config.storage_type == 'physical_hsm' %}
                                     <div class="alert alert-success mt-3">
-                                        <svg class="bi me-2" width="20" height="20" fill="currentColor">
-                                            <use href="{% static 'img/icons.svg' %}#icon-check"></use>
-                                        </svg>
                                         <strong>{% trans 'Currently Active' %}</strong>
                                     </div>
                                 {% else %}
