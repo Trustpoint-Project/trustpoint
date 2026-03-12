@@ -1,4 +1,3 @@
-// Helper function to format a date as YYYY-MM-DD
 function formatDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0"); // Months are 0-based
@@ -94,6 +93,12 @@ function createHorizontalBarChart(
   legendId,
   chartInstanceName
 ) {
+  // Farben immer beim Zeichnen neu auslesen
+  const style = getComputedStyle(document.documentElement);
+  const gridColor = style.getPropertyValue('--chart-grid-color').trim() || 'rgba(222, 226, 230, 0.2)';
+  const borderColor = style.getPropertyValue('--chart-border-color').trim() || '#dee2e6';
+  const textColor = style.getPropertyValue('--chart-text-color').trim() || '#dee2e6';
+
   // Validation of input parameters
   if (!Array.isArray(labels) || !Array.isArray(values)) {
     console.error('Invalid data: labels and values must be arrays');
@@ -216,6 +221,11 @@ function createHorizontalBarChart(
       }]
     },
     options: {
+      layout: {
+        padding: {
+          right: hasData ? 40 : 0
+        }        
+      },
       responsive: true,
       maintainAspectRatio: false,
       indexAxis: 'y',
@@ -223,18 +233,32 @@ function createHorizontalBarChart(
         x: {
           display: hasData,
           beginAtZero: true,
-          grid: { color: 'rgba(0,0,0,0.06)' },
-          ticks: { precision: 0 }
+          grid: { 
+            color: gridColor 
+          },
+          border: {
+            display: true,
+            color: borderColor 
+          },
+          ticks: { 
+            precision: 0, 
+            color: textColor 
+          }
         },
         y: {
           display: hasData,
-          grid: { display: false }
+          grid: { display: false },
+          border: {
+            display: true,
+            color: borderColor 
+          },
+          ticks: { 
+            color: textColor 
+          }
         }
       },
       plugins: {
         legend: { display: false },
-
-        // 👇 Here you configure the No-Data plugin
         noDataImagePlugin: {
           text: 'No Data'
         }
@@ -339,41 +363,39 @@ const noDataImagePlugin = {
 }
 
 function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
+  // Farben dynamisch auslesen
+  const style = getComputedStyle(document.documentElement);
+  const textColor = style.getPropertyValue('--chart-text-color').trim() || '#dee2e6';
+
   const colorMap = {
-    active: '#0B5ED7',      // Blue
-    pending: '#CFE2FF',     // Light Blue
-    expiring: '#DC3545',    // Red
-    expired: '#E9ECEF'      // Gray
+    active: '#0B5ED7',
+    pending: '#CFE2FF',
+    expiring: '#DC3545',
+    expired: '#E9ECEF'
   };
+
   const showLegend = true;
   const {
     centerText = 'Certificates',
     labels = ['Active Certificates', 'Expiring Certificates', 'Expired Certificates']
   } = options;
 
-
   const { active, pending, expiring, expired, total } = data;
   const hasData = total > 0;
-  
+
   const hasPending = pending > 0;
   const chartDataArray = hasPending 
     ? [active, pending, expiring, expired]
     : [active, expiring, expired];
-  
+
   const dataKeys = hasPending 
     ? ['active', 'pending', 'expiring', 'expired']
     : ['active', 'expiring', 'expired'];
-  const chartColors = dataKeys.map(key => {
-    // Use light pink gradient for expiring instead of blue
-    if (key === 'expiring') {
-      return '#FFE8E8'; // Light pink for expiring
-    }
-    return colorMap[key];
-  });
-  
-  // Create border colors - light pink for expiring, transparent for others
+
+  const chartColors = dataKeys.map(key => key === 'expiring' ? '#FFE8E8' : colorMap[key]);
   const borderColors = dataKeys.map(key => key === 'expiring' ? '#FFB3B3' : 'transparent');
-  
+
+  // Plugin für den Text in der Mitte
   const centerTextPlugin = {
     id: `centerText${chartInstanceName}`,
     afterDraw(chart) {
@@ -387,12 +409,14 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Number
+      // Zahl
       ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-color') || '#000';
+      const currentTextColor = getComputedStyle(document.documentElement)
+        .getPropertyValue('--bs-body-color') || '#000';
+      ctx.fillStyle = currentTextColor;
       ctx.fillText(total, x, y - 8);
 
-      // Subtitle
+      // Untertitel
       ctx.font = '500 12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
       ctx.globalAlpha = 0.85;
       ctx.fillText(centerText, x, y + 16);
@@ -400,7 +424,7 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
     }
   };
 
-  // Destroy old chart
+  // Alte Chart-Instanz zerstören
   const chartInstanceKey = `_${chartInstanceName}Chart`;
   if (window[chartInstanceKey]) {
     window[chartInstanceKey].destroy();
@@ -440,13 +464,11 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
             boxWidth: 10,
             boxHeight: 10,
             padding: 14,
-            color: '#6c757d',
+            color: textColor,
             font: { size: 12 }
           }
         },
-        noDataImagePlugin: {
-          text: 'No Data'
-        },
+        noDataImagePlugin: { text: 'No Data' },
         tooltip: {
           callbacks: {
             label: (context) => {
@@ -525,8 +547,11 @@ function initializeBarChart(identifier, dataset) {
     drawChart();
   });
 
-  const observer = new MutationObserver(() => drawChart());
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+const observer = new MutationObserver(() => {
+  console.log('Theme changed, redraw charts');
+  drawChart(); // oder alle Charts neu erstellen
+});
+observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
 }
 
 function initializeDonutChart(identifier, datasetName, chartTitle) {
@@ -590,6 +615,9 @@ function initializeDonutChart(identifier, datasetName, chartTitle) {
     drawChart();
   });
 
-  const observer = new MutationObserver(() => drawChart());
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+const observer = new MutationObserver(() => {
+  console.log('Theme changed, redraw donut chart');
+  drawChart(); // <-- Lokale Funktion nutzen
+});
+observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
 }
