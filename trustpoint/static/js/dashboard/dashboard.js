@@ -461,6 +461,12 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
           display: showLegend && hasData,
           position: 'bottom',
           align: 'start',
+          onHover: (event) => {
+          event.native.target.style.cursor = 'pointer';
+          },
+          onLeave: (event) => {
+          event.native.target.style.cursor = 'default';
+          },
           labels: {
             usePointStyle: true,
             pointStyle: 'circle',
@@ -553,7 +559,6 @@ function initializeBarChart(identifier, dataset) {
   });
 
 const observer = new MutationObserver(() => {
-  console.log('Theme changed, redraw charts');
   drawChart(); 
 });
 observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
@@ -621,7 +626,6 @@ function initializeDonutChart(identifier, datasetName, chartTitle) {
   });
 
 const observer = new MutationObserver(() => {
-  console.log('Theme changed, redraw donut chart');
   drawChart(); 
 });
 observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
