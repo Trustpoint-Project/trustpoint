@@ -1,3 +1,4 @@
+// Helper function to format a date as YYYY-MM-DD
 function formatDate(date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0"); // Months are 0-based
@@ -259,6 +260,7 @@ function createHorizontalBarChart(
       },
       plugins: {
         legend: { display: false },
+        // 👇 Here you configure the No-Data plugin
         noDataImagePlugin: {
           text: 'No Data'
         }
@@ -363,15 +365,15 @@ const noDataImagePlugin = {
 }
 
 function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
-  // Farben dynamisch auslesen
+  // Dynamically read colors
   const style = getComputedStyle(document.documentElement);
   const textColor = style.getPropertyValue('--chart-text-color').trim() || '#dee2e6';
 
   const colorMap = {
-    active: '#0B5ED7',
-    pending: '#CFE2FF',
-    expiring: '#DC3545',
-    expired: '#E9ECEF'
+    active: '#0B5ED7',    // Blue
+    pending: '#CFE2FF',   // Light Blue
+    expiring: '#DC3545',  // Red
+    expired: '#E9ECEF'    // Gray
   };
 
   const showLegend = true;
@@ -392,10 +394,11 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
     ? ['active', 'pending', 'expiring', 'expired']
     : ['active', 'expiring', 'expired'];
 
+  // Use light pink gradient for expiring instead of blue
   const chartColors = dataKeys.map(key => key === 'expiring' ? '#FFE8E8' : colorMap[key]);
+  // Create border colors - light pink for expiring, transparent for others
   const borderColors = dataKeys.map(key => key === 'expiring' ? '#FFB3B3' : 'transparent');
 
-  // Plugin für den Text in der Mitte
   const centerTextPlugin = {
     id: `centerText${chartInstanceName}`,
     afterDraw(chart) {
@@ -409,14 +412,14 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Zahl
+      // Subtitle
       ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
       const currentTextColor = getComputedStyle(document.documentElement)
         .getPropertyValue('--bs-body-color') || '#000';
       ctx.fillStyle = currentTextColor;
       ctx.fillText(total, x, y - 8);
 
-      // Untertitel
+      // Subtitle
       ctx.font = '500 12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
       ctx.globalAlpha = 0.85;
       ctx.fillText(centerText, x, y + 16);
@@ -424,7 +427,7 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
     }
   };
 
-  // Alte Chart-Instanz zerstören
+  // Destroy old chart
   const chartInstanceKey = `_${chartInstanceName}Chart`;
   if (window[chartInstanceKey]) {
     window[chartInstanceKey].destroy();
@@ -468,7 +471,9 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
             font: { size: 12 }
           }
         },
-        noDataImagePlugin: { text: 'No Data' },
+        noDataImagePlugin: { 
+          text: 'No Data' 
+        },
         tooltip: {
           callbacks: {
             label: (context) => {
@@ -549,7 +554,7 @@ function initializeBarChart(identifier, dataset) {
 
 const observer = new MutationObserver(() => {
   console.log('Theme changed, redraw charts');
-  drawChart(); // oder alle Charts neu erstellen
+  drawChart(); 
 });
 observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
 }
@@ -617,7 +622,7 @@ function initializeDonutChart(identifier, datasetName, chartTitle) {
 
 const observer = new MutationObserver(() => {
   console.log('Theme changed, redraw donut chart');
-  drawChart(); // <-- Lokale Funktion nutzen
+  drawChart(); 
 });
 observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
 }
