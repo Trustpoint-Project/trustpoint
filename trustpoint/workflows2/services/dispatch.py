@@ -10,7 +10,7 @@ from django.conf import settings
 from django.db import OperationalError, connection, transaction
 from django.utils import timezone
 
-from management.models import WorkflowExecutionConfig
+from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import (
     Workflow2Definition,

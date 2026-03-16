@@ -287,7 +287,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'drf_spectacular',
     'django_q',
-    'drf_yasg'
+    'drf_yasg',
     'workflows2.apps.Workflows2Config',
 ]
 

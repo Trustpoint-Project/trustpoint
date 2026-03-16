@@ -7,9 +7,9 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('devices', '0002_initial'),
-        ('management', '0001_initial'),
-        ('pki', '0001_initial'),
+        ('devices', '0002_tp_v0_5_0'),
+        ('management', '0001_tp_v0_5_0'),
+        ('pki', '0001_tp_v0_5_0'),
     ]
 
     operations = [

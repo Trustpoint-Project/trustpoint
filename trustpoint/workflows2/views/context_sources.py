@@ -6,13 +6,13 @@ from django.views import View
 
 from devices.models import DeviceModel
 from pki.models.domain import DomainModel
-from pki.models.issuing_ca import IssuingCaModel
+from pki.models.ca import CaModel
 
 
 class ContextSourcesView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> JsonResponse:
         cas = []
-        for ca in IssuingCaModel.objects.select_related("credential__certificate").all().order_by("unique_name"):
+        for ca in CaModel.objects.select_related("credential__certificate").all().order_by("unique_name"):
             cas.append({
                 "id": str(ca.id),
                 "name": ca.unique_name,

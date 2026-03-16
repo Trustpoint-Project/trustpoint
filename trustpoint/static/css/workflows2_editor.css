@@ -1,0 +1,71 @@
+/* --- diagram-js base (minimal essential) --- */
+.djs-container,
+.djs-container * {
+  box-sizing: border-box;
+}
+
+.djs-container {
+  position: relative;
+  overflow: hidden;
+  background: #111;
+}
+
+.djs-container svg {
+  display: block;
+}
+
+.djs-container svg,
+.djs-container .djs-overlay-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.djs-overlay-container {
+  pointer-events: none;
+}
+
+.djs-overlay {
+  position: absolute;
+  pointer-events: all;
+}
+
+.djs-visual {
+  pointer-events: all;
+}
+
+.djs-outline {
+  fill: none;
+  shape-rendering: crispEdges;
+}
+
+.djs-element.hover .djs-outline {
+  stroke: rgba(255, 255, 255, .35);
+  stroke-width: 2px;
+}
+
+.djs-element.selected .djs-outline {
+  stroke: rgba(255, 255, 255, .25);
+  stroke-width: 2px;
+}
+
+.djs-lasso-overlay {
+  fill: rgba(255, 255, 255, .08);
+  stroke: rgba(255, 255, 255, .25);
+  stroke-width: 1px;
+}
+
+/* --- YOUR REQUEST: remove the blue selection boxes entirely --- */
+.djs-element.selected .djs-outline,
+.djs-element.hover .djs-outline {
+  stroke: transparent !important;
+  stroke-width: 0 !important;
+}
+
+/* Optional: make the canvas feel nicer */
+.wf2-editor-root {
+  height: calc(100vh - 56px);
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 12px;
+  overflow: hidden;
+}

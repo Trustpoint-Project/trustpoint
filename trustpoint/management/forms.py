@@ -19,7 +19,8 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from management.models import BackupOptions, KeyStorageConfig, NotificationConfig, PKCS11Token, SecurityConfig, WorkflowExecutionConfig
+from management.models import BackupOptions, KeyStorageConfig, NotificationConfig, PKCS11Token, SecurityConfig
+from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from pki.models import CredentialModel

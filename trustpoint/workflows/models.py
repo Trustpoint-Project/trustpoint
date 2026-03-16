@@ -119,7 +119,7 @@ class WorkflowScope(models.Model):
     # These were previously IntegerField IDs (ca_id/domain_id/device_id). We use ForeignKey for clarity.
     # db_column preserves the existing column name.
     ca = models.ForeignKey(
-        IssuingCaModel,
+        CaModel,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -301,7 +301,7 @@ class EnrollmentRequest(models.Model):
         related_name='enrollment_requests',
     )
     ca = models.ForeignKey(
-        IssuingCaModel,
+        CaModel,
         null=True,
         blank=True,
         on_delete=models.CASCADE,

@@ -16,7 +16,8 @@ from django.views import View
 from django.views.generic.edit import FormView
 
 from management.forms import NotificationConfigForm, SecurityConfigForm, WorkflowExecutionConfigForm
-from management.models import LoggingConfig, NotificationConfig, SecurityConfig, WorkflowExecutionConfig
+from management.models import LoggingConfig, NotificationConfig, SecurityConfig
+from management.models.workflows2 import WorkflowExecutionConfig
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
 from pki.util.keys import AutoGenPkiKeyAlgorithm

@@ -7,8 +7,8 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('onboarding', '0001_initial'),
-        ('pki', '0001_initial'),
+        ('onboarding', '0001_tp_v0_5_0'),
+        ('pki', '0001_tp_v0_5_0'),
     ]
 
     operations = [

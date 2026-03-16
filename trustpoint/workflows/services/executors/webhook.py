@@ -23,6 +23,7 @@ from __future__ import annotations
 import contextlib
 import json as _json
 import logging
+import re
 from typing import Any
 from urllib.parse import quote
 

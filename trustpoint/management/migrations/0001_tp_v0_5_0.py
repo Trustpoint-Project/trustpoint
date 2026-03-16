@@ -160,4 +160,13 @@ class Migration(migrations.Migration):
                 ('oid', models.CharField(choices=[('1.2.840.113549.2.5', 'MD5'), ('1.3.14.3.2.26', 'SHA-1'), ('2.16.840.1.101.3.4.2.4', 'SHA-224')], max_length=64, unique=True)),
             ],
         ),
+        migrations.CreateModel(
+            name='WorkflowExecutionConfig',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('mode', models.CharField(choices=[('auto', 'Automatic (use worker if available, else inline)'), ('inline', 'Inline (run immediately in web process)'), ('queue', 'Queued (requires worker)')], default='auto', max_length=16)),
+                ('worker_stale_after_seconds', models.PositiveIntegerField(default=30, help_text='If last worker heartbeat is older than this, treat worker as unavailable.')),
+                ('last_updated', models.DateTimeField(auto_now=True)),
+            ],
+        ),
     ]
