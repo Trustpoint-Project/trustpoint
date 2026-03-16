@@ -1,0 +1,290 @@
+{% load i18n %}
+
+
+    <div class="card-header"><h5 class="mb-0">{% trans "Timezone" %}</h5></div>
+    <div class="card-body pt-4 pb-4">
+        <form method="POST" id="timezone_configuration">
+            {% csrf_token %}
+            <fieldset class="form-group tp-form-group">
+                <input name="next" type="hidden" value="{{ redirect_to }}">
+                <input type="hidden" name="timezone" id="selected-timezone" value="UTC">
+
+                <div class="timezone-select-wrapper">
+                    <!-- Button der dann das "Dropdown" öffnet -->
+                    <button
+                        type="button"
+                        class="select form-select timezone-select-toggle"
+                        id="timezone-select-toggle"
+                        aria-expanded="false"
+                    >
+                        <span id="timezone-selected-label">UTC</span>
+                    </button>
+                    <!-- Das Dropdown-Menü -->
+                    <div class="timezone-dropdown-menu select form-select" id="timezone-dropdown-menu">
+                        <div class="timezone-search-box">
+                        <!-- Das Searchfeld -->
+                         <input
+                                type="text"
+                                id="timezone-search"
+                                class="form-control"
+                                placeholder="{% trans 'Search timezone...' %}"
+                                autocomplete="off"
+                            >
+                        </div>   
+                        <!-- Die Auswahlmöglichkeiten -->
+                        <div class="timezone-options" id="timezone-options">
+                            <button type="button" class="timezone-option" data-value="UTC">UTC</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Amsterdam">Europe/Amsterdam</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Andorra">Europe/Andorra</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Athens">Europe/Athens</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Belgrade">Europe/Belgrade</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Berlin">Europe/Berlin</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Brussels">Europe/Brussels</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Bucharest">Europe/Bucharest</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Budapest">Europe/Budapest</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Chisinau">Europe/Chisinau</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Copenhagen">Europe/Copenhagen</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Dublin">Europe/Dublin</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Helsinki">Europe/Helsinki</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Istanbul">Europe/Istanbul</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Kiev">Europe/Kiev</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Lisbon">Europe/Lisbon</button>
+                            <button type="button" class="timezone-option" data-value="Europe/London">Europe/London</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Luxembourg">Europe/Luxembourg</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Madrid">Europe/Madrid</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Malta">Europe/Malta</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Monaco">Europe/Monaco</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Moscow">Europe/Moscow</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Oslo">Europe/Oslo</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Paris">Europe/Paris</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Prague">Europe/Prague</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Riga">Europe/Riga</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Rome">Europe/Rome</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Sofia">Europe/Sofia</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Stockholm">Europe/Stockholm</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Tallinn">Europe/Tallinn</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Vienna">Europe/Vienna</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Vilnius">Europe/Vilnius</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Warsaw">Europe/Warsaw</button>
+                            <button type="button" class="timezone-option" data-value="Europe/Zurich">Europe/Zurich</button>
+
+                            <button type="button" class="timezone-option" data-value="America/Anchorage">America/Anchorage</button>
+                            <button type="button" class="timezone-option" data-value="America/Argentina/Buenos_Aires">America/Argentina/Buenos_Aires</button>
+                            <button type="button" class="timezone-option" data-value="America/Bogota">America/Bogota</button>
+                            <button type="button" class="timezone-option" data-value="America/Caracas">America/Caracas</button>
+                            <button type="button" class="timezone-option" data-value="America/Chicago">America/Chicago</button>
+                            <button type="button" class="timezone-option" data-value="America/Denver">America/Denver</button>
+                            <button type="button" class="timezone-option" data-value="America/Edmonton">America/Edmonton</button>
+                            <button type="button" class="timezone-option" data-value="America/Guatemala">America/Guatemala</button>
+                            <button type="button" class="timezone-option" data-value="America/Halifax">America/Halifax</button>
+                            <button type="button" class="timezone-option" data-value="America/Havana">America/Havana</button>
+                            <button type="button" class="timezone-option" data-value="America/Jamaica">America/Jamaica</button>
+                            <button type="button" class="timezone-option" data-value="America/La_Paz">America/La_Paz</button>
+                            <button type="button" class="timezone-option" data-value="America/Lima">America/Lima</button>
+                            <button type="button" class="timezone-option" data-value="America/Los_Angeles">America/Los_Angeles</button>
+                            <button type="button" class="timezone-option" data-value="America/Mexico_City">America/Mexico_City</button>
+                            <button type="button" class="timezone-option" data-value="America/Montevideo">America/Montevideo</button>
+                            <button type="button" class="timezone-option" data-value="America/New_York">America/New_York</button>
+                            <button type="button" class="timezone-option" data-value="America/Panama">America/Panama</button>
+                            <button type="button" class="timezone-option" data-value="America/Phoenix">America/Phoenix</button>
+                            <button type="button" class="timezone-option" data-value="America/Santiago">America/Santiago</button>
+                            <button type="button" class="timezone-option" data-value="America/Santo_Domingo">America/Santo_Domingo</button>
+                            <button type="button" class="timezone-option" data-value="America/Sao_Paulo">America/Sao_Paulo</button>
+                            <button type="button" class="timezone-option" data-value="America/St_Johns">America/St_Johns</button>
+                            <button type="button" class="timezone-option" data-value="America/Toronto">America/Toronto</button>
+                            <button type="button" class="timezone-option" data-value="America/Vancouver">America/Vancouver</button>
+                            <button type="button" class="timezone-option" data-value="America/Winnipeg">America/Winnipeg</button>
+
+                            <button type="button" class="timezone-option" data-value="Africa/Abidjan">Africa/Abidjan</button>
+                            <button type="button" class="timezone-option" data-value="Africa/Accra">Africa/Accra</button>
+                            <button type="button" class="timezone-option" data-value="Africa/Algiers">Africa/Algiers</button>
+                            <button type="button" class="timezone-option" data-value="Africa/Cairo">Africa/Cairo</button>
+                            <button type="button" class="timezone-option" data-value="Africa/Casablanca">Africa/Casablanca</button>
+                            <button type="button" class="timezone-option" data-value="Africa/Johannesburg">Africa/Johannesburg</button>
+                            <button type="button" class="timezone-option" data-value="Africa/Lagos">Africa/Lagos</button>
+                            <button type="button" class="timezone-option" data-value="Africa/Nairobi">Africa/Nairobi</button>
+                            <button type="button" class="timezone-option" data-value="Africa/Tunis">Africa/Tunis</button>
+
+                            <button type="button" class="timezone-option" data-value="Asia/Almaty">Asia/Almaty</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Amman">Asia/Amman</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Baghdad">Asia/Baghdad</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Baku">Asia/Baku</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Bangkok">Asia/Bangkok</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Beirut">Asia/Beirut</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Colombo">Asia/Colombo</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Dhaka">Asia/Dhaka</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Dubai">Asia/Dubai</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Hong_Kong">Asia/Hong_Kong</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Jakarta">Asia/Jakarta</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Jerusalem">Asia/Jerusalem</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Karachi">Asia/Karachi</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Kathmandu">Asia/Kathmandu</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Kolkata">Asia/Kolkata</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Kuala_Lumpur">Asia/Kuala_Lumpur</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Kuwait">Asia/Kuwait</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Manila">Asia/Manila</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Muscat">Asia/Muscat</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Riyadh">Asia/Riyadh</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Seoul">Asia/Seoul</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Shanghai">Asia/Shanghai</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Singapore">Asia/Singapore</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Taipei">Asia/Taipei</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Tbilisi">Asia/Tbilisi</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Tehran">Asia/Tehran</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Tokyo">Asia/Tokyo</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Ulaanbaatar">Asia/Ulaanbaatar</button>
+                            <button type="button" class="timezone-option" data-value="Asia/Yerevan">Asia/Yerevan</button>
+
+                            <button type="button" class="timezone-option" data-value="Australia/Adelaide">Australia/Adelaide</button>
+                            <button type="button" class="timezone-option" data-value="Australia/Brisbane">Australia/Brisbane</button>
+                            <button type="button" class="timezone-option" data-value="Australia/Darwin">Australia/Darwin</button>
+                            <button type="button" class="timezone-option" data-value="Australia/Hobart">Australia/Hobart</button>
+                            <button type="button" class="timezone-option" data-value="Australia/Melbourne">Australia/Melbourne</button>
+                            <button type="button" class="timezone-option" data-value="Australia/Perth">Australia/Perth</button>
+                            <button type="button" class="timezone-option" data-value="Australia/Sydney">Australia/Sydney</button>
+
+                            <button type="button" class="timezone-option" data-value="Pacific/Auckland">Pacific/Auckland</button>
+                            <button type="button" class="timezone-option" data-value="Pacific/Fiji">Pacific/Fiji</button>
+                            <button type="button" class="timezone-option" data-value="Pacific/Guam">Pacific/Guam</button>
+                            <button type="button" class="timezone-option" data-value="Pacific/Honolulu">Pacific/Honolulu</button>
+                            <button type="button" class="timezone-option" data-value="Pacific/Port_Moresby">Pacific/Port_Moresby</button>
+                            <button type="button" class="timezone-option" data-value="Pacific/Tahiti">Pacific/Tahiti</button>
+
+                            <button type="button" class="timezone-option" data-value="Indian/Maldives">Indian/Maldives</button>
+                            <button type="button" class="timezone-option" data-value="Indian/Mauritius">Indian/Mauritius</button>
+                            <button type="button" class="timezone-option" data-value="Indian/Reunion">Indian/Reunion</button>
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+        </form>
+    </div>
+    <!-- Der Save Button -->
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button class="btn btn-primary" type="submit" form="timezone_configuration">{% trans "Save" %}</button>
+        </div>
+    </div>
+
+
+<style>
+.timezone-select-wrapper {
+    position: relative;
+    max-width: 100%;
+    max-width: 672px;
+}
+
+.timezone-select-toggle {
+    text-align: left;
+}
+
+.timezone-select-toggle::after {
+    display: none;
+}
+
+.timezone-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius, 0.375rem);
+    background: var(--bs-body-bg);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+}
+
+.timezone-dropdown-menu.show {
+    display: block;
+}
+
+.timezone-search-box {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.timezone-options {
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.timezone-option {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    padding: 0.625rem 0.75rem;
+    cursor: pointer;
+}
+
+.timezone-option:hover,
+.timezone-option:focus {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.timezone-option.hidden {
+    display: none;
+}
+</style>
+
+<script>
+//Code erst ausführen wenn alles geladen ist
+document.addEventListener("DOMContentLoaded", function () {
+    // Elemente holen
+    const wrapper = document.querySelector(".timezone-select-wrapper");
+    const toggle = document.getElementById("timezone-select-toggle");
+    const menu = document.getElementById("timezone-dropdown-menu");
+    const search = document.getElementById("timezone-search");
+    const hiddenInput = document.getElementById("selected-timezone");
+    const label = document.getElementById("timezone-selected-label");
+    const options = document.querySelectorAll(".timezone-option");
+    // Dropdown öffnen und schließen
+    toggle.addEventListener("click", function (event) {
+        event.stopPropagation();
+        menu.classList.toggle("show");
+        toggle.setAttribute("aria-expanded", menu.classList.contains("show"));
+
+        if (menu.classList.contains("show")) {
+            setTimeout(() => search.focus(), 0);
+        }
+    });
+    // Das verhindert, dass ein Klick ins Input-Feld als Außenklick behandelt wird.
+    search.addEventListener("click", function (event) {
+        event.stopPropagation();
+    });
+    // Filtern der Optionen
+    search.addEventListener("input", function () {
+        const value = search.value.trim().toLowerCase();
+
+        options.forEach(option => {
+            const text = option.textContent.toLowerCase();
+            option.classList.toggle("hidden", !text.includes(value));
+        });
+    });
+    // Das ist der Teil, der aus einem Klick wirklich eine Auswahl macht.
+    options.forEach(option => {
+        option.addEventListener("click", function () {
+            const value = this.dataset.value;
+            hiddenInput.value = value;
+            label.textContent = value;
+
+            menu.classList.remove("show");
+            toggle.setAttribute("aria-expanded", "false");
+            search.value = "";
+
+            options.forEach(opt => opt.classList.remove("hidden"));
+        });
+    });
+    // Klick außerhalb schließt das Menü
+    document.addEventListener("click", function (event) {
+        if (!wrapper.contains(event.target)) {
+            menu.classList.remove("show");
+            toggle.setAttribute("aria-expanded", "false");
+        }
+    });
+});
+</script>
