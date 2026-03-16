@@ -853,7 +853,8 @@ class LanguageConfigForm(forms.Form):
         """Initialize the LanguageConfigForm."""
         super().__init__(*args, **kwargs)
 
-        self.fields['language'].choices = settings.LANGUAGES
+        language_field: forms.ChoiceField[Any] = self.fields['language']  # type: ignore[assignment]
+        language_field.choices = settings.LANGUAGES
 
     def save(self) -> None:
         """Save method for form compatibility (language is handled by Django's set_language view)."""

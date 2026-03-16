@@ -7,18 +7,20 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from management.forms import SecurityConfigForm
 from management.models import LoggingConfig, SecurityConfig
-from management.views.settings import ChangeLogLevelView, LOG_LEVELS, SettingsView
+from management.views.settings import ChangeLogLevelView, SecuritySettingsView, SettingsTabView
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
+LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 
-class SettingsViewTest(TestCase):
-    """Test suite for SettingsView."""
+
+class SecuritySettingsViewTest(TestCase):
+    """Test suite for SecuritySettingsView."""
 
     def setUp(self):
         """Set up test fixtures."""
         self.factory = RequestFactory()
-        self.view = SettingsView()
-        self.view.request = self.factory.get('/settings/')
+        self.view = SecuritySettingsView()
+        self.view.request = self.factory.get('/settings/security/')
 
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
@@ -35,7 +37,7 @@ class SettingsViewTest(TestCase):
 
     def test_template_name(self):
         """Test correct template is used."""
-        self.assertEqual(self.view.template_name, 'management/settings.html')
+        self.assertEqual(self.view.template_name, 'management/includes/security_configuration.html')
 
     def test_form_class(self):
         """Test correct form class is used."""
@@ -43,7 +45,7 @@ class SettingsViewTest(TestCase):
 
     def test_success_url(self):
         """Test success URL is set correctly."""
-        self.assertEqual(str(self.view.success_url), reverse('management:settings'))
+        self.assertEqual(str(self.view.success_url), reverse('management:settings-security'))
 
     def test_page_category_and_name(self):
         """Test page category and name are set correctly."""
@@ -72,20 +74,6 @@ class SettingsViewTest(TestCase):
         
         self.assertEqual(context['page_category'], 'management')
         self.assertEqual(context['page_name'], 'settings')
-
-    def test_get_context_data_includes_log_levels(self):
-        """Test get_context_data includes log levels."""
-        context = self.view.get_context_data()
-        
-        self.assertIn('loglevels', context)
-        self.assertEqual(context['loglevels'], LOG_LEVELS)
-
-    def test_get_context_data_includes_current_log_level(self):
-        """Test get_context_data includes current log level."""
-        context = self.view.get_context_data()
-        
-        self.assertIn('current_loglevel', context)
-        self.assertIsInstance(context['current_loglevel'], str)
 
     def test_get_context_data_includes_notification_configs(self):
         """Test get_context_data includes notification configurations JSON."""
@@ -237,9 +225,50 @@ class SettingsViewTest(TestCase):
         self.assertTrue(any('error' in str(msg).lower() for msg in messages_list))
 
     def test_inherits_from_form_view(self):
-        """Test SettingsView inherits from FormView."""
+        """Test SecuritySettingsView inherits from FormView."""
         from django.views.generic.edit import FormView
-        self.assertTrue(issubclass(SettingsView, FormView))
+        self.assertTrue(issubclass(SecuritySettingsView, FormView))
+
+
+class SettingsTabViewTest(TestCase):
+    """Test suite for SettingsTabView."""
+
+    def setUp(self):
+        """Set up test fixtures."""
+        self.factory = RequestFactory()
+        self.view = SettingsTabView()
+        self.view.request = self.factory.get('/settings/')
+
+        # Create security config
+        SecurityConfig.objects.create(
+            id=1,
+            security_mode=SecurityConfig.SecurityModeChoices.BROWNFIELD,
+            auto_gen_pki=False,
+        )
+
+    def test_template_name(self):
+        """Test correct template is used."""
+        self.assertEqual(self.view.template_name, 'management/settings.html')
+
+    def test_get_context_data_includes_log_levels(self):
+        """Test get_context_data includes log levels."""
+        context = self.view.get_context_data()
+        
+        self.assertIn('loglevels', context)
+        self.assertEqual(context['loglevels'], LOG_LEVELS)
+
+    def test_get_context_data_includes_current_log_level(self):
+        """Test get_context_data includes current log level."""
+        context = self.view.get_context_data()
+        
+        self.assertIn('current_loglevel', context)
+        self.assertIsInstance(context['current_loglevel'], str)
+
+    def test_inherits_from_template_view(self):
+        """Test SettingsTabView inherits from TemplateView."""
+        from django.views.generic import TemplateView
+        self.assertTrue(issubclass(SettingsTabView, TemplateView))
+
 
 
 class ChangeLogLevelViewTest(TestCase):
@@ -277,11 +306,11 @@ class ChangeLogLevelViewTest(TestCase):
         
         # Check success message
         messages_list = list(get_messages(request))
-        self.assertTrue(any('DEBUG' in str(msg) for msg in messages_list))
+        self.assertTrue(any('updated successfully' in str(msg).lower() for msg in messages_list))
         
         # Check redirect
         self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse('management:settings'))
+        self.assertTrue(response.url.startswith(reverse('management:settings')))
 
     def test_post_with_invalid_log_level(self):
         """Test POST with invalid log level shows error."""
