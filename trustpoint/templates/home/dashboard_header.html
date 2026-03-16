@@ -5,8 +5,8 @@
     <div class="d-flex align-items-center justify-content-between mb-3">
       <h1 class="h3 fw-bold mb-0">Dashboard</h1>
       <div class="d-flex gap-2">
-        <a href="{% url 'devices:devices_create' %}" class="btn rounded-pill px-4 device_btn">+ Device</a>
-        <a href="{% url 'pki:domains-add' %}" class="btn rounded-pill px-4 domain_btn">+ Domain</a>
+        <a href="{% url 'devices:devices_create' %}" class="btn rounded-pill px-4 device_btn"><span class="btn_icon">+</span><span class="btn_label">Device</span></a>
+        <a href="{% url 'pki:domains-add' %}" class="btn rounded-pill px-4 domain_btn"><span class="btn_icon">+</span><span class="btn_label">Domain</span></a>
       </div>
     </div>
   </div>
@@ -16,23 +16,41 @@
   .device_btn{
     background-color: var(--trustpoint-ci);
     color: #fff;
-    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none !important;
   }
 
   .device_btn:hover{
-    border-color: var(--trustpoint-ci);
-    color: var(--trustpoint-ci);
+    background-color: var(--trustpoint-ci);
+    color: #fff;
   }
 
   .domain_btn{
-    color: var(--trustpoint-ci);
-    border-color: var(--trustpoint-ci);
-    text-decoration: none;
+    color: var(--trustpoint-dark-test);
+    border-color: var(--trustpoint-dark-test);
+    box-shadow: inset 0 0 0 1px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none !important;
   }
 
   .domain_btn:hover{
-    background-color: var(--trustpoint-ci);
-    color: #fff;
-    border-color: var(--trustpoint-ci);
+    color: var(--trustpoint-dark-test);
+    border-color: var(--trustpoint-dark-test);
+  }
+
+  .device_btn:hover .btn_label,
+  .domain_btn:hover .btn_label{
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 2px;
+  }
+
+  .btn_icon{
+    text-decoration: none !important;
+    display: inline-block;
   }
 </style>
