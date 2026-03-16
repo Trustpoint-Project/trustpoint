@@ -5,7 +5,12 @@ from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
 from cmp.util import PKIFailureInfo
 from pki.models import IssuedCredentialModel
-from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpRevocationRequestContext
+from request.request_context import (
+    BaseRequestContext,
+    CmpBaseRequestContext,
+    CmpCertConfRequestContext,
+    CmpRevocationRequestContext,
+)
 from trustpoint.logger import LoggerMixin
 
 from .base import (
@@ -119,6 +124,72 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
         )
 
 
+class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
+    """Authorization component for certConf messages.
+
+    When the EE signals rejection (statusInfo.status == 2) the component looks
+    up the ``IssuedCredentialModel`` whose certificate hash matches the
+    ``cert_hash`` carried in the certConf body and stores it in
+    ``context.credential_to_revoke`` so that the operation processor can
+    revoke the certificate via the standard revocation pipeline.
+
+    For accepted certConf messages (status == 0 or no statusInfo) the
+    component is a no-op from a credential perspective.
+    """
+
+    def authorize(self, context: BaseRequestContext) -> None:
+        """Authorize and, on rejection, identify the credential to revoke."""
+        if context.operation not in ('certconf', 'initialization', 'certification'):
+            return
+        if not isinstance(context, CmpCertConfRequestContext):
+            return
+
+        # PKIStatus value 2 means "rejection" per RFC 4210 Section 5.2.3.
+        pki_status_rejection = 2
+        if context.cert_conf_status != pki_status_rejection:
+            self.logger.debug('certConf: status is accepted (or absent) — no credential lookup required.')
+            return
+
+        if not context.cert_hash:
+            error_message = 'certConf rejection received but certHash is missing. Authorization denied.'
+            self.logger.warning('certConf authorization failed: certHash is missing')
+            self._raise_authorization_error(error_message, context)
+
+        # The certHash in RFC 4210 §5.3.18 is computed as SHA-256 over the
+        # DER-encoded certificate.
+        cert_hash_hex: str = context.cert_hash.hex().upper()
+
+        cert_model = (
+            IssuedCredentialModel.objects.filter(
+                credential__certificates__sha256_fingerprint=cert_hash_hex
+            )
+            .select_related('credential', 'device', 'domain')
+            .first()
+        )
+
+        if cert_model is None:
+            error_message = (
+                f'certConf rejection: no issued credential found for certHash {cert_hash_hex}. '
+                'Authorization denied.'
+            )
+            self.logger.warning(
+                'certConf authorization failed: no credential found for certHash %s', cert_hash_hex
+            )
+            self._raise_authorization_error(error_message, context)
+
+        context.credential_to_revoke = cert_model
+        self.logger.info(
+            'certConf rejection: credential %s identified for revocation (certHash=%s)',
+            cert_model.common_name,
+            cert_hash_hex,
+        )
+
+    def _raise_authorization_error(self, message: str, context: BaseRequestContext) -> None:
+        """Set a generic error on the context and raise ValueError."""
+        context.error('Unauthorized', http_status=403, cmp_code=PKIFailureInfo.NOT_AUTHORIZED)
+        raise ValueError(message)
+
+
 class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
     """Ensures the request is authorized for the specified operation."""
 
@@ -163,6 +234,12 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
         elif context.operation == 'revocation' and body_type == 'rr':
             CmpRevocationAuthorization().authorize(context)
             self.logger.info('CMP body type validation successful: RR body extracted')
+        elif context.operation in ('initialization', 'certification', 'certconf') and body_type == 'certConf':
+            # certConf is sent to the same endpoint as the original enrollment
+            # operation (RFC 9483 Section 6.1).  The CmpCertConfAuthorization
+            # component handles credential lookup for rejection-case revocation.
+            CmpCertConfAuthorization().authorize(context)
+            self.logger.info('CMP certConf body received for operation: %s', context.operation)
         else:
             err_msg = f'Expected CMP {context.operation} body, but got CMP {body_type.upper()} body.'
             raise ValueError(err_msg)

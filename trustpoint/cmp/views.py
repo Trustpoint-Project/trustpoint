@@ -109,7 +109,7 @@ class CmpRequestView(LoggerMixin, View):
             authenticator.authenticate(ctx)
 
             authorizer = CmpAuthorization(
-                ['initialization', 'certification', 'revocation']
+                ['initialization', 'certification', 'revocation', 'certconf']
             )
             authorizer.authorize(ctx)
 
