@@ -1,8 +1,9 @@
-import sys
 import subprocess
-from pathlib import Path
-from django.core.management.base import BaseCommand
+import sys
+
 from django.conf import settings
+from django.core.management.base import BaseCommand
+
 
 class Command(BaseCommand):
     help = 'Builds Sphinx documentation locally, integrating with the uv workflow.'
@@ -17,30 +18,30 @@ class Command(BaseCommand):
         docs_dir = repo_root / 'docs'
 
         if not docs_dir.exists():
-            self.stderr.write(self.style.ERROR(f"Documentation directory not found at {docs_dir}"))
+            self.stderr.write(self.style.ERROR(f'Documentation directory not found at {docs_dir}'))
             return
 
 
         if options['sync_deps']:
-            self.stdout.write("Syncing documentation dependencies...")
+            self.stdout.write('Syncing documentation dependencies...')
             try:
                 subprocess.run(['uv', 'sync', '--group', 'docs'], cwd=repo_root, check=True)
-                self.stdout.write(self.style.SUCCESS("Dependencies synced successfully."))
+                self.stdout.write(self.style.SUCCESS('Dependencies synced successfully.'))
             except subprocess.CalledProcessError as e:
-                self.stderr.write(self.style.ERROR(f"Failed to sync dependencies: {e}"))
+                self.stderr.write(self.style.ERROR(f'Failed to sync dependencies: {e}'))
                 return
 
 
         if options['clean']:
-            self.stdout.write("Cleaning previous build...")
+            self.stdout.write('Cleaning previous build...')
             try:
-                # FIX: Removed 'html' so it ONLY cleans!
+
                 subprocess.run(['make', 'clean'], cwd=docs_dir, check=True)
             except subprocess.CalledProcessError:
-                self.stdout.write(self.style.WARNING("Standard make clean failed. Proceeding anyway..."))
+                self.stdout.write(self.style.WARNING('Standard make clean failed. Proceeding anyway...'))
 
 
-        self.stdout.write("Building documentation...")
+        self.stdout.write('Building documentation...')
         build_success = False
 
         if options['force_env']:
@@ -56,9 +57,9 @@ class Command(BaseCommand):
 
         if build_success:
             docs_build_path = docs_dir / 'build' / 'html'
-            self.stdout.write(self.style.SUCCESS(f"Successfully built docs at: {docs_build_path}"))
+            self.stdout.write(self.style.SUCCESS(f'Successfully built docs at: {docs_build_path}'))
         else:
-            self.stderr.write(self.style.ERROR("Documentation build failed entirely."))
+            self.stderr.write(self.style.ERROR('Documentation build failed entirely.'))
 
     def _build_sphinx_direct(self, docs_dir):
         """Fallback method utilizing the direct Sphinx module build."""
@@ -69,5 +70,5 @@ class Command(BaseCommand):
             )
             return True
         except subprocess.CalledProcessError as e:
-            self.stderr.write(self.style.ERROR(f"Direct Sphinx build also failed: {e}"))
+            self.stderr.write(self.style.ERROR(f'Direct Sphinx build also failed: {e}'))
             return False

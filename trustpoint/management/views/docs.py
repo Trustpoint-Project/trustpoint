@@ -1,6 +1,5 @@
 import mimetypes
 import time
-from pathlib import Path
 from typing import Any
 
 from django.conf import settings
@@ -25,7 +24,7 @@ class ServeLocalDocsView(LoginRequiredMixin, View):
             content_type, _ = mimetypes.guess_type(str(file_path))
             return FileResponse(open(file_path, 'rb'), content_type=content_type or 'application/octet-stream')
 
-        return redirect(f"https://trustpoint.readthedocs.io/en/latest/{path}")
+        return redirect(f'https://trustpoint.readthedocs.io/en/latest/{path}')
 
 
 class BuildDocsTriggerView(LoginRequiredMixin, View):
@@ -39,8 +38,8 @@ class BuildDocsTriggerView(LoginRequiredMixin, View):
             return JsonResponse({'status': 'running'})
 
         try:
-            lock_file.touch()  # Create the lock
-            call_command('build_docs', force_env=True, clean=True)  # clean=True ensures old docs are wiped!
+            lock_file.touch()
+            call_command('build_docs', force_env=True, clean=True)
             return JsonResponse({'status': 'finished'})
         except Exception as e:
             return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
