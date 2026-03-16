@@ -4,7 +4,7 @@
 
 **The open source trust anchor software for machines and factories to manage digital identities.**
 
-[![Landing Page](https://img.shields.io/badge/Landing_Page-014BAD)](https://trustpoint.campus-schwarzwald.de/en/)
+[![Landing Page](https://img.shields.io/badge/Landing_Page-014BAD)](https://industrial-security.io)
 [![GitHub Discussions](https://img.shields.io/badge/GitHub-Discussions-014BAD)](https://github.com/orgs/Trustpoint-Project/discussions)
 [![Read the Docs](https://img.shields.io/readthedocs/trustpoint)](https://trustpoint.readthedocs.io)
 [![Docker Automated](https://img.shields.io/docker/automated/trustpointproject/trustpoint)](https://hub.docker.com/r/trustpointproject/trustpoint)
@@ -87,6 +87,20 @@ Capabilities:
 
 ---
 
+**[OPC UA GDS Push](https://reference.opcfoundation.org/GDS/v105/docs/7.4)**
+
+A protocol for secure and efficient distribution of certificates, trust anchors and CRLs to OPC UA servers.
+
+Authentication Methods:
+* Secure device registration
+* Certificate-based authentication for updates
+
+Capabilities:
+* Distribution of server certificates and trust anchors
+* Cyclic updates of OPC UA server certificates
+
+---
+
 **Additional Certificate Issuance Options**
 
 Manual Download
@@ -97,10 +111,17 @@ Remote Credential Download
 * Device retrieves credentials directly via its browser
 * Secured with a one-time password (OTP)
 
-### 2. Certificate Authority (CA) Modes
+### 2. Operation Modes
+
+**Certificate Authorithy (CA)**
 
 - **Import Issuing CA**: Integrate with an existing PKI by importing external CAs.
 - **Auto-Generated CA**: Create a root and issuing CA for testing purposes.
+- **CA Certificate Retrieval**: Devices can request the CA certificate via EST or CMP protocols.
+
+**Registration Authority**
+
+- **RA Mode with EST**: Act as a Registration Authority for EST-based enrollment, forwarding certificate requests to an external CA.
 
 ### 3. Miscellaneous
 
@@ -108,7 +129,10 @@ Trustpoint includes several supporting capabilities that enhance usability, inte
 * **RESTful API** for device management, certificate issuance, identity lifecycle operations, and system integration.
 * **Workflow Engine** with manual approval steps, webhook integrations (ERP, MES, IAM, etc.), and email notifications to fit seamlessly into existing operational processes.
 * **Signing Authority** (Hash & Sign) allowing devices or services to submit a hash and receive a signed artifact.
-* Additional Features including a **web-based UI**, **system dashboard**, **Docker deployment**, **CRL & certificate revocation management**, and **multi-language** support.
+* **Cyclic CRL Generation** for automated, scheduled certificate revocation list updates.
+* **Certificate Profile Definition** using JSON for flexible certificate issuance parameters and constraints.
+* **Security Levels** for configurable trust and authentication requirements across different operational contexts.
+* Additional Features including a **web-based UI**, **system dashboard**, **Docker deployment**, **certificate revocation management**, and **multi-language** support.
 
 ## Who is developing Trustpoint?
 
@@ -118,7 +142,7 @@ project as associated partners. These include ARBURG GmbH + Co KG, Belden Inc., 
 GmbH, PHOENIX CONTACT GmbH & Co. KG and Siemens AG.
 
 Trustpoint is funded as part of a project sponsored by the German Federal Ministry of Education and Research. Questions
-can be asked in [Discussions](https://github.com/orgs/Trustpoint-Project/discussions) and will be answered by us. We
+can be asked in [Discord](https://discord.gg/6fyr3fGH) and will be answered by us. We
 look forward to hearing about your experiences with Trustpoint. You can send suggestions to
 trustpoint@campus-schwarzwald.de.
 

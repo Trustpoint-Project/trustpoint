@@ -11,7 +11,6 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from devices.issuer import LocalDomainCredentialIssuer, LocalTlsClientCredentialIssuer
 from devices.models import (
     DeviceModel,
-    IssuedCredentialModel,
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
     OnboardingConfigModel,
@@ -22,10 +21,10 @@ from devices.models import (
 from django.http import HttpRequest
 from django.test.client import RequestFactory
 from management.models import KeyStorageConfig
-from pki.models import CertificateModel, CredentialModel
+from pki.models import CertificateModel, CredentialModel, IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
-from pki.models.issuing_ca import IssuingCaModel
+from pki.models import CaModel
 from pki.util.x509 import CertificateGenerator
 from trustpoint_core.serializer import CredentialSerializer
 
@@ -66,14 +65,14 @@ def ec_private_key() -> ec.EllipticCurvePrivateKey:
 
 CA_COMMON_NAME = 'Root CA'
 UNIQUE_NAME = CA_COMMON_NAME.replace(' ', '_').lower()
-CA_TYPE = IssuingCaModel.IssuingCaTypeChoice.LOCAL_UNPROTECTED
+CA_TYPE = CaModel.CaTypeChoice.LOCAL_UNPROTECTED
 
 DOMAIN_UNIQUE_NAME = 'domain_test_instance'
 
 
 @pytest.fixture
 def issuing_ca_instance() -> dict[str, Any]:
-    """Fixture for a testing IssuingCaModel instance."""
+    """Fixture for a testing CaModel instance."""
     # Ensure crypto storage config exists for encrypted fields
     KeyStorageConfig.get_or_create_default()
 
@@ -91,7 +90,7 @@ def domain_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
     priv_key = issuing_ca_instance.get('priv_key')
     cert = issuing_ca_instance.get('cert')
     if (
-            not isinstance(issuing_ca, IssuingCaModel)
+            not isinstance(issuing_ca, CaModel)
             or not isinstance(cert, x509.Certificate)
             or not isinstance(priv_key, RSAPrivateKey)
     ):
@@ -322,7 +321,7 @@ def credential_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
     subject_cn = 'Test End-Entity Certificate'
     ee_cert, ee_private_key = CertificateGenerator.create_ee(
         issuer_private_key=issuing_ca_priv_key,
-        issuer_cn=issuing_ca_cert.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value,
+        issuer_name=issuing_ca_cert.subject,
         subject_name=subject_cn,
         validity_days=365,
     )
@@ -490,13 +489,13 @@ def tls_client_request_with_client_cert_header(
     domain_str = domain.unique_name
     operation_str = 'simpleenroll'
     protocol_str = 'est'
-    certtemplate_str = 'tls_client'
+    cert_profile_str = 'tls_client'
 
     domaincredential_pem = domain_credential_instance.credential.certificate.cert_pem
 
     request_factory = RequestFactory()
     request = request_factory.post(
-        path=f'/.well-known/{protocol_str}/{domain_str}/{certtemplate_str}/{operation_str}',
+        path=f'/.well-known/{protocol_str}/{domain_str}/{cert_profile_str}/{operation_str}',
         data=csr.public_bytes(serialization.Encoding.DER),
         content_type='application/pkcs10',
         HTTP_SSL_CLIENT_CERT=domaincredential_pem,

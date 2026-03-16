@@ -1,12 +1,11 @@
 """Extended tests for backup password view error handling."""
 
 import subprocess
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.messages import get_messages
 from django.test import RequestFactory
-from django.urls import reverse
 
 from management.models import PKCS11Token
 from setup_wizard import SetupWizardState
@@ -291,7 +290,7 @@ class TestSetupWizardBackupPasswordViewFormValid:
         form = BackupPasswordForm(data={})
         form.is_valid()  # Will be invalid due to missing data
         
-        response = self.view.form_invalid(form)
+        self.view.form_invalid(form)
         
         messages_list = list(get_messages(request))
         assert any('correct the errors' in str(m).lower() for m in messages_list)

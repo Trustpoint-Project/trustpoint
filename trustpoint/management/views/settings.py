@@ -2,25 +2,23 @@
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.contrib import messages
+from django.core.management import call_command
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
-from django.utils.encoding import force_str
 from django.utils.timezone import now
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic.edit import FormView
 
-from management.forms import SecurityConfigForm, WorkflowExecutionConfigForm
-from management.models import LoggingConfig, SecurityConfig, WorkflowExecutionConfig
+from management.forms import NotificationConfigForm, SecurityConfigForm, WorkflowExecutionConfigForm
+from management.models import LoggingConfig, NotificationConfig, SecurityConfig, WorkflowExecutionConfig
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
-from notifications.models import NotificationConfig, WeakECCCurve, WeakSignatureAlgorithm
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
@@ -84,6 +82,109 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
 
     # ---------------- existing security form code (unchanged) ----------------
 
+    # ---------------- NEW: workflow execution form helpers ----------------
+
+    def _get_workflow_cfg(self) -> WorkflowExecutionConfig:
+        return WorkflowExecutionConfig.load()
+
+    def _get_workflow_form(self) -> WorkflowExecutionConfigForm:
+        wf_cfg = self._get_workflow_cfg()
+        if self.request.method == 'POST' and self.request.POST.get('form_name') == 'workflow_execution':
+            return WorkflowExecutionConfigForm(self.request.POST, instance=wf_cfg)
+        return WorkflowExecutionConfigForm(instance=wf_cfg)
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle POST requests for both SecurityConfig and NotificationConfig forms.
+
+        Parameters
+        ----------
+        request : HttpRequest
+            The HTTP request object.
+        *args : tuple
+            Positional arguments.
+        **kwargs : dict
+            Keyword arguments.
+
+        Returns:
+        -------
+        HttpResponse
+            A response object.
+        """
+        # Check which form was submitted
+        if 'security_configuration' in request.POST:
+            # Handle SecurityConfigForm
+            form = self.get_form()
+            if form.is_valid():
+                return self.form_valid(form)
+            return self.form_invalid(form)
+        if 'notification_configuration' in request.POST:
+            notification_config = NotificationConfig.get()
+            notification_form = NotificationConfigForm(request.POST, instance=notification_config)
+            self.logger.debug('NotificationConfigForm validation: is_valid=%s', notification_form.is_valid())
+            if notification_form.is_valid():
+                # Get the enabled status before and after
+                was_enabled = notification_config.enabled
+
+                notification_form.save()
+
+                notification_config.refresh_from_db()
+                cleaned_enabled = notification_config.enabled
+
+                if cleaned_enabled:
+                    needs_init = not notification_config.notification_cycle_enabled or not was_enabled
+
+                    if needs_init:
+                        try:
+                            notification_config.notification_cycle_enabled = True
+                            notification_config.save(update_fields=['notification_cycle_enabled'])
+
+                            call_command('init_notifications')
+
+                            if not was_enabled:
+                                messages.success(
+                                    request,
+                                    _('Notifications enabled and notification cycle initialized.')
+                                )
+                            else:
+                                messages.success(
+                                    request,
+                                    _('Notification configuration saved and cycle reinitialized.')
+                                )
+                        except Exception:  # pylint: disable=broad-except
+                            self.logger.exception('Error initializing notifications')
+                            messages.error(
+                                request,
+                                _('Notifications saved but error initializing notification cycle.')
+                            )
+                    else:
+                        messages.success(request, _('Notification configuration saved successfully.'))
+                else:
+                    if notification_config.notification_cycle_enabled:
+                        notification_config.notification_cycle_enabled = False
+                        notification_config.save(update_fields=['notification_cycle_enabled'])
+                    messages.success(request, _('Notifications disabled successfully.'))
+
+                return redirect(self.success_url)
+            self.logger.error('Notification form errors: %s', notification_form.errors)
+            self.logger.error('Notification form non-field errors: %s', notification_form.non_field_errors())
+            messages.error(request, _('Error saving notification configuration'))
+            return self.render_to_response(
+                self.get_context_data(notification_form=notification_form)
+            )
+
+        if request.POST.get('form_name') == 'workflow_execution':
+            wf_form = self._get_workflow_form()
+            if wf_form.is_valid():
+                wf_form.save()
+                messages.success(request, _('Workflow execution settings saved.'))
+                return redirect(self.success_url)
+
+            messages.error(request, _('Please correct the workflow execution settings errors.'))
+            # Render page with BOTH forms (security form + workflow form)
+            return self.render_to_response(self.get_context_data(form=self.get_form(), workflow_execution_form=wf_form))
+
+        return super().post(request, *args, **kwargs)
+
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get the keyword arguments for instantiating the form.
 
@@ -99,7 +200,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         try:
             security_config = SecurityConfig.objects.get(id=1)
         except SecurityConfig.DoesNotExist:
-            security_config = SecurityConfig.objects.create(notification_config=NotificationConfig.objects.create())
+            security_config = SecurityConfig.objects.create()
         kwargs['instance'] = security_config
         return kwargs
 
@@ -137,7 +238,7 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
             if new_int > old_int:
                 self.sec.reset_settings(new_value)
 
-            form.instance.apply_security_settings()
+        form.instance.apply_security_settings()
 
         if 'auto_gen_pki' in form.changed_data:
             old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
@@ -180,13 +281,18 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
             A response rendering the form with errors.
         """
         messages.error(self.request, _('Error saving the configuration'))
-        return self.render_to_response(self.get_context_data(form=form))
+        extra: dict[str, Any] = {'form': form}
+        if hasattr(form, '_violations'):
+            extra['policy_violations'] = form._violations  # noqa: SLF001
+            extra['policy_violations_mode_label'] = form._violations_mode_label  # noqa: SLF001
+            form.errors.pop('__all__', None)
+        return self.render_to_response(self.get_context_data(**extra))
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Build the context dictionary for rendering the settings page.
 
         This method adds page metadata, notification configurations, log levels,
-        and the current log level to the context.
+        task execution status, and the current log level to the context.
 
         Parameters
         ----------
@@ -201,21 +307,8 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'management'
         context['page_name'] = 'settings'
-        notification_configurations = SecurityConfig.NOTIFICATION_CONFIGURATIONS
 
-        for settings in notification_configurations.values():
-            ecc_choices = dict(WeakECCCurve.ECCCurveChoices.choices)
-            signature_choices = dict(WeakSignatureAlgorithm.SignatureChoices.choices)
-
-            settings['weak_ecc_curves'] = [
-                force_str(ecc_choices.get(oid, oid)) for oid in settings.get('weak_ecc_curves', [])
-            ]
-
-            settings['weak_signature_algorithms'] = [
-                force_str(signature_choices.get(oid, oid)) for oid in settings.get('weak_signature_algorithms', [])
-            ]
-
-        context['notification_configurations_json'] = json.dumps(notification_configurations)
+        context['notification_configurations_json'] = SecurityConfig.get_settings_preview_json()
         context['loglevels'] = LOG_LEVELS
         current_level_num = logging.getLogger().getEffectiveLevel()
         context['current_loglevel'] = logging.getLevelName(current_level_num)
@@ -235,6 +328,11 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         context['workflow_worker_latest_seen'] = getattr(latest, 'last_seen', None)
         context['workflow_worker_stale_after_seconds'] = stale_after
         # ------------------------------------------------------------------------
+
+        # Add notification configuration form
+        notification_config = NotificationConfig.get()
+        context['notification_form'] = NotificationConfigForm(instance=notification_config)
+        context['notification_config'] = notification_config
 
         return context
 

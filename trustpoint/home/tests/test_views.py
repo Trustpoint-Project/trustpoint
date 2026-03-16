@@ -1,16 +1,15 @@
 """Test cases for home app views."""
 
 from datetime import datetime, timedelta
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingStatus
-from django.contrib.messages import get_messages
+from devices.models import DeviceModel
 from django.core.management.base import CommandError
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
-from notifications.models import NotificationModel, NotificationStatus
-from pki.models import CertificateModel, CertificateProfileModel, IssuingCaModel
+from management.models import NotificationModel, NotificationStatus
+from pki.models import CertificateModel, CertificateProfileModel, CaModel, IssuedCredentialModel
 
 from ..views import (
     AddDomainsAndDevicesView,
@@ -62,7 +61,7 @@ class DashboardViewTests(TestCase):
         view = DashboardView()
         view.request = request
         view.kwargs = {}
-        result = view.get_queryset()
+        view.get_queryset()
 
         # Verify filter was called (don't check exact queryset as it may differ)
         assert mock_filter.called
@@ -316,7 +315,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
 
     def test_get_issuing_ca_counts(self) -> None:
         """Test get_issuing_ca_counts method."""
-        with patch.object(IssuingCaModel.objects, 'aggregate') as mock_aggregate:
+        with patch.object(CaModel.objects, 'aggregate') as mock_aggregate:
             mock_aggregate.return_value = {'total': 5, 'active': 4, 'expired': 1}
             result = self.view.get_issuing_ca_counts()
 
@@ -329,7 +328,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
             mock_filter.return_value.distinct.return_value.count.return_value = 3
             result = self.view.get_expiring_device_counts()
 
-        assert 'expiring_in_24_hours' in result
+        assert 'expiring_in_1_day' in result
         assert 'expiring_in_7_days' in result
 
     def test_get_expired_device_counts(self) -> None:
@@ -338,16 +337,16 @@ class DashboardChartsAndCountsViewTests(TestCase):
             mock_filter.return_value.distinct.return_value.count.return_value = 2
             result = self.view.get_expired_device_counts()
 
-        assert 'total_expired' in result
-        assert 'expired_in_last_7_days' in result
+        assert 'expired' in result
+        assert result['expired'] == 2
 
     def test_get_expiring_issuing_ca_counts(self) -> None:
         """Test get_expiring_issuing_ca_counts method."""
-        with patch.object(IssuingCaModel.objects, 'filter') as mock_filter:
-            mock_filter.return_value.count.return_value = 1
+        with patch.object(CaModel.objects, 'filter') as mock_filter:
+            mock_filter.return_value.distinct.return_value.count.return_value = 1
             result = self.view.get_expiring_issuing_ca_counts()
 
-        assert 'expiring_in_24_hours' in result
+        assert 'expiring_in_1_day' in result
         assert 'expiring_in_7_days' in result
 
     def test_get_device_count_by_onboarding_protocol(self) -> None:
@@ -416,7 +415,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
         """Test get_issuing_ca_counts_by_type method."""
         start_date = timezone.now() - timedelta(days=7)
 
-        with patch.object(IssuingCaModel.objects, 'filter') as mock_filter:
+        with patch.object(CaModel.objects, 'filter') as mock_filter:
             mock_filter.return_value.values.return_value.annotate.return_value = []
             result = self.view.get_issuing_ca_counts_by_type(start_date)
 

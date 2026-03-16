@@ -1,0 +1,90 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h1>{% trans "Certificate Revocation Lists" %}</h1>
+    </div>
+    <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th id="checkbox-column"><input type="checkbox"/></th>
+                    <th>{% trans 'CRL Number' %}</th>
+                    <th>{% trans 'CA Name' %}</th>
+                    <th>{% trans 'This Update' %}</th>
+                    <th>{% trans 'Next Update' %}</th>
+                    <th>{% trans 'Status' %}</th>
+                    <th>{% trans 'Revoked Certificates' %}</th>
+                    <th>{% trans 'Download' %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for crl in page_obj|default:crls %}
+                    <tr{% if not crl.is_active %} class="text-muted"{% endif %}>
+                        <td class="row_checkbox">
+                            <input type="checkbox" name="row_checkbox" value="{{ crl.id }}"/>
+                        </td>
+                        <td>
+                            {% if crl.crl_number %}
+                                <a href="{% url 'pki:crl-detail' pk=crl.id %}">{{ crl.crl_number }}</a>
+                            {% else %}
+                                <a href="{% url 'pki:crl-detail' pk=crl.id %}">{% trans 'No number' %}</a>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% if crl.ca.is_issuing_ca %}{% url 'pki:issuing_cas-config' crl.ca.id %}{% elif crl.ca.is_keyless_ca %}{% url 'pki:keyless_cas-config' crl.ca.id %}{% endif %}">
+                                {{ crl.ca.unique_name }}
+                            </a>
+                        </td>
+                        <td>{{ crl.this_update }}</td>
+                        <td>
+                            {% if crl.next_update %}
+                                {{ crl.next_update }}
+                            {% else %}
+                                {% trans 'Not set' %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if crl.is_active %}
+                                <span class="badge bg-success">{% trans 'Active' %}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{% trans 'Inactive' %}</span>
+                            {% endif %}
+                            {% if crl.is_expired %}
+                                <br><span class="badge bg-warning text-dark">{% trans 'Expired' %}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ crl.get_revoked_serial_numbers|length }}
+                        </td>
+                        <td>
+                            <a href="{% url 'pki:crl-download' pk=crl.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Download' %}</a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="9" class="middle">{% trans 'No CRLs have been created yet.' %}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% include 'trustpoint/pagination.html' %}
+    </div>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button type="button" class="btn btn-danger tp-table-select-btn me-2" data-tp-url="delete">{% trans 'Delete selected' %}</button>
+        </div>
+        <div class="m-1">
+            <a href="{% url 'pki:crl-import' %}" class="btn btn-primary">
+                <i class="fas fa-upload"></i> {% trans 'Import CRL' %}
+            </a>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}

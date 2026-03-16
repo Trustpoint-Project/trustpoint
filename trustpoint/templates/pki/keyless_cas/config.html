@@ -1,0 +1,152 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+{% block content %}
+    <div class="card tp-card-centered">
+        <div class="card-header">
+            <h2>{{ keyless_ca.unique_name }} {% trans 'Configuration' %}</h2>
+        </div>
+
+        <div class="card tp-card-centered">
+            <div class="card-body">
+                <h3>{% trans 'General' %}</h3>
+                <hr class="hr-m">
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>{% trans 'Type' %}</div>
+                        <div>{% trans 'Keyless CA' %}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Updated' %}</div>
+                        <div>{{ keyless_ca.updated_at }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Created' %}</div>
+                        <div>{{ keyless_ca.created_at }}</div>
+                    </div>
+                    <div>
+                        <div>{% trans 'Unique Name' %}</div>
+                        <div>{{ keyless_ca.unique_name }}</div>
+                    </div>
+                </div>
+
+                <h3>
+                    {% if keyless_ca.certificate.subject_public_bytes == keyless_ca.certificate.issuer_public_bytes %}
+                        {% trans 'Keyless CA Certificate (This is a self-signed Root CA Certificate)' %}
+                    {% else %}
+                        {% trans 'Keyless CA Certificate' %}
+                    {% endif %}
+                </h3>
+                <hr class="hr-m">
+                <div class="tp-kvp-list">
+                    <div>
+                        <div>{% trans 'Keyless CA Certificate' %}</div>
+                        <div>
+                            <a href="{% url 'pki:certificate-detail' pk=keyless_ca.certificate.id %}">
+                                {% if keyless_ca.certificate.common_name %}
+                                    CN: {{ keyless_ca.certificate.common_name }}
+                                {% else %}
+                                    {% trans 'Keyless CA Certificate' %}
+                                {% endif %}
+                            </a>
+                        </div>
+                    </div>
+                    {% with keyless_ca_certificate=keyless_ca.certificate %}
+                        <div>
+                            <div>{% trans 'Serial Number' %}</div>
+                            <div>{{ keyless_ca_certificate.serial_number }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Fingerprint (SHA256)' %}</div>
+                            <div>{{ keyless_ca_certificate.sha256_fingerprint }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Not valid before' %}</div>
+                            <div>{{ keyless_ca_certificate.not_valid_before }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Not valid after' %}</div>
+                            <div>{{ keyless_ca_certificate.not_valid_after }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Public Key Algorithm OID' %}</div>
+                            <div>{{ keyless_ca_certificate.spki_algorithm_oid }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Public Key Algorithm' %}</div>
+                            <div>{{ keyless_ca_certificate.spki_algorithm }}</div>
+                        </div>
+                        {% if keyless_ca_certificate.spki_ec_curve_oid != 'None' %}
+                            <div>
+                                <div>{% trans 'Public Key Curve OID' %}</div>
+                                <div>{{ keyless_ca_certificate.spki_ec_curve_oid }}</div>
+                            </div>
+                        {% endif %}
+                        {% if keyless_ca_certificate.spki_ec_curve %}
+                            <div>
+                                <div>{% trans 'Public Key Curve' %}</div>
+                                <div>{{ keyless_ca_certificate.spki_ec_curve }}</div>
+                            </div>
+                        {% endif %}
+                        <div>
+                            <div>{% trans 'Signature Algorithm Key Size' %}</div>
+                            <div>
+                                {{ keyless_ca_certificate.spki_key_size }} Bits
+                            </div>
+                        </div>
+                    {% endwith %}
+                </div>
+
+                <h3>{% trans 'CRL' %}</h3>
+                <hr class="hr-m">
+                <div class="tp-kvp-list">
+                    {% if keyless_ca.last_crl_issued_at %}
+                        <div>
+                            <div>{% trans 'Last CRL issued' %}</div>
+                            <div>{{ keyless_ca.last_crl_issued_at }} (#{{ keyless_ca.crl_number }})</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'CRL Management' %}</div>
+                            <div>
+                                <a href="{% url 'pki:crl-import' %}" class="btn btn-primary btn-sm me-2">
+                                    {% trans 'Import CRL' %}
+                                </a>
+                                <a href="{% url 'pki:crl-detail' pk=active_crl.pk %}" class="btn btn-primary btn-sm me-2">
+                                    {% trans 'CRL Details' %}
+                                </a>
+                                <a href="{% url 'pki:crl-download' pk=active_crl.pk %}"
+                                   class="btn btn-primary btn-sm"
+                                   title="{% trans 'Download CRL' %}">
+                                    {% trans 'Download CRL' %}
+                                </a>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div>
+                            <div>{% trans 'Last CRL issued' %}</div>
+                            <div>{% trans 'No CRL has been imported yet.' %}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'CRL Management' %}</div>
+                            <div>
+                                <a href="{% url 'pki:crl-import' %}" class="btn btn-primary btn-sm me-2">
+                                    {% trans 'Import CRL' %}
+                                </a>
+                                <button class="btn btn-secondary btn-sm me-2" disabled title="{% trans 'No CRL available' %}">
+                                    {% trans 'CRL Details' %}
+                                </button>
+                                <button class="btn btn-secondary btn-sm" disabled title="{% trans 'No CRL available' %}">
+                                    {% trans 'Download CRL' %}
+                                </button>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card-footer d-flex justify-content-between">
+            <a href="{% url 'pki:cas' %}" class="btn btn-secondary">{% trans 'Back to CAs' %}</a>
+        </div>
+    </div>
+{% endblock content %}

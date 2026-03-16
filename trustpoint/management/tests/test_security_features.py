@@ -1,6 +1,6 @@
 """Test suite for security features."""
 import threading
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 from django.test import TestCase
 from management.models import SecurityConfig
@@ -62,7 +62,7 @@ class AutoGenPkiFeatureTest(TestCase):
         """Set up test fixtures."""
         # Create a SecurityConfig instance
         self.security_config = SecurityConfig.objects.create(
-            security_mode=SecurityConfig.SecurityModeChoices.DEV,
+            security_mode=SecurityConfig.SecurityModeChoices.LAB,
             auto_gen_pki=False,
             auto_gen_pki_key_algorithm=AutoGenPkiKeyAlgorithm.RSA2048,
         )

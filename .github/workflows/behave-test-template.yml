@@ -12,6 +12,8 @@ on:
 jobs:
   behave:
     runs-on: ubuntu-latest  # Use the latest Ubuntu runner for compatibility and performance.
+    permissions:
+      contents: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6  # Ensures the repository code is available.
@@ -29,7 +31,7 @@ jobs:
           trustpoint/features/${{ inputs.feature_file }}.feature
 
       - name: Upload Test Report
-        uses: actions/upload-artifact@v6  # Uploads the test report for review.
+        uses: actions/upload-artifact@v7  # Uploads the test report for review.
         if: always()  # Ensures the report is uploaded even if tests fail.
         with:
           name: ${{ inputs.feature_file }}-html-report  # Name report based on the feature file tested.

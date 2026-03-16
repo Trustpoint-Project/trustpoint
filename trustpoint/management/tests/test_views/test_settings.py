@@ -8,7 +8,6 @@ from django.urls import reverse
 from management.forms import SecurityConfigForm
 from management.models import LoggingConfig, SecurityConfig
 from management.views.settings import ChangeLogLevelView, LOG_LEVELS, SettingsView
-from notifications.models import NotificationConfig
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 
@@ -20,20 +19,18 @@ class SettingsViewTest(TestCase):
         self.factory = RequestFactory()
         self.view = SettingsView()
         self.view.request = self.factory.get('/settings/')
-        
+
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
         setattr(self.view.request, 'session', 'session')
         messages_storage = FallbackStorage(self.view.request)
         setattr(self.view.request, '_messages', messages_storage)
-        
-        # Create notification config
-        self.notification_config = NotificationConfig.objects.create()
+
+        # Create security config
         self.security_config = SecurityConfig.objects.create(
             id=1,
-            security_mode=SecurityConfig.SecurityModeChoices.LOW,
+            security_mode=SecurityConfig.SecurityModeChoices.BROWNFIELD,
             auto_gen_pki=False,
-            notification_config=self.notification_config,
         )
 
     def test_template_name(self):
@@ -63,12 +60,11 @@ class SettingsViewTest(TestCase):
     def test_get_form_kwargs_creates_config_if_missing(self):
         """Test get_form_kwargs creates SecurityConfig if it doesn't exist."""
         SecurityConfig.objects.all().delete()
-        
+
         form_kwargs = self.view.get_form_kwargs()
-        
+
         self.assertIn('instance', form_kwargs)
         self.assertIsInstance(form_kwargs['instance'], SecurityConfig)
-        self.assertIsNotNone(form_kwargs['instance'].notification_config)
 
     def test_get_context_data_includes_page_info(self):
         """Test get_context_data includes page category and name."""
@@ -100,8 +96,8 @@ class SettingsViewTest(TestCase):
         config_json = json.loads(context['notification_configurations_json'])
         self.assertIsInstance(config_json, dict)
         # Should have entries for all security modes
-        self.assertIn(SecurityConfig.SecurityModeChoices.DEV, config_json)
-        self.assertIn(SecurityConfig.SecurityModeChoices.LOW, config_json)
+        self.assertIn(SecurityConfig.SecurityModeChoices.LAB, config_json)
+        self.assertIn(SecurityConfig.SecurityModeChoices.BROWNFIELD, config_json)
 
     @patch.object(SecurityConfig, 'apply_security_settings')
     def test_form_valid_saves_and_applies_settings(self, mock_apply):
@@ -122,8 +118,8 @@ class SettingsViewTest(TestCase):
         mock_sec = Mock()
         self.view.sec = mock_sec
         
-        # Change from LOW (1) to HIGH (3)
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.LOW
+        # Change from BROWNFIELD (1) to HARDENED (3)
+        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
         self.security_config.save()
         
         form = Mock(spec=SecurityConfigForm)
@@ -131,13 +127,13 @@ class SettingsViewTest(TestCase):
         form.instance.pk = 1
         form.changed_data = ['security_mode']
         form.cleaned_data = {
-            'security_mode': SecurityConfig.SecurityModeChoices.HIGH
+            'security_mode': SecurityConfig.SecurityModeChoices.HARDENED
         }
         form.save = Mock()
         
         self.view.form_valid(form)
         
-        mock_sec.reset_settings.assert_called_once_with(SecurityConfig.SecurityModeChoices.HIGH)
+        mock_sec.reset_settings.assert_called_once_with(SecurityConfig.SecurityModeChoices.HARDENED)
 
     @patch('management.security.features.AutoGenPkiFeature.enable')
     @patch.object(SecurityConfig, 'apply_security_settings')
@@ -207,7 +203,7 @@ class SettingsViewTest(TestCase):
         form.save = Mock()
         
         with patch.object(SecurityConfig, 'apply_security_settings'):
-            response = self.view.form_valid(form)
+            self.view.form_valid(form)
         
         messages_list = list(get_messages(self.view.request))
         self.assertTrue(any('missing' in str(msg).lower() for msg in messages_list))
@@ -225,7 +221,7 @@ class SettingsViewTest(TestCase):
         form.save = Mock()
         
         with patch.object(SecurityConfig, 'apply_security_settings'):
-            response = self.view.form_valid(form)
+            self.view.form_valid(form)
         
         messages_list = list(get_messages(self.view.request))
         self.assertTrue(any('missing' in str(msg).lower() for msg in messages_list))
@@ -234,7 +230,7 @@ class SettingsViewTest(TestCase):
         """Test form_invalid displays error message."""
         form = Mock(spec=SecurityConfigForm)
         
-        with patch.object(self.view, 'render_to_response') as mock_render:
+        with patch.object(self.view, 'render_to_response'):
             self.view.form_invalid(form)
         
         messages_list = list(get_messages(self.view.request))
@@ -298,7 +294,7 @@ class ChangeLogLevelViewTest(TestCase):
         
         original_level = logging.getLogger().getEffectiveLevel()
         
-        response = self.view.post(request)
+        self.view.post(request)
         
         # Logger should not be changed
         self.assertEqual(logging.getLogger().getEffectiveLevel(), original_level)

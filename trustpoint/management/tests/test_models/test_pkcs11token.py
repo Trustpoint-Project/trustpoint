@@ -2,7 +2,6 @@
 import os
 from unittest import mock
 
-import pkcs11
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.test import TestCase
@@ -16,7 +15,7 @@ class PKCS11TokenTestCase(TestCase):
         self.token = PKCS11Token.objects.create(
             label='TestToken',
             slot=1,
-            module_path='/usr/local/lib/libpkcs11-proxy.so',
+            module_path='/usr/lib/libpkcs11-proxy.so',
         )
 
     def tearDown(self):

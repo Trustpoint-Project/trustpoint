@@ -29,6 +29,16 @@ Glossary
         This credential is then used to authenticate itself against the Trustpoint and thus allows the device to
         request application certificates corresponding to that domain.
 
+    IDevID
+        Initial Device Identifier is a certificate issued by the device manufacturer per IEEE 802.1AR.
+        It serves as a permanent identity of the device and can be used to authenticate the device during onboarding
+        to establish trust with Trustpoint or other PKI systems.
+
+    LDevID
+        Locally-significant Device Identifier is a certificate issued by Trustpoint or a local PKI to a device
+        during the onboarding process. Unlike IDevID, LDevID is domain-specific and is used for authentication
+        within a particular industrial environment or domain.
+
     Root CA
         A trusted Certificate Authority that is the anchor of trust in a PKI.
         It is used to sign Issuing CAs and other subordinate certificates, establishing the basis for the certificate chain.
@@ -106,6 +116,15 @@ Glossary
         The Certificate Management Protocol is used for managing digital certificates within a Public Key Infrastructure (PKI),
         including certificate issuance, renewal, and revocation.
 
+    OPC UA GDS Push
+        OPC UA Global Discovery Server Push is a standardized protocol for distributing and updating certificates,
+        trust anchors, and Certificate Revocation Lists (CRLs) to OPC UA servers.
+        This allows centralized management of credentials for OPC UA-based industrial automation infrastructure.
+
+    AOKI
+        Automated Onboarding for Keyless Infrastructure is a zero-touch onboarding protocol designed specifically for industrial environments.
+        It uses mDNS for server discovery and REST APIs for mutual trust establishment before transitioning to standard PKI protocols (CMP or EST).
+
     Application Certificates
         Digital certificates issued by Trustpoint for specific applications or systems (like TLS server/client, OPC UA server/client),
         enabling secure communication and authentication for those applications within the Trustpoint-managed environment.
@@ -147,6 +166,29 @@ Glossary
         Astrals ruff ist a really fast python linter and code formatter.
         See also: `ruff <https://docs.astral.sh/ruff/>`_.
 
+    Composite Pattern
+        A structural design pattern that allows you to compose objects into tree structures to represent part-whole hierarchies.
+        Composite lets clients treat individual objects and compositions of objects uniformly.
+        Trustpoint uses this pattern extensively for composing validation, parsing, authentication, and authorization components.
+
+    Request Context
+        An object that carries state through the entire request pipeline in Trustpoint.
+        It includes raw HTTP request data, parsed messages, extracted credentials, domain information, and device identity.
+        Different context types (EstCertificateRequestContext, CmpBaseRequestContext, etc.) extend BaseRequestContext for protocol-specific attributes.
+
+    ParsingComponent
+        A component in the Trustpoint request pipeline responsible for parsing and validating a specific aspect of the request.
+        Examples include EstPkiMessageParsing (parses CSR), CmpPkiMessageParsing (parses CMP messages), and DomainParsing (resolves domain).
+
+    AuthenticationComponent
+        A component responsible for verifying the authenticity of credentials provided in the request
+        (e.g., HTTP Basic Auth, shared secret, client certificate).
+        Does not determine which device is making the request; that is the role of authorization.
+
+    AuthorizationComponent
+        A component responsible for determining what operations are allowed for an authenticated request.
+        Examples include DomainScopeValidation, CertificateProfileAuthorization, and ProtocolAuthorization.
+
     TM
         Test Manager
 
@@ -158,3 +200,4 @@ Glossary
 
     Client
         Stakeholders or End Users
+

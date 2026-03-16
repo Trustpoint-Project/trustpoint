@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
+from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
 from cryptography.x509 import Certificate
@@ -18,7 +19,7 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from management.models import BackupOptions, KeyStorageConfig, PKCS11Token, SecurityConfig, WorkflowExecutionConfig
+from management.models import BackupOptions, KeyStorageConfig, NotificationConfig, PKCS11Token, SecurityConfig, WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from pki.models import CredentialModel
@@ -45,7 +46,9 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         if 'security_mode' in self.data:
             current_mode = self.data['security_mode']
         else:
-            current_mode = self.instance.security_mode if self.instance else SecurityConfig.SecurityModeChoices.LOW
+            current_mode = (
+                self.instance.security_mode if self.instance else SecurityConfig.SecurityModeChoices.BROWNFIELD
+            )
 
         sec_manager = manager.SecurityManager()
         features_not_allowed = sec_manager.get_features_to_disable(current_mode)
@@ -69,7 +72,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             ),
             Fieldset(
                 _('Advanced security settings'),
-                'auto_gen_pki',
+                Field('auto_gen_pki', wrapper_class='form-check form-switch'),
                 'auto_gen_pki_key_algorithm',
             ),
         )
@@ -83,6 +86,8 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         label=_('Enable local auto-generated PKI'),
         widget=forms.CheckboxInput(
             attrs={
+                'class': 'form-check-input',
+                'role': 'switch',
                 'data-sl-defaults': '[true, true, false, false, false]',
                 'data-hide-at-sl': '[false, false, true, true, true]',
                 'data-more-secure': 'false',
@@ -111,6 +116,101 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             return AutoGenPkiKeyAlgorithm.RSA2048
         return AutoGenPkiKeyAlgorithm(form_value)
 
+    def clean(self) -> dict[str, Any]:
+        """Validate that existing data complies with the target security mode."""
+        cleaned_data = cast('dict[str, Any]', super().clean())
+        new_mode = cleaned_data.get('security_mode')
+        if not new_mode or not self.instance or not self.instance.pk:
+            return cleaned_data
+
+        old_mode = self.instance.security_mode
+        # Only validate when moving to a strictly higher (stricter) level.
+        if int(new_mode) <= int(old_mode):
+            return cleaned_data
+
+        violations = self.instance.check_mode_transition(new_mode)
+        if violations:
+            self._violations = violations
+            self._violations_mode_label = SecurityConfig.SecurityModeChoices(new_mode).label
+            msg = ''
+            raise ValidationError(msg, code='policy_violation')
+        return cleaned_data
+
+
+class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
+    """Form for managing global notification configuration settings."""
+
+    MAX_EXPIRY_WARNING_DAYS = 365
+    MIN_EXPIRY_WARNING_DAYS = 1
+
+    class Meta:
+        """Meta configuration for NotificationConfigForm."""
+        model = NotificationConfig
+        fields: ClassVar[list[str]] = [
+            'enabled',
+            'cert_expiry_warning_days',
+            'issuing_ca_expiry_warning_days',
+        ]
+        widgets: ClassVar[dict[str, Any]] = {
+            'enabled': forms.CheckboxInput(
+                attrs={'class': 'form-check-input'}
+            ),
+            'cert_expiry_warning_days': forms.NumberInput(
+                attrs={'class': 'form-control', 'min': '1', 'max': '365'}
+            ),
+            'issuing_ca_expiry_warning_days': forms.NumberInput(
+                attrs={'class': 'form-control', 'min': '1', 'max': '365'}
+            ),
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the NotificationConfigForm."""
+        super().__init__(*args, **kwargs)
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            Fieldset(
+                _('Notification Settings'),
+                'enabled',
+            ),
+            Fieldset(
+                _('Expiry Warning Thresholds'),
+                'cert_expiry_warning_days',
+                'issuing_ca_expiry_warning_days',
+            ),
+        )
+
+    def clean_cert_expiry_warning_days(self) -> int | None:
+        """Validate cert_expiry_warning_days field."""
+        cert_expiry = self.cleaned_data.get('cert_expiry_warning_days')
+        if cert_expiry is not None and (
+            cert_expiry < self.MIN_EXPIRY_WARNING_DAYS or
+            cert_expiry > self.MAX_EXPIRY_WARNING_DAYS
+        ):
+            raise ValidationError(
+                _('Value must be between %(min)d and %(max)d days.') % {
+                    'min': self.MIN_EXPIRY_WARNING_DAYS,
+                    'max': self.MAX_EXPIRY_WARNING_DAYS,
+                }
+            )
+        return cert_expiry
+
+    def clean_issuing_ca_expiry_warning_days(self) -> int | None:
+        """Validate issuing_ca_expiry_warning_days field."""
+        ca_expiry = self.cleaned_data.get('issuing_ca_expiry_warning_days')
+        if ca_expiry is not None and (
+            ca_expiry < self.MIN_EXPIRY_WARNING_DAYS or
+            ca_expiry > self.MAX_EXPIRY_WARNING_DAYS
+        ):
+            raise ValidationError(
+                _('Value must be between %(min)d and %(max)d days.') % {
+                    'min': self.MIN_EXPIRY_WARNING_DAYS,
+                    'max': self.MAX_EXPIRY_WARNING_DAYS,
+                }
+            )
+        return ca_expiry
+
 class BackupOptionsForm(forms.ModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""
 
@@ -129,7 +229,7 @@ class BackupOptionsForm(forms.ModelForm[BackupOptions]):
             'remote_directory',
         ]
         widgets: ClassVar[dict[str, Any]] = {
-            'enable_sftp_storage': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'enable_sftp_storage': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
             'host': forms.TextInput(attrs={'class': 'form-control'}),
             'port': forms.NumberInput(attrs={'class': 'form-control'}),
             'user': forms.TextInput(attrs={'class': 'form-control'}),
@@ -259,7 +359,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
         ]
     )
 
-    def _raise_validation_error(self, message: str) -> None:
+    def _raise_validation_error(self, message: str) -> NoReturn:
         """Raises a validation error with the given message."""
         raise ValidationError(message)
 
@@ -274,7 +374,7 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             self._raise_validation_error('No PKCS#12 file was uploaded.')
 
         try:
-            pkcs12_raw = pkcs12_file.read()  # type: ignore[union-attr]
+            pkcs12_raw = pkcs12_file.read()
             pkcs12_password = cleaned_data.get('pkcs12_password')
             domain_name = cleaned_data.get('domain_name')
         except (OSError, AttributeError) as original_exception:
@@ -317,7 +417,18 @@ class TlsAddFileImportPkcs12Form(LoggerMixin, forms.Form):
                 self._raise_validation_error('The provided PKCS#12 file does not contain a valid certificate.')
             if not isinstance(certificate, Certificate):
                 self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
-            CertificateVerifier.verify_server_cert(certificate, domain_name)  # type: ignore[arg-type]
+
+            # At this point, both isinstance and None checks guarantee certificate is Certificate
+            # For self-signed certificates, treat the certificate itself as a trusted root
+            trusted_roots = [certificate] if certificate.issuer == certificate.subject else []
+            untrusted_intermediates = tls_credential_serializer.additional_certificates or []
+
+            CertificateVerifier.verify_server_cert(
+                certificate,
+                domain_name,
+                trusted_roots=trusted_roots,
+                untrusted_intermediates=untrusted_intermediates
+            )
             self.saved_credential = CredentialModel.save_credential_serializer(
                 credential_serializer=tls_credential_serializer,
                 credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
@@ -460,7 +571,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
 
         return None
 
-    def _raise_validation_error(self, message: str) -> None:
+    def _raise_validation_error(self, message: str) -> NoReturn:
         """Raises a validation error with the given message."""
         raise forms.ValidationError(message)
 
@@ -499,10 +610,22 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         )
 
         certificate = credential_serializer.certificate
-        if certificate is None or not isinstance(certificate, Certificate):
+        if certificate is None:
+            self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
+        if not isinstance(certificate, Certificate):
             self._raise_validation_error('Invalid credential: certificate is not a valid x509.Certificate.')
 
-        CertificateVerifier.verify_server_cert(certificate, domain_name)  # type: ignore[arg-type]
+        # At this point, both isinstance and None checks guarantee certificate is Certificate
+        # For self-signed certificates, treat the certificate itself as a trusted root
+        trusted_roots = [certificate] if certificate.issuer == certificate.subject else []
+        untrusted_intermediates = credential_serializer.additional_certificates or []
+
+        CertificateVerifier.verify_server_cert(
+            certificate,
+            domain_name,
+            trusted_roots=trusted_roots,
+            untrusted_intermediates=untrusted_intermediates
+        )
 
         self.saved_credential = CredentialModel.save_credential_serializer(
             credential_serializer=credential_serializer,
@@ -640,7 +763,7 @@ class PKCS11ConfigForm(forms.Form):
         max_length=255,
         widget=forms.TextInput(attrs={'class': 'form-control'}),
         help_text=_('Path to the PKCS#11 module library file'),
-        initial='/usr/local/lib/libpkcs11-proxy.so',
+        initial='/usr/lib/libpkcs11-proxy.so',
         required=False
     )
 
@@ -665,7 +788,7 @@ class PKCS11ConfigForm(forms.Form):
         if hsm_type == 'softhsm':
             cleaned_data['label'] = 'Trustpoint-SoftHSM'
             cleaned_data['slot'] = 0
-            cleaned_data['module_path'] = '/usr/local/lib/libpkcs11-proxy.so'
+            cleaned_data['module_path'] = '/usr/lib/libpkcs11-proxy.so'
         elif hsm_type == 'physical':
             raise forms.ValidationError(_('Physical HSM is not yet supported.'))
 

@@ -9,7 +9,8 @@ from pki.models.certificate import CertificateModel
 from pki.models.credential import CredentialModel
 from pki.models.domain import DomainModel
 
-from devices.models import DeviceModel, IssuedCredentialModel
+from devices.models import DeviceModel
+from pki.models import IssuedCredentialModel
 
 
 def test_device_delete_revocation(mock_models: dict[str, Any]) -> None:

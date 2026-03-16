@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import secrets
 import threading
+from typing import cast
 
-from pki.models import DomainModel, IssuingCaModel, RevokedCertificateModel
+from pki.models import CaModel, CredentialModel, DomainModel, RevokedCertificateModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm, KeyGenerator
 from pki.util.x509 import CertificateGenerator
 from trustpoint.logger import LoggerMixin
@@ -21,23 +22,28 @@ class AutoGenPki(LoggerMixin):
     _lock: threading.Lock = threading.Lock()
 
     @classmethod
-    def get_auto_gen_pki(cls, key_alg: AutoGenPkiKeyAlgorithm | None = None) -> IssuingCaModel | None:
+    def get_auto_gen_pki(cls, key_alg: AutoGenPkiKeyAlgorithm | None = None) -> CaModel | None:
         """Retrieves the auto-generated PKI Issuing CA, if it exists."""
+        ca: CaModel | None
         if key_alg is not None:
             unique_name = f'{UNIQUE_NAME_PREFIX}_{key_alg.name}'
             try:
-                return IssuingCaModel.objects.get(unique_name=unique_name)
-            except IssuingCaModel.DoesNotExist:
+                ca = CaModel.objects.get(unique_name=unique_name)
+            except CaModel.DoesNotExist:
                 return None
+            else:
+                return ca
         else:
             try:
-                return IssuingCaModel.objects.filter(
+                ca = CaModel.objects.filter(
                     unique_name__startswith=UNIQUE_NAME_PREFIX,
-                    issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN,
+                    ca_type=CaModel.CaTypeChoice.AUTOGEN,
                     is_active=True
                 ).first()
-            except IssuingCaModel.DoesNotExist:
+            except CaModel.DoesNotExist:
                 return None
+            else:
+                return ca if ca else None
 
     @classmethod
     def enable_auto_gen_pki(cls, key_alg: AutoGenPkiKeyAlgorithm) -> None:
@@ -64,24 +70,24 @@ class AutoGenPki(LoggerMixin):
 
             # Re-use any existing root CA for the auto-generated PKI and current key type
             try:
-                root_ca = IssuingCaModel.objects.get(
-                    unique_name=root_ca_name, issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
+                root_ca = CaModel.objects.get(
+                    unique_name=root_ca_name, ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT
                 )
-                root_cert = root_ca.credential.get_certificate()
-                root_1_key = root_ca.credential.get_private_key()
+                root_cert = cast('CredentialModel', root_ca.credential).get_certificate()
+                root_1_key = cast('CredentialModel', root_ca.credential).get_private_key()
                 cls.logger.info('Reusing existing Root CA: %s', root_ca_name)
-            except IssuingCaModel.DoesNotExist:
+            except CaModel.DoesNotExist:
                 cls.logger.info('Creating new Root CA: %s', root_ca_name)
                 root_cert, root_1_key = CertificateGenerator.create_root_ca(
                     root_ca_name,
                     private_key=key_gen.generate_private_key_for_public_key_info(public_key_info)
                 )
-                CertificateGenerator.save_issuing_ca(
+                root_ca = CertificateGenerator.save_issuing_ca(
                     issuing_ca_cert=root_cert,
                     private_key=root_1_key,
                     chain=[],
                     unique_name=root_ca_name,
-                    ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT,
+                    ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
                 )
 
             cls.logger.info('Creating new Issuing CA with unique name: %s', issuing_ca_unique_name)
@@ -98,7 +104,8 @@ class AutoGenPki(LoggerMixin):
                 private_key=issuing_1_key,
                 chain=[root_cert],
                 unique_name=issuing_ca_unique_name,
-                ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN,
+                ca_type=CaModel.CaTypeChoice.AUTOGEN,
+                parent_ca=root_ca
             )
             cls.logger.info('Saved new Issuing CA: %s', issuing_ca_unique_name)
 
@@ -158,21 +165,21 @@ class AutoGenPki(LoggerMixin):
             issuing_ca.save()
             cls.logger.info('Renamed and deactivated Issuing CA: %s -> %s', old_unique_name, issuing_ca.unique_name)
 
-            root_cert = issuing_ca.credential.get_root_ca_certificate()
+            root_cert = cast('CredentialModel', issuing_ca.credential).get_root_ca_certificate()
             if root_cert is None:
                 cls.logger.error('Root CA certificate not found for auto-generated PKI Issuing CA')
                 return
             subject_public_bytes = root_cert.subject.public_bytes().hex().upper()
             try:
-                root_ca = IssuingCaModel.objects.get(
+                root_ca = CaModel.objects.get(
                     credential__primarycredentialcertificate__certificate__subject_public_bytes=subject_public_bytes,
-                    issuing_ca_type=IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT,
+                    ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
                 )
                 root_ca.revoke_all_issued_certificates(reason=RevokedCertificateModel.ReasonCode.CESSATION)
 
                 cls.logger.info('Keeping Root CA key for potential reuse: %s', root_ca.unique_name)
 
-            except IssuingCaModel.DoesNotExist:
+            except CaModel.DoesNotExist:
                 exc_msg = 'Root CA for auto-generated PKI Issuing CA not found - cannot revoke the CA certificate'
                 cls.logger.error(exc_msg)  # noqa: TRY400
                 return

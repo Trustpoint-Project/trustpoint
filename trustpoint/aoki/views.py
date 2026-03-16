@@ -51,7 +51,10 @@ class AokiServiceMixin:
         if not owner_cred_ref:
             return None
         owner_cred = owner_cred_ref.dev_owner_id
-        return owner_cred.credential
+        issued = owner_cred.dev_owner_id_credential
+        if issued is None:
+            return None
+        return issued.credential
 
 
 class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
@@ -77,9 +80,10 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
         try:
             domain, _idevid_subj_sn = IDevIDAuthenticator.authenticate_idevid_from_x509_no_device(
                 client_cert, intermediary_cas, domain=None)
-        except IDevIDAuthenticationError as e:
+        except IDevIDAuthenticationError:
+            self.logger.exception('IDevID authentication failed.')
             return LoggedHttpResponse(
-                f'IDevID authentication failed: {e}', status = 403
+                'IDevID authentication failed.', status = 403
             )
 
         owner_cred = self.get_owner_credential(client_cert)
@@ -88,7 +92,19 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
                 'No DevOwnerID present for this IDevID.', status = 422
             )
         owner_pk = owner_cred.get_private_key()
-        owner_id_cert = owner_cred.certificate
+
+        try:
+            owner_id_cert = owner_cred.certificate_or_error
+            owner_cert_pem = owner_id_cert.get_certificate_serializer().as_pem().decode()
+        except ValueError:
+            self.logger.warning('Owner credential has no certificate')
+            owner_cert_pem = ''
+
+        try:
+            tls_cert_pem = tls_cert.credential.certificate_or_error.get_certificate_serializer().as_pem().decode()
+        except ValueError:
+            self.logger.warning('TLS credential has no certificate')
+            tls_cert_pem = ''
 
         aoki_init_response = {
             'aoki-init': {
@@ -101,8 +117,8 @@ class AokiInitializationRequestView(AokiServiceMixin, LoggerMixin, View):
                         }
                     ]
                 },
-                'owner-id-cert': owner_id_cert.get_certificate_serializer().as_pem().decode(),
-                'tls-truststore': tls_cert.credential.certificate.get_certificate_serializer().as_pem().decode()
+                'owner-id-cert': owner_cert_pem,
+                'tls-truststore': tls_cert_pem
             },
         }
         resp = JsonResponse(aoki_init_response)

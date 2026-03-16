@@ -16,22 +16,33 @@ from django.utils.translation import gettext_lazy as _
 
 from devices.models import (
     DeviceModel,
-    IssuedCredentialModel,
+    RemoteDeviceCredentialDownloadModel,
+)
+from devices.utils import validate_application_uri, validate_common_name_characters
+from onboarding.authorization import PermittedProtocolsAuthorization
+from onboarding.models import (
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
     OnboardingConfigModel,
     OnboardingPkiProtocol,
     OnboardingProtocol,
     OnboardingStatus,
-    RemoteDeviceCredentialDownloadModel,
 )
+from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
+from pki.models.truststore import TruststoreModel
 from trustpoint.forms import DisableOptionsSelect
 from util.field import UniqueNameValidator
 
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
+
+
+class SwitchCheckboxSelectMultiple(forms.CheckboxSelectMultiple):
+    """Custom CheckboxSelectMultiple widget that renders as Bootstrap switches."""
+
+    template_name = 'widgets/switch_checkbox_select_multiple.html'
 
 PASSWORD_MIN_LENGTH = 12
 OTP_SPLIT_PARTS = 2
@@ -44,6 +55,7 @@ ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS = [
     (OnboardingProtocol.MANUAL.value, OnboardingProtocol.MANUAL.label),
     (OnboardingProtocol.AOKI.value, OnboardingProtocol.AOKI.label),
     (OnboardingProtocol.BRSKI.value, OnboardingProtocol.BRSKI.label),
+    (OnboardingProtocol.OPC_GDS_PUSH.value, OnboardingProtocol.OPC_GDS_PUSH.label),
 ]
 
 
@@ -112,12 +124,23 @@ class BaseCredentialForm(forms.Form):
     def clean_common_name(self) -> str:
         """Checks the common name."""
         common_name = cast('str', self.cleaned_data['common_name'])
-        if IssuedCredentialModel.objects.filter(common_name=common_name, device=self.device).exists():
-            err_msg = _('Credential with common name %s already exists for device %s.') % (
-                common_name,
-                self.device.common_name,
+
+        if not self.fields['common_name'].disabled:
+            validate_common_name_characters(common_name)
+            existing_credentials = IssuedCredentialModel.objects.filter(
+                common_name=common_name, device=self.device
             )
-            raise forms.ValidationError(err_msg)
+            for cred in existing_credentials:
+
+                if cred.credential.certificates.exclude(
+                    revoked_certificate__isnull=False
+                ).exists():
+                    err_msg = _('Credential with common name %s already exists for device %s.') % (
+                        common_name,
+                        self.device.common_name,
+                    )
+                    raise forms.ValidationError(err_msg)
+
         return common_name
 
     def clean_validity(self) -> int:
@@ -217,6 +240,8 @@ class ApplicationUriFormMixin(forms.Form):
             err_msg = _('Application URI entry is required.')
             raise forms.ValidationError(err_msg)
 
+        validate_application_uri(application_uri)
+
         return application_uri
 
 
@@ -226,6 +251,16 @@ class IssueOpcUaClientCredentialForm(ApplicationUriFormMixin, BaseCredentialForm
 
 class IssueOpcUaServerCredentialForm(ApplicationUriFormMixin, BaseServerCredentialForm):
     """Form to issue a new OPC UA server credential."""
+
+
+class IssueOpcUaGdsPushDomainCredentialForm(ApplicationUriFormMixin, BaseCredentialForm):
+    """Form to issue a new OPC UA GDS Push domain credential."""
+
+    def __init__(self, *args: Any, device: DeviceModel, **kwargs: Any) -> None:
+        """Initialize the form with disabled common name field."""
+        super().__init__(*args, device=device, **kwargs)
+        self.fields['common_name'].disabled = True
+        self.fields['common_name'].initial = 'Trustpoint Domain Credential'
 
 
 class BrowserLoginForm(forms.Form):
@@ -310,8 +345,7 @@ class NoOnboardingCreateForm(forms.Form):
             (NoOnboardingPkiProtocol.MANUAL, NoOnboardingPkiProtocol.MANUAL.label),
         ],
         initial=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
-        widget=forms.CheckboxSelectMultiple,
-        label=_('Enabled PKI Protocols'),
+        widget=SwitchCheckboxSelectMultiple(),
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -320,14 +354,38 @@ class NoOnboardingCreateForm(forms.Form):
 
         self.helper = FormHelper()
         self.helper.form_tag = False
+
+        pki_protocols_html = self._render_pki_protocols_switches('no_onboarding_pki_protocols')
+
         self.helper.layout = Layout(
             HTML('<h2>General</h2><hr>'),
             Field('common_name'),
             Field('serial_number'),
             Field('domain'),
             HTML('<h2 class="mt-5">PKI Protocol Configuration</h2><hr>'),
-            Field('no_onboarding_pki_protocols'),
+            HTML('<label class="form-label">Enabled PKI Protocols</label>'),
+            HTML(pki_protocols_html),
         )
+
+    def _render_pki_protocols_switches(self, field_name: str) -> str:
+        """Renders PKI protocol switches as HTML."""
+        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
+        html_parts = ['<div class="mt-2">']
+
+        for choice in field.widget.choices:
+            value, label = choice[0], choice[1]
+            checked = str(value) in (self.initial.get(field_name, []) or [])
+            html_parts.append(
+                f'<div class="form-check form-switch mb-2">'
+                f'<input type="checkbox" class="form-check-input" role="switch" '
+                f'name="{field_name}" value="{value}" id="id_{field_name}_{value}" '
+                f'{"checked" if checked else ""}>'
+                f'<label class="form-check-label" for="id_{field_name}_{value}">{label}</label>'
+                f'</div>'
+            )
+
+        html_parts.append('</div>')
+        return ''.join(html_parts)
 
     def clean_common_name(self) -> str:
         """Validates the device name, i.e. checks if it is unique.
@@ -338,7 +396,8 @@ class NoOnboardingCreateForm(forms.Form):
         Returns:
             The device name if it passed the checks.
         """
-        common_name = str(self.cleaned_data.get('common_name'))
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
         if DeviceModel.objects.filter(common_name=common_name).exists():
             err_msg = _('Device with this common name already exists.')
             raise forms.ValidationError(err_msg)
@@ -353,9 +412,9 @@ class NoOnboardingCreateForm(forms.Form):
         Returns:
             _description_
         """
-        common_name = cast('str', self.cleaned_data.get('common_name'))
-        serial_number = cast('str', self.cleaned_data.get('serial_number'))
-        domain = cast('DomainModel | None', self.cleaned_data.get('domain'))
+        common_name = self.cleaned_data['common_name']
+        serial_number = self.cleaned_data.get('serial_number', '')
+        domain = self.cleaned_data.get('domain')
 
         no_onboarding_pki_protocols = [
             NoOnboardingPkiProtocol(int(protocol))
@@ -379,6 +438,8 @@ class NoOnboardingCreateForm(forms.Form):
         device_model.no_onboarding_config = no_onboarding_config_model
         device_model.full_clean()
 
+        PermittedProtocolsAuthorization().check(device_model)
+
         no_onboarding_config_model.save()
         device_model.save()
 
@@ -398,7 +459,12 @@ class OnboardingCreateForm(forms.Form):
         initial=OnboardingProtocol.CMP_SHARED_SECRET,
         label=_('Onboarding Protocol'),
         widget=DisableOptionsSelect(
-            disabled_options=[OnboardingProtocol.MANUAL, OnboardingProtocol.AOKI, OnboardingProtocol.BRSKI]
+            disabled_options=[
+                OnboardingProtocol.MANUAL,
+                OnboardingProtocol.AOKI,
+                OnboardingProtocol.BRSKI,
+                OnboardingProtocol.OPC_GDS_PUSH,
+            ]
         ),
     )
 
@@ -408,8 +474,7 @@ class OnboardingCreateForm(forms.Form):
             (OnboardingPkiProtocol.EST, OnboardingPkiProtocol.EST.label),
         ],
         initial=OnboardingPkiProtocol.CMP,
-        widget=forms.CheckboxSelectMultiple,
-        label=_('Enabled PKI Protocols'),
+        widget=SwitchCheckboxSelectMultiple(),
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -418,6 +483,10 @@ class OnboardingCreateForm(forms.Form):
 
         self.helper = FormHelper()
         self.helper.form_tag = False
+
+        # Render the PKI protocols widget manually to avoid crispy-forms label rendering
+        pki_protocols_html = self._render_pki_protocols_switches('onboarding_pki_protocols')
+
         self.helper.layout = Layout(
             HTML('<h2>General</h2><hr>'),
             Field('common_name'),
@@ -426,8 +495,29 @@ class OnboardingCreateForm(forms.Form):
             HTML('<h2 class="mt-5">Onboarding Protocol</h2><hr>'),
             Field('onboarding_protocol'),
             HTML('<h2 class="mt-5">PKI Protocol Configuration</h2><hr>'),
-            Field('onboarding_pki_protocols'),
+            HTML('<label class="form-label">Enabled PKI Protocols</label>'),
+            HTML(pki_protocols_html),
         )
+
+    def _render_pki_protocols_switches(self, field_name: str) -> str:
+        """Renders PKI protocol switches as HTML."""
+        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
+        html_parts = ['<div class="mt-2">']
+
+        for choice in field.widget.choices:
+            value, label = choice[0], choice[1]
+            checked = str(value) in (self.initial.get(field_name, []) or [])
+            html_parts.append(
+                f'<div class="form-check form-switch mb-2">'
+                f'<input type="checkbox" class="form-check-input" role="switch" '
+                f'name="{field_name}" value="{value}" id="id_{field_name}_{value}" '
+                f'{"checked" if checked else ""}>'
+                f'<label class="form-check-label" for="id_{field_name}_{value}">{label}</label>'
+                f'</div>'
+            )
+
+        html_parts.append('</div>')
+        return ''.join(html_parts)
 
     def clean_common_name(self) -> str:
         """Validates the device name, i.e. checks if it is unique.
@@ -438,7 +528,8 @@ class OnboardingCreateForm(forms.Form):
         Returns:
             The device name if it passed the checks.
         """
-        common_name = str(self.cleaned_data.get('common_name'))
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
         if DeviceModel.objects.filter(common_name=common_name).exists():
             err_msg = _('Device with this common name already exists.')
             raise forms.ValidationError(err_msg)
@@ -453,19 +544,19 @@ class OnboardingCreateForm(forms.Form):
         Returns:
             _description_
         """
-        common_name = cast('str', self.cleaned_data.get('common_name'))
-        serial_number = cast('str', self.cleaned_data.get('serial_number'))
-        domain = cast('DomainModel | None', self.cleaned_data.get('domain'))
+        common_name = self.cleaned_data['common_name']
+        serial_number = self.cleaned_data.get('serial_number', '')
+        domain = self.cleaned_data.get('domain')
 
         try:
-            onboarding_protocol = OnboardingProtocol(int(cast('str', self.cleaned_data.get('onboarding_protocol'))))
+            onboarding_protocol = OnboardingProtocol(int(self.cleaned_data['onboarding_protocol']))
         except Exception as exception:
             err_msg = 'Got an invalid value for the onboarding protocol.'
             raise forms.ValidationError(err_msg) from exception
 
         onboarding_pki_protocols = [
             OnboardingPkiProtocol(int(protocol))
-            for protocol in cast('list[str]', self.cleaned_data.get('onboarding_pki_protocols'))
+            for protocol in self.cleaned_data['onboarding_pki_protocols']
         ]
         onboarding_config_model = OnboardingConfigModel(
             onboarding_status=OnboardingStatus.PENDING, onboarding_protocol=onboarding_protocol
@@ -489,6 +580,113 @@ class OnboardingCreateForm(forms.Form):
         )
 
         device_model.full_clean()
+
+        PermittedProtocolsAuthorization().check(device_model)
+
+        onboarding_config_model.save()
+        device_model.save()
+
+        return device_model
+
+
+class OpcUaGdsPushCreateForm(forms.Form):
+    """Form for OPC UA GDS Push device creation with onboarding."""
+
+    common_name = forms.CharField(max_length=100, validators=[UniqueNameValidator()])
+    serial_number = forms.CharField(max_length=100, required=False)
+    domain_queryset: QuerySet[DomainModel] = DomainModel.objects.filter(is_active=True)
+    domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label='----------', required=False)
+    ip_address = forms.GenericIPAddressField(protocol='both', required=True, label=_('IP Address'))
+    opc_server_port = forms.IntegerField(min_value=1, max_value=65535, required=True, label=_('OPC Server Port'))
+    opc_user = forms.CharField(
+        max_length=128,
+        required=False,
+        label=_('OPC User'),
+        help_text=_('OPC UA Server security administration user (role: SecurityAdmin)')
+    )
+    opc_password = forms.CharField(
+        max_length=128,
+        required=False,
+        label=_('OPC Password'),
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'})
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the CreateDeviceForm."""
+        super().__init__(*args, **kwargs)
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            HTML('<h2>General</h2><hr>'),
+            Field('common_name'),
+            Field('serial_number'),
+            Field('domain'),
+            Field('ip_address'),
+            Field('opc_server_port'),
+            HTML('<h2>OPC UA Credentials</h2><hr>'),
+            Field('opc_user'),
+            Field('opc_password'),
+        )
+
+    def clean_common_name(self) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Args:
+            common_name: The desired name of the new device.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        common_name = str(self.cleaned_data.get('common_name'))
+        if DeviceModel.objects.filter(common_name=common_name).exists():
+            err_msg = _('Device with this common name already exists.')
+            raise forms.ValidationError(err_msg)
+        return common_name
+
+    def save(self, device_type: DeviceModel.DeviceType) -> DeviceModel:
+        """Stores the form as device model object in the db.
+
+        Args:
+            device_type: The device type to set.
+
+        Returns:
+            The created DeviceModel.
+        """
+        common_name = cast('str', self.cleaned_data.get('common_name'))
+        serial_number = cast('str', self.cleaned_data.get('serial_number'))
+        domain = cast('DomainModel | None', self.cleaned_data.get('domain'))
+        ip_address = cast('str', self.cleaned_data.get('ip_address'))
+        opc_server_port = cast('int', self.cleaned_data.get('opc_server_port'))
+        opc_user = cast('str', self.cleaned_data.get('opc_user'))
+        opc_password = cast('str', self.cleaned_data.get('opc_password'))
+
+        onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
+        onboarding_pki_protocols = [OnboardingPkiProtocol.OPC_GDS_PUSH]
+
+        onboarding_config_model = OnboardingConfigModel(
+            onboarding_status=OnboardingStatus.PENDING,
+            onboarding_protocol=onboarding_protocol,
+            opc_user=opc_user,
+            opc_password=opc_password
+        )
+        onboarding_config_model.set_pki_protocols(onboarding_pki_protocols)
+
+        onboarding_config_model.full_clean()
+
+        device_model = DeviceModel(
+            common_name=common_name,
+            serial_number=serial_number,
+            domain=domain,
+            device_type=device_type,
+            onboarding_config=onboarding_config_model,
+            ip_address=ip_address,
+            opc_server_port=opc_server_port,
+        )
+
+        device_model.full_clean()
+
+        PermittedProtocolsAuthorization().check(device_model)
 
         onboarding_config_model.save()
         device_model.save()
@@ -533,14 +731,30 @@ class ClmDeviceModelOnboardingForm(forms.Form):
             Field('onboarding_protocol'),
             Field('onboarding_status'),
             HTML('<h2>Enabled PKI-Protocols</h2><hr>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_cmp'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_est'),
+            HTML('</div>'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
-            HTML('<hr>'),
         )
 
         super().__init__(*args, **kwargs)
+
+    def clean_common_name(self) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
+        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
+            err_msg = _('Device with this common name already exists.')
+            raise forms.ValidationError(err_msg)
+        return common_name
 
     def save(self, onboarding_protocol: OnboardingProtocol) -> None:
         """Saves the changes to DB."""
@@ -581,6 +795,136 @@ class ClmDeviceModelOnboardingForm(forms.Form):
             self.instance.save()
 
 
+class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
+    """CLM Device Model form for OPC UA GDS Push devices that use onboarding."""
+
+    common_name = forms.CharField(max_length=100, validators=[UniqueNameValidator()])
+    serial_number = forms.CharField(max_length=100, required=False)
+    domain_queryset: QuerySet[DomainModel] = DomainModel.objects.filter(is_active=True)
+    domain = forms.ModelChoiceField(queryset=domain_queryset, empty_label='----------', required=False)
+    ip_address = forms.GenericIPAddressField(protocol='both', required=True, label=_('IP Address'))
+    opc_server_port = forms.IntegerField(min_value=1, max_value=65535, required=True, label=_('OPC Server Port'))
+    opc_user = forms.CharField(
+        max_length=128,
+        required=False,
+        label=_('OPC User'),
+        help_text=_('OPC UA Server security administration user (role: SecurityAdmin)')
+    )
+    opc_password = forms.CharField(
+        max_length=128,
+        required=False,
+        label=_('OPC Password'),
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password', 'placeholder': '••••••••'})
+    )
+    truststore_queryset: QuerySet[TruststoreModel] = TruststoreModel.objects.filter(
+        intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
+    )
+    opc_trust_store = forms.ModelChoiceField(
+        queryset=truststore_queryset, empty_label='----------', required=False, label=_('OPC UA Trust Store')
+    )
+
+    onboarding_protocol = forms.CharField(
+        label='Onboarding Protocol',
+        widget=forms.TextInput(attrs={'readonly': 'readonly', 'class': 'readonly-field form-control'}),
+        required=False,
+    )
+    onboarding_status = forms.CharField(
+        label='Onboarding Status',
+        widget=forms.TextInput(attrs={'readonly': 'readonly', 'class': 'readonly-field form-control'}),
+    )
+
+    pki_protocol_opc_gds_push = forms.BooleanField(label='OPC - GDS Push', required=False)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the form."""
+        self.instance: DeviceModel = kwargs.pop('instance')
+
+        initial = kwargs.get('initial', {})
+        initial.update({
+            'common_name': self.instance.common_name,
+            'serial_number': self.instance.serial_number,
+            'domain': self.instance.domain,
+            'ip_address': self.instance.ip_address,
+            'opc_server_port': self.instance.opc_server_port,
+            'opc_user': (
+                self.instance.onboarding_config.opc_user
+                if self.instance.onboarding_config else ''
+            ),
+            'opc_password': (
+                self.instance.onboarding_config.opc_password
+                if self.instance.onboarding_config else ''
+            ),
+            'opc_trust_store': (
+                self.instance.onboarding_config.opc_trust_store
+                if self.instance.onboarding_config else None
+            ),
+            'onboarding_protocol': (
+                OnboardingProtocol(self.instance.onboarding_config.onboarding_protocol).label
+                if self.instance.onboarding_config else ''
+            ),
+            'onboarding_status': (
+                OnboardingStatus(self.instance.onboarding_config.onboarding_status).label
+                if self.instance.onboarding_config else ''
+            ),
+            'pki_protocol_opc_gds_push': (
+                self.instance.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
+                if self.instance.onboarding_config else False
+            ),
+        })
+        kwargs['initial'] = initial
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+        self.helper.layout = Layout(
+            Field('common_name'),
+            Field('serial_number'),
+            Field('domain'),
+            Field('ip_address'),
+            Field('opc_server_port'),
+            HTML('<h2>OPC UA Credentials</h2><hr>'),
+            Field('opc_user'),
+            Field('opc_password'),
+            Field('opc_trust_store'),
+            HTML('<h2>Device Onboarding Configuration</h2><hr>'),
+            Field('onboarding_protocol'),
+            Field('onboarding_status'),
+            HTML('<h2>Enabled PKI-Protocols</h2><hr>'),
+            HTML('<div class="form-check form-switch">'),
+            Field('pki_protocol_opc_gds_push'),
+            HTML('</div>'),
+            HTML('<hr>'),
+            Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
+        )
+
+        super().__init__(*args, **kwargs)
+
+    def save(self) -> None:
+        """Saves the changes to DB."""
+        if not self.instance.onboarding_config:
+            err_msg = _('Expected DeviceModel that is configured to use onboarding.')
+            raise forms.ValidationError(err_msg)
+
+        with transaction.atomic():
+            self.instance.common_name = self.cleaned_data['common_name']
+            self.instance.serial_number = self.cleaned_data['serial_number']
+            self.instance.domain = self.cleaned_data['domain']
+            self.instance.ip_address = self.cleaned_data['ip_address']
+            self.instance.opc_server_port = self.cleaned_data['opc_server_port']
+            self.instance.onboarding_config.opc_user = self.cleaned_data['opc_user']
+            self.instance.onboarding_config.opc_password = self.cleaned_data['opc_password']
+            self.instance.onboarding_config.opc_trust_store = self.cleaned_data['opc_trust_store']
+
+            self.instance.onboarding_config.onboarding_protocol = OnboardingProtocol.OPC_GDS_PUSH
+            self.instance.onboarding_config.clear_pki_protocols()
+            if self.cleaned_data['pki_protocol_opc_gds_push'] is True:
+                self.instance.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.OPC_GDS_PUSH)
+
+            self.instance.onboarding_config.full_clean()
+            self.instance.onboarding_config.save()
+            self.instance.full_clean()
+            self.instance.save()
+
+
 class ClmDeviceModelNoOnboardingForm(forms.Form):
     """CLM Device Model form for devices that do not use onboarding."""
 
@@ -604,15 +948,33 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
             Field('serial_number'),
             Field('domain'),
             HTML('<h2>Enabled PKI-Protocols</h2><hr>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_cmp'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_est'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_manual'),
+            HTML('</div>'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
-            HTML('<hr>'),
         )
 
         super().__init__(*args, **kwargs)
+
+    def clean_common_name(self) -> str:
+        """Validates the device name, i.e. checks if it is unique.
+
+        Returns:
+            The device name if it passed the checks.
+        """
+        common_name = cast('str', self.cleaned_data['common_name'])
+        validate_common_name_characters(common_name)
+        if DeviceModel.objects.filter(common_name=common_name).exclude(pk=self.instance.pk).exists():
+            err_msg = _('Device with this common name already exists.')
+            raise forms.ValidationError(err_msg)
+        return common_name
 
     def save(self) -> None:
         """Saves the changes to DB."""
@@ -647,3 +1009,41 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
         self.instance.no_onboarding_config.save()
         self.instance.full_clean()
         self.instance.save()
+
+
+class OpcUaGdsPushTruststoreAssociationForm(forms.Form):
+    """Form for associating a truststore with an OPC UA GDS Push device's onboarding configuration."""
+
+    truststore_queryset: QuerySet[TruststoreModel] = TruststoreModel.objects.filter(
+        intended_usage=TruststoreModel.IntendedUsage.OPC_UA_GDS_PUSH
+    )
+    opc_trust_store = forms.ModelChoiceField(
+        queryset=truststore_queryset, empty_label='----------', required=True, label=_('OPC UA Trust Store')
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the form."""
+        self.instance: DeviceModel = kwargs.pop('instance')
+
+        self.helper = FormHelper()
+        self.helper.layout = Layout(
+            HTML('<h2>Associate Trust Store</h2>'),
+            HTML("<p>Select a trust store to associate with this device's onboarding configuration.</p>"),
+            Field('opc_trust_store'),
+            HTML('<hr>'),
+            Submit('submit', _('Associate Trust Store'), css_class='btn btn-primary w-100'),
+            HTML('<hr>'),
+        )
+
+        super().__init__(*args, **kwargs)
+
+    def save(self) -> None:
+        """Saves the truststore association to the device's onboarding config."""
+        if not self.instance.onboarding_config:
+            err_msg = _('Expected DeviceModel that is configured to use onboarding.')
+            raise forms.ValidationError(err_msg)
+
+        with transaction.atomic():
+            self.instance.onboarding_config.opc_trust_store = self.cleaned_data['opc_trust_store']
+            self.instance.onboarding_config.full_clean()
+            self.instance.onboarding_config.save()

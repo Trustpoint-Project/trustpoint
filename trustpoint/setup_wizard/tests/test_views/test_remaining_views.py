@@ -2,12 +2,9 @@
 
 from unittest.mock import Mock, patch
 
-from django.contrib.auth.models import User
 from django.test import RequestFactory, TestCase
-from django.urls import reverse
 
 from setup_wizard import SetupWizardState
-from setup_wizard.forms import EmptyForm, StartupWizardTlsCertificateForm
 from setup_wizard.views import (
     SetupWizardCreateSuperUserView,
     SetupWizardDemoDataView,

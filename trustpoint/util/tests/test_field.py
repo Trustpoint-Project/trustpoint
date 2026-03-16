@@ -1,13 +1,12 @@
 """Tests for util/field.py."""
 
 import datetime
-from unittest.mock import Mock
 
 import pytest
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import ExtensionOID, NameOID
+from cryptography.x509.oid import NameOID
 from django.core.exceptions import ValidationError
 
 from util.field import UniqueNameValidator, get_certificate_name

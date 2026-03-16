@@ -1,15 +1,13 @@
 """Comprehensive tests for TLS credential import and generate views."""
 
 import subprocess
-from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 from django.contrib.messages import get_messages
 from django.test import RequestFactory
-from django.db import connection
 
-from management.forms import TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
+from management.forms import TlsAddFileImportPkcs12Form
 from management.models import KeyStorageConfig
 from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -304,7 +302,7 @@ class TestSetupWizardTlsServerCredentialApplyView:
     @patch('setup_wizard.views.DOCKER_CONTAINER', False)
     def test_post_not_in_docker(self):
         """Test POST request when not in Docker."""
-        request = self.factory.post('/apply-tls/')
+        self.factory.post('/apply-tls/')
         
         response = self.view.post()
         
@@ -388,6 +386,6 @@ class TestSetupWizardGenerateTlsServerCredentialView:
         with patch('django.views.generic.FormView.dispatch') as mock_parent:
             mock_parent.return_value = Mock(status_code=200)
             
-            response = self.view.dispatch(request)
+            self.view.dispatch(request)
             
             mock_parent.assert_called_once()

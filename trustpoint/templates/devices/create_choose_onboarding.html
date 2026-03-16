@@ -8,16 +8,16 @@
                 <h1>{% trans 'Create new Device' %}</h1>
             {% elif page_name == DEVICES_PAGE_OPC_UA_SUBCATEGORY %}
                 <h1>{% trans 'Create new OPC UA GDS' %}</h1>
+            {% elif page_name == DEVICES_PAGE_OPC_UA_GDS_PUSH_SUBCATEGORY %}
+                <h1>{% trans 'Create new OPC UA GDS Push' %}</h1>
             {% endif %}
         </div>
 
         <div class="card-body py-3">
-            <h2 class="d-inline-block">Choose Onboarding Mechanism</h2>
-
             <div class="d-flex gap-3 mt-3">
-                <div class="card flex-fill d-flex flex-column">
+                <div class="card d-flex flex-column" style="max-width: 400px; width: 100%;">
                     <div class="card-body d-flex flex-column">
-                        <h5 class="card-title"><strong>Use Onboarding (Recommended)</strong></h5>
+                        <h5 class="card-title"><strong>Use Onboarding</strong></h5>
                         <hr class="hr-m">
                         <p class="card-text flex-grow-1">If a domain credential shall be issued that will in turn be used for authentication, please choose Onboarding.</p>
                         <a href="{% url use_onboarding_url %}" class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
@@ -25,7 +25,8 @@
                         </a>
                     </div>
                 </div>
-                <div class="card flex-fill d-flex flex-column">
+                {% if use_no_onboarding_url %}
+                <div class="card d-flex flex-column" style="max-width: 400px; width: 100%;">
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title"><strong>Do not use onboarding</strong></h5>
                         <hr class="hr-m">
@@ -35,6 +36,19 @@
                         </a>
                     </div>
                 </div>
+                {% endif %}
+                {% if show_opc_ua_gds_push_option %}
+                <div class="card d-flex flex-column" style="max-width: 400px; width: 100%;">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title"><strong>OPC UA GDS Push</strong></h5>
+                        <hr class="hr-m">
+                        <p class="card-text flex-grow-1">For OPC UA devices that support GDS Push for automated certificate management and trust list updates.</p>
+                        <a href="{% url use_opc_ua_gds_push_url %}" class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
+                            OPC UA GDS Push
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 

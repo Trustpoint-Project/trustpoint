@@ -9,5 +9,7 @@ on:
 jobs:
   test:
     uses: ./.github/workflows/behave-test-template.yml
+    permissions:
+      contents: read
     with:
       feature_file: R_008_issuing_ca_management

@@ -1,11 +1,10 @@
 """Test cases for home app filters."""
 
-from datetime import timedelta
 from unittest.mock import Mock, patch
 
 from django.test import TestCase
 from django.utils import timezone
-from notifications.models import NotificationModel
+from management.models import NotificationModel
 
 from ..filters import NotificationFilter
 
@@ -22,7 +21,7 @@ class NotificationFilterTests(TestCase):
         mock_queryset = Mock()
         mock_queryset.filter.return_value = mock_queryset
 
-        result = NotificationFilter.filter_by_multiple_types(mock_queryset, 'field', 'CRITICAL,WARNING')
+        NotificationFilter.filter_by_multiple_types(mock_queryset, 'field', 'CRITICAL,WARNING')
 
         mock_queryset.filter.assert_called_once()
         call_kwargs = mock_queryset.filter.call_args[1]
@@ -40,7 +39,7 @@ class NotificationFilterTests(TestCase):
         mock_queryset = Mock()
         mock_queryset.filter.return_value = mock_queryset
 
-        result = NotificationFilter.filter_by_multiple_sources(mock_queryset, 'field', 'PKI,DEVICE')
+        NotificationFilter.filter_by_multiple_sources(mock_queryset, 'field', 'PKI,DEVICE')
 
         mock_queryset.filter.assert_called_once()
         call_kwargs = mock_queryset.filter.call_args[1]
@@ -60,7 +59,7 @@ class NotificationFilterTests(TestCase):
 
         with patch('home.filters.timezone.now') as mock_now:
             mock_now.return_value = timezone.now()
-            result = NotificationFilter.filter_by_date_range(mock_queryset, 'field', 'today')
+            NotificationFilter.filter_by_date_range(mock_queryset, 'field', 'today')
 
         mock_queryset.filter.assert_called_once()
 
@@ -71,7 +70,7 @@ class NotificationFilterTests(TestCase):
 
         with patch('home.filters.timezone.now') as mock_now:
             mock_now.return_value = timezone.now()
-            result = NotificationFilter.filter_by_date_range(mock_queryset, 'field', 'last7days')
+            NotificationFilter.filter_by_date_range(mock_queryset, 'field', 'last7days')
 
         mock_queryset.filter.assert_called_once()
 
@@ -82,7 +81,7 @@ class NotificationFilterTests(TestCase):
 
         with patch('home.filters.timezone.now') as mock_now:
             mock_now.return_value = timezone.now()
-            result = NotificationFilter.filter_by_date_range(mock_queryset, 'field', 'last30days')
+            NotificationFilter.filter_by_date_range(mock_queryset, 'field', 'last30days')
 
         mock_queryset.filter.assert_called_once()
 

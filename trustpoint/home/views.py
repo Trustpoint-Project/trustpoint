@@ -19,10 +19,12 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView, TemplateView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
+from trustpoint_core.oid import NameOid
 
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingProtocol, OnboardingStatus
-from notifications.models import NotificationModel, NotificationStatus
-from pki.models import CertificateModel, CertificateProfileModel, IssuingCaModel
+from devices.models import DeviceModel
+from management.models import NotificationModel, NotificationStatus
+from onboarding.models import OnboardingProtocol, OnboardingStatus
+from pki.models import CaModel, CertificateModel, CertificateProfileModel, IssuedCredentialModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import SortableTableMixin
@@ -48,7 +50,7 @@ class DashboardView(SortableTableMixin[NotificationModel], ListView[Notification
 
     template_name = 'home/dashboard.html'
     model = NotificationModel
-    context_object_name = 'notifications'
+    context_object_name = 'management'
     default_sort_param = '-created_at'
     paginate_by = UIConfig.notifications_paginate_by
 
@@ -101,9 +103,10 @@ class DashboardView(SortableTableMixin[NotificationModel], ListView[Notification
         """
         context = super().get_context_data(**kwargs)
 
-        for notification in context['notifications']:
+        for notification in context['management']:
             notification.type_badge = self._render_notification_type(notification)
             notification.created = self._render_created_at(notification)
+
 
         context['page_category'] = 'home'
         context['page_name'] = 'dashboard'
@@ -256,7 +259,8 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         del args
         del kwargs
 
-        start_date_object: datetime = timezone.now()
+        current_time = timezone.now()
+        start_date_object: datetime = current_time
 
         if start_date:
             parsed_date = dateparse.parse_datetime(start_date)
@@ -265,26 +269,30 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             start_date_object = parsed_date
         dashboard_data: dict[str, Any] = {}
 
-        start_date_object = timezone.make_aware(datetime.combine(start_date_object.date(), datetime.min.time()))
-        device_counts = self.get_device_count_by_onboarding_status(start_date_object)
+        start_date_for_filter = timezone.make_aware(
+            datetime.combine(start_date_object.date(), datetime.min.time())
+        )
+
+        start_date_for_expiry = timezone.make_aware(
+            datetime.combine(start_date_object.date(), current_time.time())
+        )
+
+        device_counts = self.get_device_count_by_onboarding_status(start_date_for_filter)
+
+        expiring_device_counts = self.get_expiring_device_counts(start_date_for_expiry)
+        if expiring_device_counts:
+            device_counts.update(expiring_device_counts)
+
         dashboard_data['device_counts'] = device_counts
         self.logger.debug('device counts %s', device_counts)
 
-        cert_counts = self.get_cert_counts()
+        cert_counts = self.get_cert_counts(start_date_for_expiry)
         if cert_counts:
             dashboard_data['cert_counts'] = cert_counts
 
         issuing_ca_counts = self.get_issuing_ca_counts()
         if issuing_ca_counts:
             dashboard_data['issuing_ca_counts'] = issuing_ca_counts
-
-        expiring_device_counts = self.get_expiring_device_counts()
-        if expiring_device_counts:
-            dashboard_data['expiring_device_counts'] = expiring_device_counts
-
-        expired_device_counts = self.get_expired_device_counts()
-        if expired_device_counts:
-            dashboard_data['expired_device_counts'] = expired_device_counts
 
         expiring_issuing_ca_counts = self.get_expiring_issuing_ca_counts()
         if expiring_issuing_ca_counts:
@@ -365,53 +373,80 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
     def get_device_count_by_onboarding_status(self, start_date: datetime) -> dict[str, Any]:
         """Fetch device count by onboarding status from database.
 
+        Active devices: Devices with NoOnboardingConfigModel OR OnboardingConfigModel with ONBOARDED status
+        Pending devices: Devices with OnboardingConfigModel with PENDING status
+
         Args:
             start_date: The start date for fetching data.
 
         Returns:
             It returns device counts grouped by device onboarding status.
         """
-        device_os_counts = {str(status): 0 for _, status in OnboardingStatus.choices}
         try:
-            device_os_qr = (
-                DeviceModel.objects.filter(created_at__gt=start_date, onboarding_config__isnull=False)
-                .values('onboarding_config__onboarding_status')
-                .annotate(count=Count('onboarding_config__onboarding_status'))
-            )
+            device_counts_expiring = self.get_expiring_device_counts(start_date)
+            device_counts_expired = self.get_expired_device_counts()
 
-            protocol_mapping = {key: str(value) for key, value in OnboardingStatus.choices}
+            devices_after_start = DeviceModel.objects.filter(created_at__gt=start_date)
+
+            active_count = devices_after_start.filter(
+                Q(no_onboarding_config__isnull=False) |
+                Q(onboarding_config__onboarding_status=OnboardingStatus.ONBOARDED)
+            ).count()
+
+            pending_count = devices_after_start.filter(
+                onboarding_config__onboarding_status=OnboardingStatus.PENDING
+            ).count()
+
             device_os_counts = {
-                protocol_mapping[item['onboarding_config__onboarding_status']]:
-                item['count'] for item in device_os_qr
+                'Onboarded': active_count,
+                'Pending': pending_count,
             }
 
-            for protocol in protocol_mapping.values():
-                device_os_counts.setdefault(protocol, 0)
-            device_os_counts['total'] = sum(device_os_counts.values())
+            device_os_counts.update(device_counts_expiring)
+            device_os_counts.update(device_counts_expired)
+            device_os_counts['total'] = active_count + pending_count
+
+            device_os_counts['active'] = active_count
+            device_os_counts['pending'] = pending_count
+            device_os_counts['expiring'] = (
+                device_counts_expiring.get('expiring_in_1_day', 0) +
+                device_counts_expiring.get('expiring_in_7_days', 0)
+            )
+            device_os_counts['expired'] = device_counts_expired.get('expired', 0)
+
         except Exception as exception:
             err_msg = f'Error occurred in device count by onboarding protocol query: {exception}'
             self.logger.exception(err_msg)
+            device_os_counts = {}
 
         return device_os_counts
 
-    def get_cert_counts(self) -> dict[str, Any]:
+    def get_cert_counts(self, reference_date: datetime | None = None) -> dict[str, Any]:
         """Fetch certificate count from database.
+
+        Args:
+            reference_date: The reference date to calculate expiration windows from.
+                          If None, uses current time.
 
         Returns:
             It returns certificate counts.
         """
         cert_counts = {}
 
-        now = timezone.now()
+        now = reference_date or timezone.now()
         next_7_days = now + timedelta(days=7)
         next_1_day = now + timedelta(days=1)
         try:
             cert_counts = CertificateModel.objects.aggregate(
                 total=Count('id'),
-                active=Count('id', filter=Q(not_valid_after__gt=now)),
-                expired=Count('id', filter=Q(not_valid_after__lt=now)),
-                expiring_in_7_days=Count('id', filter=Q(not_valid_after__gt=now, not_valid_after__lte=next_7_days)),
-                expiring_in_1_day=Count('id', filter=Q(not_valid_after__gt=now, not_valid_after__lte=next_1_day)),
+                active=Count('id', filter=Q(not_valid_after__gt=next_7_days)),
+                expiring_in_1_day=Count(
+                    'id', filter=Q(not_valid_after__gt=now, not_valid_after__lte=next_1_day)
+                ),
+                expiring_in_7_days=Count(
+                    'id', filter=Q(not_valid_after__gt=next_1_day, not_valid_after__lte=next_7_days)
+                ),
+                expired=Count('id', filter=Q(not_valid_after__lte=now)),
             )
         except Exception as exception:
             err_msg = f'Error occurred in certificate count query: {exception}'
@@ -479,7 +514,8 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         today = timezone.make_aware(datetime.combine(timezone.now().date(), datetime.min.time()))
         issuing_ca_counts = {}
         try:
-            issuing_ca_counts = IssuingCaModel.objects.aggregate(
+            expiring_issuing_ca_counts = self.get_expiring_issuing_ca_counts()
+            issuing_ca_counts = CaModel.objects.aggregate(
                 total=Count('id'),
                 active=Count(
                     Case(
@@ -494,6 +530,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
                     )
                 ),
             )
+            issuing_ca_counts.update(expiring_issuing_ca_counts)
         except Exception as exception:
             err_msg = f'Error occurred in issuing ca count query: {exception}'
             self.logger.exception(err_msg)
@@ -582,12 +619,13 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             start_date: The start date for fetching data.
 
         Returns:
-            It returns certificate count grouped by issuing ca.
+            It returns certificate count grouped by issuing ca (CN only).
         """
         cert_counts_by_issuing_ca = []
         try:
+            cn_oid = NameOid.COMMON_NAME.dotted_string
             cert_issuing_ca_qr = (
-                CertificateModel.objects.filter(issuer__isnull=False)
+                CertificateModel.objects.filter(issuer__isnull=False, issuer__oid=cn_oid)
                 .filter(created_at__gt=start_date)
                 .values(ca_name=F('issuer__value'))
                 .annotate(cert_count=Count('id'))
@@ -607,12 +645,13 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             start_date: The start date for fetching data.
 
         Returns:
-            It returns certificate count grouped by issuing ca and date.
+            It returns certificate count grouped by issuing ca (CN only) and date.
         """
         cert_counts_by_issuing_ca_and_date = []
         try:
+            cn_oid = NameOid.COMMON_NAME.dotted_string
             cert_issuing_ca_and_date_qr = (
-                CertificateModel.objects.filter(issuer__isnull=False)
+                CertificateModel.objects.filter(issuer__isnull=False, issuer__oid=cn_oid)
                 .filter(created_at__gt=start_date)
                 .annotate(issue_date=TruncDate('created_at'))
                 .values('issue_date', name=F('issuer__value'))
@@ -658,22 +697,31 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             start_date: The start date for fetching data.
 
         Returns:
-            Dict of certificate count for each certificate profile.
+            Dict of certificate count for each certificate profile, plus CA certificates.
         """
         profiles = CertificateProfileModel.objects.all()
         profile_mapping = {profile.id: profile.display_name for profile in profiles}
         cert_counts_by_profile = {profile.display_name: 0 for profile in profiles}
         try:
+            # Count device certificates by profile
             cert_profile_qr = (
                 IssuedCredentialModel.objects.filter(credential__certificates__created_at__gt=start_date)
                 .values(cert_type=F('issued_using_cert_profile'))
-                .annotate(count=Count('credential__certificates'))
+                .annotate(count=Count('credential__certificates', distinct=True))
             )
 
             for item in cert_profile_qr:
                 profile_id = item['cert_type']
                 display_name = profile_mapping.get(profile_id, str(profile_id))
                 cert_counts_by_profile[display_name] = item['count']
+
+            ca_cert_count = CertificateModel.objects.filter(
+                created_at__gt=start_date
+            ).exclude(
+                credential__issued_credential__isnull=False
+            ).distinct().count()
+            if ca_cert_count > 0:
+                cert_counts_by_profile['CA Certificates'] = ca_cert_count
         except Exception as exception:
             err_msg = f'Error occurred in certificate count by profile query: {exception}'
             self.logger.exception(err_msg)
@@ -689,79 +737,65 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         Returns:
             It returns issuing ca counts grouped by type.
         """
-        issuing_ca_type_counts = {str(cert_type): 0 for _, cert_type in IssuingCaModel.IssuingCaTypeChoice.choices}
+        ca_type_counts = {str(cert_type): 0 for _, cert_type in CaModel.CaTypeChoice.choices}
         try:
             ca_type_qr = (
-                IssuingCaModel.objects.filter(created_at__gt=start_date)
-                .values('issuing_ca_type')
-                .annotate(count=Count('issuing_ca_type'))
+                CaModel.objects.filter(created_at__gt=start_date)
+                .values('ca_type')
+                .annotate(count=Count('ca_type'))
             )
 
-            protocol_mapping = {key: str(value) for key, value in IssuingCaModel.IssuingCaTypeChoice.choices}
-            issuing_ca_type_counts = {protocol_mapping[item['issuing_ca_type']]: item['count'] for item in ca_type_qr}
+            protocol_mapping = {key: str(value) for key, value in CaModel.CaTypeChoice.choices}
+            ca_type_counts = {protocol_mapping[item['ca_type']]: item['count'] for item in ca_type_qr}
 
         except Exception as exception:
             err_msg = f'Error occurred in ca counts by type query: {exception}'
             self.logger.exception(err_msg)
-        return issuing_ca_type_counts
+        return ca_type_counts
 
-    def get_expiring_device_counts(self) -> dict[str, Any]:
-        """Fetch expiring device counts from database.
+    def get_expiring_device_counts(self, reference_date: datetime | None = None) -> dict[str, Any]:
+        """Fetch expiring domain credential counts from database.
+
+        Args:
+            reference_date: The reference date for calculating expiration windows. If None, uses current time.
 
         Returns:
-            It returns counts of devices with expiring certificates.
+            It returns counts of domain credentials with expiring certificates (not devices).
+            expiring_in_1_day: 0-24 hours
+            expiring_in_7_days: 1-7 days (excluding the 24-hour window)
         """
-        now = timezone.now()
-        next_7_days = now + timedelta(days=7)
-        next_24_hours = now + timedelta(hours=24)
+        if reference_date is None:
+            reference_date = timezone.now()
+
+        next_7_days = reference_date + timedelta(days=7)
+        next_24_hours = reference_date + timedelta(hours=24)
         expiring_device_counts = {}
         try:
             expiring_device_counts = {
-                'expiring_in_24_hours': DeviceModel.objects.filter(
-                    issued_credentials__credential__certificate__not_valid_after__gt=now,
-                    issued_credentials__credential__certificate__not_valid_after__lte=next_24_hours
-                ).distinct().count(),
-                'expiring_in_7_days': DeviceModel.objects.filter(
-                    issued_credentials__credential__certificate__not_valid_after__gt=now,
-                    issued_credentials__credential__certificate__not_valid_after__lte=next_7_days
-                ).distinct().count(),
+                'expiring_in_1_day': IssuedCredentialModel.objects.filter(
+                    issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+                    credential__certificate__not_valid_after__gt=reference_date,
+                    credential__certificate__not_valid_after__lte=next_24_hours
+                ).count(),
+                'expiring_in_7_days': IssuedCredentialModel.objects.filter(
+                    issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
+                    credential__certificate__not_valid_after__gt=next_24_hours,
+                    credential__certificate__not_valid_after__lte=next_7_days
+                ).count(),
             }
         except Exception as exception:
-            err_msg = f'Error occurred in expiring device count query: {exception}'
+            err_msg = f'Error occurred in expiring domain credential count query: {exception}'
             self.logger.exception(err_msg)
 
         return expiring_device_counts
-
-    def get_expired_device_counts(self) -> dict[str, Any]:
-        """Fetch expired device counts from database.
-
-        Returns:
-            It returns counts of devices with expired certificates.
-        """
-        now = timezone.now()
-        last_7_days = now - timedelta(days=7)
-        expired_device_counts = {}
-        try:
-            expired_device_counts = {
-                'total_expired': DeviceModel.objects.filter(
-                    issued_credentials__credential__certificate__not_valid_after__lt=now
-                ).distinct().count(),
-                'expired_in_last_7_days': DeviceModel.objects.filter(
-                    issued_credentials__credential__certificate__not_valid_after__gte=last_7_days,
-                    issued_credentials__credential__certificate__not_valid_after__lt=now
-                ).distinct().count(),
-            }
-        except Exception as exception:
-            err_msg = f'Error occurred in expired device count query: {exception}'
-            self.logger.exception(err_msg)
-
-        return expired_device_counts
 
     def get_expiring_issuing_ca_counts(self) -> dict[str, Any]:
         """Fetch expiring issuing CA counts from database.
 
         Returns:
             It returns counts of issuing CAs with expiring certificates.
+            expiring_in_1_day: 0-24 hours
+            expiring_in_7_days: 24h-7 days (excluding the 24-hour window)
         """
         now = timezone.now()
         next_7_days = now + timedelta(days=7)
@@ -769,14 +803,14 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         expiring_issuing_ca_counts = {}
         try:
             expiring_issuing_ca_counts = {
-                'expiring_in_24_hours': IssuingCaModel.objects.filter(
+                'expiring_in_1_day': CaModel.objects.filter(
                     credential__certificate__not_valid_after__gt=now,
                     credential__certificate__not_valid_after__lte=next_24_hours
-                ).count(),
-                'expiring_in_7_days': IssuingCaModel.objects.filter(
-                    credential__certificate__not_valid_after__gt=now,
+                ).distinct().count(),
+                'expiring_in_7_days': CaModel.objects.filter(
+                    credential__certificate__not_valid_after__gt=next_24_hours,
                     credential__certificate__not_valid_after__lte=next_7_days
-                ).count(),
+                ).distinct().count(),
             }
         except Exception as exception:
             err_msg = f'Error occurred in expiring issuing CA count query: {exception}'
@@ -784,4 +818,22 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         return expiring_issuing_ca_counts
 
+    def get_expired_device_counts(self) -> dict[str, Any]:
+        """Fetch expired device counts from database.
 
+        Returns:
+            It returns counts of expired devices.
+        """
+        now = timezone.now()
+        expired_device_counts = {}
+        try:
+            expired_device_counts = {
+                'expired': DeviceModel.objects.filter(
+                    issued_credentials__credential__certificate__not_valid_after__lt=now
+                ).distinct().count()
+            }
+        except Exception as exception:
+            err_msg = f'Error occurred in expired device count query: {exception}'
+            self.logger.exception(err_msg)
+
+        return expired_device_counts

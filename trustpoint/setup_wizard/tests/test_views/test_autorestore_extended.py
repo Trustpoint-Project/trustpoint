@@ -1,14 +1,13 @@
 """Comprehensive tests for auto-restore password recovery views."""
 
 import subprocess
-from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock, PropertyMock
+from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.messages import get_messages
 from django.test import RequestFactory
 
-from pki.models import IssuingCaModel, CredentialModel
+from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.forms import PasswordAutoRestoreForm
 from setup_wizard.views import BackupAutoRestorePasswordView
@@ -84,7 +83,7 @@ class TestBackupAutoRestorePasswordViewFormValid:
         with patch.object(self.view, 'form_invalid') as mock_form_invalid:
             mock_form_invalid.return_value = Mock(status_code=200)
             
-            response = self.view.form_valid(form)
+            self.view.form_valid(form)
             
             mock_form_invalid.assert_called_once_with(form)
 
@@ -113,7 +112,7 @@ class TestBackupAutoRestorePasswordViewFormValid:
         with patch.object(self.view, 'form_invalid') as mock_form_invalid:
             mock_form_invalid.return_value = Mock(status_code=200)
             
-            response = self.view.form_valid(form)
+            self.view.form_valid(form)
             
             mock_form_invalid.assert_called_once_with(form)
             messages_list = list(get_messages(request))
@@ -147,7 +146,7 @@ class TestBackupAutoRestorePasswordViewFormValid:
             with patch.object(self.view, '_map_exit_code_to_message') as mock_map:
                 mock_map.return_value = 'Script failed'
                 
-                response = self.view.form_valid(form)
+                self.view.form_valid(form)
                 
                 mock_form_invalid.assert_called_once_with(form)
                 messages_list = list(get_messages(request))
@@ -179,7 +178,7 @@ class TestBackupAutoRestorePasswordViewFormValid:
         with patch.object(self.view, 'form_invalid') as mock_form_invalid:
             mock_form_invalid.return_value = Mock(status_code=200)
             
-            response = self.view.form_valid(form)
+            self.view.form_valid(form)
             
             mock_form_invalid.assert_called_once_with(form)
             messages_list = list(get_messages(request))
@@ -211,7 +210,7 @@ class TestBackupAutoRestorePasswordViewFormValid:
         with patch.object(self.view, 'form_invalid') as mock_form_invalid:
             mock_form_invalid.return_value = Mock(status_code=200)
             
-            response = self.view.form_valid(form)
+            self.view.form_valid(form)
             
             mock_form_invalid.assert_called_once_with(form)
             messages_list = list(get_messages(request))
@@ -246,7 +245,7 @@ class TestBackupAutoRestorePasswordViewFormInvalid:
         with patch('django.views.generic.FormView.form_invalid') as mock_parent:
             mock_parent.return_value = Mock(status_code=200)
             
-            response = self.view.form_invalid(form)
+            self.view.form_invalid(form)
             
             messages_list = list(get_messages(request))
             assert any('correct the errors below' in str(m) for m in messages_list)
@@ -268,7 +267,7 @@ class TestBackupAutoRestorePasswordViewHelpers:
         with pytest.raises(RuntimeError, match='Test error message'):
             self.view._raise_runtime_error('Test error message')
 
-    @patch('setup_wizard.views.IssuingCaModel.objects.filter')
+    @patch('setup_wizard.views.CaModel.objects.filter')
     def test_deactivate_all_issuing_cas_with_active_cas(self, mock_filter):
         """Test _deactivate_all_issuing_cas with active CAs."""
         mock_queryset = Mock()
@@ -281,7 +280,7 @@ class TestBackupAutoRestorePasswordViewHelpers:
         mock_filter.assert_called_once_with(is_active=True)
         mock_queryset.update.assert_called_once_with(is_active=False)
 
-    @patch('setup_wizard.views.IssuingCaModel.objects.filter')
+    @patch('setup_wizard.views.CaModel.objects.filter')
     def test_deactivate_all_issuing_cas_no_active_cas(self, mock_filter):
         """Test _deactivate_all_issuing_cas with no active CAs."""
         mock_queryset = Mock()
@@ -293,7 +292,7 @@ class TestBackupAutoRestorePasswordViewHelpers:
         mock_filter.assert_called_once_with(is_active=True)
         mock_queryset.update.assert_not_called()
 
-    @patch('setup_wizard.views.IssuingCaModel.objects.filter')
+    @patch('setup_wizard.views.CaModel.objects.filter')
     def test_deactivate_all_issuing_cas_exception(self, mock_filter):
         """Test _deactivate_all_issuing_cas handles exception."""
         mock_filter.side_effect = Exception('Database error')

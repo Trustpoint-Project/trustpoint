@@ -2,16 +2,14 @@
 
 import ipaddress
 from typing import Any
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from cryptography import x509
-from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from pki.util.keys import KeyGenerator
 
 from devices.issuer import (
-    BaseTlsCredentialIssuer,
     CredentialSaver,
     LocalDomainCredentialIssuer,
     LocalTlsClientCredentialIssuer,
@@ -19,7 +17,8 @@ from devices.issuer import (
     OpcUaClientCredentialIssuer,
     OpcUaServerCredentialIssuer,
 )
-from devices.models import DeviceModel, IssuedCredentialModel, OnboardingStatus
+from pki.models import IssuedCredentialModel
+from onboarding.models import OnboardingStatus
 
 
 @pytest.mark.django_db
@@ -64,7 +63,7 @@ class TestSaveCredentialToDbMixin:
         first_credential = issuer.issue_domain_credential()
         
         # Get the certificate
-        first_cert = first_credential.credential.get_certificate()
+        first_credential.credential.get_certificate()
         
         # Issue another credential with just public key (should update existing one)
         private_key = KeyGenerator.generate_private_key(domain=domain)
@@ -259,7 +258,6 @@ class TestLocalDomainCredentialIssuer:
         
         # Ensure device has onboarding config
         assert device.onboarding_config is not None
-        initial_status = device.onboarding_config.onboarding_status
         
         issuer = LocalDomainCredentialIssuer(device=device, domain=domain)
         

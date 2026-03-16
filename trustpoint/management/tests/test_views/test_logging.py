@@ -78,7 +78,7 @@ class LoggingFilesTableViewTest(TestCase):
 
     def test_default_sort_param(self):
         """Test default sort parameter."""
-        self.assertEqual(self.view.default_sort_param, 'filename')
+        self.assertEqual(self.view.default_sort_param, 'updated_at')
 
     def test_page_category_and_name(self):
         """Test page category and name are set correctly."""
@@ -104,7 +104,13 @@ class LoggingFilesTableViewTest(TestCase):
         
         mock_log_dir.iterdir.return_value = [mock_file1, mock_file2, mock_file3, mock_file4]
 
-        with patch.object(LoggingFilesTableView, '_get_log_file_data', return_value={'filename': 'trustpoint.log'}):
+        def mock_get_log_file_data(filename):
+            # Return data only for valid filenames
+            if filename.startswith('trustpoint.log'):
+                return {'filename': filename, 'created_at': '2024-01-01 10:00:00 UTC', 'updated_at': '2024-01-02 15:30:00 UTC'}
+            return {}  # Invalid filename
+
+        with patch.object(LoggingFilesTableView, '_get_log_file_data', side_effect=mock_get_log_file_data):
             queryset = self.view.get_queryset()
             self.assertIsInstance(queryset, list)
             # Should have 3 valid files (excluding 'other.log')
@@ -117,9 +123,13 @@ class LoggingFilesTableViewTest(TestCase):
         from datetime import datetime
 
         mock_file = Mock(spec=Path)
-        mock_file.exists.return_value = True
         mock_file.is_file.return_value = True
-        mock_log_dir.__truediv__ = Mock(return_value=mock_file)
+        mock_file.name = 'trustpoint.log'
+
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.iterdir.return_value = [mock_file]
+
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         first_date = datetime(2024, 1, 1, 10, 0, 0)
         last_date = datetime(2024, 1, 2, 15, 30, 0)
@@ -137,9 +147,13 @@ class LoggingFilesTableViewTest(TestCase):
     def test_get_log_file_data_with_none_dates(self, mock_get_dates, mock_log_dir):
         """Test _get_log_file_data when no dates are found in log file."""
         mock_file = Mock(spec=Path)
-        mock_file.exists.return_value = True
         mock_file.is_file.return_value = True
-        mock_log_dir.__truediv__ = Mock(return_value=mock_file)
+        mock_file.name = 'trustpoint.log'
+
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.iterdir.return_value = [mock_file]
+
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         mock_get_dates.return_value = (None, None)
 
@@ -212,10 +226,14 @@ class LoggingFilesDetailsViewTest(TestCase):
     def test_get_context_data_with_existing_file(self, mock_log_dir):
         """Test get_context_data with existing log file."""
         mock_file = Mock(spec=Path)
-        mock_file.exists.return_value = True
         mock_file.is_file.return_value = True
         mock_file.read_text.return_value = "Log file content here"
-        mock_log_dir.__truediv__ = Mock(return_value=mock_file)
+        mock_file.name = 'trustpoint.log'
+
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.iterdir.return_value = [mock_file]
+
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         self.view.kwargs = {'filename': 'trustpoint.log'}
         context = self.view.get_context_data()
@@ -255,10 +273,14 @@ class LoggingFilesDownloadViewTest(TestCase):
     def test_get_with_existing_file(self, mock_log_dir):
         """Test GET method with existing file."""
         mock_file = Mock(spec=Path)
-        mock_file.exists.return_value = True
         mock_file.is_file.return_value = True
         mock_file.read_text.return_value = "Log content"
-        mock_log_dir.__truediv__ = Mock(return_value=mock_file)
+        mock_file.name = 'trustpoint.log'
+
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.iterdir.return_value = [mock_file]
+
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         response = self.view.get(self.view.request, filename='trustpoint.log')
 
@@ -300,9 +322,20 @@ class LoggingFilesDownloadMultipleViewTest(TestCase):
     @patch('management.views.logging.LOG_DIR_PATH')
     def test_get_with_zip_format(self, mock_log_dir):
         """Test GET method creating ZIP archive."""
-        mock_log_dir.__truediv__ = Mock(
-            return_value=Mock(read_bytes=Mock(return_value=b'log content'))
-        )
+        mock_file1 = Mock(spec=Path)
+        mock_file1.is_file.return_value = True
+        mock_file1.read_bytes.return_value = b'log content'
+        mock_file1.name = 'trustpoint.log'
+
+        mock_file2 = Mock(spec=Path)
+        mock_file2.is_file.return_value = True
+        mock_file2.read_bytes.return_value = b'log content'
+        mock_file2.name = 'trustpoint.log.1'
+
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.iterdir.return_value = [mock_file1, mock_file2]
+
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         response = self.view.get(
             self.view.request,
@@ -323,9 +356,20 @@ class LoggingFilesDownloadMultipleViewTest(TestCase):
     @patch('management.views.logging.LOG_DIR_PATH')
     def test_get_with_tar_gz_format(self, mock_log_dir):
         """Test GET method creating tar.gz archive."""
-        mock_log_dir.__truediv__ = Mock(
-            return_value=Mock(read_bytes=Mock(return_value=b'log content'))
-        )
+        mock_file1 = Mock(spec=Path)
+        mock_file1.is_file.return_value = True
+        mock_file1.read_bytes.return_value = b'log content'
+        mock_file1.name = 'trustpoint.log'
+
+        mock_file2 = Mock(spec=Path)
+        mock_file2.is_file.return_value = True
+        mock_file2.read_bytes.return_value = b'log content'
+        mock_file2.name = 'trustpoint.log.1'
+
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.iterdir.return_value = [mock_file1, mock_file2]
+
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         response = self.view.get(
             self.view.request,
@@ -389,14 +433,30 @@ class LoggingFilesDownloadMultipleViewTest(TestCase):
     @patch('management.views.logging.LOG_DIR_PATH')
     def test_get_with_multiple_files_zip(self, mock_log_dir):
         """Test GET method with multiple files in ZIP."""
-        mock_log_dir.__truediv__ = Mock(
-            return_value=Mock(read_bytes=Mock(return_value=b'content'))
-        )
+        mock_file1 = Mock(spec=Path)
+        mock_file1.is_file.return_value = True
+        mock_file1.read_bytes.return_value = b'content'
+        mock_file1.name = 'trustpoint.log'
+
+        mock_file2 = Mock(spec=Path)
+        mock_file2.is_file.return_value = True
+        mock_file2.read_bytes.return_value = b'content'
+        mock_file2.name = 'trustpoint.log.1'
+
+        mock_file3 = Mock(spec=Path)
+        mock_file3.is_file.return_value = True
+        mock_file3.read_bytes.return_value = b'content'
+        mock_file3.name = 'trustpoint.log.2'
+
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.iterdir.return_value = [mock_file1, mock_file2, mock_file3]
+
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         response = self.view.get(
             self.view.request,
             archive_format='zip',
-            filenames='file1.log/file2.log/file3.log'
+            filenames='trustpoint.log/trustpoint.log.1/trustpoint.log.2'
         )
 
         zip_data = io.BytesIO(response.content)
@@ -407,14 +467,30 @@ class LoggingFilesDownloadMultipleViewTest(TestCase):
     @patch('management.views.logging.LOG_DIR_PATH')
     def test_get_with_multiple_files_tar_gz(self, mock_log_dir):
         """Test GET method with multiple files in tar.gz."""
-        mock_log_dir.__truediv__ = Mock(
-            return_value=Mock(read_bytes=Mock(return_value=b'content'))
-        )
+        mock_file1 = Mock(spec=Path)
+        mock_file1.is_file.return_value = True
+        mock_file1.read_bytes.return_value = b'content'
+        mock_file1.name = 'trustpoint.log'
+
+        mock_file2 = Mock(spec=Path)
+        mock_file2.is_file.return_value = True
+        mock_file2.read_bytes.return_value = b'content'
+        mock_file2.name = 'trustpoint.log.1'
+
+        mock_file3 = Mock(spec=Path)
+        mock_file3.is_file.return_value = True
+        mock_file3.read_bytes.return_value = b'content'
+        mock_file3.name = 'trustpoint.log.2'
+
+        mock_resolved_dir = Mock(spec=Path)
+        mock_resolved_dir.iterdir.return_value = [mock_file1, mock_file2, mock_file3]
+
+        mock_log_dir.resolve.return_value = mock_resolved_dir
 
         response = self.view.get(
             self.view.request,
             archive_format='tar.gz',
-            filenames='file1.log/file2.log/file3.log'
+            filenames='trustpoint.log/trustpoint.log.1/trustpoint.log.2'
         )
 
         tar_data = io.BytesIO(response.content)

@@ -4,7 +4,7 @@ import io
 import tarfile
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 from django.conf import settings
 from django.contrib import messages
@@ -14,9 +14,14 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import ListView, View
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import filters, viewsets
+from rest_framework.permissions import IsAuthenticated
 
 from management.forms import BackupOptionsForm
 from management.models import BackupOptions
+from management.serializer.backup import BackupSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.views.base import SortableTableFromListMixin
 from util.sftp import SftpClient, SftpError
@@ -415,3 +420,30 @@ class BackupFilesDeleteMultipleView(View, LoggerMixin):
             messages.error(request, f"Errors deleting: {', '.join(errors)}")
 
         return redirect('management:backups')
+
+@extend_schema(tags=['Backup'])
+@extend_schema_view(
+    list=extend_schema(description='Retrieve a list of all backups.'),
+    retrieve=extend_schema(description='Retrieve a single backup by id.'),
+    create=extend_schema(description='Create a backup.'),
+    update=extend_schema(description='Update an existing backup.'),
+    partial_update=extend_schema(description='Partially update an existing backup.'),
+    destroy=extend_schema(description='Delete a backup.')
+)
+class BackupViewSet(viewsets.ModelViewSet[Any]):
+    """ViewSet for managing Backup instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+    queryset = BackupOptions.objects.all().order_by('-user')
+    serializer_class = BackupSerializer
+    permission_classes: ClassVar = [IsAuthenticated] # type: ignore[misc]
+    filter_backends: ClassVar = [ # type: ignore[misc]
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    ]
+    filterset_fields: ClassVar = ['user']
+    search_fields: ClassVar = ['user']
+    ordering_fields: ClassVar = ['user']

@@ -35,13 +35,14 @@ plantuml = f'java -jar {PLANTUML_PATH}'
 project = 'Trustpoint'
 copyright = '2026, Trustpoint Project'  # noqa: A001
 author = 'Trustpoint Project'
-release = '0.5.0.dev1'  # Project version
+release = '0.5.0'  # Project version
 
 # -- General configuration --------------------------------------------------
 extensions = [
     'sphinx.ext.inheritance_diagram',  # Generates class inheritance diagrams
     'sphinx.ext.viewcode',  # Adds links to highlighted source code
     'sphinxcontrib.plantuml',  # Enables PlantUML diagrams
+    'sphinxcontrib.openapi' #  Generate APIs docs
 ]
 
 if BUILD_AUTODOCS:
@@ -51,12 +52,39 @@ if BUILD_AUTODOCS:
         'autoapi.extension',  # Automatically documents the API
     ]
     extensions.extend(autodoc_extensions)
-    autoapi_dirs = ['../../trustpoint']  # Directories for autoapi to scan
+    autoapi_dirs = [
+        '../../trustpoint',
+    ]
     autodoc_typehints = 'description'  # Display type hints in descriptions
+    autoapi_ignore = [
+        '*features*',
+        '*tests*',
+        '*testing*',
+        '*__pycache__*',
+        '*migrations*',
+        '*unused*',
+        '*conftest.py',
+        '*/migrations/*',
+        '*/__pycache__/*',
+        '*/tests/*',
+        '*/features/*',
+    ]  # Exclude features, tests, and related folders from AutoAPI
+
+    # AutoAPI performance optimizations
+    autoapi_options = [
+        'members',
+        'undoc-members',
+        'show-inheritance',
+    ]
+    autoapi_keep_files = False  # Don't keep intermediate files to save disk I/O
+
 
 # -- Templates and exclusions -----------------------------------------------
 templates_path = ['_templates']  # Custom templates directory
-exclude_patterns = ['_build', '_templates']  # Ignore these directories
+exclude_patterns = [
+    '_build',
+    '_templates',
+]
 
 # -- HTML output options ----------------------------------------------------
 html_theme = 'furo'  # Modern, responsive theme

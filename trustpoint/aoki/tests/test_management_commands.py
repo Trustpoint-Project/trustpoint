@@ -1,12 +1,9 @@
 """Tests for AOKI management commands."""
 
-from pathlib import Path
 from unittest.mock import patch
 
-import pytest
 from cryptography import x509
 from django.core.management import call_command
-from pki.util.x509 import CertificateGenerator
 
 
 class TestAokiGenTestCertsCommand:
@@ -55,7 +52,7 @@ class TestAokiGenTestCertsCommand:
             
             # Load IDevID and OwnerID certificates
             with (tmp_path / 'idevid.pem').open('rb') as f:
-                idevid_cert = x509.load_pem_x509_certificate(f.read())
+                x509.load_pem_x509_certificate(f.read())
             
             with (tmp_path / 'owner_id.pem').open('rb') as f:
                 owner_cert = x509.load_pem_x509_certificate(f.read())

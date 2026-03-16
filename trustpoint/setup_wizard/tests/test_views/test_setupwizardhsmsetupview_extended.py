@@ -1,7 +1,6 @@
 """Comprehensive tests for SetupWizardHsmSetupView dispatch and form handling."""
 
-import subprocess
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.messages import get_messages
@@ -277,7 +276,7 @@ class TestSetupWizardHsmSetupViewFormValidIntegration:
         mock_run.return_value = mock_result
         
         request = self.factory.post('/setup_wizard/hsm_setup/softhsm/', {
-            'module_path': '/usr/local/lib/libpkcs11-proxy.so',
+            'module_path': '/usr/lib/libpkcs11-proxy.so',
             'slot': '0',
             'label': 'TestToken',
             'hsm_type': 'softhsm'
@@ -292,7 +291,7 @@ class TestSetupWizardHsmSetupViewFormValidIntegration:
         self.view.setup(request)
         
         form = HsmSetupForm(hsm_type='softhsm', data={
-            'module_path': '/usr/local/lib/libpkcs11-proxy.so',
+            'module_path': '/usr/lib/libpkcs11-proxy.so',
             'slot': 0,
             'label': 'TestToken',
             'hsm_type': 'softhsm'
@@ -325,7 +324,7 @@ class TestSetupWizardHsmSetupViewFormValidIntegration:
         mock_run.return_value = mock_result
         
         request = self.factory.post('/setup_wizard/hsm_setup/softhsm/', {
-            'module_path': '/usr/local/lib/libpkcs11-proxy.so',
+            'module_path': '/usr/lib/libpkcs11-proxy.so',
             'slot': '0',
             'label': 'TestToken',
             'hsm_type': 'softhsm'
@@ -340,7 +339,7 @@ class TestSetupWizardHsmSetupViewFormValidIntegration:
         self.view.setup(request)
         
         form = HsmSetupForm(hsm_type='softhsm', data={
-            'module_path': '/usr/local/lib/libpkcs11-proxy.so',
+            'module_path': '/usr/lib/libpkcs11-proxy.so',
             'slot': 0,
             'label': 'TestToken',
             'hsm_type': 'softhsm'

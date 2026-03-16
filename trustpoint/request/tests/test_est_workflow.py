@@ -7,11 +7,12 @@ from pki.util.cert_profile import JSONProfileVerifier
 from pki.util.cert_req_converter import JSONCertRequestConverter
 
 from request.authentication import EstAuthentication
-from request.authorization import CertificateProfileAuthorization, EstAuthorization, EstOperationAuthorization
-from request.http_request_validator import EstHttpRequestValidator
-from request.operation_processor import CertificateIssueProcessor
-from request.pki_message_parser import EstMessageParser
-from request.request_context import RequestContext
+from request.authorization import CertificateProfileAuthorization, EstAuthorization
+from request.authorization.est import EstOperationAuthorization
+from request.request_validator.http_req import EstHttpRequestValidator
+from request.operation_processor import OperationProcessor
+from request.message_parser import EstMessageParser
+from request.request_context import EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 
 
@@ -32,7 +33,7 @@ class TestESTHelper(LoggerMixin):
 
         est_username = device.est_username
         est_password = device.no_onboarding_config.est_password
-        certtemplate_str = 'tls_server'
+        cert_profile_str = 'tls_server'
         operation_str = 'simpleenroll'
         common_name = device.common_name
         expected_domain = device.domain
@@ -54,17 +55,17 @@ class TestESTHelper(LoggerMixin):
         # Generate HTTP request
         request_factory = RequestFactory()
         request = request_factory.post(
-            path=f'/.well-known/{protocol_str}/{domain_str}/{certtemplate_str}/{operation}',
+            path=f'/.well-known/{protocol_str}/{domain_str}/{cert_profile_str}/{operation}',
             data=csr.public_bytes(serialization.Encoding.DER),
             content_type='application/pkcs10',
             HTTP_AUTHORIZATION=f'Basic {auth_header}',
         )
 
-        mock_context = RequestContext(raw_message=request,
+        mock_context = EstCertificateRequestContext(raw_message=request,
                                       domain_str=domain_str,
                                       protocol=protocol_str,
                                       operation=operation_str,
-                                      cert_profile_str=certtemplate_str)
+                                      cert_profile_str=cert_profile_str)
 
         validator = EstHttpRequestValidator()
 
@@ -78,10 +79,11 @@ class TestESTHelper(LoggerMixin):
 
         assert mock_context.client_certificate is None
         assert mock_context.client_intermediate_certificate is None
+
+        mock_context = parser.parse(mock_context)
+
         assert mock_context.est_username == device.est_username
         assert mock_context.est_password == device.no_onboarding_config.est_password
-
-        parser.parse(mock_context)
 
         assert mock_context.cert_requested is not None
         assert isinstance(mock_context.cert_requested, x509.CertificateSigningRequest), \
@@ -110,7 +112,7 @@ class TestESTHelper(LoggerMixin):
         device = domain_credential_est_onboarding.get('device')
         domain_credential = domain_credential_est_onboarding.get('domain_credential')
 
-        certtemplate_str = 'tls_server'
+        cert_profile_str = 'tls_server'
         operation_str = 'simpleenroll'
         protocol_str = 'est'
         domain_str = device.domain.unique_name
@@ -126,19 +128,19 @@ class TestESTHelper(LoggerMixin):
         cert_pem = domain_credential.credential.certificate.cert_pem
 
         request = request_factory.post(
-            path=f'/.well-known/{protocol_str}/{domain_str}/{certtemplate_str}/{operation_str}',
+            path=f'/.well-known/{protocol_str}/{domain_str}/{cert_profile_str}/{operation_str}',
             data=csr.public_bytes(serialization.Encoding.DER),
             content_type='application/pkcs10',
             HTTP_SSL_CLIENT_CERT=cert_pem,
         )
 
         # Build mock context
-        mock_context = RequestContext(
+        mock_context = EstCertificateRequestContext(
             raw_message=request,
             domain_str=domain_str,
             protocol=protocol_str,
             operation=operation_str,
-            cert_profile_str=certtemplate_str,
+            cert_profile_str=cert_profile_str,
         )
 
         validator = EstHttpRequestValidator()
@@ -163,7 +165,7 @@ class TestESTHelper(LoggerMixin):
             f"Client certificate common name '{client_cert_cn}' does not match expected '{expected_cert_cn}'"
 
         # Parse request
-        parser.parse(mock_context)
+        mock_context = parser.parse(mock_context)
 
         assert mock_context.cert_requested is not None
         assert isinstance(mock_context.cert_requested, x509.CertificateSigningRequest), \
@@ -206,4 +208,4 @@ class TestESTHelper(LoggerMixin):
         self.logger.info('Validated Cert Request JSON: %s', validated_request)
 
         mock_context.cert_requested_profile_validated = JSONCertRequestConverter.from_json(validated_request)
-        CertificateIssueProcessor().process_operation(mock_context)
+        OperationProcessor().process_operation(mock_context)

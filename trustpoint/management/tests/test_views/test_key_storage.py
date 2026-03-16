@@ -1,5 +1,4 @@
 """Test suite for key_storage views."""
-from unittest.mock import Mock, patch
 
 from django.contrib.messages import get_messages
 from django.test import RequestFactory, TestCase
@@ -72,7 +71,7 @@ class KeyStorageConfigViewTest(TestCase):
             label='physical-token',
             slot=1,
         )
-        config = KeyStorageConfig.objects.create(
+        KeyStorageConfig.objects.create(
             pk=1,
             storage_type=KeyStorageConfig.StorageType.PHYSICAL_HSM,
             hsm_config=token,

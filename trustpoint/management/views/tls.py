@@ -2,25 +2,35 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django.contrib import messages
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.db import transaction
+from django.db.models import ProtectedError
+from django.http import HttpResponseRedirect
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import FormView, TemplateView, View
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import extend_schema, extend_schema_view
+from rest_framework import filters, viewsets
+from rest_framework.permissions import IsAuthenticated
 
 from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.management.commands.update_tls import Command as UpdateTlsCommand
 from management.models import TlsSettings
+from management.serializer.credential import CredentialSerializer
 from pki.models import CertificateModel, CredentialModel, GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard.forms import StartupWizardTlsCertificateForm
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
+from trustpoint.views.base import BulkDeleteView
 
 if TYPE_CHECKING:
+    from django.forms import Form
     from django.http import HttpRequest, HttpResponse
 
 
@@ -271,6 +281,63 @@ class TlsAddFileImportSeparateFilesView(
         )
         return super().form_valid(form)
 
+class TlsBulkDeleteConfirmView(TlsSettingsContextMixin, BulkDeleteView):
+    """View to confirm the deletion of multiple TLS certificates."""
+
+    model = CertificateModel
+    success_url = reverse_lazy('management:tls')
+    ignore_url = reverse_lazy('management:tls')
+    template_name = 'management/tls/confirm_delete.html'
+    context_object_name = 'certificates'
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
+        queryset = self.get_queryset()
+        if not queryset.exists():
+            messages.error(request, _('No TLs certificates selected for deletion.'))
+            return HttpResponseRedirect(self.success_url)
+        return super().get(request, *args, **kwargs)
+
+    def form_valid(self, _form: Form) -> HttpResponse:
+        """Attempt to delete tls certificates if the form is valid."""
+        queryset = self.get_queryset()
+        try:
+            active_credential = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
+        except ActiveTrustpointTlsServerCredentialModel.DoesNotExist:
+            active_credential = None
+        if active_credential and active_credential.credential and (cert := active_credential.credential.certificate):
+            cert_ids = list(queryset.values_list('id', flat=True))
+            active_id = cert.id
+            if active_id in cert_ids:
+                cert_ids.remove(active_id)
+                queryset = queryset.exclude(id=active_id)
+                messages.warning(
+                    self.request, _('Cannot delete the active TLS certificate.')
+                )
+                if len(cert_ids) == 0:
+                    return redirect(self.get_success_url())
+        try:
+            with transaction.atomic():
+                # Delete all related credentials first
+                CredentialModel.objects.filter(
+                    certificate__in=queryset
+                ).delete()
+                # Delete certificates
+                delete_count = queryset.count()
+                queryset.delete()
+        except ProtectedError:
+            messages.error(
+                self.request, _('Cannot delete the TLS certificate(s) because they are referenced by other objects.')
+            )
+            return HttpResponseRedirect(self.success_url)
+        except ValidationError as exc:
+            messages.error(self.request, exc.message)
+            return HttpResponseRedirect(self.success_url)
+
+        messages.success(self.request, _('Successfully deleted {count} TLS certificate(s).').format(count=delete_count))
+
+        return redirect(self.get_success_url())
+
 class ActivateTlsServerView(View, LoggerMixin):
     """Activate a TLS server certificate."""
 
@@ -288,6 +355,10 @@ class ActivateTlsServerView(View, LoggerMixin):
             active_tls.credential = tls_certificate
             active_tls.save()
             UpdateTlsCommand().handle()  # Apply new NGINX TLS configuration
+            if tls_certificate.certificate is None:
+                self.logger.error('TLS certificate has no certificate model')
+                messages.error(request, 'TLS certificate has no certificate model')
+                return redirect(reverse('management:tls'))
             self.logger.info(
                 'Activated TLS credential: %s, certificate: %s',
                 tls_certificate.id, tls_certificate.certificate.id
@@ -300,3 +371,30 @@ class ActivateTlsServerView(View, LoggerMixin):
             self.logger.exception('Unexpected error activating TLS certificate')
             messages.error(request, 'An unexpected error occurred while activating TLS certificate')
         return redirect(reverse('management:tls'))
+
+@extend_schema(tags=['Tls'])
+@extend_schema_view(
+    list=extend_schema(description='Retrieve a list of all TLS Certificates.'),
+    retrieve=extend_schema(description='Retrieve a single TLS Certificate by id.'),
+    create=extend_schema(description='Create a TLS Certificate.'),
+    update=extend_schema(description='Update an existing TLS Certificate.'),
+    partial_update=extend_schema(description='Partially update an existing TLS Certificate.'),
+    destroy=extend_schema(description='Delete a TLS Certificate.')
+)
+class TlsViewSet(viewsets.ModelViewSet[Any]):
+    """ViewSet for managing Backup instances.
+
+    Supports standard CRUD operations such as list, retrieve,
+    create, update, and delete.
+    """
+    queryset = CredentialModel.objects.all().order_by('-created_at')
+    serializer_class = CredentialSerializer
+    permission_classes = (IsAuthenticated,)
+    filter_backends = (
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    )
+    filterset_fields: ClassVar = ['credential_type']
+    search_fields: ClassVar = ['certificates']
+    ordering_fields: ClassVar = ['created_at']

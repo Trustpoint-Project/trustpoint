@@ -23,7 +23,7 @@ from django.views.generic import FormView, TemplateView, View
 
 from management.forms import KeyStorageConfigForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.models import KeyStorageConfig, PKCS11Token
-from pki.models import CertificateModel, CredentialModel, IssuingCaModel
+from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard import SetupWizardState
@@ -1235,7 +1235,7 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
         require the missing private keys.
         """
         try:
-            active_cas = IssuingCaModel.objects.filter(is_active=True)
+            active_cas = CaModel.objects.filter(is_active=True)
             count = active_cas.count()
 
             if count > 0:
@@ -1519,6 +1519,11 @@ class SetupWizardImportTlsServerCredentialPkcs12View(LoggerMixin, FormView[TlsAd
                         self.logger.warning('No old TLS credential found with id: %s', old_credential_id)
                 except Exception as e:  # noqa: BLE001
                     self.logger.warning('Failed to delete old TLS credential %s: %s', old_credential_id, e)
+            if tls_certificate.certificate is None:
+                err_msg = 'TLS certificate has no certificate model.'
+                messages.add_message(self.request, messages.ERROR, err_msg)
+                self.logger.error(err_msg)
+                return redirect('setup_wizard:setup_mode', permanent=False)
             self.logger.info(
                 'Activated TLS credential: %s, certificate: %s',
                 tls_certificate.id, tls_certificate.certificate.id
@@ -1629,6 +1634,11 @@ class SetupWizardImportTlsServerCredentialSeparateFilesView(
                         self.logger.warning('No old TLS credential found with id: %s', old_credential_id)
                 except Exception as e:  # noqa: BLE001
                     self.logger.warning('Failed to delete old TLS credential %s: %s', old_credential_id, e)
+            if tls_certificate.certificate is None:
+                err_msg = 'TLS certificate has no certificate model.'
+                messages.add_message(self.request, messages.ERROR, err_msg)
+                self.logger.error(err_msg)
+                return redirect('setup_wizard:setup_mode', permanent=False)
             self.logger.info(
                 'Activated TLS credential: %s, certificate: %s',
                 tls_certificate.id, tls_certificate.certificate.id
@@ -1850,7 +1860,7 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
             return redirect('setup_wizard:tls_server_credential_apply', permanent=False)
 
         try:
-            serializer = trustpoint_tls_server_credential_model.certificate.get_certificate_serializer()
+            serializer = trustpoint_tls_server_credential_model.certificate_or_error.get_certificate_serializer()
             trust_store, content_type = self._get_trust_store_and_content_type(file_format, serializer)
         except Exception:
             err_msg = f'Error generating {file_format} trust store.'
@@ -1988,7 +1998,7 @@ class SetupWizardTlsServerCredentialApplyCancelView(LoggerMixin, View):
 
     def _clear_credential_and_certificate_data(self) -> None:
         """Clears all credential and certificate data if canceled in the 'WIZARD_TLS_SERVER_CREDENTIAL_APPLY' state."""
-        IssuingCaModel.objects.all().delete()
+        CaModel.objects.all().delete()
         CredentialModel.objects.all().delete()
         #ActiveTrustpointTlsServerCredentialModel.objects.all().delete()  # noqa: ERA001
         CertificateModel.objects.all().delete()
@@ -2047,8 +2057,6 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
             else:
                 messages.add_message(self.request, messages.ERROR, 'Invalid option selected for demo data setup.')
                 return redirect('setup_wizard:demo_data', permanent=False)
-
-            call_command('execute_all_notifications')
 
         except subprocess.CalledProcessError as exception:
             err_msg = (

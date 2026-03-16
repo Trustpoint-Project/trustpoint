@@ -4,14 +4,12 @@ from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.messages import get_messages
 from django.contrib.auth.models import User
-from django.http import Http404
 from django.core.management.base import CommandError
 from management.models import BackupOptions
 from management.views.backup import get_backup_file_data, create_db_backup
 from util.sftp import SftpError
 from pathlib import Path
 import tempfile
-import os
 import datetime
 
 
@@ -330,7 +328,7 @@ class BackupManageViewTest(TestCase):
             remote_directory='/path/'
         )
 
-        response = self.client.post(self.url, {'create_sftp_backup': ''})
+        self.client.post(self.url, {'create_sftp_backup': ''})
         
         call_args = mock_client.upload_file.call_args
         self.assertEqual(call_args[0][1], '/path/backup_test.dump.gz')
@@ -362,7 +360,7 @@ class BackupManageViewTest(TestCase):
             remote_directory='/path'
         )
 
-        response = self.client.post(self.url, {'create_sftp_backup': ''})
+        self.client.post(self.url, {'create_sftp_backup': ''})
         
         call_args = mock_client.upload_file.call_args
         self.assertEqual(call_args[0][1], '/path/backup_test2.dump.gz')

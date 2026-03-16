@@ -21,6 +21,7 @@ from trustpoint_core.serializer import (
 from management.models import KeyStorageConfig, PKCS11Token
 from management.pkcs11_util import Pkcs11AESKey, Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
 from pki.models import CertificateModel
+from pki.models.issued_credential import RemoteIssuedCredentialModel
 from trustpoint.logger import LoggerMixin
 from util.db import CustomDeleteActionModel
 from util.encrypted_fields import EncryptedCharField
@@ -32,7 +33,6 @@ if TYPE_CHECKING:
     from cryptography.hazmat.primitives import hashes
     from django.db.models import QuerySet
     from trustpoint_core.crypto_types import PrivateKey
-
 
 __all__ = [
     'CertificateChainOrderModel',
@@ -148,7 +148,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         SIGNER = 5, _('Signer')
 
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
-    private_key = EncryptedCharField(verbose_name=_('Private key (PEM)'), max_length=65536, default='', blank=True)
+    private_key = EncryptedCharField(verbose_name=_('Private key (PEM)'), max_length=9500, default='', blank=True)
     pkcs11_private_key = models.ForeignKey(
         PKCS11Key,
         on_delete=models.PROTECT,
@@ -159,11 +159,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     )
 
     certificate = models.ForeignKey(
-        CertificateModel, on_delete=models.PROTECT, related_name='credential_set', blank=False
+        CertificateModel, on_delete=models.PROTECT, related_name='credential_set', blank=True, null=True
     )
 
     certificates = models.ManyToManyField[CertificateModel, 'PrimaryCredentialCertificate'](
-        CertificateModel, through='PrimaryCredentialCertificate', blank=False, related_name='credential'
+        CertificateModel, through='PrimaryCredentialCertificate', blank=True, related_name='credential'
     )
     certificate_chain: models.ManyToManyField[CertificateModel, CertificateChainOrderModel] = models.ManyToManyField(
         CertificateModel, blank=True,
@@ -193,11 +193,32 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             exc_msg = 'A credential can only have one primary certificate.'
             raise ValidationError(exc_msg)
 
+        if self.certificate is None:
+            if qs.exists():
+                exc_msg = 'Cannot have primary certificates when certificate is not set.'
+                raise ValidationError(exc_msg)
+            return  # No further validation if certificate is None
+
         if qs.get().certificate != self.certificate:
             exc_msg = ('The ForeignKey certificate must be identical to the one '
                        'marked primary in the primarycredentialcertificate_set.')
 
             raise ValidationError(exc_msg)
+
+    @property
+    def certificate_or_error(self) -> CertificateModel:
+        """Returns the certificate, raising an error if it is None.
+
+        Returns:
+            CertificateModel: The non-null certificate.
+
+        Raises:
+            ValueError: If certificate is None.
+        """
+        if self.certificate is None:
+            msg = f'Certificate is None for credential (type: {self.credential_type})'
+            raise ValueError(msg)
+        return self.certificate
 
     @classmethod
     def save_credential_serializer(
@@ -436,15 +457,16 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         credential_model = cls._create_credential_model(
             certificate, credential_type, private_key_pem, pkcs11_private_key
         )
+        additional_certificates = list(reversed(normalized_credential_serializer.additional_certificates))
         cls._save_additional_certificates(
-            credential_model, normalized_credential_serializer.additional_certificates
+            credential_model, additional_certificates
         )
         return credential_model
 
     @staticmethod
     def _validate_and_save_certificate(
         normalized_credential_serializer: CredentialSerializer
-    ) -> CertificateModel:
+    ) -> CertificateModel | None:
         """Validates and saves the certificate from the provided serializer.
 
         Args:
@@ -455,12 +477,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             ValueError: If the certificate in the serializer is None.
 
         Returns:
-            CertificateModel: The saved certificate model instance.
+            CertificateModel | None: The saved certificate model instance, or None if no certificate is present.
         """
         # TODO(AlexHx8472): Verify that the credential is valid in respect to the credential_type!!!  # noqa: FIX002
         if normalized_credential_serializer.certificate is None:
-            msg = 'Certificate cannot be None'
-            raise ValueError(msg)
+            return None
         return CertificateModel.save_certificate(normalized_credential_serializer.certificate)
 
     @classmethod
@@ -533,7 +554,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     @classmethod
     def _create_credential_model(
         cls,
-        certificate: CertificateModel,
+        certificate: CertificateModel | None,
         credential_type: CredentialModel.CredentialTypeChoice,
         private_key_pem: str,
         pkcs11_private_key: PKCS11Key | None,
@@ -545,9 +566,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             private_key=private_key_pem,
             pkcs11_private_key=pkcs11_private_key
         )
-        PrimaryCredentialCertificate.objects.create(
-            certificate=certificate, credential=credential_model, is_primary=True
-        )
+        if certificate is not None:
+            PrimaryCredentialCertificate.objects.create(
+                certificate=certificate, credential=credential_model, is_primary=True
+            )
         return credential_model
 
     @staticmethod
@@ -555,13 +577,16 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         credential_model: CredentialModel, additional_certificates: list[x509.Certificate]
     ) -> None:
         """Saves additional certificates in the certificate chain."""
+        if credential_model.certificate is None:
+            return
+        primary_cert = credential_model.certificate_or_error
         for order, certificate in enumerate(additional_certificates):
             certificate_model = CertificateModel.save_certificate(certificate)
             CertificateChainOrderModel.objects.create(
                 certificate=certificate_model,
                 credential=credential_model,
                 order=order,
-                primary_certificate=credential_model.certificate
+                primary_certificate=primary_cert
             )
 
     @classmethod
@@ -583,13 +608,15 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             certificate=certificate_model, credential=credential_model, is_primary=True
         )
 
+        primary_cert = credential_model.certificate_or_error
+
         for order, certificate_in_chain in enumerate(certificate_chain):
             certificate_model = CertificateModel.save_certificate(certificate_in_chain)
             CertificateChainOrderModel.objects.create(
                 certificate=certificate_model,
                 credential=credential_model,
                 order=order,
-                primary_certificate=credential_model.certificate
+                primary_certificate=primary_cert
             )
 
         return credential_model
@@ -607,13 +634,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         certificate_model = CertificateModel.save_certificate(certificate)
         self.certificate = certificate_model
 
-        # Consider adding private key update logic here if needed
-
         _, _ = PrimaryCredentialCertificate.objects.get_or_create(
             certificate=certificate_model, credential=self, is_primary=True
         )
 
-        # Store the complete chain for each new primary certificate
+        certificate_chain.reverse()
         for order, certificate_in_chain in enumerate(certificate_chain):
             certificate_model = CertificateModel.save_certificate(certificate_in_chain)
             _, _ = CertificateChainOrderModel.objects.get_or_create(
@@ -626,6 +651,11 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         """Deletes related models, only allow deletion if there are no more active certificates."""
         # only allow deletion if all certificates are either expired or revoked
         qs = self.certificates.all()
+        if self.certificate is None:
+            if qs.exists():
+                exc_msg = f'Cannot delete credential {self.pk} with certificates but no primary certificate.'
+                raise ValidationError(exc_msg)
+            return  # Nothing to check
         if self.certificate not in qs:
             exc_msg = f'Primary certificate not in certificate list of credential {self.pk}.'
             raise ValidationError(exc_msg)
@@ -730,7 +760,13 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
         Returns:
             CertificateSerializer: The credential certificate.
+
+        Raises:
+            ValueError: If the certificate is not set.
         """
+        if self.certificate is None:
+            msg = 'Certificate is not set for this credential'
+            raise ValueError(msg)
         return self.certificate.get_certificate_serializer()
 
     def get_certificate_chain_serializer(self) -> CertificateCollectionSerializer:
@@ -765,6 +801,8 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         """Gets the root CA certificate serializer."""
         last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
         if last_certificate_in_chain is None:
+            if self.certificate is None:
+                return None
             return self.certificate.get_certificate_serializer()
         if last_certificate_in_chain.certificate.is_root_ca:
             return last_certificate_in_chain.certificate.get_certificate_serializer()
@@ -826,7 +864,7 @@ class PrimaryCredentialCertificate(models.Model):
     """
 
     credential = models.ForeignKey(CredentialModel, on_delete=models.CASCADE)
-    certificate = models.OneToOneField(CertificateModel, on_delete=models.CASCADE)
+    certificate = models.ForeignKey(CertificateModel, on_delete=models.CASCADE)
     is_primary = models.BooleanField(default=False)
 
     def __repr__(self) -> str:
@@ -963,11 +1001,27 @@ class IDevIDReferenceModel(models.Model):
     """Model to store the string referencing an IDevID certificate.
 
     Obtained from the SAN of the DevOwnerID certificate.
+
+    The ``idevid_ref`` field holds the raw ``dev-owner:`` URI embedded in the DevOwnerID SAN.
+    ``dev_owner_id_certificate`` points to the :class:`~pki.models.certificate.CertificateModel`
+    of the DevOwnerID certificate whose SAN contained this reference, so the details view can
+    display the DevOwnerID certificate information without a fragile fingerprint-string lookup.
     """
     dev_owner_id = models.ForeignKey(
         'OwnerCredentialModel', related_name='idevid_ref_set', on_delete=models.CASCADE
     )
     idevid_ref = models.CharField(max_length=255, verbose_name=_('IDevID Identifier'))
+    dev_owner_id_certificate = models.ForeignKey(
+        CertificateModel,
+        verbose_name=_('DevOwnerID Certificate'),
+        on_delete=models.SET_NULL,
+        related_name='idevid_refs',
+        null=True,
+        blank=True,
+        help_text=_(
+            'The DevOwnerID certificate whose SAN contained this IDevID reference.'
+        ),
+    )
 
     def __str__(self) -> str:
         """Returns a human-readable string that represents this IDevIDRefSanModel entry."""
@@ -975,25 +1029,36 @@ class IDevIDReferenceModel(models.Model):
 
     @property
     def idevid_subject_serial_number(self) -> str:
-        """Returns the IDevID Subject Serial Number from the SAN of the DevOwnerID certificate."""
+        """Returns the IDevID Subject Serial Number from the SAN of the DevOwnerID certificate.
+
+        The stored ``idevid_ref`` format is ``dev-owner:<subj_sn>.<x509_sn>.<sha256_fingerprint>``.
+        This property strips the ``dev-owner:`` scheme prefix and returns the first segment.
+        """
         try:
-            return self.idevid_ref.split('.')[0]
+            # Remove 'dev-owner:' prefix before splitting
+            return self.idevid_ref.removeprefix('dev-owner:').split('.')[0]
         except IndexError:
             return ''
 
     @property
     def idevid_x509_serial_number(self) -> str:
-        """Returns the IDevID X.509 Serial Number from the SAN of the DevOwnerID certificate."""
+        """Returns the IDevID X.509 Serial Number from the SAN of the DevOwnerID certificate.
+
+        Second dot-separated segment after stripping the ``dev-owner:`` prefix.
+        """
         try:
-            return self.idevid_ref.split('.')[2]
+            return self.idevid_ref.removeprefix('dev-owner:').split('.')[1]
         except IndexError:
             return ''
 
     @property
     def idevid_sha256_fingerprint(self) -> str:
-        """Returns the IDevID SHA256 Fingerprint from the SAN of the DevOwnerID certificate."""
+        """Returns the IDevID SHA256 Fingerprint from the SAN of the DevOwnerID certificate.
+
+        Third dot-separated segment after stripping the ``dev-owner:`` prefix.
+        """
         try:
-            return self.idevid_ref.split('.')[3]
+            return self.idevid_ref.removeprefix('dev-owner:').split('.')[2]
         except IndexError:
             return ''
 
@@ -1002,46 +1067,198 @@ class IDevIDReferenceModel(models.Model):
 class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
     """Device owner credential model.
 
-    This model is a wrapper to store a DevOwnerID Credential for use by devices to trust the Trustpoint.
+    This model is a wrapper to manage a DevOwnerID for use by devices to trust the Trustpoint.
+
+    The actual DevOwnerID certificate is stored as an ``IssuedCredentialModel`` with
+    ``issued_credential_type=DEV_OWNER_ID`` pointing back to this model.
+
+    Supports two acquisition modes:
+    - File upload / Manual: a ``NoOnboardingConfigModel`` with ``MANUAL`` protocol is created.
+    - Remote CA enrollment: ``no_onboarding_config`` (EST username/password) or
+      ``onboarding_config`` (EST IDevID) is set together with the remote_* fields.
     """
+
+    class OwnerCredentialTypeChoice(models.IntegerChoices):
+        """How the DevOwnerID certificate is acquired.
+
+        - ``LOCAL``: uploaded as a file or generated locally (no remote CA).
+        - ``REMOTE_EST``: enrolled from a remote CA via EST (RFC 7030) with username/password.
+        - ``REMOTE_CMP``: enrolled from a remote CA via CMP (RFC 4210 / 9483).
+        - ``REMOTE_EST_ONBOARDING``: enrolled from a remote CA via EST using IDevID onboarding.
+        """
+
+        LOCAL = 0, _('Local')
+        REMOTE_EST = 1, _('Remote EST')
+        REMOTE_CMP = 2, _('Remote CMP')
+        REMOTE_EST_ONBOARDING = 3, _('Remote EST (Onboarding)')
 
     unique_name = models.CharField(
         verbose_name=_('Unique Name'), max_length=100, validators=[UniqueNameValidator()], unique=True
     )
-    credential: models.OneToOneField[CredentialModel] = models.OneToOneField(
-        CredentialModel, related_name='dev_owner_ids', on_delete=models.PROTECT)
+
+    owner_credential_type = models.IntegerField(
+        verbose_name=_('Credential Type'),
+        choices=OwnerCredentialTypeChoice,
+        default=OwnerCredentialTypeChoice.LOCAL,
+        help_text=_('How the DevOwnerID certificate is acquired.')
+    )
+
+    remote_host = models.CharField(
+        verbose_name=_('Remote Host'),
+        max_length=253,
+        blank=True,
+        default='',
+        help_text=_('The hostname or IP address of the remote CA used to enroll this DevOwnerID.')
+    )
+
+    remote_port = models.PositiveIntegerField(
+        verbose_name=_('Remote Port'),
+        blank=True,
+        null=True,
+        help_text=_('The port number of the remote CA.')
+    )
+
+    remote_path = models.CharField(
+        verbose_name=_('Remote Path'),
+        max_length=255,
+        blank=True,
+        default='',
+        help_text=_('The path on the remote CA endpoint (DevOwnerID enrollment).')
+    )
+
+    remote_path_domain_credential = models.CharField(
+        verbose_name=_('Remote Path (Domain Credential)'),
+        max_length=255,
+        blank=True,
+        default='',
+        help_text=_(
+            'The EST path used to obtain the domain credential during onboarding '
+            '(e.g. /.well-known/est/simpleenroll). Only relevant for EST onboarding.'
+        )
+    )
+
+    est_username = models.CharField(
+        verbose_name=_('EST Username'),
+        max_length=128,
+        blank=True,
+        default='',
+        help_text=_('Username for EST authentication when enrolling from a remote CA.')
+    )
+
+    key_type = models.CharField(
+        verbose_name=_('Key Type'),
+        max_length=32,
+        blank=True,
+        default='ECC-SECP256R1',
+        help_text=_('Cryptographic key type used for all DevOwnerID key pairs (e.g. RSA-2048, ECC-SECP256R1).')
+    )
+
+    onboarding_config = models.ForeignKey(
+        'onboarding.OnboardingConfigModel',
+        related_name='owner_credentials',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name=_('Onboarding Config'),
+        help_text=_('Onboarding configuration used for remote CA enrollment.')
+    )
+
+    no_onboarding_config = models.ForeignKey(
+        'onboarding.NoOnboardingConfigModel',
+        related_name='owner_credentials',
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        verbose_name=_('No Onboarding Config'),
+        help_text=_('No-onboarding configuration (manual or EST username/password).')
+    )
 
     created_at = models.DateTimeField(verbose_name=_('Created'), auto_now_add=True)
 
-
     def __str__(self) -> str:
-        """Returns a human-readable string that represents this OwnerCredentialModel entry.
-
-        Returns:
-            str: Human-readable string that represents this OwnerCredentialModel entry.
-        """
+        """Returns a human-readable string that represents this OwnerCredentialModel entry."""
         return self.unique_name
 
     def __repr__(self) -> str:
         """Returns a string representation of the OwnerCredentialModel instance."""
         return f'OwnerCredentialModel(unique_name={self.unique_name})'
 
+    @property
+    def dev_owner_id_credentials(self) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Returns all DevOwnerID RemoteIssuedCredentialModel instances for this owner credential, newest first.
+
+        An OwnerCredentialModel may accumulate multiple DevOwnerID credentials over time,
+        e.g. after re-enrollment or renewal rounds.
+        """
+        return (
+            self.remote_issued_credentials
+            .filter(issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID)
+            .select_related('credential__certificate')
+            .order_by('-created_at')
+        )
+
+    @property
+    def dev_owner_id_credential(self) -> RemoteIssuedCredentialModel | None:
+        """Returns the most recently created DevOwnerID RemoteIssuedCredentialModel, or ``None``.
+
+        Use :attr:`dev_owner_id_credentials` when you need the full set of credentials.
+        """
+        return self.dev_owner_id_credentials.first()
+
+    @property
+    def domain_credentials(self) -> QuerySet[RemoteIssuedCredentialModel]:
+        """Returns all Domain Credential RemoteIssuedCredentialModel instances for this owner credential, newest first.
+
+        Domain credentials are obtained during onboarding before the DevOwnerID is enrolled.
+        """
+        return (
+            self.remote_issued_credentials
+            .filter(issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DOMAIN_CREDENTIAL)
+            .select_related('credential__certificate')
+            .order_by('-created_at')
+        )
+
+    @property
+    def domain_credential(self) -> RemoteIssuedCredentialModel | None:
+        """Returns the most recently created Domain Credential RemoteIssuedCredentialModel, or ``None``."""
+        return self.domain_credentials.first()
+
+    @property
+    def has_valid_domain_credential(self) -> bool:
+        """Returns True if there is at least one valid domain credential."""
+        latest = self.domain_credential
+        if latest is None:
+            return False
+        cert = latest.credential.certificate
+        if cert is None:
+            return False
+        from pki.models.certificate import CertificateModel as CertModel  # noqa: PLC0415
+        return cert.certificate_status == CertModel.CertificateStatus.OK
+
     @classmethod
     def create_new_owner_credential(
         cls,
         unique_name: str,
         credential_serializer: CredentialSerializer,
+        no_onboarding_config: Any | None = None,
     ) -> OwnerCredentialModel:
-        """Creates a new owner credential model and returns it.
+        """Creates a new OwnerCredentialModel with the DevOwnerID stored as RemoteIssuedCredentialModel.
+
+        The DevOwnerID certificate (with optional chain and private key) is stored in a
+        ``CredentialModel`` and wrapped in a ``RemoteIssuedCredentialModel`` of type ``DEV_OWNER_ID``.
+        If no ``no_onboarding_config`` is provided a new ``NoOnboardingConfigModel`` with
+        protocol ``MANUAL`` is created automatically.
 
         Args:
-            unique_name: The unique name that will be used to identify the Owner Credential.
-            credential_serializer:
-                The credential as CredentialSerializer instance.
+            unique_name: Unique human-readable name for this owner credential.
+            credential_serializer: The DevOwnerID credential (cert + optional key + chain).
+            no_onboarding_config: Optional pre-created ``NoOnboardingConfigModel`` to attach.
 
         Returns:
-            OwnerCredentialModel: The newly created owner credential model.
+            OwnerCredentialModel: The newly created instance.
         """
+        from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol  # noqa: PLC0415
+
         # Extract the IDevID references from the SAN of the DevOwnerID certificate
         # Reference URI format: 'dev-owner:<IDevID_Subj_SN>.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>'
         idevid_refs: set[str] = set()
@@ -1056,37 +1273,62 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(err_msg) from e
 
         for san in san_extension.value:
-            if isinstance(san, x509.UniformResourceIdentifier):
-                san_uri_str = san.value
-                if san_uri_str.startswith('dev-owner:'):
-                    idevid_refs.add(san_uri_str)
+            if isinstance(san, x509.UniformResourceIdentifier) and san.value.startswith('dev-owner:'):
+                idevid_refs.add(san.value)
         if not idevid_refs:
             raise ValidationError(_(
                 'The provided certificate is not a valid DevOwnerID; '
                 'it does not contain a valid IDevID reference in the SAN.'
             ))
 
-        credential_type = CredentialModel.CredentialTypeChoice.DEV_OWNER_ID
+        # Derive common_name from the certificate subject CN (or fall back to unique_name)
+        from util.field import get_certificate_name  # noqa: PLC0415
+        common_name = get_certificate_name(owner_cert) or unique_name
 
-        credential_model = CredentialModel.save_credential_serializer(
-            credential_serializer=credential_serializer, credential_type=credential_type
-        )
+        # Create a MANUAL NoOnboardingConfig if none is given
+        if no_onboarding_config is None:
+            no_onboarding_config = NoOnboardingConfigModel(
+                pki_protocols=NoOnboardingPkiProtocol.MANUAL,
+            )
+            no_onboarding_config.save()
 
         owner_credential = cls(
             unique_name=unique_name,
-            credential=credential_model,
+            no_onboarding_config=no_onboarding_config,
+            owner_credential_type=cls.OwnerCredentialTypeChoice.LOCAL,
         )
         owner_credential.save()
+
+        # Store the DevOwnerID as a RemoteIssuedCredentialModel
+        credential_model = CredentialModel.save_credential_serializer(
+            credential_serializer=credential_serializer,
+            credential_type=CredentialModel.CredentialTypeChoice.DEV_OWNER_ID,
+        )
+        RemoteIssuedCredentialModel.objects.create(
+            common_name=common_name,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID,
+            issued_using_cert_profile='dev_owner_id',
+            credential=credential_model,
+            owner_credential=owner_credential,
+        )
+
+        # credential_model.certificate is the DevOwnerID CertificateModel; link it on each
+        # IDevIDReferenceModel so the details view can show certificate info without a
+        # fragile fingerprint-based lookup.
+        dev_owner_id_cert_model = credential_model.certificate
         for idevid_ref in idevid_refs:
             IDevIDReferenceModel.objects.create(
                 dev_owner_id=owner_credential,
-                idevid_ref=idevid_ref
+                idevid_ref=idevid_ref,
+                dev_owner_id_certificate=dev_owner_id_cert_model,
             )
 
         return owner_credential
 
     def post_delete(self) -> None:
-        """Deletes the credential of this owner credential after deleting it."""
-        self.logger.debug('Deleting credential of owner credential %s', self)
-        self.credential.delete()
+        """Deletes all remote issued credentials and the onboarding config on deletion."""
+        self.logger.debug('Deleting remote issued credentials of owner credential %s', self)
+        for issued in self.remote_issued_credentials.all():
+            issued.credential.delete()
+
 

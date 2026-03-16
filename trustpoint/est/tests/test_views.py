@@ -4,20 +4,14 @@ import base64
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.x509.oid import NameOID
-from django.http import HttpRequest
 from django.test import RequestFactory
 from pki.models.domain import DomainModel
-from request.request_context import RequestContext
+from request.request_context import EstCertificateRequestContext
 
 from est.views import (
     EstCACertsView,
     EstCsrAttrsView,
     EstRequestedDomainExtractorMixin,
-    EstSimpleEnrollmentDefaultView,
     EstSimpleEnrollmentMixin,
     EstSimpleEnrollmentView,
     EstSimpleReEnrollmentView,
@@ -156,21 +150,19 @@ def test_est_simple_enrollment_mixin_event():
 
 @patch('est.views.EstErrorMessageResponder')
 @patch('est.views.EstMessageResponder')
-@patch('est.views.CertificateIssueProcessor')
+@patch('est.views.OperationProcessor')
 @patch('est.views.WorkflowHandler')
-@patch('est.views.ProfileValidator')
 @patch('est.views.EstAuthorization')
 @patch('est.views.EstAuthentication')
 @patch('est.views.EstMessageParser')
 @patch('est.views.EstHttpRequestValidator')
-@patch('est.views.RequestContext')
+@patch('est.views.EstCertificateRequestContext')
 def test_process_enrollment_success(
     mock_request_context,
     mock_validator,
     mock_parser,
     mock_auth,
     mock_authz,
-    mock_profile_validator,
     mock_workflow,
     mock_processor,
     mock_responder,
@@ -178,12 +170,24 @@ def test_process_enrollment_success(
     request_factory,
 ):
     """Test successful enrollment processing."""
+    from django.http import HttpResponse
+    
     # Setup mocks
-    mock_ctx = Mock(spec=RequestContext)
+    mock_ctx = Mock(spec=EstCertificateRequestContext)
     mock_ctx.http_response_content = b'Certificate issued'
     mock_ctx.http_response_status = 200
     mock_ctx.http_response_content_type = 'application/pkcs7-mime'
     mock_request_context.return_value = mock_ctx
+    
+    # Configure parser mock to return the context
+    mock_parser.return_value.parse.return_value = mock_ctx
+    
+    # Mock to_http_response to return actual HttpResponse
+    mock_ctx.to_http_response.return_value = HttpResponse(
+        content=mock_ctx.http_response_content,
+        status=mock_ctx.http_response_status,
+        content_type=mock_ctx.http_response_content_type
+    )
     
     # Create view and request
     mixin = EstSimpleEnrollmentMixin()
@@ -203,16 +207,15 @@ def test_process_enrollment_success(
     mock_parser.return_value.parse.assert_called_once_with(mock_ctx)
     mock_auth.return_value.authenticate.assert_called_once_with(mock_ctx)
     mock_authz.return_value.authorize.assert_called_once_with(mock_ctx)
-    mock_profile_validator.validate.assert_called_once_with(mock_ctx)
     mock_workflow.return_value.handle.assert_called_once_with(mock_ctx)
     mock_processor.return_value.process_operation.assert_called_once_with(mock_ctx)
     mock_responder.build_response.assert_called_once_with(mock_ctx)
     mock_error_responder.build_response.assert_not_called()
 
 
-@patch('est.views.RequestContext')
+@patch('est.views.EstCertificateRequestContext')
 def test_process_enrollment_request_context_failure(mock_request_context, request_factory):
-    """Test enrollment processing when RequestContext initialization fails."""
+    """Test enrollment processing when EstCertificateRequestContext initialization fails."""
     mock_request_context.side_effect = Exception('Context creation failed')
     
     mixin = EstSimpleEnrollmentMixin()
@@ -225,21 +228,30 @@ def test_process_enrollment_request_context_failure(mock_request_context, reques
     response = mixin.process_enrollment(request, 'test_domain', 'tls_client')
     
     assert response.status_code == 500
-    assert b'Failed to set up request context' in response.content
+    assert b'Failed to set up EST request context' in response.content
 
 
 @patch('est.views.EstErrorMessageResponder')
 @patch('est.views.EstHttpRequestValidator')
-@patch('est.views.RequestContext')
+@patch('est.views.EstCertificateRequestContext')
 def test_process_enrollment_validation_failure(
     mock_request_context, mock_validator, mock_error_responder, request_factory
 ):
     """Test enrollment processing when validation fails."""
-    mock_ctx = Mock(spec=RequestContext)
+    from django.http import HttpResponse
+    
+    mock_ctx = Mock(spec=EstCertificateRequestContext)
     mock_ctx.http_response_content = b'Validation error'
     mock_ctx.http_response_status = 400
     mock_ctx.http_response_content_type = 'text/plain'
     mock_request_context.return_value = mock_ctx
+    
+    # Mock to_http_response to return actual HttpResponse
+    mock_ctx.to_http_response.return_value = HttpResponse(
+        content=mock_ctx.http_response_content,
+        status=mock_ctx.http_response_status,
+        content_type=mock_ctx.http_response_content_type
+    )
     
     mock_validator.return_value.validate.side_effect = Exception('Validation failed')
     
@@ -263,7 +275,7 @@ def test_process_enrollment_validation_failure(
 
 def test_est_simple_enrollment_view_csrf_exempt():
     """Test that EstSimpleEnrollmentView has CSRF exemption."""
-    view = EstSimpleEnrollmentView()
+    EstSimpleEnrollmentView()
     # Check that the view class has csrf_exempt decorator applied
     assert hasattr(EstSimpleEnrollmentView, 'dispatch')
 
@@ -281,70 +293,13 @@ def test_est_simple_enrollment_view_post(mock_process, request_factory):
         content_type='application/pkcs10'
     )
     
-    response = view(request, domain='test_domain', certtemplate='tls_client')
+    response = view(request, domain='test_domain', cert_profile='tls_client')
     
     assert response.status_code == 200
     mock_process.assert_called_once()
     call_args = mock_process.call_args
     assert call_args[0][1] == 'test_domain'
     assert call_args[0][2] == 'tls_client'
-
-
-# ============================================================================
-# Tests for EstSimpleEnrollmentDefaultView
-# ============================================================================
-
-
-def test_est_simple_enrollment_default_view_csrf_exempt():
-    """Test that EstSimpleEnrollmentDefaultView has CSRF exemption."""
-    view = EstSimpleEnrollmentDefaultView()
-    assert hasattr(EstSimpleEnrollmentDefaultView, 'dispatch')
-
-
-@patch('est.views.DomainModel.objects.get')
-@patch.object(EstSimpleEnrollmentMixin, 'process_enrollment')
-def test_est_simple_enrollment_default_view_post_success(mock_process, mock_get_domain, request_factory):
-    """Test POST request to EstSimpleEnrollmentDefaultView with existing default domain."""
-    mock_domain = Mock(spec=DomainModel)
-    mock_domain.unique_name = 'arburg'
-    mock_get_domain.return_value = mock_domain
-    
-    mock_response = LoggedHttpResponse('Success', status=200)
-    mock_process.return_value = mock_response
-    
-    view = EstSimpleEnrollmentDefaultView.as_view()
-    request = request_factory.post(
-        '/est/simpleenroll',
-        data=b'CSR',
-        content_type='application/pkcs10'
-    )
-    
-    response = view(request)
-    
-    assert response.status_code == 200
-    mock_get_domain.assert_called_once_with(unique_name='arburg')
-    mock_process.assert_called_once()
-    call_args = mock_process.call_args
-    assert call_args[0][1] == 'arburg'
-    assert call_args[0][2] == 'tls_client'
-
-
-@patch('est.views.DomainModel.objects.get')
-def test_est_simple_enrollment_default_view_post_domain_not_exist(mock_get_domain, request_factory):
-    """Test POST request to EstSimpleEnrollmentDefaultView when default domain doesn't exist."""
-    mock_get_domain.side_effect = DomainModel.DoesNotExist
-    
-    view = EstSimpleEnrollmentDefaultView.as_view()
-    request = request_factory.post(
-        '/est/simpleenroll',
-        data=b'CSR',
-        content_type='application/pkcs10'
-    )
-    
-    response = view(request)
-    
-    assert response.status_code == 404
-    assert b'Default domain "arburg" does not exist' in response.content
 
 
 # ============================================================================
@@ -360,27 +315,25 @@ def test_est_simple_reenrollment_view_event():
 
 def test_est_simple_reenrollment_view_csrf_exempt():
     """Test that EstSimpleReEnrollmentView has CSRF exemption."""
-    view = EstSimpleReEnrollmentView()
+    EstSimpleReEnrollmentView()
     assert hasattr(EstSimpleReEnrollmentView, 'dispatch')
 
 
 @patch('est.views.EstErrorMessageResponder')
 @patch('est.views.EstMessageResponder')
-@patch('est.views.CertificateIssueProcessor')
+@patch('est.views.OperationProcessor')
 @patch('est.views.WorkflowHandler')
-@patch('est.views.ProfileValidator')
 @patch('est.views.EstAuthorization')
 @patch('est.views.EstAuthentication')
 @patch('est.views.EstMessageParser')
 @patch('est.views.EstHttpRequestValidator')
-@patch('est.views.RequestContext')
+@patch('est.views.EstCertificateRequestContext')
 def test_est_simple_reenrollment_view_post_success(
     mock_request_context,
     mock_validator,
     mock_parser,
     mock_auth,
     mock_authz,
-    mock_profile_validator,
     mock_workflow,
     mock_processor,
     mock_responder,
@@ -388,12 +341,24 @@ def test_est_simple_reenrollment_view_post_success(
     request_factory,
 ):
     """Test successful reenrollment via POST."""
+    from django.http import HttpResponse
+    
     # Setup mocks
-    mock_ctx = Mock(spec=RequestContext)
+    mock_ctx = MagicMock(spec=EstCertificateRequestContext)
     mock_ctx.http_response_content = b'Certificate renewed'
     mock_ctx.http_response_status = 200
     mock_ctx.http_response_content_type = 'application/pkcs7-mime'
     mock_request_context.return_value = mock_ctx
+    
+    # Configure parser mock to return the context
+    mock_parser.return_value.parse.return_value = mock_ctx
+    
+    # Mock to_http_response to return actual HttpResponse
+    mock_ctx.to_http_response.return_value = HttpResponse(
+        content=mock_ctx.http_response_content,
+        status=mock_ctx.http_response_status,
+        content_type=mock_ctx.http_response_content_type
+    )
     
     # Create view and request
     view = EstSimpleReEnrollmentView.as_view()
@@ -404,7 +369,7 @@ def test_est_simple_reenrollment_view_post_success(
     )
     
     # Execute
-    response = view(request, domain='test_domain', certtemplate='tls_client')
+    response = view(request, domain='test_domain', cert_profile='tls_client')
     
     # Verify
     assert response.status_code == 200
@@ -414,16 +379,15 @@ def test_est_simple_reenrollment_view_post_success(
     mock_auth.return_value.authenticate.assert_called_once_with(mock_ctx)
     mock_authz.return_value.authorize.assert_called_once()
     assert mock_authz.call_args[1]['allowed_operations'] == ['simplereenroll']
-    mock_profile_validator.validate.assert_called_once_with(mock_ctx)
     mock_workflow.return_value.handle.assert_called_once_with(mock_ctx)
     mock_processor.return_value.process_operation.assert_called_once_with(mock_ctx)
     mock_responder.build_response.assert_called_once_with(mock_ctx)
     mock_error_responder.build_response.assert_not_called()
 
 
-@patch('est.views.RequestContext')
+@patch('est.views.EstCertificateRequestContext')
 def test_est_simple_reenrollment_view_post_context_failure(mock_request_context, request_factory):
-    """Test reenrollment when RequestContext initialization fails."""
+    """Test reenrollment when EstCertificateRequestContext initialization fails."""
     mock_request_context.side_effect = Exception('Context creation failed')
     
     view = EstSimpleReEnrollmentView.as_view()
@@ -433,7 +397,7 @@ def test_est_simple_reenrollment_view_post_context_failure(mock_request_context,
         content_type='application/pkcs10'
     )
     
-    response = view(request, domain='test_domain', certtemplate='tls_client')
+    response = view(request, domain='test_domain', cert_profile='tls_client')
     
     assert response.status_code == 500
     assert b'Failed to set up request context' in response.content
@@ -442,16 +406,25 @@ def test_est_simple_reenrollment_view_post_context_failure(mock_request_context,
 @patch('est.views.EstErrorMessageResponder')
 @patch('est.views.EstAuthentication')
 @patch('est.views.EstHttpRequestValidator')
-@patch('est.views.RequestContext')
+@patch('est.views.EstCertificateRequestContext')
 def test_est_simple_reenrollment_view_post_authentication_failure(
     mock_request_context, mock_validator, mock_auth, mock_error_responder, request_factory
 ):
     """Test reenrollment when authentication fails."""
-    mock_ctx = Mock(spec=RequestContext)
+    from django.http import HttpResponse
+    
+    mock_ctx = Mock(spec=EstCertificateRequestContext)
     mock_ctx.http_response_content = b'Authentication error'
     mock_ctx.http_response_status = 401
     mock_ctx.http_response_content_type = 'text/plain'
     mock_request_context.return_value = mock_ctx
+    
+    # Mock to_http_response to return actual HttpResponse
+    mock_ctx.to_http_response.return_value = HttpResponse(
+        content=mock_ctx.http_response_content,
+        status=mock_ctx.http_response_status,
+        content_type=mock_ctx.http_response_content_type
+    )
     
     mock_auth.return_value.authenticate.side_effect = Exception('Auth failed')
     
@@ -462,7 +435,7 @@ def test_est_simple_reenrollment_view_post_authentication_failure(
         content_type='application/pkcs10'
     )
     
-    response = view(request, domain='test_domain', certtemplate='tls_client')
+    response = view(request, domain='test_domain', cert_profile='tls_client')
     
     assert response.status_code == 401
     mock_error_responder.build_response.assert_called_once_with(mock_ctx)
@@ -475,7 +448,7 @@ def test_est_simple_reenrollment_view_post_authentication_failure(
 
 def test_est_cacerts_view_csrf_exempt():
     """Test that EstCACertsView has CSRF exemption."""
-    view = EstCACertsView()
+    EstCACertsView()
     assert hasattr(EstCACertsView, 'dispatch')
 
 
@@ -624,7 +597,7 @@ def test_est_cacerts_view_get_headers_removed(request_factory, mock_domain):
             view = EstCACertsView.as_view()
             request = request_factory.get('/est/cacerts/test_domain')
             
-            response = view(request, domain='test_domain')
+            view(request, domain='test_domain')
             
             # Verify delete was called for both headers
             assert mock_response_instance.__delitem__.call_count >= 2
@@ -637,7 +610,7 @@ def test_est_cacerts_view_get_headers_removed(request_factory, mock_domain):
 
 def test_est_csrattrs_view_csrf_exempt():
     """Test that EstCsrAttrsView has CSRF exemption."""
-    view = EstCsrAttrsView()
+    EstCsrAttrsView()
     assert hasattr(EstCsrAttrsView, 'dispatch')
 
 

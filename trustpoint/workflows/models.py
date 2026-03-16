@@ -8,8 +8,8 @@ from typing import Any, ClassVar, cast
 from django.db import models
 
 from devices.models import DeviceModel
+from pki.models import CaModel
 from pki.models.domain import DomainModel
-from pki.models.issuing_ca import IssuingCaModel
 
 # ---------------------------------------------------------------------------
 # States
@@ -194,7 +194,7 @@ class DeviceRequest(models.Model):
         related_name='device_requests',
     )
     ca = models.ForeignKey(
-        IssuingCaModel,
+        CaModel,
         null=True,
         blank=True,
         on_delete=models.SET_NULL,

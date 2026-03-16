@@ -43,12 +43,12 @@ class TestUrls:
 
     def test_est_url_included(self):
         """Test that the 'est/' URL pattern is included and resolves correctly."""
-        url = reverse('est:ca-certs-post', kwargs={'domain': 'test-domain', 'certtemplate': 'template'})
+        url = reverse('est:ca-certs-post', kwargs={'domain': 'test-domain', 'cert_profile': 'template'})
         assert resolve(url).namespace == 'est'
 
     def test_cmp_url_included(self):
         """Test that the 'cmp/' URL pattern is included and resolves to the correct namespace."""
-        url = reverse('cmp:initialization', kwargs={'domain_name': 'test-domain'})
+        url = reverse('cmp:req_op', kwargs={'operation': 'initialization'})
         assert resolve(url).namespace == 'cmp'
 
     def test_jsi18n_url_resolves(self):

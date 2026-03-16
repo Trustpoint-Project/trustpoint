@@ -11,26 +11,27 @@ from cryptography.x509 import CertificateSigningRequest
 from django.db import transaction
 from django.db.models import Q
 
+from request.request_context import BaseCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 from workflows.models import DeviceRequest, EnrollmentRequest, State, WorkflowDefinition, WorkflowInstance
 from workflows.services.engine import advance_instance
 
 if TYPE_CHECKING:
-    from request.request_context import RequestContext
+    from request.request_context import BaseRequestContext
 
 
 class AbstractWorkflowHandler(ABC, LoggerMixin):
     """Abstract base class for workflow handler."""
 
     @abstractmethod
-    def handle(self, context: RequestContext) -> None:
+    def handle(self, context: BaseRequestContext) -> None:
         """Execute workflow logic."""
 
 
 class WorkflowHandler(ABC, LoggerMixin):
     """Abstract base class for workflow handler."""
 
-    def handle(self, context: RequestContext) -> None:
+    def handle(self, context: BaseRequestContext) -> None:
         """Execute workflow logic."""
         if not context.event:
             self.logger.error('No event found for the Workflow.')
@@ -48,7 +49,7 @@ class DeviceActionHandler(WorkflowHandler):
 
     def handle(
         self,
-        context: RequestContext,
+        context: BaseRequestContext,
         payload: dict[str, Any] | None = None,
         **_: Any,
     ) -> None:
@@ -169,9 +170,20 @@ class DeviceActionHandler(WorkflowHandler):
 class CertificateRequestHandler(WorkflowHandler):
     """Manages workflows triggered by certificate request events."""
 
-    def handle(  # noqa: C901, PLR0912, PLR0915
+    def _validate_context(self, context: BaseCertificateRequestContext) -> tuple[bool, str]:
+        """Validate the context for the worfklow request handler."""
+        if not context.domain:
+            return (False, 'No domain found')
+        if not context.device:
+            return (False, 'No device found')
+        if not context.parsed_message:
+            return (False, 'No CSR found')
+
+        return (True, '')
+
+    def handle(  # noqa: C901, PLR0912, PLR0915 - Core workflow orchestration requires multiple validation and conditional paths
         self,
-        context: RequestContext,
+        context: BaseRequestContext,
         payload: dict[str, Any] | None = None,
         **_: Any,
     ) -> None:
@@ -182,6 +194,10 @@ class CertificateRequestHandler(WorkflowHandler):
                 return int(v) if v is not None else None
             except (TypeError, ValueError):
                 return None
+
+        if not isinstance(context, BaseCertificateRequestContext):
+            msg = 'CertificateRequestHandler requires a BaseCertificateRequestContext.'
+            raise TypeError(msg)
 
         if not context.domain:
             raise ValueError

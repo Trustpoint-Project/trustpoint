@@ -41,6 +41,7 @@
                         </a>
                     </th>
                     <th>{% trans 'Config' %}</th>
+                    <th>{% trans 'Issuance' %}</th>
                 </tr>
             </thead>
             <tbody>
@@ -57,10 +58,11 @@
                         <td>{{ profile.updated_at }}</td>
                         <td>{% if profile.is_default == 1 %} ✔ {% else %} ✘ {% endif %}</td>
                         <td><a href="config/{{ profile.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Edit' %}</a></td>
+                        <td><a href="issuance/{{ profile.id }}/" class="btn btn-secondary tp-table-btn w-100">{% trans 'Issue' %}</a></td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="8" class="middle">{% trans 'No Certificate Profile has been added yet.' %}</td>
+                        <td colspan="9" class="middle">{% trans 'No Certificate Profile has been added yet.' %}</td>
                     </tr>
                 {% endfor %}
             </tbody>

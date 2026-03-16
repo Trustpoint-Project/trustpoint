@@ -4,7 +4,6 @@ import subprocess
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import pytest
 from django.test import TestCase
 
 from setup_wizard.views import (

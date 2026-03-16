@@ -3,10 +3,19 @@
 from django.contrib import admin
 from django.http import HttpRequest
 
+from pki.models.issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
+
+from .models import CaModel
 from .models.certificate import CertificateModel
 from .models.credential import CertificateChainOrderModel, CredentialModel
 from .models.devid_registration import DevIdRegistration
-from .models.issuing_ca import IssuingCaModel
+
+
+class IssuedCredentialModelAdmin(admin.ModelAdmin[IssuedCredentialModel]):
+    """Registers the IssuedCredentialModelAdmin with Django Admin."""
+
+class RemoteIssuedCredentialModelAdmin(admin.ModelAdmin[RemoteIssuedCredentialModel]):
+    """Registers the RemoteIssuedCredentialModelAdmin with Django Admin."""
 
 
 class DevIdRegistrationAdmin(admin.ModelAdmin[DevIdRegistration]):
@@ -29,12 +38,66 @@ class CertificateChainOrderModelAdmin(admin.ModelAdmin[CertificateChainOrderMode
     """Admin configuration for the CertificateChainOrderModel."""
 
 
-class IssuingCaModelAdmin(admin.ModelAdmin[IssuingCaModel]):
-    """Admin configuration for the IssuingCaModel."""
+class CaModelAdmin(admin.ModelAdmin[CaModel]):
+    """Admin configuration for the CaModel."""
+
+    fieldsets = (
+        (
+            'General',
+            {
+                'fields': (
+                    'unique_name',
+                    'is_active',
+                    'ca_type',
+                    'parent_ca',
+                )
+            }
+        ),
+        (
+            'Certificates and Credentials',
+            {
+                'fields': (
+                    'certificate',
+                    'credential',
+                    'chain_truststore',
+                )
+            }
+        ),
+        (
+            'Remote Configuration',
+            {
+                'fields': (
+                    'remote_host',
+                    'remote_port',
+                    'remote_path',
+                    'est_username',
+                    'onboarding_config',
+                    'no_onboarding_config',
+                ),
+                'classes': ('collapse',),
+            }
+        ),
+        (
+            'CRL Cycle Configuration',
+            {
+                'fields': (
+                    'crl_cycle_enabled',
+                    'crl_cycle_interval_hours',
+                    'last_crl_generation_started_at',
+                    'auto_crl_on_revocation_enabled',
+                ),
+                'description': 'Configure automatic periodic CRL generation',
+            }
+        ),
+    )
+
+    readonly_fields = ('last_crl_generation_started_at',)
 
 
 admin.site.register(CertificateModel, CertificateModelAdmin)
 admin.site.register(CredentialModel, CredentialModelAdmin)
 admin.site.register(CertificateChainOrderModel, CertificateChainOrderModelAdmin)
-admin.site.register(IssuingCaModel, IssuingCaModelAdmin)
+admin.site.register(CaModel, CaModelAdmin)
 admin.site.register(DevIdRegistration, DevIdRegistrationAdmin)
+admin.site.register(IssuedCredentialModel, IssuedCredentialModelAdmin)
+admin.site.register(RemoteIssuedCredentialModel, RemoteIssuedCredentialModelAdmin)

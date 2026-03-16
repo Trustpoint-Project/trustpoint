@@ -36,7 +36,7 @@ from django.views.generic import ListView
 from trustpoint_core.oid import AlgorithmIdentifier
 
 from devices.models import DeviceModel
-from pki.models import DomainModel, IssuingCaModel
+from pki.models import CaModel, DomainModel
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_DEVICES_SUBCATEGORY, PageContextMixin
 from util.email import MailTemplates
@@ -219,7 +219,7 @@ class CAListView(View):
         Returns:
             A JsonResponse with CA IDs and names.
         """
-        cas = IssuingCaModel.objects.filter(is_active=True)
+        cas = CaModel.objects.filter(is_active=True)
         data = [{'id': str(c.id), 'name': c.unique_name} for c in cas]
         return JsonResponse(data, safe=False)
 
@@ -287,7 +287,7 @@ class DefinitionDetailView(View):
         scopes_out: list[dict[str, str]] = []
         for sc in wf.scopes.all():
             if sc.ca_id:
-                ca = get_object_or_404(IssuingCaModel, pk=sc.ca_id)
+                ca = get_object_or_404(CaModel, pk=sc.ca_id)
                 scopes_out.append(
                     {
                         'type': 'CA',
@@ -868,6 +868,12 @@ class WorkflowInstanceDetailView(PageContextMixin, View):
         return None
 
     def _build_steps(self, inst: WorkflowInstance) -> tuple[list[dict[str, Any]], str | None, list[dict[str, Any]]]:
+        enr = inst.enrollment_request
+        ca = _resolve(CaModel, payload.get('ca_id'), enr.ca if enr and enr.ca_id else None)
+        dm = _resolve(DomainModel, payload.get('domain_id'), enr.domain if enr and enr.domain_id else None)
+        dv = _resolve(DeviceModel, payload.get('device_id'), enr.device if enr and enr.device_id else None)
+
+        # ---- Steps + step contexts -------------------------------------------
         steps_raw = inst.get_steps()
         step_contexts: dict[str, dict[str, Any]] = inst.step_contexts or {}
 

@@ -3,7 +3,7 @@
 from django.urls import path, re_path
 
 from help_pages import pki_help_views
-from pki.views import cert_profiles, certificates, domains, issuing_cas, owner_credentials, truststores
+from pki.views import ca, cert_profiles, certificates, crls, domains, issuing_cas, owner_credentials, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView
 
@@ -16,6 +16,9 @@ urlpatterns = [
         name='truststores',
     ),
     path('truststores/add/', truststores.TruststoreCreateView.as_view(), name='truststores-add'),
+    re_path(r'^truststores/add/(?P<pk>\d+)?/?$',
+            truststores.TruststoreCreateView.as_view(),
+            name='truststores-add-with-pk'),
     path('truststores/add/<int:pk>/', truststores.TruststoreCreateView.as_view(), name='truststores-add-with-pk'),
     re_path(
         r'^truststores/download/(?P<pk>[0-9]+)/?$',
@@ -42,7 +45,7 @@ urlpatterns = [
     ),
     path('truststores/details/<int:pk>/', truststores.TruststoreDetailView.as_view(), name='truststore-detail'),
     re_path(
-        r'^truststores/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        r'^truststores/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         truststores.TruststoreBulkDeleteConfirmView.as_view(),
         name='truststore-delete_confirm',
     ),
@@ -85,6 +88,30 @@ urlpatterns = [
         name='certificate-issuing-ca-download',
     ),
     path('certificates/details/<int:pk>/', certificates.CertificateDetailView.as_view(), name='certificate-detail'),
+    path('cas/', ca.CaTableView.as_view(), name='cas'),
+    re_path(
+        r'^cas/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
+        ca.CaBulkDeleteConfirmView.as_view(),
+        name='cas-delete_confirm',
+    ),
+    path('crls/', crls.CrlTableView.as_view(), name='crls'),
+    path('crls/import/', crls.CrlImportView.as_view(), name='crl-import'),
+    re_path(
+        r'^crls/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
+        crls.CrlBulkDeleteConfirmView.as_view(),
+        name='crls-delete_confirm',
+    ),
+    path('crls/details/<int:pk>/', crls.CrlDetailView.as_view(), name='crl-detail'),
+    re_path(
+        r'^crls/download/(?P<pk>[0-9]+)/?$',
+        crls.CrlDownloadView.as_view(),
+        name='crl-download',
+    ),
+    re_path(
+        r'^crls/download/(?P<file_format>[a-zA-Z0-9_]+)/(?P<pk>[0-9]+)/?$',
+        crls.CrlDownloadView.as_view(),
+        name='crl-file-download',
+    ),
     path('issuing-cas/', issuing_cas.IssuingCaTableView.as_view(), name='issuing_cas'),
     path(
         'issuing-cas/add/method-select/',
@@ -101,8 +128,54 @@ urlpatterns = [
         issuing_cas.IssuingCaAddFileImportSeparateFilesView.as_view(),
         name='issuing_cas-add-file_import-separate_files',
     ),
+    path(
+        'issuing-cas/add/request-est/',
+        issuing_cas.IssuingCaAddRequestEstView.as_view(),
+        name='issuing_cas-add-request-est',
+    ),
+    path(
+        'issuing-cas/add/request-cmp/',
+        issuing_cas.IssuingCaAddRequestCmpView.as_view(),
+        name='issuing_cas-add-request-cmp',
+    ),
+    path(
+        'issuing-cas/add/cmp-ra/',
+        issuing_cas.RemoteRaAddRequestCmpView.as_view(),
+        name='issuing_cas-add-cmp-ra',
+    ),
+    path(
+        'issuing-cas/add/est-ra/',
+        issuing_cas.RemoteRaAddRequestEstView.as_view(),
+        name='issuing_cas-add-est-ra',
+    ),
+    path(
+        'issuing-cas/truststore-association/<int:pk>/',
+        issuing_cas.IssuingCaTruststoreAssociationView.as_view(),
+        name='issuing_cas-truststore-association',
+    ),
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
+    path(
+        'issuing-cas/define-cert-content-est/<int:pk>/',
+        issuing_cas.IssuingCaDefineCertContentEstView.as_view(),
+        name='issuing_cas-define-cert-content-est',
+    ),
+    path(
+        'issuing-cas/request-cert-est/<int:pk>/',
+        issuing_cas.IssuingCaRequestCertEstView.as_view(),
+        name='issuing_cas-request-cert-est',
+    ),
+    path(
+        'issuing-cas/define-cert-content-cmp/<int:pk>/',
+        issuing_cas.IssuingCaDefineCertContentCmpView.as_view(),
+        name='issuing_cas-define-cert-content-cmp',
+    ),
+    path(
+        'issuing-cas/request-cert-cmp/<int:pk>/',
+        issuing_cas.IssuingCaRequestCertCmpView.as_view(),
+        name='issuing_cas-request-cert-cmp',
+    ),
+    path('keyless-cas/config/<int:pk>/', issuing_cas.KeylessCaConfigView.as_view(), name='keyless_cas-config'),
     path('issuing-cas/crl-gen/<int:pk>/', issuing_cas.IssuingCaCrlGenerationView.as_view(), name='issuing_cas-crl-gen'),
     path(
         'issuing-cas/config/<int:pk>/help/crl-download/',
@@ -115,7 +188,7 @@ urlpatterns = [
         name='issuing_ca-issued_certificates',
     ),
     re_path(
-        r'^issuing-cas/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        r'^issuing-cas/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         issuing_cas.IssuingCaBulkDeleteConfirmView.as_view(),
         name='issuing_cas-delete_confirm',
     ),
@@ -139,7 +212,7 @@ urlpatterns = [
     ),
     path('domains/detail/<int:pk>/', domains.DomainDetailView.as_view(), name='domains-detail'),
     re_path(
-        r'^domains/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        r'^domains/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         domains.DomainCaBulkDeleteConfirmView.as_view(),
         name='domains-delete_confirm',
     ),
@@ -148,21 +221,29 @@ urlpatterns = [
         domains.IssuedCertificatesView.as_view(),
         name='domain-issued_certificates',
     ),
-    path(
-        'devid-registration/method_select/<int:pk>/',
+    re_path(
+        r'^devid-registration/method_select/(?P<pk>\d+)?/?$',
         DevIdMethodSelectView.as_view(),
         name='devid_registration-method_select',
     ),
-    path(
-        'devid-registration/create/<int:pk>/',
+
+    re_path(
+        r'devid-registration/create/(?P<pk>\d+)?/?$',
         DevIdRegistrationCreateView.as_view(),
         name='devid_registration_create',
     ),
+
     path(
         'devid-registration/create/<int:pk>/<int:truststore_id>/',
         DevIdRegistrationCreateView.as_view(),
         name='devid_registration_create-with_truststore_id',
     ),
+    path(
+        'truststores/add/from-device/',
+        truststores.TruststoreCreateView.as_view(),
+        name='truststores-add-from-device',
+    ),
+
     path(
         'devid-registration/delete/<int:pk>/', DevIdRegistrationDeleteView.as_view(), name='devid_registration_delete'
     ),
@@ -175,11 +256,66 @@ urlpatterns = [
     ),
     path(
         'owner-credentials/add/',
-        owner_credentials.OwnerCredentialAddView.as_view(),
+        owner_credentials.OwnerCredentialAddMethodSelectView.as_view(),
         name='owner_credentials-add',
     ),
+    path(
+        'owner-credentials/add/file-import/',
+        owner_credentials.OwnerCredentialFileImportView.as_view(),
+        name='owner_credentials-add-file_import',
+    ),
+    path(
+        'owner-credentials/add/est/',
+        owner_credentials.OwnerCredentialAddRequestEstMethodSelectView.as_view(),
+        name='owner_credentials-add-est',
+    ),
+    path(
+        'owner-credentials/add/est/no-onboarding/',
+        owner_credentials.OwnerCredentialAddRequestEstNoOnboardingView.as_view(),
+        name='owner_credentials-add-est-no-onboarding',
+    ),
+    path(
+        'owner-credentials/add/est/onboarding/',
+        owner_credentials.OwnerCredentialAddRequestEstOnboardingView.as_view(),
+        name='owner_credentials-add-est-onboarding',
+    ),
+    path(
+        'owner-credentials/truststore-association/<int:pk>/',
+        owner_credentials.OwnerCredentialTruststoreAssociationView.as_view(),
+        name='owner_credentials-truststore-association',
+    ),
+    path(
+        'owner-credentials/clm/<int:pk>/',
+        owner_credentials.OwnerCredentialCLMView.as_view(),
+        name='owner_credentials-clm',
+    ),
+    path(
+        'owner-credentials/define-cert-content-est/<int:pk>/',
+        owner_credentials.OwnerCredentialDefineCertContentEstView.as_view(),
+        name='owner_credentials-define-cert-content-est',
+    ),
+    path(
+        'owner-credentials/request-cert-est/<int:pk>/',
+        owner_credentials.OwnerCredentialRequestCertEstView.as_view(),
+        name='owner_credentials-request-cert-est',
+    ),
+    path(
+        'owner-credentials/define-cert-content-domain-credential-est/<int:pk>/',
+        owner_credentials.OwnerCredentialDefineCertContentDomainCredentialEstView.as_view(),
+        name='owner_credentials-define-cert-content-domain-credential-est',
+    ),
+    path(
+        'owner-credentials/request-domain-credential-est/<int:pk>/',
+        owner_credentials.OwnerCredentialRequestDomainCredentialEstView.as_view(),
+        name='owner_credentials-request-domain-credential-est',
+    ),
+    path(
+        'owner-credentials/<int:owner_pk>/issued-credential/<int:pk>/delete/',
+        owner_credentials.IssuedCredentialDeleteView.as_view(),
+        name='owner_credentials-issued-credential-delete',
+    ),
     re_path(
-        r'^owner-credentials/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        r'^owner-credentials/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         owner_credentials.OwnerCredentialBulkDeleteConfirmView.as_view(),
         name='owner_credentials-delete_confirm',
     ),
@@ -191,12 +327,17 @@ urlpatterns = [
         name='cert_profiles-details',
     ),
     path(
+        'cert-profiles/issuance/<int:pk>/',
+        cert_profiles.CertProfileIssuanceView.as_view(),
+        name='cert_profiles-issuance',
+    ),
+    path(
         'cert-profiles/add/',
         cert_profiles.CertProfileConfigView.as_view(),
         name='cert_profiles-add',
     ),
     re_path(
-        r'^cert-profiles/delete/(?P<pks>([0-9]+/)+[0-9]*)/?$',
+        r'^cert-profiles/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
         cert_profiles.CertProfileBulkDeleteConfirmView.as_view(),
         name='cert_profiles-delete_confirm',
     ),

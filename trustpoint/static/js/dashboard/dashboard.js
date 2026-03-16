@@ -130,6 +130,8 @@ function createHorizontalBarChart(
   // The plugin then handles the "No Data" display.
   const chartDisplayItems = allItems.slice(0, 5);
 
+  const hasData = chartDisplayItems.length > 0;
+
   const palette = [
     '#0B5ED7', '#86B7FE', '#A6C8FF',
     '#CFE2FF', '#6C757D', '#ADB5BD', '#E9ECEF'
@@ -219,11 +221,13 @@ function createHorizontalBarChart(
       indexAxis: 'y',
       scales: {
         x: {
+          display: hasData,
           beginAtZero: true,
           grid: { color: 'rgba(0,0,0,0.06)' },
           ticks: { precision: 0 }
         },
         y: {
+          display: hasData,
           grid: { display: false }
         }
       },
@@ -232,7 +236,6 @@ function createHorizontalBarChart(
 
         // 👇 Here you configure the No-Data plugin
         noDataImagePlugin: {
-          imageSrc: 'trustpoint/static/img/tp-logo-128.png',
           text: 'No Data'
         }
       }
@@ -248,7 +251,7 @@ const noDataImagePlugin = {
   afterDraw(chart, args, pluginOptions) {
     const opts = pluginOptions || {};
     const imageSrc = opts.imageSrc;
-    const text = opts.text || 'No Data';
+    const text = opts.text ?? 'No Data';
 
     // Check if there is any meaningful data
     const hasData =
@@ -307,9 +310,11 @@ const noDataImagePlugin = {
     if (opts._img && opts._imgLoaded) {
       const img = opts._img;
 
-      const maxImgWidth = width * 0.6;
-      const imgWidth = Math.min(img.width, maxImgWidth);
-      const imgHeight = (imgWidth / img.width) * img.height;
+      // Constrain to 50% of container dimensions to ensure it fits
+      const scale = Math.min((width * 0.5) / img.width, (height * 0.5) / img.height);
+
+      const imgWidth = img.width * scale;
+      const imgHeight = img.height * scale;
 
       const x = left + (width - imgWidth) / 2;
       const y = top + (height - imgHeight) / 2 - 10;
@@ -334,7 +339,12 @@ const noDataImagePlugin = {
 }
 
 function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
-  const colors = ['#0B5ED7', '#86B7FE', '#E9ECEF'];
+  const colorMap = {
+    active: '#0B5ED7',      // Blue
+    pending: '#CFE2FF',     // Light Blue
+    expiring: '#DC3545',    // Red
+    expired: '#E9ECEF'      // Gray
+  };
   const showLegend = true;
   const {
     centerText = 'Certificates',
@@ -342,11 +352,32 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
   } = options;
 
 
-  const { active, expiring, expired, total } = data;
+  const { active, pending, expiring, expired, total } = data;
+  const hasData = total > 0;
+  
+  const hasPending = pending > 0;
+  const chartDataArray = hasPending 
+    ? [active, pending, expiring, expired]
+    : [active, expiring, expired];
+  
+  const dataKeys = hasPending 
+    ? ['active', 'pending', 'expiring', 'expired']
+    : ['active', 'expiring', 'expired'];
+  const chartColors = dataKeys.map(key => {
+    // Use light pink gradient for expiring instead of blue
+    if (key === 'expiring') {
+      return '#FFE8E8'; // Light pink for expiring
+    }
+    return colorMap[key];
+  });
+  
+  // Create border colors - light pink for expiring, transparent for others
+  const borderColors = dataKeys.map(key => key === 'expiring' ? '#FFB3B3' : 'transparent');
   
   const centerTextPlugin = {
     id: `centerText${chartInstanceName}`,
     afterDraw(chart) {
+      if (!hasData) return;
       const meta = chart.getDatasetMeta(0);
       if (!meta?.data?.length) return;
       const { ctx } = chart;
@@ -369,35 +400,6 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
     }
   };
 
-  const noDataPlugin = {
-    id:'noDataPlugin',
-    afterDraw: (chart) => {
-      if (chart.data.datasets.length > 0) return;
-      const ctx = chart.ctx;
-      const width = chart.width;
-      const height = chart.height;
-
-      chart.clear();
-
-      ctx.save();
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
-      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bs-body-color') || '#000';
-      ctx.fillText('No data available', width / 2, height / 2 - 30);
-
-      const img = new Image();
-      img.onload = function(){
-        const imgSize = 80;
-        const x = width/2-imgSize/2;
-        const y = height/2+10;
-        ctx.drawImage(img, x, y, imgSize, imgSize);
-      };
-      img.src = '../../static/img/tp-logo-128.png';
-      ctx.restore();
-    }
-  };
-
   // Destroy old chart
   const chartInstanceKey = `_${chartInstanceName}Chart`;
   if (window[chartInstanceKey]) {
@@ -415,9 +417,10 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
     data: {
       labels: labels,
       datasets: [{
-        data: [active, expiring, expired],
-        backgroundColor: colors,
-        borderColor: 'transparent',
+        data: chartDataArray,
+        backgroundColor: chartColors,
+        borderColor: borderColors,
+        borderWidth: 2,
         borderRadius: 5,
         spacing: 3
       }]
@@ -428,7 +431,7 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
       cutout: '72%',
       plugins: {
         legend: {
-          display: showLegend,
+          display: showLegend && hasData,
           position: 'bottom',
           align: 'start',
           labels: {
@@ -441,6 +444,9 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
             font: { size: 12 }
           }
         },
+        noDataImagePlugin: {
+          text: 'No Data'
+        },
         tooltip: {
           callbacks: {
             label: (context) => {
@@ -452,10 +458,138 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
         }
       }
     },
-    plugins: [centerTextPlugin, noDataPlugin]
+    plugins: [centerTextPlugin, noDataImagePlugin]
   });
 
   return window[chartInstanceKey];
 }
 
 document.addEventListener("DOMContentLoaded", loadDashboardData)
+
+function initializeBarChart(identifier, dataset) {
+  const chartCanvasId = `chart_${identifier}`;
+  const legendContainerId = `legend_${identifier}`;
+
+  let chartInstance = null;
+  let chartLabels = [];
+  let chartValues = [];
+
+  function drawChart() {
+    if (chartInstance && typeof chartInstance.destroy === 'function') {
+      chartInstance.destroy();
+    }
+
+    const legendContainer = document.getElementById(legendContainerId);
+    if (legendContainer) {
+        legendContainer.innerHTML = '';
+    }
+
+    chartInstance = createHorizontalBarChart(
+      chartLabels,
+      chartValues,
+      chartCanvasId,
+      legendContainerId,
+      identifier
+    );
+  }
+
+  document.addEventListener('dashboardData', (event) => {
+    const total = event.detail.total || {};
+    let dataSource = total[dataset];
+    let items;
+
+    if (!dataSource) {
+      dataSource = [];
+    }
+
+    if (Array.isArray(dataSource)) {
+      items = dataSource.map(item => {
+        const labelKey = Object.keys(item).find(key => key.includes('name'));
+        const valueKey = Object.keys(item).find(key => key.includes('count'));
+        return {
+          label: labelKey ? item[labelKey] : 'Unknown',
+          value: valueKey ? item[valueKey] : 0
+        };
+      });
+    } else {
+      items = Object.entries(dataSource).map(([key, value]) => ({
+        label: key || 'unknown',
+        value: value || 0
+      }));
+    }
+
+    const sortedItems = items.sort((a, b) => b.value - a.value);
+    chartLabels = sortedItems.map(i => i.label);
+    chartValues = sortedItems.map(i => i.value);
+
+    drawChart();
+  });
+
+  const observer = new MutationObserver(() => drawChart());
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+}
+
+function initializeDonutChart(identifier, datasetName, chartTitle) {
+  const chartCanvasId = `chart_dount_${identifier}`;
+  
+  let chartInstance = null;
+  let chartData = null;
+  let chartOptions = null;
+
+  function drawChart() {
+    if (chartInstance && typeof chartInstance.destroy === 'function') {
+      chartInstance.destroy();
+    }
+    if (chartData) {
+      chartInstance = createDonutChart(chartData, chartCanvasId, identifier, chartOptions);
+    }
+  }
+
+  document.addEventListener("dashboardData", (event) => {
+    const today = event.detail.today || {};
+    const sourceData = today[datasetName] || {};
+
+    if (!Array.isArray(sourceData)) {
+      const isDeviceChart = chartTitle.toLowerCase().includes('device');
+      
+      chartData = {
+        active: sourceData.active || sourceData.Onboarded || 0,
+        pending: sourceData.pending || 0,
+        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0),
+        expired: sourceData.expired || 0,
+        total: sourceData.total || 0
+      };
+      
+      if (!isDeviceChart) {
+        chartData.pending = 0;
+        chartData.total = chartData.active + chartData.expiring + chartData.expired;
+      }
+      
+      const labelMap = isDeviceChart ? {
+        active: 'Active Devices',
+        pending: 'Pending Devices',
+        expiring: 'Expiring Devices',
+        expired: 'Expired Devices'
+      } : {
+        active: 'Active Certificates',
+        pending: 'Pending Certificates',
+        expiring: 'Expiring Certificates',
+        expired: 'Expired Certificates'
+      };
+      
+      const dataKeys = isDeviceChart 
+        ? ['active', 'pending', 'expiring', 'expired']
+        : ['active', 'expiring', 'expired'];
+      
+      chartOptions = {
+        centerText: chartTitle,
+        labels: dataKeys.map(key => labelMap[key])
+      };
+    }
+    
+    drawChart();
+  });
+
+  const observer = new MutationObserver(() => drawChart());
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+}

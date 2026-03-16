@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, help_support, key_storage, logging, settings, tls
+from .views import IndexView, backup, help_support, key_storage, logging, notifications, settings, tls
 
 app_name = 'management'
 urlpatterns = [
@@ -43,6 +43,11 @@ urlpatterns = [
         tls.TlsAddFileImportSeparateFilesView.as_view(),
         name='tls-add-file_import-separate_files',
     ),
+    re_path(
+        r'^tls/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
+        tls.TlsBulkDeleteConfirmView.as_view(),
+        name='tls-delete_confirm',
+    ),
     path('tls/activate/<int:pk>', tls.ActivateTlsServerView.as_view(), name='activate-tls'),
     path(
         'backups/',
@@ -63,5 +68,6 @@ urlpatterns = [
     path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
     path('help/', help_support.HelpView.as_view(), name='help'),
     path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
-
+    path('notifications/refresh/', notifications.RefreshNotificationsView.as_view(), name='refresh_notifications'),
+    path('notifications/<int:pk>/delete/', notifications.NotificationDeleteView.as_view(), name='notification_delete'),
 ]

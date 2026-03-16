@@ -10,6 +10,8 @@ jobs:
 
   generate-unit-test-results:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -29,13 +31,15 @@ jobs:
           trustpoint/ 
           
       - name: Upload unit test results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: unit-test-results
           path: reports/allure-results/unit
 
   generate-bdd-test-results:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -54,7 +58,7 @@ jobs:
           trustpoint/features/
 
       - name: Upload BDD results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: bdd-test-results
@@ -65,6 +69,8 @@ jobs:
       - generate-unit-test-results
       - generate-bdd-test-results
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6
@@ -78,13 +84,13 @@ jobs:
           path: gh-pages
 
       - name: Download unit-test-results
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: unit-test-results
           path: unit-test-results
 
       - name: Download bdd-test-results
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: bdd-test-results
           path: bdd-test-results

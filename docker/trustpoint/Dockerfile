@@ -1,5 +1,5 @@
-FROM python:3.12-slim-bookworm
-COPY --from=ghcr.io/astral-sh/uv:0.9.22 /uv /uvx /bin/
+FROM python:3.14-slim-trixie
+COPY --from=ghcr.io/astral-sh/uv:0.10.8 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -24,12 +24,22 @@ RUN apt-get update && \
         gettext \
         cron \
         locales \
-        postgresql-client \
         git \
         build-essential \
         cmake \
         libssl-dev \
         libseccomp-dev \
+        libpkcs11-proxy0 \
+        curl \
+        ca-certificates \
+        gnupg
+
+# Install postgres v18 client
+RUN curl -fSsL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] http://apt.postgresql.org/pub/repos/apt/ trixie-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+    apt-get update && \
+    apt-get install -y postgresql-client-18 && \
+    rm -rf /var/lib/apt/lists/*
         && update-ca-certificates \
         && rm -rf /var/lib/apt/lists/*
 
@@ -80,6 +90,11 @@ RUN uv pip install gunicorn[gevent]
 USER root
 
 
+
+RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
+             /var/www/html/trustpoint/trustpoint/collected_static && \
+    chown -R www-data:www-data /var/www/html/trustpoint/trustpoint/ && \
+    chmod -R 755 /var/www/html/trustpoint/trustpoint/
 
 # Sets DEBUG = False and DOCKER_CONTAINER = True in the Django settings
 RUN sed -i '/DEBUG = True/s/True/False/' trustpoint/trustpoint/settings.py && \

@@ -6,25 +6,22 @@ from unittest.mock import Mock, patch
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
-from pyasn1.codec.der import decoder, encoder
-from pyasn1_modules import rfc4210
 
 from devices.models import (
     DeviceModel,
-    IssuedCredentialModel,
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
     OnboardingConfigModel,
-    OnboardingPkiProtocol,
 )
 from pki.util.keys import KeyGenerator
 from request.authentication import (
     ClientCertificateAuthentication,
-    CmpSharedSecretAuthentication,
     IDevIDAuthentication,
-    UsernamePasswordAuthentication,
 )
-from request.request_context import RequestContext
+from pki.models import IssuedCredentialModel
+from request.authentication.cmp import CmpSharedSecretAuthentication
+from request.authentication.est import UsernamePasswordAuthentication
+from request.request_context import BaseRequestContext, EstBaseRequestContext, CmpBaseRequestContext, HttpBaseRequestContext
 
 
 @pytest.mark.django_db
@@ -48,7 +45,7 @@ class TestUsernamePasswordAuthenticationExtended:
         device.save()
         
         auth = UsernamePasswordAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.est_username = device.common_name
         context.est_password = 'anypassword'
         
@@ -71,7 +68,7 @@ class TestUsernamePasswordAuthenticationExtended:
         )
         
         auth = UsernamePasswordAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.est_username = device.common_name
         context.est_password = 'anypassword'
         
@@ -81,7 +78,7 @@ class TestUsernamePasswordAuthenticationExtended:
     def test_authenticate_exception_during_lookup(self) -> None:
         """Test authentication handles exceptions during device lookup."""
         auth = UsernamePasswordAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.est_username = 'test-user'
         context.est_password = 'test-pass'
         
@@ -100,7 +97,7 @@ class TestClientCertificateAuthenticationExtended:
     def test_authenticate_no_client_certificate(self) -> None:
         """Test authentication returns None when no client certificate provided."""
         auth = ClientCertificateAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=BaseRequestContext)
         context.client_certificate = None
         
         result = auth.authenticate(context)
@@ -112,7 +109,7 @@ class TestClientCertificateAuthenticationExtended:
         device_instance: dict[str, Any]
     ) -> None:
         """Test authentication fails when certificate is not found in database."""
-        device = device_instance['device']
+
         domain = device_instance['domain']
         
         # Create a certificate that's not in the database
@@ -138,7 +135,7 @@ class TestClientCertificateAuthenticationExtended:
         ).sign(private_key.as_crypto(), hashes.SHA256())
         
         auth = ClientCertificateAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=BaseRequestContext)
         context.client_certificate = cert
         
         with pytest.raises(ValueError, match="Client certificate not recognized"):
@@ -161,7 +158,7 @@ class TestClientCertificateAuthenticationExtended:
         cert = issued_cred.credential.get_certificate()
         
         auth = ClientCertificateAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=BaseRequestContext)
         context.client_certificate = cert
         
         # Mock the is_valid_domain_credential to return False
@@ -179,7 +176,7 @@ class TestCmpSharedSecretAuthentication:
     def test_authenticate_non_cmp_protocol(self) -> None:
         """Test authentication raises error when protocol is not CMP."""
         auth = CmpSharedSecretAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=CmpBaseRequestContext)
         context.protocol = 'est'  # Wrong protocol
         
         with pytest.raises(ValueError, match="CMP shared secret authentication requires CMP protocol"):
@@ -188,7 +185,7 @@ class TestCmpSharedSecretAuthentication:
     def test_authenticate_no_parsed_message(self) -> None:
         """Test authentication raises error when no parsed message."""
         auth = CmpSharedSecretAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=CmpBaseRequestContext)
         context.protocol = 'cmp'
         context.parsed_message = None
         
@@ -198,7 +195,7 @@ class TestCmpSharedSecretAuthentication:
     def test_authenticate_invalid_message_type(self) -> None:
         """Test authentication raises error with invalid message type."""
         auth = CmpSharedSecretAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=CmpBaseRequestContext)
         context.protocol = 'cmp'
         context.parsed_message = Mock()  # Not a PKIMessage
         context.parsed_message.__class__.__name__ = 'SomeOtherType'
@@ -214,7 +211,7 @@ class TestIDevIDAuthentication:
     def test_authenticate_no_raw_message(self) -> None:
         """Test authentication returns None when no raw_message."""
         auth = IDevIDAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=HttpBaseRequestContext)
         context.raw_message = None
         
         result = auth.authenticate(context)
@@ -230,13 +227,13 @@ class TestIDevIDAuthentication:
         domain = device_instance['domain']
         
         auth = IDevIDAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=HttpBaseRequestContext)
         context.raw_message = Mock()  # Non-None raw message
         context.domain = domain
         
         # Mock the IDevIDAuthenticator
-        with patch('request.authentication.IDevIDAuthenticator') as mock_authenticator_class:
-            mock_authenticator_class.authenticate_idevid.return_value = device
+        with patch('request.authentication.base.IDevIDAuthenticator.authenticate_idevid') as mock_auth_method:
+            mock_auth_method.return_value = device
             
             auth.authenticate(context)
             
@@ -250,14 +247,14 @@ class TestIDevIDAuthentication:
         domain = device_instance['domain']
         
         auth = IDevIDAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=HttpBaseRequestContext)
         context.raw_message = Mock()  # Non-None raw message
         context.domain = domain
         
         # Mock the IDevIDAuthenticator to raise error
-        with patch('request.authentication.IDevIDAuthenticator') as mock_authenticator_class:
+        with patch('request.authentication.base.IDevIDAuthenticator.authenticate_idevid') as mock_auth_method:
             from pki.util.idevid import IDevIDAuthenticationError
-            mock_authenticator_class.authenticate_idevid.side_effect = IDevIDAuthenticationError("Invalid IDevID")
+            mock_auth_method.side_effect = IDevIDAuthenticationError("Invalid IDevID")
             
             with pytest.raises(ValueError, match="Error validating the IDevID"):
                 auth.authenticate(context)
@@ -270,13 +267,13 @@ class TestIDevIDAuthentication:
         domain = device_instance['domain']
         
         auth = IDevIDAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=HttpBaseRequestContext)
         context.raw_message = Mock()  # Non-None raw message
         context.domain = domain
         
         # Mock the IDevIDAuthenticator to return None
-        with patch('request.authentication.IDevIDAuthenticator') as mock_authenticator_class:
-            mock_authenticator_class.authenticate_idevid.return_value = None
+        with patch('request.authentication.base.IDevIDAuthenticator.authenticate_idevid') as mock_auth_method:
+            mock_auth_method.return_value = None
             
             with pytest.raises(ValueError, match="IDevID authentication failed: No device associated"):
                 auth.authenticate(context)
@@ -292,13 +289,13 @@ class TestIDevIDAuthentication:
         device.save()
         
         auth = IDevIDAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=HttpBaseRequestContext)
         context.raw_message = Mock()  # Non-None raw message
         context.domain = None
         
         # Mock the IDevIDAuthenticator to return device without domain
-        with patch('request.authentication.IDevIDAuthenticator') as mock_authenticator_class:
-            mock_authenticator_class.authenticate_idevid.return_value = device
+        with patch('request.authentication.base.IDevIDAuthenticator.authenticate_idevid') as mock_auth_method:
+            mock_auth_method.return_value = device
             
             with pytest.raises(ValueError, match="IDevID authentication failed: Device domain is not set"):
                 auth.authenticate(context)
@@ -326,7 +323,7 @@ class TestCompositeAuthentication:
         
         # Try username/password authentication
         auth = UsernamePasswordAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.est_username = device.common_name
         context.est_password = 'test-password-123'
         
@@ -346,13 +343,13 @@ class TestCompositeAuthentication:
             # Update the existing config
             onboarding_config = device.onboarding_config
             # Only set password if protocol supports it
-            from devices.models import OnboardingProtocol
+            from onboarding.models import OnboardingProtocol
             if onboarding_config.onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
                 onboarding_config.est_password = 'onboarding-password-123'
                 onboarding_config.save()
                 
                 auth = UsernamePasswordAuthentication()
-                context = Mock(spec=RequestContext)
+                context = Mock(spec=EstBaseRequestContext)
                 context.est_username = device.common_name
                 context.est_password = 'onboarding-password-123'
                 
@@ -361,7 +358,7 @@ class TestCompositeAuthentication:
                 assert context.device == device
         else:
             # Create a new onboarding config with EST_USERNAME_PASSWORD
-            from devices.models import OnboardingProtocol
+            from onboarding.models import OnboardingProtocol
             onboarding_config = OnboardingConfigModel()
             onboarding_config.onboarding_protocol = OnboardingProtocol.EST_USERNAME_PASSWORD
             onboarding_config.est_password = 'onboarding-password-123'
@@ -371,7 +368,7 @@ class TestCompositeAuthentication:
             device.save()
             
             auth = UsernamePasswordAuthentication()
-            context = Mock(spec=RequestContext)
+            context = Mock(spec=EstBaseRequestContext)
             context.est_username = device.common_name
             context.est_password = 'onboarding-password-123'
             
@@ -408,7 +405,7 @@ class TestAuthenticationEdgeCases:
         device.save()
         
         auth = UsernamePasswordAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.est_username = 'device-special-@#$'
         context.est_password = 'p@ssw0rd!#$%^&*()'
         
@@ -433,7 +430,7 @@ class TestAuthenticationEdgeCases:
         device.save()
         
         auth = UsernamePasswordAuthentication()
-        context = Mock(spec=RequestContext)
+        context = Mock(spec=EstBaseRequestContext)
         context.est_username = device.common_name.upper()  # Wrong case
         context.est_password = 'test-password'
         

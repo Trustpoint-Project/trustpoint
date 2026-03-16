@@ -1,6 +1,5 @@
 """Tests for PKI domain views."""
 
-from typing import Any
 
 import pytest
 from django.contrib.messages import get_messages
@@ -9,10 +8,9 @@ from django.test import RequestFactory
 
 from pki.models import (
     DomainModel,
-    IssuingCaModel,
+    CaModel,
     DevIdRegistration,
     TruststoreModel,
-    CertificateModel,
     CertificateProfileModel,
 )
 from pki.views.domains import (
@@ -20,9 +18,7 @@ from pki.views.domains import (
     DomainCreateView,
     DomainConfigView,
     DomainDetailView,
-    DomainCaBulkDeleteConfirmView,
     DevIdRegistrationCreateView,
-    DevIdRegistrationDeleteView,
     DevIdMethodSelectView,
     IssuedCertificatesView,
     OnboardingMethodSelectIdevidHelpView,
@@ -97,9 +93,9 @@ class TestDomainCreateView:
         # Check that regular issuing CA is included
         ca_ids = [ca.id for ca in form.fields['issuing_ca'].queryset]
         assert issuing_ca.id in ca_ids
-        # Verify that queryset excludes IssuingCaTypeChoice.AUTOGEN_ROOT (type 0)
+        # Verify that queryset excludes CaTypeChoice.AUTOGEN_ROOT (type 0)
         for ca in form.fields['issuing_ca'].queryset:
-            assert ca.issuing_ca_type != IssuingCaModel.IssuingCaTypeChoice.AUTOGEN_ROOT
+            assert ca.ca_type != CaModel.CaTypeChoice.AUTOGEN_ROOT
 
     def test_create_view_removes_is_active_field(self, rf: RequestFactory, admin_user):
         """Test that is_active field is removed from the form."""
@@ -216,7 +212,7 @@ class TestDomainConfigView:
         
         messages = list(get_messages(response.wsgi_request))
         # Check if there's a warning about duplicate alias
-        warning_found = any('already in use' in str(msg) or 'unique' in str(msg).lower() for msg in messages)
+        any('already in use' in str(msg) or 'unique' in str(msg).lower() for msg in messages)
         # Note: The actual behavior might vary, so we just check the response is successful
         assert response.status_code == 200
 
@@ -502,7 +498,7 @@ class TestDevIdMethodSelectView:
         
         assert response.status_code == 302
         # The actual URL pattern is /pki/devid-registration/create/<pk>/
-        assert f'/pki/devid-registration/create/{domain.pk}/' in response.url
+        assert f'/pki/devid-registration/create/{domain.pk}' in response.url
 
 
 @pytest.mark.django_db

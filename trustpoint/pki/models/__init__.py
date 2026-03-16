@@ -18,7 +18,8 @@ from .extension import (
     SubjectAlternativeNameExtension,
 )
 from .certificate import CertificateModel, RevokedCertificateModel
-from .issuing_ca import IssuingCaModel
+from .crl import CrlModel
+from .ca import CaModel
 from .credential import (CredentialAlreadyExistsError,
                          CredentialModel,
                          CertificateChainOrderModel,
@@ -28,21 +29,25 @@ from .domain import DomainModel, DomainAllowedCertificateProfileModel
 from .devid_registration import DevIdRegistration
 from .cert_profile import CertificateProfileModel
 from .truststore import TruststoreModel, TruststoreOrderModel
+from .issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
 
 __all__ = [
     'AttributeTypeAndValue',
+    'CaModel',
     'CertificateExtension',
     'CertificateModel',
     'CertificateProfileModel',
     'CredentialAlreadyExistsError',
     'CredentialModel',
+    'CrlModel',
     'DevIdRegistration',
     'DomainAllowedCertificateProfileModel',
     'DomainModel',
     'GeneralNameIpAddress',
-    'IssuingCaModel',
+    'IssuedCredentialModel',
     'OwnerCredentialModel',
     'PKCS11Key',
+    'RemoteIssuedCredentialModel',
     'RevokedCertificateModel',
     'TruststoreModel',
     'TruststoreOrderModel',
