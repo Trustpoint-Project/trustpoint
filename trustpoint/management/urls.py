@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, help_support, key_storage, logging, notifications, settings, tls
+from .views import IndexView, backup, help_support, key_storage, logging, notifications, settings, tls, docs
 
 app_name = 'management'
 urlpatterns = [
@@ -67,6 +67,9 @@ urlpatterns = [
     ),
     path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
     path('help/', help_support.HelpView.as_view(), name='help'),
+    path('docs/build/trigger/', docs.BuildDocsTriggerView.as_view(), name='trigger_build_docs'),
+    path('docs/', docs.ServeLocalDocsView.as_view(), name='local_docs'),
+    path('docs/<path:path>', docs.ServeLocalDocsView.as_view(), name='local_docs_path'),
     path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
     path('notifications/refresh/', notifications.RefreshNotificationsView.as_view(), name='refresh_notifications'),
     path('notifications/<int:pk>/delete/', notifications.NotificationDeleteView.as_view(), name='notification_delete'),
