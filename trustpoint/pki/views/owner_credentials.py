@@ -140,7 +140,7 @@ OwnerCredentialAddView = OwnerCredentialFileImportView
 class OwnerCredentialAddRequestEstMethodSelectView(
     OwnerCredentialContextMixin, FormView[OwnerCredentialFileImportForm]
 ):
-    """View to select between onboarding and no-onboarding for EST-based DevOwnerID enrollment."""
+    """View to select between EST authentication methods: Basic Auth or mTLS Client Auth."""
 
     template_name = 'pki/owner_credentials/add/est_method_select.html'
     form_class = OwnerCredentialFileImportForm
@@ -151,7 +151,7 @@ class OwnerCredentialAddRequestEstMethodSelectView(
         return self.render_to_response(self.get_context_data())
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Redirect based on whether onboarding or no-onboarding is chosen."""
+        """Redirect based on the selected EST authentication method (Basic Auth or mTLS Client Auth)."""
         method = request.POST.get('method_select')
         if method == 'no_onboarding':
             return HttpResponseRedirect(reverse_lazy('pki:owner_credentials-add-est-no-onboarding'))
@@ -163,7 +163,7 @@ class OwnerCredentialAddRequestEstMethodSelectView(
 class OwnerCredentialAddRequestEstNoOnboardingView(
     OwnerCredentialContextMixin, FormView[OwnerCredentialAddRequestEstNoOnboardingForm]
 ):
-    """View to request a DevOwnerID via EST using username/password (no IDevID onboarding)."""
+    """View to request a DevOwnerID via EST using HTTP Basic Auth (username/password)."""
 
     template_name = 'pki/owner_credentials/add/est_request.html'
     form_class = OwnerCredentialAddRequestEstNoOnboardingForm
@@ -172,7 +172,7 @@ class OwnerCredentialAddRequestEstNoOnboardingView(
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add heading context."""
         context = super().get_context_data(**kwargs)
-        context['form_title'] = _('Request DevOwnerID via EST — No Onboarding (Username / Password)')
+        context['form_title'] = _('Request DevOwnerID via EST — Basic Auth (Username / Password)')
         context['back_url'] = reverse_lazy('pki:owner_credentials-add-est')
         return context
 
@@ -214,7 +214,7 @@ class OwnerCredentialAddRequestEstNoOnboardingView(
 class OwnerCredentialAddRequestEstOnboardingView(
     OwnerCredentialContextMixin, FormView[OwnerCredentialAddRequestEstOnboardingForm]
 ):
-    """View to request a DevOwnerID via EST using IDevID-based onboarding (mTLS client certificate)."""
+    """View to request a DevOwnerID via EST using mTLS Client Auth (two-step enrollment with domain credential)."""
 
     template_name = 'pki/owner_credentials/add/est_request.html'
     form_class = OwnerCredentialAddRequestEstOnboardingForm
@@ -223,15 +223,15 @@ class OwnerCredentialAddRequestEstOnboardingView(
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add heading context."""
         context = super().get_context_data(**kwargs)
-        context['form_title'] = _('Request DevOwnerID via EST — Onboarding (IDevID)')
+        context['form_title'] = _('Request DevOwnerID via EST — mTLS Client Auth')
         context['back_url'] = reverse_lazy('pki:owner_credentials-add-est')
         return context
 
     def form_valid(self, form: OwnerCredentialAddRequestEstOnboardingForm) -> HttpResponse:
-        """Save the OwnerCredentialModel with its EST onboarding configuration.
+        """Save the OwnerCredentialModel with its EST mTLS Client Auth configuration.
 
         Creates the ``OwnerCredentialModel`` with all remote-endpoint fields and redirects
-        to the truststore-association step, mirroring the no-onboarding workflow.
+        to the truststore-association step.
         """
         owner_credential = OwnerCredentialModel.objects.create(
             unique_name=form.cleaned_data['unique_name'],
@@ -856,10 +856,10 @@ class OwnerCredentialRequestCertEstView(
     ) -> dict[str, Any]:
         """Build keyword arguments for ``EstCertificateRequestContext``.
 
-        For ``REMOTE_EST`` (no onboarding) → username/password auth,
+        For ``REMOTE_EST`` (Basic Auth) → username/password auth,
         truststore from ``no_onboarding_config``.
 
-        For ``REMOTE_EST_ONBOARDING`` → mTLS with the domain credential,
+        For ``REMOTE_EST_ONBOARDING`` (mTLS Client Auth) → mTLS with the domain credential,
         truststore from ``onboarding_config``.
         """
         kwargs: dict[str, Any] = {
