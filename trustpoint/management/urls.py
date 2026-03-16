@@ -2,7 +2,7 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, help_support, key_storage, logging, notifications, settings, tls, docs
+from .views import IndexView, backup, docs, help_support, key_storage, logging, notifications, settings, tls
 
 app_name = 'management'
 urlpatterns = [
