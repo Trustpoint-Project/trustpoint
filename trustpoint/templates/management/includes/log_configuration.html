@@ -3,17 +3,10 @@
 <div class="card">
     <div class="card-header"><h5 class="mb-0">{% trans "Log Configuration" %}</h5></div>
     <div class="card-body pt-4 pb-4">
-        <form method="POST" action="{% url 'management:change-loglevel' %}" id="loglevel_configuration">
+        <form method="POST" action="{% url 'management:settings-logging' %}" id="loglevel_configuration">
             {% csrf_token %}
             <fieldset class="form-group tp-form-group">
-                <input name="next" type="hidden" value="{{ redirect_to }}">
-                <select name="loglevel" class="select form-select">
-                    {% for loglevel in loglevels %}
-                        <option value="{{ loglevel }}"{% if loglevel == current_loglevel %} selected{% endif %}>
-                            {{ loglevel }}
-                        </option>
-                    {% endfor %}
-                </select>
+                {{ form.loglevel }}
             </fieldset>
         </form>
     </div>
