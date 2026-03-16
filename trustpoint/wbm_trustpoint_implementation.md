@@ -15,26 +15,28 @@ The poll interval is configured **in Trustpoint** per `TrustpointAgent` and retu
 Agent                                  Trustpoint
   |                                        |
   |  [every poll_interval_seconds]         |
-  |── GET /api/agents/wbm/check-in/ ──────▶|  "Any work for me?"
+  |── GET /agents/agents/wbm/check-in/ ───▶|  "Any work for me?"
   |◀── 200 { poll_interval_seconds,        |  Trustpoint lists due targets:
-  |          jobs: [{ job_id, base_url,    |  job_id, base_url, key_spec,
-  |                  key_spec, subject,    |  subject (for CSR), workflow
+  |          jobs: [{ job_id,              |  job_id, key_spec, subject
+  |                  key_spec, subject,    |  (for CSR), workflow profile
   |                  workflow }] }         |  (no cert or key in this response)
   |                                        |
   |  [Agent generates key pair + CSR]      |
   |                                        |
-  |── POST /api/agents/wbm/submit-csr/ ───▶|  { job_id, csr_pem }
+  |── POST /agents/agents/wbm/submit-csr/ ▶|  { job_id, csr_pem }
   |◀── 200 { cert_pem, ca_bundle_pem } ────|  Trustpoint signs CSR, returns cert
   |                                        |
   |  [Playwright executes workflow]        |  (key stays on agent, never sent)
   |                                        |
-  |── POST /api/agents/wbm/push-result/ ──▶|  "job_id X: Succeeded / Failed"
-  |◀── 200 ────────────────────────────────|
+  |── POST /agents/agents/wbm/push-result/▶|  { job_id, status, detail }
+  |◀── 200 { status } ─────────────────────|
 ```
+
+> **URL routing:** `trustpoint/urls.py` mounts `agents/` → `agents/urls.py`, which mounts `agents/wbm/` → `agents/wbm/urls.py`. The full paths therefore contain a double `agents/agents/` segment: `/agents/agents/wbm/<endpoint>/`.
 
 Consequences:
 - **Private key never leaves the agent.** Trustpoint only ever sees the public key (via the CSR).
-- **`WbmJob` stores no private key** — `key_pem` field is eliminated.
+- **`AgentJob` stores no private key** — `key_pem` field does not exist.
 - **Trustpoint holds all scheduling logic** — renewal window, expiry threshold, operator "push now" trigger.
 - **Poll interval is server-side configurable** — changing `TrustpointAgent.poll_interval_seconds` takes effect on the next check-in.
 
@@ -49,14 +51,17 @@ trustpoint/agents/
 ├── __init__.py
 ├── apps.py
 ├── models.py              ← TrustpointAgent (generic) +
-│                             WbmWorkflowDefinition, WbmCertificateTarget, WbmJob
+│                             AgentWorkflowDefinition, AgentCertificateTarget, AgentJob
 │
 │  ── generic pipeline layer (capability-agnostic) ──────────────────────────
 ├── request_context.py     ← AgentRequestContext (extends RestBaseRequestContext)
 │                             holds only: agent, protocol="agent"
 ├── authentication.py      ← AgentAuthentication (fingerprint → TrustpointAgent)
 ├── authorization.py       ← AgentActiveAuthorization (is_active guard)
-├── views.py               ← AgentPipelineMixin (generic pipeline runner)
+├── views.py               ← AgentPipelineMixin (generic pipeline runner) +
+│                             AgentPipelineConfig (dataclass grouping components) +
+│                             AgentPipelineView (base Django view)
+├── web_views.py           ← UI views for workflow profiles and managed device targets
 │
 │  ── WBM sub-package ────────────────────────────────────────────────────────
 ├── wbm/
@@ -72,12 +77,14 @@ trustpoint/agents/
 │   │   └── push_result.py ← WbmPushResultProcessor
 │   ├── message_responder.py ← WbmCheckInResponder, WbmSubmitCsrResponder,
 │   │                          WbmPushResultResponder, WbmErrorResponder
-│   └── views.py           ← WbmCheckInView, WbmSubmitCsrView, WbmPushResultView
+│   ├── views.py           ← WbmPipelineMixin, WbmCheckInView, WbmSubmitCsrView,
+│   │                         WbmPushResultView
+│   └── urls.py            ← /agents/wbm/ routing
 │
-├── urls.py                ← /api/agents/ routing (includes wbm.urls)
+├── urls.py                ← /agents/ routing (includes wbm.urls, web UI routes)
 ├── admin.py               ← admin registrations for all models
 └── migrations/
-    └── 0001_initial.py
+    └── 0001_tp_v0_5_0_dev1.py
 ```
 
 ---
@@ -86,7 +93,7 @@ trustpoint/agents/
 
 ### 2.1 `TrustpointAgent`
 
-Generic identity record for any automation agent. Not WBM-specific.
+Generic identity record for any automation agent. Not WBM-specific. Linked to a `DeviceModel` (the agent's own device record) to tie the agent identity into the existing device/onboarding lifecycle.
 
 ```python
 # agents/models.py
@@ -96,314 +103,191 @@ class TrustpointAgent(models.Model):
 
     Acts as the identity anchor for all agent-executed job types.
     WBM certificate pushing is the first supported capability.
+
+    **1-to-1 agent** (``DeviceType.AGENT_ONE_TO_ONE``):
+    The associated ``DeviceModel`` represents the agent itself.  It is treated
+    like a standalone device — the domain credential *and* all other issued
+    certificates belong to that single device record.  Exactly one
+    ``TrustpointAgent`` may be linked to the device.
+
+    **1-to-n agent** (``DeviceType.AGENT_ONE_TO_N``):
+    The associated ``DeviceModel`` represents the agent process only and holds
+    *only* its domain credential (LDevID).  Every device managed by the agent
+    is a separate ``DeviceModel`` (type ``AGENT_MANAGED_DEVICE``) referenced via
+    ``AgentCertificateTarget.device``.  Application certificates are issued to
+    those managed-device records, not to the agent device itself.
     """
 
     class Capability(models.TextChoices):
-        """Known job types an agent may support. An agent may declare multiple."""
+        WBM_CERT_PUSH = 'wbm_cert_push', _('WBM Certificate Push')
 
-        WBM_CERT_PUSH = "wbm_cert_push", _("WBM Certificate Push")
-        # Future entries, e.g.:
-        # FIRMWARE_UPDATE = "firmware_update", _("Firmware Update")
-
-    name = models.CharField(
-        verbose_name=_("Name"),
-        max_length=120,
-        unique=True,
-        help_text=_("Human-readable name, e.g. 'Cell A Agent 1'."),
+    name = models.CharField(max_length=120, unique=True, ...)
+    agent_id = models.CharField(max_length=120, unique=True, ...)
+    device = models.ForeignKey(
+        'devices.DeviceModel',
+        on_delete=models.PROTECT,
+        related_name='agents',
+        null=True, blank=True,
+        # For 1-to-1: the device IS the agent.
+        # For 1-to-n: the agent-process device (holds only domain credential).
     )
-    agent_id = models.CharField(
-        verbose_name=_("Agent ID"),
-        max_length=120,
-        unique=True,
-        help_text=_(
-            "Stable identifier sent by the agent in every API request. "
-            "Must match AGENT_ID in the agent's runtime config."
-        ),
-    )
-    # SHA-256 fingerprint (hex, uppercase, no colons) of the mTLS client certificate
-    # issued to this agent by Trustpoint. Verified on every REST API request.
-    # Updated automatically when a new agent cert is issued via the registration flow.
-    certificate_fingerprint = models.CharField(
-        verbose_name=_("Certificate Fingerprint (SHA-256)"),
-        max_length=64,
-        unique=True,
-        help_text=_(
-            "SHA-256 fingerprint of the agent's mTLS client certificate. "
-            "Revoke the cert to decommission the agent at the TLS layer."
-        ),
-    )
-    # JSON array of Capability values, e.g. ["wbm_cert_push"].
-    # JSONField keeps us SQLite-compatible (ArrayField requires PostgreSQL).
-    capabilities = models.JSONField(
-        verbose_name=_("Capabilities"),
-        default=list,
-        help_text=_(
-            "List of job types this agent supports, e.g. [\"wbm_cert_push\"]. "
-            "Used for display and validation; does not restrict API access at runtime."
-        ),
-    )
-    cell_location = models.CharField(
-        verbose_name=_("Cell Location"),
-        max_length=200,
-        blank=True,
-        help_text=_("Free-text description of the production cell, e.g. 'Building 3 / Cell A'."),
-    )
-    is_active = models.BooleanField(
-        verbose_name=_("Active"),
-        default=True,
-        help_text=_("Inactive agents are rejected by the API even if their certificate is still valid."),
-    )
-    poll_interval_seconds = models.PositiveIntegerField(
-        verbose_name=_("Poll Interval (seconds)"),
-        default=300,
-        help_text=_(
-            "How often this agent should call the check-in endpoint. "
-            "Returned in every check-in response so the agent self-configures. "
-            "Lower values increase responsiveness; higher values reduce server load."
-        ),
-    )
-    last_seen_at = models.DateTimeField(
-        verbose_name=_("Last Seen"),
-        null=True,
-        blank=True,
-        help_text=_("Updated on every authenticated API call. Use for liveness monitoring."),
-    )
+    certificate_fingerprint = models.CharField(max_length=64, unique=True, ...)
+    capabilities = models.JSONField(default=list, ...)  # e.g. ["wbm_cert_push"]
+    cell_location = models.CharField(max_length=200, blank=True, ...)
+    is_active = models.BooleanField(default=True, ...)
+    poll_interval_seconds = models.PositiveIntegerField(default=300, ...)
+    last_seen_at = models.DateTimeField(null=True, blank=True, ...)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self) -> str:
-        """Return a human-readable representation."""
-        return f"TrustpointAgent({self.name} / {self.agent_id})"
-
-    def clean(self) -> None:
-        """Validate that all declared capabilities are known values."""
-        from django.core.exceptions import ValidationError
-
-        valid = {c.value for c in TrustpointAgent.Capability}
-        unknown = [c for c in self.capabilities if c not in valid]
-        if unknown:
-            raise ValidationError({"capabilities": f"Unknown capabilities: {unknown}"})
 ```
+
+`clean()` validates capabilities and enforces device-type constraints:
+- The linked device must be of type `AGENT_ONE_TO_ONE` or `AGENT_ONE_TO_N`.
+- For `AGENT_ONE_TO_ONE` devices only a single `TrustpointAgent` may be linked.
 
 **Decommissioning:** revoke the agent's mTLS certificate in Trustpoint *and* set `is_active = False`. The revoked cert is rejected at the TLS layer; `is_active = False` is an immediate software kill-switch while CRL propagation completes.
 
 ---
 
-### 2.2 `WbmWorkflowDefinition`
+### 2.2 `AgentWorkflowDefinition`
 
-Reusable, versioned Playwright-style automation profile. Managed by operators in Trustpoint. No credentials stored here.
-
-```python
-class WbmWorkflowDefinition(models.Model):
-    """A reusable Playwright automation script for a specific device family or firmware variant."""
-
-    name = models.CharField(verbose_name=_("Name"), max_length=200)
-    vendor = models.CharField(verbose_name=_("Vendor"), max_length=120, blank=True)
-    device_family = models.CharField(verbose_name=_("Device Family"), max_length=120, blank=True)
-    firmware_hint = models.CharField(
-        verbose_name=_("Firmware Hint"),
-        max_length=120,
-        blank=True,
-        help_text=_("Optional firmware version string to help operators select the right profile."),
-    )
-    version = models.CharField(verbose_name=_("Version"), max_length=40, default="1.0")
-    description = models.TextField(verbose_name=_("Description"), blank=True)
-    profile = models.JSONField(
-        verbose_name=_("Workflow Profile"),
-        help_text=_("JSON array of Playwright-style automation steps. Validated on save."),
-    )
-    is_active = models.BooleanField(
-        verbose_name=_("Active"),
-        default=True,
-        help_text=_("Inactive definitions are hidden from selection but preserved for audit purposes."),
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = [("name", "version")]
-
-    def __str__(self) -> str:
-        """Return a human-readable representation."""
-        return f"WbmWorkflowDefinition({self.name} v{self.version})"
-```
-
-`clean()` validates `profile` against `WORKFLOW_STEP_SCHEMA` (see Section 5).
-
----
-
-### 2.3 `WbmCertificateTarget`
-
-Describes one certificate slot on a device WBM. Links device, certificate profile, workflow, and the responsible agent. No credentials.
+Reusable automation profile. Replaces the earlier `WbmWorkflowDefinition` concept. Metadata (vendor, device_family, etc.) and the automation steps are **stored together inside the `profile` JSON object** rather than as separate columns.
 
 ```python
-class WbmCertificateTarget(models.Model):
-    """A single certificate slot on a device WBM, with the workflow and agent responsible for updates."""
+class AgentWorkflowDefinition(models.Model):
+    """A reusable automation workflow for a specific device family or firmware variant.
 
-    class SlotPurpose(models.TextChoices):
-        """Semantic purpose of the certificate slot."""
-
-        TLS_SERVER = "tls_server", _("TLS Server Certificate")
-        TLS_CLIENT = "tls_client", _("TLS Client Certificate")
-        CA_BUNDLE  = "ca_bundle",  _("CA / Trust-Store Bundle")
-        OTHER      = "other",      _("Other")
-
-    device = models.ForeignKey(
-        "devices.DeviceModel",
-        verbose_name=_("Device"),
-        on_delete=models.CASCADE,
-        related_name="wbm_targets",
-    )
-    certificate_profile = models.ForeignKey(
-        "pki.CertificateProfileModel",
-        verbose_name=_("Certificate Profile"),
-        on_delete=models.PROTECT,
-        related_name="wbm_targets",
-    )
-    workflow = models.ForeignKey(
-        "agents.WbmWorkflowDefinition",
-        verbose_name=_("Workflow Definition"),
-        on_delete=models.PROTECT,
-        related_name="targets",
-    )
-    # The agent responsible for executing pushes to this target.
-    # PROTECT prevents accidental deletion of an agent that still owns active targets.
-    agent = models.ForeignKey(
-        "agents.TrustpointAgent",
-        verbose_name=_("Agent"),
-        on_delete=models.PROTECT,
-        related_name="wbm_targets",
-        help_text=_("The agent deployed in the production cell that can reach this device."),
-    )
-    # WBM address as reachable from inside the cell — never accessed by Trustpoint directly.
-    base_url = models.URLField(
-        verbose_name=_("WBM Base URL"),
-        help_text=_("e.g. https://192.168.1.10 — resolved by the agent, not by Trustpoint."),
-    )
-    purpose = models.CharField(
-        verbose_name=_("Slot Purpose"),
-        max_length=20,
-        choices=SlotPurpose,
-        default=SlotPurpose.TLS_SERVER,
-    )
-    slot = models.CharField(
-        verbose_name=_("Slot Identifier"),
-        max_length=80,
-        blank=True,
-        default="",
-        help_text=_("Optional device-specific slot name, e.g. 'slot0'."),
-    )
-    enabled = models.BooleanField(verbose_name=_("Enabled"), default=True)
-    renewal_threshold_days = models.PositiveIntegerField(
-        verbose_name=_("Renewal Threshold (days)"),
-        default=30,
-        help_text=_(
-            "Trustpoint will include this target in the agent's check-in response when the "
-            "currently issued certificate expires within this many days. Set to 0 to only push "
-            "when explicitly triggered by an operator."
-        ),
-    )
-    push_requested = models.BooleanField(
-        verbose_name=_("Push Requested"),
-        default=False,
-        help_text=_(
-            "Set to True by the operator ('push now') to force a push on the next check-in, "
-            "regardless of the certificate expiry window. Cleared automatically once the agent "
-            "picks up the job."
-        ),
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        unique_together = [("device", "purpose", "slot")]
-
-    def __str__(self) -> str:
-        """Return a human-readable representation."""
-        return f"WbmCertificateTarget({self.device} — {self.purpose}/{self.slot} via {self.agent})"
-```
-
----
-
-### 2.4 `WbmJob`
-
-History record. Written by Trustpoint when it handles a push-request from the agent. The agent never creates this record — it only reads back the `job_id` and later posts a result.
-
-```python
-class WbmJob(models.Model):
-    """Audit record for a single WBM certificate-push operation.
-
-    Created by Trustpoint when the agent requests a push.
-    Closed when the agent reports the result.
+    The profile is a JSON object containing device metadata fields
+    (vendor, device_family, firmware_hint, version, description) and a
+    'steps' array validated against WORKFLOW_STEP_SCHEMA.
     """
 
+    name = models.CharField(max_length=200, unique=True, ...)
+    profile = models.JSONField(
+        # JSON object: { vendor, device_family, firmware_hint, version, description, steps: [...] }
+    )
+    is_active = models.BooleanField(default=True, ...)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+```
+
+`clean()` validates `profile['steps']` against `WORKFLOW_STEP_SCHEMA` (see Section 5).
+
+**Key differences from the original concept:**
+- No separate `vendor`, `device_family`, `firmware_hint`, `version`, `description` columns — all inside `profile`.
+- No `unique_together = [("name", "version")]` — `name` alone is unique.
+
+---
+
+### 2.3 `AgentCertificateTarget`
+
+Describes one certificate target on a managed device. Links device, certificate profile, workflow, and the responsible agent. Replaces the earlier `WbmCertificateTarget`. The `base_url` and `purpose`/`slot` fields from the concept **are not present** — the WBM base URL and slot information are instead carried inside the workflow profile or handled by the agent.
+
+```python
+class AgentCertificateTarget(models.Model):
+    """A certificate target on a managed device.
+
+    Device ownership rules:
+    - 1-to-n agent (AGENT_ONE_TO_N): device must be AGENT_MANAGED_DEVICE.
+    - 1-to-1 agent (AGENT_ONE_TO_ONE): device must be the agent's own DeviceModel.
+    """
+
+    device = models.ForeignKey('devices.DeviceModel', on_delete=models.CASCADE,
+                                related_name='agent_targets', ...)
+    certificate_profile = models.ForeignKey('pki.CertificateProfileModel',
+                                             on_delete=models.PROTECT,
+                                             related_name='agent_targets', ...)
+    workflow = models.ForeignKey('agents.AgentWorkflowDefinition',
+                                  on_delete=models.PROTECT,
+                                  related_name='targets',
+                                  null=True, blank=True, ...)
+    agent = models.ForeignKey('agents.TrustpointAgent', on_delete=models.PROTECT,
+                               related_name='agent_targets', ...)
+    enabled = models.BooleanField(default=True, ...)
+    renewal_threshold_days = models.PositiveIntegerField(default=30, ...)
+    push_requested = models.BooleanField(default=False, ...)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = [('device', 'agent', 'certificate_profile')]
+```
+
+`clean()` enforces device-ownership rules: for 1-to-n agents the target device must be `AGENT_MANAGED_DEVICE`; for 1-to-1 agents the target device must be the agent's own device.
+
+---
+
+### 2.4 `AgentJob`
+
+History record. Replaces `WbmJob`. Written by Trustpoint when the check-in processor creates a job. The agent never creates this record — it only reads back the `job_id` and later posts a result.
+
+```python
+class AgentJob(models.Model):
+    """Audit record for a single agent certificate-provisioning operation."""
+
     class Status(models.TextChoices):
-        """Lifecycle state of the job."""
+        PENDING_CSR = 'pending_csr', _('Pending CSR')
+        IN_PROGRESS = 'in_progress', _('In Progress')
+        SUCCEEDED   = 'succeeded',   _('Succeeded')
+        FAILED      = 'failed',      _('Failed')
 
-        PENDING_CSR = "pending_csr", _("Pending CSR")   # created at check-in; waiting for agent's CSR
-        IN_PROGRESS = "in_progress", _("In Progress")   # CSR signed; agent is executing the workflow
-        SUCCEEDED   = "succeeded",   _("Succeeded")
-        FAILED      = "failed",      _("Failed")
-
-    target = models.ForeignKey(
-        "agents.WbmCertificateTarget",
-        verbose_name=_("Certificate Target"),
-        on_delete=models.CASCADE,
-        related_name="jobs",
-    )
-    status = models.CharField(
-        verbose_name=_("Status"),
-        max_length=20,
-        choices=Status,
-        default=Status.IN_PROGRESS,
-        db_index=True,
-    )
-    # Certificate material.
-    # The private key is generated by the agent and never transmitted to Trustpoint.
-    # key_spec and subject are sent to the agent in the check-in response so it can
-    # build a correct CSR. Trustpoint signs the CSR and stores only the issued cert.
-    key_spec = models.CharField(
-        verbose_name=_("Key Spec"),
-        max_length=40,
-        default="EC_P256",
-        help_text=_("Algorithm and size for key generation, e.g. 'EC_P256', 'RSA_2048'."),
-    )
-    subject = models.JSONField(
-        verbose_name=_("Subject"),
-        default=dict,
-        help_text=_(
-            "X.509 subject attributes to embed in the CSR, "
-            "e.g. {\"CN\": \"device.example.com\", \"O\": \"Acme\"}."
-        ),
-    )
-    csr_pem = models.TextField(
-        verbose_name=_("CSR (PEM)"),
-        blank=True,
-        help_text=_("Stored after the agent submits the CSR, before the cert is issued."),
-    )
-    cert_pem = models.TextField(verbose_name=_("Certificate (PEM)"), blank=True)
-    ca_bundle_pem = models.TextField(verbose_name=_("CA Bundle (PEM)"), blank=True)
-
+    target = models.ForeignKey('agents.AgentCertificateTarget',
+                                on_delete=models.CASCADE, related_name='jobs', ...)
+    status = models.CharField(max_length=20, choices=Status,
+                               default=Status.IN_PROGRESS, db_index=True)
+    key_spec = models.CharField(max_length=40, default='EC_P256', ...)
+    subject = models.JSONField(default=dict, ...)
+    csr_pem = models.TextField(blank=True, ...)
+    cert_pem = models.TextField(blank=True)
+    ca_bundle_pem = models.TextField(blank=True)
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
-    result_detail = models.TextField(verbose_name=_("Result Detail"), blank=True)
-
-    def __str__(self) -> str:
-        """Return a human-readable representation."""
-        return f"WbmJob({self.pk} {self.status} → {self.target})"
+    result_detail = models.TextField(blank=True)
 ```
 
 ---
 
-## 3. `devices.DeviceModel` — no change needed
+## 3. `devices.DeviceModel` — new device types added
 
-`WbmCertificateTarget` already holds a FK to `DeviceModel`. Targets are reachable as `device.wbm_targets.all()` via the reverse relation. `DeviceModel` gains no direct dependency on the `agents` app.
+Three new `DeviceType` enum values were added to `DeviceModel`:
+
+```python
+class DeviceType(models.IntegerChoices):
+    GENERIC_DEVICE        = 0, _('Generic Device')
+    OPC_UA_GDS            = 1, _('OPC UA GDS')
+    OPC_UA_GDS_PUSH       = 2, _('OPC UA GDS Push')
+    AGENT_ONE_TO_ONE      = 3, _('Agent (1-to-1)')
+    AGENT_ONE_TO_N        = 4, _('Agent (1-to-n)')
+    AGENT_MANAGED_DEVICE  = 5, _('Agent Managed Device')
+```
+
+`DeviceModel.clean()` now validates agent devices: both `AGENT_ONE_TO_ONE` and `AGENT_ONE_TO_N` must use EST - Username & Password as their onboarding protocol, must not have CMP enabled, and must not use the no-onboarding config.
+
+`AgentCertificateTarget` holds a FK to `DeviceModel`. Targets are reachable as `device.agent_targets.all()` via the reverse relation.
+
+The `DeviceTableView` excludes agent types from the main devices list. A new `AgentTableView` in `devices/views.py` lists only agent devices and auto-creates a `TrustpointAgent` record for any agent device that doesn't have one yet.
 
 ---
 
 ## 4. REST API
 
-All endpoints live under `/api/agents/`. They follow the **same request pipeline** used by EST and CMP: `RequestContext → Parser → Authentication → Authorization → OperationProcessor → MessageResponder`. Each stage is a dedicated class that reads from and writes to the context, keeping views thin.
+All WBM endpoints are mounted via a two-level `include()` chain:
+
+```
+trustpoint/urls.py       path('agents/', include('agents.urls'))
+agents/urls.py           path('agents/wbm/', include('agents.wbm.urls'))
+agents/wbm/urls.py       path('check-in/' | 'submit-csr/' | 'push-result/')
+```
+
+This produces the following absolute paths (the double `agents/` segment is intentional — the outer prefix is for the app, the inner one scopes WBM under the future `agents/<agent_id>/…` resource space):
+
+| Method | Absolute URL | Django name |
+|---|---|---|
+| `GET`  | `/agents/agents/wbm/check-in/`   | `agents:agents_wbm:check-in`   |
+| `POST` | `/agents/agents/wbm/submit-csr/` | `agents:agents_wbm:submit-csr` |
+| `POST` | `/agents/agents/wbm/push-result/`| `agents:agents_wbm:push-result`|
+
+They follow the **same request pipeline** used by EST and CMP: `RequestContext → Parser → Authentication → Authorization → OperationProcessor → MessageResponder`.
 
 The pipeline is split into two layers:
 - **Generic layer** (`agents/`) — capability-agnostic; handles agent identity, active check, and pipeline execution. Reused by every future capability.
@@ -411,13 +295,35 @@ The pipeline is split into two layers:
 
 ### 4.1 Endpoints
 
-| Method | URL | Description |
-|---|---|---|
-| `GET`  | `/api/agents/wbm/check-in/` | Agent polls for pending work. Returns due jobs with `key_spec` and `subject` for CSR generation. No cert or key in this response. |
-| `POST` | `/api/agents/wbm/submit-csr/` | Agent submits a CSR for a job. Trustpoint signs it and returns `cert_pem` + `ca_bundle_pem`. |
-| `POST` | `/api/agents/wbm/push-result/` | Agent reports the outcome of a completed push. Trustpoint closes the `WbmJob`. |
-
 The private key is generated on the agent and **never transmitted to Trustpoint**.
+
+**GET `/agents/agents/wbm/check-in/`**
+
+No request body. Authenticated via mTLS fingerprint. Returns the poll interval and a list of `AgentJob` descriptors the agent must service. Each job carries `key_spec` and `subject` so the agent can build a CSR locally. The workflow profile object is included so the agent knows which automation steps to execute after the cert is pushed.
+
+**POST `/agents/agents/wbm/submit-csr/`**
+
+```json
+{ "job_id": 42, "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----..." }
+```
+
+Trustpoint verifies the job belongs to the calling agent, signs the CSR using `CertificateIssueProcessor`, advances the job status to `IN_PROGRESS`, and returns:
+
+```json
+{ "cert_pem": "-----BEGIN CERTIFICATE-----...", "ca_bundle_pem": "-----BEGIN CERTIFICATE-----..." }
+```
+
+**POST `/agents/agents/wbm/push-result/`**
+
+```json
+{ "job_id": 42, "status": "succeeded", "detail": "" }
+```
+
+Trustpoint closes the `AgentJob` with the reported status and `completed_at` timestamp. Returns:
+
+```json
+{ "status": "succeeded" }
+```
 
 ### 4.2 Generic request context
 
@@ -425,68 +331,25 @@ The base context holds only what is common to **all** agent API calls: the resol
 
 ```python
 # agents/request_context.py
-from __future__ import annotations
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
-from request.request_context import RestBaseRequestContext
-
-if TYPE_CHECKING:
-    from agents.models import TrustpointAgent
-
-
 @dataclass(kw_only=True)
 class AgentRequestContext(RestBaseRequestContext):
-    """Base request context for all Trustpoint agent API endpoints.
-
-    Holds only the resolved :class:`TrustpointAgent` identity plus the HTTP
-    fields inherited from :class:`RestBaseRequestContext`.  Capability-specific
-    sub-classes (e.g. :class:`WbmAgentRequestContext`) extend this with the
-    fields needed by their own parsers, processors and responders.
-    """
-
-    # Set by AgentAuthentication; None until authentication succeeds.
+    """Base request context for all Trustpoint agent API endpoints."""
     agent: TrustpointAgent | None = None
 ```
 
 ```python
 # agents/wbm/request_context.py
-from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
-
-from agents.request_context import AgentRequestContext
-
-if TYPE_CHECKING:
-    from agents.models import WbmJob
-
-
 @dataclass(kw_only=True)
 class WbmAgentRequestContext(AgentRequestContext):
-    """Request context for all three WBM agent API endpoints.
-
-    Extends :class:`AgentRequestContext` with WBM-specific input/output fields.
-    Each pipeline stage populates only the fields it is responsible for:
-
-    - Parser        → ``operation`` + operation-specific *input* fields
-    - Authorizer    → validates inputs, stores fetched DB objects (e.g. job)
-    - Processor     → performs the work, sets *output* fields
-    - Responder     → serialises output fields into ``http_response_*``
-    """
-
-    # ── check-in output ───────────────────────────────────────────────────────
-    # Set by WbmCheckInProcessor
+    """Request context for all three WBM agent API endpoints."""
+    # check-in output (set by WbmCheckInProcessor)
     pending_jobs: list[dict[str, Any]] = field(default_factory=list)
-
-    # ── submit-csr input / output ─────────────────────────────────────────────
-    # Set by WbmSubmitCsrParser
+    # submit-csr input (set by WbmSubmitCsrParser)
     submit_csr_job_id: int | None = None
     submit_csr_csr_pem: str | None = None
-    # Set by WbmSubmitCsrAuthorization (fetched once, shared with processor)
-    submit_csr_job: WbmJob | None = None
-
-    # ── push-result input ─────────────────────────────────────────────────────
-    # Set by WbmPushResultParser
+    # submit-csr fetched object (set by WbmSubmitCsrAuthorization)
+    submit_csr_job: AgentJob | None = None
+    # push-result input (set by WbmPushResultParser)
     push_result_job_id: int | None = None
     push_result_status: str | None = None
     push_result_detail: str = ""
@@ -494,771 +357,108 @@ class WbmAgentRequestContext(AgentRequestContext):
 
 ### 4.3 Generic authentication
 
-`AgentAuthentication` is **not WBM-specific** — it works for any `AgentRequestContext` sub-class. It resolves the `TrustpointAgent` by SHA-256 fingerprint of the mTLS client certificate, mirroring `ClientCertificateAuthentication` for devices.
-
-```python
-# agents/authentication.py
-import hashlib
-
-from django.utils import timezone
-from request.authentication.base import AuthenticationComponent
-from request.request_context import BaseRequestContext
-from trustpoint.logger import LoggerMixin
-
-from .models import TrustpointAgent
-from .request_context import AgentRequestContext
-
-
-class AgentAuthentication(AuthenticationComponent, LoggerMixin):
-    """Authenticate any Trustpoint agent via its mTLS client-certificate fingerprint.
-
-    Protocol-agnostic: works for any :class:`AgentRequestContext` sub-class.
-    Reads the DER-encoded client certificate from ``SSL_CLIENT_CERT_DER``,
-    computes its SHA-256 fingerprint, and looks up the matching
-    :class:`TrustpointAgent` record. Raises ``ValueError`` on failure,
-    consistent with all other authentication components.
-    """
-
-    def authenticate(self, context: BaseRequestContext) -> None:
-        """Resolve the agent and store it on the context."""
-        if not isinstance(context, AgentRequestContext):
-            return
-
-        if context.raw_message is None:
-            raise ValueError("No raw HTTP request in context.")
-
-        der: bytes | None = context.raw_message.META.get("SSL_CLIENT_CERT_DER")
-        if der is None:
-            self.logger.warning("Agent request received without a client certificate.")
-            raise ValueError("No client certificate presented.")
-
-        fingerprint = hashlib.sha256(der).hexdigest().upper()
-
-        try:
-            agent = TrustpointAgent.objects.get(
-                certificate_fingerprint=fingerprint, is_active=True
-            )
-        except TrustpointAgent.DoesNotExist:
-            self.logger.warning(
-                "Agent authentication failed: unknown or inactive fingerprint %s",
-                fingerprint,
-            )
-            raise ValueError("Unknown or inactive agent.")
-
-        TrustpointAgent.objects.filter(pk=agent.pk).update(last_seen_at=timezone.now())
-        context.agent = agent
-        self.logger.info("Agent authenticated: %s", agent.agent_id)
-```
+`AgentAuthentication` resolves the `TrustpointAgent` by SHA-256 fingerprint of the mTLS client certificate, mirroring `ClientCertificateAuthentication` for devices. Reads `SSL_CLIENT_CERT_DER` from `request.META`, updates `last_seen_at` on every call.
 
 ### 4.4 Generic authorization
 
-`AgentActiveAuthorization` is also **not WBM-specific**. It guards every agent endpoint. WBM-specific checks live in `agents/wbm/authorization.py`.
-
-```python
-# agents/authorization.py
-from request.authorization.base import AuthorizationComponent
-from request.request_context import BaseRequestContext
-from trustpoint.logger import LoggerMixin
-
-from .request_context import AgentRequestContext
-
-
-class AgentActiveAuthorization(AuthorizationComponent, LoggerMixin):
-    """Ensure the resolved agent is active.
-
-    Applied to every agent endpoint regardless of capability.  The
-    authentication stage already filters on ``is_active``, but this
-    component makes the check explicit in the authorization stage for
-    clarity and defence-in-depth.
-    """
-
-    def authorize(self, context: BaseRequestContext) -> None:
-        """Raise ``ValueError`` if the agent is not active."""
-        if not isinstance(context, AgentRequestContext):
-            return
-        if context.agent is None or not context.agent.is_active:
-            raise ValueError("Agent is not active.")
-        self.logger.debug("Agent active check passed for %s", context.agent.agent_id)
-```
-
-```python
-# agents/wbm/authorization.py
-from request.authorization.base import AuthorizationComponent
-from request.request_context import BaseRequestContext
-from trustpoint.logger import LoggerMixin
-
-from agents.models import WbmJob
-from agents.wbm.request_context import WbmAgentRequestContext
-
-
-class WbmSubmitCsrAuthorization(AuthorizationComponent, LoggerMixin):
-    """Ensure the job referenced in submit-csr belongs to the calling agent.
-
-    Fetches the ``WbmJob`` and stores it on the context so the operation
-    processor does not need to repeat the query.
-    """
-
-    def authorize(self, context: BaseRequestContext) -> None:
-        """Verify job ownership and state; store job on context."""
-        if not isinstance(context, WbmAgentRequestContext):
-            return
-        if context.operation != "submit-csr":
-            return
-
-        job = (
-            WbmJob.objects
-            .select_related("target__certificate_profile", "target__device")
-            .filter(
-                pk=context.submit_csr_job_id,
-                status=WbmJob.Status.PENDING_CSR,
-                target__agent=context.agent,
-            )
-            .first()
-        )
-        if job is None:
-            raise ValueError("Job not found or not in PENDING_CSR state.")
-        context.submit_csr_job = job
-        self.logger.debug("WBM submit-csr authorization passed for job %s", job.pk)
-
-
-class WbmPushResultAuthorization(AuthorizationComponent, LoggerMixin):
-    """Ensure the job referenced in push-result belongs to the calling agent."""
-
-    def authorize(self, context: BaseRequestContext) -> None:
-        """Verify the agent owns the in-progress job."""
-        if not isinstance(context, WbmAgentRequestContext):
-            return
-        if context.operation != "push-result":
-            return
-
-        exists = WbmJob.objects.filter(
-            pk=context.push_result_job_id,
-            status=WbmJob.Status.IN_PROGRESS,
-            target__agent=context.agent,
-        ).exists()
-        if not exists:
-            raise ValueError("Job not found or not in IN_PROGRESS state.")
-        self.logger.debug(
-            "WBM push-result authorization passed for job %s", context.push_result_job_id
-        )
-```
+`AgentActiveAuthorization` guards every agent endpoint. WBM-specific ownership/state checks live in `agents/wbm/authorization.py` and are passed as `extra_authorizers` in the `AgentPipelineConfig`.
 
 ### 4.5 WBM message parsers
 
-Each WBM operation gets a dedicated parser that reads from `raw_message` and populates the WBM-specific context fields. All extend `ParsingComponent` from `request.message_parser.base`.
+Each WBM operation gets a dedicated parser that reads from `raw_message` and populates WBM-specific context fields. All extend `ParsingComponent`.
 
-```python
-# agents/wbm/message_parser.py
-import json
-
-from request.message_parser.base import ParsingComponent
-from request.request_context import BaseRequestContext
-from trustpoint.logger import LoggerMixin
-
-from agents.wbm.request_context import WbmAgentRequestContext
-
-
-class WbmCheckInParser(ParsingComponent, LoggerMixin):
-    """Parse a GET /check-in/ request.
-
-    No request body — agent identity is resolved by AgentAuthentication.
-    """
-
-    def parse(self, context: BaseRequestContext) -> None:
-        """Set operation; no body fields to parse for check-in."""
-        if not isinstance(context, WbmAgentRequestContext):
-            return
-        context.operation = "check-in"
-
-
-class WbmSubmitCsrParser(ParsingComponent, LoggerMixin):
-    """Parse a POST /submit-csr/ request body into context fields."""
-
-    def parse(self, context: BaseRequestContext) -> None:
-        """Extract ``job_id`` and ``csr_pem`` from the JSON body."""
-        if not isinstance(context, WbmAgentRequestContext):
-            return
-        context.operation = "submit-csr"
-
-        if context.raw_message is None:
-            raise ValueError("No raw HTTP request in context.")
-
-        try:
-            body: dict = json.loads(context.raw_message.body)
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise ValueError("Request body is not valid JSON.") from exc
-
-        job_id = body.get("job_id")
-        csr_pem = body.get("csr_pem", "")
-
-        if job_id is None:
-            raise ValueError("'job_id' is required.")
-        if not csr_pem:
-            raise ValueError("'csr_pem' is required.")
-
-        context.submit_csr_job_id = int(job_id)
-        context.submit_csr_csr_pem = csr_pem
-
-
-class WbmPushResultParser(ParsingComponent, LoggerMixin):
-    """Parse a POST /push-result/ request body into context fields."""
-
-    def parse(self, context: BaseRequestContext) -> None:
-        """Extract ``job_id``, ``status``, and ``detail`` from the JSON body."""
-        if not isinstance(context, WbmAgentRequestContext):
-            return
-        context.operation = "push-result"
-
-        if context.raw_message is None:
-            raise ValueError("No raw HTTP request in context.")
-
-        try:
-            body: dict = json.loads(context.raw_message.body)
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            raise ValueError("Request body is not valid JSON.") from exc
-
-        job_id = body.get("job_id")
-        if job_id is None:
-            raise ValueError("'job_id' is required.")
-
-        from agents.models import WbmJob
-        context.push_result_job_id = int(job_id)
-        context.push_result_status = body.get("status", WbmJob.Status.FAILED)
-        context.push_result_detail = body.get("detail", "")
-```
+- `WbmCheckInParser` — sets `operation = 'check-in'`; no body to parse.
+- `WbmSubmitCsrParser` — extracts `job_id` and `csr_pem` from the JSON body.
+- `WbmPushResultParser` — extracts `job_id`, `status`, and `detail` from the JSON body.
 
 ### 4.6 Operation processors
 
-Each operation has a processor that extends `AbstractOperationProcessor` from `request.operation_processor.base`. The `submit-csr` processor re-uses `CertificateIssueProcessor` from the existing PKI pipeline to sign the CSR, keeping certificate issuance logic in one place.
+Each operation has a processor extending `AbstractOperationProcessor`.
 
-```python
-# agents/wbm/operation_processor/check_in.py
-from datetime import timedelta
+**`WbmCheckInProcessor`** — discovers due `AgentCertificateTarget` records for the calling agent. A target is *due* when `push_requested=True` OR the most recently issued certificate (looked up from `IssuedCredentialModel` filtered by device and cert-profile) expires within `renewal_threshold_days` days. Creates an `AgentJob` with `status=PENDING_CSR` for each due target and clears `push_requested` atomically. `key_spec` and `subject` are derived from `target.certificate_profile.profile` (keys `key_algorithm` and `subject`).
 
-from django.utils import timezone
-from request.operation_processor.base import AbstractOperationProcessor
-from request.request_context import BaseRequestContext
-from trustpoint.logger import LoggerMixin
+**`WbmSubmitCsrProcessor`** — parses the PEM CSR, stores the raw CSR on the job, builds an `EstCertificateRequestContext` (with domain asserted from `target.device.domain` — raises `ValueError` if None), delegates to `CertificateIssueProcessor`, serialises the resulting certificate and chain to PEM, saves `cert_pem`/`ca_bundle_pem` on the job, advances status to `IN_PROGRESS`, and calls `job.refresh_from_db()` so the responder sees the current state.
 
-from agents.models import IssuedCredentialModel, WbmCertificateTarget, WbmJob
-from agents.wbm.request_context import WbmAgentRequestContext
-
-
-class WbmCheckInProcessor(AbstractOperationProcessor, LoggerMixin):
-    """Discover due targets for the calling agent and create PENDING_CSR jobs.
-
-    A target is *due* when either:
-
-    - ``push_requested`` is ``True`` (operator-triggered), or
-    - The most recently issued certificate expires within
-      ``renewal_threshold_days`` days (automatic renewal window).
-
-    For each due target a :class:`WbmJob` with status ``PENDING_CSR`` is
-    created. ``push_requested`` is cleared atomically on the target.
-    """
-
-    def process_operation(self, context: BaseRequestContext) -> None:
-        """Populate ``context.pending_jobs`` with descriptors for each due target."""
-        if not isinstance(context, WbmAgentRequestContext):
-            return
-
-        if context.agent is None:
-            raise ValueError("Agent not set on context.")
-
-        targets = (
-            WbmCertificateTarget.objects
-            .filter(agent=context.agent, enabled=True)
-            .select_related("device", "certificate_profile", "workflow")
-        )
-
-        jobs: list[dict] = []
-        for target in targets:
-            if self._is_due(target):
-                jobs.append(self._create_job(target))
-
-        context.pending_jobs = jobs
-        self.logger.info(
-            "Check-in for agent %s: %d job(s) pending.", context.agent.agent_id, len(jobs)
-        )
-
-    # ── helpers ───────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _is_due(target: WbmCertificateTarget) -> bool:
-        """Return True if the target needs a certificate push in this cycle."""
-        if target.push_requested:
-            return True
-        if target.renewal_threshold_days == 0:
-            return False
-        credential = (
-            IssuedCredentialModel.objects
-            .filter(
-                device=target.device,
-                issued_using_cert_profile=target.certificate_profile.unique_name,
-            )
-            .order_by("-created_at")
-            .select_related("credential")
-            .first()
-        )
-        if credential is None:
-            return True  # no cert yet — issue a fresh one
-        not_after = credential.credential.get_not_after()
-        return not_after <= timezone.now() + timedelta(days=target.renewal_threshold_days)
-
-    @staticmethod
-    def _create_job(target: WbmCertificateTarget) -> dict:
-        """Create a PENDING_CSR WbmJob and return its check-in descriptor."""
-        profile = target.certificate_profile
-        job = WbmJob.objects.create(
-            target=target,
-            status=WbmJob.Status.PENDING_CSR,
-            key_spec=profile.key_algorithm,      # e.g. "EC_P256"
-            subject=profile.get_subject_dict(),  # e.g. {"CN": "...", "O": "..."}
-        )
-        WbmCertificateTarget.objects.filter(pk=target.pk).update(push_requested=False)
-        return {
-            "job_id": job.pk,
-            "base_url": target.base_url,
-            "key_spec": job.key_spec,
-            "subject": job.subject,
-            "workflow": target.workflow.profile,
-        }
-```
-
-```python
-# agents/wbm/operation_processor/submit_csr.py
-from cryptography import x509
-from cryptography.hazmat.primitives.serialization import Encoding
-from request.operation_processor.base import AbstractOperationProcessor
-from request.request_context import BaseRequestContext, EstCertificateRequestContext
-from request.operation_processor.issue_cert import CertificateIssueProcessor
-from trustpoint.logger import LoggerMixin
-
-from agents.models import WbmJob
-from agents.wbm.request_context import WbmAgentRequestContext
-
-
-class WbmSubmitCsrProcessor(AbstractOperationProcessor, LoggerMixin):
-    """Sign the agent-submitted CSR using the existing PKI CertificateIssueProcessor.
-
-    The CSR is loaded from ``context.submit_csr_csr_pem``, placed into a
-    temporary :class:`EstCertificateRequestContext` that is already understood
-    by :class:`CertificateIssueProcessor`, and then the issued certificate is
-    pulled back out and stored on the ``WbmJob``.
-
-    This approach keeps all certificate signing logic in
-    ``request.operation_processor.issue_cert`` — the WBM processor is just a
-    thin adapter that translates between the agent job context and the
-    established PKI pipeline context.
-    """
-
-    def process_operation(self, context: BaseRequestContext) -> None:
-        """Issue the certificate for the CSR and advance the job to IN_PROGRESS."""
-        if not isinstance(context, WbmAgentRequestContext):
-            return
-
-        job = context.submit_csr_job
-        if job is None:
-            raise ValueError("WbmJob not set on context.")
-        if not context.submit_csr_csr_pem:
-            raise ValueError("CSR PEM not set on context.")
-
-        # Parse the PEM CSR.
-        csr = x509.load_pem_x509_csr(context.submit_csr_csr_pem.encode())
-
-        target = job.target
-
-        # Build a minimal EstCertificateRequestContext so CertificateIssueProcessor
-        # can be reused without modification.
-        pki_ctx = EstCertificateRequestContext(
-            protocol="wbm_agent",
-            operation="submit-csr",
-            domain_str=target.device.domain.unique_name if target.device.domain else None,
-            cert_profile_str=target.certificate_profile.unique_name,
-            cert_requested=csr,
-            device=target.device,
-            certificate_profile_model=target.certificate_profile,
-        )
-
-        CertificateIssueProcessor().process_operation(pki_ctx)
-
-        if pki_ctx.issued_certificate is None:
-            raise ValueError("CertificateIssueProcessor did not produce a certificate.")
-
-        cert_pem = pki_ctx.issued_certificate.public_bytes(Encoding.PEM).decode()
-        ca_bundle_pem = _build_ca_bundle(pki_ctx)
-
-        WbmJob.objects.filter(pk=job.pk).update(
-            status=WbmJob.Status.IN_PROGRESS,
-            csr_pem=context.submit_csr_csr_pem,
-            cert_pem=cert_pem,
-            ca_bundle_pem=ca_bundle_pem,
-        )
-
-        # Refresh the job instance so the responder can read cert_pem / ca_bundle_pem.
-        context.submit_csr_job = WbmJob.objects.get(pk=job.pk)
-        self.logger.info("WBM CSR signed and job %s advanced to IN_PROGRESS.", job.pk)
-
-
-def _build_ca_bundle(pki_ctx: EstCertificateRequestContext) -> str:
-    """Concatenate the issued certificate chain into a PEM CA bundle string."""
-    chain = pki_ctx.issued_certificate_chain or []
-    return "".join(cert.public_bytes(Encoding.PEM).decode() for cert in chain)
-```
-
-```python
-# agents/wbm/operation_processor/push_result.py
-from django.utils import timezone
-from request.operation_processor.base import AbstractOperationProcessor
-from request.request_context import BaseRequestContext
-from trustpoint.logger import LoggerMixin
-
-from agents.models import WbmJob
-from agents.wbm.request_context import WbmAgentRequestContext
-
-
-class WbmPushResultProcessor(AbstractOperationProcessor, LoggerMixin):
-    """Close a WbmJob with the outcome reported by the agent."""
-
-    def process_operation(self, context: BaseRequestContext) -> None:
-        """Update the job status and completion timestamp."""
-        if not isinstance(context, WbmAgentRequestContext):
-            return
-
-        updated = WbmJob.objects.filter(
-            pk=context.push_result_job_id,
-            status=WbmJob.Status.IN_PROGRESS,
-            target__agent=context.agent,
-        ).update(
-            status=context.push_result_status,
-            result_detail=context.push_result_detail,
-            completed_at=timezone.now(),
-        )
-
-        if not updated:
-            raise ValueError("Job not found or not in IN_PROGRESS state.")
-
-        self.logger.info(
-            "WBM job %s closed with status '%s'.",
-            context.push_result_job_id,
-            context.push_result_status,
-        )
-```
+**`WbmPushResultProcessor`** — maps the incoming status string to a valid `AgentJob.Status` (defaults to `FAILED` for unknown values), updates the job with status, `result_detail`, and `completed_at`. Raises `ValueError` if the job is not found or not in `IN_PROGRESS` state.
 
 ### 4.7 Message responders
 
-Responders read the output fields set by the operation processor and write the final HTTP response into the context, mirroring `EstMessageResponder`.
+Responders read output fields set by the processor and write the final HTTP response into the context.
 
-```python
-# agents/wbm/message_responder.py
-import json
+- `WbmCheckInResponder` — returns `{ poll_interval_seconds, jobs: [...] }`.
+- `WbmSubmitCsrResponder` — returns `{ cert_pem, ca_bundle_pem }` from `context.submit_csr_job`.
+- `WbmPushResultResponder` — returns `{ status }`.
+- `WbmErrorResponder` — ensures a 500 status and plain-text error body if not already set.
 
-from request.message_responder.base import AbstractMessageResponder
-from request.request_context import BaseRequestContext
-from trustpoint.logger import LoggerMixin
+### 4.8 Views and `AgentPipelineConfig`
 
-from agents.request_context import AgentRequestContext
-from agents.wbm.request_context import WbmAgentRequestContext
-
-
-class WbmCheckInResponder(AbstractMessageResponder, LoggerMixin):
-    """Serialise the check-in job list into a JSON HTTP response."""
-
-    @staticmethod
-    def build_response(context: BaseRequestContext) -> None:
-        """Write poll_interval_seconds and jobs list into the context."""
-        if not isinstance(context, WbmAgentRequestContext):
-            return
-        if context.agent is None:
-            return
-        body = {
-            "poll_interval_seconds": context.agent.poll_interval_seconds,
-            "jobs": context.pending_jobs,
-        }
-        context.http_response_content = json.dumps(body)
-        context.http_response_status = 200
-        context.http_response_content_type = "application/json"
-
-
-class WbmSubmitCsrResponder(AbstractMessageResponder, LoggerMixin):
-    """Serialise cert_pem and ca_bundle_pem into a JSON HTTP response."""
-
-    @staticmethod
-    def build_response(context: BaseRequestContext) -> None:
-        """Write signed certificate material into the context."""
-        if not isinstance(context, WbmAgentRequestContext):
-            return
-        job = context.submit_csr_job
-        if job is None:
-            return
-        body = {
-            "cert_pem": job.cert_pem,
-            "ca_bundle_pem": job.ca_bundle_pem,
-        }
-        context.http_response_content = json.dumps(body)
-        context.http_response_status = 200
-        context.http_response_content_type = "application/json"
-
-
-class WbmPushResultResponder(AbstractMessageResponder, LoggerMixin):
-    """Acknowledge a successfully closed job."""
-
-    @staticmethod
-    def build_response(context: BaseRequestContext) -> None:
-        """Write the final status into the context."""
-        if not isinstance(context, WbmAgentRequestContext):
-            return
-        body = {"status": context.push_result_status}
-        context.http_response_content = json.dumps(body)
-        context.http_response_status = 200
-        context.http_response_content_type = "application/json"
-
-
-class WbmErrorResponder(AbstractMessageResponder, LoggerMixin):
-    """Return a plain-text error response for any WBM pipeline failure."""
-
-    @staticmethod
-    def build_response(context: BaseRequestContext) -> None:
-        """Ensure an error status and message are set on the context."""
-        if not isinstance(context, AgentRequestContext):
-            return
-        if not context.http_response_status or context.http_response_status < 400:
-            context.http_response_status = 500
-        if not context.http_response_content:
-            context.http_response_content = "Internal server error."
-        context.http_response_content_type = "text/plain"
-```
-
-### 4.8 Views
-
-The view layer is split into two files mirroring the two-layer architecture:
-
-- **`agents/views.py`** — `AgentPipelineMixin`: generic pipeline runner, reusable by every capability. Handles context construction, stage ordering, and error fallback. Not WBM-specific.
-- **`agents/wbm/views.py`** — the three thin WBM views that inject the correct WBM-specific parser/processor/responder into the mixin.
+The view layer is split into two files. The key change from the concept is the introduction of `AgentPipelineConfig` — a dataclass that groups all per-operation pipeline components to avoid a too-many-arguments linter violation:
 
 ```python
 # agents/views.py
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Any
-
-from django.http import HttpRequest, HttpResponse
-
-from trustpoint.logger import LoggerMixin
-
-from .authentication import AgentAuthentication
-from .authorization import AgentActiveAuthorization
-from .request_context import AgentRequestContext
-
-if TYPE_CHECKING:
-    from request.authorization.base import AuthorizationComponent
-    from request.message_parser.base import ParsingComponent
-    from request.message_responder.base import AbstractMessageResponder
-    from request.operation_processor.base import AbstractOperationProcessor
-
-
-class AgentPipelineMixin(LoggerMixin):
-    """Generic pipeline runner for all Trustpoint agent views.
-
-    Mirrors ``EstSimpleEnrollmentMixin``: build context → parse →
-    authenticate → authorize → process → respond.  On any exception the
-    ``error_responder`` is called so the pipeline always produces a
-    well-formed HTTP response.
-
-    Subclasses provide a capability-specific :class:`AgentRequestContext`
-    sub-class as ``context_class``, and call :meth:`_run_pipeline` with the
-    matching parser, authorizers, processor and responders.  The generic
-    :class:`AgentAuthentication` and :class:`AgentActiveAuthorization` are
-    always applied first; capability-specific authorizers are appended.
-    """
-
-    #: Override in sub-packages with the capability-specific context class.
-    context_class: type[AgentRequestContext] = AgentRequestContext
-
-    def _run_pipeline(
-        self,
-        request: HttpRequest,
-        operation: str,
-        parser: ParsingComponent,
-        extra_authorizers: list[AuthorizationComponent],
-        processor: AbstractOperationProcessor,
-        responder: AbstractMessageResponder,
-        error_responder: AbstractMessageResponder,
-    ) -> HttpResponse:
-        """Execute the full request pipeline for a single agent operation."""
-        self.logger.info(
-            "Agent request: operation=%s method=%s path=%s",
-            operation, request.method, request.path,
-        )
-
-        try:
-            ctx = self.context_class(
-                raw_message=request,
-                protocol="agent",
-                operation=operation,
-            )
-        except Exception:
-            self.logger.exception("Failed to build %s.", self.context_class.__name__)
-            return HttpResponse("Internal server error.", status=500)
-
-        try:
-            # 1. Parse
-            parser.parse(ctx)
-
-            # 2. Authenticate (generic — fingerprint → TrustpointAgent)
-            AgentAuthentication().authenticate(ctx)
-
-            # 3. Authorize (generic active check + capability-specific checks)
-            AgentActiveAuthorization().authorize(ctx)
-            for authorizer in extra_authorizers:
-                authorizer.authorize(ctx)
-
-            # 4. Process
-            processor.process_operation(ctx)
-
-            # 5. Respond
-            responder.build_response(ctx)
-
-        except Exception:
-            self.logger.exception(
-                "Error in agent pipeline for operation '%s'.", operation
-            )
-            error_responder.build_response(ctx)
-
-        return ctx.to_http_response()
+@dataclass
+class AgentPipelineConfig:
+    """Groups all per-operation pipeline components into a single parameter object."""
+    parser: ParsingComponent
+    extra_authorizers: list[AuthorizationComponent]
+    processor: AbstractOperationProcessor
+    responder: AbstractMessageResponder
+    error_responder: AbstractMessageResponder
 ```
+
+`AgentPipelineMixin._run_pipeline()` now takes `config: AgentPipelineConfig` instead of individual keyword arguments. `AgentPipelineView` is a thin base Django `View` combining the mixin.
+
+WBM views pass a fully populated `AgentPipelineConfig` to `_run_pipeline`:
 
 ```python
 # agents/wbm/views.py
-from django.http import HttpRequest, HttpResponse
-from django.utils.decorators import method_decorator
-from django.views import View
-from django.views.decorators.csrf import csrf_exempt
-
-from agents.views import AgentPipelineMixin
-
-from .authorization import WbmPushResultAuthorization, WbmSubmitCsrAuthorization
-from .message_parser import WbmCheckInParser, WbmPushResultParser, WbmSubmitCsrParser
-from .message_responder import (
-    WbmCheckInResponder,
-    WbmErrorResponder,
-    WbmPushResultResponder,
-    WbmSubmitCsrResponder,
-)
-from .operation_processor.check_in import WbmCheckInProcessor
-from .operation_processor.push_result import WbmPushResultProcessor
-from .operation_processor.submit_csr import WbmSubmitCsrProcessor
-from .request_context import WbmAgentRequestContext
-
-
-class WbmPipelineMixin(AgentPipelineMixin):
-    """Pipeline mixin for WBM views.
-
-    Sets ``context_class`` to :class:`WbmAgentRequestContext` so the generic
-    runner constructs the right context sub-class on every request.
-    """
-
-    context_class = WbmAgentRequestContext
-
-
-@method_decorator(csrf_exempt, name="dispatch")
 class WbmCheckInView(WbmPipelineMixin, View):
-    """GET /api/agents/wbm/check-in/ — agent polls for pending work."""
-
-    def get(self, request: HttpRequest, *args: object, **kwargs: object) -> HttpResponse:
-        """Run the WBM check-in pipeline."""
-        return self._run_pipeline(
-            request,
-            operation="check-in",
+    def get(self, request, *args, **kwargs):
+        return self._run_pipeline(request, 'check-in', AgentPipelineConfig(
             parser=WbmCheckInParser(),
             extra_authorizers=[],
             processor=WbmCheckInProcessor(),
             responder=WbmCheckInResponder(),
             error_responder=WbmErrorResponder(),
-        )
-
-
-@method_decorator(csrf_exempt, name="dispatch")
-class WbmSubmitCsrView(WbmPipelineMixin, View):
-    """POST /api/agents/wbm/submit-csr/ — agent submits CSR, receives signed cert."""
-
-    def post(self, request: HttpRequest, *args: object, **kwargs: object) -> HttpResponse:
-        """Run the WBM submit-csr pipeline."""
-        return self._run_pipeline(
-            request,
-            operation="submit-csr",
-            parser=WbmSubmitCsrParser(),
-            extra_authorizers=[WbmSubmitCsrAuthorization()],
-            processor=WbmSubmitCsrProcessor(),
-            responder=WbmSubmitCsrResponder(),
-            error_responder=WbmErrorResponder(),
-        )
-
-
-@method_decorator(csrf_exempt, name="dispatch")
-class WbmPushResultView(WbmPipelineMixin, View):
-    """POST /api/agents/wbm/push-result/ — agent reports push outcome."""
-
-    def post(self, request: HttpRequest, *args: object, **kwargs: object) -> HttpResponse:
-        """Run the WBM push-result pipeline."""
-        return self._run_pipeline(
-            request,
-            operation="push-result",
-            parser=WbmPushResultParser(),
-            extra_authorizers=[WbmPushResultAuthorization()],
-            processor=WbmPushResultProcessor(),
-            responder=WbmPushResultResponder(),
-            error_responder=WbmErrorResponder(),
-        )
+        ))
 ```
 
-### 4.9 Message payloads (reference)
+### 4.9 Full check-in response example
 
-**Check-in response:**
 ```json
 {
   "poll_interval_seconds": 300,
   "jobs": [
     {
       "job_id": 42,
-      "base_url": "https://192.168.1.10",
       "key_spec": "EC_P256",
       "subject": { "CN": "device-a.cell1.example.com", "O": "Acme" },
-      "workflow": [
-        { "type": "goto",       "url": "{{base_url}}/login" },
-        { "type": "fill",       "selector": "#username", "value": "{{username}}" },
-        { "type": "fill",       "selector": "#password", "value": "{{password}}" },
-        { "type": "click",      "selector": "#login-btn" },
-        { "type": "uploadFile", "selector": "#cert-upload", "content": "{{cert_pem}}" },
-        { "type": "click",      "selector": "#apply-btn" },
-        { "type": "expect",     "selector": ".success-banner", "text": "Certificate updated" }
-      ]
+      "workflow": {
+        "vendor": "Vendor Name",
+        "device_family": "Device Family",
+        "firmware_hint": "3.2",
+        "version": "1.0",
+        "description": "Push TLS cert via WBM",
+        "steps": [
+          { "type": "goto",       "url": "https://{{device_ip}}/login" },
+          { "type": "fill",       "selector": "#username", "value": "admin" },
+          { "type": "fill",       "selector": "#password", "value": "{{wbm_password}}" },
+          { "type": "click",      "selector": "#login-btn" },
+          { "type": "uploadFile", "selector": "#cert-upload", "content": "{{cert_pem}}" },
+          { "type": "click",      "selector": "#apply-btn" },
+          { "type": "expect",     "selector": ".success-banner", "text": "Certificate updated" }
+        ]
+      }
     }
   ]
 }
-```
-
-**Submit-CSR request / response:**
-```json
-{ "job_id": 42, "csr_pem": "-----BEGIN CERTIFICATE REQUEST-----..." }
-```
-```json
-{ "cert_pem": "-----BEGIN CERTIFICATE-----...", "ca_bundle_pem": "-----BEGIN CERTIFICATE-----..." }
-```
-
-**Push-result request / response:**
-```json
-{ "job_id": 42, "status": "succeeded", "detail": "" }
-```
-```json
-{ "status": "succeeded" }
 ```
 
 ---
 
 ## 5. Workflow JSON Schema Validation
 
-Validate `WbmWorkflowDefinition.profile` on save using `jsonschema`.
+`AgentWorkflowDefinition.profile` is a JSON **object** (not a plain array). Metadata fields (`vendor`, `device_family`, `firmware_hint`, `version`, `description`) live as top-level keys. The automation steps live under a `steps` key and are validated against `WORKFLOW_STEP_SCHEMA`:
 
 ```python
 # agents/models.py — module-level constant
@@ -1285,78 +485,103 @@ WORKFLOW_STEP_SCHEMA = {
 }
 ```
 
-Called from `WbmWorkflowDefinition.clean()`:
+Called from `AgentWorkflowDefinition.clean()`:
 
 ```python
-import jsonschema
-from django.core.exceptions import ValidationError
-
 def clean(self) -> None:
     """Validate the workflow profile against the step schema."""
+    if not isinstance(self.profile, dict):
+        raise ValidationError({"profile": "Profile must be a JSON object."})
+    steps = self.profile.get("steps", [])
     try:
-        jsonschema.validate(self.profile, WORKFLOW_STEP_SCHEMA)
+        jsonschema.validate(steps, WORKFLOW_STEP_SCHEMA)
     except jsonschema.ValidationError as exc:
-        raise ValidationError({"profile": exc.message}) from exc
+        raise ValidationError({"profile": f"Steps validation error: {exc.message}"}) from exc
 ```
+
+A default profile template (with example steps) is provided by `AgentWorkflowDefinitionConfigView._default_profile_json()` when creating a new definition via the UI.
 
 ---
 
 ## 6. Django Admin
 
-All four models are registered under the single `agents` app admin.
+All four models are registered under the `agents` app admin. Model names reflect the actual implementation.
 
 ```python
 # agents/admin.py
 from django.contrib import admin
-from .models import TrustpointAgent, WbmWorkflowDefinition, WbmCertificateTarget, WbmJob
+from .models import TrustpointAgent, AgentWorkflowDefinition, AgentCertificateTarget, AgentJob
 
 
 @admin.register(TrustpointAgent)
 class TrustpointAgentAdmin(admin.ModelAdmin):
-    list_display    = ["name", "agent_id", "capabilities", "cell_location", "is_active", "poll_interval_seconds", "last_seen_at"]
+    list_display    = ["name", "agent_id", "is_active", "poll_interval_seconds", "last_seen_at"]
     list_filter     = ["is_active"]
     search_fields   = ["name", "agent_id", "cell_location"]
     readonly_fields = ["last_seen_at", "created_at", "updated_at"]
 
 
-@admin.register(WbmWorkflowDefinition)
-class WbmWorkflowDefinitionAdmin(admin.ModelAdmin):
-    list_display  = ["name", "version", "vendor", "device_family", "is_active", "updated_at"]
-    list_filter   = ["is_active", "vendor"]
-    search_fields = ["name", "vendor", "device_family"]
+@admin.register(AgentWorkflowDefinition)
+class AgentWorkflowDefinitionAdmin(admin.ModelAdmin):
+    list_display  = ["name", "is_active", "created_at", "updated_at"]
+    list_filter   = ["is_active"]
+    search_fields = ["name"]
+    readonly_fields = ["created_at", "updated_at"]
 
 
-@admin.register(WbmCertificateTarget)
-class WbmCertificateTargetAdmin(admin.ModelAdmin):
-    list_display  = ["device", "purpose", "slot", "agent", "base_url", "enabled", "renewal_threshold_days", "push_requested"]
-    list_filter   = ["purpose", "enabled", "agent", "push_requested"]
-    search_fields = ["device__common_name", "agent__name", "base_url"]
-    actions       = ["trigger_push_now"]
+@admin.register(AgentCertificateTarget)
+class AgentCertificateTargetAdmin(admin.ModelAdmin):
+    list_display  = ["device", "agent", "certificate_profile", "enabled", "renewal_threshold_days", "push_requested"]
+    list_filter   = ["enabled", "push_requested"]
+    search_fields = ["device__common_name", "agent__name"]
+    readonly_fields = ["created_at", "updated_at"]
+    actions       = ["request_push"]
 
-    @admin.action(description="Request immediate push on next check-in")
-    def trigger_push_now(self, request: Any, queryset: Any) -> None:
-        """Set push_requested=True on selected targets so they are included in the next check-in."""
-        queryset.update(push_requested=True)
+    @admin.action(description="Request immediate certificate push on next check-in")
+    def request_push(self, request: Any, queryset: Any) -> None:
+        """Set push_requested=True on selected targets."""
+        updated = queryset.update(push_requested=True)
+        self.message_user(request, f"{updated} target(s) flagged for immediate push.")
 
 
-@admin.register(WbmJob)
-class WbmJobAdmin(admin.ModelAdmin):
-    list_display    = ["pk", "target", "status", "started_at", "completed_at"]
-    list_filter     = ["status"]
-    readonly_fields = ["key_spec", "subject", "csr_pem", "cert_pem", "ca_bundle_pem", "result_detail", "started_at", "completed_at"]
+@admin.register(AgentJob)
+class AgentJobAdmin(admin.ModelAdmin):
+    list_display    = ["pk", "target", "status", "key_spec", "started_at", "completed_at"]
+    list_filter     = ["status", "key_spec"]
+    search_fields   = ["target__device__common_name"]
+    readonly_fields = ["started_at", "completed_at", "csr_pem", "cert_pem", "ca_bundle_pem"]
 ```
 
 ---
 
-## 7. Open Items (Trustpoint side)
+## 7. Web UI (implemented)
 
-- **`WbmSubmitCsrProcessor` — domain lookup** — `WbmSubmitCsrProcessor` builds an `EstCertificateRequestContext` and reuses `CertificateIssueProcessor`. The domain is derived from `target.device.domain`; verify that all `DeviceModel` instances that can be WBM targets have a domain FK, or add a fallback that selects the domain from the `CertificateProfileModel`.
-- **Issued credential linking** — after `CertificateIssueProcessor` completes, the resulting `IssuedCredentialModel` should be linked back to the `WbmJob` (add an optional FK `WbmJob.issued_credential`) so the issued certificate appears in the standard certificate inventory and expiry tracking works out-of-the-box.
-- **UI views** — `TrustpointAgent` registration wizard, workflow definition editor/importer, per-target job history with CSR/cert viewer, agent liveness dashboard, "Push Now" button (sets `push_requested=True`).
-- **Notifications** — hook `WbmJob` close (succeeded / failed) into the existing `notifications` app.
-- **Agent certificate issuance** — integrate `TrustpointAgent` registration with the existing Trustpoint cert issuance flow so `certificate_fingerprint` is populated automatically.
-- **Liveness alerting** — alert when `TrustpointAgent.last_seen_at` exceeds a configurable threshold (e.g. `3 × poll_interval_seconds`).
-- **Duplicate job guard** — if the agent calls check-in while a `PENDING_CSR` or `IN_PROGRESS` job already exists for a target, skip re-creating it. Add a check in `WbmCheckInProcessor._is_due()` or `_create_job()`.
+The following UI views are implemented in `agents/web_views.py` and routed under `/agents/`:
+
+| View | URL | Description |
+|---|---|---|
+| `AgentWorkflowDefinitionTableView` | `/agents/profiles/` | List all workflow definitions |
+| `AgentWorkflowDefinitionConfigView` | `/agents/profiles/<pk>/` | View/edit a workflow definition; includes a JSON editor with default template |
+| `AgentWorkflowDefinitionBulkDeleteConfirmView` | `/agents/profiles/delete/<pks>/` | Bulk delete confirmation |
+| `AgentManagedDeviceTableView` | `/agents/<agent_id>/targets/` | List managed devices (AgentCertificateTargets) for an agent |
+| `AgentManagedDeviceCreateView` | `/agents/<agent_id>/targets/create/` | Create managed device + target in one step |
+| `AgentManagedDeviceDeleteView` | `/agents/<agent_id>/targets/delete/<pks>/` | Bulk delete managed devices |
+
+The "Agents" sidebar item in the main navigation (`base.html`) links to the `devices:agents` view (the `AgentTableView` in `devices/views.py`), which lists `AGENT_ONE_TO_ONE` and `AGENT_ONE_TO_N` devices and provides a "Managed Devices" button per agent.
+
+The `ManagedDeviceCreateForm.save()` creates a `DeviceModel` of type `AGENT_MANAGED_DEVICE` with a `NoOnboardingConfigModel` (EST), then creates the `AgentCertificateTarget` atomically in one transaction.
+
+---
+
+## 8. Open Items
+
 - **Error HTTP status codes** — `AgentPipelineMixin` currently maps all exceptions to 500. Differentiate authentication/authorisation failures (401/403) from validation failures (400) by catching typed errors or inspecting `ctx.http_response_status` before calling `error_responder`.
+- **Issued credential linking** — after `CertificateIssueProcessor` completes, the resulting `IssuedCredentialModel` should be linked back to the `AgentJob` (add an optional FK `AgentJob.issued_credential`) so the issued certificate appears in the standard certificate inventory and expiry tracking works out-of-the-box.
+- **Duplicate job guard** — if the agent calls check-in while a `PENDING_CSR` or `IN_PROGRESS` job already exists for a target, skip re-creating it. Add a check in `WbmCheckInProcessor._is_due()` or `_create_job()`.
+- **Notifications** — hook `AgentJob` close (succeeded / failed) into the existing `notifications` app.
+- **Agent certificate issuance** — integrate `TrustpointAgent` registration with the existing Trustpoint cert issuance flow so `certificate_fingerprint` is populated automatically when an agent device is onboarded.
+- **Liveness alerting** — alert when `TrustpointAgent.last_seen_at` exceeds a configurable threshold (e.g. `3 × poll_interval_seconds`).
+- **`base_url` on targets** — `AgentCertificateTarget` currently has no `base_url` field; the WBM device address must be embedded in the workflow profile or added as a dedicated field.
+- **`SlotPurpose` / slot identifier** — the `purpose` and `slot` fields from the original concept are not present on `AgentCertificateTarget`. Multi-slot devices require either multiple targets or extending the model.
 - **Adding a second capability** — create `agents/firmware/` mirroring `agents/wbm/`: define a `FirmwareAgentRequestContext(AgentRequestContext)`, implement capability-specific parsers/processors/responders, subclass `AgentPipelineMixin` with `context_class = FirmwareAgentRequestContext`. The generic authentication, active-check, and pipeline runner require zero changes.
 - **Generic job base model** — once a second capability is implemented, extract `AbstractAgentJob` (status, started_at, completed_at, result_detail, agent FK) so each feature only adds its domain fields.

@@ -24,7 +24,7 @@
           <th>{% trans 'Domain' %}</th>
           <th>{% trans 'Onboarding Status' %}</th>
           <th>{% trans 'Devices' %}</th>
-          <th>{% trans 'Certificate Management' %}</th>
+          <th>{% trans 'Onboarding' %}</th>
         </tr>
       </thead>
       <tbody>
@@ -46,7 +46,7 @@
           <td>
             {% for agent in device.agent_list %}
               <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-sm btn-primary">
-                <i class="fas fa-server"></i> {% trans 'Managed Devices' %}
+                <i class="fas fa-server"></i> {% trans 'Manage' %}
               </a>
             {% endfor %}
           </td>

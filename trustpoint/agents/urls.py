@@ -1,5 +1,5 @@
 """URL configuration for the agents application."""
-from django.urls import include, path, re_path
+from django.urls import path, re_path
 
 from agents.web_views import (
     AgentManagedDeviceCreateView,
@@ -13,7 +13,6 @@ from agents.web_views import (
 app_name = 'agents'
 
 urlpatterns = [
-    path('agents/wbm/', include('agents.wbm.urls', namespace='agents_wbm')),
     path('profiles/', AgentWorkflowDefinitionTableView.as_view(), name='profiles'),
     path('profiles/<int:pk>/', AgentWorkflowDefinitionConfigView.as_view(), name='profiles-config'),
     re_path(

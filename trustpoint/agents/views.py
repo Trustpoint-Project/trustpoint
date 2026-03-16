@@ -1,12 +1,16 @@
 """Generic pipeline view mixin for all Trustpoint agent API endpoints."""
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from agents.authentication import AgentAuthentication
 from agents.authorization import AgentActiveAuthorization
@@ -15,6 +19,7 @@ from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
+    from rest_framework.request import Request
 
     from request.authorization.base import AuthorizationComponent
     from request.message_parser.base import ParsingComponent
@@ -109,3 +114,63 @@ class AgentPipelineView(AgentPipelineMixin, View):
     set ``context_class``.  Import ``View`` from ``django.views`` in the
     sub-class if additional HTTP methods are needed.
     """
+
+
+class AgentPipelineAPIView(AgentPipelineMixin, APIView):
+    """Base DRF ``APIView`` for agent pipeline endpoints.
+
+    Provides the same pipeline execution as :class:`AgentPipelineMixin` but
+    wraps it in the DRF request/response cycle so that content-negotiation,
+    OpenAPI schema generation (via ``drf-spectacular``), and DRF renderer
+    classes all work correctly.
+
+    Sub-classes must:
+
+    * Set :attr:`~AgentPipelineMixin.context_class` to the capability-specific
+      context type (e.g. ``WbmAgentRequestContext``).
+    * Call :meth:`_run_api_pipeline` from their HTTP handler methods after any
+      serializer validation.
+
+    Authentication via mTLS is handled inside the pipeline by
+    :class:`~agents.authentication.AgentAuthentication`, which reads
+    ``request.META['SSL_CLIENT_CERT_DER']`` from the underlying Django
+    ``HttpRequest``.  DRF's own authentication/permission machinery is therefore
+    disabled by default.
+    """
+
+    authentication_classes = ()
+    permission_classes = ()
+
+    def _run_api_pipeline(
+        self,
+        request: Request,
+        operation: str,
+        config: AgentPipelineConfig,
+    ) -> Response:
+        """Execute the agent pipeline and return a DRF :class:`~rest_framework.response.Response`.
+
+        Unwraps the underlying Django ``HttpRequest`` from the DRF ``request``
+        so that ``request.META`` (including ``SSL_CLIENT_CERT_DER``) is
+        accessible to :class:`~agents.authentication.AgentAuthentication`.
+        The ``HttpResponse`` produced by the pipeline responder is then
+        converted to a DRF ``Response``.
+
+        Args:
+            request: The incoming DRF request.
+            operation: Short operation name for logging (e.g. ``'check-in'``).
+            config: Grouped pipeline components for this operation.
+
+        Returns:
+            A DRF :class:`~rest_framework.response.Response` carrying the JSON
+            body and HTTP status code produced by the pipeline responder.
+        """
+        raw_request: HttpRequest = request._request  # noqa: SLF001
+        http_response = self._run_pipeline(raw_request, operation, config)
+
+        try:
+            body = json.loads(http_response.content)
+        except (ValueError, AttributeError):
+            body = {'detail': http_response.content.decode('utf-8', errors='replace')}
+
+        drf_status = http_response.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
+        return Response(body, status=drf_status)
