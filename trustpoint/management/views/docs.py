@@ -3,6 +3,7 @@
 import mimetypes
 import time
 from typing import Any
+from urllib.parse import quote
 
 from django.conf import settings
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -29,7 +30,12 @@ class ServeLocalDocsView(LoginRequiredMixin, View):
             content_type, _ = mimetypes.guess_type(str(file_path))
             return FileResponse(file_path.open('rb'), content_type=content_type or 'application/octet-stream')
 
-        return redirect(f'https://trustpoint.readthedocs.io/en/latest/{path}')
+        # Sanitize the path for the external redirect to prevent injection
+        safe_path = path.replace('\\', '/')
+        safe_path = safe_path.split('?')[0].split('#')[0]
+        safe_path = quote(safe_path, safe='/')
+
+        return redirect(f'https://trustpoint.readthedocs.io/en/latest/{safe_path}')
 
 
 class BuildDocsTriggerView(LoginRequiredMixin, View):
