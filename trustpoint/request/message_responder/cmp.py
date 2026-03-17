@@ -220,6 +220,26 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
 
         return pki_message
 
+    @staticmethod
+    def _grant_implicit_confirm(pki_message: rfc4210.PKIMessage) -> rfc4210.PKIMessage:
+        """Add the implicitConfirmGranted InfoTypeAndValue to the response generalInfo.
+
+        Per RFC 9483 §3.1, the CA MUST include this OID in the ip/cp/kup
+        generalInfo when it honours the client's implicitConfirm request,
+        signalling that no certConf message is expected.
+
+        OID 1.3.6.1.5.5.7.4.13 — id-it-implicitConfirm (RFC 4210)
+        """
+        _IMPLICIT_CONFIRM_OID = '1.3.6.1.5.5.7.4.13'  # noqa: N806
+        pki_message['header'].setComponentByPosition(11)
+        gi_schema = pki_message['header'].componentType.getTypeByPosition(11)
+        itav_val = gi_schema.componentType.clone()
+        itav_val['infoType'] = univ.ObjectIdentifier(
+            [int(x) for x in _IMPLICIT_CONFIRM_OID.split('.')]
+        )
+        pki_message['header']['generalInfo'].append(itav_val)
+        return pki_message
+
 
 class CmpInitializationResponder(CmpMessageResponder):
     """Respond to a CMP initialization request (IR) with the issued certificate (IP)."""
@@ -316,7 +336,7 @@ class CmpInitializationResponder(CmpMessageResponder):
         issuing_ca_credential = context.issuer_credential
 
         # AOKI: Sign with owner credential
-        signer_credential = context.owner_credential if context.owner_credential else issuing_ca_credential
+        signer_credential = context.owner_credential or issuing_ca_credential
 
         sender_ski = x509.SubjectKeyIdentifier.from_public_key(signer_credential.get_certificate().public_key())
         sender_kid = rfc2459.KeyIdentifier(sender_ski.digest).subtype(
@@ -330,6 +350,8 @@ class CmpInitializationResponder(CmpMessageResponder):
             issuer_credential=issuing_ca_credential,
             signer_credential=signer_credential
         )
+        if context.implicit_confirm:
+            pki_message = CmpInitializationResponder._grant_implicit_confirm(pki_message)
         if context.cmp_shared_secret:
             pki_message = CmpInitializationResponder._add_protection_shared_secret(
                 pki_message=pki_message, context=context
@@ -444,6 +466,8 @@ class CmpCertificationResponder(CmpMessageResponder):
             sender_kid=sender_kid,
             issuer_credential=issuing_ca_credential,
         )
+        if context.implicit_confirm:
+            pki_message = CmpCertificationResponder._grant_implicit_confirm(pki_message)
         if context.cmp_shared_secret:
             pki_message = CmpCertificationResponder._add_protection_shared_secret(
                 pki_message=pki_message, context=context
@@ -575,9 +599,8 @@ class CmpPkiConfResponder(CmpMessageResponder):
         )
 
         pkiconf_body = rfc4210.PKIBody()
-        pkiconf_body['pkiConf'] = univ.Null().subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 19)
-        )
+        pkiconf_val = pkiconf_body.componentType.getTypeByPosition(19).clone()
+        pkiconf_body.setComponentByPosition(19, pkiconf_val)
 
         pkiconf_message = rfc4210.PKIMessage()
         pkiconf_message['header'] = pkiconf_header
@@ -591,10 +614,13 @@ class CmpPkiConfResponder(CmpMessageResponder):
             exc_msg = 'CmpPkiConfResponder requires a CmpCertConfRequestContext.'
             raise TypeError(exc_msg)
 
-        if context.issuer_credential is None:
-            exc_msg = 'Issuer credential is not set in the context.'
+        if context.issuer_credential is not None:
+            issuing_ca_credential = context.issuer_credential
+        elif context.domain is not None and context.domain.issuing_ca is not None:
+            issuing_ca_credential = context.domain.issuing_ca.get_credential()
+        else:
+            exc_msg = 'Cannot determine issuing CA credential for pkiConf response.'
             raise ValueError(exc_msg)
-        issuing_ca_credential = context.issuer_credential
 
         signer_credential = context.owner_credential or issuing_ca_credential
         issuer_cert = signer_credential.get_certificate()

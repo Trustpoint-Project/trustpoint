@@ -164,29 +164,43 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
         context: CmpBaseRequestContext,
         serialized_pyasn1_message: rfc4210.PKIMessage,
     ) -> None:
-        """Check for the presence and correctness of the implicit confirm entry.
+        """Detect and record whether the client requested implicit confirm.
+
+        Per RFC 9483 §3.1, ``implicitConfirm`` is a OPTIONAL request from the
+        EE included in the generalInfo of an ir/cr/kur/p10cr message.  When
+        present and granted by the CA the certConf/pkiConf round-trip is
+        skipped.  When absent the normal certConf round-trip MUST take place.
 
         certConf messages never carry an implicitConfirm generalInfo field
         (RFC 9483 Section 3.1: implicitConfirm is PROHIBITED in message types
         other than ir/cr/kur/p10cr and ip/cp/kup).
+
+        Sets ``context.implicit_confirm = True`` when the flag is present and
+        valid; leaves it ``False`` otherwise (certConf round-trip expected).
         """
         body_type = serialized_pyasn1_message['body'].getName()
         if body_type == 'certConf' or context.operation == 'certconf':
             return
         if context.operation not in ['initialization', 'certification', 'key_update']:
             return
+
         implicit_confirm_entry = None
         for entry in serialized_pyasn1_message['header']['generalInfo']:
             if entry['infoType'].prettyPrint() == self.implicit_confirm_oid:
                 implicit_confirm_entry = entry
                 break
+
         if implicit_confirm_entry is None:
-            err_msg = 'implicit confirm missing'
-            raise ValueError(err_msg)
+            self.logger.debug('implicitConfirm absent: certConf round-trip expected.')
+            context.implicit_confirm = False
+            return
 
         if implicit_confirm_entry['infoValue'].prettyPrint() != self.implicit_confirm_str_value:
             err_msg = 'implicit confirm entry fail'
             raise ValueError(err_msg)
+
+        context.implicit_confirm = True
+        self.logger.debug('implicitConfirm requested by client: will grant in response.')
 
 
 

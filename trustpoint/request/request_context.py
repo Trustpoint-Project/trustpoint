@@ -179,6 +179,7 @@ class CmpBaseRequestContext(HttpBaseRequestContext):
     cmp_shared_secret: str | None = None
     error_code: PKIFailureInfo | None = None
     error_details: str | None = None
+    implicit_confirm: bool = False
 
     # Client-side fields
     cmp_server_host: str | None = None

@@ -117,6 +117,12 @@ class CmpRequestView(LoggerMixin, View):
         except Exception:
             self.logger.exception('Error processing CMP request')
 
-        CmpMessageResponder.build_response(ctx)
+        try:
+            CmpMessageResponder.build_response(ctx)
+        except Exception:
+            self.logger.exception('Error building CMP response')
+            ctx.http_response_status = 500
+            ctx.http_response_content = 'Internal server error building CMP response.'
+            ctx.http_response_content_type = 'text/plain'
 
         return ctx.to_http_response()
