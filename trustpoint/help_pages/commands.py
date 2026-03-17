@@ -69,7 +69,6 @@ class CmpSharedSecretCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
-            '-implicit_confirm \\\n'
             '-tls_used \\\n'
             f'-server {host} \\\n'
             f'-ref {pk} \\\n'
@@ -99,7 +98,6 @@ class CmpSharedSecretCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd ir \\\n'
-            '-implicit_confirm \\\n'
             '-tls_used \\\n'
             f'-server {host} \\\n'
             f'-ref {pk} \\\n'
@@ -258,7 +256,6 @@ class CmpClientCertificateCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
-            '-implicit_confirm \\\n'
             '-tls_used \\\n'
             '-trusted domain-credential-full-chain.pem \\\n'
             f'-server {host} \\\n'
@@ -286,7 +283,6 @@ class CmpClientCertificateCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd ir \\\n'
-            '-implicit_confirm \\\n'
             f'-server {host} \\\n'
             '-tls_used \\\n'
             '-cert idevid.pem \\\n'
