@@ -6,10 +6,12 @@ from request.request_context import (
     BaseRequestContext,
     BaseRevocationRequestContext,
     CmpBaseRequestContext,
+    CmpCertConfRequestContext,
 )
 from trustpoint.logger import LoggerMixin
 
 from .base import AbstractOperationProcessor
+from .cert_conf import CertConfProcessor
 from .issue_cert import CertificateIssueProcessor
 from .revoke_cert import CertificateRevocationProcessor
 
@@ -20,7 +22,9 @@ class OperationProcessor(AbstractOperationProcessor, LoggerMixin):
     def process_operation(self, context: BaseRequestContext) -> None:
         """Process the requested operation."""
         processor_instance: AbstractOperationProcessor
-        if isinstance(context, BaseCertificateRequestContext):
+        if isinstance(context, CmpCertConfRequestContext):
+            processor_instance = CertConfProcessor()
+        elif isinstance(context, BaseCertificateRequestContext):
             # Process certificate issuance operation
             processor_instance = CertificateIssueProcessor()
         elif isinstance(context, BaseRevocationRequestContext):
