@@ -617,7 +617,11 @@ class CmpPkiConfResponder(CmpMessageResponder):
         if context.issuer_credential is not None:
             issuing_ca_credential = context.issuer_credential
         elif context.domain is not None and context.domain.issuing_ca is not None:
-            issuing_ca_credential = context.domain.issuing_ca.get_credential()
+            _credential = context.domain.issuing_ca.get_credential()
+            if _credential is None:
+                exc_msg = 'Issuing CA has no credential for pkiConf response.'
+                raise ValueError(exc_msg)
+            issuing_ca_credential = _credential
         else:
             exc_msg = 'Cannot determine issuing CA credential for pkiConf response.'
             raise ValueError(exc_msg)
