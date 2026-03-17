@@ -363,7 +363,7 @@ class CmpInitializationResponder(CmpMessageResponder):
 
         encoded_message = encoder.encode(pki_message)
 
-        if context.device and context.device.onboarding_config:
+        if context.implicit_confirm and context.device and context.device.onboarding_config:
             context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             context.device.onboarding_config.save()
         context.http_response_status = 200
@@ -479,7 +479,7 @@ class CmpCertificationResponder(CmpMessageResponder):
 
         encoded_message = encoder.encode(pki_message)
 
-        if context.device and context.device.onboarding_config:
+        if context.implicit_confirm and context.device and context.device.onboarding_config:
             context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             context.device.onboarding_config.save()
         context.http_response_status = 200
@@ -650,6 +650,15 @@ class CmpPkiConfResponder(CmpMessageResponder):
             )
 
         encoded_message = encoder.encode(pki_message)
+
+        cert_accepted = context.cert_conf_status in (0, None)
+        if cert_accepted and context.device and context.device.onboarding_config:
+            context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+            context.device.onboarding_config.save()
+            CmpPkiConfResponder.logger.info(
+                'Device %s marked as ONBOARDED after successful certConf.',
+                context.device,
+            )
 
         context.http_response_status = 200
         context.http_response_content = encoded_message
