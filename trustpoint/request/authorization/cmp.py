@@ -184,7 +184,7 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
             cert_hash_hex,
         )
 
-    def _raise_authorization_error(self, message: str, context: BaseRequestContext) -> None:
+    def _raise_authorization_error(self, message: str, context: BaseRequestContext) -> Never:
         """Set a generic error on the context and raise ValueError."""
         context.error('Unauthorized', http_status=403, cmp_code=PKIFailureInfo.NOT_AUTHORIZED)
         raise ValueError(message)
