@@ -94,60 +94,85 @@ class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
         help_text='Optional password for the private key.',
     )
 
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        """Parse uploaded files and build a CredentialSerializer."""
-        from cryptography.hazmat.primitives import hashes  # noqa: PLC0415
-
+    def _parse_private_key(self, attrs: dict[str, Any]) -> PrivateKeySerializer:
+        """Parse and return the private key serializer from uploaded file."""
         pk_file = attrs.get('private_key_file')
+        if pk_file is None:
+            raise serializers.ValidationError({'private_key_file': 'No private key file provided.'})
         pw = attrs.get('private_key_file_password') or None
         try:
-            private_key_serializer = PrivateKeySerializer.from_bytes(pk_file.read(), pw)
+            return PrivateKeySerializer.from_bytes(pk_file.read(), pw)
         except Exception as exc:
             msg = 'Failed to parse the private key file. Wrong password or corrupted.'
             raise serializers.ValidationError({'private_key_file': msg}) from exc
 
+    def _parse_certificate(self, attrs: dict[str, Any]) -> CertificateSerializer:
+        """Parse and return the certificate serializer from uploaded file."""
         cert_file = attrs.get('certificate')
+        if cert_file is None:
+            raise serializers.ValidationError({'certificate': 'No certificate file provided.'})
         try:
-            certificate_serializer = CertificateSerializer.from_bytes(cert_file.read())
+            return CertificateSerializer.from_bytes(cert_file.read())
         except Exception as exc:
             msg = 'Failed to parse the certificate. Seems to be corrupted.'
             raise serializers.ValidationError({'certificate': msg}) from exc
 
+    def _check_duplicate_certificate(self, certificate_serializer: CertificateSerializer) -> None:
+        """Raise a ValidationError if the certificate is already used by another DevOwnerID."""
+        from cryptography.hazmat.primitives import hashes  # noqa: PLC0415
+
         from pki.models.certificate import CertificateModel  # noqa: PLC0415
+
         fingerprint = certificate_serializer.as_crypto().fingerprint(hashes.SHA256()).hex()
         cert_in_db = CertificateModel.get_cert_by_sha256_fingerprint(fingerprint)
-        if cert_in_db:
-            dup_qs = OwnerCredentialModel.objects.filter(
-                remote_issued_credentials__credential__certificate=cert_in_db,
-                remote_issued_credentials__issued_credential_type=(
-                    RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID
-                ),
-            )
-            if dup_qs.exists():
-                existing = dup_qs.first()
-                msg = f'DevOwnerID "{existing.unique_name}" already uses this certificate.'
-                raise serializers.ValidationError({'certificate': msg})
+        if not cert_in_db:
+            return
+        dup_qs = OwnerCredentialModel.objects.filter(
+            remote_issued_credentials__credential__certificate=cert_in_db,
+            remote_issued_credentials__issued_credential_type=(
+                RemoteIssuedCredentialModel.RemoteIssuedCredentialType.DEV_OWNER_ID
+            ),
+        )
+        existing = dup_qs.first()
+        if existing is not None:
+            msg = f'DevOwnerID "{existing.unique_name}" already uses this certificate.'
+            raise serializers.ValidationError({'certificate': msg})
 
+    def _parse_chain(self, attrs: dict[str, Any]) -> CertificateCollectionSerializer | None:
+        """Parse and return the optional certificate chain serializer."""
         chain_file = attrs.get('certificate_chain')
-        chain_serializer: CertificateCollectionSerializer | None = None
-        if chain_file:
-            try:
-                chain_serializer = CertificateCollectionSerializer.from_bytes(chain_file.read())
-            except Exception as exc:
-                msg = 'Failed to parse the certificate chain.'
-                raise serializers.ValidationError({'certificate_chain': msg}) from exc
+        if not chain_file:
+            return None
+        try:
+            return CertificateCollectionSerializer.from_bytes(chain_file.read())
+        except Exception as exc:
+            msg = 'Failed to parse the certificate chain.'
+            raise serializers.ValidationError({'certificate_chain': msg}) from exc
 
+    def _resolve_unique_name(
+        self, attrs: dict[str, Any], certificate_serializer: CertificateSerializer
+    ) -> str:
+        """Derive and validate the unique name for the new DevOwnerID."""
         unique_name: str = attrs.get('unique_name', '')
         if not unique_name:
             from util.field import get_certificate_name  # noqa: PLC0415
             unique_name = get_certificate_name(certificate_serializer.as_crypto()) or ''
         if not unique_name:
-            msg = 'Could not derive a unique name from the certificate.'
-            raise serializers.ValidationError({'unique_name': msg})
-
+            raise serializers.ValidationError(
+                {'unique_name': 'Could not derive a unique name from the certificate.'}
+            )
         if OwnerCredentialModel.objects.filter(unique_name=unique_name).exists():
             msg = f'An owner credential with name "{unique_name}" already exists.'
             raise serializers.ValidationError({'unique_name': msg})
+        return unique_name
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        """Parse uploaded files and build a CredentialSerializer."""
+        private_key_serializer = self._parse_private_key(attrs)
+        certificate_serializer = self._parse_certificate(attrs)
+        self._check_duplicate_certificate(certificate_serializer)
+        chain_serializer = self._parse_chain(attrs)
+        unique_name = self._resolve_unique_name(attrs, certificate_serializer)
 
         attrs['_unique_name'] = unique_name
         attrs['_credential_serializer'] = CredentialSerializer.from_serializers(

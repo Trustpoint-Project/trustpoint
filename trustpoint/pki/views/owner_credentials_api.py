@@ -270,9 +270,9 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
         instance = self.get_object()
         try:
             instance.delete()
-        except ProtectedError as exc:
+        except ProtectedError:
             return Response(
-                {'detail': f'Cannot delete DevOwnerID: it is referenced by other objects. {exc}'},
+                {'detail': 'Cannot delete DevOwnerID: it is referenced by other objects.'},
                 status=status.HTTP_409_CONFLICT,
             )
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -348,24 +348,24 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
 
         try:
             self._enroll_domain_credential(owner_credential, cert_profile, pending_issued, cert_content)
-        except (ValueError, KeyError, ProfileValidationError) as exc:
+        except (ValueError, KeyError, ProfileValidationError):
             pending_issued.delete()
             return Response(
-                {'detail': f'Failed to build certificate request: {exc}'},
+                {'detail': 'Failed to build certificate request.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except EstClientError as exc:
+        except EstClientError:
             self.logger.exception('EST client error during Domain Credential enrollment')
             pending_issued.delete()
             return Response(
-                {'detail': f'Failed to enroll Domain Credential via EST: {exc}'},
+                {'detail': 'Failed to enroll Domain Credential via EST.'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
-        except Exception as exc:
+        except Exception:
             self.logger.exception('Unexpected error during Domain Credential EST enrollment')
             pending_issued.delete()
             return Response(
-                {'detail': f'Unexpected error during enrollment: {exc}'},
+                {'detail': 'Unexpected error during enrollment.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -511,24 +511,24 @@ class DevOwnerIdViewSet(LoggerMixin, viewsets.GenericViewSet[OwnerCredentialMode
 
         try:
             self._enroll_devownerid(owner_credential, cert_profile, pending_issued, cert_content)
-        except (ValueError, KeyError, ProfileValidationError) as exc:
+        except (ValueError, KeyError, ProfileValidationError):
             pending_issued.delete()
             return Response(
-                {'detail': f'Failed to build certificate request: {exc}'},
+                {'detail': 'Failed to build certificate request.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except EstClientError as exc:
+        except EstClientError:
             self.logger.exception('EST client error during DevOwnerID enrollment')
             pending_issued.delete()
             return Response(
-                {'detail': f'Failed to enroll DevOwnerID certificate via EST: {exc}'},
+                {'detail': 'Failed to enroll DevOwnerID certificate via EST.'},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
-        except Exception as exc:
+        except Exception:
             self.logger.exception('Unexpected error during DevOwnerID EST enrollment')
             pending_issued.delete()
             return Response(
-                {'detail': f'Unexpected error during enrollment: {exc}'},
+                {'detail': 'Unexpected error during enrollment.'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
