@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, NoReturn, cast
+import logging
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
 
 from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
 from cryptography.x509 import Certificate
 from django import forms
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
@@ -19,7 +21,14 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from management.models import BackupOptions, KeyStorageConfig, NotificationConfig, PKCS11Token, SecurityConfig
+from management.models import (
+    BackupOptions,
+    KeyStorageConfig,
+    LoggingConfig,
+    NotificationConfig,
+    PKCS11Token,
+    SecurityConfig,
+)
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from pki.models import CredentialModel
@@ -830,3 +839,51 @@ class PKCS11ConfigForm(forms.Form):
                     setattr(token, field, value)
             token.save()
         return token
+
+
+class LanguageConfigForm(forms.Form):
+    """Form for managing language configuration."""
+
+    language = forms.ChoiceField(
+        label=_('Language'),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the LanguageConfigForm."""
+        super().__init__(*args, **kwargs)
+
+        language_field = self.fields['language']
+        if isinstance(language_field, forms.ChoiceField):
+            language_field.choices = settings.LANGUAGES
+
+    def save(self) -> None:
+        """Save method for form compatibility (language is handled by Django's set_language view)."""
+
+
+class LoggingConfigForm(forms.Form):
+    """Form for managing logging configuration."""
+
+    LOG_LEVELS: ClassVar[list[tuple[str, str]]] = [
+        ('DEBUG', 'DEBUG'),
+        ('INFO', 'INFO'),
+        ('WARNING', 'WARNING'),
+        ('ERROR', 'ERROR'),
+        ('CRITICAL', 'CRITICAL'),
+    ]
+
+    loglevel = forms.ChoiceField(
+        label=_('Log Level'),
+        choices=LOG_LEVELS,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    def save(self) -> None:
+        """Save the logging configuration."""
+        level = self.cleaned_data['loglevel']
+        logger = logging.getLogger()
+        logger.setLevel(getattr(logging, level))
+        LoggingConfig.objects.update_or_create(
+            id=1,
+            defaults={'log_level': level}
+        )

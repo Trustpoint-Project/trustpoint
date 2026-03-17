@@ -7,28 +7,28 @@
 <div class="tp-settings-layout">
 
   <div class="tp-settings-tabs">
-    <a class="tp-settings-tab-link" href="#" data-settings-tab="panel-language">{% trans "Language" %}</a>
-    <a class="tp-settings-tab-link" href="#" data-settings-tab="panel-security">{% trans "Security" %}</a>
-    <a class="tp-settings-tab-link" href="#" data-settings-tab="panel-log">{% trans "Logging" %}</a>
-    <a class="tp-settings-tab-link" href="#" data-settings-tab="panel-notifications">{% trans "Notifications" %}</a>
+    <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=language" data-settings-tab="panel-language">{% trans "Language" %}</a>
+    <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=security" data-settings-tab="panel-security">{% trans "Security" %}</a>
+    <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=log" data-settings-tab="panel-log">{% trans "Logging" %}</a>
+    <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=notifications" data-settings-tab="panel-notifications">{% trans "Notifications" %}</a>
   </div>
 
   <div class="tp-settings-content">
 
     <div id="panel-language" class="tp-settings-panel">
-      {% include 'management/includes/language_configuration.html' %}
+      {% include 'management/includes/language_configuration.html' with form=language_form %}
     </div>
 
     <div id="panel-security" class="tp-settings-panel">
-      {% include 'management/includes/security_configuration.html' %}
+      {% include 'management/includes/security_configuration.html' with form=security_form %}
     </div>
 
     <div id="panel-log" class="tp-settings-panel">
-      {% include 'management/includes/log_configuration.html' %}
+      {% include 'management/includes/log_configuration.html' with form=logging_form %}
     </div>
 
     <div id="panel-notifications" class="tp-settings-panel">
-      {% include 'management/includes/notification_configuration.html' %}
+      {% include 'management/includes/notification_configuration.html' with form=notification_form %}
     </div>
 
   </div>
@@ -59,7 +59,10 @@
         });
     });
 
-    var saved = localStorage.getItem(STORAGE_KEY) || DEFAULT_TAB;
+    // Get tab from URL parameter or localStorage
+    var urlParams = new URLSearchParams(window.location.search);
+    var tabParam = urlParams.get('tab');
+    var saved = tabParam ? 'panel-' + tabParam : (localStorage.getItem(STORAGE_KEY) || DEFAULT_TAB);
     if (!document.getElementById(saved)) saved = DEFAULT_TAB;
     activate(saved);
 }());
