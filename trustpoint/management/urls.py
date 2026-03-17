@@ -2,12 +2,33 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, help_support, key_storage, logging, notifications, settings, tls
+from .views import (
+    IndexView,
+    backup,
+    help_support,
+    key_storage,
+    logging,
+    notifications,
+    settings,
+    tls,
+)
 
 app_name = 'management'
 urlpatterns = [
     path('', IndexView.as_view(), name='index'),
-    # path('settings/', settings.settings, name='settings'),  # noqa: ERA001
+    # Settings URLs
+    path('settings/', settings.SettingsTabView.as_view(), name='settings'),
+    path('settings/language/', settings.LanguageSettingsView.as_view(), name='settings-language'),
+    path('settings/security/', settings.SecuritySettingsView.as_view(), name='settings-security'),
+    path('settings/logging/', settings.LoggingSettingsView.as_view(), name='settings-logging'),
+    path(
+        'settings/notifications/',
+        settings.NotificationSettingsView.as_view(),
+        name='settings-notifications'
+    ),
+    # Backward compatibility for log level change
+    path('loglevel/change', settings.ChangeLogLevelView.as_view(), name='change-loglevel'),
+    # Logging file views
     path('logging/files/', logging.LoggingFilesTableView.as_view(), name='logging-files'),
     re_path(
         r'^logging/files/details/(?P<filename>trustpoint\.log(?:\.\d{1,5})?)/?$',
@@ -24,8 +45,7 @@ urlpatterns = [
         logging.LoggingFilesDownloadMultipleView.as_view(),
         name='logging-files-download-multiple',
     ),
-    path('loglevel/change', settings.ChangeLogLevelView.as_view(), name='change-loglevel'),
-    path('settings/', settings.SettingsView.as_view(), name='settings'),
+    # TLS views
     path('tls/', tls.TlsView.as_view(), name='tls'),
     path('tls/add/method-select/', tls.TlsAddMethodSelectView.as_view(),
         name='tls-add-method_select',
@@ -49,11 +69,7 @@ urlpatterns = [
         name='tls-delete_confirm',
     ),
     path('tls/activate/<int:pk>', tls.ActivateTlsServerView.as_view(), name='activate-tls'),
-    path(
-        'backups/',
-        backup.BackupManageView.as_view(extra_context={'page_category': 'management', 'page_name': 'backup'}),
-        name='backups'
-    ),
+    # Backup views
     path(
         'backups/',
         backup.BackupManageView.as_view(extra_context={'page_category': 'management', 'page_name': 'backup'}),
@@ -66,6 +82,7 @@ urlpatterns = [
         name='backup-download-multiple'
     ),
     path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
+    # Other views
     path('help/', help_support.HelpView.as_view(), name='help'),
     path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
     path('notifications/refresh/', notifications.RefreshNotificationsView.as_view(), name='refresh_notifications'),

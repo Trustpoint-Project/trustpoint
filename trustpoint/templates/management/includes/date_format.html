@@ -1,23 +1,18 @@
 {% load i18n %}
 
-
+<div class="card">
     <div class="card-header"><h5 class="mb-0">{% trans "Date Format" %}</h5></div>
     <div class="card-body pt-4 pb-4">
-        <form method="POST" id="date_format_configuration">
+        <form method="POST" action="{% url 'management:settings-date' %}" id="dateformat_configuration">
             {% csrf_token %}
             <fieldset class="form-group tp-form-group">
-                <input name="next" type="hidden" value="{{ redirect_to }}">
-                <select name="date_format" class="select form-select">
-                    <option value="dd/MM/yyyy HH:mm">31/12/2026 16:45</option>
-                    <option value="MM/dd/yyyy HH:mm">12/31/2026 16:45</option>
-                    <option value="dd MMM yyyy HH:mm">31 Dec 2026 16:45</option>
-                    <option value="dd MMM yyyy hh:mm a">31 Dec 2026 04:45 PM</option>
-                    <option value="dd MMMM yyyy HH:mm:ss">31 December 2026 16:45:59</option>
-                    <option value="dd MMMM yyyy hh:mm:ss a">31 December 2026 04:45:59 PM</option>
-                    <option value="yyyy-MM-dd HH:mm:ss">2026-12-31 16:45:59</option>
-                    <option value="yyyy-MM-dd'T'HH:mm:ss">2026-12-31T16:45:59</option>
-                </select>
+                {{ form.dateformat }}
             </fieldset>
         </form>
     </div>
-
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button class="btn btn-primary" type="submit" form="dateformat_configuration">{% trans "Save" %}</button>
+        </div>
+    </div>
+</div>

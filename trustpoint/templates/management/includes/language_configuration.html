@@ -1,22 +1,12 @@
 {% load i18n %}
 
-
-    <h5 class="mb-0 card-header">{% trans "Language Configuration" %}</h5>
-    <div class="card-body pt-2 pb-4">
-        <form method="POST" action="{% url 'set_language' %}" enctype="multipart/form-data" id="language_configuration">
+<div class="card">
+    <div class="card-header"><h5 class="mb-0">{% trans "Language Configuration" %}</h5></div>
+    <div class="card-body pt-4 pb-4">
+        <form method="POST" action="{% url 'management:settings-language' %}" enctype="multipart/form-data" id="language_configuration">
             {% csrf_token %}
             <fieldset class="form-group tp-form-group">
-                <input name="next" type="hidden" value="{{ redirect_to }}">
-                <select name="language" class="select form-select">
-                    {% get_current_language as LANGUAGE_CODE %}
-                    {% get_available_languages as LANGUAGES %}
-                    {% get_language_info_list for LANGUAGES as languages %}
-                    {% for language in languages %}
-                        <option value="{{ language.code }}"{% if language.code == LANGUAGE_CODE %} selected{% endif %}>
-                            {{ language.name_local }} ({{ language.code }})
-                        </option>
-                    {% endfor %}
-                </select>
+                {{ form.language }}
             </fieldset>
         </form>
     </div>
