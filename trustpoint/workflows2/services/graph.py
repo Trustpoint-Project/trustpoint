@@ -7,6 +7,9 @@ from typing import Any
 from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2StepRun
 
 
+_END_NODE_IDS = {"$end", "$reject"}
+
+
 @dataclass(frozen=True)
 class GraphNode:
     id: str
@@ -15,6 +18,7 @@ class GraphNode:
     produces_outcome: bool
     outcomes: list[str]
     is_terminal: bool
+    is_virtual: bool = False
 
 
 @dataclass(frozen=True)
@@ -30,11 +34,10 @@ class IRGraphAdapter:
 
     - Derived from IR (YAML stays source of truth).
     - No layout in v1.
+    - Workflow end states are represented via virtual nodes:
+      - $end
+      - $reject
     """
-
-    def __init__(self, *, terminal_types: set[str] | None = None) -> None:
-        # use compiler's terminal set by default
-        self.terminal_types = terminal_types or {"stop", "succeed", "fail", "reject"}
 
     def to_graph(self, ir: dict[str, Any]) -> dict[str, Any]:
         wf = self._get_dict(ir, "workflow")
@@ -43,8 +46,8 @@ class IRGraphAdapter:
 
         edges = self._build_edges(transitions)
 
-        # compute which nodes have outgoing edges
         has_outgoing: set[str] = {e.frm for e in edges}
+        referenced_targets: set[str] = {e.to for e in edges if isinstance(e.to, str)}
 
         nodes: list[GraphNode] = []
         for step_id, s in steps.items():
@@ -64,11 +67,8 @@ class IRGraphAdapter:
             outcomes_raw = s.get("outcomes") or []
             outcomes: list[str] = [o for o in outcomes_raw if isinstance(o, str)]
 
-            # NEW:
-            # terminal if:
-            # - it's an explicit terminal type OR
-            # - it has no outgoing edges (implicit end node)
-            is_terminal = (typ in self.terminal_types) or (step_id not in has_outgoing)
+            # A real step is terminal when it has no outgoing edge.
+            is_terminal = step_id not in has_outgoing
 
             nodes.append(
                 GraphNode(
@@ -78,6 +78,34 @@ class IRGraphAdapter:
                     produces_outcome=produces,
                     outcomes=outcomes,
                     is_terminal=is_terminal,
+                    is_virtual=False,
+                )
+            )
+
+        # Add virtual end/reject nodes if referenced by flow.
+        if "$end" in referenced_targets:
+            nodes.append(
+                GraphNode(
+                    id="$end",
+                    type="end",
+                    title="End",
+                    produces_outcome=False,
+                    outcomes=[],
+                    is_terminal=True,
+                    is_virtual=True,
+                )
+            )
+
+        if "$reject" in referenced_targets:
+            nodes.append(
+                GraphNode(
+                    id="$reject",
+                    type="reject",
+                    title="Reject",
+                    produces_outcome=False,
+                    outcomes=[],
+                    is_terminal=True,
+                    is_virtual=True,
                 )
             )
 
@@ -102,39 +130,6 @@ class IRGraphAdapter:
             return {}
         v = obj.get(key)
         return v if isinstance(v, dict) else {}
-
-    def _build_nodes(self, steps: dict[str, Any]) -> list[GraphNode]:
-        out: list[GraphNode] = []
-        for step_id, s in steps.items():
-            if not isinstance(step_id, str) or not isinstance(s, dict):
-                continue
-
-            typ = s.get("type")
-            if not isinstance(typ, str):
-                typ = "unknown"
-
-            title = s.get("title")
-            if title is not None and not isinstance(title, str):
-                title = None
-
-            produces = bool(s.get("produces_outcome", False))
-
-            outcomes_raw = s.get("outcomes") or []
-            outcomes: list[str] = [o for o in outcomes_raw if isinstance(o, str)]
-
-            out.append(
-                GraphNode(
-                    id=step_id,
-                    type=typ,
-                    title=title,
-                    produces_outcome=produces,
-                    outcomes=outcomes,
-                    is_terminal=(typ in self.terminal_types),
-                )
-            )
-
-        out.sort(key=lambda n: n.id)
-        return out
 
     def _build_edges(self, transitions: dict[str, Any]) -> list[GraphEdge]:
         out: list[GraphEdge] = []

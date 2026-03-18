@@ -9,16 +9,17 @@ from workflows2.events.context import ContextVar
 
 @dataclass(frozen=True)
 class EventSpec:
-    """A trigger key (trigger.on) that is allowed in workflows.
+    """
+    A trigger key (trigger.on) that is allowed in workflows.
 
     allowed_step_types:
       - None => allow all step types (compiler built-ins still apply)
       - set(...) => only these step types may appear in workflow.steps for this trigger
     """
     key: str
+    title: str = ""
     description: str = ""
     allowed_step_types: set[str] | None = None
-
     context_vars: tuple[ContextVar, ...] = ()
 
 
@@ -33,29 +34,32 @@ class EventRegistry:
         if not key:
             raise ValueError("EventSpec.key must be non-empty")
 
-        # normalize allowed_step_types
         allowed = spec.allowed_step_types
         if allowed is not None:
             allowed = {str(x).strip() for x in allowed if str(x).strip()}
             allowed = allowed or set()
 
-        # normalize context vars
         ctx_vars: list[ContextVar] = []
         for v in (spec.context_vars or ()):
             p = (v.path or "").strip()
             if not p:
                 continue
+
             ctx_vars.append(
                 ContextVar(
                     path=p,
                     type=str(v.type or "any"),
                     description=str(v.description or ""),
                     example=v.example,
+                    title=str(v.title or ""),
+                    group=str(v.group or ""),
+                    help_text=str(v.help_text or ""),
                 )
             )
 
         self._specs[key] = EventSpec(
             key=key,
+            title=str(spec.title or "").strip(),
             description=str(spec.description or ""),
             allowed_step_types=allowed,
             context_vars=tuple(ctx_vars),
@@ -81,13 +85,11 @@ class EventRegistry:
         spec = self.get(key)
         return spec.description if spec else None
 
-    # NEW: convenience for UI
     def context_for(self, key: str) -> tuple[ContextVar, ...]:
         spec = self.get(key)
         return spec.context_vars if spec else ()
 
 
-# single global registry instance (empty initially)
 _REGISTRY = EventRegistry()
 
 

@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 
 from django.http import JsonResponse
+from django.utils.decorators import method_decorator
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
-from django.utils.decorators import method_decorator
 
 from workflows2.compiler.compiler import WorkflowCompiler
 from workflows2.services.graph import WorkflowGraphService
@@ -14,8 +14,8 @@ from workflows2.services.graph import WorkflowGraphService
 @method_decorator(csrf_exempt, name="dispatch")
 class Workflow2GraphFromYamlView(View):
     """
-    Compile raw YAML and return the same graph structure
-    as Workflow2DefinitionGraphView, but without persisting anything.
+    Compile raw YAML and return the same graph structure as the saved-definition
+    graph endpoint, but without persisting anything.
     """
 
     def post(self, request, *args, **kwargs):
@@ -29,19 +29,28 @@ class Workflow2GraphFromYamlView(View):
             return JsonResponse({"error": "yaml_text missing"}, status=400)
 
         try:
-            # Compile YAML → IR
             compiler = WorkflowCompiler()
-            compiled = compiler.compile_text(yaml_text)  # adjust if your API differs
-            ir = compiled.ir  # adjust if your compiler returns dict directly
+            ir = compiler.compile(yaml_text)
 
-            # Reuse same graph adapter via service
             svc = WorkflowGraphService()
-            graph = svc.adapter.to_graph(ir)
 
-            return JsonResponse(graph)
+            # Prefer the existing adapter path if present.
+            if hasattr(svc, "adapter") and hasattr(svc.adapter, "to_graph"):
+                graph = svc.adapter.to_graph(ir)
+                return JsonResponse(graph)
+
+            # Fallbacks in case your service exposes a direct helper instead.
+            if hasattr(svc, "to_graph"):
+                graph = svc.to_graph(ir)
+                return JsonResponse(graph)
+
+            if hasattr(svc, "graph_from_ir"):
+                graph = svc.graph_from_ir(ir)
+                return JsonResponse(graph)
+
+            raise RuntimeError("WorkflowGraphService has no supported graph conversion method")
 
         except Exception as e:
-            # Optional: catch your CompileError separately if you have one
             return JsonResponse(
                 {"error": f"{type(e).__name__}: {str(e)}"},
                 status=400,

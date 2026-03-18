@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 from .errors import CompileError
 
@@ -46,7 +46,7 @@ def _tokenize(s: str) -> list[Token]:
             continue
 
         # punctuation
-        if ch in "(),.":
+        if ch in '(),.':
             add(ch, ch, i)
             i += 1
             continue
@@ -59,24 +59,24 @@ def _tokenize(s: str) -> list[Token]:
             buf: list[str] = []
             while i < n:
                 c = s[i]
-                if c == "\\":
+                if c == '\\':
                     if i + 1 >= n:
-                        raise CompileError("Unterminated escape sequence in string literal")
+                        raise CompileError('Unterminated escape sequence in string literal')
                     buf.append(s[i + 1])
                     i += 2
                     continue
                 if c == quote:
                     i += 1
-                    add("STRING", "".join(buf), start)
+                    add('STRING', ''.join(buf), start)
                     break
                 buf.append(c)
                 i += 1
             else:
-                raise CompileError("Unterminated string literal")
+                raise CompileError('Unterminated string literal')
             continue
 
         # number literal: int or float
-        if ch.isdigit() or (ch == "-" and i + 1 < n and s[i + 1].isdigit()):
+        if ch.isdigit() or (ch == '-' and i + 1 < n and s[i + 1].isdigit()):
             start = i
             i += 1
             has_dot = False
@@ -85,26 +85,26 @@ def _tokenize(s: str) -> list[Token]:
                 if c.isdigit():
                     i += 1
                     continue
-                if c == "." and not has_dot:
+                if c == '.' and not has_dot:
                     has_dot = True
                     i += 1
                     continue
                 break
-            add("NUMBER", s[start:i], start)
+            add('NUMBER', s[start:i], start)
             continue
 
         # identifier
-        if ch.isalpha() or ch == "_":
+        if ch.isalpha() or ch == '_':
             start = i
             i += 1
-            while i < n and (s[i].isalnum() or s[i] == "_"):
+            while i < n and (s[i].isalnum() or s[i] == '_'):
                 i += 1
-            add("IDENT", s[start:i], start)
+            add('IDENT', s[start:i], start)
             continue
 
         raise CompileError(f"Unexpected character '{ch}' in expression")
 
-    add("EOF", "", n)
+    add('EOF', '', n)
     return tokens
 
 
@@ -122,7 +122,7 @@ class _Parser:
     def eat(self, typ: str) -> Token:
         t = self.cur()
         if t.typ != typ:
-            raise CompileError(f"Expected {typ} but found {t.typ}", path=self.path)
+            raise CompileError(f'Expected {typ} but found {t.typ}', path=self.path)
         self.i += 1
         return t
 
@@ -133,82 +133,100 @@ class _Parser:
 
     def parse(self) -> Any:
         expr = self.parse_primary()
-        if self.cur().typ != "EOF":
-            raise CompileError("Unexpected trailing tokens in expression", path=self.path)
+        if self.cur().typ != 'EOF':
+            raise CompileError('Unexpected trailing tokens in expression', path=self.path)
         return expr
 
     def parse_primary(self) -> Any:
         t = self.cur()
 
-        if t.typ == "IDENT":
-            ident = self.eat("IDENT").val
+        if t.typ == 'IDENT':
+            ident = self.eat('IDENT').val
 
             # literals by identifier
             low = ident.lower()
-            if low == "true":
+            if low == 'true':
                 return True
-            if low == "false":
+            if low == 'false':
                 return False
-            if low == "null":
+            if low == 'null':
                 return None
 
             # call: ident(...)
-            if self.cur().typ == "(":
-                self.eat("(")
+            if self.cur().typ == '(':
+                self.eat('(')
                 args: list[Any] = []
-                if self.cur().typ != ")":
+                if self.cur().typ != ')':
                     while True:
                         args.append(self.parse_primary())
-                        if self.maybe(","):
+                        if self.maybe(','):
                             continue
                         break
-                self.eat(")")
+                self.eat(')')
                 return CallExpr(name=ident, args=args)
 
             # ref: ident(.ident)*
             path = [ident]
-            while self.maybe("."):
-                seg = self.eat("IDENT").val
+            while self.maybe('.'):
+                seg = self.eat('IDENT').val
                 path.append(seg)
             return RefExpr(path=path)
 
-        if t.typ == "NUMBER":
-            raw = self.eat("NUMBER").val
+        if t.typ == 'NUMBER':
+            raw = self.eat('NUMBER').val
             try:
-                if "." in raw:
+                if '.' in raw:
                     return float(raw)
                 return int(raw)
             except ValueError as e:
-                raise CompileError("Invalid number literal", path=self.path) from e
+                raise CompileError('Invalid number literal', path=self.path) from e
 
-        if t.typ == "STRING":
-            return self.eat("STRING").val
+        if t.typ == 'STRING':
+            return self.eat('STRING').val
 
-        raise CompileError(f"Invalid expression token: {t.typ}", path=self.path)
+        raise CompileError(f'Invalid expression token: {t.typ}', path=self.path)
 
 
 # ----------------------------- allowlist + public API ----------------------------- #
 
-ALLOWED_REF_ROOTS = {"event", "vars"}
+ALLOWED_REF_ROOTS: tuple[str, ...] = ('event', 'vars')
+
+EXPRESSION_FUNCTION_GROUPS: tuple[dict[str, Any], ...] = (
+    {
+        'group': 'numeric',
+        'functions': (
+            {'name': 'add', 'title': 'add', 'description': 'Adds all arguments.'},
+            {'name': 'sub', 'title': 'sub', 'description': 'Subtracts subsequent arguments from the first.'},
+            {'name': 'mul', 'title': 'mul', 'description': 'Multiplies all arguments.'},
+            {'name': 'div', 'title': 'div', 'description': 'Divides the first argument by subsequent arguments.'},
+            {'name': 'min', 'title': 'min', 'description': 'Returns the minimum argument.'},
+            {'name': 'max', 'title': 'max', 'description': 'Returns the maximum argument.'},
+            {'name': 'round', 'title': 'round', 'description': 'Rounds a numeric value.'},
+            {'name': 'int', 'title': 'int', 'description': 'Casts a value to int.'},
+            {'name': 'float', 'title': 'float', 'description': 'Casts a value to float.'},
+        ),
+    },
+    {
+        'group': 'string',
+        'functions': (
+            {'name': 'str', 'title': 'str', 'description': 'Casts a value to string.'},
+            {'name': 'lower', 'title': 'lower', 'description': 'Lower-cases a string.'},
+            {'name': 'upper', 'title': 'upper', 'description': 'Upper-cases a string.'},
+            {'name': 'concat', 'title': 'concat', 'description': 'Concatenates arguments into one string.'},
+        ),
+    },
+    {
+        'group': 'debug',
+        'functions': (
+            {'name': 'json', 'title': 'json', 'description': 'Serializes a value to JSON.'},
+        ),
+    },
+)
 
 ALLOWED_FUNCTIONS = {
-    # numeric
-    "add",
-    "sub",
-    "mul",
-    "div",
-    "min",
-    "max",
-    "round",
-    "int",
-    "float",
-    # string
-    "str",
-    "lower",
-    "upper",
-    "concat",
-    # debug/serialization
-    "json",
+    fn['name']
+    for group in EXPRESSION_FUNCTION_GROUPS
+    for fn in group['functions']
 }
 
 
@@ -216,9 +234,9 @@ def parse_expr(expr: str, *, path: str) -> Any:
     """
     Parse and validate a single expression string (no surrounding ${}).
     """
-    expr = (expr or "").strip()
+    expr = (expr or '').strip()
     if not expr:
-        raise CompileError("Empty expression", path=path)
+        raise CompileError('Empty expression', path=path)
 
     tokens = _tokenize(expr)
     ast = _Parser(tokens, path=path).parse()
@@ -233,11 +251,11 @@ def parse_required_expr_string(value: Any, *, path: str) -> Any:
     Returns parsed+validated AST.
     """
     if not isinstance(value, str):
-        raise CompileError("Expected expression string like ${...}", path=path)
+        raise CompileError('Expected expression string like ${...}', path=path)
 
     s = value.strip()
-    if not (s.startswith("${") and s.endswith("}")):
-        raise CompileError("Expected expression string like ${...}", path=path)
+    if not (s.startswith('${') and s.endswith('}')):
+        raise CompileError('Expected expression string like ${...}', path=path)
 
     inner = s[2:-1].strip()
     return parse_expr(inner, path=path)
@@ -246,10 +264,10 @@ def parse_required_expr_string(value: Any, *, path: str) -> Any:
 def _validate_ast(node: Any, *, path: str) -> None:
     if isinstance(node, RefExpr):
         if not node.path:
-            raise CompileError("Invalid ref", path=path)
+            raise CompileError('Invalid ref', path=path)
         if node.path[0] not in ALLOWED_REF_ROOTS:
             raise CompileError(
-                "Invalid expression. Use event.* / vars.* or allowlisted functions.",
+                'Invalid expression. Use event.* / vars.* or allowlisted functions.',
                 path=path,
             )
         return
@@ -268,4 +286,4 @@ def _validate_ast(node: Any, *, path: str) -> None:
     if isinstance(node, (str, int, float, bool)) or node is None:
         return
 
-    raise CompileError("Unsupported expression node", path=path)
+    raise CompileError('Unsupported expression node', path=path)

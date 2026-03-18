@@ -13,6 +13,7 @@ def register_builtin_events() -> None:
     reg.register(
         EventSpec(
             key=Triggers.DEVICE_CREATED,
+            title="Device created",
             description="A device object was created.",
             allowed_step_types=STEPSET_AUTOMATION,
             context_vars=DEVICE_CONTEXT,
@@ -22,17 +23,18 @@ def register_builtin_events() -> None:
     reg.register(
         EventSpec(
             key=Triggers.EST_SIMPLEENROLL,
+            title="EST simpleenroll",
             description="EST simpleenroll request received.",
             allowed_step_types=STEPSET_GATED_ENROLLMENT,
             context_vars=merge(DEVICE_CONTEXT, EST_CONTEXT),
         )
     )
 
-    # internal trigger for tests that need approval etc.
     reg.register(
         EventSpec(
             key="workflows2.test",
-            description="Internal test trigger (allows all step types).",
+            title="Workflow test",
+            description="Internal test trigger that allows all supported step types.",
             allowed_step_types=None,
             context_vars=merge(DEVICE_CONTEXT, EST_CONTEXT),
         )

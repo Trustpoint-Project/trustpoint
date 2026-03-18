@@ -2,7 +2,16 @@
 {% load static %}
 
 {% block content %}
-<div class="container-fluid py-3">
+<div
+  id="wf2-editor-root"
+  class="container-fluid py-3"
+  data-mode="{{ mode }}"
+  data-context-catalog-url="{% url 'workflows2:context_catalog' %}"
+  data-graph-from-yaml-url="{% url 'workflows2:api_graph_from_yaml' %}"
+  {% if definition %}
+    data-definition-graph-url="{% url 'workflows2:api_definition_graph' definition.id %}"
+  {% endif %}
+>
   <div class="d-flex align-items-center justify-content-between mb-3">
     <div>
       {% if mode == "create" %}
@@ -23,11 +32,10 @@
   {% endif %}
 
   <div class="row g-3">
-    <!-- LEFT: editor -->
     <div class="col-12 col-xl-7">
       <div class="card">
         <div class="card-body">
-          <form method="post" id="wf2-form">
+          <form method="post" id="wf2-form" novalidate>
             {% csrf_token %}
 
             <div class="mb-3">
@@ -41,23 +49,37 @@
             </div>
 
             <div class="mb-3">
-              <div class="d-flex align-items-center justify-content-between">
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <label class="form-label mb-0">YAML</label>
                 <div class="d-flex gap-2">
                   <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-open-vars">
-                    Variables (Ctrl+K)
+                    Guide
                   </button>
-                  <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-format-yaml">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    id="wf2-format-yaml"
+                    disabled
+                    title="Formatting will be reconnected after semantic YAML document operations are added."
+                  >
                     Format YAML
                   </button>
                 </div>
               </div>
 
-              {{ form.yaml_text }}
+              <div id="wf2-code-editor" class="wf2-editor-host" aria-label="Workflow YAML editor"></div>
+
+              <div class="wf2-hidden-textarea">
+                {{ form.yaml_text }}
+              </div>
 
               {% if form.yaml_text.help_text %}
                 <div class="form-text">{{ form.yaml_text.help_text }}</div>
               {% endif %}
+
+              <div class="form-text mt-2" id="wf2-editor-status">
+                Loading editor…
+              </div>
             </div>
 
             <div class="d-flex gap-2">
@@ -73,33 +95,57 @@
       </div>
     </div>
 
-    <!-- RIGHT: flow + IR -->
     <div class="col-12 col-xl-5">
-      {% if definition %}
-        <div class="card mb-3">
-          <div class="card-header d-flex align-items-center justify-content-between">
-            <div class="fw-semibold">Flow</div>
-            <div class="d-flex align-items-center gap-2">
-              <a class="small text-muted" href="{% url 'workflows2:api_definition_graph' definition.id %}" target="_blank" rel="noopener">
-                graph json
-              </a>
-              <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-expand-graph">
-                Expand
-              </button>
-            </div>
+      <div class="card mb-3" id="wf2-context-card">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <div class="fw-semibold">Editor guide</div>
+          <span class="text-muted small">Context-aware</span>
+        </div>
+        <div class="card-body">
+          <div id="wf2-guide-content" class="mb-3">
+            Loading guide…
           </div>
 
-          <div class="card-body">
-            <div
-              id="wf2-diagram"
-              data-graph-url="{% url 'workflows2:api_definition_graph' definition.id %}"
-              style="height: 62vh; border: 1px solid #eee; border-radius: 6px; background: #fff; overflow: auto;"
-            >
-              <div class="text-muted p-3">Loading graph…</div>
+          <hr>
+
+          <div class="small text-muted">
+            <div class="fw-semibold text-body mb-2">Diagnostics</div>
+
+            <div class="mb-1">
+              <strong>Catalog:</strong>
+              <span id="wf2-catalog-version">Loading…</span>
+            </div>
+
+            <div class="mb-1">
+              <strong>YAML:</strong>
+              <span id="wf2-parse-status" class="text-muted">Checking…</span>
+            </div>
+
+            <div class="mb-1">
+              <strong>Cursor:</strong>
+              <span id="wf2-cursor-info">Line 1, column 1</span>
+            </div>
+
+            <div>
+              <strong>Path:</strong>
+              <code id="wf2-current-path">(root)</code>
             </div>
           </div>
         </div>
-      {% endif %}
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <div class="fw-semibold">Graph preview</div>
+          <span class="text-muted small" id="wf2-graph-status">Loading…</span>
+        </div>
+        <div class="card-body">
+          <div class="small text-muted mb-2">
+            Live graph JSON derived from the current YAML text. This is not persisted until you save.
+          </div>
+          <pre id="wf2-graph-preview" class="wf2-pretty-box mb-0">Loading preview…</pre>
+        </div>
+      </div>
 
       <div class="card">
         <div class="card-header d-flex align-items-center justify-content-between">
@@ -110,7 +156,7 @@
         </div>
         <div class="card-body">
           {% if ir_json %}
-            <pre class="mb-0" style="max-height: 60vh; overflow: auto;">{{ ir_json|safe }}</pre>
+            <pre class="wf2-pretty-box mb-0">{{ ir_json|safe }}</pre>
           {% else %}
             <div class="text-muted">Save to compile and display IR.</div>
           {% endif %}
@@ -120,48 +166,43 @@
   </div>
 </div>
 
-<!-- Global config for JS -->
-<script>
-  window.WF2_EVENT_CATALOG_URL = "{% url 'workflows2:event_catalog' %}";
-</script>
-
-<script defer src="{% static 'js/workflows2/diagram_svg.js' %}"></script>
-<script>
-  window.WF2_CONTEXT_CATALOG_URL = "{% url 'workflows2:context_catalog' %}";
-  window.WF2_CONTEXT_SOURCES_URL = "{% url 'workflows2:context_sources' %}";
-  window.WF2_FORMAT_YAML_URL = "{% url 'workflows2:format_yaml' %}";
-</script>
-
-<script defer src="{% static 'js/workflows2/context_catalog/00_bootstrap.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/10_utils.js' %}"></script>
-
-<script defer src="{% static 'js/workflows2/context_catalog/20_dom.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/21_text_edit.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/22_snippets.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/23_folding.js' %}"></script>
-
-<script defer src="{% static 'js/workflows2/context_catalog/30_yaml_scan.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/31_yaml_cursor_context.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/32_yaml_step_keys.js' %}"></script>
-
-<script defer src="{% static 'js/workflows2/context_catalog/40_catalog_api.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/41_sources_api.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/42_format_api.js' %}"></script>
-
-<script defer src="{% static 'js/workflows2/context_catalog/50_ui_drawer.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/52_ui_toolbar.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/60_ui_render_base.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/61_ui_render_vars.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/62_ui_render_inserts.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/63_ui_render_global_search.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/64_ui_render_sources.js' %}"></script>
-<script defer src="{% static 'js/workflows2/context_catalog/66_value_pickers.js' %}"></script>
-
-<script defer src="{% static 'js/workflows2/context_catalog/90_app.js' %}"></script>
+<script defer src="{% static 'js/workflows2/editor_bundle.js' %}"></script>
 
 <style>
-/* When vars drawer open, give page some breathing room (tweak selector if your base differs) */
-body.wf2-vars-open .tp-main { margin-right: 580px; }
-@media (max-width: 991px) { body.wf2-vars-open .tp-main { margin-right: 0; } }
+  .wf2-hidden-textarea {
+    display: none;
+  }
+
+  .wf2-editor-host {
+    width: 100%;
+  }
+
+  .wf2-pretty-box {
+    max-height: 32rem;
+    overflow: auto;
+    margin: 0;
+    padding: 0.9rem;
+    border: 1px solid #e9ecef;
+    border-radius: 0.5rem;
+    background: #fafafa;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .wf2-chip {
+    display: inline-block;
+    margin: 0 0.35rem 0.35rem 0;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid #dee2e6;
+    border-radius: 999px;
+    background: #fff;
+    font-size: 0.8rem;
+  }
+
+  .wf2-chip strong {
+    font-weight: 600;
+  }
 </style>
 {% endblock %}
