@@ -1,0 +1,21 @@
+services:
+  mdns-advertiser:
+    build:
+      context: .
+      dockerfile: docker/mdns/Dockerfile
+    network_mode: host
+    restart: on-failure:3
+    # We mount the socket in case the host HAS Avahi already
+    volumes:
+      - /var/run/avahi-daemon/socket:/var/run/avahi-daemon/socket
+    # Required for starting internal D-Bus if the host doesn't have one
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    privileged: true # TEST!!
+    healthcheck:
+      test: ["CMD", "avahi-browse", "-a", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
