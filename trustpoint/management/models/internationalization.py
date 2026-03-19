@@ -30,7 +30,7 @@ class InternationalizationConfig(models.Model):
         DE = 'de', _('German')
         EN = 'en', _('English')
 
-    date_format = models.CharField(max_length=23 , choices=DateFormatChoices, default=DateFormatChoices.YYYY_MM_DD_24_SEC)
+    date_format = models.CharField(max_length=1, choices=DateFormatChoices, default=DateFormatChoices.YYYY_MM_DD_24_SEC)
     language = models.CharField(max_length=2, choices=LanguageChoices, default=LanguageChoices.EN)
     timezone = models.CharField(max_length=64, choices=TIMEZONE_CHOICES, default='UTC')
 

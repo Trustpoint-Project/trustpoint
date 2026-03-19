@@ -18,14 +18,10 @@ urlpatterns = [
     path('', IndexView.as_view(), name='index'),
     # Settings URLs
     path('settings/', settings.SettingsTabView.as_view(), name='settings'),
-    path('settings/language/', settings.LanguageSettingsView.as_view(), name='settings-language'),
+    path('settings/internationalization/',settings.InternationalizationSettingsView.as_view(),name='settings-internationalization'),
     path('settings/security/', settings.SecuritySettingsView.as_view(), name='settings-security'),
     path('settings/logging/', settings.LoggingSettingsView.as_view(), name='settings-logging'),
-    path(
-        'settings/notifications/',
-        settings.NotificationSettingsView.as_view(),
-        name='settings-notifications'
-    ),
+    path('settings/notifications/', settings.NotificationSettingsView.as_view(), name='settings-notifications'),
     # Backward compatibility for log level change
     path('loglevel/change', settings.ChangeLogLevelView.as_view(), name='change-loglevel'),
     # Logging file views
