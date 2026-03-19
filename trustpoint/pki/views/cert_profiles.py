@@ -22,7 +22,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from pki.forms import CertificateIssuanceForm, CertProfileConfigForm
 from pki.models import CertificateProfileModel
-from pki.serializer.cert_profile import CertProfileSerializer
+from pki.serializer.cert_profile import CertProfileDetailSerializer, CertProfileSerializer
 from trustpoint.logger import LoggerMixin
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
@@ -243,5 +243,11 @@ class CertProfileViewSet(viewsets.ModelViewSet[CertificateProfileModel]):
     filterset_fields: ClassVar = ['unique_name', 'created_at']
     search_fields: ClassVar = ['unique_name', 'display_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at']
+
+    def get_serializer_class(self) -> type[CertProfileDetailSerializer | CertProfileSerializer]:
+        """Return the detail serializer for retrieve, and the list serializer for all other actions."""
+        if self.action == 'retrieve':
+            return CertProfileDetailSerializer
+        return CertProfileSerializer
 
 

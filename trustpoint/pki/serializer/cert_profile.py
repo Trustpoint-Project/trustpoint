@@ -23,3 +23,28 @@ class CertProfileSerializer(serializers.ModelSerializer[CertificateProfileModel]
         model = CertificateProfileModel
         fields: ClassVar[list[str]] = ['id', 'unique_name']
         read_only_fields: ClassVar[list[str]] = ['id']
+
+
+class CertProfileDetailSerializer(serializers.ModelSerializer[CertificateProfileModel]):
+    """Detailed serializer for a single Certificate Profile instance."""
+
+    profile_json = serializers.SerializerMethodField()
+
+    def get_profile_json(self, obj: CertificateProfileModel) -> object:
+        """Return profile_json as a parsed JSON object."""
+        return obj.profile
+
+    class Meta:
+        """Metadata for CertProfileDetailSerializer, defining model and serialized fields."""
+
+        model = CertificateProfileModel
+        fields: ClassVar[list[str]] = [
+            'id',
+            'unique_name',
+            'display_name',
+            'profile_json',
+            'is_default',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields: ClassVar[list[str]] = ['id', 'created_at', 'updated_at']
