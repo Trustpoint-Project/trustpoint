@@ -28,12 +28,13 @@ class AuditLogListView(PageContextMixin, LoggerMixin, ListView[AuditLog]):
 
     def get_queryset(self) -> QuerySet[AuditLog]:
         """Return a filtered and pre-fetched queryset."""
-        qs = (
+        qs: QuerySet[AuditLog] = (
             AuditLog.objects.select_related('target_content_type', 'actor')
             .order_by('-timestamp')
         )
         self._filter = AuditLogFilter(self.request.GET, queryset=qs)
-        return self._filter.qs
+        filtered_qs: QuerySet[AuditLog] = self._filter.qs
+        return filtered_qs
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add the active filter to the template context."""

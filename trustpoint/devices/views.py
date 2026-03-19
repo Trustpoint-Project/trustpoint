@@ -500,8 +500,8 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
         actor = self.request.user if self.request.user.is_authenticated else None
         AuditLog.create_entry(
             operation_type=AuditLog.OperationType.DEVICE_ADDED,
-            target=self.object,  # type: ignore[arg-type]
-            target_display=f'Device: {self.object.common_name}',  # type: ignore[attr-defined]
+            target=self.object,
+            target_display=f'Device: {self.object.common_name}',
             actor=actor,
         )
 
@@ -575,8 +575,8 @@ class DeviceCreateOpcUaGdsPushView(AbstractCreateOnboardingView):
         actor = self.request.user if self.request.user.is_authenticated else None
         AuditLog.create_entry(
             operation_type=AuditLog.OperationType.DEVICE_ADDED,
-            target=self.object,  # type: ignore[arg-type]
-            target_display=f'Device: {self.object.common_name}',  # type: ignore[attr-defined]
+            target=self.object,
+            target_display=f'Device: {self.object.common_name}',
             actor=actor,
         )
 
