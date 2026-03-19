@@ -52,7 +52,7 @@
               <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                 <label class="form-label mb-0">YAML</label>
                 <div class="d-flex gap-2">
-                  <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-open-vars">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-open-guide">
                     Guide
                   </button>
                   <button
@@ -96,54 +96,32 @@
     </div>
 
     <div class="col-12 col-xl-5">
-      <div class="card mb-3" id="wf2-context-card">
+      <div class="card mb-3" id="wf2-graph-card">
         <div class="card-header d-flex align-items-center justify-content-between">
-          <div class="fw-semibold">Editor guide</div>
-          <span class="text-muted small">Context-aware</span>
+          <div class="fw-semibold">Interactive flow editor</div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small" id="wf2-graph-status">Loading…</span>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-secondary"
+              id="wf2-graph-expand"
+              aria-expanded="false"
+            >
+              Expand
+            </button>
+          </div>
         </div>
         <div class="card-body">
-          <div id="wf2-guide-content" class="mb-3">
-            Loading guide…
-          </div>
-
-          <hr>
-
-          <div class="small text-muted">
-            <div class="fw-semibold text-body mb-2">Diagnostics</div>
-
-            <div class="mb-1">
-              <strong>Catalog:</strong>
-              <span id="wf2-catalog-version">Loading…</span>
-            </div>
-
-            <div class="mb-1">
-              <strong>YAML:</strong>
-              <span id="wf2-parse-status" class="text-muted">Checking…</span>
-            </div>
-
-            <div class="mb-1">
-              <strong>Cursor:</strong>
-              <span id="wf2-cursor-info">Line 1, column 1</span>
-            </div>
-
-            <div>
-              <strong>Path:</strong>
-              <code id="wf2-current-path">(root)</code>
-            </div>
-          </div>
+          <div id="wf2-graph-editor"></div>
         </div>
       </div>
 
       <div class="card mb-3">
-        <div class="card-header d-flex align-items-center justify-content-between">
-          <div class="fw-semibold">Graph preview</div>
-          <span class="text-muted small" id="wf2-graph-status">Loading…</span>
+        <div class="card-header">
+          <div class="fw-semibold">Issues</div>
         </div>
         <div class="card-body">
-          <div class="small text-muted mb-2">
-            Live graph JSON derived from the current YAML text. This is not persisted until you save.
-          </div>
-          <pre id="wf2-graph-preview" class="wf2-pretty-box mb-0">Loading preview…</pre>
+          <div id="wf2-issues-list"></div>
         </div>
       </div>
 
@@ -165,6 +143,50 @@
     </div>
   </div>
 </div>
+
+<aside id="wf2-guide-drawer" class="wf2-guide-drawer" aria-hidden="true">
+  <div class="wf2-guide-drawer-header">
+    <div>
+      <div class="fw-semibold">Editor guide</div>
+      <div class="text-muted small">Context-aware</div>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-close-guide">
+      Close
+    </button>
+  </div>
+
+  <div class="wf2-guide-drawer-body">
+    <div id="wf2-guide-content" class="mb-3">
+      Loading guide…
+    </div>
+
+    <hr>
+
+    <div class="small text-muted">
+      <div class="fw-semibold text-body mb-2">Diagnostics</div>
+
+      <div class="mb-1">
+        <strong>Catalog:</strong>
+        <span id="wf2-catalog-version">Loading…</span>
+      </div>
+
+      <div class="mb-1">
+        <strong>YAML:</strong>
+        <span id="wf2-parse-status" class="text-muted">Checking…</span>
+      </div>
+
+      <div class="mb-1">
+        <strong>Cursor:</strong>
+        <span id="wf2-cursor-info">Line 1, column 1</span>
+      </div>
+
+      <div>
+        <strong>Path:</strong>
+        <code id="wf2-current-path">(root)</code>
+      </div>
+    </div>
+  </div>
+</aside>
 
 <script defer src="{% static 'js/workflows2/editor_bundle.js' %}"></script>
 
@@ -203,6 +225,202 @@
 
   .wf2-chip strong {
     font-weight: 600;
+  }
+
+  .wf2-graph-ui {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    height: 100%;
+  }
+
+  .wf2-graph-toolbar {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .wf2-graph-toolbar select {
+    min-width: 0;
+  }
+
+  .wf2-graph-main {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    align-items: start;
+  }
+
+  .wf2-graph-canvas-wrap {
+    border: 1px solid #e9ecef;
+    border-radius: 0.75rem;
+    background: #fafafa;
+    overflow: auto;
+    min-height: 38rem;
+    max-height: 38rem;
+  }
+
+  .wf2-graph-canvas-empty {
+    min-height: 38rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: #6c757d;
+    padding: 1rem;
+  }
+
+  .wf2-graph-inspector {
+    border: 1px solid #e9ecef;
+    border-radius: 0.75rem;
+    background: #fff;
+    padding: 0.9rem;
+    min-height: 12rem;
+  }
+
+  .wf2-graph-panel-title {
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+  }
+
+  .wf2-graph-svg {
+    display: block;
+    background:
+      linear-gradient(#f8f9fa 1px, transparent 1px),
+      linear-gradient(90deg, #f8f9fa 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .wf2-graph-node {
+    cursor: pointer;
+  }
+
+  .wf2-graph-edge {
+    cursor: pointer;
+  }
+
+  .wf2-graph-node-title {
+    font-size: 13px;
+    font-weight: 600;
+    fill: #212529;
+  }
+
+  .wf2-graph-node-meta {
+    font-size: 11px;
+    fill: #6c757d;
+  }
+
+  .wf2-graph-badge {
+    font-size: 10px;
+    font-weight: 700;
+    fill: #0d6efd;
+  }
+
+  .wf2-graph-edge-label {
+    font-size: 11px;
+    fill: #495057;
+    paint-order: stroke;
+    stroke: #ffffff;
+    stroke-width: 3px;
+    stroke-linejoin: round;
+  }
+
+  .wf2-issue-item {
+    border: 1px solid #e9ecef;
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .wf2-issue-error {
+    background: #fff5f5;
+    border-color: #f5c2c7;
+  }
+
+  .wf2-issue-warning {
+    background: #fffaf0;
+    border-color: #ffe69c;
+  }
+
+  .wf2-issue-info {
+    background: #f8f9fa;
+    border-color: #dee2e6;
+  }
+
+  .wf2-guide-drawer {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: min(32rem, 92vw);
+    height: 100vh;
+    background: #fff;
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .wf2-guide-drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 1rem;
+    padding: 1rem 1rem 0.75rem;
+    border-bottom: 1px solid #e9ecef;
+  }
+
+  .wf2-guide-drawer-body {
+    padding: 1rem;
+    overflow: auto;
+    min-height: 0;
+  }
+
+  body.wf2-guide-open .wf2-guide-drawer {
+    transform: translateX(0);
+  }
+
+  #wf2-graph-card.wf2-graph-expanded {
+    position: fixed;
+    inset: 1rem;
+    z-index: 1060;
+    margin: 0 !important;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.2);
+  }
+
+  #wf2-graph-card.wf2-graph-expanded .card-body {
+    height: calc(100vh - 6rem);
+    overflow: hidden;
+  }
+
+  #wf2-graph-card.wf2-graph-expanded #wf2-graph-editor,
+  #wf2-graph-card.wf2-graph-expanded .wf2-graph-ui {
+    height: 100%;
+  }
+
+  #wf2-graph-card.wf2-graph-expanded .wf2-graph-main {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    height: calc(100% - 3rem);
+  }
+
+  #wf2-graph-card.wf2-graph-expanded .wf2-graph-canvas-wrap,
+  #wf2-graph-card.wf2-graph-expanded .wf2-graph-inspector {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+  }
+
+  body.wf2-graph-expanded {
+    overflow: hidden;
+  }
+
+  @media (max-width: 1199px) {
+    #wf2-graph-card.wf2-graph-expanded .wf2-graph-main {
+      grid-template-columns: 1fr;
+    }
   }
 </style>
 {% endblock %}
