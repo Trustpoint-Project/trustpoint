@@ -1,5 +1,5 @@
-import { text } from '../../core/dom.js';
-import { renderGuideContent } from './guide_sections.js';
+import { text } from '../core/dom.js';
+import { renderGuideContent } from './guide_content_renderer.js';
 
 export function renderCatalogSummary(catalog, els) {
   text(els.catalogVersionEl, `v${catalog?.meta?.version || '?'}`);

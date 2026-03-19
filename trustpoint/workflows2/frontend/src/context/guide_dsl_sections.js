@@ -1,9 +1,9 @@
-import { escapeHtml, renderChips } from '../../core/dom.js';
+import { escapeHtml, renderChips } from '../core/dom.js';
 import {
   findStepSpec,
   renderActionButton,
   renderScalarSetterButtons,
-} from './helpers.js';
+} from './guide_ui_helpers.js';
 
 function findFieldMeta(catalog, context) {
   if (!context?.stepType || !context?.fieldKey) {

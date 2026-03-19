@@ -1,4 +1,4 @@
-import { escapeHtml, renderChips } from '../../core/dom.js';
+import { escapeHtml, renderChips } from '../core/dom.js';
 
 export function findStepSpec(catalog, stepType) {
   return (catalog?.steps || []).find((step) => step.type === stepType) || null;

@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 
 const watch = process.argv.includes('--watch');
 
-const srcFile = path.join(__dirname, 'src', 'editor_app.js');
+const srcFile = path.join(__dirname, 'src', 'app', 'workflow_editor_page.js');
 const outFile = path.join(__dirname, '..', '..', 'static', 'js', 'workflows2', 'editor_bundle.js');
 
 await mkdir(path.dirname(outFile), { recursive: true });
@@ -31,7 +31,7 @@ const buildOptions = {
 if (watch) {
   const ctx = await esbuild.context(buildOptions);
   await ctx.watch();
-  console.log('[workflows2] watching src/editor_app.js');
+  console.log('[workflows2] watching src/app/workflow_editor_page.js');
 } else {
   await esbuild.build(buildOptions);
   console.log('[workflows2] built ../../static/js/workflows2/editor_bundle.js');

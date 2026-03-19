@@ -1,8 +1,8 @@
-import { basicSetup } from 'codemirror';
-import { indentWithTab } from '@codemirror/commands';
+import { indentWithTab, redo, undo } from '@codemirror/commands';
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { yaml as yamlLanguage } from '@codemirror/lang-yaml';
+import { basicSetup } from 'codemirror';
 
 function buildEditorTheme() {
   return EditorView.theme({
@@ -97,6 +97,26 @@ export function createWorkflowEditor({
 
     getCursorInfo() {
       return getCursorInfoFromView(view);
+    },
+
+    focusOffset(offset) {
+      const safeOffset = Math.max(0, Math.min(Number(offset) || 0, view.state.doc.length));
+      view.focus();
+      view.dispatch({
+        selection: {
+          anchor: safeOffset,
+          head: safeOffset,
+        },
+        scrollIntoView: true,
+      });
+    },
+
+    undo() {
+      return undo(view);
+    },
+
+    redo() {
+      return redo(view);
     },
 
     replaceValue(newValue, options = {}) {
