@@ -28,7 +28,7 @@ from pki.models import (
     DomainModel,
 )
 from pki.models.truststore import TruststoreModel
-from pki.serializer.domain import DomainSerializer
+from pki.serializer.domain import DomainDetailSerializer, DomainSerializer
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -436,5 +436,11 @@ class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
 
     queryset = DomainModel.objects.all()
     serializer_class = DomainSerializer
+
+    def get_serializer_class(self) -> type[DomainDetailSerializer | DomainSerializer]:
+        """Return the detail serializer for retrieve, and the list serializer for all other actions."""
+        if self.action == 'retrieve':
+            return DomainDetailSerializer
+        return DomainSerializer
 
 
