@@ -15,13 +15,14 @@ class CertProfileSerializer(serializers.ModelSerializer[CertificateProfileModel]
     """Serializer for Certificate profile instances.
 
     Handles conversion between Certificate Profile model objects and JSON representations.
+    Used for list, create, update, and partial_update actions.
     """
 
     class Meta:
         """Metadata for CertProfileSerializer, defining model and serialized fields."""
 
         model = CertificateProfileModel
-        fields: ClassVar[list[str]] = ['id', 'unique_name']
+        fields: ClassVar[list[str]] = ['id', 'unique_name', 'display_name', 'profile_json', 'is_default']
         read_only_fields: ClassVar[list[str]] = ['id']
 
 

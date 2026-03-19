@@ -16,7 +16,7 @@ from django.utils.translation import gettext as _
 from django.views.generic.edit import FormView, UpdateView
 from django.views.generic.list import ListView
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiExample, extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
 from rest_framework.permissions import IsAuthenticated
 
@@ -221,7 +221,52 @@ class CertProfileBulkDeleteConfirmView(CertProfileContextMixin, BulkDeleteView):
 @extend_schema(tags=['Certificate Profile'])
 @extend_schema_view(
     retrieve=extend_schema(description='Retrieve a single certificate profile by id.'),
-    create=extend_schema(description='Create a certificate profile.'),
+    create=extend_schema(
+        description='Create a certificate profile.',
+        examples=[
+            OpenApiExample(
+                name='OPC UA Profile',
+                summary='Example certificate profile for OPC UA',
+                value={
+                    'unique_name': 'opc_ua',
+                    'display_name': 'OPC UA',
+                    'profile_json': {
+                        'type': 'cert_profile',
+                        'display_name': 'OPC UA',
+                        'subj': {
+                            'allow': '*',
+                            'cn': {'default': 'OPC-UA'},
+                        },
+                        'reject_mods': False,
+                        'ext': {
+                            'basic_constraints': {'ca': False},
+                            'key_usage': {
+                                'digital_signature': True,
+                                'content_commitment': True,
+                                'key_encipherment': True,
+                                'data_encipherment': True,
+                                'critical': True,
+                            },
+                            'extended_key_usage': {
+                                'usages': ['server_auth', 'client_auth'],
+                                'critical': False,
+                            },
+                            'subject_alternative_name': {
+                                'uris': {
+                                    'required': True,
+                                    'default': ['urn:example_trustpoint_opcua'],
+                                },
+                                'critical': True,
+                            },
+                        },
+                        'validity': {'days': 10},
+                    },
+                    'is_default': False,
+                },
+                request_only=True,
+            ),
+        ],
+    ),
     update=extend_schema(description='Update an existing certificate profile.'),
     partial_update=extend_schema(description='Partially update an existing certificate profile.'),
     destroy=extend_schema(description='Delete a certificate profile.')
