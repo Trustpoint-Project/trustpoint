@@ -403,9 +403,6 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_delete',
     ),
 
-    # -----------------------------------------------------------------------
-    # Zero-Touch Credentials (AOKI / DevOwnerID management)
-    # -----------------------------------------------------------------------
     path(
         'zero-touch-credentials/',
         ztc_views.OwnerCredentialTableView.as_view(),

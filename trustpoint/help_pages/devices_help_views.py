@@ -1186,10 +1186,6 @@ class OpcUaGdsPushOnboardingHelpView(BaseHelpView):
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     strategy = OpcUaGdsPushOnboardingStrategy()
 
-
-# ---------------------------------------- AOKI - Help Page Implementations ----------------------------------------
-
-
 class AokiCmpIDevIDStrategy(HelpPageStrategy):
     """Strategy for building the AOKI CMP with IDevID help page."""
 
@@ -1230,7 +1226,6 @@ class AokiCmpIDevIDStrategy(HelpPageStrategy):
             ],
         )
 
-        # Trustpoint Requirements section
         trustpoint_requirements = HelpSection(
             _non_lazy('Trustpoint Requirements'),
             [
@@ -1261,7 +1256,6 @@ class AokiCmpIDevIDStrategy(HelpPageStrategy):
             ],
         )
 
-        # How it works section
         how_it_works = HelpSection(
             _non_lazy('How AOKI with CMP Works'),
             [
@@ -1288,7 +1282,6 @@ class AokiCmpIDevIDStrategy(HelpPageStrategy):
             ],
         )
 
-        # Example commands section
         keygen_cmd = AokiCmpIDevIDCommandBuilder.get_keygen_command()
         cmp_ir_cmd = AokiCmpIDevIDCommandBuilder.get_cmp_ir_command(
             help_context.host_cmp_path
@@ -1322,7 +1315,6 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
     @override
     def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
         """Build help sections for AOKI with EST (IDevID authentication)."""
-        # Device Requirements section
         device_requirements = HelpSection(
             _non_lazy('Device Requirements'),
             [
@@ -1476,6 +1468,8 @@ class AokiCmpHelpView(PageContextMixin, TemplateView):
         """Build generic context for AOKI help."""
         from pki.models import DomainModel  # noqa: PLC0415
 
+        # HelpContext needs a domain per default. For demonstration purpose we take the first one
+
         try:
             domain = DomainModel.objects.first()
             if not domain:
@@ -1538,6 +1532,8 @@ class AokiEstHelpView(PageContextMixin, TemplateView):
         """Build generic context for AOKI help."""
         from pki.models import DomainModel  # noqa: PLC0415
 
+        # HelpContext needs a domain per default. For demonstration purpose we take the first one
+
         try:
             domain = DomainModel.objects.first()
             if not domain:
@@ -1574,7 +1570,6 @@ class AokiEstHelpView(PageContextMixin, TemplateView):
         host_ip = self.request.GET.get('host_ip', '127.0.0.1')
         help_context = self._make_context(host_ip=host_ip)
 
-        # Build EST sections
         strategy = AokiEstIDevIDStrategy()
         sections, heading = strategy.build_sections(help_context)
 
