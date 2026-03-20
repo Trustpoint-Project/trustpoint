@@ -479,9 +479,8 @@ class CaModel(LoggerMixin, CustomDeleteActionModel):
             raise ValidationError(_('ca_type must be set for issuing CAs.'))
         if self.certificate is not None and self.ca_type != self.CaTypeChoice.KEYLESS:
             raise ValidationError(_('ca_type must be KEYLESS for keyless CAs.'))
-        # Remote fields should not be set for local/keyless CAs
-        if (self.remote_host or self.remote_port is not None or self.remote_path or self.est_username or
-            self.onboarding_config or self.no_onboarding_config):
+        # Remote-only fields should not be set for local/keyless CAs
+        if (self.remote_host or self.remote_port is not None or self.remote_path or self.est_username):
             raise ValidationError(_('Remote fields can only be set for remote CAs.'))
 
     def save(self, *args: Any, **kwargs: Any) -> None:

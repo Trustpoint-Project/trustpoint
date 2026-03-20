@@ -19,6 +19,7 @@ from request.message_responder.base import AbstractMessageResponder
 from request.operation_processor import LocalCaCmpSignatureProcessor
 from request.request_context import (
     CmpBaseRequestContext,
+    CmpCertConfRequestContext,
     CmpCertificateRequestContext,
     CmpRevocationRequestContext,
     HttpBaseRequestContext,
@@ -59,6 +60,10 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
         if (context.error_details is not None
             or (context.http_response_status and context.http_response_status >= HTTP_ERROR_STATUS_THRESHOLD)):
             responder = CmpErrorMessageResponder()
+            return responder.build_response(context)
+
+        if isinstance(context, CmpCertConfRequestContext):
+            responder = CmpPkiConfResponder()
             return responder.build_response(context)
 
         if isinstance(context, CmpCertificateRequestContext) and context.issued_certificate:
@@ -215,6 +220,26 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
 
         return pki_message
 
+    @staticmethod
+    def _grant_implicit_confirm(pki_message: rfc4210.PKIMessage) -> rfc4210.PKIMessage:
+        """Add the implicitConfirmGranted InfoTypeAndValue to the response generalInfo.
+
+        Per RFC 9483 §3.1, the CA MUST include this OID in the ip/cp/kup
+        generalInfo when it honours the client's implicitConfirm request,
+        signalling that no certConf message is expected.
+
+        OID 1.3.6.1.5.5.7.4.13 — id-it-implicitConfirm (RFC 4210)
+        """
+        _IMPLICIT_CONFIRM_OID = '1.3.6.1.5.5.7.4.13'  # noqa: N806
+        pki_message['header'].setComponentByPosition(11)
+        gi_schema = pki_message['header'].componentType.getTypeByPosition(11)
+        itav_val = gi_schema.componentType.clone()
+        itav_val['infoType'] = univ.ObjectIdentifier(
+            [int(x) for x in _IMPLICIT_CONFIRM_OID.split('.')]
+        )
+        pki_message['header']['generalInfo'].append(itav_val)
+        return pki_message
+
 
 class CmpInitializationResponder(CmpMessageResponder):
     """Respond to a CMP initialization request (IR) with the issued certificate (IP)."""
@@ -311,7 +336,7 @@ class CmpInitializationResponder(CmpMessageResponder):
         issuing_ca_credential = context.issuer_credential
 
         # AOKI: Sign with owner credential
-        signer_credential = context.owner_credential if context.owner_credential else issuing_ca_credential
+        signer_credential = context.owner_credential or issuing_ca_credential
 
         sender_ski = x509.SubjectKeyIdentifier.from_public_key(signer_credential.get_certificate().public_key())
         sender_kid = rfc2459.KeyIdentifier(sender_ski.digest).subtype(
@@ -325,6 +350,8 @@ class CmpInitializationResponder(CmpMessageResponder):
             issuer_credential=issuing_ca_credential,
             signer_credential=signer_credential
         )
+        if context.implicit_confirm:
+            pki_message = CmpInitializationResponder._grant_implicit_confirm(pki_message)
         if context.cmp_shared_secret:
             pki_message = CmpInitializationResponder._add_protection_shared_secret(
                 pki_message=pki_message, context=context
@@ -336,7 +363,7 @@ class CmpInitializationResponder(CmpMessageResponder):
 
         encoded_message = encoder.encode(pki_message)
 
-        if context.device and context.device.onboarding_config:
+        if context.implicit_confirm and context.device and context.device.onboarding_config:
             context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             context.device.onboarding_config.save()
         context.http_response_status = 200
@@ -439,6 +466,8 @@ class CmpCertificationResponder(CmpMessageResponder):
             sender_kid=sender_kid,
             issuer_credential=issuing_ca_credential,
         )
+        if context.implicit_confirm:
+            pki_message = CmpCertificationResponder._grant_implicit_confirm(pki_message)
         if context.cmp_shared_secret:
             pki_message = CmpCertificationResponder._add_protection_shared_secret(
                 pki_message=pki_message, context=context
@@ -450,7 +479,7 @@ class CmpCertificationResponder(CmpMessageResponder):
 
         encoded_message = encoder.encode(pki_message)
 
-        if context.device and context.device.onboarding_config:
+        if context.implicit_confirm and context.device and context.device.onboarding_config:
             context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             context.device.onboarding_config.save()
         context.http_response_status = 200
@@ -528,6 +557,108 @@ class CmpRevocationResponder(CmpMessageResponder):
         )
 
         encoded_message = encoder.encode(pki_message)
+
+        context.http_response_status = 200
+        context.http_response_content = encoded_message
+        context.http_response_content_type = 'application/pkixcmp'
+
+
+class CmpPkiConfResponder(CmpMessageResponder):
+    """Respond to a CMP certificate confirmation message (certConf) with a pkiConf.
+
+    Per RFC 9483 Section 4.1.1 and RFC 4210 Section 5.3.17/5.3.18:
+    - On receipt of a valid certConf the PKI management entity MUST reply
+      with a pkiConf whose body contains NULL.
+    - The same protection scheme (MAC or signature) as the first response
+      message of the PKI management operation MUST be used (RFC 9483 Section
+      3.2), so we reuse the existing _add_protection_shared_secret /
+      _sign_pki_message helpers.
+    - extraCerts MAY be omitted for pkiConf to reduce message size
+      (RFC 9483 Section 3.3).
+    """
+
+    @staticmethod
+    def _build_base_pkiconf_message(
+        parsed_message: rfc4210.PKIMessage,
+        sender_kid: rfc2459.KeyIdentifier,
+        issuer_cert: x509.Certificate | None,
+    ) -> rfc4210.PKIMessage:
+        """Build the pkiConf response message body (without protection).
+
+        :param parsed_message: The incoming certConf PKIMessage whose header
+            fields (transactionID, senderNonce …) are echoed back.
+        :param sender_kid: SubjectKeyIdentifier of the signing credential.
+        :param issuer_cert: Certificate of the signer; may be None when
+            MAC-based protection is used.
+        :returns: An unsigned/unprotected pkiConf PKIMessage.
+        """
+        pkiconf_header = CmpPkiConfResponder._build_response_message_header(
+            serialized_pyasn1_message=parsed_message,
+            sender_kid=sender_kid,
+            issuer_cert=issuer_cert,
+        )
+
+        pkiconf_body = rfc4210.PKIBody()
+        pkiconf_val = pkiconf_body.componentType.getTypeByPosition(19).clone()
+        pkiconf_body.setComponentByPosition(19, pkiconf_val)
+
+        pkiconf_message = rfc4210.PKIMessage()
+        pkiconf_message['header'] = pkiconf_header
+        pkiconf_message['body'] = pkiconf_body
+        return pkiconf_message
+
+    @staticmethod
+    def build_response(context: BaseRequestContext) -> None:
+        """Respond to a certConf message with a pkiConf."""
+        if not isinstance(context, CmpCertConfRequestContext):
+            exc_msg = 'CmpPkiConfResponder requires a CmpCertConfRequestContext.'
+            raise TypeError(exc_msg)
+
+        if context.issuer_credential is not None:
+            issuing_ca_credential = context.issuer_credential
+        elif context.domain is not None and context.domain.issuing_ca is not None:
+            _credential = context.domain.issuing_ca.get_credential()
+            if _credential is None:
+                exc_msg = 'Issuing CA has no credential for pkiConf response.'
+                raise ValueError(exc_msg)
+            issuing_ca_credential = _credential
+        else:
+            exc_msg = 'Cannot determine issuing CA credential for pkiConf response.'
+            raise ValueError(exc_msg)
+
+        signer_credential = context.owner_credential or issuing_ca_credential
+        issuer_cert = signer_credential.get_certificate()
+
+        sender_ski = x509.SubjectKeyIdentifier.from_public_key(issuer_cert.public_key())
+        sender_kid = rfc2459.KeyIdentifier(sender_ski.digest).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
+        )
+
+        pki_message = CmpPkiConfResponder._build_base_pkiconf_message(
+            parsed_message=context.parsed_message,
+            sender_kid=sender_kid,
+            issuer_cert=issuer_cert,
+        )
+
+        if context.cmp_shared_secret:
+            pki_message = CmpPkiConfResponder._add_protection_shared_secret(
+                pki_message=pki_message, context=context
+            )
+        else:
+            pki_message = CmpPkiConfResponder._sign_pki_message(
+                pki_message=pki_message, context=context
+            )
+
+        encoded_message = encoder.encode(pki_message)
+
+        cert_accepted = context.cert_conf_status in (0, None)
+        if cert_accepted and context.device and context.device.onboarding_config:
+            context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+            context.device.onboarding_config.save()
+            CmpPkiConfResponder.logger.info(
+                'Device %s marked as ONBOARDED after successful certConf.',
+                context.device,
+            )
 
         context.http_response_status = 200
         context.http_response_content = encoded_message

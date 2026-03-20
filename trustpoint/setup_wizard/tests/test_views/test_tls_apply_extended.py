@@ -46,17 +46,20 @@ class TestTlsServerCredentialApplyFormValid:
         mock_first.return_value = mock_active
         
         request = self.factory.post('/apply-tls/')
+        from django.contrib.auth.models import AnonymousUser
         from django.contrib.messages.storage.fallback import FallbackStorage
         setattr(request, 'session', 'session')
         messages_storage = FallbackStorage(request)
         setattr(request, '_messages', messages_storage)
+        request.user = AnonymousUser()
         
         self.view.request = request
         self.view.setup(request)
         
         form = EmptyForm()
         
-        with patch('django.views.generic.FormView.form_valid') as mock_parent:
+        with patch('django.views.generic.FormView.form_valid') as mock_parent, \
+             patch('setup_wizard.views.AuditLog.create_entry'):
             mock_parent.return_value = Mock(status_code=302, url='/success/')
             
             response = self.view.form_valid(form)

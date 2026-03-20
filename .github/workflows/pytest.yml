@@ -51,7 +51,7 @@ jobs:
           path: reports/
 
       - name: Render the report to the PR
-        uses: marocchino/sticky-pull-request-comment@v2  # Posts test results as a comment on PRs.
+        uses: marocchino/sticky-pull-request-comment@v3  # Posts test results as a comment on PRs.
         if: always()  # Always runs.
         with:
           header: test-report

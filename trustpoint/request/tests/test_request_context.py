@@ -196,6 +196,7 @@ class TestRequestContext:
             'client_certificate', 'client_intermediate_certificate',
             'cert_requested_profile_validated', 'issued_certificate',
             'owner_credential', 'issuer_credential',
+            'actor',
             'http_response_status', 'http_response_content',
             'http_response_content_type',
             'enrollment_request', 'event',  # These two should be refactored into the overall Req Context

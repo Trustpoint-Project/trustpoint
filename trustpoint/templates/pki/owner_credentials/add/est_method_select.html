@@ -12,28 +12,28 @@
 
                 <div class="card d-flex flex-column" style="max-width: 400px; width: 100%;">
                     <div class="card-body d-flex flex-column">
-                        <h5 class="card-title"><strong>{% trans 'No Onboarding' %}</strong></h5>
+                        <h5 class="card-title"><strong>{% trans 'Basic authentication' %}</strong></h5>
                         <hr class="hr-m">
                         <p class="card-text flex-grow-1">
                             {% trans 'Authenticate directly to the remote EST server using a username and password (HTTP Basic Auth) to retrieve the DevOwnerID certificate.' %}
                         </p>
                         <a href="{% url 'pki:owner_credentials-add-est-no-onboarding' %}"
                            class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
-                            {% trans 'No Onboarding' %}
+                            {% trans 'Basic authentication' %}
                         </a>
                     </div>
                 </div>
 
                 <div class="card d-flex flex-column" style="max-width: 400px; width: 100%;">
                     <div class="card-body d-flex flex-column">
-                        <h5 class="card-title"><strong>{% trans 'Onboarding' %}</strong></h5>
+                        <h5 class="card-title"><strong>{% trans 'Mutual TLS authentication' %}</strong></h5>
                         <hr class="hr-m">
                         <p class="card-text flex-grow-1">
-                            {% trans 'Two-step enrollment: first request a client certificate from the remote EST server using the device IDevID, then use that client certificate to request the DevOwnerID.' %}
+                            {% trans 'Two-step enrollment: first request a client certificate from the remote EST server using username/password, then use that client certificate to request the DevOwnerID.' %}
                         </p>
                         <a href="{% url 'pki:owner_credentials-add-est-onboarding' %}"
                            class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
-                            {% trans 'Onboarding' %}
+                            {% trans 'Mutual TLS authentication' %}
                         </a>
                     </div>
                 </div>

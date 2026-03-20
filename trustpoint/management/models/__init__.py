@@ -1,6 +1,7 @@
 """Management app models."""
 
 from management.models.appversion import AppVersion
+from management.models.audit_log import AuditLog
 from management.models.backup import BackupOptions
 from management.models.key_storage import KeyStorageConfig
 from management.models.logging import LoggingConfig
@@ -20,6 +21,7 @@ from management.models.tls import TlsSettings
 
 __all__ = [
     'AppVersion',
+    'AuditLog',
     'BackupOptions',
     'KeyStorageConfig',
     'LoggingConfig',

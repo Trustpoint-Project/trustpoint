@@ -116,7 +116,6 @@ class AokiCmpClient:
             'openssl',
             'cmp',
             '-cmd', 'ir',
-            '-implicit_confirm',
             '-server', self.server_url + '/.well-known/cmp/p/.aoki/initialization',
             '-cert', f'{CERTS_DIR}/{self.cert_file}',
             '-key', f'{CERTS_DIR}/{self.key_file}',

@@ -2,6 +2,7 @@
 import logging
 from unittest.mock import Mock, patch
 
+from django.contrib.auth.models import AnonymousUser
 from django.contrib.messages import get_messages
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
@@ -21,6 +22,7 @@ class SecuritySettingsViewTest(TestCase):
         self.factory = RequestFactory()
         self.view = SecuritySettingsView()
         self.view.request = self.factory.get('/settings/security/')
+        self.view.request.user = AnonymousUser()
 
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage

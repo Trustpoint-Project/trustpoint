@@ -21,6 +21,7 @@ from rest_framework.permissions import IsAuthenticated
 from management.forms import IPv4AddressForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.management.commands.update_tls import Command as UpdateTlsCommand
 from management.models import TlsSettings
+from management.models.audit_log import AuditLog
 from management.serializer.credential import CredentialSerializer
 from pki.models import CertificateModel, CredentialModel, GeneralNameIpAddress
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -240,6 +241,14 @@ class GenerateTlsCertificateView(LoggerMixin, FormView[StartupWizardTlsCertifica
 
             messages.add_message(self.request, messages.SUCCESS, 'TLS-Server Credential generated successfully.')
 
+            actor = self.request.user if self.request.user.is_authenticated else None
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.TLS_CERTIFICATE_CHANGED,
+                target=trustpoint_tls_server_credential,
+                target_display=f'TLS Credential: {trustpoint_tls_server_credential.pk} (generated)',
+                actor=actor,
+            )
+
             return super().form_valid(form)
         except Exception:
             err_msg = 'Error generating TLS Server Credential.'
@@ -261,6 +270,14 @@ class TlsAddFileImportPkcs12View(TlsSettingsContextMixin, FormView[TlsAddFileImp
             self.request,
             _('Successfully added TLS-Server Credential.'),
         )
+        credential = form.get_saved_credential()
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.TLS_CERTIFICATE_CHANGED,
+            target=credential,
+            target_display=f'TLS Credential: {credential.pk} (PKCS12 import)',
+            actor=actor,
+        )
         return super().form_valid(form)
 
 class TlsAddFileImportSeparateFilesView(
@@ -278,6 +295,14 @@ class TlsAddFileImportSeparateFilesView(
         messages.success(
             self.request,
             _('Successfully added TLS-Server Credential.'),
+        )
+        credential = form.get_saved_credential()
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.TLS_CERTIFICATE_CHANGED,
+            target=credential,
+            target_display=f'TLS Credential: {credential.pk} (PEM import)',
+            actor=actor,
         )
         return super().form_valid(form)
 
@@ -317,6 +342,7 @@ class TlsBulkDeleteConfirmView(TlsSettingsContextMixin, BulkDeleteView):
                 if len(cert_ids) == 0:
                     return redirect(self.get_success_url())
         try:
+            certs_to_delete = list(queryset)
             with transaction.atomic():
                 # Delete all related credentials first
                 CredentialModel.objects.filter(
@@ -333,6 +359,15 @@ class TlsBulkDeleteConfirmView(TlsSettingsContextMixin, BulkDeleteView):
         except ValidationError as exc:
             messages.error(self.request, exc.message)
             return HttpResponseRedirect(self.success_url)
+
+        actor = self.request.user if self.request.user.is_authenticated else None
+        for cert in certs_to_delete:
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.TLS_CERTIFICATE_DELETED,
+                target=cert,
+                target_display=f'TLS Certificate: {cert.common_name or cert.pk}',
+                actor=actor,
+            )
 
         messages.success(self.request, _('Successfully deleted {count} TLS certificate(s).').format(count=delete_count))
 
