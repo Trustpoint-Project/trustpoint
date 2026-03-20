@@ -76,10 +76,8 @@ USER root
 RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
              /var/www/html/trustpoint/trustpoint/collected_static \
              /var/www/html/trustpoint/docker/trustpoint/nginx/tls && \
-    chown -R www-data:www-data /var/www/html/trustpoint/trustpoint/media/log && \
     chown -R www-data:www-data /var/www/html/trustpoint/trustpoint/ && \
     chown -R www-data:www-data /var/www/html/trustpoint/docker/trustpoint/nginx/tls && \
-    chmod -R 755 /var/www/html/trustpoint/trustpoint/media/log && \
     chmod -R 755 /var/www/html/trustpoint/trustpoint/ && \
     chmod -R 755 /var/www/html/trustpoint/docker/trustpoint/nginx/tls
 
