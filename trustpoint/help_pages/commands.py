@@ -451,3 +451,71 @@ class AokiCmpIDevIDCommandBuilder:
             '  -extracertsout full_chain.pem \\\n'
             '  -trusted ownerid_ca.pem'
         )
+
+
+class AokiEstIDevIDCommandBuilder:
+    """Builds AOKI EST commands with IDevID authentication."""
+
+    @staticmethod
+    def get_aoki_init_command(host: str) -> str:
+        """Get the AOKI initialization request command."""
+        return (
+            f'curl --cert idevid.pem \\\n'
+            f'  --key idevid_pk.pem \\\n'
+            f'  --cacert ownerid_ca.pem \\\n'
+            f'  -o aoki_init_response.json \\\n'
+            f'{host}/aoki/init'
+        )
+
+    @staticmethod
+    def get_aoki_init_response_example() -> str:
+        """Get an example AOKI initialization response JSON."""
+        return """{
+  "aoki-init": {
+    "version": "1.0",
+    "owner-id-cert": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----",
+    "tls-truststore": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----",
+    "enrollment-info": {
+      "protocols": [
+        {
+          "protocol": "EST",
+          "url": "https://127.0.0.1:443/.well-known/est/domain/domain_credential/simpleenroll"
+        }
+      ]
+    }
+  }
+}"""
+
+    @staticmethod
+    def get_keygen_command() -> str:
+        """Get the key generation command for domain credential."""
+        return (
+            'openssl genrsa \\\n'
+            '  -out domain_credential_key.pem \\\n'
+            '  2048'
+        )
+
+    @staticmethod
+    def get_csr_command() -> str:
+        """Get the CSR generation command for AOKI EST enrollment."""
+        return (
+            'openssl req \\\n'
+            '  -new \\\n'
+            '  -key domain_credential_key.pem \\\n'
+            '  -outform DER \\\n'
+            '  -out domain_credential.der \\\n'
+            '  -subj "/CN=Trustpoint-Domain-Credential"'
+        )
+
+    @staticmethod
+    def get_curl_enroll_command(host: str) -> str:
+        """Get the curl EST enrollment command for AOKI with IDevID."""
+        return (
+            f'curl --cert domain_credential.pem \\\n'
+            f'  --key domain_credential_key.pem \\\n'
+            f'  --cacert trust_store.pem \\\n'
+            f'  --header "Content-Type: application/pkcs10" \\\n'
+            f'  --data-binary "@domain_credential.der" \\\n'
+            f'  -o domain_certificate.p7c \\\n'
+            f'{host}'
+        )
