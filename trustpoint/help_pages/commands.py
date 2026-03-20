@@ -416,11 +416,7 @@ class AokiCmpIDevIDCommandBuilder:
 
     @staticmethod
     def get_keygen_command() -> str:
-        """Get the key generation command for domain credential.
-
-        Returns:
-            The constructed command.
-        """
+        """Get the key generation command for domain credential."""
         return (
             'openssl genrsa \\\n'
             '  -out domain_credential_key.pem \\\n'
@@ -429,14 +425,7 @@ class AokiCmpIDevIDCommandBuilder:
 
     @staticmethod
     def get_cmp_ir_command(host: str) -> str:
-        """Get the CMP Initial Request (IR) command for AOKI with IDevID.
-
-        Args:
-            host: The full host name and url path, e.g. https://127.0.0.1/.well-known/cmp/p/.aoki/initialization
-
-        Returns:
-            The constructed command.
-        """
+        """Get the CMP Initial Request (IR) command for AOKI with IDevID."""
         return (
             'openssl cmp \\\n'
             '  -cmd ir \\\n'
