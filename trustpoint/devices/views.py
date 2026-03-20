@@ -65,6 +65,7 @@ from devices.models import (
 from devices.revocation import DeviceCredentialRevocation
 from devices.serializers import DeviceSerializer
 from management.models import KeyStorageConfig
+from management.models.audit_log import AuditLog
 from onboarding.models import (
     NoOnboardingPkiProtocol,
     OnboardingPkiProtocol,
@@ -420,6 +421,15 @@ class AbstractCreateNoOnboardingView(PageContextMixin, FormView[NoOnboardingCrea
             self.object = form.save(device_type=DeviceModel.DeviceType.GENERIC_DEVICE)
         else:
             self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS)
+
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.DEVICE_ADDED,
+            target=self.object,
+            target_display=f'Device: {self.object.common_name}',
+            actor=actor,
+        )
+
         return super().form_valid(form)
 
     def get_success_url(self) -> str:
@@ -486,6 +496,15 @@ class AbstractCreateOnboardingView(PageContextMixin, FormView[forms.Form]):
             self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS)  # type: ignore[attr-defined]
         else:  # DEVICES_PAGE_DEVICES_SUBCATEGORY
             self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH)  # type: ignore[attr-defined]
+
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.DEVICE_ADDED,
+            target=self.object,
+            target_display=f'Device: {self.object.common_name}',
+            actor=actor,
+        )
+
         return super().form_valid(form)
 
     def get_success_url(self) -> str:
@@ -552,6 +571,15 @@ class DeviceCreateOpcUaGdsPushView(AbstractCreateOnboardingView):
             The HTTP Response to be returned.
         """
         self.object = form.save(device_type=DeviceModel.DeviceType.OPC_UA_GDS_PUSH)  # type: ignore[attr-defined]
+
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.DEVICE_ADDED,
+            target=self.object,
+            target_display=f'Device: {self.object.common_name}',
+            actor=actor,
+        )
+
         return FormView.form_valid(self, form)
 
 
@@ -1784,6 +1812,7 @@ class AbstractIssueProfileCredentialView(
             domain=device.domain,
             cert_profile_str=self.profile.unique_name,
             cert_requested=cert_builder,
+            actor=self.request.user if self.request.user.is_authenticated else None,
         )
         ManualAuthorization().authorize(ctx)
         CredentialIssueProcessor().process_operation(ctx)
@@ -2729,6 +2758,18 @@ class AbstractIssuedCredentialRevocationView(PageContextMixin, DetailView[Issued
             if revoked_successfully:
                 msg = gettext_lazy('Successfully revoked one active credential.')
                 messages.success(self.request, msg)
+                actor = self.request.user if self.request.user.is_authenticated else None
+                domain_name = self.object.domain.unique_name if self.object.domain else 'unknown'
+                cred_display = (
+                    f'Device: {device.common_name} | Domain: {domain_name}'
+                    f' | Credential: {self.object.common_name}'
+                )
+                AuditLog.create_entry(
+                    operation_type=AuditLog.OperationType.CREDENTIAL_REVOKED,
+                    target=device,
+                    target_display=cred_display,
+                    actor=actor,
+                )
             else:
                 messages.error(
                     self.request, gettext_lazy('Failed to revoke certificate. See logs for more information.')
@@ -2880,6 +2921,19 @@ class AbstractBulkRevokeView(LoggerMixin, PageContextMixin, ListView[DeviceModel
                 )
                 if revoked_successfully:
                     n_revoked += 1
+                    actor = request.user if request.user.is_authenticated else None
+                    device_name = credential.device.common_name if credential.device else 'unknown'
+                    domain_name = credential.domain.unique_name if credential.domain else 'unknown'
+                    cred_display = (
+                        f'Device: {device_name} | Domain: {domain_name}'
+                        f' | Credential: {credential.common_name}'
+                    )
+                    AuditLog.create_entry(
+                        operation_type=AuditLog.OperationType.CREDENTIAL_REVOKED,
+                        target=credential.device,
+                        target_display=cred_display,
+                        actor=actor,
+                    )
 
             if n_revoked > 0:
                 msg = ngettext(
@@ -3023,7 +3077,16 @@ class AbstractBulkDeleteView(LoggerMixin, PageContextMixin, ListView[DeviceModel
                 return redirect(redirect_name)
 
         try:
+            devices_to_delete = list(self.queryset)
             count, _ = self.queryset.delete()
+            actor = request.user if request.user.is_authenticated else None
+            for device in devices_to_delete:
+                AuditLog.create_entry(
+                    operation_type=AuditLog.OperationType.DEVICE_DELETED,
+                    target=device,
+                    target_display=f'Device: {device.common_name}',
+                    actor=actor,
+                )
             success_msg_template = gettext_lazy(
                 'Successfully deleted {count} devices. All corresponding certificates have been revoked.'
             )

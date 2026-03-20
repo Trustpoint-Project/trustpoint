@@ -10,6 +10,7 @@ from trustpoint_core.serializer import CredentialSerializer
 
 from devices.issuer import CredentialSaver
 from management.models import TlsSettings
+from management.models.audit_log import AuditLog
 from pki.models import CaModel, IssuedCredentialModel
 from pki.models.credential import CredentialModel
 from pki.util.keys import is_supported_public_key
@@ -151,6 +152,16 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
             issuing_credential.get_certificate(),
             *issuing_credential.get_certificate_chain(),
         ]
+
+        domain_name = context.domain.unique_name if context.domain else 'unknown'
+        device_name = context.device.common_name if context.device else 'unknown'
+        protocol = context.protocol if hasattr(context, 'protocol') else 'unknown'
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CREDENTIAL_ISSUED,
+            target=context.device,
+            target_display=f'Device: {device_name} | Domain: {domain_name} | Protocol: {protocol}',
+            actor=context.actor,
+        )
 
     def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0915 - Core pipeline orchestration requires multiple validation and conditional paths
         """Process the certificate issuance operation."""
@@ -444,4 +455,14 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         self.logger.info(
             'Successfully issued certificate via remote EST CA: %s',
             issuing_ca.unique_name
+        )
+
+        domain_name = context.domain.unique_name if context.domain else 'unknown'
+        device_name = context.device.common_name if context.device else 'unknown'
+        protocol = context.protocol if hasattr(context, 'protocol') else 'est'
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CREDENTIAL_ISSUED,
+            target=context.device,
+            target_display=f'Device: {device_name} | Domain: {domain_name} | Protocol: {protocol}',
+            actor=context.actor,
         )
