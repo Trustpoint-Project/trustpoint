@@ -1,5 +1,6 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
+{% load internationalization_tags %}
 
 {% block content %}
 
@@ -54,8 +55,8 @@
                         <td>{{ profile.unique_name }}</td>
                         <td>{{ profile.display_name }}</td>
                         <td></td>
-                        <td>{{ profile.created_at }}</td>
-                        <td>{{ profile.updated_at }}</td>
+                        <td>{{ profile.created_at|local_datetime }}</td>
+                        <td>{{ profile.updated_at|local_datetime }}</td>
                         <td>{% if profile.is_default == 1 %} ✔ {% else %} ✘ {% endif %}</td>
                         <td><a href="config/{{ profile.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Edit' %}</a></td>
                         <td><a href="issuance/{{ profile.id }}/" class="btn btn-secondary tp-table-btn w-100">{% trans 'Issue' %}</a></td>

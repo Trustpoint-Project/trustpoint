@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load static %}
+{% load internationalization_tags %}
 
 {% block content %}
 <div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
@@ -32,8 +33,8 @@
                             </a>
                         </td>
                         <td>{{ signer.credential.certificate.signature_suite }}</td>
-                        <td>{{ signer.created_at|date:"N j, Y, g:i a" }}</td>
-                        <td>{{ signer.credential.certificate.not_valid_after|date:"N j, Y, g:i a" }}</td>
+                        <td>{{ signer.created_at|local_datetime }}</td>
+                        <td>{{ signer.credential.certificate.not_valid_after|local_datetime}}</td>
                         <td>
                             <a href="{% url 'signer:signer-signed_messages' signer.pk %}"
                                class="btn btn-sm btn-primary">

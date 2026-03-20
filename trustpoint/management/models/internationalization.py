@@ -1,16 +1,19 @@
-"""Date format configuration Model"""
+"""Internationalization configuration model."""
 
 from __future__ import annotations
 
-from django.db import models
-from django.utils.translation import gettext_lazy as _
-from zoneinfo import available_timezones
+from datetime import datetime
+from zoneinfo import ZoneInfo, available_timezones
 
-"""Supported timezones"""
+from django.db import models
+from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
+
+"""Supported Timezones"""
 TIMEZONE_CHOICES = sorted((tz, tz) for tz in available_timezones())
 
 class InternationalizationConfig(models.Model):
-    """Dateformat Configuration model."""
+    """Internationalization configuration model."""
 
     class DateFormatChoices(models.TextChoices):
         """Types of date formats."""
@@ -37,4 +40,42 @@ class InternationalizationConfig(models.Model):
     last_updated = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
-        return f'{self.date_format} | {self.language} | {self.timezone}'
+        return f'{self.get_date_format_display()} | {self.language} | {self.timezone}'
+
+    @classmethod
+    def get_current(cls) -> "InternationalizationConfig":
+        """Return the current internationalization configuration."""
+        config, _ = cls.objects.get_or_create(
+            id=1,
+            defaults={
+                'date_format': cls.DateFormatChoices.YYYY_MM_DD_24_SEC,
+                'language': cls.LanguageChoices.EN,
+                'timezone': 'UTC',
+            },
+        )
+        return config
+
+    def get_python_datetime_format(self) -> str:
+        """Return the configured format as Python strftime format."""
+        format_map = {
+            self.DateFormatChoices.DD_MM_YYYY_24: '%d/%m/%Y %H:%M',
+            self.DateFormatChoices.MM_DD_YYYY_24: '%m/%d/%Y %H:%M',
+            self.DateFormatChoices.DD_MMM_YYYY_24: '%d %b %Y %H:%M',
+            self.DateFormatChoices.DD_MMM_YYYY_12: '%d %b %Y %I:%M %p',
+            self.DateFormatChoices.DD_MMMM_YYYY_24_SEC: '%d %B %Y %H:%M:%S',
+            self.DateFormatChoices.DD_MMMM_YYYY_12_SEC: '%d %B %Y %I:%M:%S %p',
+            self.DateFormatChoices.YYYY_MM_DD_24_SEC: '%Y-%m-%d %H:%M:%S',
+            self.DateFormatChoices.ISO_LIKE: '%Y-%m-%dT%H:%M:%S',
+        }
+        return format_map.get(self.date_format, '%Y-%m-%d %H:%M:%S')
+
+    def format_datetime(self, value: datetime | None) -> str:
+        """Format a datetime using the configured timezone and date format."""
+        if value is None:
+            return ''
+
+        if timezone.is_naive(value):
+            value = timezone.make_aware(value, ZoneInfo('UTC'))
+
+        converted_value = value.astimezone(ZoneInfo(self.timezone))
+        return converted_value.strftime(self.get_python_datetime_format())
