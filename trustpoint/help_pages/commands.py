@@ -409,3 +409,45 @@ class EstClientCertificateCommandBuilder:
             The constructed command.
         """
         return 'openssl pkcs7 \\\n-print_certs \\\n-inform DER \\\n-in cacerts.p7b \\\n-out cacerts.pem'
+
+
+class AokiCmpIDevIDCommandBuilder:
+    """Builds AOKI CMP commands with IDevID authentication."""
+
+    @staticmethod
+    def get_keygen_command() -> str:
+        """Get the key generation command for domain credential.
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            'openssl genrsa \\\n'
+            '  -out domain_credential_key.pem \\\n'
+            '  2048'
+        )
+
+    @staticmethod
+    def get_cmp_ir_command(host: str) -> str:
+        """Get the CMP Initial Request (IR) command for AOKI with IDevID.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known/cmp/p/.aoki/initialization
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            'openssl cmp \\\n'
+            '  -cmd ir \\\n'
+            f'  -server {host} \\\n'
+            '  -cert idevid.pem \\\n'
+            '  -key idevid_pk.pem \\\n'
+            '  -extracerts idevid_ca.pem \\\n'
+            '  -subject "/CN=Trustpoint Domain Credential" \\\n'
+            '  -newkey domain_credential_key.pem \\\n'
+            '  -certout domain_credential.pem \\\n'
+            '  -chainout chain_without_root.pem \\\n'
+            '  -extracertsout full_chain.pem \\\n'
+            '  -trusted ownerid_ca.pem'
+        )

@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
+from django.views.generic.base import TemplateView
 from django.views.generic.detail import DetailView
 from pydantic import ValidationError as PydanticValidationError
 
@@ -27,6 +28,7 @@ from help_pages.base import (
     build_tls_trust_store_section,
 )
 from help_pages.commands import (
+    AokiCmpIDevIDCommandBuilder,
     CmpClientCertificateCommandBuilder,
     CmpSharedSecretCommandBuilder,
     EstClientCertificateCommandBuilder,
@@ -1181,3 +1183,314 @@ class OpcUaGdsPushOnboardingHelpView(BaseHelpView):
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     strategy = OpcUaGdsPushOnboardingStrategy()
+
+
+# ---------------------------------------- AOKI - Help Page Implementations ----------------------------------------
+
+
+class AokiCmpIDevIDStrategy(HelpPageStrategy):
+    """Strategy for building the AOKI CMP with IDevID help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        """Build help sections for AOKI with CMP (IDevID authentication)."""
+        # Prerequisites section
+        prerequisites = HelpSection(
+            _non_lazy('Prerequisites'),
+            [
+                HelpRow(
+                    _non_lazy('IDevID Certificate'),
+                    'The device must have a valid IDevID (Initial Device Identifier) certificate issued by the '
+                    'device manufacturer. This certificate is used for CMP client authentication.',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('IDevID Private Key'),
+                    'The private key corresponding to the IDevID certificate must be available on the device.',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('DevOwnerID Trust Chain'),
+                    'The device must have the trust chain of the DevOwnerID certificate. This is used to validate '
+                    'the server certificate during the CMP communication.',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('mDNS Client'),
+                    'The device must support mDNS (Multicast DNS) to discover the Trustpoint server. '
+                    'Ensure mDNS is enabled on your device and network.',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Network Access'),
+                    'The device must have network access to the Trustpoint server over CMP protocol '
+                    f'({help_context.host_cmp_path}).',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Trustpoint Configuration'),
+                    "A DevOwnerID must be configured in Trustpoint. A truststore containing the trust chain "
+                    "of the IDevID must be present with a registration pattern (e.g. a UUID). "
+                    "The domain is automatically configured through the truststore's registration pattern.",
+                    ValueRenderType.PLAIN,
+                ),
+            ],
+        )
+
+        # How it works section
+        how_it_works = HelpSection(
+            _non_lazy('How AOKI with CMP Works'),
+            [
+                HelpRow(
+                    _non_lazy('Step 1: Device Discovery'),
+                    '1. Device boots and sends mDNS query to discover Trustpoint server\n'
+                    '2. Device receives server address of Trustpoint',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Step 2: IDevID Authentication'),
+                    '3. Device sends CMP Initial Request (IR) with generated key pair\n'
+                    '4. Request is signed using the IDevID private key\n'
+                    '5. Server validates the signature against the configured truststore and registration pattern',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Step 3: Certificate Issuance'),
+                    '6. Server verifies the IDevID and issues a domain credential\n'
+                    '7. Device receives operational certificate and can now communicate securely',
+                    ValueRenderType.PLAIN,
+                ),
+            ],
+        )
+
+        # Example commands section
+        keygen_cmd = AokiCmpIDevIDCommandBuilder.get_keygen_command()
+        cmp_ir_cmd = AokiCmpIDevIDCommandBuilder.get_cmp_ir_command(
+            help_context.host_cmp_path
+        )
+
+        example_commands = HelpSection(
+            _non_lazy('Example Commands'),
+            [
+                HelpRow(
+                    _non_lazy('Step 1: Generate Key Pair'),
+                    keygen_cmd,
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Step 2: Execute CMP Initial Request'),
+                    cmp_ir_cmd,
+                    ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+        return (
+            [prerequisites, how_it_works, example_commands],
+            _non_lazy('AOKI with CMP - IDevID Authentication'),
+        )
+
+
+class AokiEstIDevIDStrategy(HelpPageStrategy):
+    """Strategy for building the AOKI EST with IDevID help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        """Build help sections for AOKI with EST (IDevID authentication)."""
+        # Prerequisites section
+        prerequisites = HelpSection(
+            _non_lazy('Prerequisites'),
+            [
+                HelpRow(
+                    _non_lazy('IDevID Certificate'),
+                    'The device must have a valid IDevID (Initial Device Identifier) certificate issued by the '
+                    'device manufacturer. This certificate is used for mutual TLS (mTLS) authentication.',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('IDevID Private Key'),
+                    'The private key corresponding to the IDevID certificate must be available on the device.',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('mDNS Client'),
+                    'The device must support mDNS (Multicast DNS) to discover the Trustpoint server. '
+                    'Ensure mDNS is enabled on your device and network.',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Network Access'),
+                    'The device must have network access to the Trustpoint server over EST protocol (TLS) '
+                    f'({help_context.host_est_path}).',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('TLS Support'),
+                    'The device must support TLS 1.2 or higher for secure communication with the server.',
+                    ValueRenderType.PLAIN,
+                ),
+            ],
+        )
+
+
+
+        # How it works section
+        how_it_works = HelpSection(
+            _non_lazy('How AOKI with EST Works'),
+            [
+                HelpRow(
+                    _non_lazy('Step 1: Device Discovery'),
+                    '1. Device boots and sends mDNS query to discover Trustpoint server\n'
+                    '2. Device learns server address and EST endpoint',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Step 2: Secure Connection via mTLS'),
+                    '3. Device establishes TLS connection with IDevID certificate (mTLS)\n'
+                    '4. Server validates IDevID certificate chain\n'
+                    '5. Server verifies IDevID against manufacturer database',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Step 3: Certificate Issuance'),
+                    '6. Device receives operational certificate from server\n'
+                    '7. Automatic enrollment of application certificates',
+                    ValueRenderType.PLAIN,
+                ),
+            ],
+        )
+
+        # EST API endpoints section
+        est_endpoints = HelpSection(
+            _non_lazy('EST API Endpoints'),
+            [
+                HelpRow(
+                    _non_lazy('CA Certificates'),
+                    f'{help_context.host_est_path}/cacerts',
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Simple Enroll'),
+                    f'{help_context.host_est_path}/<profile>/simpleenroll',
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Simple Re-enroll'),
+                    f'{help_context.host_est_path}/<profile>/simplereenroll',
+                    ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+        return (
+            [prerequisites, summary, how_it_works, est_endpoints],
+            _non_lazy('AOKI with EST - IDevID Authentication (mTLS)'),
+        )
+
+
+class AokiCmpHelpView(PageContextMixin, TemplateView):
+    """Help view for AOKI with CMP (IDevID authentication)."""
+
+    template_name = 'help/help_page.html'
+    http_method_names = ('get',)
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def _make_context(self, host_ip: str = '127.0.0.1') -> HelpContext:
+        """Build generic context for AOKI help."""
+        host_base = f'https://{host_ip}:{self.request.META.get("SERVER_PORT", "443")}'
+
+        return HelpContext(
+            device=None,
+            host_base=host_base,
+            host_cmp_path=f'{host_base}/.aoki/initialization',
+            host_est_path=f'{host_base}/.aoki/init',
+            cred_count=0,
+        )
+
+    @override
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Build context with AOKI CMP help page."""
+        from devices.forms import HostIPForm  # noqa: PLC0415
+
+        context = super().get_context_data(**kwargs)
+
+        host_ip = self.request.GET.get('host_ip', '127.0.0.1')
+        help_context = self._make_context(host_ip=host_ip)
+
+        # Build CMP sections
+        strategy = AokiCmpIDevIDStrategy()
+        sections, heading = strategy.build_sections(help_context)
+
+        context['help_page'] = HelpPage(heading=heading, sections=sections)
+        context['form'] = HostIPForm(initial={'host_ip': host_ip})
+        context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
+        context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
+        context['ValueRenderType_HTML'] = ValueRenderType.HTML.value
+
+        return context
+
+
+class AokiEstHelpView(PageContextMixin, TemplateView):
+    """Help view for AOKI with EST (IDevID authentication)."""
+
+    template_name = 'help/help_page.html'
+    http_method_names = ('get',)
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def _make_context(self, host_ip: str = '127.0.0.1') -> HelpContext:
+        """Build generic context for AOKI help."""
+        from pki.models import DomainModel  # noqa: PLC0415
+
+        try:
+            domain = DomainModel.objects.first()
+            if not domain:
+                raise Http404(_('No domains configured in the system.'))
+        except DomainModel.DoesNotExist as exc:
+            raise Http404(_('No domains configured in the system.')) from exc
+
+        host_base = f'https://{host_ip}:{self.request.META.get("SERVER_PORT", "443")}'
+
+        public_key_info = domain.public_key_info
+        if not public_key_info:
+            raise Http404(PublicKeyInfoMissingErrorMsg)
+
+        allowed_app_profiles = list(
+            domain.get_allowed_cert_profiles().exclude(certificate_profile__unique_name='domain_credential'))
+
+        return HelpContext(
+            device=None,
+            domain=domain,
+            domain_unique_name=domain.unique_name,
+            allowed_app_profiles=allowed_app_profiles,
+            public_key_info=public_key_info,
+            host_base=host_base,
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/{domain.unique_name}',
+            host_est_path=f'{host_base}/.well-known/est/{domain.unique_name}',
+            cred_count=0,
+        )
+
+    @override
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Build context with AOKI EST help page."""
+        from devices.forms import HostIPForm  # noqa: PLC0415
+
+        context = super().get_context_data(**kwargs)
+
+        host_ip = self.request.GET.get('host_ip', '127.0.0.1')
+        help_context = self._make_context(host_ip=host_ip)
+
+        # Build EST sections
+        strategy = AokiEstIDevIDStrategy()
+        sections, heading = strategy.build_sections(help_context)
+
+        context['help_page'] = HelpPage(heading=heading, sections=sections)
+        context['form'] = HostIPForm(initial={'host_ip': host_ip})
+        context['ValueRenderType_CODE'] = ValueRenderType.CODE.value
+        context['ValueRenderType_PLAIN'] = ValueRenderType.PLAIN.value
+        context['ValueRenderType_HTML'] = ValueRenderType.HTML.value
+
+        return context

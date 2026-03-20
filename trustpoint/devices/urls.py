@@ -3,6 +3,7 @@
 from django.urls import path, re_path
 
 from help_pages import devices_help_views
+from pki.views import owner_credentials as ztc_views
 from trustpoint.page_context import (
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
@@ -400,5 +401,94 @@ urlpatterns = [
         r'^opc-ua-gds-push/delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
         views.DeviceBulkDeleteView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_delete',
+    ),
+
+    # -----------------------------------------------------------------------
+    # Zero-Touch Credentials (AOKI / DevOwnerID management)
+    # -----------------------------------------------------------------------
+    path(
+        'zero-touch-credentials/',
+        ztc_views.OwnerCredentialTableView.as_view(),
+        name='zero_touch_credentials',
+    ),
+    path(
+        'zero-touch-credentials/details/<int:pk>/',
+        ztc_views.OwnerCredentialDetailView.as_view(),
+        name='zero_touch_credentials-details',
+    ),
+    path(
+        'zero-touch-credentials/add/',
+        ztc_views.OwnerCredentialAddMethodSelectView.as_view(),
+        name='zero_touch_credentials-add',
+    ),
+    path(
+        'zero-touch-credentials/add/file-import/',
+        ztc_views.OwnerCredentialFileImportView.as_view(),
+        name='zero_touch_credentials-add-file_import',
+    ),
+    path(
+        'zero-touch-credentials/add/est/',
+        ztc_views.OwnerCredentialAddRequestEstMethodSelectView.as_view(),
+        name='zero_touch_credentials-add-est',
+    ),
+    path(
+        'zero-touch-credentials/add/est/no-onboarding/',
+        ztc_views.OwnerCredentialAddRequestEstNoOnboardingView.as_view(),
+        name='zero_touch_credentials-add-est-no-onboarding',
+    ),
+    path(
+        'zero-touch-credentials/add/est/onboarding/',
+        ztc_views.OwnerCredentialAddRequestEstOnboardingView.as_view(),
+        name='zero_touch_credentials-add-est-onboarding',
+    ),
+    path(
+        'zero-touch-credentials/truststore-association/<int:pk>/',
+        ztc_views.OwnerCredentialTruststoreAssociationView.as_view(),
+        name='zero_touch_credentials-truststore-association',
+    ),
+    path(
+        'zero-touch-credentials/clm/<int:pk>/',
+        ztc_views.OwnerCredentialCLMView.as_view(),
+        name='zero_touch_credentials-clm',
+    ),
+    path(
+        'zero-touch-credentials/define-cert-content-est/<int:pk>/',
+        ztc_views.OwnerCredentialDefineCertContentEstView.as_view(),
+        name='zero_touch_credentials-define-cert-content-est',
+    ),
+    path(
+        'zero-touch-credentials/request-cert-est/<int:pk>/',
+        ztc_views.OwnerCredentialRequestCertEstView.as_view(),
+        name='zero_touch_credentials-request-cert-est',
+    ),
+    path(
+        'zero-touch-credentials/define-cert-content-domain-credential-est/<int:pk>/',
+        ztc_views.OwnerCredentialDefineCertContentDomainCredentialEstView.as_view(),
+        name='zero_touch_credentials-define-cert-content-domain-credential-est',
+    ),
+    path(
+        'zero-touch-credentials/request-domain-credential-est/<int:pk>/',
+        ztc_views.OwnerCredentialRequestDomainCredentialEstView.as_view(),
+        name='zero_touch_credentials-request-domain-credential-est',
+    ),
+    path(
+        'zero-touch-credentials/<int:owner_pk>/issued-credential/<int:pk>/delete/',
+        ztc_views.IssuedCredentialDeleteView.as_view(),
+        name='zero_touch_credentials-issued-credential-delete',
+    ),
+    re_path(
+        r'^zero-touch-credentials/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
+        ztc_views.OwnerCredentialBulkDeleteConfirmView.as_view(),
+        name='zero_touch_credentials-delete_confirm',
+    ),
+    path(
+        'zero-touch-credentials/aoki-cmp-help/',
+        devices_help_views.AokiCmpHelpView.as_view(),
+        name='zero_touch_credentials-aoki_cmp_help',
+    ),
+    path(
+        'zero-touch-credentials/aoki-est-help/',
+        devices_help_views.AokiEstHelpView.as_view(),
+        name='zero_touch_credentials-aoki_est_help',
     ),
 ]

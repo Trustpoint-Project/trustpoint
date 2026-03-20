@@ -36,6 +36,7 @@ from request.operation_processor.csr_build import ProfileAwareCsrBuilder
 from request.operation_processor.csr_sign import EstDeviceCsrSignProcessor
 from request.request_context import EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
+from trustpoint.page_context import DEVICES_PAGE_CATEGORY, DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -54,26 +55,33 @@ class OwnerCredentialContextMixin(ContextDataMixin):
     context_page_name = 'owner_credentials'
 
 
+class ZeroTouchContextMixin(ContextDataMixin):
+    """Mixin which adds context_data for the Devices -> Zero-Touch Credentials pages."""
+
+    context_page_category = DEVICES_PAGE_CATEGORY
+    context_page_name = DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
+
+
 class OwnerCredentialTableView(
-    OwnerCredentialContextMixin, SortableTableMixin[OwnerCredentialModel], ListView[OwnerCredentialModel]):
-    """Owner Credential Table View."""
+    ZeroTouchContextMixin, SortableTableMixin[OwnerCredentialModel], ListView[OwnerCredentialModel]):
+    """Owner Credential Table View (displayed in Devices → Zero-Touch Credentials)."""
 
     model = OwnerCredentialModel
-    template_name = 'pki/owner_credentials/owner_credentials.html'  # Template file
+    template_name = 'devices/zero_touch_credentials/zero_touch_credentials.html'
     context_object_name = 'owner_credential'
     paginate_by = UIConfig.paginate_by  # Number of items per page
     default_sort_param = 'unique_name'
 
 
-class OwnerCredentialDetailView(LoggerMixin, OwnerCredentialContextMixin, DetailView[OwnerCredentialModel]):
-    """View to display the details of an Issuing CA."""
+class OwnerCredentialDetailView(LoggerMixin, ZeroTouchContextMixin, DetailView[OwnerCredentialModel]):
+    """View to display the details of an Owner Credential (Devices section)."""
 
     http_method_names = ('get',)
 
     model = OwnerCredentialModel
-    success_url = reverse_lazy('pki:owner_credentials')
-    ignore_url = reverse_lazy('pki:owner_credentials')
-    template_name = 'pki/owner_credentials/details.html'
+    success_url = reverse_lazy('devices:zero_touch_credentials')
+    ignore_url = reverse_lazy('devices:zero_touch_credentials')
+    template_name = 'devices/zero_touch_credentials/details.html'
     context_object_name = 'owner_credential'
 
     # add idevid refs to the context
@@ -94,10 +102,10 @@ class OwnerCredentialDetailView(LoggerMixin, OwnerCredentialContextMixin, Detail
         return context
 
 
-class OwnerCredentialAddMethodSelectView(OwnerCredentialContextMixin, FormView[OwnerCredentialFileImportForm]):
-    """View to select the method for adding a new DevOwnerID."""
+class OwnerCredentialAddMethodSelectView(ZeroTouchContextMixin, FormView[OwnerCredentialFileImportForm]):
+    """View to select the method for adding a new Zero-Touch Credential."""
 
-    template_name = 'pki/owner_credentials/add/method_select.html'
+    template_name = 'devices/zero_touch_credentials/add/method_select.html'
     # Use the file-import form as a lightweight stand-in so FormView machinery is satisfied.
     form_class = OwnerCredentialFileImportForm
 
@@ -110,22 +118,22 @@ class OwnerCredentialAddMethodSelectView(OwnerCredentialContextMixin, FormView[O
         """Redirect based on the chosen method."""
         method = request.POST.get('method_select')
         if method == 'local_file_import':
-            return HttpResponseRedirect(reverse_lazy('pki:owner_credentials-add-file_import'))
-        return HttpResponseRedirect(reverse_lazy('pki:owner_credentials-add'))
+            return HttpResponseRedirect(reverse_lazy('devices:zero_touch_credentials-add-file_import'))
+        return HttpResponseRedirect(reverse_lazy('devices:zero_touch_credentials-add'))
 
 
-class OwnerCredentialFileImportView(OwnerCredentialContextMixin, FormView[OwnerCredentialFileImportForm]):
-    """View to import a DevOwnerID from separate PEM files."""
+class OwnerCredentialFileImportView(ZeroTouchContextMixin, FormView[OwnerCredentialFileImportForm]):
+    """View to import a Zero-Touch Credential from separate PEM files."""
 
-    template_name = 'pki/owner_credentials/add/file_import.html'
+    template_name = 'devices/zero_touch_credentials/add/file_import.html'
     form_class = OwnerCredentialFileImportForm
-    success_url = reverse_lazy('pki:owner_credentials')
+    success_url = reverse_lazy('devices:zero_touch_credentials')
 
     def form_valid(self, form: OwnerCredentialFileImportForm) -> HttpResponse:
         """Handle the case where the form is valid."""
         messages.success(
             self.request,
-            _('Successfully added DevOwnerID {name}.').format(name=form.cleaned_data['unique_name']),
+            _('Successfully added Zero-Touch Credential {name}.').format(name=form.cleaned_data['unique_name']),
         )
         action = self.request.POST.get('action', 'add_only')
         if action == 'add_with_truststore':
@@ -138,11 +146,11 @@ OwnerCredentialAddView = OwnerCredentialFileImportView
 
 
 class OwnerCredentialAddRequestEstMethodSelectView(
-    OwnerCredentialContextMixin, FormView[OwnerCredentialFileImportForm]
+    ZeroTouchContextMixin, FormView[OwnerCredentialFileImportForm]
 ):
     """View to select between EST authentication methods: Basic Auth or mTLS Client Auth."""
 
-    template_name = 'pki/owner_credentials/add/est_method_select.html'
+    template_name = 'devices/zero_touch_credentials/add/est_method_select.html'
     form_class = OwnerCredentialFileImportForm
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -154,33 +162,33 @@ class OwnerCredentialAddRequestEstMethodSelectView(
         """Redirect based on the selected EST authentication method (Basic Auth or mTLS Client Auth)."""
         method = request.POST.get('method_select')
         if method == 'no_onboarding':
-            return HttpResponseRedirect(reverse_lazy('pki:owner_credentials-add-est-no-onboarding'))
+            return HttpResponseRedirect(reverse_lazy('devices:zero_touch_credentials-add-est-no-onboarding'))
         if method == 'onboarding':
-            return HttpResponseRedirect(reverse_lazy('pki:owner_credentials-add-est-onboarding'))
-        return HttpResponseRedirect(reverse_lazy('pki:owner_credentials-add-est'))
+            return HttpResponseRedirect(reverse_lazy('devices:zero_touch_credentials-add-est-onboarding'))
+        return HttpResponseRedirect(reverse_lazy('devices:zero_touch_credentials-add-est'))
 
 
 class OwnerCredentialAddRequestEstNoOnboardingView(
-    OwnerCredentialContextMixin, FormView[OwnerCredentialAddRequestEstNoOnboardingForm]
+    ZeroTouchContextMixin, FormView[OwnerCredentialAddRequestEstNoOnboardingForm]
 ):
-    """View to request a DevOwnerID via EST using HTTP Basic Auth (username/password)."""
+    """View to request a Zero-Touch Credential via EST using HTTP Basic Auth (username/password)."""
 
-    template_name = 'pki/owner_credentials/add/est_request.html'
+    template_name = 'devices/zero_touch_credentials/add/est_request.html'
     form_class = OwnerCredentialAddRequestEstNoOnboardingForm
-    success_url = reverse_lazy('pki:owner_credentials')
+    success_url = reverse_lazy('devices:zero_touch_credentials')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add heading context."""
         context = super().get_context_data(**kwargs)
-        context['form_title'] = _('Request DevOwnerID via EST — Basic Auth (Username / Password)')
-        context['back_url'] = reverse_lazy('pki:owner_credentials-add-est')
+        context['form_title'] = _('Request Zero-Touch Credential via EST — Basic Auth (Username / Password)')
+        context['back_url'] = reverse_lazy('devices:zero_touch_credentials-add-est')
         return context
 
     def form_valid(self, form: OwnerCredentialAddRequestEstNoOnboardingForm) -> HttpResponse:
         """Save the OwnerCredentialModel with its EST configuration.
 
         The key pair and IssuedCredentialModel are created later when the user
-        triggers an actual DevOwnerID issuance via the CLM page.
+        triggers an actual Zero-Touch Credential issuance via the CLM page.
         """
         owner_credential = OwnerCredentialModel.objects.create(
             unique_name=form.cleaned_data['unique_name'],
@@ -196,12 +204,12 @@ class OwnerCredentialAddRequestEstNoOnboardingView(
         messages.success(
             self.request,
             _(
-                'DevOwnerID configuration "{name}" saved. '
+                'Zero-Touch Credential configuration "{name}" saved. '
                 'Now associate the TLS server certificate trust store.'
             ).format(name=owner_credential.unique_name),
         )
         return HttpResponseRedirect(
-            reverse('pki:owner_credentials-truststore-association', kwargs={'pk': owner_credential.pk})
+            reverse('devices:zero_touch_credentials-truststore-association', kwargs={'pk': owner_credential.pk})
         )
 
     def form_invalid(self, form: OwnerCredentialAddRequestEstNoOnboardingForm) -> HttpResponse:
@@ -212,19 +220,22 @@ class OwnerCredentialAddRequestEstNoOnboardingView(
 
 
 class OwnerCredentialAddRequestEstOnboardingView(
-    OwnerCredentialContextMixin, FormView[OwnerCredentialAddRequestEstOnboardingForm]
+    ZeroTouchContextMixin, FormView[OwnerCredentialAddRequestEstOnboardingForm]
 ):
-    """View to request a DevOwnerID via EST using mTLS Client Auth (two-step enrollment with domain credential)."""
+    """View to request a Zero-Touch Credential via EST using mTLS Client Auth.
 
-    template_name = 'pki/owner_credentials/add/est_request.html'
+    Enables two-step enrollment with domain credential support.
+    """
+
+    template_name = 'devices/zero_touch_credentials/add/est_request.html'
     form_class = OwnerCredentialAddRequestEstOnboardingForm
-    success_url = reverse_lazy('pki:owner_credentials')
+    success_url = reverse_lazy('devices:zero_touch_credentials')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add heading context."""
         context = super().get_context_data(**kwargs)
-        context['form_title'] = _('Request DevOwnerID via EST — mTLS Client Auth')
-        context['back_url'] = reverse_lazy('pki:owner_credentials-add-est')
+        context['form_title'] = _('Request Zero-Touch Credential via EST — mTLS Client Auth')
+        context['back_url'] = reverse_lazy('devices:zero_touch_credentials-add-est')
         return context
 
     def form_valid(self, form: OwnerCredentialAddRequestEstOnboardingForm) -> HttpResponse:
@@ -248,12 +259,12 @@ class OwnerCredentialAddRequestEstOnboardingView(
         messages.success(
             self.request,
             _(
-                'DevOwnerID onboarding configuration "{name}" saved. '
+                'Zero-Touch Credential onboarding configuration "{name}" saved. '
                 'Now associate the TLS server certificate trust store.'
             ).format(name=owner_credential.unique_name),
         )
         return HttpResponseRedirect(
-            reverse('pki:owner_credentials-truststore-association', kwargs={'pk': owner_credential.pk})
+            reverse('devices:zero_touch_credentials-truststore-association', kwargs={'pk': owner_credential.pk})
         )
 
     def form_invalid(self, form: OwnerCredentialAddRequestEstOnboardingForm) -> HttpResponse:
@@ -264,12 +275,12 @@ class OwnerCredentialAddRequestEstOnboardingView(
 
 
 class OwnerCredentialTruststoreAssociationView(
-    OwnerCredentialContextMixin, FormView[OwnerCredentialTruststoreAssociationForm]
+    ZeroTouchContextMixin, FormView[OwnerCredentialTruststoreAssociationForm]
 ):
-    """View for associating a TLS truststore with a DevOwnerID EST no-onboarding configuration."""
+    """View for associating a TLS truststore with a Zero-Touch Credential EST configuration."""
 
     form_class = OwnerCredentialTruststoreAssociationForm
-    template_name = 'pki/owner_credentials/truststore_association.html'
+    template_name = 'devices/zero_touch_credentials/truststore_association.html'
 
     def get_owner_credential(self) -> OwnerCredentialModel:
         """Get the OwnerCredentialModel from the URL pk."""
@@ -321,7 +332,7 @@ class OwnerCredentialTruststoreAssociationView(
             )
             return HttpResponseRedirect(
                 reverse(
-                    'pki:owner_credentials-truststore-association',
+                    'devices:zero_touch_credentials-truststore-association',
                     kwargs={'pk': owner_credential.pk},
                 ) + f'?truststore_id={truststore.pk}'
             )
@@ -359,15 +370,15 @@ class OwnerCredentialTruststoreAssociationView(
                 name=owner_credential.unique_name
             ),
         )
-        return HttpResponseRedirect(reverse_lazy('pki:owner_credentials'))
+        return HttpResponseRedirect(reverse_lazy('devices:zero_touch_credentials'))
 
 
-class OwnerCredentialCLMView(OwnerCredentialContextMixin, DetailView[OwnerCredentialModel]):
-    """Certificate Lifecycle Management view for a DevOwnerID credential."""
+class OwnerCredentialCLMView(ZeroTouchContextMixin, DetailView[OwnerCredentialModel]):
+    """Certificate Lifecycle Management view for a Zero-Touch Credential in the Devices section."""
 
     http_method_names = ('get',)
     model = OwnerCredentialModel
-    template_name = 'pki/owner_credentials/clm.html'
+    template_name = 'devices/zero_touch_credentials/clm.html'
     context_object_name = 'owner_credential'
 
     @staticmethod
@@ -400,7 +411,7 @@ class OwnerCredentialCLMView(OwnerCredentialContextMixin, DetailView[OwnerCreden
                 cred.expiration_date = '—'  # type: ignore[attr-defined]
 
         context['issued_credentials'] = issued_creds
-        context['back_url'] = reverse_lazy('pki:owner_credentials')
+        context['back_url'] = reverse_lazy('devices:zero_touch_credentials')
 
         owner_credential: OwnerCredentialModel = self.object
         tls_trust_store = None
@@ -437,13 +448,13 @@ class OwnerCredentialCLMView(OwnerCredentialContextMixin, DetailView[OwnerCreden
         return context
 
 
-class OwnerCredentialBulkDeleteConfirmView(OwnerCredentialContextMixin, BulkDeleteView):
-    """View to confirm the deletion of multiple owner credentials."""
+class OwnerCredentialBulkDeleteConfirmView(ZeroTouchContextMixin, BulkDeleteView):
+    """View to confirm the deletion of multiple zero-touch credentials in the Devices section."""
 
     model = OwnerCredentialModel
-    success_url = reverse_lazy('pki:owner_credentials')
-    ignore_url = reverse_lazy('pki:owner_credentials')
-    template_name = 'pki/owner_credentials/confirm_delete.html'
+    success_url = reverse_lazy('devices:zero_touch_credentials')
+    ignore_url = reverse_lazy('devices:zero_touch_credentials')
+    template_name = 'devices/zero_touch_credentials/confirm_delete.html'
     context_object_name = 'owner_credentials'
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -476,8 +487,8 @@ class OwnerCredentialBulkDeleteConfirmView(OwnerCredentialContextMixin, BulkDele
         return response
 
 
-class IssuedCredentialDeleteView(LoggerMixin, OwnerCredentialContextMixin, DetailView[RemoteIssuedCredentialModel]):
-    """Confirm and delete a single RemoteIssuedCredentialModel (DEV_OWNER_ID or DOMAIN_CREDENTIAL).
+class IssuedCredentialDeleteView(LoggerMixin, ZeroTouchContextMixin, DetailView[RemoteIssuedCredentialModel]):
+    """Confirm and delete a single zero-touch issued credential in the Devices section.
 
     Only credentials owned by an ``OwnerCredentialModel`` are accessible via this view.
     The parent ``OwnerCredentialModel`` is resolved from the URL ``owner_pk`` parameter
@@ -486,7 +497,7 @@ class IssuedCredentialDeleteView(LoggerMixin, OwnerCredentialContextMixin, Detai
 
     http_method_names = ('get', 'post')
     model = RemoteIssuedCredentialModel
-    template_name = 'pki/owner_credentials/confirm_delete_issued_credential.html'
+    template_name = 'devices/zero_touch_credentials/confirm_delete_issued_credential.html'
     context_object_name = 'issued_credential'
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -531,7 +542,7 @@ class IssuedCredentialDeleteView(LoggerMixin, OwnerCredentialContextMixin, Detai
                 request,
                 _('DevOwnerID credential "{cn}" has been deleted.').format(cn=cn),
             )
-        return redirect('pki:owner_credentials-clm', pk=self.owner_credential.pk)
+        return redirect('devices:zero_touch_credentials-clm', pk=self.owner_credential.pk)
 
 
 # ---------------------------------------------------------------------------
@@ -539,9 +550,9 @@ class IssuedCredentialDeleteView(LoggerMixin, OwnerCredentialContextMixin, Detai
 # ---------------------------------------------------------------------------
 
 class OwnerCredentialDefineCertContentEstView(
-    LoggerMixin, OwnerCredentialContextMixin, FormView[CertificateIssuanceForm]
+    LoggerMixin, ZeroTouchContextMixin, FormView[CertificateIssuanceForm]
 ):
-    """Step 1 - Define the certificate content for a new DevOwnerID EST enrollment.
+    """Step 1 - Define the certificate content for a new Zero-Touch EST enrollment in the Devices section.
 
     On every GET/POST a fresh EC P-256 key pair is generated and a key-only
     :class:`~devices.models.IssuedCredentialModel` (type ``DEV_OWNER_ID``) is
@@ -554,7 +565,7 @@ class OwnerCredentialDefineCertContentEstView(
     """
 
     form_class = CertificateIssuanceForm
-    template_name = 'pki/owner_credentials/define_cert_content_est.html'
+    template_name = 'devices/zero_touch_credentials/define_cert_content_est.html'
     available_profiles: list[CertificateProfileModel]
 
     def _pending_session_key(self, owner_credential: OwnerCredentialModel) -> str:
@@ -661,7 +672,7 @@ class OwnerCredentialDefineCertContentEstView(
                 request,
                 _('No certificate profiles found. Please create one first.'),
             )
-            return redirect('pki:owner_credentials-clm', pk=self.owner_credential.pk)
+            return redirect('devices:zero_touch_credentials-clm', pk=self.owner_credential.pk)
         self.cert_profile = resolved_profile
 
         # Reuse an existing pending (certificate-less) credential if one exists,
@@ -721,13 +732,13 @@ class OwnerCredentialDefineCertContentEstView(
             self.request,
             _('Certificate content defined. Please proceed to request the DevOwnerID via EST.'),
         )
-        return redirect('pki:owner_credentials-request-cert-est', pk=self.owner_credential.pk)
+        return redirect('devices:zero_touch_credentials-request-cert-est', pk=self.owner_credential.pk)
 
 
 class OwnerCredentialRequestCertEstView(
-    LoggerMixin, OwnerCredentialContextMixin, DetailView[OwnerCredentialModel]
+    LoggerMixin, ZeroTouchContextMixin, DetailView[OwnerCredentialModel]
 ):
-    """Step 2 - Review and trigger the EST enrollment for a new DevOwnerID certificate.
+    """Step 2 - Review and trigger the EST enrollment for a new Zero-Touch certificate in the Devices section.
 
     Reads the certificate content stored by
     :class:`OwnerCredentialDefineCertContentEstView`, builds a CSR using the
@@ -738,7 +749,7 @@ class OwnerCredentialRequestCertEstView(
 
     http_method_names = ('get', 'post')
     model = OwnerCredentialModel
-    template_name = 'pki/owner_credentials/request_cert_est.html'
+    template_name = 'devices/zero_touch_credentials/request_cert_est.html'
     context_object_name = 'owner_credential'
 
     # ------------------------------------------------------------------
@@ -1003,7 +1014,7 @@ class OwnerCredentialRequestCertEstView(
                 request,
                 _('Certificate content data not found. Please define the certificate content first.'),
             )
-            return redirect('pki:owner_credentials-define-cert-content-est', pk=owner_credential.pk)
+            return redirect('devices:zero_touch_credentials-define-cert-content-est', pk=owner_credential.pk)
 
         try:
             self._perform_est_enrollment(owner_credential, cert_content_data)
@@ -1014,27 +1025,27 @@ class OwnerCredentialRequestCertEstView(
                     name=owner_credential.unique_name
                 ),
             )
-            return redirect('pki:owner_credentials-clm', pk=owner_credential.pk)
+            return redirect('devices:zero_touch_credentials-clm', pk=owner_credential.pk)
         except (ValueError, KeyError, ProfileValidationError) as exc:
             messages.error(request, _('Failed to build certificate request: {error}').format(error=str(exc)))
-            return redirect('pki:owner_credentials-define-cert-content-est', pk=owner_credential.pk)
+            return redirect('devices:zero_touch_credentials-define-cert-content-est', pk=owner_credential.pk)
         except CertificateProfileModel.DoesNotExist:
             messages.error(request, _('Certificate profile "dev_owner_id" not found.'))
-            return redirect('pki:owner_credentials-clm', pk=owner_credential.pk)
+            return redirect('devices:zero_touch_credentials-clm', pk=owner_credential.pk)
         except EstClientError as exc:
             self.logger.exception('EST client error during DevOwnerID enrollment')
             messages.error(
                 request,
                 _('Failed to enroll DevOwnerID certificate via EST: {error}').format(error=str(exc)),
             )
-            return redirect('pki:owner_credentials-request-cert-est', pk=owner_credential.pk)
+            return redirect('devices:zero_touch_credentials-request-cert-est', pk=owner_credential.pk)
         except Exception as exc:
             self.logger.exception('Unexpected error during DevOwnerID EST enrollment')
             messages.error(
                 request,
                 _('Unexpected error during enrollment: {error}').format(error=str(exc)),
             )
-            return redirect('pki:owner_credentials-request-cert-est', pk=owner_credential.pk)
+            return redirect('devices:zero_touch_credentials-request-cert-est', pk=owner_credential.pk)
 
 
 # ---------------------------------------------------------------------------
@@ -1042,9 +1053,9 @@ class OwnerCredentialRequestCertEstView(
 # ---------------------------------------------------------------------------
 
 class OwnerCredentialDefineCertContentDomainCredentialEstView(
-    LoggerMixin, OwnerCredentialContextMixin, FormView[CertificateIssuanceForm]
+    LoggerMixin, ZeroTouchContextMixin, FormView[CertificateIssuanceForm]
 ):
-    """Step 1 - Define the certificate content for a new Domain Credential EST enrollment.
+    """Step 1 - Define the certificate content for a new Domain Credential EST enrollment in the Devices section.
 
     Only available for REMOTE_EST_ONBOARDING owner credentials.
     The user can select any available certificate profile via a dropdown.
@@ -1052,7 +1063,7 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
     """
 
     form_class = CertificateIssuanceForm
-    template_name = 'pki/owner_credentials/define_cert_content_domain_credential_est.html'
+    template_name = 'devices/zero_touch_credentials/define_cert_content_domain_credential_est.html'
     available_profiles: list[CertificateProfileModel]
 
     def _pending_session_key(self, owner_credential: OwnerCredentialModel) -> str:
@@ -1137,7 +1148,7 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
             != OwnerCredentialModel.OwnerCredentialTypeChoice.REMOTE_EST_ONBOARDING
         ):
             messages.error(request, _('Domain credentials are only available for EST onboarding configurations.'))
-            return redirect('pki:owner_credentials-clm', pk=self.owner_credential.pk)
+            return redirect('devices:zero_touch_credentials-clm', pk=self.owner_credential.pk)
 
         resolved_profile = self._resolve_cert_profile(request)
         if resolved_profile is None:
@@ -1145,7 +1156,7 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
                 request,
                 _('No certificate profiles found. Please create one first.'),
             )
-            return redirect('pki:owner_credentials-clm', pk=self.owner_credential.pk)
+            return redirect('devices:zero_touch_credentials-clm', pk=self.owner_credential.pk)
         self.cert_profile = resolved_profile
 
         session_key = self._pending_session_key(self.owner_credential)
@@ -1200,13 +1211,13 @@ class OwnerCredentialDefineCertContentDomainCredentialEstView(
             self.request,
             _('Certificate content defined. Please proceed to request the Domain Credential via EST.'),
         )
-        return redirect('pki:owner_credentials-request-domain-credential-est', pk=self.owner_credential.pk)
+        return redirect('devices:zero_touch_credentials-request-domain-credential-est', pk=self.owner_credential.pk)
 
 
 class OwnerCredentialRequestDomainCredentialEstView(
-    LoggerMixin, OwnerCredentialContextMixin, DetailView[OwnerCredentialModel]
+    LoggerMixin, ZeroTouchContextMixin, DetailView[OwnerCredentialModel]
 ):
-    """Step 2 - Review and trigger the EST enrollment for a new Domain Credential.
+    """Step 2 - Review and trigger the EST enrollment for a new Domain Credential in the Devices section.
 
     Uses ``remote_path_domain_credential`` from OwnerCredentialModel,
     ``trust_store`` from OnboardingConfigModel,
@@ -1216,7 +1227,7 @@ class OwnerCredentialRequestDomainCredentialEstView(
 
     http_method_names = ('get', 'post')
     model = OwnerCredentialModel
-    template_name = 'pki/owner_credentials/request_domain_credential_est.html'
+    template_name = 'devices/zero_touch_credentials/request_domain_credential_est.html'
     context_object_name = 'owner_credential'
 
     def _session_key(self, owner_credential: OwnerCredentialModel) -> str:
@@ -1399,7 +1410,7 @@ class OwnerCredentialRequestDomainCredentialEstView(
                 _('Certificate content data not found. Please define the certificate content first.'),
             )
             return redirect(
-                'pki:owner_credentials-define-cert-content-domain-credential-est', pk=owner_credential.pk
+                'devices:zero_touch_credentials-define-cert-content-domain-credential-est', pk=owner_credential.pk
             )
 
         try:
@@ -1411,11 +1422,11 @@ class OwnerCredentialRequestDomainCredentialEstView(
                     name=owner_credential.unique_name
                 ),
             )
-            return redirect('pki:owner_credentials-clm', pk=owner_credential.pk)
+            return redirect('devices:zero_touch_credentials-clm', pk=owner_credential.pk)
         except (ValueError, KeyError, ProfileValidationError) as exc:
             messages.error(request, _('Failed to build certificate request: {error}').format(error=str(exc)))
             return redirect(
-                'pki:owner_credentials-define-cert-content-domain-credential-est', pk=owner_credential.pk
+                'devices:zero_touch_credentials-define-cert-content-domain-credential-est', pk=owner_credential.pk
             )
         except CertificateProfileModel.DoesNotExist:
             profile_name = (cert_content_data or {}).get('cert_profile_unique_name', 'devownerid_domain_credential')
@@ -1423,7 +1434,7 @@ class OwnerCredentialRequestDomainCredentialEstView(
                 request,
                 _('Certificate profile "{name}" not found.').format(name=profile_name),
             )
-            return redirect('pki:owner_credentials-clm', pk=owner_credential.pk)
+            return redirect('devices:zero_touch_credentials-clm', pk=owner_credential.pk)
         except EstClientError as exc:
             self.logger.exception('EST client error during Domain Credential enrollment')
             messages.error(
@@ -1431,7 +1442,7 @@ class OwnerCredentialRequestDomainCredentialEstView(
                 _('Failed to enroll Domain Credential via EST: {error}').format(error=str(exc)),
             )
             return redirect(
-                'pki:owner_credentials-request-domain-credential-est', pk=owner_credential.pk
+                'devices:zero_touch_credentials-request-domain-credential-est', pk=owner_credential.pk
             )
         except Exception as exc:
             self.logger.exception('Unexpected error during Domain Credential EST enrollment')
@@ -1440,5 +1451,5 @@ class OwnerCredentialRequestDomainCredentialEstView(
                 _('Unexpected error during enrollment: {error}').format(error=str(exc)),
             )
             return redirect(
-                'pki:owner_credentials-request-domain-credential-est', pk=owner_credential.pk
+                'devices:zero_touch_credentials-request-domain-credential-est', pk=owner_credential.pk
             )
