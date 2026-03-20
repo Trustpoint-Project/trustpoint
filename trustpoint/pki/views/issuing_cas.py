@@ -1608,7 +1608,7 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
     search_fields: ClassVar = ['unique_name', 'credential__certificate__common_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at', 'updated_at']
 
-    http_method_names: ClassVar = ['get', 'post', 'head', 'options']
+    http_method_names = ['get', 'post', 'head', 'options']  # noqa: RUF012
 
     @extend_schema(
         summary='List Issuing CAs',
@@ -1678,10 +1678,10 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
             return error_response
 
         mixin = IssuingCaImportMixin()
-        chain = list(credential_serializer.additional_certificates or [])  # type: ignore[union-attr]
+        chain = list(credential_serializer.additional_certificates or [])
         try:
             issuing_ca = mixin._finalize_issuing_ca_creation(  # noqa: SLF001
-                unique_name or None, cert, credential_serializer, chain  # type: ignore[arg-type]
+                unique_name or None, cert, credential_serializer, chain
             )
         except ValidationError as exc:
             return Response({'detail': exc.messages}, status=status.HTTP_400_BAD_REQUEST)
