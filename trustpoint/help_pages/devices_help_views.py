@@ -31,6 +31,8 @@ from help_pages.commands import (
     CmpSharedSecretCommandBuilder,
     EstClientCertificateCommandBuilder,
     EstUsernamePasswordCommandBuilder,
+    RestClientCertificateCommandBuilder,
+    RestUsernamePasswordCommandBuilder,
 )
 from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
@@ -783,6 +785,368 @@ class OpcUaGdsApplicationCertificateWithEstDomainCredentialHelpView(BaseHelpView
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
     strategy = ApplicationCertificateWithEstDomainCredentialStrategy()
+
+
+# ----------------------------- No Onboarding - REST Username/Password Help Page Implementations ---------------------
+
+
+class NoOnboardingRestUsernamePasswordStrategy(HelpPageStrategy):
+    """Strategy for building the no-onboarding REST username/password help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        no_onboarding_config = getattr(device, 'no_onboarding_config', None)
+        if not no_onboarding_config:
+            raise Http404(_('Onboarding is configured for this device.'))
+        est_password = no_onboarding_config.est_password
+        host_base = help_context.host_base
+        domain_name = help_context.domain_unique_name
+
+        def _get_enroll_path(cert_profile_name: str) -> str:
+            return f'{host_base}/.well-known/rest/{domain_name}/{cert_profile_name}/enroll/'
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(
+                    _non_lazy('Certificate Enrollment URL'),
+                    f'{host_base}/.well-known/rest/{domain_name}/<certificate_profile>/enroll/',
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Required Public Key Type'),
+                    str(help_context.domain.public_key_info),
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    key=_non_lazy('REST-Username'),
+                    value=device.common_name,
+                    value_render_type=ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    key=_non_lazy('REST-Password'),
+                    value=est_password,
+                    value_render_type=ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+        cred = help_context.cred_count
+
+        def _build_section(
+            title: str, cert_profile_name: str, csr_cmd: str, *, hidden: bool = False
+        ) -> HelpSection:
+            return HelpSection(
+                title,
+                [
+                    HelpRow(_non_lazy('Generate CSR'), csr_cmd, ValueRenderType.CODE),
+                    HelpRow(
+                        _non_lazy('Enroll certificate with curl'),
+                        value=RestUsernamePasswordCommandBuilder.get_curl_enroll_command(
+                            rest_username=device.common_name,
+                            rest_password=est_password,
+                            host=_get_enroll_path(cert_profile_name=cert_profile_name),
+                            cred_number=cred,
+                        ),
+                        value_render_type=ValueRenderType.CODE,
+                    ),
+                    HelpRow(
+                        _non_lazy('Extract certificate from JSON response'),
+                        value=RestUsernamePasswordCommandBuilder.get_extract_cert_command(cred_number=cred),
+                        value_render_type=ValueRenderType.CODE,
+                    ),
+                ],
+                css_id=cert_profile_name,
+                hidden=hidden,
+            )
+
+        sections = [
+            summary,
+            build_tls_trust_store_section(),
+            build_keygen_section(help_context, file_name=''),
+            build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
+        ]
+
+        for i, profile in enumerate(help_context.allowed_app_profiles):
+            name = profile.alias or profile.certificate_profile.unique_name
+            title = profile.certificate_profile.display_name or name
+
+            try:
+                cert_profile = profile.certificate_profile.profile
+                sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
+                csr_cmd = RestUsernamePasswordCommandBuilder.get_dynamic_cert_profile_command(
+                    cred_number=cred,
+                    sample_request=sample_request,
+                )
+            except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
+                err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
+                sections.append(HelpSection(
+                    _non_lazy(f'Certificate Request for a {title} Certificate'),
+                    [HelpRow(_non_lazy('Generate CSR'), err_msg, ValueRenderType.PLAIN)],
+                    css_id=name,
+                    hidden=(i > 0),
+                ))
+                continue
+
+            sections.append(_build_section(
+                _non_lazy(f'Certificate Request for a {title} Certificate'),
+                name,
+                csr_cmd,
+                hidden=(i > 0),
+            ))
+
+        return sections, _non_lazy('Help - Issue Application Certificates using REST with username and password')
+
+
+class DeviceNoOnboardingRestUsernamePasswordHelpView(BaseHelpView):
+    """Help view for no-onboarding REST username/password for generic device abstractions."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    strategy = NoOnboardingRestUsernamePasswordStrategy()
+
+
+class OpcUaGdsNoOnboardingRestUsernamePasswordHelpView(BaseHelpView):
+    """Help view for no-onboarding REST username/password for OPC-UA GDS device abstractions."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+    strategy = NoOnboardingRestUsernamePasswordStrategy()
+
+
+# -------------------- Onboarding - Domain Credential - REST Username/Password - Help Page Implementations ----------
+
+
+class OnboardingDomainCredentialRestUsernamePasswordStrategy(HelpPageStrategy):
+    """Strategy for building the onboarding REST username/password domain-credential help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        onboarding_config = getattr(device, 'onboarding_config', None)
+        if not onboarding_config:
+            raise Http404(_('Onboarding is not configured for this device.'))
+        est_password = onboarding_config.est_password
+        host_base = help_context.host_base
+        domain_name = help_context.domain_unique_name
+        enroll_url = f'{host_base}/.well-known/rest/{domain_name}/domain_credential/enroll/'
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(
+                    _non_lazy('Domain Credential Enrollment URL'),
+                    enroll_url,
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Required Public Key Type'),
+                    str(help_context.domain.public_key_info),
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    key=_non_lazy('REST-Username'),
+                    value=device.common_name,
+                    value_render_type=ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    key=_non_lazy('REST-Password'),
+                    value=est_password,
+                    value_render_type=ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+        csr_cmd = RestUsernamePasswordCommandBuilder.get_domain_credential_csr_command()
+        curl_cmd = RestUsernamePasswordCommandBuilder.get_curl_enroll_domain_credential_command(
+            rest_username=device.common_name,
+            rest_password=est_password,
+            host=enroll_url,
+        )
+        extract_cmd = RestUsernamePasswordCommandBuilder.get_extract_domain_credential_command()
+
+        sections = [
+            summary,
+            build_tls_trust_store_section(),
+            build_keygen_section(help_context, file_name='domain-credential-key.pem'),
+            HelpSection(
+                heading=_non_lazy('Domain Credential Certificate Request'),
+                rows=[
+                    HelpRow(_non_lazy('Generate CSR'), csr_cmd, ValueRenderType.CODE),
+                    HelpRow(_non_lazy('Enroll with curl'), curl_cmd, ValueRenderType.CODE),
+                    HelpRow(_non_lazy('Extract certificate from JSON response'), extract_cmd, ValueRenderType.CODE),
+                ],
+                css_id='domain_credential',
+            ),
+        ]
+        return sections, _non_lazy('Help - Issue a Domain Credential using REST with username and password')
+
+
+class DeviceOnboardingDomainCredentialRestUsernamePasswordHelpView(BaseHelpView):
+    """Help view for onboarding using REST username/password domain credential for generic device abstractions."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    strategy = OnboardingDomainCredentialRestUsernamePasswordStrategy()
+
+
+class OpcUaGdsOnboardingDomainCredentialRestUsernamePasswordHelpView(BaseHelpView):
+    """Help view for onboarding using REST username/password domain credential for OPC-UA GDS device abstractions."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+    strategy = OnboardingDomainCredentialRestUsernamePasswordStrategy()
+
+
+# --------------------- Application Certificates - REST mTLS Domain Credential - Help Page Implementations -----------
+
+
+class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
+    """Strategy for building the onboarding REST app-cert help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        onboarding_config = getattr(device, 'onboarding_config', None)
+        if not onboarding_config:
+            raise Http404(_('Onboarding is not configured for this device.'))
+        host_base = help_context.host_base
+        domain_name = help_context.domain_unique_name
+
+        def _get_enroll_path(cert_profile_name: str) -> str:
+            return f'{host_base}/.well-known/rest/{domain_name}/{cert_profile_name}/enroll/'
+
+        def _get_reenroll_path(cert_profile_name: str) -> str:
+            return f'{host_base}/.well-known/rest/{domain_name}/{cert_profile_name}/reenroll/'
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(
+                    _non_lazy('Initial Enrollment URL'),
+                    f'{host_base}/.well-known/rest/{domain_name}/<certificate_profile>/enroll/',
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Renewal URL'),
+                    f'{host_base}/.well-known/rest/{domain_name}/<certificate_profile>/reenroll/',
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Required Public Key Type'),
+                    str(help_context.domain.public_key_info),
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Authentication for Enrollment'),
+                    _non_lazy('mTLS with domain credential'),
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Authentication for Renewal'),
+                    _non_lazy('mTLS with domain credential OR previously issued application certificate'),
+                    ValueRenderType.PLAIN,
+                ),
+            ],
+        )
+
+        cred = help_context.cred_count
+
+        def _build_section(
+            title: str, cert_profile_name: str, csr_cmd: str, *, hidden: bool = False
+        ) -> HelpSection:
+            return HelpSection(
+                title,
+                [
+                    HelpRow(_non_lazy('Generate CSR'), csr_cmd, ValueRenderType.CODE),
+                    HelpRow(
+                        _non_lazy('Enroll certificate with curl (mTLS domain credential)'),
+                        value=RestClientCertificateCommandBuilder.get_curl_enroll_command(
+                            host=_get_enroll_path(cert_profile_name=cert_profile_name),
+                            cred_number=cred,
+                        ),
+                        value_render_type=ValueRenderType.CODE,
+                    ),
+                    HelpRow(
+                        _non_lazy('Re-enroll / renew certificate with curl (mTLS domain credential)'),
+                        value=RestClientCertificateCommandBuilder.get_curl_reenroll_command(
+                            host=_get_reenroll_path(cert_profile_name=cert_profile_name),
+                            cred_number=cred,
+                        ),
+                        value_render_type=ValueRenderType.CODE,
+                    ),
+                    HelpRow(
+                        _non_lazy('Re-enroll / renew with previous application certificate'),
+                        value=_non_lazy(
+                            'Replace domain-credential-certificate.pem with the previously issued certificate, '
+                            'and domain-credential-key.pem with its corresponding private key.'
+                        ),
+                        value_render_type=ValueRenderType.PLAIN,
+                    ),
+                    HelpRow(
+                        _non_lazy('Extract certificate from JSON response'),
+                        value=RestClientCertificateCommandBuilder.get_extract_cert_command(cred_number=cred),
+                        value_render_type=ValueRenderType.CODE,
+                    ),
+                    HelpRow(
+                        _non_lazy('Extract certificate chain from JSON response'),
+                        value=RestClientCertificateCommandBuilder.get_extract_cert_chain_command(
+                            cred_number=cred
+                        ),
+                        value_render_type=ValueRenderType.CODE,
+                    ),
+                ],
+                css_id=cert_profile_name,
+                hidden=hidden,
+            )
+
+        sections = [
+            summary,
+            build_tls_trust_store_section(),
+            build_keygen_section(help_context, file_name=''),
+            build_profile_select_section(app_cert_profiles=help_context.allowed_app_profiles),
+        ]
+
+        for i, profile in enumerate(help_context.allowed_app_profiles):
+            name = profile.alias or profile.certificate_profile.unique_name
+            title = profile.certificate_profile.display_name or name
+
+            try:
+                cert_profile = profile.certificate_profile.profile
+                sample_request = JSONProfileVerifier(cert_profile).get_sample_request()
+                csr_cmd = RestClientCertificateCommandBuilder.get_dynamic_cert_profile_command(
+                    cred_number=cred,
+                    sample_request=sample_request,
+                )
+            except (json.JSONDecodeError, PydanticValidationError, ProfileValidationError, ValueError) as e:
+                err_msg = f'The command cannot be generated because the Certificate Profile is malformed: {e}'
+                sections.append(HelpSection(
+                    _non_lazy(f'Certificate Request for a {title} Certificate'),
+                    [HelpRow(_non_lazy('Generate CSR'), err_msg, ValueRenderType.PLAIN)],
+                    css_id=name,
+                    hidden=(i > 0),
+                ))
+                continue
+
+            sections.append(_build_section(
+                _non_lazy(f'Certificate Request for a {title} Certificate'),
+                name,
+                csr_cmd,
+                hidden=(i > 0),
+            ))
+
+        return sections, _non_lazy('Help - Issue Application Certificates using REST with a Domain Credential')
+
+
+class DeviceApplicationCertificateWithRestDomainCredentialHelpView(BaseHelpView):
+    """Help view for application certs using REST with client cert for generic device abstractions."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    strategy = ApplicationCertificateWithRestDomainCredentialStrategy()
+
+
+class OpcUaGdsApplicationCertificateWithRestDomainCredentialHelpView(BaseHelpView):
+    """Help view for application certs using REST with client cert for OPC-UA GDS device abstractions."""
+
+    page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
+    strategy = ApplicationCertificateWithRestDomainCredentialStrategy()
 
 
 class OpcUaGdsPushOnboardingStrategy(HelpPageStrategy):

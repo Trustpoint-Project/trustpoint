@@ -38,6 +38,20 @@ class Events:
         operation='simplereenroll',
         handler='certificate_request',
     )
+
+    rest_enroll = Event(
+        key='rest_enroll',
+        protocol='rest',
+        operation='enroll',
+        handler='certificate_request',
+    )
+
+    rest_reenroll = Event(
+        key='rest_reenroll',
+        protocol='rest',
+        operation='reenroll',
+        handler='certificate_request',
+    )
     """
 
     est_cacerts = Event(
