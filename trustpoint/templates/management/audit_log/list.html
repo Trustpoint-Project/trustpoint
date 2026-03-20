@@ -1,0 +1,75 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header">
+        <h1>{% trans 'Audit Log' %}</h1>
+    </div>
+    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
+
+        {# Filter form #}
+        <form method="get" class="row g-2 mb-3 align-items-end">
+            <div class="col-auto">
+                {{ filter.form.operation_type.label_tag }}
+                {{ filter.form.operation_type }}
+            </div>
+            <div class="col-auto">
+                {{ filter.form.target_content_type.label_tag }}
+                {{ filter.form.target_content_type }}
+            </div>
+            <div class="col-auto">
+                {{ filter.form.target_object_id.label_tag }}
+                {{ filter.form.target_object_id }}
+            </div>
+            <div class="col-auto">
+                {{ filter.form.actor.label_tag }}
+                {{ filter.form.actor }}
+            </div>
+            <div class="col-auto">
+                {{ filter.form.timestamp_after.label_tag }}
+                {{ filter.form.timestamp_after }}
+            </div>
+            <div class="col-auto">
+                {{ filter.form.timestamp_before.label_tag }}
+                {{ filter.form.timestamp_before }}
+            </div>
+            <div class="col-auto d-flex gap-2">
+                <button type="submit" class="btn btn-primary btn-sm">{% trans 'Filter' %}</button>
+                <a href="{% url 'management:audit-log' %}" class="btn btn-outline-secondary btn-sm">{% trans 'Reset' %}</a>
+            </div>
+        </form>
+
+        {# Results table #}
+        <table class="table table-sm table-hover">
+            <thead>
+                <tr>
+                    <th>{% trans 'Timestamp' %}</th>
+                    <th>{% trans 'Operation' %}</th>
+                    <th>{% trans 'Target Type' %}</th>
+                    <th>{% trans 'Target' %}</th>
+                    <th>{% trans 'Actor' %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for entry in audit_log_entries %}
+                <tr>
+                    <td class="text-nowrap">{{ entry.timestamp }}</td>
+                    <td>{{ entry.get_operation_type_display }}</td>
+                    <td>{{ entry.target_content_type }}</td>
+                    <td>{{ entry.target_display }}</td>
+                    <td>{{ entry.actor|default:_('System') }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted">{% trans 'No audit log entries found.' %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% include 'trustpoint/pagination.html' %}
+
+    </div>
+</div>
+{% endblock %}

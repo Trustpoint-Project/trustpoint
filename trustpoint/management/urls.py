@@ -4,6 +4,7 @@ from django.urls import path, re_path
 
 from .views import (
     IndexView,
+    audit_log,
     backup,
     help_support,
     key_storage,
@@ -87,4 +88,6 @@ urlpatterns = [
     path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
     path('notifications/refresh/', notifications.RefreshNotificationsView.as_view(), name='refresh_notifications'),
     path('notifications/<int:pk>/delete/', notifications.NotificationDeleteView.as_view(), name='notification_delete'),
+    # Audit log
+    path('audit-log/', audit_log.AuditLogListView.as_view(), name='audit-log'),
 ]

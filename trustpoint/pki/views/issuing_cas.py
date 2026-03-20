@@ -34,6 +34,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from management.models.audit_log import AuditLog
 from pki.forms import (
     CertificateIssuanceForm,
     IssuingCaAddFileImportPkcs12Form,
@@ -164,6 +165,15 @@ class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, FormView[IssuingCa
             self.request,
             _('Successfully added Issuing CA {name}.').format(name=form.cleaned_data['unique_name']),
         )
+        ca = CaModel.objects.filter(unique_name=form.cleaned_data['unique_name']).first()
+        if ca is not None:
+            actor = self.request.user if self.request.user.is_authenticated else None
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.CA_CREATED,
+                target=ca,
+                target_display=f'CA: {ca.unique_name}',
+                actor=actor,
+            )
         return super().form_valid(form)
 
 
@@ -180,6 +190,15 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView[Is
             self.request,
             _('Successfully added Issuing CA {name}.').format(name=form.cleaned_data['unique_name']),
         )
+        ca = CaModel.objects.filter(unique_name=form.cleaned_data['unique_name']).first()
+        if ca is not None:
+            actor = self.request.user if self.request.user.is_authenticated else None
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.CA_CREATED,
+                target=ca,
+                target_display=f'CA: {ca.unique_name}',
+                actor=actor,
+            )
         return super().form_valid(form)
 
 
@@ -197,6 +216,13 @@ class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddReq
             _('Successfully created Issuing CA {name}. Please associate a trust store.').format(
                 name=ca.unique_name
             ),
+        )
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CA_CREATED,
+            target=ca,
+            target_display=f'CA: {ca.unique_name}',
+            actor=actor,
         )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
@@ -512,6 +538,13 @@ class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
             self.request,  # type: ignore[attr-defined]
             _('Successfully configured CMP RA {name}. Please associate a trust store.').format(name=ca.unique_name)
         )
+        actor = self.request.user if self.request.user.is_authenticated else None  # type: ignore[attr-defined]
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CA_CREATED,
+            target=ca,
+            target_display=f'CA: {ca.unique_name}',
+            actor=actor,
+        )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
 
@@ -530,6 +563,13 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
             _('Successfully created Issuing CA {name}. Please associate a trust store.').format(
                 name=ca.unique_name
             ),
+        )
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CA_CREATED,
+            target=ca,
+            target_display=f'CA: {ca.unique_name}',
+            actor=actor,
         )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
@@ -552,6 +592,13 @@ class RemoteRaAddRequestEstMixin(IssuingCaContextMixin):
             _('Successfully configured EST RA {name}. Please associate the CA chain trust store.').format(
                 name=ca.unique_name
             )
+        )
+        actor = self.request.user if self.request.user.is_authenticated else None  # type: ignore[attr-defined]
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CA_CREATED,
+            target=ca,
+            target_display=f'CA: {ca.unique_name}',
+            actor=actor,
         )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
