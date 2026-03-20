@@ -44,6 +44,10 @@ class BaseRequestContext(LoggerMixin):
     client_certificate: x509.Certificate | None = None
     client_intermediate_certificate: list[x509.Certificate] | None = None
 
+    # The authenticated user who triggered this request, if applicable (e.g. manual web UI issuance).
+    # None for machine-to-machine protocol flows (CMP, EST).
+    actor: Any | None = None
+
     # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
     event: Event | None = None
 

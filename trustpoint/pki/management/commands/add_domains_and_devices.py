@@ -147,6 +147,7 @@ def create_signer_for_domain(
 
 
 from trustpoint.logger import LoggerMixin
+from management.models.audit_log import AuditLog
 
 
 class Command(BaseCommand, LoggerMixin):
@@ -271,6 +272,12 @@ class Command(BaseCommand, LoggerMixin):
 
             if created:
                 self.log_and_stdout(f'Created new domain: {domain_name}')
+                AuditLog.create_entry(
+                    operation_type=AuditLog.OperationType.DOMAIN_CREATED,
+                    target=domain,
+                    target_display=f'Domain: {domain_name} (demo data)',
+                    actor=None,
+                )
             else:
                 self.log_and_stdout(f'Domain already exists: {domain_name}')
 
@@ -286,6 +293,12 @@ class Command(BaseCommand, LoggerMixin):
                     f"Created DevIdRegistration for domain '{domain_name}' and issuing CA "
                     f"'{issuing_ca_name}' with truststore '{truststore_name}'"
                 )
+                AuditLog.create_entry(
+                    operation_type=AuditLog.OperationType.MODEL_CREATED,
+                    target=devid_reg,
+                    target_display=f'DevIdRegistration: {devid_reg.unique_name} (demo data)',
+                    actor=None,
+                )
             else:
                 self.log_and_stdout(
                     f"DevIdRegistration already exists for domain '{domain_name}' "
@@ -299,6 +312,12 @@ class Command(BaseCommand, LoggerMixin):
                     self.log_and_stdout(
                         f"Created signer '{signer.unique_name}' for domain '{domain_name}' "
                         f"with CN '{signer.common_name}' issued by '{issuing_ca_name}'"
+                    )
+                    AuditLog.create_entry(
+                        operation_type=AuditLog.OperationType.MODEL_CREATED,
+                        target=signer,
+                        target_display=f'Signer: {signer.unique_name} (demo data)',
+                        actor=None,
                     )
                 except Exception as e:  # noqa: BLE001
                     self.log_and_stdout(
@@ -379,6 +398,13 @@ class Command(BaseCommand, LoggerMixin):
                     onboarding_config_model.save()
                     device_model.save()
 
+                    AuditLog.create_entry(
+                        operation_type=AuditLog.OperationType.DEVICE_ADDED,
+                        target=device_model,
+                        target_display=f'Device: {device_name} (demo data)',
+                        actor=None,
+                    )
+
 
                 else:
 
@@ -436,6 +462,12 @@ class Command(BaseCommand, LoggerMixin):
                                 f"in domain '{device_model.domain}' with Serial Number: {device_model.serial_number}; "
                                 f"Onboarding Protocol: {onboarding_protocol_display}; "
                                 f"PKI Protocols: {[p.label for p in pki_protocols]}"
+                            )
+                            AuditLog.create_entry(
+                                operation_type=AuditLog.OperationType.DEVICE_ADDED,
+                                target=device_model,
+                                target_display=f'Device: {device_model.common_name} (demo data)',
+                                actor=None,
                             )
                         else:
                             self.log_and_stdout(f"Device '{device_name}' was not saved correctly.", level='warning')
