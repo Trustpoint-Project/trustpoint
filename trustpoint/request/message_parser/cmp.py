@@ -16,6 +16,7 @@ from cmp.util import NameParser
 from request.request_context import (
     BaseRequestContext,
     CmpBaseRequestContext,
+    CmpCertConfRequestContext,
     CmpCertificateRequestContext,
     CmpRevocationRequestContext,
 )
@@ -163,21 +164,43 @@ class CmpHeaderValidation(ParsingComponent, LoggerMixin):
         context: CmpBaseRequestContext,
         serialized_pyasn1_message: rfc4210.PKIMessage,
     ) -> None:
-        """Check for the presence and correctness of the implicit confirm entry."""
+        """Detect and record whether the client requested implicit confirm.
+
+        Per RFC 9483 §3.1, ``implicitConfirm`` is a OPTIONAL request from the
+        EE included in the generalInfo of an ir/cr/kur/p10cr message.  When
+        present and granted by the CA the certConf/pkiConf round-trip is
+        skipped.  When absent the normal certConf round-trip MUST take place.
+
+        certConf messages never carry an implicitConfirm generalInfo field
+        (RFC 9483 Section 3.1: implicitConfirm is PROHIBITED in message types
+        other than ir/cr/kur/p10cr and ip/cp/kup).
+
+        Sets ``context.implicit_confirm = True`` when the flag is present and
+        valid; leaves it ``False`` otherwise (certConf round-trip expected).
+        """
+        body_type = serialized_pyasn1_message['body'].getName()
+        if body_type == 'certConf' or context.operation == 'certconf':
+            return
         if context.operation not in ['initialization', 'certification', 'key_update']:
             return
+
         implicit_confirm_entry = None
         for entry in serialized_pyasn1_message['header']['generalInfo']:
             if entry['infoType'].prettyPrint() == self.implicit_confirm_oid:
                 implicit_confirm_entry = entry
                 break
+
         if implicit_confirm_entry is None:
-            err_msg = 'implicit confirm missing'
-            raise ValueError(err_msg)
+            self.logger.debug('implicitConfirm absent: certConf round-trip expected.')
+            context.implicit_confirm = False
+            return
 
         if implicit_confirm_entry['infoValue'].prettyPrint() != self.implicit_confirm_str_value:
             err_msg = 'implicit confirm entry fail'
             raise ValueError(err_msg)
+
+        context.implicit_confirm = True
+        self.logger.debug('implicitConfirm requested by client: will grant in response.')
 
 
 
@@ -566,6 +589,71 @@ class CmpRevocationBodyValidation(LoggerMixin):
         raise ValueError(message)
 
 
+class CmpCertConfBodyValidation(LoggerMixin):
+    """Sub-component for validating and parsing a CMP certConf body (RFC 4210 Section 5.3.18).
+
+    Per RFC 9483 Section 4.1.1 the certConf body MUST contain exactly one
+    CertStatus element with:
+    - certHash  REQUIRED -- hash of the confirmed certificate
+    - certReqId REQUIRED -- MUST be 0
+    - statusInfo OPTIONAL -- if omitted, acceptance is implied; if present,
+      status MUST be 'accepted' (0) or 'rejection' (2)
+    """
+
+    def parse_certconf_body(self, context: CmpCertConfRequestContext, pki_body: rfc4210.PKIBody) -> None:
+        """Extract and validate the CertStatus elements from a certConf PKIBody."""
+        cert_conf = pki_body['certConf']
+
+        if len(cert_conf) > 1:
+            self._raise_value_error(
+                'certConf MUST contain exactly one CertStatus element per RFC 9483, but found more than one.'
+            )
+        if len(cert_conf) < 1:
+            self._raise_value_error(
+                'certConf MUST contain exactly one CertStatus element per RFC 9483, but found none.'
+            )
+
+        cert_status = cert_conf[0]
+
+        if not cert_status['certHash'].hasValue():
+            self._raise_value_error('certHash is REQUIRED in CertStatus per RFC 9483.')
+        context.cert_hash = bytes(cert_status['certHash'])
+
+        if not cert_status['certReqId'].hasValue():
+            self._raise_value_error('certReqId is REQUIRED in CertStatus per RFC 9483.')
+        cert_req_id = int(cert_status['certReqId'])
+        if cert_req_id != 0:
+            self._raise_value_error(
+                f'certReqId in certConf MUST be 0 per RFC 9483, but got {cert_req_id}.'
+            )
+        context.cert_req_id = cert_req_id
+
+        if cert_status['statusInfo'].hasValue():
+            status_info = cert_status['statusInfo']
+            status_val = int(status_info['status'])
+            # Only 'accepted' (0) and 'rejection' (2) are allowed per RFC 9483.
+            if status_val not in (0, 2):
+                self._raise_value_error(
+                    f'statusInfo.status in certConf MUST be "accepted" (0) or "rejection" (2), '
+                    f'but got {status_val}.'
+                )
+            context.cert_conf_status = status_val
+            if status_info['statusString'].hasValue() and len(status_info['statusString']) > 0:
+                context.cert_conf_status_string = str(status_info['statusString'][0])
+        else:
+            context.cert_conf_status = 0
+
+        self.logger.info(
+            'certConf body parsed: certReqId=%d, status=%s',
+            context.cert_req_id,
+            'accepted' if context.cert_conf_status == 0 else 'rejection',
+        )
+
+    def _raise_value_error(self, message: str) -> Never:
+        """Helper function to raise a ValueError with the given message."""
+        raise ValueError(message)
+
+
 class CmpBodyValidation(ParsingComponent, LoggerMixin):
     """Component for validating CMP body based on operation context."""
 
@@ -612,6 +700,9 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             elif body_type == 'rr':
                 context = context.narrow(CmpRevocationRequestContext)
                 CmpRevocationBodyValidation().parse_rr_body(context, pki_body)
+            elif body_type == 'certConf':
+                context = context.narrow(CmpCertConfRequestContext)
+                CmpCertConfBodyValidation().parse_certconf_body(context, pki_body)
 
             self.logger.info('CMP body type validation successful: %s body extracted', body_type.upper())
 
@@ -624,18 +715,24 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
 
     def _validate_body_type_supported(self, body_type: str) -> None:
         """Validate that the CMP body type is supported by the request pipeline."""
-        if body_type not in ('ir', 'cr', 'rr'):
+        if body_type not in ('ir', 'cr', 'rr', 'certConf'):
             err_msg = f'Unsupported CMP body type: {body_type}'
             self._raise_value_error(err_msg)
 
     def _operation_from_body_type(self, body_type: str) -> str | None:
-        """Map CMP body type to operation."""
+        """Map CMP body type to operation.
+
+        Note: certConf shares the same endpoint as the original enrollment
+        operation (RFC 9483 Section 6.1).
+        """
         if body_type == 'ir':
             return 'initialization'
         if body_type == 'cr':
             return 'certification'
         if body_type == 'rr':
             return 'revocation'
+        if body_type == 'certConf':
+            return 'certconf'
         err_msg = f'Unsupported CMP body type: {body_type}'
         self._raise_value_error(err_msg)
         return None
@@ -643,18 +740,29 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
     def _validate_operation_body_match(self, operation: str | None, body_type: str) -> None:
         """Validate that the operation matches the body type."""
         if operation == 'initialization':
-            if body_type != 'ir':
-                err_msg = f'Expected CMP IR body for initialization operation, but got CMP {body_type.upper()} body.'
+            if body_type not in ('ir', 'certConf'):
+                err_msg = (
+                    f'Expected CMP IR or certConf body for initialization operation, '
+                    f'but got CMP {body_type.upper()} body.'
+                )
                 raise ValueError(err_msg)
             return
         if operation == 'certification':
-            if body_type != 'cr':
-                err_msg = f'Expected CMP CR body for certification operation, but got CMP {body_type.upper()} body.'
+            if body_type not in ('cr', 'certConf'):
+                err_msg = (
+                    f'Expected CMP CR or certConf body for certification operation, '
+                    f'but got CMP {body_type.upper()} body.'
+                )
                 raise ValueError(err_msg)
             return
         if operation == 'revocation':
             if body_type != 'rr':
                 err_msg = f'Expected CMP RR body for revocation operation, but got CMP {body_type.upper()} body.'
+                raise ValueError(err_msg)
+            return
+        if operation == 'certconf':
+            if body_type != 'certConf':
+                err_msg = f'Expected CMP certConf body for certconf operation, but got CMP {body_type.upper()} body.'
                 raise ValueError(err_msg)
             return
 

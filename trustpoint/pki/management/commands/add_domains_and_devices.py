@@ -147,6 +147,7 @@ def create_signer_for_domain(
 
 
 from trustpoint.logger import LoggerMixin
+from management.models.audit_log import AuditLog
 
 
 class Command(BaseCommand, LoggerMixin):
@@ -271,6 +272,12 @@ class Command(BaseCommand, LoggerMixin):
 
             if created:
                 self.log_and_stdout(f'Created new domain: {domain_name}')
+                AuditLog.create_entry(
+                    operation_type=AuditLog.OperationType.DOMAIN_CREATED,
+                    target=domain,
+                    target_display=f'Domain: {domain_name} (demo data)',
+                    actor=None,
+                )
             else:
                 self.log_and_stdout(f'Domain already exists: {domain_name}')
 
@@ -286,6 +293,12 @@ class Command(BaseCommand, LoggerMixin):
                     f"Created DevIdRegistration for domain '{domain_name}' and issuing CA "
                     f"'{issuing_ca_name}' with truststore '{truststore_name}'"
                 )
+                AuditLog.create_entry(
+                    operation_type=AuditLog.OperationType.MODEL_CREATED,
+                    target=devid_reg,
+                    target_display=f'DevIdRegistration: {devid_reg.unique_name} (demo data)',
+                    actor=None,
+                )
             else:
                 self.log_and_stdout(
                     f"DevIdRegistration already exists for domain '{domain_name}' "
@@ -299,6 +312,12 @@ class Command(BaseCommand, LoggerMixin):
                     self.log_and_stdout(
                         f"Created signer '{signer.unique_name}' for domain '{domain_name}' "
                         f"with CN '{signer.common_name}' issued by '{issuing_ca_name}'"
+                    )
+                    AuditLog.create_entry(
+                        operation_type=AuditLog.OperationType.MODEL_CREATED,
+                        target=signer,
+                        target_display=f'Signer: {signer.unique_name} (demo data)',
+                        actor=None,
                     )
                 except Exception as e:  # noqa: BLE001
                     self.log_and_stdout(
@@ -337,6 +356,8 @@ class Command(BaseCommand, LoggerMixin):
                             OnboardingProtocol.CMP_IDEVID,
                             OnboardingProtocol.CMP_SHARED_SECRET]:
                         onboarding_pki_protocols = get_random_onboarding_pki_protocols(OnboardingPkiProtocol.CMP)
+                    elif onboarding_protocol == OnboardingProtocol.REST_USERNAME_PASSWORD:
+                        onboarding_pki_protocols = get_random_onboarding_pki_protocols(OnboardingPkiProtocol.REST)
                     else:
                         err_msg = 'Unknown onboarding protocol found.'
                         raise ValueError(err_msg)
@@ -356,7 +377,10 @@ class Command(BaseCommand, LoggerMixin):
                     if onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
                         onboarding_config_model.cmp_shared_secret = _get_secret()
 
-                    if onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
+                    if onboarding_protocol in (
+                        OnboardingProtocol.EST_USERNAME_PASSWORD,
+                        OnboardingProtocol.REST_USERNAME_PASSWORD,
+                    ):
                         onboarding_config_model.est_password = _get_secret()
 
                     onboarding_config_model.full_clean()
@@ -374,6 +398,13 @@ class Command(BaseCommand, LoggerMixin):
                     onboarding_config_model.save()
                     device_model.save()
 
+                    AuditLog.create_entry(
+                        operation_type=AuditLog.OperationType.DEVICE_ADDED,
+                        target=device_model,
+                        target_display=f'Device: {device_name} (demo data)',
+                        actor=None,
+                    )
+
 
                 else:
 
@@ -388,6 +419,12 @@ class Command(BaseCommand, LoggerMixin):
                         no_onboarding_config_model.cmp_shared_secret = _get_secret()
 
                     if NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD in no_onboarding_pki_protocols:
+                        no_onboarding_config_model.est_password = _get_secret()
+
+                    if (
+                        NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD in no_onboarding_pki_protocols
+                        and not no_onboarding_config_model.est_password
+                    ):
                         no_onboarding_config_model.est_password = _get_secret()
 
                     no_onboarding_config_model.full_clean()
@@ -425,6 +462,12 @@ class Command(BaseCommand, LoggerMixin):
                                 f"in domain '{device_model.domain}' with Serial Number: {device_model.serial_number}; "
                                 f"Onboarding Protocol: {onboarding_protocol_display}; "
                                 f"PKI Protocols: {[p.label for p in pki_protocols]}"
+                            )
+                            AuditLog.create_entry(
+                                operation_type=AuditLog.OperationType.DEVICE_ADDED,
+                                target=device_model,
+                                target_display=f'Device: {device_model.common_name} (demo data)',
+                                actor=None,
                             )
                         else:
                             self.log_and_stdout(f"Device '{device_name}' was not saved correctly.", level='warning')

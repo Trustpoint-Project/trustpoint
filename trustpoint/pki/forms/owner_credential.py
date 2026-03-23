@@ -366,7 +366,7 @@ class _OwnerCredentialEstBaseMixin(LoggerMixin, forms.Form):
 
 
 class OwnerCredentialAddRequestEstNoOnboardingForm(_OwnerCredentialEstBaseMixin):
-    """Form for requesting a DevOwnerID certificate via EST with username/password."""
+    """Form for requesting a DevOwnerID certificate via EST with HTTP Basic Auth (username/password)."""
 
     est_username = forms.CharField(
         max_length=128,
@@ -381,7 +381,7 @@ class OwnerCredentialAddRequestEstNoOnboardingForm(_OwnerCredentialEstBaseMixin)
     )
 
     def clean(self) -> dict[str, Any]:
-        """Validate and save the owner credential via EST no-onboarding enrollment."""
+        """Validate and save the owner credential via EST with HTTP Basic Auth."""
         cleaned_data: dict[str, Any] = super().clean() or {}
 
         unique_name = cleaned_data.get('unique_name')
@@ -420,7 +420,7 @@ class OwnerCredentialAddRequestEstNoOnboardingForm(_OwnerCredentialEstBaseMixin)
 
 
 class OwnerCredentialAddRequestEstOnboardingForm(_OwnerCredentialEstBaseMixin):
-    """Form for requesting a DevOwnerID certificate via EST with IDevID-based onboarding."""
+    """Form for requesting a DevOwnerID certificate via EST with mTLS Client Auth (two-step enrollment)."""
 
     remote_path_domain_credential = forms.CharField(
         max_length=255,
@@ -444,7 +444,7 @@ class OwnerCredentialAddRequestEstOnboardingForm(_OwnerCredentialEstBaseMixin):
     )
 
     def clean(self) -> dict[str, Any]:
-        """Validate and prepare the owner credential via EST IDevID onboarding."""
+        """Validate and prepare the owner credential via EST with mTLS Client Auth (two-step enrollment)."""
         cleaned_data: dict[str, Any] = super().clean() or {}
 
         unique_name = cleaned_data.get('unique_name')

@@ -1,5 +1,6 @@
 {% load i18n %}
 {% load sort_tags %}
+{% load internationalization_tags %}
 {% block devices_table %}
 <table class="table">
     <thead>
@@ -62,7 +63,7 @@
         {% if page_name != 'opc_ua_gds' %}
         <td>{{ device.serial_number }}</td>
         {% endif %}
-        <td>{{ device.created_at }}</td>
+        <td>{{ device.created_at|local_datetime }}</td>
         <td>
             {{ device.onboarding_config.get_onboarding_status_display }}
         </td>

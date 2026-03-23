@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load static %}
+{% load internationalization_tags %}
 
 {% block content %}
     <div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
@@ -39,8 +40,8 @@
                       <input type="checkbox" name="row_checkbox" value="{{ logfile.filename }}" />
                     </td>
                     <td><a href="{% url 'management:logging-files-details' filename=logfile.filename %}">{{ logfile.filename }}</a></td>
-                    <td>{{ logfile.created_at }}</td>
-                    <td>{{ logfile.updated_at }}</td>
+                    <td>{{ logfile.created_at|local_datetime }}</td>
+                    <td>{{ logfile.updated_at|local_datetime }}</td>
                     <td><a href="{% url 'management:logging-files-details' filename=logfile.filename %}"
                         class="btn btn-primary tp-table-btn">{% trans 'View' %}</a>
                     </td>

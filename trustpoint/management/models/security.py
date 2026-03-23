@@ -193,7 +193,7 @@ class SecurityConfig(models.Model):
         blank=True,
         help_text=_(
             'JSON list of allowed NoOnboardingPkiProtocol integer values '
-            '(bitmask flags: CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16).'
+            '(bitmask flags: CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32).'
         ),
     )
 
@@ -203,7 +203,7 @@ class SecurityConfig(models.Model):
         help_text=_(
             'JSON list of allowed OnboardingProtocol integer values '
             '(MANUAL=0, CMP_IDEVID=1, CMP_SHARED_SECRET=2, EST_IDEVID=3, '
-            'EST_USERNAME_PASSWORD=4, AOKI=5, BRSKI=6, OPC_GDS_PUSH=7).'
+            'EST_USERNAME_PASSWORD=4, AOKI=5, BRSKI=6, OPC_GDS_PUSH=7, REST_USERNAME_PASSWORD=8).'
         ),
     )
 
@@ -212,9 +212,9 @@ class SecurityConfig(models.Model):
     # ------------------------------------------------------------------
 
     #: All OnboardingProtocol values
-    _ALL_ONBOARDING_PROTOCOLS: ClassVar[list[int]] = [0, 1, 2, 3, 4, 5, 6, 7]
+    _ALL_ONBOARDING_PROTOCOLS: ClassVar[list[int]] = [0, 1, 2, 3, 4, 5, 6, 7, 8]
     #: All OnboardingProtocol values except MANUAL (0)
-    _ONBOARDING_PROTOCOLS_NO_MANUAL: ClassVar[list[int]] = [1, 2, 3, 4, 5, 6, 7]
+    _ONBOARDING_PROTOCOLS_NO_MANUAL: ClassVar[list[int]] = [1, 2, 3, 4, 5, 6, 7, 8]
 
     _MODE_DEFAULTS: ClassVar[dict[str, _SecurityModeDefaults]] = {
         # ----------------------------------------------------------------
@@ -230,7 +230,8 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
             'require_physical_hsm': False,
-            'permitted_no_onboarding_pki_protocols': [1, 4, 16],  # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD, MANUAL
+            # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
+            'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
         },
         # ----------------------------------------------------------------
@@ -246,7 +247,8 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
             'require_physical_hsm': False,
-            'permitted_no_onboarding_pki_protocols': [1, 4, 16],  # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD, MANUAL
+            # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
+            'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
         },
         # ----------------------------------------------------------------
@@ -268,7 +270,8 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
             'require_physical_hsm': False,
-            'permitted_no_onboarding_pki_protocols': [1, 4, 16],  # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD, MANUAL
+            # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
+            'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
         },
         # ----------------------------------------------------------------
@@ -292,7 +295,7 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
             'require_physical_hsm': False,
-            'permitted_no_onboarding_pki_protocols': [1, 4],   # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD
+            'permitted_no_onboarding_pki_protocols': [1, 4],   # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
         # ----------------------------------------------------------------
@@ -319,7 +322,7 @@ class SecurityConfig(models.Model):
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
             'require_physical_hsm': True,
-            'permitted_no_onboarding_pki_protocols': [1, 4],   # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD
+            'permitted_no_onboarding_pki_protocols': [1, 4],   # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
     }

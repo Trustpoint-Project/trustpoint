@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load crispy_forms_filters %}
+{% load internationalization_tags %}
 
 {% block content %}
     {% load static %}
@@ -66,7 +67,7 @@
                         </div>
                         <div>
                             <div>{% trans 'Expiry Date' %}</div>
-                            <div>{{ domain.issuing_ca.credential.certificate.not_valid_after }}</div>
+                            <div>{{ domain.issuing_ca.credential.certificate.not_valid_after|local_datetime }}</div>
                         </div>
                         <div>
                             <div>{% trans 'Certificates Issued:' %}</div>
