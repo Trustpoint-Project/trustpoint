@@ -5,10 +5,17 @@ from datetime import timedelta
 from django.test import TestCase
 from django.utils import timezone
 
-from management.models import WorkflowExecutionConfig
+from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.engine.executor import WorkflowExecutor
-from workflows2.models import Workflow2Approval, Workflow2Definition, Workflow2Instance, Workflow2Job, Workflow2Run
+from workflows2.models import (
+    Workflow2Approval,
+    Workflow2Definition,
+    Workflow2Instance,
+    Workflow2Job,
+    Workflow2Run,
+    Workflow2StepRun,
+)
 from workflows2.services.dispatch import EventSource, WorkflowDispatchService
 from workflows2.services.runtime import WorkflowRuntimeService
 from workflows2.services.worker import Workflow2DbWorker
@@ -63,6 +70,43 @@ workflow:
       type: set
       vars: {}
   flow: []
+"""
+
+
+YAML_APPROVAL_CUSTOM_OUTCOMES = """
+schema: trustpoint.workflow.v2
+name: Approval Custom Outcomes
+enabled: true
+
+trigger:
+  on: workflows2.test
+  sources:
+    trustpoint: true
+
+workflow:
+  start: approve
+
+  steps:
+    approve:
+      type: approval
+      approved_outcome: continue_ok
+      rejected_outcome: needs_review
+      timeout_seconds: 3600
+
+    mark_review:
+      type: set
+      vars:
+        review_required: true
+
+  flow:
+    - from: approve
+      on: continue_ok
+      to: $end
+    - from: approve
+      on: needs_review
+      to: mark_review
+    - from: mark_review
+      to: $end
 """
 
 
@@ -199,3 +243,49 @@ class Workflow2BundleApprovalRejectTests(TestCase):
 
         run.refresh_from_db()
         self.assertEqual(run.status, Workflow2Run.STATUS_REJECTED)
+
+    def test_rejected_decision_uses_configured_outcome_and_continues_when_routed(self) -> None:
+        d = self._store_def(YAML_APPROVAL_CUSTOM_OUTCOMES, name="custom-reject")
+        runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
+
+        inst = runtime.create_instance(definition=d, event={"device": {"id": "x"}})
+        runtime.run_one_step(inst)
+
+        approval = Workflow2Approval.objects.get(instance=inst, step_id="approve")
+        runtime.resolve_approval(approval=approval, decision="rejected")
+
+        inst.refresh_from_db()
+        approval.refresh_from_db()
+
+        self.assertEqual(approval.status, Workflow2Approval.STATUS_REJECTED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_RUNNING)
+        self.assertEqual(inst.current_step, "mark_review")
+
+        continued = Workflow2StepRun.objects.get(instance=inst, run_index=2)
+        self.assertEqual(continued.step_id, "approve")
+        self.assertEqual(continued.status, "continued")
+        self.assertEqual(continued.outcome, "needs_review")
+        self.assertEqual(continued.next_step, "mark_review")
+
+    def test_approved_decision_can_end_workflow_without_enqueueing_next_step(self) -> None:
+        d = self._store_def(YAML_APPROVAL_CUSTOM_OUTCOMES, name="custom-approve")
+        runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
+
+        inst = runtime.create_instance(definition=d, event={"device": {"id": "x"}})
+        runtime.run_one_step(inst)
+
+        approval = Workflow2Approval.objects.get(instance=inst, step_id="approve")
+        runtime.resolve_approval(approval=approval, decision="approved")
+
+        inst.refresh_from_db()
+        approval.refresh_from_db()
+
+        self.assertEqual(approval.status, Workflow2Approval.STATUS_APPROVED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertIsNone(inst.current_step)
+
+        continued = Workflow2StepRun.objects.get(instance=inst, run_index=2)
+        self.assertEqual(continued.step_id, "approve")
+        self.assertEqual(continued.status, "succeeded")
+        self.assertEqual(continued.outcome, "continue_ok")
+        self.assertIsNone(continued.next_step)

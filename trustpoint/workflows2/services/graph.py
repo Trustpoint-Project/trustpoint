@@ -167,8 +167,11 @@ class WorkflowGraphService:
     def __init__(self) -> None:
         self.adapter = IRGraphAdapter()
 
+    def graph_from_ir(self, *, ir: dict[str, Any]) -> dict[str, Any]:
+        return self.adapter.to_graph(ir or {})
+
     def definition_graph(self, *, definition: Workflow2Definition) -> dict[str, Any]:
-        base = self.adapter.to_graph(definition.ir_json or {})
+        base = self.graph_from_ir(ir=definition.ir_json or {})
         base["definition_id"] = str(definition.id)
         base["ir_hash"] = definition.ir_hash
         return base

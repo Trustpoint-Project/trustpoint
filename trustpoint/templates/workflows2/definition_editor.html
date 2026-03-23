@@ -7,10 +7,6 @@
   class="container-fluid py-3"
   data-mode="{{ mode }}"
   data-context-catalog-url="{% url 'workflows2:context_catalog' %}"
-  data-graph-from-yaml-url="{% url 'workflows2:api_graph_from_yaml' %}"
-  {% if definition %}
-    data-definition-graph-url="{% url 'workflows2:api_definition_graph' definition.id %}"
-  {% endif %}
 >
   <div class="d-flex align-items-center justify-content-between mb-3">
     <div>

@@ -1,4 +1,4 @@
-# workflows2/views.py
+# workflows2/views/dev.py
 from __future__ import annotations
 
 from django.conf import settings
@@ -95,7 +95,7 @@ workflow:
       method: POST
       url: https://example.com/status
       capture:
-        status_code: vars.http_status
+        vars.http_status: status_code
 
     route_by_status:
       type: logic
@@ -110,11 +110,8 @@ workflow:
 
     stop_ok:
       type: set
-      vars: {}
-
-    stop_fail:
-      type: stop
-      reason: Done (fail)
+      vars:
+        result: ok
 
   flow:
     - from: notify
@@ -126,5 +123,5 @@ workflow:
       to: stop_ok
     - from: route_by_status
       on: fail
-      to: stop_fail
+      to: $reject
 """

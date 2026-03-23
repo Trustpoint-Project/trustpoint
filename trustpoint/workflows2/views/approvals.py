@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
@@ -15,7 +16,7 @@ from workflows2.models import Workflow2Approval, Workflow2Instance, Workflow2Job
 from workflows2.services.runtime import WorkflowRuntimeService
 
 
-class Workflow2ApprovalListView(View):
+class Workflow2ApprovalListView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         qs = Workflow2Approval.objects.select_related('instance').order_by('-created_at')
 
@@ -37,7 +38,7 @@ class Workflow2ApprovalListView(View):
         )
 
 
-class Workflow2ApprovalDetailView(View):
+class Workflow2ApprovalDetailView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest, approval_id) -> HttpResponse:
         approval = get_object_or_404(
             Workflow2Approval.objects.select_related('instance', 'instance__definition', 'instance__run'),
@@ -57,7 +58,7 @@ class Workflow2ApprovalDetailView(View):
         )
 
 
-class Workflow2ApprovalResolveView(View):
+class Workflow2ApprovalResolveView(LoginRequiredMixin, View):
     """Approve/Reject.
     - Resolves approval transactionally (locks approval + instance)
     - Then continues either by enqueuing a job or running inline.
@@ -83,15 +84,21 @@ class Workflow2ApprovalResolveView(View):
 
                 inst = Workflow2Instance.objects.select_for_update().get(id=approval.instance_id)
 
-                # Continue execution:
-                # Option A (recommended for worker mode): enqueue next execution step
-                Workflow2Job.objects.create(
-                    instance=inst,
-                    kind=Workflow2Job.KIND_RUN,
-                    status=Workflow2Job.STATUS_QUEUED,
-                )
+                if inst.status == Workflow2Instance.STATUS_RUNNING and inst.current_step:
+                    Workflow2Job.objects.create(
+                        instance=inst,
+                        kind=Workflow2Job.KIND_RUN,
+                        status=Workflow2Job.STATUS_QUEUED,
+                    )
+                    success_message = f'Approval resolved: {decision}. Continued via job queue.'
+                elif inst.status == Workflow2Instance.STATUS_SUCCEEDED:
+                    success_message = f'Approval resolved: {decision}. Workflow ended successfully.'
+                elif inst.status == Workflow2Instance.STATUS_REJECTED:
+                    success_message = f'Approval resolved: {decision}. Workflow ended rejected.'
+                else:
+                    success_message = f'Approval resolved: {decision}.'
 
-            messages.success(request, f'Approval resolved: {decision}. Continued via job queue.')
+            messages.success(request, success_message)
         except Exception as e:  # noqa: BLE001
             messages.error(request, f'Resolve failed: {type(e).__name__}: {e}')
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django.test import TestCase
 
-from management.models import WorkflowExecutionConfig
+from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2Job
@@ -53,11 +53,12 @@ class DispatchTests(TestCase):
         self._store_definition()
 
         svc = WorkflowDispatchService()
-        instances = svc.emit_event(
-            on="device.created",
-            event={"device": {"common_name": "dev1"}},
-            source=EventSource(trustpoint=True),
-        )
+        with self.captureOnCommitCallbacks(execute=True):
+            instances = svc.emit_event(
+                on="device.created",
+                event={"device": {"common_name": "dev1"}},
+                source=EventSource(trustpoint=True),
+            )
 
         self.assertEqual(len(instances), 1)
         self.assertEqual(instances[0].definition.name, "TP device created")

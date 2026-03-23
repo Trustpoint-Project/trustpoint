@@ -5,6 +5,7 @@ import json
 from typing import Any
 
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -122,7 +123,7 @@ def _get_step_meta(inst: Workflow2Instance) -> dict[str, dict[str, Any]]:
     return meta
 
 
-class Workflow2InstanceDetailView(View):
+class Workflow2InstanceDetailView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest, instance_id) -> HttpResponse:
         inst = get_object_or_404(Workflow2Instance.objects.select_related("definition", "run"), id=instance_id)
 
@@ -172,7 +173,7 @@ class Workflow2InstanceDetailView(View):
         )
 
 
-class Workflow2InstanceRunInlineView(View):
+class Workflow2InstanceRunInlineView(LoginRequiredMixin, View):
     """Force-run inline. If FAILED, this is 'retry from current_step'."""
 
     def post(self, request: HttpRequest, instance_id) -> HttpResponse:
@@ -195,7 +196,7 @@ class Workflow2InstanceRunInlineView(View):
         return redirect("workflows2:instances-detail", instance_id=instance_id)
 
 
-class Workflow2InstanceCancelView(View):
+class Workflow2InstanceCancelView(LoginRequiredMixin, View):
     def post(self, request: HttpRequest, instance_id) -> HttpResponse:
         inst = get_object_or_404(Workflow2Instance.objects.select_related("run"), id=instance_id)
 
@@ -224,7 +225,7 @@ class Workflow2InstanceCancelView(View):
         return redirect("workflows2:instances-detail", instance_id=inst.id)
 
 
-class Workflow2InstanceResumeView(View):
+class Workflow2InstanceResumeView(LoginRequiredMixin, View):
     """Retry failed step by re-queueing (and inline-executing if config is inline)."""
 
     def post(self, request: HttpRequest, instance_id) -> HttpResponse:

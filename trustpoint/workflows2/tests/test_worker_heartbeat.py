@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from django.test import TransactionTestCase
 from django.utils import timezone
 
-from management.models import WorkflowExecutionConfig
+from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2Job
 from workflows2.services.runtime import WorkflowRuntimeService
 from workflows2.services.worker import Workflow2DbWorker

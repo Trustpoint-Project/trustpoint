@@ -3,7 +3,7 @@ from __future__ import annotations
 from django.test import TestCase
 
 from devices.models import DeviceModel
-from management.models import WorkflowExecutionConfig
+from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2Job
@@ -53,7 +53,8 @@ class DispatchSignalsTests(TestCase):
         self._store_definition()
         self.assertEqual(Workflow2Instance.objects.count(), 0)
 
-        DeviceModel.objects.create(common_name="dev1", serial_number="SN-1")
+        with self.captureOnCommitCallbacks(execute=True):
+            DeviceModel.objects.create(common_name="dev1", serial_number="SN-1")
 
         self.assertEqual(Workflow2Instance.objects.count(), 1)
         inst = Workflow2Instance.objects.first()

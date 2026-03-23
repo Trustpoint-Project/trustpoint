@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count
@@ -14,7 +15,7 @@ from workflows2.models import Workflow2Instance, Workflow2Job, Workflow2Run
 from workflows2.services.runtime import WorkflowRuntimeService
 
 
-class Workflow2RunListView(View):
+class Workflow2RunListView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
         qs = Workflow2Run.objects.all().order_by('-created_at')
 
@@ -43,7 +44,7 @@ class Workflow2RunListView(View):
         )
 
 
-class Workflow2RunDetailView(View):
+class Workflow2RunDetailView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest, run_id: int) -> HttpResponse:
         run = get_object_or_404(Workflow2Run, id=run_id)
         instances = Workflow2Instance.objects.filter(run=run).select_related('definition').order_by('created_at')
@@ -58,7 +59,7 @@ class Workflow2RunDetailView(View):
         )
 
 
-class Workflow2RunRunInlineView(View):
+class Workflow2RunRunInlineView(LoginRequiredMixin, View):
     def post(self, request: HttpRequest, run_id: int) -> HttpResponse:
         run = get_object_or_404(Workflow2Run, id=run_id)
 
@@ -88,7 +89,7 @@ class Workflow2RunRunInlineView(View):
         return redirect('workflows2:runs-detail', run_id=run.id)
 
 
-class Workflow2RunCancelView(View):
+class Workflow2RunCancelView(LoginRequiredMixin, View):
     def post(self, request: HttpRequest, run_id: int) -> HttpResponse:
         run = get_object_or_404(Workflow2Run, id=run_id)
 

@@ -253,52 +253,82 @@ class WorkflowRuntimeService:
         if inst.status != Workflow2Instance.STATUS_AWAITING:
             raise ValueError("Instance must be awaiting to resolve approval")
 
-        if decision == "rejected":
-            inst.status = Workflow2Instance.STATUS_REJECTED
-            inst.current_step = None
-            inst.save(update_fields=["status", "current_step", "updated_at"])
-            self._recompute_run_if_present(inst)
-            return
+        if approval.status != Workflow2Approval.STATUS_PENDING:
+            raise ValueError("Approval is already resolved")
 
         ir = inst.definition.ir_json
         wf = (ir or {}).get("workflow") or {}
+        steps_map = wf.get("steps") or {}
         transitions = (wf.get("transitions") or {}).get(approval.step_id)
         if not isinstance(transitions, dict) or transitions.get("kind") != "by_outcome":
             raise ValueError("Approval step missing by_outcome transitions in IR")
+
+        step = steps_map.get(approval.step_id)
+        params = (step.get("params") or {}) if isinstance(step, dict) else {}
+        selected_outcome = (
+            params.get("approved_outcome")
+            if decision == "approved"
+            else params.get("rejected_outcome")
+        )
+        if not isinstance(selected_outcome, str) or not selected_outcome:
+            raise ValueError(f"Approval step missing configured outcome for decision '{decision}'")
 
         outcome_map = transitions.get("map") or {}
         if not isinstance(outcome_map, dict):
             raise ValueError("Invalid outcome map")
 
-        next_step = outcome_map.get(decision)
+        next_step = outcome_map.get(selected_outcome)
         if not isinstance(next_step, str) or not next_step:
-            raise ValueError(f"No route for approval decision '{decision}'")
+            raise ValueError(f"No route for approval outcome '{selected_outcome}'")
 
-        approval.status = Workflow2Approval.STATUS_APPROVED
-        if hasattr(approval, "decision"):
-            setattr(approval, "decision", decision)
-        if hasattr(approval, "decided_at"):
-            setattr(approval, "decided_at", timezone.now())
-        approval.save()
+        approval.status = (
+            Workflow2Approval.STATUS_APPROVED
+            if decision == "approved"
+            else Workflow2Approval.STATUS_REJECTED
+        )
+        approval.decided_at = timezone.now()
+        approval.save(update_fields=["status", "decided_at"])
 
         run_index = int(inst.run_count) + 1
+        terminal_reject = next_step == "$reject"
+        terminal_end = next_step == "$end"
+        next_step_id = None if terminal_end or terminal_reject else next_step
+        step_run_status = (
+            "rejected"
+            if terminal_reject
+            else "succeeded"
+            if terminal_end
+            else "continued"
+        )
+
         Workflow2StepRun.objects.create(
             instance=inst,
             run_index=run_index,
             step_id=approval.step_id,
             step_type="approval",
-            status="continued",
-            outcome=decision,
-            next_step=next_step,
+            status=step_run_status,
+            outcome=selected_outcome,
+            next_step=next_step_id,
             vars_delta={},
-            output={"decision": decision},
+            output={
+                "decision": decision,
+                "selected_outcome": selected_outcome,
+            },
             error=None,
             created_at=timezone.now(),
         )
 
         inst.run_count = run_index
-        inst.status = Workflow2Instance.STATUS_RUNNING
-        inst.current_step = next_step
+        if terminal_reject:
+            inst.status = Workflow2Instance.STATUS_REJECTED
+            inst.current_step = None
+        elif terminal_end:
+            inst.status = Workflow2Instance.STATUS_SUCCEEDED
+            inst.current_step = None
+        else:
+            inst.status = Workflow2Instance.STATUS_RUNNING
+            inst.current_step = next_step_id
+
         inst.save(update_fields=["run_count", "status", "current_step", "updated_at"])
         self._recompute_run_if_present(inst)
 

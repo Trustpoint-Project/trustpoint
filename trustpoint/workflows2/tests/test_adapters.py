@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import json
 import socket
-import threading
 import time
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from unittest.mock import patch
 from urllib.error import URLError
 from urllib.request import urlopen
 
@@ -40,61 +39,19 @@ def _mailpit_list_subjects() -> list[str]:
     return subjects
 
 
-# -----------------------------
-# HTTP test server (real socket)
-# -----------------------------
+def _build_mock_response(*, status_code: int, headers: dict[str, str], json_body=None, text_body: str = "OK"):
+    class _Response:
+        def __init__(self) -> None:
+            self.status_code = status_code
+            self.headers = headers
+            self.text = text_body
 
-class _AdapterTestHandler(BaseHTTPRequestHandler):
-    received: list[dict] = []
-    response_status: int = 200
-    response_json: dict | None = {"ok": True}
-    response_text: str = "OK"
+        def json(self):
+            if json_body is None:
+                raise ValueError("No JSON body")
+            return json_body
 
-    def do_POST(self) -> None:  # noqa: N802
-        length = int(self.headers.get("Content-Length", "0") or "0")
-        raw = self.rfile.read(length) if length else b""
-
-        try:
-            req_body = json.loads(raw.decode("utf-8")) if raw else None
-        except Exception:
-            req_body = raw.decode("utf-8", errors="replace")
-
-        self.__class__.received.append(
-            {
-                "method": "POST",
-                "path": self.path,
-                "headers": {str(k): str(v) for k, v in self.headers.items()},
-                "body": req_body,
-            }
-        )
-
-        self.send_response(self.__class__.response_status)
-
-        if self.__class__.response_json is not None:
-            payload = json.dumps(self.__class__.response_json).encode("utf-8")
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(payload)))
-            self.send_header("X-Adapter-Test", "1")
-            self.end_headers()
-            self.wfile.write(payload)
-        else:
-            payload = self.__class__.response_text.encode("utf-8")
-            self.send_header("Content-Type", "text/plain")
-            self.send_header("Content-Length", str(len(payload)))
-            self.send_header("X-Adapter-Test", "1")
-            self.end_headers()
-            self.wfile.write(payload)
-
-    def log_message(self, format: str, *args) -> None:  # noqa: A003
-        return
-
-
-def _start_http_server() -> tuple[HTTPServer, str]:
-    httpd = HTTPServer(("127.0.0.1", 0), _AdapterTestHandler)
-    t = threading.Thread(target=httpd.serve_forever, daemon=True)
-    t.start()
-    host, port = httpd.server_address
-    return httpd, f"http://{host}:{port}"
+    return _Response()
 
 
 # -----------------------------
@@ -102,20 +59,18 @@ def _start_http_server() -> tuple[HTTPServer, str]:
 # -----------------------------
 
 class RequestsWebhookAdapterTests(SimpleTestCase):
-    def setUp(self) -> None:
-        _AdapterTestHandler.received.clear()
-        _AdapterTestHandler.response_status = 200
-        _AdapterTestHandler.response_json = {"ok": True}
-        _AdapterTestHandler.response_text = "OK"
-
     def test_request_returns_200_and_parses_json(self) -> None:
-        httpd, base = _start_http_server()
-        try:
+        with patch("requests.request") as request_mock:
+            request_mock.return_value = _build_mock_response(
+                status_code=200,
+                headers={"X-Adapter-Test": "1"},
+                json_body={"ok": True},
+            )
             adapter = RequestsWebhookAdapter(verify_tls=True)
 
             resp = adapter.request(
                 method="POST",
-                url=f"{base}/hook",
+                url="https://example.test/hook",
                 headers={"X-Test": "1"},
                 body={"hello": "world"},
                 timeout_seconds=5,
@@ -125,26 +80,23 @@ class RequestsWebhookAdapterTests(SimpleTestCase):
             self.assertEqual(resp.body, {"ok": True})
             self.assertIn("X-Adapter-Test", resp.headers)
 
-            self.assertEqual(len(_AdapterTestHandler.received), 1)
-            r = _AdapterTestHandler.received[0]
-            self.assertEqual(r["method"], "POST")
-            self.assertEqual(r["path"], "/hook")
-            self.assertEqual(r["body"], {"hello": "world"})
-            self.assertEqual(r["headers"].get("X-Test"), "1")
-        finally:
-            httpd.shutdown()
+            request_mock.assert_called_once()
+            _, kwargs = request_mock.call_args
+            self.assertEqual(kwargs["headers"].get("X-Test"), "1")
+            self.assertEqual(kwargs["json"], {"hello": "world"})
 
     def test_request_returns_non_200_and_preserves_status_code(self) -> None:
-        httpd, base = _start_http_server()
-        try:
-            _AdapterTestHandler.response_status = 418
-            _AdapterTestHandler.response_json = {"teapot": True}
-
+        with patch("requests.request") as request_mock:
+            request_mock.return_value = _build_mock_response(
+                status_code=418,
+                headers={"X-Adapter-Test": "1"},
+                json_body={"teapot": True},
+            )
             adapter = RequestsWebhookAdapter(verify_tls=True)
 
             resp = adapter.request(
                 method="POST",
-                url=f"{base}/teapot",
+                url="https://example.test/teapot",
                 headers={},
                 body={"x": 1},
                 timeout_seconds=5,
@@ -152,23 +104,21 @@ class RequestsWebhookAdapterTests(SimpleTestCase):
 
             self.assertEqual(resp.status_code, 418)
             self.assertEqual(resp.body, {"teapot": True})
-            self.assertEqual(len(_AdapterTestHandler.received), 1)
-            self.assertEqual(_AdapterTestHandler.received[0]["path"], "/teapot")
-        finally:
-            httpd.shutdown()
+            request_mock.assert_called_once()
 
     def test_request_falls_back_to_text_when_response_is_not_json(self) -> None:
-        httpd, base = _start_http_server()
-        try:
-            _AdapterTestHandler.response_status = 200
-            _AdapterTestHandler.response_json = None
-            _AdapterTestHandler.response_text = "NOT JSON"
-
+        with patch("requests.request") as request_mock:
+            request_mock.return_value = _build_mock_response(
+                status_code=200,
+                headers={"X-Adapter-Test": "1"},
+                json_body=None,
+                text_body="NOT JSON",
+            )
             adapter = RequestsWebhookAdapter(verify_tls=True)
 
             resp = adapter.request(
                 method="POST",
-                url=f"{base}/plain",
+                url="https://example.test/plain",
                 headers={},
                 body="raw-body",
                 timeout_seconds=5,
@@ -176,8 +126,7 @@ class RequestsWebhookAdapterTests(SimpleTestCase):
 
             self.assertEqual(resp.status_code, 200)
             self.assertEqual(resp.body, "NOT JSON")
-        finally:
-            httpd.shutdown()
+            request_mock.assert_called_once()
 
 
 # -----------------------------
