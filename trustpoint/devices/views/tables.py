@@ -19,6 +19,7 @@ from devices.filters import DeviceFilter
 from devices.models import (
     DeviceModel,
 )
+from onboarding.enums import OnboardingStatus
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
@@ -115,9 +116,15 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
         params.pop('sort', None)
         context['preserve_qs'] = params.urlencode()
 
+        filter_keys = {'common_name', 'domain', 'serial_number', 'created_at_from', 'created_at_to'}
+        context['filters_active'] = any(
+            self.request.GET.get(k) for k in filter_keys
+        )
+
         for device in context['devices']:
             device.clm_button = self._get_clm_button_html(device)
             device.pki_protocols = self._get_pki_protocols(device)
+            device.onboarding_progress = self._get_onboarding_progress(device)
         context['create_url'] = f'{self.page_category}:{self.page_name}_create'
         context['new_onboarding_url'] = f'{self.page_category}:{self.page_name}_new_onboarding'
         context['device_revoke_url'] = reverse(f'{self.page_category}:{self.page_name}_device_revoke')
@@ -161,6 +168,52 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
             return ', '.join([str(p.label) for p in record.no_onboarding_config.get_pki_protocols()])
 
         return ''
+
+    def _get_onboarding_progress(self, record: DeviceModel) -> dict[str, Any]:
+        """Builds structured progress data for the combined onboarding column."""
+        if record.onboarding_config:
+            cfg = record.onboarding_config
+            is_onboarded = cfg.onboarding_status == OnboardingStatus.ONBOARDED
+            status_key = 'onboarded' if is_onboarded else 'pending'
+            status_label = str(gettext_lazy('Onboarded') if is_onboarded else gettext_lazy('Pending'))
+            onboarding_protocol = str(cfg.get_onboarding_protocol_display())
+            pki_labels = [str(p.label) for p in cfg.get_pki_protocols()]
+            none_str = str(gettext_lazy('None'))
+            pki_list = ''.join(f'<li>{p}</li>' for p in pki_labels) if pki_labels else f'<li>{none_str}</li>'
+            tooltip = (
+                f'<strong>{gettext_lazy("Onboarding Protocol")}:</strong> {onboarding_protocol}<br>'
+                f'<strong>{gettext_lazy("Status")}:</strong> {status_label}<br>'
+                f'<strong>{gettext_lazy("PKI Protocols")}:</strong>'
+                f'<ul class="mb-0 ps-3 mt-1">{pki_list}</ul>'
+            )
+        elif record.no_onboarding_config:
+            pki_labels = [str(p.label) for p in record.no_onboarding_config.get_pki_protocols()]
+            none_str = str(gettext_lazy('None'))
+            pki_list = ''.join(f'<li>{p}</li>' for p in pki_labels) if pki_labels else f'<li>{none_str}</li>'
+            status_key = 'active'
+            status_label = str(gettext_lazy('Active'))
+            onboarding_protocol = '—'
+            tooltip = (
+                f'<strong>{gettext_lazy("Onboarding")}:</strong> {gettext_lazy("No Onboarding")}<br>'
+                f'<strong>{gettext_lazy("PKI Protocols")}:</strong>'
+                f'<ul class="mb-0 ps-3 mt-1">{pki_list}</ul>'
+            )
+        else:
+            status_key = 'unconfigured'
+            status_label = str(gettext_lazy('Not configured'))
+            onboarding_protocol = '—'
+            pki_labels = []
+            tooltip = str(gettext_lazy('No onboarding or PKI configuration found.'))
+
+        pki_protocols = ', '.join(pki_labels) if pki_labels else '—'
+
+        return {
+            'status_key': status_key,
+            'status_label': status_label,
+            'tooltip': tooltip,
+            'onboarding_protocol': onboarding_protocol,
+            'pki_protocols': pki_protocols,
+        }
 
 
 class DeviceTableView(AbstractDeviceTableView):

@@ -11,13 +11,7 @@ from pki.models import DomainModel
 
 
 class DeviceFilter(django_filters.FilterSet):
-    """FilterSet for the devices list page.
-
-    Exposes three fields:
-      * common_name: case-insensitive substring match
-      * serial_number: case-insensitive substring match
-      * domain: exact match via dropdown
-    """
+    """FilterSet for the devices list page."""
     common_name = django_filters.CharFilter(
         label='Device',
         lookup_expr='icontains',
@@ -39,10 +33,27 @@ class DeviceFilter(django_filters.FilterSet):
             'placeholder': _('Serial…')
         })
     )
-
+    created_at_from = django_filters.DateFilter(
+        field_name='created_at',
+        label=_('Created from'),
+        lookup_expr='date__gte',
+        widget=forms.DateInput(attrs={
+            'class': 'form-control form-control-sm',
+            'type': 'date',
+        })
+    )
+    created_at_to = django_filters.DateFilter(
+        field_name='created_at',
+        label=_('Created to'),
+        lookup_expr='date__lte',
+        widget=forms.DateInput(attrs={
+            'class': 'form-control form-control-sm',
+            'type': 'date',
+        })
+    )
 
     class Meta:
         """Meta class configuration."""
 
         model = DeviceModel
-        fields = ('common_name', 'domain', 'serial_number')
+        fields = ('common_name', 'domain', 'serial_number', 'created_at_from', 'created_at_to')
