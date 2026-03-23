@@ -6,7 +6,7 @@
 <!-- General info card -->
 <div class="card mb-4">
     <div class="card-header">
-        <h1>{% trans "DevOwnerID Details" %}</h1>
+        <h1>{% trans "Zero-Touch Credential Details" %}</h1>
     </div>
     <div class="card-body">
         <div class="tp-card-centered-content">
@@ -70,7 +70,7 @@
                 {% empty %}
                 <tr>
                     <td colspan="4" class="text-center text-muted py-3">
-                        {% trans 'No IDevID references associated with this DevOwnerID.' %}
+                        {% trans 'No IDevID references associated with this Zero-Touch Credential.' %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -79,7 +79,7 @@
     </div>
     <div class="card-footer d-flex">
         <div class="tp-card-btn-footer m-1">
-            <a href="{% url 'pki:owner_credentials' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
+            <a href="{% url 'devices:zero_touch_credentials' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
         </div>
     </div>
 </div>
