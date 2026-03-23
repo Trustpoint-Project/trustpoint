@@ -91,8 +91,6 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
     )
     ALLOWED_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH = reverse('setup_wizard:select_tls_server_credential')
 
-    redirect_dest: str | None = None
-
     def __call__(self, request: HttpRequest) -> HttpResponse:
         """Handle an incoming request and apply redirects.
 
@@ -105,6 +103,8 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
             A redirect response when access is not allowed, otherwise the normal
             downstream response.
         """
+        redirect_dest: str | None = None
+
         msg = f'\n\npath_info: {request.path_info}'
         self.logger.critical(msg)
         # handle dev environment
@@ -131,7 +131,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         if not users_exists \
                 and request.path_info not in self.ALLOWED_NO_USER_CREATED:
             self.logger.critical('redirecting to wizard index')
-            self.redirect_dest = self.SETUP_WIZARD_INDEX_REVERSE
+            redirect_dest = self.SETUP_WIZARD_INDEX_REVERSE
 
         authenticated = request.user.is_authenticated
         msg = f'authenticated: {authenticated}'
@@ -141,17 +141,17 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         if not authenticated \
                 and users_exists \
                 and request.path_info not in self.ALLOWED_NON_AUTH_PATHS:
-            self.redirect_dest = self.USERS_LOGIN_REVERSE
+            redirect_dest = self.USERS_LOGIN_REVERSE
 
         # if user is authenticated (wizard not completed), only allow views to finish up the wizard
         if authenticated \
                 and users_exists \
                 and not request.path_info.startswith(self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS):
-            self.redirect_dest = self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH
+            redirect_dest = self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH
 
-        if self.redirect_dest:
-            self.logger.critical(f'redirecting dest: {self.redirect_dest}')
-            return redirect(self.redirect_dest, premanent=False)
+        if redirect_dest:
+            self.logger.critical(f'redirecting dest: {redirect_dest}')
+            return redirect(redirect_dest, premanent=False)
 
         self.logger.critical(f'NOT redirecting')
         return self.get_response(request)
