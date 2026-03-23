@@ -2,8 +2,8 @@
 
 from django.urls import path, re_path
 
+from devices.views import owner_credentials as ztc_views
 from help_pages import devices_help_views
-from pki.views import owner_credentials as ztc_views
 from trustpoint.page_context import (
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,

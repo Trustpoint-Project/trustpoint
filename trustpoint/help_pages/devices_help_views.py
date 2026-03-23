@@ -1643,6 +1643,11 @@ class AokiCmpIDevIDStrategy(HelpPageStrategy):
                     '8. Device receives a domain credential',
                     ValueRenderType.PLAIN,
                 ),
+                HelpRow(
+                    _non_lazy('Step 4: Device Verification'),
+                    '9. Device verifies the signature of the DevOwnerID and its validity for the IDevID',
+                    ValueRenderType.PLAIN,
+                ),
             ],
         )
 
@@ -1764,6 +1769,11 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
                     _non_lazy('Step 3: Certificate Issuance'),
                     '6. Device receives operational certificate from server\n'
                     '7. Automatic enrollment of application certificates',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('Step 4: Device Verification'),
+                    '8. Device verifies the signature of the DevOwnerID and its validity for the IDevID',
                     ValueRenderType.PLAIN,
                 ),
             ],
