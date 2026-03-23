@@ -22,6 +22,7 @@ from management.forms import (
     SecurityConfigForm,
 )
 from management.models import InternationalizationConfig, LoggingConfig, NotificationConfig, SecurityConfig
+from management.models.audit_log import AuditLog
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
 from pki.util.keys import AutoGenPkiKeyAlgorithm
@@ -213,6 +214,17 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
         """
         old_conf = SecurityConfig.objects.get(pk=form.instance.pk) if form.instance.pk else None
         form.save()
+
+        # --- Audit log ---
+        security_mode_display = form.instance.get_security_mode_display()
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.SECURITY_CONFIG_CHANGED,
+            target=form.instance,
+            target_display=f'SecurityConfig: {security_mode_display}',
+            actor=actor,
+        )
+        # -----------------
 
         if 'security_mode' in form.changed_data:
             old_value = getattr(old_conf, 'security_mode', None) if old_conf else None
