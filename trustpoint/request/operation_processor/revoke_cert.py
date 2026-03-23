@@ -1,6 +1,7 @@
 """Certificate revocation operation processor classes."""
 
 from cmp.util import PKIFailureInfo
+from management.models.audit_log import AuditLog
 from pki.models.certificate import CertificateModel
 from request.request_context import (
     BaseRequestContext,
@@ -54,3 +55,13 @@ class LocalCaCertificateRevocationProcessor(CertificateRevocationProcessor):
             context.error(exc_msg, http_status=422, cmp_code=PKIFailureInfo.CERT_REVOKED)
             raise ValueError(exc_msg)
         context.credential_to_revoke.revoke()
+
+        domain_name = context.domain.unique_name
+        device_name = context.device.common_name
+        protocol = context.protocol if hasattr(context, 'protocol') else 'unknown'
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CREDENTIAL_REVOKED,
+            target=context.device,
+            target_display=f'Device: {device_name} | Domain: {domain_name} | Protocol: {protocol}',
+            actor=None,
+        )

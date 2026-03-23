@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load crispy_forms_filters %}
+{% load internationalization_tags %}
 
 {% block content %}
     <form method="POST" autocomplete="off">
@@ -24,7 +25,7 @@
                             </div>
                             <div>
                                 <div> {% trans 'Not valid after (UTC)' %}</div>
-                                <div>{{ cert.not_valid_after }}</div>
+                                <div>{{ cert.not_valid_after|local_datetime }}</div>
                             </div>
                             <div>
                                 <div>{% trans 'Public Key Algorithm' %}</div>

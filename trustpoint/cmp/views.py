@@ -16,7 +16,7 @@ from request.authorization import CmpAuthorization
 from request.message_parser import CmpMessageParser
 from request.message_responder.cmp import CmpMessageResponder
 from request.operation_processor.general import OperationProcessor
-from request.request_context import BaseRequestContext, CmpCertificateRequestContext
+from request.request_context import BaseRequestContext, CmpCertificateRequestContext, HttpBaseRequestContext
 from request.request_validator.http_req import CmpHttpRequestValidator
 from trustpoint.logger import LoggerMixin
 
@@ -109,7 +109,7 @@ class CmpRequestView(LoggerMixin, View):
             authenticator.authenticate(ctx)
 
             authorizer = CmpAuthorization(
-                ['initialization', 'certification', 'revocation']
+                ['initialization', 'certification', 'revocation', 'certconf']
             )
             authorizer.authorize(ctx)
 
@@ -117,6 +117,13 @@ class CmpRequestView(LoggerMixin, View):
         except Exception:
             self.logger.exception('Error processing CMP request')
 
-        CmpMessageResponder.build_response(ctx)
+        try:
+            CmpMessageResponder.build_response(ctx)
+        except Exception:
+            self.logger.exception('Error building CMP response')
+            if isinstance(ctx, HttpBaseRequestContext):
+                ctx.http_response_status = 500
+                ctx.http_response_content = 'Internal server error building CMP response.'
+                ctx.http_response_content_type = 'text/plain'
 
         return ctx.to_http_response()

@@ -9,9 +9,11 @@ from __future__ import annotations
 import logging
 import subprocess
 from pathlib import Path
+from time import sleep
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
+from zeroconf import IPVersion, InterfaceChoice, ServiceBrowser, ServiceListener, Zeroconf
 
 log = logging.getLogger('aoki.client')
 
@@ -26,10 +28,37 @@ class AokiClientOwnerIdCertVerificationError(Exception):
 class AokiClientCertLoadError(Exception):
     """Exception raised when a certificate could not be loaded from the provided path."""
 
+class AokiListener(ServiceListener):
+    def __init__(self, cb: AokiCmpClient) -> None:
+        super().__init__()
+        self.cb = cb
+
+
+    def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
+        info = zc.get_service_info(type_, name)
+        print(f"Service {name} added, service info: {info}")
+        if info and '_aoki._tcp.local.' in type_:
+            address_candidates = info.parsed_addresses(IPVersion.V4Only)
+            for addr in address_candidates:
+                self.cb.address_candidates.append(f'https://{addr}:{info.port}')
+
+
+    def update_service(self, zc: Zeroconf, type_: str, name: str) -> None:
+        info = zc.get_service_info(type_, name)
+        print(f"Service {name} updated, service info: {info}")
+        pass
+
+    def remove_service(self, zc: Zeroconf, type_: str, name: str) -> None:
+        print(f"Service {name} removed")
+        pass
+
+
 class AokiCmpClient:
     """AOKI-CMP Client for testing purposes."""
 
     idevid_subj_sn : str = '_'
+    onboarding_completed : bool = False
+    address_candidates : list[str] = []
 
     @staticmethod
     def _load_certificate(cert_path: Path) -> x509.Certificate:
@@ -72,15 +101,34 @@ class AokiCmpClient:
 
     def _verify_matches_idevid_cert(self, owner_id_cert: x509.Certificate, idevid_cert: x509.Certificate) -> None:
         """Verify the Owner ID certificate is valid for the device IDevID."""
-        log.info('Verifying Owner ID certificate matches IDevID certificate')
+        print('Verifying Owner ID certificate matches IDevID certificate')
         idevid_san_uri = self._get_idevid_owner_san_uri(idevid_cert)
-        log.info('IDevID SAN URI: %s', idevid_san_uri)
+        print('IDevID SAN URI: %s', idevid_san_uri)
         for san in owner_id_cert.extensions.get_extension_for_oid(x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value:
             if isinstance(san, x509.UniformResourceIdentifier) and san.value == idevid_san_uri:
-                log.info('Owner ID certificate SAN URI matches IDevID certificate!')
+                print('Owner ID certificate SAN URI matches IDevID certificate!')
                 return
         exc_msg = 'Owner ID certificate does not match IDevID certificate.'
         raise AokiClientOwnerIdCertVerificationError(exc_msg)
+    
+    def _discover_aoki_owner_service_mdns(self) -> None:
+        """Discover the AOKI Owner Service via mDNS and set the server URL accordingly."""
+        print('Discovering AOKI Owner Service via mDNS...')
+        zeroconf = Zeroconf(interfaces=InterfaceChoice.All)
+        listener = AokiListener(cb=self)
+        browser = ServiceBrowser(zeroconf, '_aoki._tcp.local.', listener)
+        
+        while not self.onboarding_completed:
+            sleep(0.5)
+            while self.address_candidates and not self.onboarding_completed:
+                addr = self.address_candidates.pop(0)
+                self.server_url = addr
+                try:
+                    self.onboard()
+                except Exception as e:
+                    print(f"Error during onboarding after mDNS discovery: {e}")
+        zeroconf.close()
+        
 
     def __init__(
             self,
@@ -99,9 +147,13 @@ class AokiCmpClient:
         self.idevid_truststore_file = idevid_truststore_file
         self.args = args
         self.kwargs = kwargs
+        self.onboarding_completed = False
 
     def onboard(self) -> None:
         """Run the AOKI-CMP Zero-Touch Device Onboarding process."""
+        # Step 0: Discover the AOKI Owner Service via mDNS (if enabled) and set the server URL accordingly
+        if not self.server_url and self.kwargs.get('mdns', True):
+            return self._discover_aoki_owner_service_mdns()
         # Step 1: Generate a new key for the domain credential
         cmd = (
             'openssl',
@@ -116,7 +168,7 @@ class AokiCmpClient:
             'openssl',
             'cmp',
             '-cmd', 'ir',
-            '-implicit_confirm',
+            '-implicit_confirm', # Temporary, certConf works only if domain is given
             '-server', self.server_url + '/.well-known/cmp/p/.aoki/initialization',
             '-cert', f'{CERTS_DIR}/{self.cert_file}',
             '-key', f'{CERTS_DIR}/{self.key_file}',
@@ -127,7 +179,7 @@ class AokiCmpClient:
             '-chainout', f'{CERTS_DIR}/chain_without_root.pem',
             '-extracertsout', f'{CERTS_DIR}/full_chain.pem',
             '-trusted', f'{CERTS_DIR}/{self.owner_truststore_file}',
-            #'-tls_used'
+            '-tls_used'
         )
         try:
             print(subprocess.check_output(cmd).decode())  # noqa: S603
@@ -142,15 +194,16 @@ class AokiCmpClient:
         self._verify_matches_idevid_cert(owner_id_cert, idevid_cert)
 
         print('AOKI-CMP Client Onboarding completed successfully!')
+        self.onboarding_completed = True
 
 
 if __name__ == '__main__':
     client = AokiCmpClient(
-        server_url='http://localhost:8000', # or 'http://localhost:8000' for dev
+        server_url=None,
         cert_file='idevid.pem',
         key_file='idevid_pk.pem',
         idevid_truststore_file='idevid_ca.pem',
         owner_truststore_file='ownerid_ca.pem',
-        mdns = False, # not yet implemented
+        mdns = True,
     )
     client.onboard()

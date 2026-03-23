@@ -2,8 +2,9 @@
 
 from django.urls import path, re_path
 
+from devices.views import owner_credentials
 from help_pages import pki_help_views
-from pki.views import ca, cert_profiles, certificates, crls, domains, issuing_cas, owner_credentials, truststores
+from pki.views import ca, cert_profiles, certificates, crls, domains, issuing_cas, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView
 

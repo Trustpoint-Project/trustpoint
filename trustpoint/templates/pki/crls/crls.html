@@ -1,5 +1,6 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
+{% load internationalization_tags %}
 
 {% block content %}
 
@@ -39,10 +40,10 @@
                                 {{ crl.ca.unique_name }}
                             </a>
                         </td>
-                        <td>{{ crl.this_update }}</td>
+                        <td>{{ crl.this_update|local_datetime }}</td>
                         <td>
                             {% if crl.next_update %}
-                                {{ crl.next_update }}
+                                {{ crl.next_update|local_datetime }}
                             {% else %}
                                 {% trans 'Not set' %}
                             {% endif %}

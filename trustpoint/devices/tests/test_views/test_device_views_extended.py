@@ -121,10 +121,12 @@ class TestNoOnboardingIssueApplicationCredentialView:
         no_onboarding_config.set_pki_protocols([
             NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
             NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD,
+            NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD,
             NoOnboardingPkiProtocol.MANUAL
         ])
         no_onboarding_config.cmp_shared_secret = 'test_secret'
         no_onboarding_config.est_password = 'test_password'
+        no_onboarding_config.rest_password = 'test_password'
         no_onboarding_config.full_clean()
         no_onboarding_config.save()
         
@@ -145,7 +147,7 @@ class TestNoOnboardingIssueApplicationCredentialView:
         assert response.status_code == 200
         assert 'sections' in response.context
         sections = response.context['sections']
-        assert len(sections) == 3
+        assert len(sections) == 4
         
         # Check that all protocols are enabled
         assert all(section['enabled'] for section in sections)

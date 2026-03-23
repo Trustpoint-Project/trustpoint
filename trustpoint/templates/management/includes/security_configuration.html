@@ -19,7 +19,7 @@
         </div>
         {% endif %}
 
-        <form method="POST" enctype="multipart/form-data" id="security_configuration">
+        <form method="POST" action="{% url 'management:settings-security' %}" enctype="multipart/form-data" id="security_configuration">
             {% csrf_token %}
             <fieldset class="form-group tp-form-group">
                 {% crispy form %}

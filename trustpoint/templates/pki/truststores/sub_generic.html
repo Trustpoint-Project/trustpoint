@@ -1,4 +1,5 @@
 {% load i18n %}
+{% load internationalization_tags %}
 {% block sub_details %}
     <div class="tp-kvp-list">
         <div>
@@ -16,7 +17,7 @@
         <div>
             <div>Created-At</div>
             <div>
-                {{ truststore.created_at }}
+                {{ truststore.created_at|local_datetime }}
             </div>
         </div>
     </div>

@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load crispy_forms_filters %}
+{% load internationalization_tags %}
 
 {% block content %}
 
@@ -38,13 +39,13 @@
                         </div>
                         <div>
                             <div>{% trans 'This Update' %}</div>
-                            <div>{{ crl.this_update }}</div>
+                            <div>{{ crl.this_update|local_datetime }}</div>
                         </div>
                         <div>
                             <div>{% trans 'Next Update' %}</div>
                             <div>
                                 {% if crl.next_update %}
-                                    {{ crl.next_update }}
+                                    {{ crl.next_update|local_datetime }}
                                 {% else %}
                                     {% trans 'Not set' %}
                                 {% endif %}
