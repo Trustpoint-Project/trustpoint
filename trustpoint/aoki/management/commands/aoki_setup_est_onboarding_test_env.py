@@ -266,7 +266,7 @@ class Command(CertificateCreationCommandMixin, LoggerMixin, BaseCommand):
         :param truststore: The TLS truststore to use for verifying the EST server.
         :returns: The :class:`~pki.models.credential.OwnerCredentialModel` for
             ``DevOwnerIDOnboardingOwnerCred``.
-        """        
+        """
         if OwnerCredentialModel.objects.filter(unique_name=OWNER_CRED_UNIQUE_NAME).exists():
             self.log_and_stdout(
                 f'OwnerCredential "{OWNER_CRED_UNIQUE_NAME}" already exists, skipping creation.'
