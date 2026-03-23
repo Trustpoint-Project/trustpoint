@@ -1,15 +1,15 @@
 import { escapeHtml } from '../core/dom.js';
 import {
-  renderApplyGuide,
   renderRootGuide,
   renderStepsAreaGuide,
   renderTriggerGuide,
   renderWorkflowStartGuide,
 } from './guide_document_sections.js';
+import { renderApplyGuide } from './guide_apply_sections.js';
 import { renderStepGuide } from './guide_step_sections.js';
 import { renderFlowGuide } from './guide_flow_sections.js';
 
-export function renderGuideContent(context, catalog) {
+export function renderGuideContent(context, catalog, yamlText = '') {
   if (!context?.ok) {
     return `
       <div class="fw-semibold mb-1">Invalid YAML</div>
@@ -28,7 +28,7 @@ export function renderGuideContent(context, catalog) {
 
     case 'apply':
     case 'apply.item':
-      return renderApplyGuide(context, catalog);
+      return renderApplyGuide(context, catalog, yamlText);
 
     case 'workflow.start':
       return renderWorkflowStartGuide(context);

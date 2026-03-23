@@ -331,7 +331,7 @@
   }
 
   .wf2-graph-editor-host {
-    min-height: 34rem;
+    min-height: 36rem;
   }
 
   .wf2-graph-ui {
@@ -355,25 +355,27 @@
   }
 
   .wf2-graph-main {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-    align-items: start;
     min-height: 0;
     flex: 1 1 auto;
   }
 
   .wf2-graph-canvas-wrap {
+    position: relative;
     border: 1px solid #e9ecef;
     border-radius: 0.75rem;
     background: #fafafa;
     overflow: auto;
-    min-height: 38rem;
-    max-height: 38rem;
+    min-height: 40rem;
+    max-height: 40rem;
+    width: 100%;
   }
 
-  .wf2-graph-canvas-empty {
-    min-height: 38rem;
+  .wf2-graph-canvas {
+    min-height: 40rem;
+  }
+
+  .wf2-graph-canvas-empty-state {
+    min-height: 40rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -382,21 +384,22 @@
     padding: 1rem;
   }
 
-  .wf2-graph-inspector {
-    border: 1px solid #e9ecef;
-    border-radius: 0.75rem;
-    background: #fff;
-    padding: 0.9rem;
-    min-height: 12rem;
+  .wf2-graph-canvas-stage {
+    position: relative;
+    display: inline-block;
+    min-width: 100%;
+    min-height: 100%;
   }
 
-  .wf2-graph-panel-title {
-    font-weight: 600;
-    margin-bottom: 0.75rem;
+  .wf2-graph-overlay-root {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
   }
 
   .wf2-graph-svg {
     display: block;
+    max-width: none;
     background:
       linear-gradient(#f8f9fa 1px, transparent 1px),
       linear-gradient(90deg, #f8f9fa 1px, transparent 1px);
@@ -404,7 +407,11 @@
   }
 
   .wf2-graph-node {
-    cursor: pointer;
+    cursor: move;
+  }
+
+  .wf2-graph-node.is-dragging {
+    opacity: 0.85;
   }
 
   .wf2-graph-edge {
@@ -435,6 +442,193 @@
     stroke: #ffffff;
     stroke-width: 3px;
     stroke-linejoin: round;
+  }
+
+  .wf2-graph-output-handle {
+    fill: #0d6efd;
+    stroke: #ffffff;
+    stroke-width: 2px;
+    cursor: crosshair;
+  }
+
+  .wf2-graph-output-handle:hover {
+    fill: #0b5ed7;
+  }
+
+  .wf2-graph-connection-preview {
+    fill: none;
+    stroke: #0d6efd;
+    stroke-width: 2.5;
+    stroke-dasharray: 6 4;
+    pointer-events: none;
+  }
+
+  .wf2-graph-floating-card {
+    position: absolute;
+    z-index: 4;
+    width: 460px;
+    min-width: 340px;
+    min-height: 320px;
+    height: 520px;
+    max-width: min(860px, calc(100% - 16px));
+    max-height: calc(100% - 16px);
+    overflow: auto;
+    resize: both;
+    padding: 0.9rem;
+    border: 1px solid #dbe4ff;
+    border-radius: 0.75rem;
+    background: #fff;
+    box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.12);
+    pointer-events: auto;
+  }
+
+  .wf2-graph-context-menu {
+    width: 280px;
+    min-width: 260px;
+    min-height: 0;
+    height: auto;
+    resize: none;
+  }
+
+  .wf2-graph-floating-card .form-control,
+  .wf2-graph-floating-card .form-select,
+  .wf2-graph-floating-card textarea {
+    min-width: 0;
+  }
+
+  .wf2-graph-floating-card .btn {
+    white-space: nowrap;
+  }
+
+  .wf2-graph-floating-card .form-control-sm,
+  .wf2-graph-floating-card .form-select-sm,
+  .wf2-graph-floating-card .btn-sm {
+    font-size: 0.82rem;
+  }
+
+  .wf2-graph-floating-card textarea.form-control {
+    line-height: 1.35;
+  }
+
+  .wf2-graph-floating-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    line-height: 1.3;
+  }
+
+  .wf2-logic-case-card {
+    border: 1px solid #e9ecef;
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    background: #fcfcfd;
+    margin-bottom: 0.9rem;
+  }
+
+  .wf2-logic-case-outcome-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.5rem;
+    align-items: end;
+  }
+
+  .wf2-logic-tree-node {
+    border: 1px solid #e9ecef;
+    border-radius: 0.75rem;
+    padding: 0.75rem;
+    background: #fff;
+  }
+
+  .wf2-logic-tree-node-nested {
+    background: #fbfcff;
+  }
+
+  .wf2-logic-tree-header {
+    margin-bottom: 0.75rem;
+  }
+
+  .wf2-logic-tree-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 0.5rem;
+    align-items: center;
+    margin-bottom: 0.4rem;
+  }
+
+  .wf2-logic-tree-help {
+    font-size: 0.82rem;
+    color: #6c757d;
+  }
+
+  .wf2-logic-tree-form-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+
+  .wf2-logic-tree-field {
+    min-width: 0;
+  }
+
+  .wf2-logic-tree-field-full {
+    grid-column: 1 / -1;
+  }
+
+  .wf2-logic-tree-children {
+    margin-top: 0.75rem;
+    margin-left: 0.35rem;
+    padding-left: 0.85rem;
+    border-left: 2px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .wf2-logic-tree-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+
+  .wf2-graph-floating-card .border.rounded.p-2 {
+    border-radius: 0.75rem !important;
+    padding: 0.75rem !important;
+    margin-bottom: 0.75rem;
+    background: #fcfcfd;
+  }
+
+  .wf2-graph-floating-card [data-step-field-row],
+  .wf2-graph-floating-card [data-logic-case-row],
+  .wf2-graph-floating-card [data-capture-row],
+  .wf2-graph-floating-card [data-compute-row],
+  .wf2-graph-floating-card [data-set-var-row] {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+
+  .wf2-graph-floating-card .d-flex.gap-2 {
+    flex-wrap: wrap;
+  }
+
+  .wf2-graph-floating-card .d-flex.gap-2 > .btn {
+    flex: 0 0 auto;
+  }
+
+  .wf2-graph-floating-card .d-flex.gap-2 > .form-control,
+  .wf2-graph-floating-card .d-flex.gap-2 > .form-select {
+    flex: 1 1 160px;
+    min-width: 0;
+  }
+
+  .wf2-graph-floating-card .form-label-sm {
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #495057;
+  }
+
+  .wf2-graph-floating-card .small.text-muted {
+    line-height: 1.35;
   }
 
   #wf2-graph-card.wf2-graph-expanded {
@@ -473,20 +667,14 @@
   }
 
   #wf2-graph-card.wf2-graph-expanded .wf2-graph-editor-host,
-  #wf2-graph-card.wf2-graph-expanded .wf2-graph-ui {
+  #wf2-graph-card.wf2-graph-expanded .wf2-graph-ui,
+  #wf2-graph-card.wf2-graph-expanded .wf2-graph-main {
     flex: 1 1 auto;
     min-height: 0;
     height: 100%;
   }
 
-  #wf2-graph-card.wf2-graph-expanded .wf2-graph-main {
-    grid-template-columns: minmax(0, 1fr) 320px;
-    min-height: 0;
-    height: 100%;
-  }
-
-  #wf2-graph-card.wf2-graph-expanded .wf2-graph-canvas-wrap,
-  #wf2-graph-card.wf2-graph-expanded .wf2-graph-inspector {
+  #wf2-graph-card.wf2-graph-expanded .wf2-graph-canvas-wrap {
     height: 100%;
     min-height: 0;
     max-height: none;
@@ -496,9 +684,50 @@
     overflow: hidden;
   }
 
-  @media (max-width: 1199px) {
-    #wf2-graph-card.wf2-graph-expanded .wf2-graph-main {
+  @media (max-width: 991px) {
+    .wf2-graph-canvas-wrap,
+    .wf2-graph-canvas,
+    .wf2-graph-canvas-empty-state {
+      min-height: 32rem;
+      max-height: 32rem;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .wf2-graph-floating-card {
+      width: min(94vw, 420px);
+      min-width: 280px;
+      max-width: calc(100% - 12px);
+      min-height: 180px;
+      padding: 0.75rem;
+    }
+
+    .wf2-graph-context-menu {
+      width: min(92vw, 320px);
+      min-width: 0;
+    }
+
+    .wf2-logic-tree-toolbar {
       grid-template-columns: 1fr;
+    }
+
+    .wf2-logic-tree-form-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .wf2-logic-case-outcome-row {
+      grid-template-columns: 1fr;
+    }
+
+    .wf2-graph-floating-card .d-flex.gap-2 {
+      flex-direction: column;
+    }
+
+    .wf2-graph-floating-card .d-flex.gap-2 > .btn,
+    .wf2-graph-floating-card .d-flex.gap-2 > .form-control,
+    .wf2-graph-floating-card .d-flex.gap-2 > .form-select {
+      width: 100%;
+      flex: 1 1 auto;
     }
   }
 </style>

@@ -1,10 +1,25 @@
-export function buildGraphLayout(graph) {
-  const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
-  const edges = Array.isArray(graph.edges) ? graph.edges : [];
+export function buildGraphLayout(graph, manualPositions = {}) {
+  const nodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  const edges = Array.isArray(graph?.edges) ? graph.edges : [];
 
-  const nodeIds = new Set(nodes.map((node) => node.id));
+  const positions = new Map();
+
+  const nodeWidth = 190;
+  const nodeHeight = 76;
+  const xGap = 250;
+  const yGap = 130;
+  const xStart = 40;
+  const yStart = 40;
+
+  const manualIds = new Set(
+    Object.keys(manualPositions || {}).filter((id) => manualPositions[id]),
+  );
+
+  const autoNodes = nodes.filter((node) => !manualIds.has(node.id));
+  const nodeIds = new Set(autoNodes.map((node) => node.id));
+
   const adjacency = new Map();
-  for (const node of nodes) {
+  for (const node of autoNodes) {
     adjacency.set(node.id, []);
   }
 
@@ -15,7 +30,10 @@ export function buildGraphLayout(graph) {
   }
 
   const levels = new Map();
-  const startId = graph.start && nodeIds.has(graph.start) ? graph.start : nodes[0]?.id || null;
+  const startId =
+    graph?.start && nodeIds.has(graph.start)
+      ? graph.start
+      : autoNodes[0]?.id || null;
 
   if (startId) {
     const queue = [startId];
@@ -35,7 +53,7 @@ export function buildGraphLayout(graph) {
   }
 
   let maxAssignedLevel = levels.size ? Math.max(...levels.values()) : 0;
-  for (const node of nodes) {
+  for (const node of autoNodes) {
     if (!levels.has(node.id)) {
       maxAssignedLevel += 1;
       levels.set(node.id, maxAssignedLevel);
@@ -43,7 +61,7 @@ export function buildGraphLayout(graph) {
   }
 
   const groups = new Map();
-  for (const node of nodes) {
+  for (const node of autoNodes) {
     const level = levels.get(node.id) || 0;
     if (!groups.has(level)) {
       groups.set(level, []);
@@ -52,15 +70,6 @@ export function buildGraphLayout(graph) {
   }
 
   const sortedLevels = Array.from(groups.keys()).sort((a, b) => a - b);
-  const positions = new Map();
-
-  const nodeWidth = 190;
-  const nodeHeight = 76;
-  const xGap = 250;
-  const yGap = 130;
-  const xStart = 40;
-  const yStart = 40;
-
   for (const level of sortedLevels) {
     const group = groups.get(level) || [];
     group.forEach((node, index) => {
@@ -73,12 +82,27 @@ export function buildGraphLayout(graph) {
     });
   }
 
-  const maxX = Math.max(...Array.from(positions.values()).map((p) => p.x + p.w), 420);
-  const maxY = Math.max(...Array.from(positions.values()).map((p) => p.y + p.h), 240);
+  for (const node of nodes) {
+    const manual = manualPositions?.[node.id];
+    if (manual && Number.isFinite(manual.x) && Number.isFinite(manual.y)) {
+      positions.set(node.id, {
+        x: manual.x,
+        y: manual.y,
+        w: nodeWidth,
+        h: nodeHeight,
+      });
+    }
+  }
+
+  const allRects = Array.from(positions.values());
+  const maxX = Math.max(...allRects.map((p) => p.x + p.w), 420);
+  const maxY = Math.max(...allRects.map((p) => p.y + p.h), 240);
 
   return {
     positions,
-    width: maxX + 40,
-    height: maxY + 40,
+    width: maxX + 80,
+    height: maxY + 80,
+    nodeWidth,
+    nodeHeight,
   };
 }

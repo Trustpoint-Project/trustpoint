@@ -1,4 +1,13 @@
 import {
+  addApplyChild,
+  addApplyRule,
+  removeApplyChild,
+  removeApplyRule,
+  saveApplyCompare,
+  saveApplyExists,
+  setApplyNodeOperator,
+} from '../features/operations/apply_rules.js';
+import {
   buildExpressionFunctionInsertion,
   insertComputeOperator,
   insertConditionOperator,
@@ -12,6 +21,10 @@ import {
 import { addMissingRequiredFields, addOptionalField } from '../features/operations/step_fields.js';
 import { addStepFromType, setCurrentStepType } from '../features/operations/steps.js';
 import { setWorkflowStart } from '../features/operations/workflow.js';
+
+function readValue(scope, selector) {
+  return scope?.querySelector(selector)?.value ?? '';
+}
 
 export function createGuideActionsController({
   containerEl,
@@ -46,6 +59,144 @@ export function createGuideActionsController({
     const catalog = getCatalog();
     const context = getContext();
     const yamlText = getYamlText();
+    const scope =
+      button.closest('[data-apply-scope="true"]') ||
+      button.closest('.wf2-cond-node') ||
+      containerEl;
+
+    if (action === 'add-apply-rule') {
+      const operator = button.getAttribute('data-apply-operator') || 'compare';
+
+      try {
+        const result = addApplyRule({
+          yamlText,
+          operator,
+        });
+
+        applyYamlMutation(result.yamlText, `Added apply rule (${operator}).`);
+      } catch (err) {
+        fail(`Failed to add apply rule: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return;
+    }
+
+    if (action === 'remove-apply-rule') {
+      const ruleIndex = button.getAttribute('data-apply-rule-index');
+
+      try {
+        const result = removeApplyRule({
+          yamlText,
+          ruleIndex,
+        });
+
+        applyYamlMutation(result.yamlText, 'Removed apply rule.');
+      } catch (err) {
+        fail(`Failed to remove apply rule: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return;
+    }
+
+    if (action === 'set-apply-node-operator') {
+      const ruleIndex = button.getAttribute('data-apply-rule-index');
+      const path = button.getAttribute('data-apply-node-path');
+      const operator = readValue(scope, '[data-apply-node-operator-input="true"]');
+
+      try {
+        const result = setApplyNodeOperator({
+          yamlText,
+          ruleIndex,
+          path,
+          operator,
+        });
+
+        applyYamlMutation(result.yamlText, `Changed apply operator to "${operator}".`);
+      } catch (err) {
+        fail(`Failed to change apply operator: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return;
+    }
+
+    if (action === 'save-apply-exists') {
+      const ruleIndex = button.getAttribute('data-apply-rule-index');
+      const path = button.getAttribute('data-apply-node-path');
+      const value = readValue(scope, '[data-apply-exists-input="true"]');
+
+      try {
+        const result = saveApplyExists({
+          yamlText,
+          ruleIndex,
+          path,
+          value,
+        });
+
+        applyYamlMutation(result.yamlText, 'Saved exists condition.');
+      } catch (err) {
+        fail(`Failed to save exists condition: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return;
+    }
+
+    if (action === 'save-apply-compare') {
+      const ruleIndex = button.getAttribute('data-apply-rule-index');
+      const path = button.getAttribute('data-apply-node-path');
+      const left = readValue(scope, '[data-apply-compare-left-input="true"]');
+      const op = readValue(scope, '[data-apply-compare-op-input="true"]');
+      const right = readValue(scope, '[data-apply-compare-right-input="true"]');
+
+      try {
+        const result = saveApplyCompare({
+          yamlText,
+          ruleIndex,
+          path,
+          left,
+          op,
+          right,
+        });
+
+        applyYamlMutation(result.yamlText, 'Saved compare condition.');
+      } catch (err) {
+        fail(`Failed to save compare condition: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return;
+    }
+
+    if (action === 'add-apply-child') {
+      const ruleIndex = button.getAttribute('data-apply-rule-index');
+      const path = button.getAttribute('data-apply-node-path');
+      const operator = readValue(scope, '[data-apply-child-operator-input="true"]') || 'compare';
+
+      try {
+        const result = addApplyChild({
+          yamlText,
+          ruleIndex,
+          path,
+          operator,
+        });
+
+        applyYamlMutation(result.yamlText, `Added nested "${operator}" condition.`);
+      } catch (err) {
+        fail(`Failed to add nested condition: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return;
+    }
+
+    if (action === 'remove-apply-child') {
+      const ruleIndex = button.getAttribute('data-apply-rule-index');
+      const path = button.getAttribute('data-apply-node-path');
+
+      try {
+        const result = removeApplyChild({
+          yamlText,
+          ruleIndex,
+          path,
+        });
+
+        applyYamlMutation(result.yamlText, 'Removed nested condition.');
+      } catch (err) {
+        fail(`Failed to remove nested condition: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return;
+    }
 
     if (action === 'insert-variable') {
       const insertText = button.getAttribute('data-insert-text');

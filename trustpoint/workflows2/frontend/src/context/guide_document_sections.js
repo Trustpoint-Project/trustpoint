@@ -1,19 +1,12 @@
 import { escapeHtml, renderChips } from '../core/dom.js';
 import {
-  buildVariableSuggestions,
   findTriggerSpec,
-  renderActionButton,
   renderEventList,
   renderStepIdActions,
   renderStepTypeActions,
   renderTriggerButtons,
-  renderVariableButtons,
 } from './guide_ui_helpers.js';
-import {
-  renderConditionDsl,
-  renderConditionOperatorButtons,
-  renderExpressionDsl,
-} from './guide_dsl_sections.js';
+import { renderExpressionDsl } from './guide_dsl_sections.js';
 
 export function renderRootGuide(catalog) {
   return `
@@ -65,36 +58,6 @@ export function renderTriggerGuide(context, catalog) {
     <div class="text-muted">
       Configure how the workflow is triggered.
     </div>
-  `;
-}
-
-export function renderApplyGuide(context, catalog) {
-  const { eventButtons, varsButtons } = buildVariableSuggestions(context, catalog);
-
-  return `
-    <div class="mb-3">
-      <div class="fw-semibold mb-1">Suggestions</div>
-      <div class="text-muted">
-        Apply rules are evaluated before the workflow starts.
-      </div>
-    </div>
-
-    <div class="mb-3">
-      <div class="fw-semibold mb-1">Insert condition</div>
-      ${renderConditionOperatorButtons(catalog, 'apply-item')}
-    </div>
-
-    <div class="mb-3">
-      <div class="fw-semibold mb-1">Insert event variable</div>
-      ${renderVariableButtons(eventButtons)}
-    </div>
-
-    <div class="mb-3">
-      <div class="fw-semibold mb-1">Insert workflow var</div>
-      ${renderVariableButtons(varsButtons)}
-    </div>
-
-    ${renderConditionDsl(catalog)}
   `;
 }
 

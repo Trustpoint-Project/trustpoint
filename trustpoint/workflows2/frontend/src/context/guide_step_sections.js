@@ -17,6 +17,68 @@ import {
   renderFieldSpecificOptions,
 } from './guide_dsl_sections.js';
 
+function renderLogicGuideSection(context, catalog, presentFieldKeys, eventButtons, varsButtons) {
+  const caseHelp = `
+    <div class="mb-3">
+      <div class="fw-semibold mb-1">Logic routing</div>
+      <div class="text-muted">
+        Each logic case contains a <code>when</code> condition and an <code>outcome</code>.
+        The <code>when</code> condition can be a nested tree using <code>and</code>, <code>or</code>, <code>not</code>, <code>exists</code>, and <code>compare</code>.
+      </div>
+    </div>
+  `;
+
+  const quickActions = `
+    <div class="mb-3">
+      <div class="fw-semibold mb-1">Quick actions</div>
+      <div class="d-flex flex-wrap gap-2">
+        ${renderActionButton('add-logic-case', 'Add logic case')}
+      </div>
+    </div>
+  `;
+
+  const conditionBuilders = `
+    <div class="mb-3">
+      <div class="fw-semibold mb-1">Insert condition operator</div>
+      <div class="text-muted mb-2">
+        Use these to scaffold nested condition blocks inside a logic case.
+      </div>
+      ${renderConditionOperatorButtons(catalog, 'logic-case')}
+    </div>
+  `;
+
+  const variableSection = contextSupportsVariableInsertion(context)
+    ? `
+      <div class="mb-3">
+        <div class="fw-semibold mb-1">Insert event variable</div>
+        ${renderVariableButtons(eventButtons)}
+      </div>
+
+      <div class="mb-3">
+        <div class="fw-semibold mb-1">Insert workflow var</div>
+        ${renderVariableButtons(varsButtons)}
+      </div>
+    `
+    : '';
+
+  const casesFieldHint = presentFieldKeys.includes('cases')
+    ? ''
+    : `
+      <div class="mb-3 text-muted">
+        Add the required <code>cases</code> field if it is missing, then scaffold nested conditions into it.
+      </div>
+    `;
+
+  return `
+    ${caseHelp}
+    ${quickActions}
+    ${casesFieldHint}
+    ${conditionBuilders}
+    ${variableSection}
+    ${renderConditionDsl(catalog)}
+  `;
+}
+
 export function renderStepGuide(context, catalog) {
   const stepSpec = context.stepType ? findStepSpec(catalog, context.stepType) : null;
   const commonFields = catalog?.meta?.common_step_fields || [];
@@ -40,21 +102,13 @@ export function renderStepGuide(context, catalog) {
   if (context.fieldKey) {
     dslSection = renderFieldSpecificOptions(catalog, context);
   } else if (context.stepType === 'logic') {
-    dslSection = `
-      <div class="mb-3">
-        <div class="fw-semibold mb-1">Quick actions</div>
-        <div class="d-flex flex-wrap gap-2">
-          ${renderActionButton('add-logic-case', 'Add compare case')}
-        </div>
-      </div>
-
-      <div class="mb-2">
-        <div class="fw-semibold mb-1">Insert logic case</div>
-        ${renderConditionOperatorButtons(catalog, 'logic-case')}
-      </div>
-
-      ${renderConditionDsl(catalog)}
-    `;
+    dslSection = renderLogicGuideSection(
+      context,
+      catalog,
+      presentFieldKeys,
+      eventButtons,
+      varsButtons,
+    );
   } else if (context.stepType === 'compute') {
     dslSection = `
       <div class="mb-3">
@@ -127,7 +181,7 @@ export function renderStepGuide(context, catalog) {
       </div>
     ` : ''}
 
-    ${contextSupportsVariableInsertion(context) ? `
+    ${contextSupportsVariableInsertion(context) && context.stepType !== 'logic' ? `
       <div class="mb-3">
         <div class="fw-semibold mb-1">Insert event variable</div>
         ${renderVariableButtons(eventButtons)}

@@ -14,10 +14,12 @@ function uniqStrings(values) {
     if (typeof value !== 'string') {
       continue;
     }
+
     const s = value.trim();
     if (!s || seen.has(s)) {
       continue;
     }
+
     seen.add(s);
     out.push(s);
   }
@@ -26,10 +28,12 @@ function uniqStrings(values) {
 }
 
 function normalizeStepBase(stepType) {
-  return `${String(stepType || 'step')
-    .trim()
-    .replaceAll(/[^a-zA-Z0-9_]+/g, '_')
-    .replaceAll(/^_+|_+$/g, '') || 'step'}_step`;
+  return (
+    `${String(stepType || 'step')
+      .trim()
+      .replaceAll(/[^a-zA-Z0-9_]+/g, '_')
+      .replaceAll(/^_+|_+$/g, '')}` || 'step'
+  );
 }
 
 function makeUniqueStepId(existingIds, base) {
@@ -67,7 +71,7 @@ function getWorkflow(rootObj) {
 }
 
 function getSteps(workflow) {
-  if (!workflow.steps || typeof workflow.steps !== 'object') {
+  if (!workflow.steps || typeof workflow.steps !== 'object' || Array.isArray(workflow.steps)) {
     workflow.steps = {};
   }
   return workflow.steps;
@@ -134,9 +138,48 @@ function validateTarget(steps, toStep) {
 }
 
 function normalizeFlow(flow) {
-  const linearSeen = new Set();
-  const outcomeSeen = new Set();
   const out = [];
+  const seenLinear = new Set();
+  const seenOutcome = new Set();
+
+  for (const edge of flow || []) {
+    if (!edge || typeof edge !== 'object') {
+      continue;
+    }
+
+    const from = typeof edge.from === 'string' ? edge.from.trim() : '';
+    const to = typeof edge.to === 'string' ? edge.to.trim() : '';
+    const on = typeof edge.on === 'string' ? edge.on.trim() : '';
+
+    if (!from || !to) {
+      continue;
+    }
+
+    if (on) {
+      const key = `${from}|${on}`;
+      if (seenOutcome.has(key)) {
+        continue;
+      }
+      seenOutcome.add(key);
+      out.push({ from, on, to });
+      continue;
+    }
+
+    if (seenLinear.has(from)) {
+      continue;
+    }
+    seenLinear.add(from);
+    out.push({ from, to });
+  }
+
+  return out;
+}
+
+function cleanupFlowForDeletedStep(flow, stepId) {
+  const nextFlow = [];
+  let deletedOutgoingEdgeCount = 0;
+  let removedIncomingLinearEdgeCount = 0;
+  let reroutedIncomingOutcomeEdgeCount = 0;
 
   for (const edge of flow || []) {
     if (!edge || typeof edge !== 'object') {
@@ -145,29 +188,49 @@ function normalizeFlow(flow) {
 
     const from = typeof edge.from === 'string' ? edge.from : null;
     const to = typeof edge.to === 'string' ? edge.to : null;
-    const on = typeof edge.on === 'string' ? edge.on : null;
+    const on = typeof edge.on === 'string' && edge.on.trim() ? edge.on.trim() : null;
 
     if (!from || !to) {
       continue;
     }
 
-    if (on) {
-      const key = `${from}|${on}`;
-      if (outcomeSeen.has(key)) {
-        continue;
-      }
-      outcomeSeen.add(key);
-      out.push({ from, on, to });
-    } else {
-      if (linearSeen.has(from)) {
-        continue;
-      }
-      linearSeen.add(from);
-      out.push({ from, to });
+    if (from === stepId) {
+      deletedOutgoingEdgeCount += 1;
+      continue;
     }
+
+    if (to === stepId) {
+      if (on) {
+        nextFlow.push({
+          from,
+          on,
+          to: '$end',
+        });
+        reroutedIncomingOutcomeEdgeCount += 1;
+      } else {
+        removedIncomingLinearEdgeCount += 1;
+      }
+      continue;
+    }
+
+    nextFlow.push(on ? { from, on, to } : { from, to });
   }
 
-  return out;
+  return {
+    flow: normalizeFlow(nextFlow),
+    deletedOutgoingEdgeCount,
+    removedIncomingLinearEdgeCount,
+    reroutedIncomingOutcomeEdgeCount,
+  };
+}
+
+function pickReplacementStartStep(steps, deletedStepId, currentStart) {
+  if (currentStart !== deletedStepId) {
+    return currentStart;
+  }
+
+  const remaining = Object.keys(steps);
+  return remaining[0] || '';
 }
 
 export function repairWorkflowStart({ yamlText }) {
@@ -202,6 +265,7 @@ export function addStepToWorkflow({ yamlText, catalog, stepType }) {
   const rootObj = parseRoot(yamlText);
   const workflow = getWorkflow(rootObj);
   const steps = getSteps(workflow);
+  getFlow(workflow);
 
   const stepSpec = findStepSpec(catalog, stepType);
   if (!stepSpec) {
@@ -210,9 +274,9 @@ export function addStepToWorkflow({ yamlText, catalog, stepType }) {
 
   const existingIds = Object.keys(steps);
   const stepId = makeUniqueStepId(existingIds, normalizeStepBase(stepType));
-  const stepObj = deepClone(stepSpec.scaffold || { type: stepType });
+  const scaffold = deepClone(stepSpec.scaffold || { type: stepType });
 
-  steps[stepId] = stepObj;
+  steps[stepId] = scaffold;
 
   const currentStart = typeof workflow.start === 'string' ? workflow.start : '';
   const startLooksInvalid =
@@ -234,13 +298,12 @@ export function setStepTitle({ yamlText, stepId, title }) {
   const rootObj = parseRoot(yamlText);
   const workflow = getWorkflow(rootObj);
   const steps = getSteps(workflow);
+
+  validateExistingStep(steps, stepId);
+
   const stepObj = steps[stepId];
-
-  if (!stepObj || typeof stepObj !== 'object') {
-    throw new Error(`Step "${stepId}" not found.`);
-  }
-
   const trimmed = String(title || '').trim();
+
   if (trimmed) {
     stepObj.title = trimmed;
   } else {
@@ -258,32 +321,24 @@ export function deleteStepFromWorkflow({ yamlText, stepId }) {
   const steps = getSteps(workflow);
   const flow = getFlow(workflow);
 
-  if (!Object.prototype.hasOwnProperty.call(steps, stepId)) {
-    throw new Error(`Step "${stepId}" not found.`);
-  }
+  validateExistingStep(steps, stepId);
 
   const stepIds = Object.keys(steps);
   if (stepIds.length <= 1) {
     throw new Error('Cannot delete the last step.');
   }
 
-  delete steps[stepId];
-  workflow.flow = normalizeFlow(
-    flow.filter((edge) => {
-      if (!edge || typeof edge !== 'object') {
-        return false;
-      }
-      return edge.from !== stepId && edge.to !== stepId;
-    }),
-  );
+  const cleaned = cleanupFlowForDeletedStep(flow, stepId);
 
-  if (workflow.start === stepId) {
-    const remaining = Object.keys(steps);
-    workflow.start = remaining[0] || '';
-  }
+  delete steps[stepId];
+  workflow.flow = cleaned.flow;
+  workflow.start = pickReplacementStartStep(steps, stepId, workflow.start);
 
   return {
     yamlText: stringifyRoot(rootObj),
+    deletedOutgoingEdgeCount: cleaned.deletedOutgoingEdgeCount,
+    removedIncomingLinearEdgeCount: cleaned.removedIncomingLinearEdgeCount,
+    reroutedIncomingOutcomeEdgeCount: cleaned.reroutedIncomingOutcomeEdgeCount,
   };
 }
 
@@ -304,8 +359,14 @@ export function addLinearFlowEdge({ yamlText, fromStep, toStep }) {
   }
 
   const hasOutcomeRoutes = flow.some(
-    (edge) => edge && typeof edge === 'object' && edge.from === fromStep && typeof edge.on === 'string',
+    (edge) =>
+      edge &&
+      typeof edge === 'object' &&
+      edge.from === fromStep &&
+      typeof edge.on === 'string' &&
+      edge.on.trim(),
   );
+
   if (hasOutcomeRoutes) {
     throw new Error(
       `Step "${fromStep}" already has outcome-based transitions and cannot also have a linear edge.`,
@@ -318,22 +379,16 @@ export function addLinearFlowEdge({ yamlText, fromStep, toStep }) {
       edge &&
       typeof edge === 'object' &&
       edge.from === fromStep &&
-      (edge.on === undefined || edge.on === null)
+      (edge.on === undefined || edge.on === null || edge.on === '')
     ) {
       updated = true;
-      return {
-        from: fromStep,
-        to: toStep,
-      };
+      return { from: fromStep, to: toStep };
     }
     return edge;
   });
 
   if (!updated) {
-    nextFlow.push({
-      from: fromStep,
-      to: toStep,
-    });
+    nextFlow.push({ from: fromStep, to: toStep });
   }
 
   workflow.flow = normalizeFlow(nextFlow);
@@ -363,9 +418,7 @@ export function addOutcomeFlowEdge({ yamlText, fromStep, toStep, outcome }) {
 
   const safeOutcome = String(outcome || '').trim();
   if (!safeOutcome || !validOutcomes.includes(safeOutcome)) {
-    throw new Error(
-      `Invalid outcome "${outcome}" for step "${fromStep}".`,
-    );
+    throw new Error(`Invalid outcome "${outcome}" for step "${fromStep}".`);
   }
 
   const hasLinearRoute = flow.some(
@@ -373,7 +426,7 @@ export function addOutcomeFlowEdge({ yamlText, fromStep, toStep, outcome }) {
       edge &&
       typeof edge === 'object' &&
       edge.from === fromStep &&
-      (edge.on === undefined || edge.on === null),
+      (edge.on === undefined || edge.on === null || edge.on === ''),
   );
 
   if (hasLinearRoute) {
@@ -415,6 +468,89 @@ export function addOutcomeFlowEdge({ yamlText, fromStep, toStep, outcome }) {
   };
 }
 
+export function updateOutcomeFlowEdge({
+  yamlText,
+  fromStep,
+  toStep,
+  oldOutcome,
+  newOutcome,
+}) {
+  const rootObj = parseRoot(yamlText);
+  const workflow = getWorkflow(rootObj);
+  const steps = getSteps(workflow);
+  const flow = getFlow(workflow);
+
+  validateExistingStep(steps, fromStep, 'Source step');
+
+  const fromObj = steps[fromStep];
+  const validOutcomes = extractStepOutcomes(fromObj);
+
+  if (!validOutcomes.length) {
+    throw new Error(`Step "${fromStep}" has no outcome routes.`);
+  }
+
+  const safeOldOutcome = String(oldOutcome || '').trim();
+  const safeNewOutcome = String(newOutcome || '').trim();
+
+  if (!safeOldOutcome) {
+    throw new Error('Old outcome is required.');
+  }
+
+  if (!safeNewOutcome) {
+    throw new Error('New outcome is required.');
+  }
+
+  if (!validOutcomes.includes(safeNewOutcome)) {
+    throw new Error(`Outcome "${safeNewOutcome}" is not valid for "${fromStep}".`);
+  }
+
+  const duplicateExists = flow.some(
+    (edge) =>
+      edge &&
+      typeof edge === 'object' &&
+      edge.from === fromStep &&
+      edge.to === toStep &&
+      edge.on === safeNewOutcome &&
+      edge.on !== safeOldOutcome,
+  );
+
+  if (duplicateExists) {
+    throw new Error(
+      `An edge for outcome "${safeNewOutcome}" already exists on "${fromStep}".`,
+    );
+  }
+
+  let changed = false;
+  const nextFlow = flow.map((edge) => {
+    if (
+      edge &&
+      typeof edge === 'object' &&
+      edge.from === fromStep &&
+      edge.to === toStep &&
+      edge.on === safeOldOutcome
+    ) {
+      changed = true;
+      return {
+        from: fromStep,
+        on: safeNewOutcome,
+        to: toStep,
+      };
+    }
+    return edge;
+  });
+
+  if (!changed) {
+    throw new Error('Outcome edge not found.');
+  }
+
+  workflow.flow = normalizeFlow(nextFlow);
+
+  return {
+    yamlText: stringifyRoot(rootObj),
+    changed: safeOldOutcome !== safeNewOutcome,
+  };
+}
+
 export function deleteFlowEdge({ yamlText, fromStep, toStep, outcome = null }) {
   const rootObj = parseRoot(yamlText);
   const workflow = getWorkflow(rootObj);
@@ -424,24 +560,27 @@ export function deleteFlowEdge({ yamlText, fromStep, toStep, outcome = null }) {
   validateExistingStep(steps, fromStep, 'Source step');
 
   const safeOutcome = outcome ? String(outcome).trim() : null;
+  const before = flow.length;
 
-  const filtered = flow.filter((edge) => {
-    if (!edge || typeof edge !== 'object') {
-      return false;
-    }
+  workflow.flow = normalizeFlow(
+    flow.filter((edge) => {
+      if (!edge || typeof edge !== 'object') {
+        return false;
+      }
 
-    const sameFrom = edge.from === fromStep;
-    const sameTo = edge.to === toStep;
-    const sameOutcome = (edge.on || null) === (safeOutcome || null);
+      const sameFrom = edge.from === fromStep;
+      const sameTo = edge.to === toStep;
+      const edgeOutcome =
+        typeof edge.on === 'string' && edge.on.trim() ? edge.on.trim() : null;
+      const sameOutcome = edgeOutcome === safeOutcome;
 
-    return !(sameFrom && sameTo && sameOutcome);
-  });
+      return !(sameFrom && sameTo && sameOutcome);
+    }),
+  );
 
-  if (filtered.length === flow.length) {
+  if (workflow.flow.length === before) {
     throw new Error('Flow edge not found.');
   }
-
-  workflow.flow = normalizeFlow(filtered);
 
   return {
     yamlText: stringifyRoot(rootObj),

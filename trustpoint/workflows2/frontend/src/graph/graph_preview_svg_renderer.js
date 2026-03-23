@@ -8,7 +8,41 @@ function truncate(value, max = 28) {
   return `${s.slice(0, max - 1)}…`;
 }
 
-export function renderGraphSvg(graph, layout, selectedNodeId, selectedEdgeId) {
+function edgePath(from, to) {
+  const x1 = from.x + from.w;
+  const y1 = from.y + from.h / 2;
+  const x2 = to.x;
+  const y2 = to.y + to.h / 2;
+  const dx = Math.max(60, Math.abs(x2 - x1) / 2);
+
+  return {
+    path: `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`,
+    labelX: (x1 + x2) / 2,
+    labelY: (y1 + y2) / 2 - 8,
+  };
+}
+
+function renderConnectionPreview(connectPreview) {
+  if (!connectPreview) {
+    return '';
+  }
+
+  return `
+    <path
+      class="wf2-graph-connection-preview"
+      d="M ${connectPreview.fromX} ${connectPreview.fromY} C ${connectPreview.fromX + 60} ${connectPreview.fromY}, ${connectPreview.toX - 60} ${connectPreview.toY}, ${connectPreview.toX} ${connectPreview.toY}"
+    ></path>
+  `;
+}
+
+export function renderGraphSvg(
+  graph,
+  layout,
+  selectedNodeId,
+  selectedEdgeId,
+  connectPreview = null,
+  dragNodeId = null,
+) {
   const defs = `
     <defs>
       <marker id="wf2-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
@@ -20,6 +54,17 @@ export function renderGraphSvg(graph, layout, selectedNodeId, selectedEdgeId) {
     </defs>
   `;
 
+  const background = `
+    <rect
+      data-graph-background="true"
+      x="0"
+      y="0"
+      width="${layout.width}"
+      height="${layout.height}"
+      fill="transparent"
+    ></rect>
+  `;
+
   const edgeSvg = (graph.edges || [])
     .map((edge) => {
       const from = layout.positions.get(edge.from);
@@ -28,16 +73,8 @@ export function renderGraphSvg(graph, layout, selectedNodeId, selectedEdgeId) {
         return '';
       }
 
-      const x1 = from.x + from.w;
-      const y1 = from.y + from.h / 2;
-      const x2 = to.x;
-      const y2 = to.y + to.h / 2;
-      const dx = Math.max(60, Math.abs(x2 - x1) / 2);
-
-      const path = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+      const { path, labelX, labelY } = edgePath(from, to);
       const selected = edge.id === selectedEdgeId;
-      const labelX = (x1 + x2) / 2;
-      const labelY = (y1 + y2) / 2 - 8;
 
       return `
         <g class="wf2-graph-edge ${selected ? 'is-selected' : ''}" data-edge-id="${escapeHtml(edge.id)}">
@@ -50,7 +87,16 @@ export function renderGraphSvg(graph, layout, selectedNodeId, selectedEdgeId) {
           ></path>
           ${
             edge.on
-              ? `<text x="${labelX}" y="${labelY}" class="wf2-graph-edge-label">${escapeHtml(edge.on)}</text>`
+              ? `
+                <text
+                  x="${labelX}"
+                  y="${labelY}"
+                  class="wf2-graph-edge-label"
+                  data-edge-label-id="${escapeHtml(edge.id)}"
+                >
+                  ${escapeHtml(edge.on)}
+                </text>
+              `
               : ''
           }
         </g>
@@ -66,12 +112,16 @@ export function renderGraphSvg(graph, layout, selectedNodeId, selectedEdgeId) {
       }
 
       const selected = node.id === selectedNodeId;
+      const dragging = node.id === dragNodeId;
       const fill = node.is_virtual ? '#fff8e1' : '#ffffff';
       const stroke = selected ? '#0d6efd' : '#adb5bd';
       const dash = node.is_virtual ? '6 4' : 'none';
 
       return `
-        <g class="wf2-graph-node ${selected ? 'is-selected' : ''}" data-node-id="${escapeHtml(node.id)}">
+        <g
+          class="wf2-graph-node ${selected ? 'is-selected' : ''} ${dragging ? 'is-dragging' : ''}"
+          data-node-id="${escapeHtml(node.id)}"
+        >
           <rect
             x="${pos.x}"
             y="${pos.y}"
@@ -102,6 +152,20 @@ export function renderGraphSvg(graph, layout, selectedNodeId, selectedEdgeId) {
               ? `<text x="${pos.x + pos.w - 44}" y="${pos.y + 20}" class="wf2-graph-badge">START</text>`
               : ''
           }
+
+          ${
+            !node.is_virtual
+              ? `
+                <circle
+                  class="wf2-graph-output-handle"
+                  data-node-handle="${escapeHtml(node.id)}"
+                  cx="${pos.x + pos.w}"
+                  cy="${pos.y + pos.h / 2}"
+                  r="7"
+                ></circle>
+              `
+              : ''
+          }
         </g>
       `;
     })
@@ -117,6 +181,8 @@ export function renderGraphSvg(graph, layout, selectedNodeId, selectedEdgeId) {
       xmlns="http://www.w3.org/2000/svg"
     >
       ${defs}
+      ${background}
+      ${renderConnectionPreview(connectPreview)}
       ${edgeSvg}
       ${nodeSvg}
     </svg>
