@@ -19,6 +19,7 @@ from django.views.generic.list import ListView
 from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import viewsets
 
+from management.models.audit_log import AuditLog
 from pki.forms import DevIdAddMethodSelectForm, DevIdRegistrationForm
 from pki.models import (
     CaModel,
@@ -28,7 +29,7 @@ from pki.models import (
     DomainModel,
 )
 from pki.models.truststore import TruststoreModel
-from pki.serializer.domain import DomainSerializer
+from pki.serializer.domain import DomainDetailSerializer, DomainSerializer
 from trustpoint.settings import UIConfig
 from trustpoint.views.base import (
     BulkDeleteView,
@@ -93,6 +94,13 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
         messages.success(
             self.request,
             _('Successfully created domain {name}.').format(name=domain.unique_name),
+        )
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.DOMAIN_CREATED,
+            target=domain,
+            target_display=f'Domain: {domain.unique_name}',
+            actor=actor,
         )
         return super().form_valid(form)
 
@@ -214,6 +222,7 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
         """Attempt to delete domains if the form is valid."""
         queryset = self.get_queryset()
         deleted_count = queryset.count()
+        domains_to_delete = list(queryset)
 
         try:
             response = super().form_valid(form)
@@ -225,6 +234,15 @@ class DomainCaBulkDeleteConfirmView(DomainContextMixin, BulkDeleteView):
         except ValidationError as exc:
             messages.error(self.request, exc.message)
             return HttpResponseRedirect(self.success_url)
+
+        actor = self.request.user if self.request.user.is_authenticated else None
+        for domain in domains_to_delete:
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.DOMAIN_DELETED,
+                target=domain,
+                target_display=f'Domain: {domain.unique_name}',
+                actor=actor,
+            )
 
         messages.success(self.request, _('Successfully deleted {count} Domains.').format(count=deleted_count))
 
@@ -436,5 +454,11 @@ class DomainViewSet(viewsets.ModelViewSet[DomainModel]):
 
     queryset = DomainModel.objects.all()
     serializer_class = DomainSerializer
+
+    def get_serializer_class(self) -> type[DomainDetailSerializer | DomainSerializer]:
+        """Return the detail serializer for retrieve, and the list serializer for all other actions."""
+        if self.action == 'retrieve':
+            return DomainDetailSerializer
+        return DomainSerializer
 
 

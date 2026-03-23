@@ -127,15 +127,13 @@ class IssuingCaImportMixin:
         Raises:
             ValidationError: If certificate verification fails.
         """
+        if not chain:
+            return
+
         try:
-            if chain:
-                # Use the last cert in the chain as the trust anchor (root)
-                trusted_roots = [chain[-1]]
-                untrusted_intermediates = chain[:-1]
-            else:
-                # No chain provided — verify as self-signed
-                trusted_roots = [cert]
-                untrusted_intermediates = []
+            # Use the last cert in the chain as the trust anchor (root).
+            trusted_roots = [chain[-1]]
+            untrusted_intermediates = chain[:-1]
 
             CertificateVerifier.verify_ca_cert(
                 cert=cert,
@@ -181,6 +179,39 @@ class IssuingCaImportMixin:
         issuing_ca.save(update_fields=['no_onboarding_config'])
 
         return issuing_ca
+
+    def _validate_credential_components(
+        self, credential_serializer: CredentialSerializer
+    ) -> tuple[x509.Certificate, Any]:
+        """Validates the private key and certificate from the credential serializer."""
+        pk = credential_serializer.private_key
+        cert = credential_serializer.certificate
+
+        if cert is None:
+            self._raise_validation_error('Certificate is missing from credential serializer.')
+        if pk is None:
+            self._raise_validation_error('Private key is missing from credential serializer.')
+
+        if pk.public_key() != cert.public_key():
+            self._raise_validation_error('The provided private key does not match the Issuing CA certificate.')
+
+        return cert, pk
+
+    def _prepare_credential_serializer(
+        self, credential_serializer: CredentialSerializer, unique_name: str | None, pk: Any
+    ) -> None:
+        """Prepares the credential serializer with private key reference."""
+        if credential_serializer.private_key is None:
+            self._raise_validation_error('Private key is missing from credential serializer.')
+
+        private_key_location = get_private_key_location_from_config()
+        credential_serializer.private_key_reference = (
+            PrivateKeyReference.from_private_key(
+                private_key=pk,
+                key_label=unique_name,
+                location=private_key_location
+            )
+        )
 
 
 class IssuingCaAddMethodSelectForm(forms.Form):
@@ -492,53 +523,6 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
                 raise ValidationError(err_msg) from exception
 
         return None
-
-    def _validate_credential_components(
-        self, credential_serializer: CredentialSerializer
-    ) -> tuple[x509.Certificate, Any]:
-        """Validates the private key and certificate from the credential serializer.
-
-        Args:
-            credential_serializer: The credential serializer containing the private key and certificate.
-
-        Returns:
-            A tuple containing the certificate and private key.
-
-        Raises:
-            ValidationError: If the certificate or private key is missing or they don't match.
-        """
-        pk = credential_serializer.private_key
-        cert = credential_serializer.certificate
-
-        if cert is None:
-            self._raise_validation_error('Certificate is missing from credential serializer.')
-        if pk is None:
-            self._raise_validation_error('Private key is missing from credential serializer.')
-
-        # After the None checks above, mypy needs explicit assertion that these are not None
-        assert cert is not None  # noqa: S101
-        assert pk is not None  # noqa: S101
-
-        if pk.public_key() != cert.public_key():
-            self._raise_validation_error('The provided private key does not match the Issuing CA certificate.')
-
-        return cert, pk
-
-    def _prepare_credential_serializer(
-        self, credential_serializer: CredentialSerializer, unique_name: str | None, pk: Any
-    ) -> None:
-        """Prepares the credential serializer with private key reference."""
-        if credential_serializer.private_key is None:
-            self._raise_validation_error('Private key is missing from credential serializer.')
-
-        private_key_location = get_private_key_location_from_config()
-        credential_serializer.private_key_reference = (
-            PrivateKeyReference.from_private_key(
-                private_key=pk,
-                key_label=unique_name,
-                location=private_key_location
-            )
-        )
 
     def clean(self) -> None:
         """Cleans and validates the form data.

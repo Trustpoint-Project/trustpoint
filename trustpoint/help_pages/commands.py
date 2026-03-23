@@ -7,6 +7,7 @@ from trustpoint_core import oid
 
 from devices.views import NamedCurveMissingForEccErrorMsg
 from pki.util.cert_req_converter import JSONCertRequestCommandExtractor
+from trustpoint.settings import DOCKER_CONTAINER
 
 
 class KeyGenCommandBuilder:
@@ -68,7 +69,6 @@ class CmpSharedSecretCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
-            '-implicit_confirm \\\n'
             '-tls_used \\\n'
             f'-server {host} \\\n'
             f'-ref {pk} \\\n'
@@ -98,7 +98,6 @@ class CmpSharedSecretCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd ir \\\n'
-            '-implicit_confirm \\\n'
             '-tls_used \\\n'
             f'-server {host} \\\n'
             f'-ref {pk} \\\n'
@@ -257,7 +256,6 @@ class CmpClientCertificateCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
-            '-implicit_confirm \\\n'
             '-tls_used \\\n'
             '-trusted domain-credential-full-chain.pem \\\n'
             f'-server {host} \\\n'
@@ -285,7 +283,6 @@ class CmpClientCertificateCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd ir \\\n'
-            '-implicit_confirm \\\n'
             f'-server {host} \\\n'
             '-tls_used \\\n'
             '-cert idevid.pem \\\n'
@@ -413,3 +410,346 @@ class EstClientCertificateCommandBuilder:
             The constructed command.
         """
         return 'openssl pkcs7 \\\n-print_certs \\\n-inform DER \\\n-in cacerts.p7b \\\n-out cacerts.pem'
+
+
+class AokiCmpIDevIDCommandBuilder:
+    """Builds AOKI CMP commands with IDevID authentication."""
+
+    @staticmethod
+    def get_keygen_command() -> str:
+        """Get the key generation command for domain credential."""
+        return (
+            'openssl genrsa \\\n'
+            '  -out domain_credential_key.pem \\\n'
+            '  2048'
+        )
+
+    @staticmethod
+    def get_cmp_ir_command(host: str) -> str:
+        """Get the CMP Initial Request (IR) command for AOKI with IDevID."""
+        return (
+            'openssl cmp \\\n'
+            '  -cmd ir \\\n'
+            f'  -server {host} \\\n'
+            '  -cert idevid.pem \\\n'
+            '  -key idevid_pk.pem \\\n'
+            '  -extracerts idevid_ca.pem \\\n'
+            '  -subject "/CN=Trustpoint Domain Credential" \\\n'
+            '  -newkey domain_credential_key.pem \\\n'
+            '  -certout domain_credential.pem \\\n'
+            '  -chainout chain_without_root.pem \\\n'
+            '  -extracertsout full_chain.pem \\\n'
+            '  -trusted ownerid_ca.pem'
+        )
+
+
+class AokiEstIDevIDCommandBuilder:
+    """Builds AOKI EST commands with IDevID authentication."""
+
+    @staticmethod
+    def get_aoki_init_command(host: str) -> str:
+        """Get the AOKI initialization request command."""
+        return (
+            f'curl --cert idevid.pem \\\n'
+            f'  --key idevid_pk.pem \\\n'
+            f'  --cacert ownerid_ca.pem \\\n'
+            f'  -o aoki_init_response.json \\\n'
+            f'{host}/aoki/init'
+        )
+
+    @staticmethod
+    def get_aoki_init_response_example() -> str:
+        """Get an example AOKI initialization response JSON."""
+        return """{
+  "aoki-init": {
+    "version": "1.0",
+    "owner-id-cert": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----",
+    "tls-truststore": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----",
+    "enrollment-info": {
+      "protocols": [
+        {
+          "protocol": "EST",
+          "url": "https://127.0.0.1:443/.well-known/est/domain/domain_credential/simpleenroll"
+        }
+      ]
+    }
+  }
+}"""
+
+    @staticmethod
+    def get_keygen_command() -> str:
+        """Get the key generation command for domain credential."""
+        return (
+            'openssl genrsa \\\n'
+            '  -out domain_credential_key.pem \\\n'
+            '  2048'
+        )
+
+    @staticmethod
+    def get_csr_command() -> str:
+        """Get the CSR generation command for AOKI EST enrollment."""
+        return (
+            'openssl req \\\n'
+            '  -new \\\n'
+            '  -key domain_credential_key.pem \\\n'
+            '  -outform DER \\\n'
+            '  -out domain_credential.der \\\n'
+            '  -subj "/CN=Trustpoint-Domain-Credential"'
+        )
+
+    @staticmethod
+    def get_curl_enroll_command(host: str) -> str:
+        """Get the curl EST enrollment command for AOKI with IDevID."""
+        return (
+            f'curl --cert domain_credential.pem \\\n'
+            f'  --key domain_credential_key.pem \\\n'
+            f'  --cacert trust_store.pem \\\n'
+            f'  --header "Content-Type: application/pkcs10" \\\n'
+            f'  --data-binary "@domain_credential.der" \\\n'
+            f'  -o domain_certificate.p7c \\\n'
+            f'{host}'
+        )
+
+
+class RestUsernamePasswordCommandBuilder:
+    """Builds REST API username-password commands for different certificate profiles."""
+
+    @staticmethod
+    def get_dynamic_cert_profile_command(cred_number: int, sample_request: dict[str, Any]) -> str:
+        """Gets the CSR generation command for a dynamic certificate profile.
+
+        Args:
+            cred_number: The credential number - counter of issued credentials.
+            sample_request: The sample certificate request in JSON format.
+
+        Returns:
+            The constructed command.
+        """
+        profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
+        sans_line = f'-addext "subjectAltName = {profile_sans}" \\\n' if profile_sans else ''
+
+        return (
+            'openssl req \\\n'
+            '-new \\\n'
+            f'-key key-{cred_number}.pem \\\n'
+            f'-out csr-{cred_number}.pem \\\n'
+            f'{sans_line}'
+            f'-subj "{profile_subject_entries}"'
+        )
+
+    @staticmethod
+    def get_curl_enroll_command(rest_username: str, rest_password: str, host: str, cred_number: int) -> str:
+        """Get the curl enroll command.
+
+        Args:
+            rest_username: The REST username to use.
+            rest_password: The REST password to use.
+            host: The full REST enroll URL.
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            f'curl --user "{rest_username}:{rest_password}" \\\n'
+            '--cacert trustpoint-tls-trust-store.pem \\\n'
+            '--header "Content-Type: application/json" \\\n'
+            f'--data-binary @<(jq -n --arg csr "$(cat csr-{cred_number}.pem)" \'{{csr: $csr}}\') \\\n'
+            f'-o certificate-{cred_number}.json \\\n'
+            f'{host}'
+        )
+
+    @staticmethod
+    def get_extract_cert_command(cred_number: int) -> str:
+        """Get the command to extract the PEM certificate from the JSON response.
+
+        Args:
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            f'jq -r .certificate certificate-{cred_number}.json > certificate-{cred_number}.pem'
+        )
+
+    @staticmethod
+    def get_domain_credential_csr_command() -> str:
+        """Get the domain credential CSR generation command.
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            'openssl req \\\n'
+            '-new \\\n'
+            '-key domain-credential-key.pem \\\n'
+            '-out csr-domain-credential.pem \\\n'
+            '-subj "/CN=Trustpoint-Domain-Credential"'
+        )
+
+    @staticmethod
+    def get_curl_enroll_domain_credential_command(rest_username: str, rest_password: str, host: str) -> str:
+        """Get the curl domain credential enroll command.
+
+        Args:
+            rest_username: The REST username to use.
+            rest_password: The REST password to use.
+            host: The full REST enroll URL.
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            f'curl --user "{rest_username}:{rest_password}" \\\n'
+            '--cacert trustpoint-tls-trust-store.pem \\\n'
+            '--header "Content-Type: application/json" \\\n'
+            '--data-binary @<(jq -n --arg csr "$(cat csr-domain-credential.pem)" \'{csr: $csr}\') \\\n'
+            '-o domain-credential-certificate.json \\\n'
+            f'{host}'
+        )
+
+    @staticmethod
+    def get_extract_domain_credential_command() -> str:
+        """Get the command to extract the domain credential PEM certificate from the JSON response.
+
+        Returns:
+            The constructed command.
+        """
+        return 'jq -r .certificate domain-credential-certificate.json > domain-credential-certificate.pem'
+
+
+class RestClientCertificateCommandBuilder:
+    """Builds REST API client-certificate (mTLS) commands for certificate re-enrollment."""
+
+    @staticmethod
+    def get_dynamic_cert_profile_command(cred_number: int, sample_request: dict[str, Any]) -> str:
+        """Gets the CSR generation command for a dynamic certificate profile.
+
+        Args:
+            cred_number: The credential number - counter of issued credentials.
+            sample_request: The sample certificate request in JSON format.
+
+        Returns:
+            The constructed command.
+        """
+        profile_subject_entries = JSONCertRequestCommandExtractor.sample_request_to_openssl_subj(sample_request)
+        profile_sans = JSONCertRequestCommandExtractor.sample_request_to_openssl_req_sans(sample_request)
+        sans_line = f'-addext "subjectAltName = {profile_sans}" \\\n' if profile_sans else ''
+
+        return (
+            'openssl req \\\n'
+            '-new \\\n'
+            f'-key key-{cred_number}.pem \\\n'
+            f'-out csr-{cred_number}.pem \\\n'
+            f'{sans_line}'
+            f'-subj "{profile_subject_entries}"'
+        )
+
+    @staticmethod
+    def get_curl_enroll_command(host: str, cred_number: int) -> str:
+        """Get the curl enroll command using mTLS with the domain credential.
+
+        Args:
+            host: The full REST enroll URL.
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+
+        Note:
+            When not running inside a Docker container (i.e. the development server) nginx
+            is not present to inject the ``SSL-CLIENT-CERT`` header automatically.  The curl
+            command therefore URL-encodes the PEM certificate and sends it as an explicit HTTP
+            header so the server-side ``ClientCertificateValidation`` can read it from
+            ``META['HTTP_SSL_CLIENT_CERT']``.  In Docker/production nginx handles this
+            transparently and the header must not be sent twice.
+        """
+        if not DOCKER_CONTAINER:
+            return (
+                'CERT_HEADER=$(python3 -c "import urllib.parse; '
+                "print(urllib.parse.quote(open('domain-credential-certificate.pem').read()))\") \\\n"
+                '&& curl \\\n'
+                '--cert domain-credential-certificate.pem \\\n'
+                '--key domain-credential-key.pem \\\n'
+                '--cacert trustpoint-tls-trust-store.pem \\\n'
+                '--header "Content-Type: application/json" \\\n'
+                '--header "SSL-CLIENT-CERT: ${CERT_HEADER}" \\\n'
+                f'--data-binary @<(jq -n --arg csr "$(cat csr-{cred_number}.pem)" \'{{csr: $csr}}\') \\\n'
+                f'-o certificate-{cred_number}.json \\\n'
+                f'{host}'
+            )
+        return (
+            'curl \\\n'
+            '--cert domain-credential-certificate.pem \\\n'
+            '--key domain-credential-key.pem \\\n'
+            '--cacert trustpoint-tls-trust-store.pem \\\n'
+            '--header "Content-Type: application/json" \\\n'
+            f'--data-binary @<(jq -n --arg csr "$(cat csr-{cred_number}.pem)" \'{{csr: $csr}}\') \\\n'
+            f'-o certificate-{cred_number}.json \\\n'
+            f'{host}'
+        )
+
+    @staticmethod
+    def get_curl_reenroll_command(host: str, cred_number: int) -> str:
+        """Get the curl re-enroll command using mTLS with the domain credential.
+
+        Args:
+            host: The full REST reenroll URL.
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+
+        Note:
+            Same ``SSL-CLIENT-CERT`` header logic as :meth:`get_curl_enroll_command`.
+        """
+        if not DOCKER_CONTAINER:
+            return (
+                'CERT_HEADER=$(python3 -c "import urllib.parse; '
+                "print(urllib.parse.quote(open('domain-credential-certificate.pem').read()))\") \\\n"
+                '&& curl \\\n'
+                '--cert domain-credential-certificate.pem \\\n'
+                '--key domain-credential-key.pem \\\n'
+                '--cacert trustpoint-tls-trust-store.pem \\\n'
+                '--header "Content-Type: application/json" \\\n'
+                '--header "SSL-CLIENT-CERT: ${CERT_HEADER}" \\\n'
+                f'--data-binary @<(jq -n --arg csr "$(cat csr-{cred_number}.pem)" \'{{csr: $csr}}\') \\\n'
+                f'-o certificate-{cred_number}.json \\\n'
+                f'{host}'
+            )
+        return (
+            'curl \\\n'
+            '--cert domain-credential-certificate.pem \\\n'
+            '--key domain-credential-key.pem \\\n'
+            '--cacert trustpoint-tls-trust-store.pem \\\n'
+            '--header "Content-Type: application/json" \\\n'
+            f'--data-binary @<(jq -n --arg csr "$(cat csr-{cred_number}.pem)" \'{{csr: $csr}}\') \\\n'
+            f'-o certificate-{cred_number}.json \\\n'
+            f'{host}'
+        )
+
+    @staticmethod
+    def get_extract_cert_command(cred_number: int) -> str:
+        """Get the command to extract the PEM certificate from the JSON response.
+
+        Args:
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
+        return f'jq -r .certificate certificate-{cred_number}.json > certificate-{cred_number}.pem'
+
+    @staticmethod
+    def get_extract_cert_chain_command(cred_number: int) -> str:
+        """Get the command to extract the certificate chain from the JSON response.
+
+        Args:
+            cred_number: The credential number - counter of issued credentials.
+
+        Returns:
+            The constructed command.
+        """
+        return f"jq -r '.certificate_chain[]' certificate-{cred_number}.json > certificate-chain-{cred_number}.pem"

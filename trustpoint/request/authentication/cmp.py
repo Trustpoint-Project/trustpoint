@@ -400,7 +400,7 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
             idevid_cert=cmp_signer_cert,
             intermediate_cas=intermediate_certs,
             domain=None if is_aoki else context.domain,
-            onboarding_protocol=OnboardingProtocol.CMP_IDEVID,
+            onboarding_protocol=OnboardingProtocol.AOKI if is_aoki else OnboardingProtocol.CMP_IDEVID,
             pki_protocol=OnboardingPkiProtocol.CMP,
         )
 
@@ -417,7 +417,9 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
         if not device.onboarding_config:
             self._raise_value_error('The corresponding device is not configured to use the onboarding mechanism.')
 
-        if device.onboarding_config.onboarding_protocol != OnboardingProtocol.CMP_IDEVID:
+        if device.onboarding_config.onboarding_protocol not in (
+            OnboardingProtocol.CMP_IDEVID, OnboardingProtocol.AOKI
+        ):
             self._raise_value_error('Wrong onboarding protocol.')
 
         if not device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP):

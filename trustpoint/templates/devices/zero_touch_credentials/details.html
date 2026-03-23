@@ -1,0 +1,87 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+
+<!-- General info card -->
+<div class="card mb-4">
+    <div class="card-header">
+        <h1>{% trans "Zero-Touch Credential Details" %}</h1>
+    </div>
+    <div class="card-body">
+        <div class="tp-card-centered-content">
+            <div class="tp-kvp-list">
+                <div>
+                    <div>{% trans 'Unique Name' %}</div>
+                    <div>{{ owner_credential.unique_name }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Type' %}</div>
+                    <div>{{ owner_credential.get_owner_credential_type_display }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Key Type' %}</div>
+                    <div>{{ owner_credential.key_type|default:"—" }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Associated IDevIDs' %}</div>
+                    <div>{{ owner_credential.idevid_ref_set.count }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Created at' %}</div>
+                    <div>{{ owner_credential.created_at }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Associated IDevIDs table card -->
+<div class="card">
+    <div class="card-header">
+        <h2 class="mb-0">{% trans 'Associated IDevIDs' %}</h2>
+    </div>
+    <div class="card-body p-0">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th class="text-nowrap">{% trans 'Subject Serial Number' %}</th>
+                    <th class="text-nowrap">{% trans 'X.509 Serial Number' %}</th>
+                    <th class="text-nowrap">{% trans 'SHA-256 Fingerprint' %}</th>
+                    <th class="text-nowrap">{% trans 'Certificate' %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ref in idevid_refs %}
+                <tr>
+                    <td>{{ ref.idevid_subject_serial_number|default:"—" }}</td>
+                    <td>{{ ref.idevid_x509_serial_number|default:"—" }}</td>
+                    <td class="small text-break">{{ ref.idevid_sha256_fingerprint|default:"—" }}</td>
+                    <td>
+                        {% if ref.dev_owner_id_certificate %}
+                            <a href="{% url 'pki:certificate-detail' pk=ref.dev_owner_id_certificate.pk %}">
+                                {{ ref.dev_owner_id_certificate.serial_number }}
+                            </a>
+                        {% else %}
+                            <span class="text-muted">{% trans 'Not in store' %}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="text-center text-muted py-3">
+                        {% trans 'No IDevID references associated with this Zero-Touch Credential.' %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer d-flex">
+        <div class="tp-card-btn-footer m-1">
+            <a href="{% url 'devices:zero_touch_credentials' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
+        </div>
+    </div>
+</div>
+
+{% endblock content %}

@@ -23,6 +23,7 @@ from django.views.generic import FormView, TemplateView, View
 
 from management.forms import KeyStorageConfigForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.models import KeyStorageConfig, PKCS11Token
+from management.models.audit_log import AuditLog
 from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
@@ -442,6 +443,12 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
 
             execute_shell_script(SCRIPT_WIZARD_SETUP_CRYPTO_STORAGE, storage_type)
 
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.SECURITY_CONFIG_CHANGED,
+                target=config,
+                target_display=f'Crypto storage configured via setup wizard: {config.get_storage_type_display()}',
+                actor=None,
+            )
             messages.add_message(
                 self.request,
                 messages.SUCCESS,
@@ -1647,6 +1654,17 @@ class SetupWizardTlsServerCredentialApplyView(LoggerMixin, FormView[EmptyForm]):
 
             execute_shell_script(SCRIPT_WIZARD_TLS_SERVER_CREDENTIAL_APPLY, storage_param)
 
+            cert_display = (
+                trustpoint_tls_server_credential_model.common_name
+                if hasattr(trustpoint_tls_server_credential_model, 'common_name')
+                else str(trustpoint_tls_server_credential_model.pk)
+            )
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.TLS_CERTIFICATE_CHANGED,
+                target=trustpoint_tls_server_credential_model,
+                target_display=f'TLS credential applied via setup wizard: {cert_display}',
+                actor=None,
+            )
             messages.add_message(self.request, messages.SUCCESS, 'TLS Server Credential applied successfully.')
             return super().form_valid(form)
 
@@ -1957,4 +1975,3 @@ class SetupWizardDemoDataView(LoggerMixin, FormView[EmptyForm]):
             4: 'Failed to create WIZARD_CREATE_SUPER_USER state file.',
         }
         return error_messages.get(return_code, 'An unknown error occurred while executing the demo data script.')
-
