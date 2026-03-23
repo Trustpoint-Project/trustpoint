@@ -91,15 +91,15 @@ class HelpViewTest(TestCase):
             temp_path = Path(temp_dir)
             base_dir = temp_path / 'project' / 'trustpoint'
 
-            # Setup fake directory structure
+
             docs_dir = base_dir.parent / 'docs'
             docs_dir.mkdir(parents=True)
 
-            # Create a lock file
+
             lock_file = docs_dir / '.building'
             lock_file.touch()
 
-            # Modify the file's modified time to be older than the 300s timeout
+
             stale_time = time.time() - 400
             os.utime(lock_file, (stale_time, stale_time))
 
@@ -107,7 +107,7 @@ class HelpViewTest(TestCase):
                 context = self.view.get_context_data()
 
                 self.assertFalse(context['build_in_progress'])
-                self.assertFalse(lock_file.exists())  # Ensure the view cleaned it up
+                self.assertFalse(lock_file.exists())
 
     def test_get_context_data_with_local_docs_available(self):
         """Test context when local documentation has been successfully built."""
@@ -115,7 +115,7 @@ class HelpViewTest(TestCase):
             temp_path = Path(temp_dir)
             base_dir = temp_path / 'project' / 'trustpoint'
 
-            # Setup fake directory structure for finished docs
+
             docs_index = base_dir.parent / 'docs' / 'build' / 'html' / 'index.html'
             docs_index.parent.mkdir(parents=True)
             docs_index.touch()
