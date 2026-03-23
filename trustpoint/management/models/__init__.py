@@ -3,6 +3,7 @@
 from management.models.appversion import AppVersion
 from management.models.audit_log import AuditLog
 from management.models.backup import BackupOptions
+from management.models.internationalization import InternationalizationConfig
 from management.models.key_storage import KeyStorageConfig
 from management.models.logging import LoggingConfig
 from management.models.notifications import (
@@ -22,6 +23,7 @@ __all__ = [
     'AppVersion',
     'AuditLog',
     'BackupOptions',
+    'InternationalizationConfig',
     'KeyStorageConfig',
     'LoggingConfig',
     'NotificationConfig',

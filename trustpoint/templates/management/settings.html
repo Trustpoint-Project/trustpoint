@@ -7,7 +7,7 @@
 <div class="tp-settings-layout">
 
   <div class="tp-settings-tabs">
-    <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=language" data-settings-tab="panel-language">{% trans "Language" %}</a>
+    <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=internationalization" data-settings-tab="panel-internationalization">{% trans "Internationalization" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=security" data-settings-tab="panel-security">{% trans "Security" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=log" data-settings-tab="panel-log">{% trans "Logging" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=notifications" data-settings-tab="panel-notifications">{% trans "Notifications" %}</a>
@@ -15,8 +15,8 @@
 
   <div class="tp-settings-content">
 
-    <div id="panel-language" class="tp-settings-panel">
-      {% include 'management/includes/language_configuration.html' with form=language_form %}
+    <div id="panel-internationalization" class="tp-settings-panel">
+      {% include 'management/includes/internationalization_configuration.html' with form=internationalization_form %}
     </div>
 
     <div id="panel-security" class="tp-settings-panel">
@@ -37,7 +37,7 @@
 <script>
 (function () {
     var STORAGE_KEY = 'settings_tab_active';
-    var DEFAULT_TAB = 'panel-language';
+    var DEFAULT_TAB = 'panel-internationalization';
 
     var tabs = document.querySelectorAll('[data-settings-tab]');
     var panels = document.querySelectorAll('.tp-settings-panel');

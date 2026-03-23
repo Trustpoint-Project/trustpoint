@@ -1,5 +1,6 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
+{% load internationalization_tags %}
 
 {% block content %}
 
@@ -71,8 +72,8 @@
                                 {% endif %}
                             </td>
                             <td>{{ cred.issued_using_cert_profile }}</td>
-                            <td>{{ cred.created_at }}</td>
-                            <td>{{ cred.expiration_date }}</td>
+                            <td>{{ cred.created_at|local_datetime }}</td>
+                            <td>{{ cred.expiration_date|local_datetime }}</td>
                             <td>{{ cred.expires_in }}</td>
                             <td class="text-nowrap">
                                 {% if not cred.credential.certificate %}
@@ -157,8 +158,8 @@
                                 {% endif %}
                             </td>
                             <td>{{ cred.issued_using_cert_profile }}</td>
-                            <td>{{ cred.created_at }}</td>
-                            <td>{{ cred.expiration_date }}</td>
+                            <td>{{ cred.created_at|local_datetime }}</td>
+                            <td>{{ cred.expiration_date|local_datetime }}</td>
                             <td>{{ cred.expires_in }}</td>
                             <td class="text-nowrap">
                                 {% if not cred.credential.certificate %}

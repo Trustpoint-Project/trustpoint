@@ -15,8 +15,13 @@ from django.views import View
 from django.views.generic import TemplateView
 from django.views.generic.edit import FormView
 
-from management.forms import LanguageConfigForm, LoggingConfigForm, NotificationConfigForm, SecurityConfigForm
-from management.models import LoggingConfig, NotificationConfig, SecurityConfig
+from management.forms import (
+    InternationalizationConfigForm,
+    LoggingConfigForm,
+    NotificationConfigForm,
+    SecurityConfigForm,
+)
+from management.models import InternationalizationConfig, LoggingConfig, NotificationConfig, SecurityConfig
 from management.models.audit_log import AuditLog
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
@@ -29,7 +34,7 @@ if TYPE_CHECKING:
 
 
 class SettingsFormViewMixin[FormType: (
-    LanguageConfigForm | LoggingConfigForm | NotificationConfigForm | SecurityConfigForm
+    InternationalizationConfigForm | LoggingConfigForm | NotificationConfigForm | SecurityConfigForm
 )](
     PageContextMixin,
     SecurityLevelMixin,
@@ -80,10 +85,10 @@ class SettingsTabView(TemplateView):
 
         context['active_tab'] = self.request.GET.get('tab', 'language')
 
-        language_view = LanguageSettingsView()
-        language_view.request = self.request
-        language_view.setup(self.request)
-        context['language_form'] = language_view.get_form()
+        internationalization_view = InternationalizationSettingsView()
+        internationalization_view.request = self.request
+        internationalization_view.setup(self.request)
+        context['internationalization_form'] = internationalization_view.get_form()
 
         security_view = SecuritySettingsView()
         security_view.request = self.request
@@ -108,36 +113,68 @@ class SettingsTabView(TemplateView):
         return context
 
 
-class LanguageSettingsView(SettingsFormViewMixin[LanguageConfigForm]):
-    """View for managing language settings."""
 
-    template_name = 'management/includes/language_configuration.html'
-    form_class = LanguageConfigForm
-    setting_type = 'language'
+
+
+class InternationalizationSettingsView(SettingsFormViewMixin[InternationalizationConfigForm]):
+    """View for managing internationalization settings."""
+
+    template_name = 'management/includes/internationalization_configuration.html'
+    form_class = InternationalizationConfigForm
+    setting_type = 'internationalization'
 
     def get_initial(self) -> dict[str, Any]:
-        """Get initial form data."""
+        """Get initial form data with current internationalization settings."""
         initial = super().get_initial()
-        initial['language'] = translation.get_language()
+
+        config, _ = InternationalizationConfig.objects.get_or_create(
+            id=1,
+            defaults={
+                'date_format': InternationalizationConfig.DateFormatChoices.YYYY_MM_DD_24_SEC,
+                'language': translation.get_language() or InternationalizationConfig.LanguageChoices.EN,
+                'timezone': 'UTC',
+            },
+        )
+
+        initial['date_format'] = config.date_format
+        initial['language'] = config.language
+        initial['timezone'] = config.timezone
         return initial
 
-    def form_valid(self, form: LanguageConfigForm) -> HttpResponse:
-        """Handle valid language form submission."""
+    def form_valid(self, form: InternationalizationConfigForm) -> HttpResponse:
+        """Handle valid internationalization form submission."""
+        date_format = form.cleaned_data['date_format']
         language = form.cleaned_data['language']
+        timezone = form.cleaned_data['timezone']
+
+        self.logger.info(
+            'Changing internationalization settings to: date_format=%s, language=%s, timezone=%s',
+            date_format,
+            language,
+            timezone,
+        )
+
+        InternationalizationConfig.objects.update_or_create(
+            id=1,
+            defaults={
+                'date_format': date_format,
+                'language': language,
+                'timezone': timezone,
+            },
+        )
 
         translation.activate(language)
 
         response = redirect(self.get_success_url())
-
         response.set_cookie(
             key='django_language',
             value=language,
-            max_age=365 * 24 * 60 * 60,  # 1 year
+            max_age=365 * 24 * 60 * 60,
             path='/',
             samesite='Lax',
         )
 
-        messages.success(self.request, _('Language changed successfully.'))
+        messages.success(self.request,_('Internationalization configuration saved successfully.'))
         return response
 
 

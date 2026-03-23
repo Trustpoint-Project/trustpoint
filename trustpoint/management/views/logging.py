@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import render
-from django.utils.translation import gettext as _
 from django.views.generic import TemplateView, View
 from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
@@ -150,43 +149,38 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
         return first_date, last_date
 
     @classmethod
-    def _get_log_file_data(cls, log_filename: str) -> dict[str, str]:
+    def _get_log_file_data(cls, log_filename: str) -> dict[str, str | datetime.datetime | None]:
         try:
-            log_file_path = _validate_log_filename(log_filename)
+         log_file_path = _validate_log_filename(log_filename)
         except Http404:
             return {}
 
         first_date, last_date = cls._get_first_and_last_entry_date(log_file_path)
-        if isinstance(first_date, datetime.datetime):
-            created_at = first_date.strftime(f'{DATE_FORMAT} UTC')
-        else:
-            created_at = _('None')
 
-        if isinstance(last_date, datetime.datetime):  # noqa: SIM108
-            updated_at = last_date.strftime(f'{DATE_FORMAT} UTC')
-        else:
-            updated_at = _('None')
+        return {
+            'filename': log_filename,
+            'created_at': first_date,
+            'updated_at': last_date,
+    }
 
-        return {'filename': log_filename, 'created_at': created_at, 'updated_at': updated_at}
-
-    def get_queryset(self) -> list[dict[str, str]]:  # type: ignore[override]
+    def get_queryset(self) -> list[dict[str, str | datetime.datetime | None]]:  # type: ignore[override]
         """Gets a queryset of all valid Trustpoint log files in the log directory."""
         all_files = [file.name for file in LOG_DIR_PATH.iterdir()]
 
         file_data_list = [self._get_log_file_data(log_file_name) for log_file_name in all_files]
 
-        self.queryset = [data for data in file_data_list if data]
+        queryset: list[dict[str, str | datetime.datetime | None]] = [
+            data for data in file_data_list if data
+        ]
 
-        def sort_key(item: dict[str, str]) -> datetime.datetime:
-            if item['updated_at'] == _('None'):
+        def sort_key(item: dict[str, str | datetime.datetime | None]) -> datetime.datetime:
+            updated_at = item.get('updated_at')
+            if not isinstance(updated_at, datetime.datetime):
                 return datetime.datetime.min.replace(tzinfo=datetime.UTC)
-            date_str = item['updated_at'][:-4]
-            return datetime.datetime.strptime(date_str, DATE_FORMAT).replace(tzinfo=datetime.UTC)
+            return updated_at
 
-        self.queryset.sort(key=sort_key, reverse=True)
-        return self.queryset
-
-
+        queryset.sort(key=sort_key, reverse=True)
+        return queryset
 
 
 class LoggingFilesDetailsView(PageContextMixin, LoggerMixin, TemplateView):

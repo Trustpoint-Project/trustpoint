@@ -1,5 +1,6 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
+{% load internationalization_tags %}
 
 {% block content %}
 
@@ -61,7 +62,7 @@
                         </td>
                         <td>
                             {% if ca.display_not_valid_after %}
-                                {{ ca.display_not_valid_after }}
+                                {{ ca.display_not_valid_after|local_datetime }}
                             {% else %}
                                 -
                             {% endif %}
