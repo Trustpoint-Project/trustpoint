@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo, available_timezones
+
+if TYPE_CHECKING:
+    from datetime import datetime
 
 from django.db import models
 from django.utils import timezone
@@ -40,10 +43,11 @@ class InternationalizationConfig(models.Model):
     last_updated = models.DateTimeField(auto_now=True)
 
     def __str__(self) -> str:
+        """Return a readable string representation of the configuration."""
         return f'{self.get_date_format_display()} | {self.language} | {self.timezone}'
 
     @classmethod
-    def get_current(cls) -> "InternationalizationConfig":
+    def get_current(cls) -> InternationalizationConfig:
         """Return the current internationalization configuration."""
         config, _ = cls.objects.get_or_create(
             id=1,
@@ -57,15 +61,15 @@ class InternationalizationConfig(models.Model):
 
     def get_python_datetime_format(self) -> str:
         """Return the configured format as Python strftime format."""
-        format_map = {
-            self.DateFormatChoices.DD_MM_YYYY_24: '%d/%m/%Y %H:%M',
-            self.DateFormatChoices.MM_DD_YYYY_24: '%m/%d/%Y %H:%M',
-            self.DateFormatChoices.DD_MMM_YYYY_24: '%d %b %Y %H:%M',
-            self.DateFormatChoices.DD_MMM_YYYY_12: '%d %b %Y %I:%M %p',
-            self.DateFormatChoices.DD_MMMM_YYYY_24_SEC: '%d %B %Y %H:%M:%S',
-            self.DateFormatChoices.DD_MMMM_YYYY_12_SEC: '%d %B %Y %I:%M:%S %p',
-            self.DateFormatChoices.YYYY_MM_DD_24_SEC: '%Y-%m-%d %H:%M:%S',
-            self.DateFormatChoices.ISO_LIKE: '%Y-%m-%dT%H:%M:%S',
+        format_map: dict[str, str] = {
+            '0': '%d/%m/%Y %H:%M',
+            '1': '%m/%d/%Y %H:%M',
+            '2': '%d %b %Y %H:%M',
+            '3': '%d %b %Y %I:%M %p',
+            '4': '%d %B %Y %H:%M:%S',
+            '5': '%d %B %Y %I:%M:%S %p',
+            '6': '%Y-%m-%d %H:%M:%S',
+            '7': '%Y-%m-%dT%H:%M:%S',
         }
         return format_map.get(self.date_format, '%Y-%m-%d %H:%M:%S')
 

@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any
 
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import render
-from django.utils.translation import gettext as _
 from django.views.generic import TemplateView, View
 from django.views.generic.base import RedirectView
 from django.views.generic.list import ListView
@@ -150,7 +149,7 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
         return first_date, last_date
 
     @classmethod
-    def _get_log_file_data(cls, log_filename: str) -> dict[str, object]:
+    def _get_log_file_data(cls, log_filename: str) -> dict[str, str | datetime.datetime | None]:
         try:
          log_file_path = _validate_log_filename(log_filename)
         except Http404:
@@ -164,7 +163,7 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
             'updated_at': last_date,
     }
 
-    def get_queryset(self) -> list[dict[str, object]]:  # type: ignore[override]
+    def get_queryset(self) -> list[dict[str, str | datetime.datetime | None]]:  # type: ignore[override]
         """Gets a queryset of all valid Trustpoint log files in the log directory."""
         all_files = [file.name for file in LOG_DIR_PATH.iterdir()]
 
@@ -172,7 +171,7 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
 
         self.queryset = [data for data in file_data_list if data]
 
-        def sort_key(item: dict[str, object]) -> datetime.datetime:
+        def sort_key(item: dict[str, str | datetime.datetime | None]) -> datetime.datetime:
             updated_at = item.get('updated_at')
             if not isinstance(updated_at, datetime.datetime):
                 return datetime.datetime.min.replace(tzinfo=datetime.UTC)

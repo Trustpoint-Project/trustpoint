@@ -2,9 +2,9 @@
 
 from management.models.appversion import AppVersion
 from management.models.backup import BackupOptions
+from management.models.internationalization import InternationalizationConfig
 from management.models.key_storage import KeyStorageConfig
 from management.models.logging import LoggingConfig
-from management.models.internationalization import InternationalizationConfig
 from management.models.notifications import (
     NotificationConfig,
     NotificationMessage,
@@ -21,6 +21,7 @@ from management.models.tls import TlsSettings
 __all__ = [
     'AppVersion',
     'BackupOptions',
+    'InternationalizationConfig',
     'KeyStorageConfig',
     'LoggingConfig',
     'NotificationConfig',
@@ -33,5 +34,4 @@ __all__ = [
     'TlsSettings',
     'WeakECCCurve',
     'WeakSignatureAlgorithm',
-    'InternationalizationConfig',
 ]

@@ -15,7 +15,12 @@ from django.views import View
 from django.views.generic import TemplateView
 from django.views.generic.edit import FormView
 
-from management.forms import InternationalizationConfigForm, LoggingConfigForm, NotificationConfigForm, SecurityConfigForm
+from management.forms import (
+    InternationalizationConfigForm,
+    LoggingConfigForm,
+    NotificationConfigForm,
+    SecurityConfigForm,
+)
 from management.models import InternationalizationConfig, LoggingConfig, NotificationConfig, SecurityConfig
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
@@ -170,7 +175,7 @@ class InternationalizationSettingsView(SettingsFormViewMixin[Internationalizatio
 
         messages.success(self.request,_('Internationalization configuration saved successfully.'))
         return response
-    
+
 
 class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
     """View for managing security settings."""

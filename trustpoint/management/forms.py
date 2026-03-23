@@ -24,12 +24,12 @@ from trustpoint_core.serializer import (
 
 from management.models import (
     BackupOptions,
+    InternationalizationConfig,
     KeyStorageConfig,
     LoggingConfig,
     NotificationConfig,
     PKCS11Token,
     SecurityConfig,
-    InternationalizationConfig,
 )
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature

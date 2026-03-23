@@ -1,3 +1,5 @@
+"""Template filters for internationalization formatting."""
+
 from datetime import datetime
 
 from django import template
@@ -8,16 +10,10 @@ register = template.Library()
 
 
 @register.filter
-def local_datetime(value):
+def local_datetime(value: datetime | str | None) -> str:
     """Format datetime using current internationalization settings."""
-    if value in (None, ''):
-        return ''
-
     if isinstance(value, str):
-        try:
-            value = datetime.fromisoformat(value)
-        except ValueError:
-            return value
+        return value
 
     config = InternationalizationConfig.get_current()
     return config.format_datetime(value)
