@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load crispy_forms_filters %}
+{% load internationalization_tags %}
 {% block content %}
     <div class="card tp-card-centered">
         <div class="card-header">
@@ -18,11 +19,11 @@
                     </div>
                     <div>
                         <div>{% trans 'Updated' %}</div>
-                        <div>{{ signer.updated_at }}</div>
+                        <div>{{ signer.updated_at|local_datetime }}</div>
                     </div>
                     <div>
                         <div>{% trans 'Created' %}</div>
-                        <div>{{ signer.created_at }}</div>
+                        <div>{{ signer.created_at|local_datetime }}</div>
                     </div>
                 </div>
 
@@ -75,11 +76,11 @@
                     </div>
                     <div>
                         <div>{% trans 'Valid From' %}</div>
-                        <div>{{ signer.credential.certificate.not_valid_before }}</div>
+                        <div>{{ signer.credential.certificate.not_valid_before|local_datetime }}</div>
                     </div>
                     <div>
                         <div>{% trans 'Valid Until' %}</div>
-                        <div>{{ signer.credential.certificate.not_valid_after }}</div>
+                        <div>{{ signer.credential.certificate.not_valid_after|local_datetime }}</div>
                     </div>
                 </div>
 

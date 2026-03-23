@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
+from zoneinfo import available_timezones
 
 from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
@@ -23,6 +24,7 @@ from trustpoint_core.serializer import (
 
 from management.models import (
     BackupOptions,
+    InternationalizationConfig,
     KeyStorageConfig,
     LoggingConfig,
     NotificationConfig,
@@ -840,27 +842,6 @@ class PKCS11ConfigForm(forms.Form):
             token.save()
         return token
 
-
-class LanguageConfigForm(forms.Form):
-    """Form for managing language configuration."""
-
-    language = forms.ChoiceField(
-        label=_('Language'),
-        widget=forms.Select(attrs={'class': 'form-select'}),
-    )
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the LanguageConfigForm."""
-        super().__init__(*args, **kwargs)
-
-        language_field = self.fields['language']
-        if isinstance(language_field, forms.ChoiceField):
-            language_field.choices = settings.LANGUAGES
-
-    def save(self) -> None:
-        """Save method for form compatibility (language is handled by Django's set_language view)."""
-
-
 class LoggingConfigForm(forms.Form):
     """Form for managing logging configuration."""
 
@@ -886,4 +867,58 @@ class LoggingConfigForm(forms.Form):
         LoggingConfig.objects.update_or_create(
             id=1,
             defaults={'log_level': level}
+        )
+
+class InternationalizationConfigForm(forms.Form):
+    """Form for managing internationalization configuration."""
+
+    DATE_FORMATS: ClassVar[list[tuple[str, str]]] = [
+        ('0', 'dd/MM/yyyy HH:mm'),
+        ('1', 'MM/dd/yyyy HH:mm'),
+        ('2', 'dd MMM yyyy HH:mm'),
+        ('3', 'dd MMM yyyy hh:mm a'),
+        ('4', 'dd MMMM yyyy HH:mm:ss'),
+        ('5', 'dd MMMM yyyy hh:mm:ss a'),
+        ('6', 'yyyy-MM-dd HH:mm:ss'),
+        ('7', "yyyy-MM-dd'T'HH:mm:ss"),
+    ]
+
+    TIMEZONES: ClassVar[list[tuple[str, str]]] = sorted(
+        (tz, tz) for tz in available_timezones()
+    )
+
+    date_format = forms.ChoiceField(
+        label=_('Date Format'),
+        choices=DATE_FORMATS,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    language = forms.ChoiceField(
+        label=_('System Language'),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    timezone = forms.ChoiceField(
+        label=_('Timezone'),
+        choices=TIMEZONES,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form."""
+        super().__init__(*args, **kwargs)
+
+        language_field = self.fields['language']
+        if isinstance(language_field, forms.ChoiceField):
+            language_field.choices = settings.LANGUAGES
+
+    def save(self) -> None:
+        """Save the internationalization configuration."""
+        InternationalizationConfig.objects.update_or_create(
+            id=1,
+            defaults={
+                'date_format': self.cleaned_data['date_format'],
+                'language': self.cleaned_data['language'],
+                'timezone': self.cleaned_data['timezone'],
+            }
         )

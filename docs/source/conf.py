@@ -35,7 +35,7 @@ plantuml = f'java -jar {PLANTUML_PATH}'
 project = 'Trustpoint'
 copyright = '2026, Trustpoint Project'  # noqa: A001
 author = 'Trustpoint Project'
-release = '0.5.0'  # Project version
+release = '0.6.0.dev1'  # Project version
 
 # -- General configuration --------------------------------------------------
 extensions = [
