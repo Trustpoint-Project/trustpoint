@@ -7,7 +7,7 @@
 <div class="card mb-4">
     <div class="card-header">
         <h2 class="mb-0">
-            {% trans "DevOwnerID" %}: <strong>{{ owner_credential.unique_name }}</strong>
+            {% trans "Zero-Touch Credential" %}: <strong>{{ owner_credential.unique_name }}</strong>
         </h2>
     </div>
     <div class="card-body">
@@ -77,13 +77,13 @@
                             <td>{{ cred.expires_in }}</td>
                             <td class="text-nowrap">
                                 {% if not cred.credential.certificate %}
-                                <a href="{% url 'pki:owner_credentials-request-domain-credential-est' pk=owner_credential.pk %}"
+                                <a href="{% url 'devices:zero_touch_credentials-request-domain-credential-est' pk=owner_credential.pk %}"
                                    class="btn btn-primary tp-table-btn me-1"
                                    title="{% trans 'Resume enrollment' %}">
                                     {% trans 'Resume' %}
                                 </a>
                                 {% endif %}
-                                <a href="{% url 'pki:owner_credentials-issued-credential-delete' owner_pk=owner_credential.pk pk=cred.pk %}"
+                                <a href="{% url 'devices:zero_touch_credentials-issued-credential-delete' owner_pk=owner_credential.pk pk=cred.pk %}"
                                    class="btn btn-danger tp-table-btn"
                                    title="{% trans 'Delete credential' %}">
                                     {% trans 'Delete' %}
@@ -102,7 +102,7 @@
             </div>
             <div class="card-footer d-flex justify-content-end">
                 <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'pki:owner_credentials-define-cert-content-domain-credential-est' pk=owner_credential.pk %}"
+                    <a href="{% url 'devices:zero_touch_credentials-define-cert-content-domain-credential-est' pk=owner_credential.pk %}"
                        class="btn btn-primary">
                         {% trans 'Issue Domain Credential' %}
                     </a>
@@ -115,9 +115,9 @@
             <div class="card-header">
                 <h2 class="mb-0">
                     {% if owner_credential.owner_credential_type == 0 %}
-                        {% trans "Uploaded DevOwnerIDs" %}
+                        {% trans "Uploaded Zero-Touch Credentials" %}
                     {% else %}
-                        {% trans "Issued DevOwnerIDs" %}
+                        {% trans "Issued Zero-Touch Credentials" %}
                     {% endif %}
                 </h2>
             </div>
@@ -163,13 +163,13 @@
                             <td>{{ cred.expires_in }}</td>
                             <td class="text-nowrap">
                                 {% if not cred.credential.certificate %}
-                                <a href="{% url 'pki:owner_credentials-request-cert-est' pk=owner_credential.pk %}"
+                                <a href="{% url 'devices:zero_touch_credentials-request-cert-est' pk=owner_credential.pk %}"
                                    class="btn btn-primary tp-table-btn me-1"
                                    title="{% trans 'Resume enrollment' %}">
                                     {% trans 'Resume' %}
                                 </a>
                                 {% endif %}
-                                <a href="{% url 'pki:owner_credentials-issued-credential-delete' owner_pk=owner_credential.pk pk=cred.pk %}"
+                                <a href="{% url 'devices:zero_touch_credentials-issued-credential-delete' owner_pk=owner_credential.pk pk=cred.pk %}"
                                    class="btn btn-danger tp-table-btn"
                                    title="{% trans 'Delete credential' %}">
                                     {% trans 'Delete' %}
@@ -179,7 +179,7 @@
                         {% empty %}
                         <tr>
                             <td colspan="6" class="text-center">
-                                {% trans 'No credentials have been issued to this DevOwnerID yet.' %}
+                                {% trans 'No Zero-Touch Credentials have been issued yet.' %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -193,13 +193,13 @@
                     <a href="#"
                        class="btn btn-primary disabled"
                        aria-disabled="true"
-                       title="{% trans 'A valid domain credential is required before issuing a DevOwnerID.' %}">
-                        {% trans 'Issue DevOwnerID' %}
+                       title="{% trans 'A valid domain credential is required before issuing a Zero-Touch Credential.' %}">
+                        {% trans 'Issue Zero-Touch Credential' %}
                     </a>
                     {% else %}
-                    <a href="{% url 'pki:owner_credentials-define-cert-content-est' pk=owner_credential.pk %}"
+                    <a href="{% url 'devices:zero_touch_credentials-define-cert-content-est' pk=owner_credential.pk %}"
                        class="btn btn-primary">
-                        {% trans 'Issue DevOwnerID' %}
+                        {% trans 'Issue Zero-Touch Credential' %}
                     </a>
                     {% endif %}
                 </div>
@@ -210,7 +210,7 @@
     </div>
     <div class="card-footer d-flex">
         <div class="tp-card-btn-footer m-1">
-            <a href="{% url 'pki:owner_credentials' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
+            <a href="{{ back_url|default:'#' }}" class="btn btn-secondary">{% trans 'Back' %}</a>
         </div>
     </div>
 </div>

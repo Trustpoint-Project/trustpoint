@@ -16,7 +16,7 @@
             <div class="card-body">
                 <div class="tp-card-centered-content">
                     <h2>{% trans 'TLS Trust Store Association' %}</h2>
-                    <p>{% blocktrans with name=owner_credential.unique_name %}Select a TLS trust store to associate with DevOwnerID "{{ name }}".{% endblocktrans %}</p>
+                    <p>{% blocktrans with name=owner_credential.unique_name %}Select a TLS trust store to associate with Zero-Touch Credential "{{ name }}".{% endblocktrans %}</p>
                     <div class="alert alert-info" role="alert">
                         <strong>{% trans 'TLS Certificate:' %}</strong>
                         {% trans 'Import the TLS server certificate of the remote EST server. This certificate is used to verify the HTTPS connection during EST enrollment.' %}
@@ -30,7 +30,7 @@
             </div>
             <div class="card-footer d-flex justify-content-between align-items-center">
                 <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'pki:owner_credentials' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
+                    <a href="{% url 'devices:zero_touch_credentials' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
                     <button type="submit" class="btn btn-primary">{% trans "Associate Trust Store" %}</button>
                 </div>
             </div>

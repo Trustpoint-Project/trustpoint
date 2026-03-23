@@ -13,6 +13,7 @@ from .base import (
 from .cmp import CmpAuthorization
 from .est import EstAuthorization
 from .manual import ManualAuthorization
+from .rest import RestAuthorization
 
 __all__ = [
     'AuthorizationComponent',
@@ -25,5 +26,6 @@ __all__ = [
     'ManualAuthorization',
     'OnboardingDomainCredentialAuthorization',
     'ProtocolAuthorization',
+    'RestAuthorization',
     'SecurityConfigAuthorization',
 ]

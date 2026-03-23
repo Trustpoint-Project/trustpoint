@@ -8,7 +8,7 @@
         <div class="card">
             <div class="card-header">
                 <div>
-                    <h1>{% trans 'Add new DevOwnerID' %}</h1>
+                    <h1>{% trans 'Add Zero-Touch Credential' %}</h1>
                 </div>
             </div>
             <div class="card-body">
@@ -21,9 +21,9 @@
             </div>
             <div class="card-footer d-flex">
                 <div class="tp-card-btn-footer m-1">
-                    <a href="{% url 'pki:owner_credentials-add' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
-                    <button type="submit" name="action" value="add_only" class="btn btn-primary">{% trans 'Add DevOwnerID' %}</button>
-                    <button type="submit" name="action" value="add_with_truststore" class="btn btn-primary">{% trans 'DevOwnerID with Truststore' %}</button>
+                    <a href="{% url 'devices:zero_touch_credentials-add' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                    <button type="submit" name="action" value="add_only" class="btn btn-primary">{% trans 'Add Zero-Touch Credential' %}</button>
+                    <button type="submit" name="action" value="add_with_truststore" class="btn btn-primary">{% trans 'Add with Truststore' %}</button>
                 </div>
             </div>
         </div>

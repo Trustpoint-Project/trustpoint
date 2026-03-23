@@ -4,7 +4,10 @@
 {% block content %}
     <div class="card">
         <div class="card-header">
-            <h1>{% trans 'Request DevOwnerID via EST' %}</h1>
+            <h1>{% trans 'Add Zero-Touch Credential' %}</h1>
+            <p class="text-muted mb-0">
+                {% trans 'Choose how you want to add a new Zero-Touch Credential (DevOwnerID) for AOKI-based device onboarding.' %}
+            </p>
         </div>
 
         <div class="card-body py-3">
@@ -12,38 +15,39 @@
 
                 <div class="card d-flex flex-column" style="max-width: 400px; width: 100%;">
                     <div class="card-body d-flex flex-column">
-                        <h5 class="card-title"><strong>{% trans 'Basic authentication' %}</strong></h5>
+                        <h5 class="card-title"><strong>{% trans 'File Import' %}</strong></h5>
                         <hr class="hr-m">
                         <p class="card-text flex-grow-1">
-                            {% trans 'Authenticate directly to the remote EST server using a username and password (HTTP Basic Auth) to retrieve the DevOwnerID certificate.' %}
+                            {% trans 'Upload an existing Zero-Touch Credential from a private key file and certificate file stored on your local machine.' %}
                         </p>
-                        <a href="{% url 'pki:owner_credentials-add-est-no-onboarding' %}"
+                        <a href="{% url 'devices:zero_touch_credentials-add-file_import' %}"
                            class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
-                            {% trans 'Basic authentication' %}
+                            {% trans 'File Import' %}
                         </a>
                     </div>
                 </div>
 
                 <div class="card d-flex flex-column" style="max-width: 400px; width: 100%;">
                     <div class="card-body d-flex flex-column">
-                        <h5 class="card-title"><strong>{% trans 'Mutual TLS authentication' %}</strong></h5>
+                        <h5 class="card-title"><strong>{% trans 'Request via EST' %}</strong></h5>
                         <hr class="hr-m">
                         <p class="card-text flex-grow-1">
-                            {% trans 'Two-step enrollment: first request a client certificate from the remote EST server using username/password, then use that client certificate to request the DevOwnerID.' %}
+                            {% trans 'Generate a key pair and request a new Zero-Touch Credential certificate from a remote CA using the Enrollment over Secure Transport (EST) protocol.' %}
                         </p>
-                        <a href="{% url 'pki:owner_credentials-add-est-onboarding' %}"
+                        <a href="{% url 'devices:zero_touch_credentials-add-est' %}"
                            class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
-                            {% trans 'Mutual TLS authentication' %}
+                            {% trans 'Request via EST' %}
                         </a>
                     </div>
                 </div>
 
             </div>
+
         </div>
 
         <div class="card-footer d-flex">
             <div class="tp-card-btn-footer m-1">
-                <a href="{% url 'pki:owner_credentials-add' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
+                <a href="{% url 'devices:zero_touch_credentials' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
             </div>
         </div>
     </div>

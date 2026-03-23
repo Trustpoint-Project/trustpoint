@@ -5,7 +5,7 @@
 {% block content %}
 <div class="card">
     <div class="card-header">
-        <h1>{% trans 'Issue DevOwnerID Certificate for' %} "{{ owner_credential.unique_name }}"</h1>
+        <h1>{% trans 'Issue Zero-Touch Credential Certificate for' %} "{{ owner_credential.unique_name }}"</h1>
         <p class="text-muted">{% trans 'Using profile:' %} {{ cert_profile.display_name|default:cert_profile.unique_name }}</p>
     </div>
     <form method="post">
@@ -57,7 +57,7 @@
                                         {% if field.name == 'uris' %}
                                         <small class="form-text text-muted">
                                             {% blocktrans %}
-                                            One URI per line. The DevOwnerID profile requires at least one URI
+                                            One URI per line. The Zero-Touch Credential profile requires at least one URI
                                             referencing an IDevID in the format:<br>
                                             <code>dev-owner:&lt;IDevID_Subject_SN&gt;.&lt;IDevID_X509_SN&gt;.&lt;IDevID_SHA256_Fingerprint&gt;</code><br>
                                             Example: <code>dev-owner:SN-12345678.0123456789ABCDEF.AA:BB:CC:DD:EE:FF</code>
@@ -88,7 +88,7 @@
         </div>
         <div class="card-footer d-flex justify-content-between">
             <div class="tp-card-btn-footer m-1">
-                <a href="{% url 'pki:owner_credentials-clm' pk=owner_credential.pk %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                <a href="{% url 'devices:zero_touch_credentials-clm' pk=owner_credential.pk %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
             </div>
             <div class="tp-card-btn-footer m-1">
                 <button type="submit" class="btn btn-primary">{% trans 'Continue to Request Certificate' %}</button>
