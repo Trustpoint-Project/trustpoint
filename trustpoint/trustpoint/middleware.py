@@ -151,7 +151,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
 
         if redirect_dest:
             self.logger.critical(f'redirecting dest: {redirect_dest}')
-            return redirect(redirect_dest, premanent=False)
+            return redirect(redirect_dest, permanent=False)
 
         self.logger.critical(f'NOT redirecting')
         return self.get_response(request)
