@@ -2019,9 +2019,7 @@ class AokiEstHelpView(PageContextMixin, TemplateView):
         return context
 
 
-# --------------------------------- AOKI Demo Environment (shared by CMP and EST help) --------------------------------
 
-# Files produced by aoki_gen_test_certs / aoki_setup_idevid_test_env that users may download.
 _AOKI_DEMO_CERT_FILES: list[tuple[str, str]] = [
     ('idevid.pem', 'IDevID Certificate'),
     ('idevid_pk.pem', 'IDevID Private Key'),
@@ -2031,12 +2029,10 @@ _AOKI_DEMO_CERT_FILES: list[tuple[str, str]] = [
     ('ownerid_ca.pem', 'Owner CA Certificate'),
 ]
 
-# Resolved path to the generated certificate directory.
 _AOKI_DEMO_CERTS_DIR: Path = (
     Path(__file__).resolve().parents[1] / 'aoki' / 'tests' / 'certs'
 )
 
-# Allowed file names (whitelist) for the download view.
 _AOKI_DEMO_ALLOWED_FILES: frozenset[str] = frozenset(name for name, _ in _AOKI_DEMO_CERT_FILES)
 
 
@@ -2049,7 +2045,6 @@ def _build_aoki_demo_section(request: Any) -> HelpSection:
         kwargs={'filename': 'placeholder'},
     ).replace('placeholder', '')
 
-    # Build download buttons HTML
     download_buttons_html = ''
     for filename, label in _AOKI_DEMO_CERT_FILES:
         file_path = _AOKI_DEMO_CERTS_DIR / filename
@@ -2104,7 +2099,7 @@ class AokiSetupDemoEnvView(PageContextMixin, View):
 
     def post(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
         """Run setup command and redirect back."""
-        del args, kwargs  # unused
+        del args, kwargs
         try:
             call_command('aoki_setup_idevid_test_env')
             messages.success(
@@ -2133,7 +2128,7 @@ class AokiDemoDownloadView(PageContextMixin, View):
 
     def get(self, request: Any, filename: str, *args: Any, **kwargs: Any) -> FileResponse:
         """Stream the requested certificate / key file."""
-        del request, args, kwargs  # unused
+        del request, args, kwargs
         if filename not in _AOKI_DEMO_ALLOWED_FILES:
             raise Http404
         file_path = _AOKI_DEMO_CERTS_DIR / filename
