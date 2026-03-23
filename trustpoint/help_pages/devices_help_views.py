@@ -4,16 +4,19 @@ from __future__ import annotations
 
 import ipaddress
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, override
 
 from cryptography import x509
 from django.contrib import messages
-from django.http import Http404
+from django.core.management import call_command
+from django.http import FileResponse, Http404, HttpResponseRedirect
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.safestring import SafeString
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
-from django.views.generic.base import TemplateView
+from django.views.generic.base import TemplateView, View
 from django.views.generic.detail import DetailView
 from pydantic import ValidationError as PydanticValidationError
 
@@ -1617,6 +1620,16 @@ class AokiCmpIDevIDStrategy(HelpPageStrategy):
                     'Ensure the domain has valid certificate profiles configured.',
                     ValueRenderType.PLAIN,
                 ),
+                HelpRow(
+                    _non_lazy('mDNS Responder'),
+                    'An mDNS responder must be running so that devices can discover Trustpoint via mDNS. '
+                    'This is an additional component that needs to be deployed as a separate Docker container. '
+                    'A ready-to-use Docker Compose file is provided in the Trustpoint repository: '
+                    'docker-compose.mdns.yml '
+                    '(https://github.com/Trustpoint-Project/trustpoint/blob/main/docker-compose.mdns.yml). '
+                    'Note: this does not work with Docker Desktop.',
+                    ValueRenderType.PLAIN,
+                ),
             ],
         )
 
@@ -1743,6 +1756,16 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
                     _non_lazy('Domain Mapping'),
                     "The domain is automatically configured through the truststore's registration pattern. "
                     'Ensure the domain has valid certificate profiles configured.',
+                    ValueRenderType.PLAIN,
+                ),
+                HelpRow(
+                    _non_lazy('mDNS Responder'),
+                    'An mDNS responder must be running so that devices can discover Trustpoint via mDNS. '
+                    'This is an additional component that needs to be deployed as a separate Docker container. '
+                    'A ready-to-use Docker Compose file is provided in the Trustpoint repository: '
+                    'docker-compose.mdns.yml '
+                    '(https://github.com/Trustpoint-Project/trustpoint/blob/main/docker-compose.mdns.yml). '
+                    'Note: this does not work with Docker Desktop.',
                     ValueRenderType.PLAIN,
                 ),
             ],
@@ -1878,11 +1901,31 @@ class AokiCmpHelpView(PageContextMixin, TemplateView):
         context = super().get_context_data(**kwargs)
 
         host_ip = self.request.GET.get('host_ip', '127.0.0.1')
-        help_context = self._make_context(host_ip=host_ip)
 
-        # Build CMP sections
-        strategy = AokiCmpIDevIDStrategy()
-        sections, heading = strategy.build_sections(help_context)
+        sections: list[HelpSection] = []
+        heading = _non_lazy('AOKI with CMP - IDevID Authentication')
+
+        try:
+            help_context = self._make_context(host_ip=host_ip)
+            strategy = AokiCmpIDevIDStrategy()
+            sections, heading = strategy.build_sections(help_context)
+        except Http404:
+            sections.append(
+                HelpSection(
+                    _non_lazy('Prerequisites'),
+                    [
+                        HelpRow(
+                            _non_lazy('No Domain Configured'),
+                            'No domain is configured in Trustpoint yet. '
+                            'Use the Demo Environment Setup section below to automatically '
+                            'set up a test environment, or configure a domain manually first.',
+                            ValueRenderType.PLAIN,
+                        ),
+                    ],
+                )
+            )
+
+        sections.append(_build_aoki_demo_section(self.request))
 
         context['help_page'] = HelpPage(heading=heading, sections=sections)
         context['form'] = IpAddressForm(ip_choices=['127.0.0.1'], initial={'host_ip': host_ip})
@@ -1942,10 +1985,31 @@ class AokiEstHelpView(PageContextMixin, TemplateView):
         context = super().get_context_data(**kwargs)
 
         host_ip = self.request.GET.get('host_ip', '127.0.0.1')
-        help_context = self._make_context(host_ip=host_ip)
 
-        strategy = AokiEstIDevIDStrategy()
-        sections, heading = strategy.build_sections(help_context)
+        sections: list[HelpSection] = []
+        heading = _non_lazy('AOKI with EST - IDevID Authentication (mTLS)')
+
+        try:
+            help_context = self._make_context(host_ip=host_ip)
+            strategy = AokiEstIDevIDStrategy()
+            sections, heading = strategy.build_sections(help_context)
+        except Http404:
+            sections.append(
+                HelpSection(
+                    _non_lazy('Prerequisites'),
+                    [
+                        HelpRow(
+                            _non_lazy('No Domain Configured'),
+                            'No domain is configured in Trustpoint yet. '
+                            'Use the Demo Environment Setup section below to automatically '
+                            'set up a test environment, or configure a domain manually first.',
+                            ValueRenderType.PLAIN,
+                        ),
+                    ],
+                )
+            )
+
+        sections.append(_build_aoki_demo_section(self.request))
 
         context['help_page'] = HelpPage(heading=heading, sections=sections)
         context['form'] = IpAddressForm(ip_choices=['127.0.0.1'], initial={'host_ip': host_ip})
@@ -1954,3 +2018,130 @@ class AokiEstHelpView(PageContextMixin, TemplateView):
         context['ValueRenderType_HTML'] = ValueRenderType.HTML.value
 
         return context
+
+
+# --------------------------------- AOKI Demo Environment (shared by CMP and EST help) --------------------------------
+
+# Files produced by aoki_gen_test_certs / aoki_setup_idevid_test_env that users may download.
+_AOKI_DEMO_CERT_FILES: list[tuple[str, str]] = [
+    ('idevid.pem', 'IDevID Certificate'),
+    ('idevid_pk.pem', 'IDevID Private Key'),
+    ('idevid_ca.pem', 'IDevID CA Certificate'),
+    ('owner_id.pem', 'DevOwnerID Certificate'),
+    ('owner_id_pk.pem', 'DevOwnerID Private Key'),
+    ('ownerid_ca.pem', 'Owner CA Certificate'),
+]
+
+# Resolved path to the generated certificate directory.
+_AOKI_DEMO_CERTS_DIR: Path = (
+    Path(__file__).resolve().parents[1] / 'aoki' / 'tests' / 'certs'
+)
+
+# Allowed file names (whitelist) for the download view.
+_AOKI_DEMO_ALLOWED_FILES: frozenset[str] = frozenset(name for name, _ in _AOKI_DEMO_CERT_FILES)
+
+
+def _build_aoki_demo_section(request: Any) -> HelpSection:
+    """Build the *Demo Environment Setup* help section for the AOKI help pages."""
+    del request
+    setup_url = reverse('devices:zero_touch_credentials-aoki_setup_demo_env')
+    download_base_url = reverse(
+        'devices:zero_touch_credentials-aoki_demo_download',
+        kwargs={'filename': 'placeholder'},
+    ).replace('placeholder', '')
+
+    # Build download buttons HTML
+    download_buttons_html = ''
+    for filename, label in _AOKI_DEMO_CERT_FILES:
+        file_path = _AOKI_DEMO_CERTS_DIR / filename
+        if file_path.exists():
+            download_buttons_html += (
+                f'<a href="{download_base_url}{filename}" '
+                f'class="btn btn-sm btn-outline-secondary me-2 mb-2" download="{filename}">'
+                f'\u2b07 {label} ({filename})</a>'
+            )
+        else:
+            download_buttons_html += (
+                f'<span class="btn btn-sm btn-outline-secondary me-2 mb-2 disabled" '
+                f'title="Run setup first">'
+                f'\u2b07 {label} ({filename})</span>'
+            )
+
+    setup_html = SafeString(
+        f'<form method="post" action="{setup_url}" style="display:inline;">'
+        f'CSRF_TOKEN_PLACEHOLDER'
+        f'<button type="submit" class="btn btn-primary mb-3">'
+        f'Run aoki_setup_idevid_test_env</button>'
+        f'</form>'
+        f'<div class="mt-2">{download_buttons_html}</div>'
+    )
+
+    return HelpSection(
+        _non_lazy('Demo Environment Setup'),
+        [
+            HelpRow(
+                _non_lazy('Setup'),
+                'Click the button below to generate a test IDevID PKI and DevOwnerID credential and '
+                'register them in Trustpoint automatically. Afterwards, download the '
+                'generated certificate and key files to use them with your AOKI client.',
+                ValueRenderType.PLAIN,
+            ),
+            HelpRow(
+                _non_lazy('Actions'),
+                setup_html,
+                ValueRenderType.HTML,
+            ),
+        ],
+    )
+
+
+class AokiSetupDemoEnvView(PageContextMixin, View):
+    """POST view that runs the ``aoki_setup_idevid_test_env`` management command."""
+
+    http_method_names = ('post',)
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
+
+    def post(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponseRedirect:
+        """Run setup command and redirect back."""
+        del args, kwargs  # unused
+        try:
+            call_command('aoki_setup_idevid_test_env')
+            messages.success(
+                request,
+                'AOKI demo environment set up successfully. '
+                'You can now download the generated certificate and key files.',
+            )
+        except Exception as exc:  # noqa: BLE001
+            messages.error(request, f'Setup failed: {exc}')
+
+        referer = request.META.get('HTTP_REFERER', '')
+        cmp_url = reverse('devices:zero_touch_credentials-aoki_cmp_help')
+        est_url = reverse('devices:zero_touch_credentials-aoki_est_help')
+        if referer.endswith(est_url):
+            return HttpResponseRedirect(est_url)
+        return HttpResponseRedirect(cmp_url)
+
+
+class AokiDemoDownloadView(PageContextMixin, View):
+    """Serve a single file from the AOKI demo certificate directory for download."""
+
+    http_method_names = ('get',)
+
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_ZERO_TOUCH_SUBCATEGORY
+
+    def get(self, request: Any, filename: str, *args: Any, **kwargs: Any) -> FileResponse:
+        """Stream the requested certificate / key file."""
+        del request, args, kwargs  # unused
+        if filename not in _AOKI_DEMO_ALLOWED_FILES:
+            raise Http404
+        file_path = _AOKI_DEMO_CERTS_DIR / filename
+        if not file_path.exists():
+            raise Http404
+        return FileResponse(
+            file_path.open('rb'),
+            as_attachment=True,
+            filename=filename,
+        )
