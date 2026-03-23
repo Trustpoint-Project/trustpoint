@@ -1889,7 +1889,7 @@ class AokiCmpHelpView(PageContextMixin, TemplateView):
             allowed_app_profiles=allowed_app_profiles,
             public_key_info=public_key_info,
             host_base=host_base,
-            host_cmp_path=f'{host_base}/.aoki/initialization',
+            host_cmp_path=f'{host_base}/.well-known/cmp/p/.aoki/initialization',
             host_est_path=f'{host_base}/.aoki/init',
             cred_count=0,
         )
