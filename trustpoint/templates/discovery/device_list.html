@@ -138,10 +138,7 @@
                 {% if stop_pending %}
                     <button class="btn btn-sm btn-secondary w-100 fw-bold" disabled>{% trans "Stopping…" %}</button>
                 {% elif scan_running %}
-                    <form action="{% url 'discovery:stop_scan' %}" method="post" class="w-100">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-danger w-100 fw-bold">{% trans "Stop Scan" %}</button>
-                    </form>
+                    <button type="submit" formaction="{% url 'discovery:stop_scan' %}" class="btn btn-sm btn-danger w-100 fw-bold">{% trans "Stop Scan" %}</button>
                 {% else %}
                     <button type="submit" class="btn btn-sm btn-primary w-100 fw-bold">{% trans "Run Network Scan" %}</button>
                 {% endif %}

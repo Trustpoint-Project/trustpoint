@@ -7,53 +7,99 @@ from django.contrib import messages
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
 from pki.models.certificate import CertificateModel
 
 from .models import DiscoveredDevice, DiscoveryPort
 from .scanner import OTScanner
 
-SCAN_RUNNING = False
-STOP_PENDING = False
-START_IP = '10.100.13.1'
-END_IP = '10.100.13.254'
-scanner_instance = OTScanner(target_ports=[])
+
+class ScanManager:
+    """Thread-safe state manager for the network scanner."""
+    _lock = threading.Lock()
+    
+    is_running = False
+    stop_pending = False
+    start_ip = '10.100.13.1'
+    end_ip = '10.100.13.254'
+    scanner_instance = None
+
+    @classmethod
+    def begin_scan(cls, start_ip: str, end_ip: str) -> bool:
+        with cls._lock:
+            if cls.is_running:
+                return False
+            cls.is_running = True
+            cls.stop_pending = False
+            cls.start_ip = start_ip
+            cls.end_ip = end_ip
+            cls.scanner_instance = OTScanner(target_ports=[])
+            return True
+
+    @classmethod
+    def request_stop(cls) -> None:
+        with cls._lock:
+            cls.stop_pending = True
+            if cls.scanner_instance:
+                cls.scanner_instance.stop_requested.set()
+
+    @classmethod
+    def end_scan(cls) -> None:
+        with cls._lock:
+            cls.is_running = False
+            cls.stop_pending = False
+            cls.scanner_instance = None
+
+    @classmethod
+    def get_state(cls) -> dict:
+        with cls._lock:
+            return {
+                'scan_running': cls.is_running,
+                'stop_pending': cls.stop_pending,
+                'start_ip': cls.start_ip,
+                'end_ip': cls.end_ip,
+            }
 
 
 def run_scan_in_background(start_ip: str, end_ip: str) -> None:
     """Threaded task to perform network scanning and database updates."""
-    global SCAN_RUNNING, STOP_PENDING  # noqa: PLW0603
     try:
         ports = list(DiscoveryPort.objects.values_list('port_number', flat=True))
-        scanner_instance.target_ports = ports
+        
+        # Safely get the active scanner instance
+        with ScanManager._lock:
+            scanner = ScanManager.scanner_instance
+            
+        if scanner:
+            scanner.target_ports = ports
+            results = scanner.scan_network(start_ip, end_ip)
 
-        results = scanner_instance.scan_network(start_ip, end_ip)
+            if scanner.stop_requested.is_set():
+                return
 
-        if scanner_instance.stop_requested.is_set():
-            return
+            for d in results:
+                pki_cert = None
+                ssl_info = d.get('ssl_info')
+                if ssl_info and 'cert_object' in ssl_info:
+                    try:
+                        cert_obj = ssl_info.pop('cert_object')
+                        pki_cert = CertificateModel.save_certificate(cert_obj)
+                    except Exception:  # noqa: BLE001, S110
+                        pass
 
-        for d in results:
-            pki_cert = None
-            ssl_info = d.get('ssl_info')
-            if ssl_info and 'cert_object' in ssl_info:
-                try:
-                    cert_obj = ssl_info.pop('cert_object')
-                    pki_cert = CertificateModel.save_certificate(cert_obj)
-                except Exception:  # noqa: BLE001, S110
-                    pass
-
-            DiscoveredDevice.objects.update_or_create(
-                ip_address=d['ip'],
-                defaults={
-                    'hostname': d.get('hostname') or '',
-                    'open_ports': d['ports'],
-                    'ssl_info': ssl_info,
-                    'certificate_record': pki_cert,
-                },
-            )
+                DiscoveredDevice.objects.update_or_create(
+                    ip_address=d['ip'],
+                    defaults={
+                        'hostname': d.get('hostname') or '',
+                        'open_ports': d['ports'],
+                        'ssl_info': ssl_info,
+                        'certificate_record': pki_cert,
+                    },
+                )
     finally:
-        SCAN_RUNNING = False
-        STOP_PENDING = False
+        # Guarantee the state is reset even if the scanner crashes
+        ScanManager.end_scan()
 
 
 def device_list(request: HttpRequest) -> HttpResponse:
@@ -75,56 +121,67 @@ def device_list(request: HttpRequest) -> HttpResponse:
         if any(p in ot_ports for p in d.open_ports):
             stats['industrial'] += 1
 
+    # Safely get the current variables
+    state = ScanManager.get_state()
+
     return render(
         request,
         'discovery/device_list.html',
         {
             'devices': all_devs,
             'scan_ports': all_ports,
-            'scan_running': SCAN_RUNNING,
-            'stop_pending': STOP_PENDING,
+            'scan_running': state['scan_running'],
+            'stop_pending': state['stop_pending'],
             'stats': stats,
-            'start_ip': START_IP,
-            'end_ip': END_IP,
+            'start_ip': state['start_ip'],
+            'end_ip': state['end_ip'],
         },
     )
 
 
+@require_POST
 def start_scan(request: HttpRequest) -> HttpResponse:
     """Initialize and start a background network scan."""
-    global SCAN_RUNNING, START_IP, END_IP, STOP_PENDING  # noqa: PLW0603
-    if request.method == 'POST':
-        START_IP = request.POST.get('start_ip', START_IP)
-        END_IP = request.POST.get('end_ip', END_IP)
-        if not SCAN_RUNNING:
-            scanner_instance.stop_requested.clear()
-            SCAN_RUNNING = True
-            STOP_PENDING = False
-            thread = threading.Thread(target=run_scan_in_background, args=(START_IP, END_IP))
-            thread.daemon = True
-            thread.start()
+    start_ip = request.POST.get('start_ip', '10.100.13.1')
+    end_ip = request.POST.get('end_ip', '10.100.13.254')
+    
+    if ScanManager.begin_scan(start_ip, end_ip):
+        thread = threading.Thread(target=run_scan_in_background, args=(start_ip, end_ip))
+        thread.daemon = True
+        thread.start()
+        messages.success(request, "Network scan started.")
+    else:
+        messages.warning(request, "A scan is already running.")
+        
     return redirect('discovery:device_list')
 
 
+@require_POST 
 def stop_scan(request: HttpRequest) -> HttpResponse:  # noqa: ARG001
     """Request the active scan to terminate."""
-    global STOP_PENDING  # noqa: PLW0603
-    scanner_instance.stop_requested.set()
-    STOP_PENDING = True
+    ScanManager.request_stop()
+    messages.info(request, "Stopping the scan...")
     return redirect('discovery:device_list')
 
 
+@require_POST
 def add_port(request: HttpRequest) -> HttpResponse:
     """Add a new port to the scan configuration."""
-    if request.method == 'POST':
-        port = request.POST.get('port_number')
-        desc = request.POST.get('description')
-        if port and desc:
-            DiscoveryPort.objects.get_or_create(port_number=port, description=desc)
-            messages.success(request, f'Port {port} added to scan configuration.')
+    port_str = request.POST.get('port_number')
+    desc = request.POST.get('description')
+    
+    if port_str and desc:
+        try:
+            port_int = int(port_str)
+            DiscoveryPort.objects.get_or_create(port_number=port_int, description=desc)
+            messages.success(request, f'Port {port_int} added to scan configuration.')
+        except ValueError:
+            messages.error(request, 'Invalid port number. Please enter a valid integer.')
+            
     return redirect('discovery:device_list')
 
 
+@require_POST
 def delete_port(request: HttpRequest, port_id: int) -> HttpResponse:
     """Remove a port from the scan configuration."""
     port = get_object_or_404(DiscoveryPort, id=port_id)
@@ -134,6 +191,7 @@ def delete_port(request: HttpRequest, port_id: int) -> HttpResponse:
     return redirect('discovery:device_list')
 
 
+@require_POST
 def clear_devices(request: HttpRequest) -> HttpResponse:
     """Wipe the discovered devices inventory."""
     DiscoveredDevice.objects.all().delete()

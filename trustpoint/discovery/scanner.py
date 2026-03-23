@@ -20,7 +20,6 @@ class OTScanner:
         self.max_workers = max_workers
         self.stop_requested = Event()
         self.target_ports = target_ports
-        self.ssl_ports = [443, 8883]
 
     def _get_ips_from_range(self, start_ip: str, end_ip: str) -> list[str]:
         """Generate a list of IPv4 addresses from a start and end point."""
@@ -88,15 +87,15 @@ class OTScanner:
                 with socket.create_connection((ip, port), timeout=self.timeout):
                     found_ports.append(port)
                     found = True
-                    if port in self.ssl_ports:
-                        ssl_data = self._get_ssl_info(ip, port)
-                        if ssl_data.get('ssl_open'):
-                            result['ssl_info'] = ssl_data
+                    
+                    ssl_data = self._get_ssl_info(ip, port)
+                    if ssl_data.get('ssl_open'):
+                        result['ssl_info'] = ssl_data
             except (OSError, TimeoutError):
                 continue
 
         if not found or self.stop_requested.is_set():
-            return None
+                return None
 
         result['hostname'] = self._resolve_hostname(ip)
         return result
