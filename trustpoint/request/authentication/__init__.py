@@ -8,6 +8,7 @@ from .base import (
 )
 from .cmp import CmpAuthentication
 from .est import EstAuthentication
+from .rest import RestAuthentication
 
 __all__ = [
     'AuthenticationComponent',
@@ -16,4 +17,5 @@ __all__ = [
     'CompositeAuthentication',
     'EstAuthentication',
     'IDevIDAuthentication',
+    'RestAuthentication',
 ]

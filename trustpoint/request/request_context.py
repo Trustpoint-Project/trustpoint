@@ -196,6 +196,14 @@ class CmpBaseRequestContext(HttpBaseRequestContext):
 class RestBaseRequestContext(HttpBaseRequestContext):
     """Shared context for all REST API requests."""
 
+    rest_username: str | None = None
+    rest_password: str | None = None
+
+
+@dataclass(kw_only=True)
+class RestCertificateRequestContext(RestBaseRequestContext, BaseCertificateRequestContext):
+    """REST context for certificate enrollment requests."""
+
 
 @dataclass(kw_only=True)
 class ManualBaseRequestContext(BaseRequestContext):
