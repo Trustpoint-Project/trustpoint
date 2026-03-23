@@ -47,7 +47,7 @@ workflow:
             - "A ${event.device.common_name}"
             - "B ${json(vars)}"
       capture:
-        status_code: vars.http_status
+        vars.http_status: status_code
 
     route_by_status:
       type: logic
@@ -137,7 +137,7 @@ class CompilerTests(SimpleTestCase):
         self.assertIn("Did you mean", s)
 
     def test_unknown_webhook_capture_key(self) -> None:
-        bad = VALID_YAML.replace("status_code: vars.http_status", "statuz_code: vars.http_status")
+        bad = VALID_YAML.replace("vars.http_status: status_code", "statuz_code: status_code")
         with self.assertRaises(CompileError):
             compile_workflow_yaml(bad, compiler_version="test")
 
@@ -266,3 +266,153 @@ workflow:
         self.assertIn("b", ir["workflow"]["steps"])
         # b has no outgoing transition -> allowed
         self.assertNotIn("b", ir["workflow"]["transitions"])
+
+    def test_unreachable_step_is_error(self) -> None:
+        yaml_text = """\
+schema: trustpoint.workflow.v2
+name: Unreachable step
+enabled: true
+
+trigger:
+  on: device.created
+  sources:
+    trustpoint: true
+
+workflow:
+  start: a
+  steps:
+    a:
+      type: set
+      vars: {}
+    b:
+      type: set
+      vars: {}
+    c:
+      type: set
+      vars: {}
+  flow:
+    - from: a
+      to: b
+"""
+
+        with self.assertRaises(CompileError) as ctx:
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertIn('Unreachable steps', str(ctx.exception))
+        self.assertIn('c', str(ctx.exception))
+
+    def test_branch_only_var_is_rejected_at_merge(self) -> None:
+        yaml_text = """\
+schema: trustpoint.workflow.v2
+name: Branch var
+enabled: true
+
+trigger:
+  on: device.created
+  sources:
+    trustpoint: true
+
+workflow:
+  start: fetch
+  steps:
+    fetch:
+      type: webhook
+      method: POST
+      url: https://example.com/status
+      capture:
+        vars.http_status: status_code
+    choose:
+      type: logic
+      cases:
+        - when:
+            compare:
+              left: ${vars.http_status}
+              op: "=="
+              right: 200
+          outcome: left
+      default: right
+    left_only:
+      type: set
+      vars:
+        token: abc
+    right_only:
+      type: set
+      vars: {}
+    merged_email:
+      type: email
+      to: [ops@example.com]
+      subject: "Token ${vars.token}"
+      body: "Status ${vars.http_status}"
+  flow:
+    - from: fetch
+      to: choose
+    - from: choose
+      on: left
+      to: left_only
+    - from: choose
+      on: right
+      to: right_only
+    - from: left_only
+      to: merged_email
+    - from: right_only
+      to: merged_email
+"""
+
+        with self.assertRaises(CompileError) as ctx:
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertIn('vars.token', str(ctx.exception))
+        self.assertIn('may not be initialized', str(ctx.exception))
+
+    def test_set_step_cannot_reference_var_created_in_same_step(self) -> None:
+        yaml_text = """\
+schema: trustpoint.workflow.v2
+name: Same set step
+enabled: true
+
+trigger:
+  on: device.created
+  sources:
+    trustpoint: true
+
+workflow:
+  start: assign
+  steps:
+    assign:
+      type: set
+      vars:
+        first: hello
+        second: "${vars.first}"
+  flow: []
+"""
+
+        with self.assertRaises(CompileError) as ctx:
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertIn('vars.first', str(ctx.exception))
+        self.assertIn('assign', str(ctx.exception))
+
+    def test_compute_step_allows_reference_to_prior_assignment_in_same_step(self) -> None:
+        yaml_text = """\
+schema: trustpoint.workflow.v2
+name: Sequential compute
+enabled: true
+
+trigger:
+  on: device.created
+  sources:
+    trustpoint: true
+
+workflow:
+  start: calc
+  steps:
+    calc:
+      type: compute
+      set:
+        vars.base: ${add(1, 2)}
+        vars.total: ${add(vars.base, 10)}
+  flow: []
+"""
+
+        ir = compile_workflow_yaml(yaml_text, compiler_version="test")
+        self.assertIn("calc", ir["workflow"]["steps"])

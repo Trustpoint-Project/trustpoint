@@ -86,6 +86,8 @@ class WorkflowCompiler:
 
         transitions_ir = self._compile_flow(flow_raw, steps_ir)
         self._validate_flow_completeness(steps_ir, transitions_ir)
+        self._validate_flow_reachability(start_id, steps_ir, transitions_ir)
+        self._validate_step_variable_references(start_id, steps_ir, transitions_ir)
 
         ir: dict[str, Any] = {
             'ir_version': self.IR_VERSION,
@@ -625,6 +627,451 @@ class WorkflowCompiler:
                         'Non-outcome step requires a linear transition (or omit it to end)',
                         path=f'workflow.flow({step_id})',
                     )
+
+    @staticmethod
+    def _collect_reachable_steps(start_id: str, steps_ir: dict[str, Any], transitions: dict[str, Any]) -> set[str]:
+        reachable: set[str] = set()
+        pending = [start_id]
+
+        while pending:
+            step_id = pending.pop()
+            if step_id in reachable or step_id not in steps_ir:
+                continue
+
+            reachable.add(step_id)
+            transition = transitions.get(step_id)
+            if not isinstance(transition, dict):
+                continue
+
+            if transition.get('kind') == 'linear':
+                target = transition.get('to')
+                if isinstance(target, str) and target in steps_ir:
+                    pending.append(target)
+                continue
+
+            if transition.get('kind') == 'by_outcome':
+                target_map = transition.get('map')
+                if not isinstance(target_map, dict):
+                    continue
+
+                for target in target_map.values():
+                    if isinstance(target, str) and target in steps_ir:
+                        pending.append(target)
+
+        return reachable
+
+    def _validate_flow_reachability(self, start_id: str, steps_ir: dict[str, Any], transitions: dict[str, Any]) -> None:
+        reachable = self._collect_reachable_steps(start_id, steps_ir, transitions)
+        unreachable = [step_id for step_id in steps_ir if step_id not in reachable]
+        if not unreachable:
+            return
+
+        detail = ', '.join(unreachable)
+        raise CompileError(
+            f'Unreachable steps from workflow.start "{start_id}": {detail}',
+            path='workflow.steps',
+            details={'unreachable_steps': unreachable},
+        )
+
+    @staticmethod
+    def _extract_step_produced_vars(step_ir: dict[str, Any]) -> set[str]:
+        produced: set[str] = set()
+        step_type = step_ir.get('type')
+        params = step_ir.get('params') or {}
+
+        if step_type == StepTypes.SET:
+            vars_map = params.get('vars')
+            if isinstance(vars_map, dict):
+                for key in vars_map:
+                    if isinstance(key, str) and key.strip():
+                        produced.add(key.strip())
+            return produced
+
+        if step_type == StepTypes.COMPUTE:
+            set_map = params.get('set')
+            if isinstance(set_map, dict):
+                for target in set_map:
+                    if not (isinstance(target, str) and target.startswith('vars.')):
+                        continue
+                    name = target.split('.', 1)[1].strip()
+                    if name:
+                        produced.add(name)
+            return produced
+
+        if step_type == StepTypes.WEBHOOK:
+            capture = params.get('capture')
+            if isinstance(capture, list):
+                for rule in capture:
+                    if not isinstance(rule, dict):
+                        continue
+                    target = rule.get('target')
+                    if (
+                        isinstance(target, list)
+                        and len(target) >= 2
+                        and target[0] == 'vars'
+                        and isinstance(target[1], str)
+                        and target[1].strip()
+                    ):
+                        produced.add(target[1].strip())
+            return produced
+
+        return produced
+
+    @staticmethod
+    def _build_step_predecessors(
+        steps_ir: dict[str, Any],
+        transitions: dict[str, Any],
+        reachable: set[str],
+    ) -> dict[str, set[str]]:
+        predecessors: dict[str, set[str]] = {step_id: set() for step_id in steps_ir}
+
+        for from_step, transition in transitions.items():
+            if from_step not in reachable or not isinstance(transition, dict):
+                continue
+
+            if transition.get('kind') == 'linear':
+                target = transition.get('to')
+                if isinstance(target, str) and target in reachable:
+                    predecessors[target].add(from_step)
+                continue
+
+            if transition.get('kind') == 'by_outcome':
+                target_map = transition.get('map')
+                if not isinstance(target_map, dict):
+                    continue
+                for target in target_map.values():
+                    if isinstance(target, str) and target in reachable:
+                        predecessors[target].add(from_step)
+
+        return predecessors
+
+    def _compute_available_vars_before_step(
+        self,
+        start_id: str,
+        steps_ir: dict[str, Any],
+        transitions: dict[str, Any],
+    ) -> tuple[dict[str, set[str]], set[str]]:
+        reachable = self._collect_reachable_steps(start_id, steps_ir, transitions)
+        predecessors = self._build_step_predecessors(steps_ir, transitions, reachable)
+        produced_by_step = {
+            step_id: self._extract_step_produced_vars(step_ir)
+            for step_id, step_ir in steps_ir.items()
+        }
+        produced_universe: set[str] = set()
+        for step_id in reachable:
+            produced_universe.update(produced_by_step.get(step_id, set()))
+
+        available_before: dict[str, set[str]] = {}
+        available_after: dict[str, set[str]] = {}
+
+        for step_id in steps_ir:
+            if step_id not in reachable or step_id == start_id:
+                available_before[step_id] = set()
+            else:
+                available_before[step_id] = set(produced_universe)
+
+            available_after[step_id] = set(available_before[step_id]) | produced_by_step.get(step_id, set())
+
+        changed = True
+        while changed:
+            changed = False
+
+            for step_id in steps_ir:
+                if step_id not in reachable:
+                    continue
+
+                if step_id == start_id:
+                    next_before: set[str] = set()
+                else:
+                    incoming = list(predecessors.get(step_id, set()))
+                    if not incoming:
+                        next_before = set()
+                    else:
+                        next_before = set(available_after[incoming[0]])
+                        for predecessor_id in incoming[1:]:
+                            next_before &= available_after[predecessor_id]
+
+                next_after = set(next_before) | produced_by_step.get(step_id, set())
+
+                if next_before != available_before[step_id]:
+                    available_before[step_id] = next_before
+                    changed = True
+
+                if next_after != available_after[step_id]:
+                    available_after[step_id] = next_after
+                    changed = True
+
+        return available_before, reachable
+
+    def _raise_unavailable_var(self, *, step_id: str, var_name: str, available_vars: set[str], path: str) -> None:
+        available_detail = ', '.join(sorted(available_vars))
+        if available_detail:
+            message = (
+                f'Variable "vars.{var_name}" may not be initialized before step "{step_id}". '
+                f'Guaranteed vars here: {available_detail}'
+            )
+        else:
+            message = (
+                f'Variable "vars.{var_name}" may not be initialized before step "{step_id}". '
+                'No workflow vars are guaranteed here yet.'
+            )
+
+        raise CompileError(
+            message,
+            path=path,
+            details={
+                'step_id': step_id,
+                'variable': var_name,
+                'available_vars': sorted(available_vars),
+            },
+        )
+
+    def _validate_expr_ir_refs(
+        self,
+        expr_ir: Any,
+        *,
+        available_vars: set[str],
+        step_id: str,
+        path: str,
+    ) -> None:
+        if not isinstance(expr_ir, dict):
+            return
+
+        kind = expr_ir.get('kind')
+        if kind == 'ref':
+            ref_path = expr_ir.get('path')
+            if not (isinstance(ref_path, list) and ref_path):
+                return
+            if ref_path[0] != 'vars' or len(ref_path) < 2:
+                return
+
+            var_name = ref_path[1]
+            if isinstance(var_name, str) and var_name not in available_vars:
+                self._raise_unavailable_var(
+                    step_id=step_id,
+                    var_name=var_name,
+                    available_vars=available_vars,
+                    path=path,
+                )
+            return
+
+        if kind == 'call':
+            for index, arg in enumerate(expr_ir.get('args') or []):
+                self._validate_expr_ir_refs(
+                    arg,
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    path=f'{path}.args[{index}]',
+                )
+            return
+
+    def _validate_compiled_value_refs(
+        self,
+        value: Any,
+        *,
+        available_vars: set[str],
+        step_id: str,
+        path: str,
+    ) -> None:
+        if isinstance(value, list):
+            for index, item in enumerate(value):
+                self._validate_compiled_value_refs(
+                    item,
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    path=f'{path}[{index}]',
+                )
+            return
+
+        if not isinstance(value, dict):
+            return
+
+        kind = value.get('kind')
+        if kind == 'template':
+            for index, part in enumerate(value.get('parts') or []):
+                if isinstance(part, dict) and part.get('kind') == 'expr':
+                    self._validate_expr_ir_refs(
+                        part.get('expr'),
+                        available_vars=available_vars,
+                        step_id=step_id,
+                        path=f'{path}.parts[{index}]',
+                    )
+            return
+
+        if kind in {'ref', 'call'}:
+            self._validate_expr_ir_refs(
+                value,
+                available_vars=available_vars,
+                step_id=step_id,
+                path=path,
+            )
+            return
+
+        if kind in {'expr'}:
+            self._validate_expr_ir_refs(
+                value.get('expr'),
+                available_vars=available_vars,
+                step_id=step_id,
+                path=path,
+            )
+            return
+
+        if kind == 'lit':
+            return
+
+        for key, nested in value.items():
+            self._validate_compiled_value_refs(
+                nested,
+                available_vars=available_vars,
+                step_id=step_id,
+                path=f'{path}.{key}',
+            )
+
+    def _validate_condition_refs(
+        self,
+        condition_ir: Any,
+        *,
+        available_vars: set[str],
+        step_id: str,
+        path: str,
+    ) -> None:
+        if not isinstance(condition_ir, dict):
+            return
+
+        op = condition_ir.get('op')
+        if op == 'exists':
+            self._validate_compiled_value_refs(
+                condition_ir.get('arg'),
+                available_vars=available_vars,
+                step_id=step_id,
+                path=f'{path}.exists',
+            )
+            return
+
+        if op == 'not':
+            self._validate_condition_refs(
+                condition_ir.get('arg'),
+                available_vars=available_vars,
+                step_id=step_id,
+                path=f'{path}.not',
+            )
+            return
+
+        if op in {'and', 'or'}:
+            for index, item in enumerate(condition_ir.get('args') or []):
+                self._validate_condition_refs(
+                    item,
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    path=f'{path}.{op}[{index}]',
+                )
+            return
+
+        if op == 'compare':
+            self._validate_compiled_value_refs(
+                condition_ir.get('left'),
+                available_vars=available_vars,
+                step_id=step_id,
+                path=f'{path}.compare.left',
+            )
+            self._validate_compiled_value_refs(
+                condition_ir.get('right'),
+                available_vars=available_vars,
+                step_id=step_id,
+                path=f'{path}.compare.right',
+            )
+
+    def _validate_step_variable_references(
+        self,
+        start_id: str,
+        steps_ir: dict[str, Any],
+        transitions: dict[str, Any],
+    ) -> None:
+        available_before, reachable = self._compute_available_vars_before_step(start_id, steps_ir, transitions)
+
+        for step_id, step_ir in steps_ir.items():
+            if step_id not in reachable:
+                continue
+
+            step_type = step_ir.get('type')
+            params = step_ir.get('params') or {}
+            base = f'workflow.steps.{step_id}'
+            available_vars = set(available_before.get(step_id, set()))
+
+            if step_type == StepTypes.EMAIL:
+                self._validate_compiled_value_refs(
+                    params.get('subject'),
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    path=f'{base}.subject',
+                )
+                self._validate_compiled_value_refs(
+                    params.get('body'),
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    path=f'{base}.body',
+                )
+                continue
+
+            if step_type == StepTypes.WEBHOOK:
+                self._validate_compiled_value_refs(
+                    params.get('url'),
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    path=f'{base}.url',
+                )
+                self._validate_compiled_value_refs(
+                    params.get('headers'),
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    path=f'{base}.headers',
+                )
+                self._validate_compiled_value_refs(
+                    params.get('body'),
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    path=f'{base}.body',
+                )
+                continue
+
+            if step_type == StepTypes.LOGIC:
+                for index, item in enumerate(params.get('cases') or []):
+                    if not isinstance(item, dict):
+                        continue
+                    self._validate_condition_refs(
+                        item.get('when'),
+                        available_vars=available_vars,
+                        step_id=step_id,
+                        path=f'{base}.cases[{index}].when',
+                    )
+                continue
+
+            if step_type == StepTypes.SET:
+                self._validate_compiled_value_refs(
+                    params.get('vars'),
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    path=f'{base}.vars',
+                )
+                continue
+
+            if step_type == StepTypes.COMPUTE:
+                current_available = set(available_vars)
+                set_map = params.get('set') or {}
+                if not isinstance(set_map, dict):
+                    continue
+
+                for target, spec in set_map.items():
+                    self._validate_compiled_value_refs(
+                        spec.get('expr') if isinstance(spec, dict) else spec,
+                        available_vars=current_available,
+                        step_id=step_id,
+                        path=f'{base}.set.{target}',
+                    )
+                    if isinstance(target, str) and target.startswith('vars.'):
+                        name = target.split('.', 1)[1].strip()
+                        if name:
+                            current_available.add(name)
 
     def _build_meta(self, yaml_text: str, ir: dict[str, Any]) -> CompileMeta:
         source_hash = sha256_text(yaml_text)

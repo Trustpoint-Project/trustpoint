@@ -162,8 +162,9 @@
 <aside id="wf2-guide-drawer" class="wf2-guide-drawer" aria-hidden="true">
   <div class="wf2-guide-drawer-header">
     <div>
+      <div class="wf2-guide-drawer-eyebrow">Workflow 2</div>
       <div class="fw-semibold">Editor guide</div>
-      <div class="text-muted small">Context-aware</div>
+      <div class="text-muted small">Context-aware DSL editing</div>
     </div>
     <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-close-guide">
       Close
@@ -171,33 +172,33 @@
   </div>
 
   <div class="wf2-guide-drawer-body">
-    <div id="wf2-guide-content" class="mb-3">
+    <div id="wf2-guide-content" class="wf2-guide-content">
       Loading guide…
     </div>
 
-    <hr>
-
-    <div class="small text-muted">
+    <div class="wf2-guide-diagnostics small">
       <div class="fw-semibold text-body mb-2">Diagnostics</div>
 
-      <div class="mb-1">
-        <strong>Catalog:</strong>
-        <span id="wf2-catalog-version">Loading…</span>
-      </div>
+      <div class="wf2-guide-diagnostics-grid">
+        <div class="wf2-guide-diagnostics-item">
+          <div class="wf2-guide-diagnostics-label">Catalog</div>
+          <div id="wf2-catalog-version">Loading…</div>
+        </div>
 
-      <div class="mb-1">
-        <strong>YAML:</strong>
-        <span id="wf2-parse-status" class="text-muted">Checking…</span>
-      </div>
+        <div class="wf2-guide-diagnostics-item">
+          <div class="wf2-guide-diagnostics-label">YAML</div>
+          <div id="wf2-parse-status" class="text-muted">Checking…</div>
+        </div>
 
-      <div class="mb-1">
-        <strong>Cursor:</strong>
-        <span id="wf2-cursor-info">Line 1, column 1</span>
-      </div>
+        <div class="wf2-guide-diagnostics-item">
+          <div class="wf2-guide-diagnostics-label">Cursor</div>
+          <div id="wf2-cursor-info">Line 1, column 1</div>
+        </div>
 
-      <div>
-        <strong>Path:</strong>
-        <code id="wf2-current-path">(root)</code>
+        <div class="wf2-guide-diagnostics-item">
+          <div class="wf2-guide-diagnostics-label">Path</div>
+          <code id="wf2-current-path">(root)</code>
+        </div>
       </div>
     </div>
   </div>
@@ -246,10 +247,11 @@
     position: fixed;
     top: 0;
     right: 0;
-    width: min(32rem, 92vw);
+    width: min(38rem, 96vw);
     height: 100vh;
-    background: #fff;
-    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12);
+    background: #f4f7fb;
+    box-shadow: -16px 0 40px rgba(19, 33, 68, 0.18);
+    border-left: 1px solid #dce4f2;
     transform: translateX(100%);
     transition: transform 0.2s ease;
     z-index: 1050;
@@ -257,19 +259,364 @@
     flex-direction: column;
   }
 
+  .wf2-guide-drawer-eyebrow {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #0d6efd;
+    margin-bottom: 0.2rem;
+  }
+
   .wf2-guide-drawer-header {
     display: flex;
     justify-content: space-between;
     align-items: start;
     gap: 1rem;
-    padding: 1rem 1rem 0.75rem;
-    border-bottom: 1px solid #e9ecef;
+    padding: 1.1rem 1.25rem 1rem;
+    border-bottom: 1px solid #dce4f2;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   }
 
   .wf2-guide-drawer-body {
     padding: 1rem;
     overflow: auto;
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    background:
+      radial-gradient(circle at top right, rgba(13, 110, 253, 0.06), transparent 30%),
+      linear-gradient(180deg, #f7f9fc 0%, #f4f7fb 100%);
+  }
+
+  .wf2-guide-content {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .wf2-guide-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .wf2-guide-page-header {
+    padding: 1rem 1.05rem;
+    border: 1px solid #dce4f2;
+    border-radius: 1rem;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    box-shadow: 0 0.5rem 1.25rem rgba(19, 33, 68, 0.06);
+  }
+
+  .wf2-guide-page-kicker {
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #0d6efd;
+    margin-bottom: 0.35rem;
+  }
+
+  .wf2-guide-page-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 0.3rem;
+  }
+
+  .wf2-guide-page-summary {
+    color: #5c667a;
+    line-height: 1.45;
+    margin-bottom: 0.75rem;
+  }
+
+  .wf2-guide-path-pill {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.45rem 0.6rem;
+    border-radius: 999px;
+    background: #eef4ff;
+    color: #355c9b;
+    font-size: 0.82rem;
+  }
+
+  .wf2-guide-path-pill span {
+    font-weight: 600;
+  }
+
+  .wf2-guide-path-pill code {
+    color: #24467a;
+  }
+
+  .wf2-guide-page-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .wf2-guide-section {
+    padding: 0.95rem 1rem;
+    border: 1px solid #dce4f2;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 0.35rem 1rem rgba(19, 33, 68, 0.05);
+  }
+
+  .wf2-guide-section-accent {
+    border-color: #cfe0ff;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  }
+
+  .wf2-guide-section-danger {
+    border-color: #f5c2c7;
+    background: #fff5f5;
+  }
+
+  .wf2-guide-section-head {
+    margin-bottom: 0.75rem;
+  }
+
+  .wf2-guide-section-title {
+    font-size: 0.96rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 0.2rem;
+  }
+
+  .wf2-guide-section-description {
+    color: #5c667a;
+    line-height: 1.45;
+    font-size: 0.88rem;
+  }
+
+  .wf2-guide-section-body {
+    min-width: 0;
+  }
+
+  .wf2-guide-button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .wf2-guide-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+  }
+
+  .wf2-guide-meta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.38rem 0.6rem;
+    border-radius: 999px;
+    background: #f6f9ff;
+    border: 1px solid #dce4f2;
+    color: #355c9b;
+    font-size: 0.82rem;
+  }
+
+  .wf2-guide-meta-label {
+    font-weight: 600;
+    color: #516177;
+  }
+
+  .wf2-guide-note {
+    margin-top: 0.85rem;
+    padding: 0.75rem 0.85rem;
+    border-radius: 0.85rem;
+    border: 1px solid #dce4f2;
+    background: #f8fbff;
+    color: #516177;
+    line-height: 1.45;
+    font-size: 0.86rem;
+  }
+
+  .wf2-guide-note-info {
+    border-color: #cfe0ff;
+    background: #eef5ff;
+    color: #355c9b;
+  }
+
+  .wf2-runtime-scope-grid {
+    display: grid;
+    gap: 0.8rem;
+  }
+
+  .wf2-runtime-scope-card {
+    padding: 0.85rem 0.95rem;
+    border: 1px solid #dbe5f3;
+    border-radius: 0.9rem;
+    background: linear-gradient(180deg, #fbfdff 0%, #f3f7fc 100%);
+  }
+
+  .wf2-runtime-scope-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #33557b;
+    margin-bottom: 0.2rem;
+  }
+
+  .wf2-runtime-scope-description {
+    font-size: 0.82rem;
+    color: #66788f;
+    margin-bottom: 0.55rem;
+  }
+
+  .wf2-runtime-chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .wf2-inline-variable-picker {
+    margin-top: 0.45rem;
+    border: 1px solid #dce4f2;
+    border-radius: 0.75rem;
+    background: #f8fbff;
+    overflow: hidden;
+  }
+
+  .wf2-inline-variable-picker summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #355c9b;
+  }
+
+  .wf2-inline-variable-picker summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .wf2-inline-variable-picker-body {
+    padding: 0 0.65rem 0.65rem;
+    display: grid;
+    gap: 0.55rem;
+  }
+
+  .wf2-inline-variable-group-title {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #6b7f99;
+    margin-bottom: 0.3rem;
+  }
+
+  .wf2-inline-variable-group-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .wf2-inline-variable-chip {
+    border: 1px solid #cfe0ff;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #355c9b;
+    padding: 0.22rem 0.55rem;
+    font-size: 0.76rem;
+    line-height: 1.2;
+  }
+
+  .wf2-inline-variable-chip:hover {
+    border-color: #8fb3ef;
+    background: #eef5ff;
+  }
+
+  .wf2-guide-diagnostics {
+    padding: 0.95rem 1rem;
+    border: 1px solid #dce4f2;
+    border-radius: 1rem;
+    background: #fff;
+    box-shadow: 0 0.35rem 1rem rgba(19, 33, 68, 0.05);
+  }
+
+  .wf2-guide-diagnostics-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .wf2-guide-diagnostics-item {
+    min-width: 0;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid #e9eef7;
+    border-radius: 0.85rem;
+    background: #f8fbff;
+  }
+
+  .wf2-guide-diagnostics-label {
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #607089;
+    margin-bottom: 0.2rem;
+  }
+
+  .wf2-guide-drawer .wf2-chip {
+    background: #f8fbff;
+    border-color: #dce4f2;
+  }
+
+  .wf2-cond-node {
+    border: 1px solid #dce4f2;
+    border-radius: 0.85rem;
+    padding: 0.85rem;
+    background: #fcfdff;
+    margin-bottom: 0.75rem;
+  }
+
+  .wf2-cond-node-nested {
+    margin-top: 0.75rem;
+    margin-left: 0.25rem;
+    padding-left: 0.85rem;
+    border-left: 2px solid #dce4f2;
+  }
+
+  .wf2-cond-header-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    align-items: end;
+  }
+
+  .wf2-cond-header-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .wf2-inline-save-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    align-items: end;
+  }
+
+  .wf2-inline-save-input,
+  .wf2-inline-save-action {
+    min-width: 0;
+  }
+
+  .wf2-guide-drawer .wf2-logic-case-card {
+    border-color: #dce4f2;
+    background: #fcfdff;
+  }
+
+  .wf2-guide-drawer .wf2-logic-tree-node {
+    border-color: #dce4f2;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
   }
 
   body.wf2-guide-open .wf2-guide-drawer {
@@ -355,8 +702,9 @@
   }
 
   .wf2-graph-main {
+    position: relative;
     min-height: 0;
-    flex: 1 1 auto;
+    flex: 1 1 100%;
   }
 
   .wf2-graph-canvas-wrap {
@@ -394,6 +742,7 @@
   .wf2-graph-overlay-root {
     position: absolute;
     inset: 0;
+    z-index: 3;
     pointer-events: none;
   }
 
@@ -455,6 +804,13 @@
     fill: #0b5ed7;
   }
 
+  .wf2-graph-node-warning {
+    font-size: 9px;
+    font-weight: 700;
+    fill: #b26a00;
+    letter-spacing: 0.05em;
+  }
+
   .wf2-graph-connection-preview {
     fill: none;
     stroke: #0d6efd;
@@ -466,28 +822,60 @@
   .wf2-graph-floating-card {
     position: absolute;
     z-index: 4;
-    width: 460px;
     min-width: 340px;
-    min-height: 320px;
-    height: 520px;
-    max-width: min(860px, calc(100% - 16px));
-    max-height: calc(100% - 16px);
-    overflow: auto;
+    max-width: min(960px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px);
+    overflow: hidden;
     resize: both;
-    padding: 0.9rem;
-    border: 1px solid #dbe4ff;
-    border-radius: 0.75rem;
+    border: 1px solid #d4def3;
+    border-radius: 1rem;
     background: #fff;
-    box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.12);
+    box-shadow: 0 1rem 2.5rem rgba(19, 33, 68, 0.16);
     pointer-events: auto;
+    display: flex;
+    flex-direction: column;
   }
 
   .wf2-graph-context-menu {
-    width: 280px;
-    min-width: 260px;
+    width: 340px;
+    min-width: 320px;
     min-height: 0;
     height: auto;
     resize: none;
+  }
+
+  .wf2-graph-floating-node {
+    min-height: 18rem;
+    height: auto;
+  }
+
+  .wf2-graph-floating-edge {
+    min-height: 0;
+    height: auto;
+    max-height: min(28rem, calc(100vh - 48px));
+  }
+
+  .wf2-graph-overlay-shell {
+    backdrop-filter: blur(6px);
+  }
+
+  .wf2-graph-floating-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 0.9rem;
+    padding: 1rem 1rem 0.85rem;
+    border-bottom: 1px solid #e4ebf7;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  }
+
+  .wf2-graph-floating-kicker {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #0d6efd;
+    margin-bottom: 0.15rem;
   }
 
   .wf2-graph-floating-card .form-control,
@@ -512,8 +900,135 @@
 
   .wf2-graph-floating-title {
     font-weight: 600;
-    font-size: 0.95rem;
+    font-size: 1rem;
     line-height: 1.3;
+    color: #1f2937;
+  }
+
+  .wf2-graph-floating-subtitle {
+    margin-top: 0.2rem;
+    font-size: 0.84rem;
+    color: #607089;
+    line-height: 1.4;
+  }
+
+  .wf2-graph-floating-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.85rem 1rem 0;
+  }
+
+  .wf2-graph-meta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 999px;
+    background: #f6f9ff;
+    border: 1px solid #dce4f2;
+    color: #355c9b;
+    font-size: 0.8rem;
+  }
+
+  .wf2-graph-meta-pill span {
+    font-weight: 600;
+    color: #5a6c87;
+  }
+
+  .wf2-graph-floating-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 1rem;
+  }
+
+  .wf2-graph-floating-footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    justify-content: flex-start;
+    padding: 0.9rem 1rem 1rem;
+    border-top: 1px solid #e4ebf7;
+    background: #fbfcff;
+  }
+
+  .wf2-graph-editor-section {
+    margin-bottom: 0.95rem;
+    padding: 0.9rem;
+    border: 1px solid #e4ebf7;
+    border-radius: 0.9rem;
+    background: #fcfdff;
+  }
+
+  .wf2-graph-editor-section:last-child {
+    margin-bottom: 0;
+  }
+
+  .wf2-graph-editor-section-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 0.25rem;
+  }
+
+  .wf2-graph-editor-section-description {
+    font-size: 0.83rem;
+    color: #607089;
+    line-height: 1.4;
+    margin-bottom: 0.75rem;
+  }
+
+  .wf2-graph-editor-inline-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.65rem;
+    align-items: end;
+  }
+
+  .wf2-graph-step-pick-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .wf2-graph-step-pick {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 0.18rem;
+    width: 100%;
+    padding: 0.8rem 0.9rem;
+    border: 1px solid #dce4f2;
+    border-radius: 0.9rem;
+    background: #fbfcff;
+    text-align: left;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  }
+
+  .wf2-graph-step-pick:hover {
+    border-color: #8fb3ef;
+    box-shadow: 0 0.45rem 1rem rgba(13, 110, 253, 0.1);
+    transform: translateY(-1px);
+  }
+
+  .wf2-graph-step-pick-title {
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  .wf2-graph-step-pick-meta {
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #0d6efd;
+  }
+
+  .wf2-graph-step-pick-desc {
+    font-size: 0.82rem;
+    color: #607089;
+    line-height: 1.4;
   }
 
   .wf2-logic-case-card {
@@ -588,6 +1103,91 @@
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-top: 0.75rem;
+  }
+
+  .wf2-structured-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .wf2-structured-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    gap: 0.75rem;
+  }
+
+  .wf2-structured-section-title {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  .wf2-structured-section-description {
+    font-size: 0.83rem;
+    color: #607089;
+    line-height: 1.4;
+    margin-top: 0.2rem;
+  }
+
+  .wf2-structured-section-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .wf2-structured-item {
+    border: 1px solid #dce4f2;
+    border-radius: 0.9rem;
+    background: #ffffff;
+    padding: 0.85rem;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
+
+  .wf2-structured-item + .wf2-structured-item {
+    margin-top: 0.75rem;
+  }
+
+  .wf2-structured-item-head {
+    margin-bottom: 0.7rem;
+  }
+
+  .wf2-structured-item-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #1f2937;
+  }
+
+  .wf2-structured-item-description {
+    font-size: 0.8rem;
+    color: #607089;
+    margin-top: 0.18rem;
+    line-height: 1.4;
+  }
+
+  .wf2-structured-item-body {
+    margin-bottom: 0.8rem;
+  }
+
+  .wf2-structured-item-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .wf2-structured-form-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 0.7rem;
+  }
+
+  .wf2-structured-field {
+    min-width: 0;
+  }
+
+  .wf2-structured-field-full {
+    grid-column: 1 / -1;
   }
 
   .wf2-graph-floating-card .border.rounded.p-2 {
@@ -694,17 +1294,39 @@
   }
 
   @media (max-width: 767px) {
+    .wf2-guide-drawer {
+      width: 100vw;
+    }
+
+    .wf2-guide-diagnostics-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .wf2-inline-save-row,
+    .wf2-cond-header-row {
+      grid-template-columns: 1fr;
+    }
+
     .wf2-graph-floating-card {
-      width: min(94vw, 420px);
+      width: min(96vw, 520px);
       min-width: 280px;
-      max-width: calc(100% - 12px);
-      min-height: 180px;
+      max-width: calc(100vw - 16px);
+      min-height: 220px;
       padding: 0.75rem;
     }
 
     .wf2-graph-context-menu {
       width: min(92vw, 320px);
       min-width: 0;
+    }
+
+    .wf2-graph-editor-inline-row,
+    .wf2-structured-form-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .wf2-runtime-scope-card {
+      padding: 0.75rem 0.8rem;
     }
 
     .wf2-logic-tree-toolbar {
