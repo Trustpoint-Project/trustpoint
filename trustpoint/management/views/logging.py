@@ -169,7 +169,9 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
 
         file_data_list = [self._get_log_file_data(log_file_name) for log_file_name in all_files]
 
-        self.queryset = [data for data in file_data_list if data]
+        queryset: list[dict[str, str | datetime.datetime | None]] = [
+            data for data in file_data_list if data
+        ]
 
         def sort_key(item: dict[str, str | datetime.datetime | None]) -> datetime.datetime:
             updated_at = item.get('updated_at')
@@ -177,10 +179,8 @@ class LoggingFilesTableView(PageContextMixin, LoggerMixin, SortableTableFromList
                 return datetime.datetime.min.replace(tzinfo=datetime.UTC)
             return updated_at
 
-        self.queryset.sort(key=sort_key, reverse=True)
-        return self.queryset
-
-
+        queryset.sort(key=sort_key, reverse=True)
+        return queryset
 
 
 class LoggingFilesDetailsView(PageContextMixin, LoggerMixin, TemplateView):
