@@ -67,10 +67,9 @@ RUN if [ "${BRANCH}" != "" ]; then \
     chown www-data:www-data /var/www/html/trustpoint/
 
 USER www-data
-RUN uv sync --python-preference only-system
+RUN uv sync --group docs --python-preference only-system
 RUN uv pip install gunicorn[gevent]
 USER root
-
 
 
 RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
