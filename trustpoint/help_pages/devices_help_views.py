@@ -1809,10 +1809,9 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
         enroll_path = f'{help_context.host_est_path}/.well-known/est/domain/domain_credential/simpleenroll'
         curl_cmd = AokiEstIDevIDCommandBuilder.get_curl_enroll_command(enroll_path)
 
-        pre_style = 'background: #f5f5f5; padding: 15px; border-radius: 4px; overflow-x: auto;'
         aoki_response_html = (
-            f'<pre style="{pre_style}"><code class="language-json">'
-            f'{aoki_response}</code></pre>'
+            f'<pre class="bg-body-secondary text-body p-3 rounded overflow-x-auto">'
+            f'<code class="language-json">{aoki_response}</code></pre>'
         )
 
         example_commands = HelpSection(
