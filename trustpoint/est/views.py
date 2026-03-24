@@ -21,6 +21,7 @@ from request.message_responder import EstErrorMessageResponder, EstMessageRespon
 from request.request_context import EstCertificateRequestContext
 from request.request_validator.http_req import EstHttpRequestValidator
 from request.workflow_handler import WorkflowHandler
+from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
 from workflows.events import Events
 
@@ -131,7 +132,12 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
             )
             est_authorizer.authorize(ctx)
 
-            WorkflowHandler().handle(ctx)
+            workflow2_result = Workflow2Handler().handle(ctx)
+            if workflow2_result.should_stop:
+                return ctx.to_http_response()
+
+            if workflow2_result.should_fallback_to_legacy:
+                WorkflowHandler().handle(ctx)
 
             OperationProcessor().process_operation(ctx)
 

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.x509 import CertificateSigningRequest
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q
 
 from request.request_context import BaseCertificateRequestContext
@@ -42,6 +42,88 @@ class WorkflowHandler(ABC, LoggerMixin):
             CertificateRequestHandler().handle(context)
         elif h == 'device_action':
             DeviceActionHandler().handle(context)
+
+
+def _norm_event_part(value: Any) -> str:
+    return str(value or '').strip().lower()
+
+
+def _definition_matches_event(
+    definition: WorkflowDefinition,
+    *,
+    handler: str | None,
+    protocol: str,
+    operation: str,
+) -> bool:
+    meta = definition.definition or {}
+    events = meta.get('events')
+    if not isinstance(events, list):
+        return False
+
+    wanted_handler = _norm_event_part(handler)
+    wanted_protocol = _norm_event_part(protocol)
+    wanted_operation = _norm_event_part(operation)
+
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+
+        event_protocol = _norm_event_part(event.get('protocol'))
+        event_operation = _norm_event_part(event.get('operation'))
+        if event_protocol != wanted_protocol or event_operation != wanted_operation:
+            continue
+
+        event_handler = _norm_event_part(event.get('handler'))
+        if wanted_handler and event_handler and event_handler != wanted_handler:
+            continue
+
+        return True
+
+    return False
+
+
+def _matching_workflow_definitions(
+    *,
+    handler: str | None,
+    protocol: str,
+    operation: str,
+    ca_id: int | None,
+    domain_id: int | None,
+    device_id: int | None,
+) -> list[WorkflowDefinition]:
+    base_qs = (
+        WorkflowDefinition.objects.filter(published=True)
+        .filter(
+            Q(scopes__ca_id=ca_id) | Q(scopes__ca_id__isnull=True),
+            Q(scopes__domain_id=domain_id) | Q(scopes__domain_id__isnull=True),
+            Q(scopes__device_id=device_id) | Q(scopes__device_id__isnull=True),
+        )
+        .distinct()
+    )
+
+    if getattr(connection.features, 'supports_json_field_contains', False):
+        base_qs = base_qs.filter(
+            definition__events__contains=[
+                {
+                    'protocol': protocol,
+                    'operation': operation,
+                }
+            ]
+        )
+        candidates = list(base_qs)
+    else:
+        candidates = list(base_qs)
+
+    return [
+        definition
+        for definition in candidates
+        if _definition_matches_event(
+            definition,
+            handler=handler,
+            protocol=protocol,
+            operation=operation,
+        )
+    ]
 
 
 class DeviceActionHandler(WorkflowHandler):
@@ -92,22 +174,13 @@ class DeviceActionHandler(WorkflowHandler):
         # Determine applicable workflows FIRST:
         # 1) Restrict by event at DB level (prevents "certificate-only" definitions from being scanned here)
         # 2) Apply scope semantics (CA/Domain/Device exact or NULL=any)
-        candidates = (
-            WorkflowDefinition.objects.filter(published=True)
-            .filter(
-                definition__events__contains=[
-                    {
-                        'protocol': 'device',
-                        'operation': action,
-                    }
-                ]
-            )
-            .filter(
-                Q(scopes__ca_id=ca_id) | Q(scopes__ca_id__isnull=True),
-                Q(scopes__domain_id=domain_id) | Q(scopes__domain_id__isnull=True),
-                Q(scopes__device_id=device_id) | Q(scopes__device_id__isnull=True),
-            )
-            .distinct()
+        candidates = _matching_workflow_definitions(
+            handler='device_action',
+            protocol='device',
+            operation=action,
+            ca_id=ca_id,
+            domain_id=domain_id,
+            device_id=device_id,
         )
 
         # Keep only workflows that have steps
@@ -227,22 +300,13 @@ class CertificateRequestHandler(WorkflowHandler):
 
         # 1) Determine applicable workflows FIRST (so we can skip creating empty requests)
         # Restrict by event at DB level to avoid scanning device-action definitions.
-        definitions_qs = (
-            WorkflowDefinition.objects.filter(published=True)
-            .filter(
-                definition__events__contains=[
-                    {
-                        'protocol': context.protocol,
-                        'operation': context.operation,
-                    }
-                ]
-            )
-            .filter(
-                Q(scopes__ca_id=ca_id) | Q(scopes__ca_id__isnull=True),
-                Q(scopes__domain_id=domain_id) | Q(scopes__domain_id__isnull=True),
-                Q(scopes__device_id=device_id) | Q(scopes__device_id__isnull=True),
-            )
-            .distinct()
+        definitions_qs = _matching_workflow_definitions(
+            handler='certificate_request',
+            protocol=context.protocol,
+            operation=context.operation,
+            ca_id=ca_id,
+            domain_id=domain_id,
+            device_id=device_id,
         )
         definitions: list[WorkflowDefinition] = []
         for wf in definitions_qs:

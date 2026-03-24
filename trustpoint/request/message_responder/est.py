@@ -36,6 +36,8 @@ class EstCertificateMessageResponder(EstMessageResponder):
     def _check_workflow_state(context: EstCertificateRequestContext) -> bool:
         """Check if the workflow state allows for certificate issuance."""
         if not context.enrollment_request:
+            if getattr(context, 'workflow2_gate_applied', False) is True:
+                return True
             exc_msg = 'No enrollment request is set in the context.'
             raise ValueError(exc_msg)
 
@@ -60,17 +62,17 @@ class EstCertificateMessageResponder(EstMessageResponder):
             enrollment_req.finalize(State.REJECTED)
             context.http_response_status = 403
             context.http_response_content_type = 'text/plain'
-            context.http_response_content = 'Enrollment request rejected.'
-            return None
+            context.http_response_content = 'Enrollment request Rejected.'
+            return False
 
         if workflow_state == State.ABORTED:
             enrollment_req.finalize(State.ABORTED)
             context.http_response_status = 409
             context.http_response_content_type = 'text/plain'
             context.http_response_content = 'Enrollment request aborted.'
-            return None
+            return False
 
-        if workflow_state.aggregated_state == State.FAILED:
+        if workflow_state == State.FAILED:
             context.http_response_status = 500
             context.http_response_content_type = 'text/plain'
             context.http_response_content = \
@@ -135,6 +137,8 @@ class EstCertificateMessageResponder(EstMessageResponder):
 
         cert, content_type = EstCertificateMessageResponder._prepare_certificate_data(context)
 
+        if context.enrollment_request:
+            context.enrollment_request.finalize(State.FINALIZED)
         if context.device and context.device.onboarding_config:
             context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             context.device.onboarding_config.save()

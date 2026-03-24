@@ -7,6 +7,7 @@ import pytest
 from django.test import RequestFactory
 from pki.models.domain import DomainModel
 from request.request_context import EstCertificateRequestContext
+from request.workflows2_handler import Workflow2HandleResult
 
 from est.views import (
     EstCACertsView,
@@ -152,6 +153,7 @@ def test_est_simple_enrollment_mixin_event():
 @patch('est.views.EstMessageResponder')
 @patch('est.views.OperationProcessor')
 @patch('est.views.WorkflowHandler')
+@patch('est.views.Workflow2Handler')
 @patch('est.views.EstAuthorization')
 @patch('est.views.EstAuthentication')
 @patch('est.views.EstMessageParser')
@@ -163,6 +165,7 @@ def test_process_enrollment_success(
     mock_parser,
     mock_auth,
     mock_authz,
+    mock_workflow2,
     mock_workflow,
     mock_processor,
     mock_responder,
@@ -178,6 +181,7 @@ def test_process_enrollment_success(
     mock_ctx.http_response_status = 200
     mock_ctx.http_response_content_type = 'application/pkcs7-mime'
     mock_request_context.return_value = mock_ctx
+    mock_workflow2.return_value.handle.return_value = Workflow2HandleResult.no_match()
     
     # Configure parser mock to return the context
     mock_parser.return_value.parse.return_value = mock_ctx
@@ -207,6 +211,7 @@ def test_process_enrollment_success(
     mock_parser.return_value.parse.assert_called_once_with(mock_ctx)
     mock_auth.return_value.authenticate.assert_called_once_with(mock_ctx)
     mock_authz.return_value.authorize.assert_called_once_with(mock_ctx)
+    mock_workflow2.return_value.handle.assert_called_once_with(mock_ctx)
     mock_workflow.return_value.handle.assert_called_once_with(mock_ctx)
     mock_processor.return_value.process_operation.assert_called_once_with(mock_ctx)
     mock_responder.build_response.assert_called_once_with(mock_ctx)
