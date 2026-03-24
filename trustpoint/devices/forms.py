@@ -52,6 +52,7 @@ ALLOWED_CHARS = allowed_chars = string.ascii_letters + string.digits
 ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS = [
     (OnboardingProtocol.CMP_SHARED_SECRET.value, OnboardingProtocol.CMP_SHARED_SECRET.label),
     (OnboardingProtocol.EST_USERNAME_PASSWORD.value, OnboardingProtocol.EST_USERNAME_PASSWORD.label),
+    (OnboardingProtocol.REST_USERNAME_PASSWORD.value, OnboardingProtocol.REST_USERNAME_PASSWORD.label),
     (OnboardingProtocol.MANUAL.value, OnboardingProtocol.MANUAL.label),
     (OnboardingProtocol.AOKI.value, OnboardingProtocol.AOKI.label),
     (OnboardingProtocol.BRSKI.value, OnboardingProtocol.BRSKI.label),
@@ -343,6 +344,7 @@ class NoOnboardingCreateForm(forms.Form):
             (NoOnboardingPkiProtocol.CMP_SHARED_SECRET, NoOnboardingPkiProtocol.CMP_SHARED_SECRET.label),
             (NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD, NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD.label),
             (NoOnboardingPkiProtocol.MANUAL, NoOnboardingPkiProtocol.MANUAL.label),
+            (NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD, NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD.label),
         ],
         initial=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
         widget=SwitchCheckboxSelectMultiple(),
@@ -429,6 +431,10 @@ class NoOnboardingCreateForm(forms.Form):
         if NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD in no_onboarding_pki_protocols:
             no_onboarding_config_model.est_password = _get_secret()
 
+        rest_selected = NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD in no_onboarding_pki_protocols
+        if rest_selected and not no_onboarding_config_model.est_password:
+            no_onboarding_config_model.est_password = _get_secret()
+
         no_onboarding_config_model.full_clean()
 
         device_model = DeviceModel(
@@ -472,6 +478,7 @@ class OnboardingCreateForm(forms.Form):
         choices=[
             (OnboardingPkiProtocol.CMP, OnboardingPkiProtocol.CMP.label),
             (OnboardingPkiProtocol.EST, OnboardingPkiProtocol.EST.label),
+            (OnboardingPkiProtocol.REST, OnboardingPkiProtocol.REST.label),
         ],
         initial=OnboardingPkiProtocol.CMP,
         widget=SwitchCheckboxSelectMultiple(),
@@ -566,7 +573,7 @@ class OnboardingCreateForm(forms.Form):
         if onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
             onboarding_config_model.cmp_shared_secret = _get_secret()
 
-        if onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
+        if onboarding_protocol in (OnboardingProtocol.EST_USERNAME_PASSWORD, OnboardingProtocol.REST_USERNAME_PASSWORD):
             onboarding_config_model.est_password = _get_secret()
 
         onboarding_config_model.full_clean()
@@ -716,6 +723,7 @@ class ClmDeviceModelOnboardingForm(forms.Form):
 
     pki_protocol_cmp = forms.BooleanField(label='CMP', required=False)
     pki_protocol_est = forms.BooleanField(label='EST', required=False)
+    pki_protocol_rest = forms.BooleanField(label='REST', required=False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the form."""
@@ -736,6 +744,9 @@ class ClmDeviceModelOnboardingForm(forms.Form):
             HTML('</div>'),
             HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_est'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
+            Field('pki_protocol_rest'),
             HTML('</div>'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
@@ -777,7 +788,10 @@ class ClmDeviceModelOnboardingForm(forms.Form):
                 if not self.instance.onboarding_config.cmp_shared_secret:
                     self.instance.onboarding_config.cmp_shared_secret = _get_secret()
 
-            if onboarding_protocol_selected == OnboardingProtocol.EST_USERNAME_PASSWORD:
+            if onboarding_protocol_selected in (
+                OnboardingProtocol.EST_USERNAME_PASSWORD,
+                OnboardingProtocol.REST_USERNAME_PASSWORD,
+            ):
                 self.instance.onboarding_config.cmp_shared_secret = ''
                 if not self.instance.onboarding_config.est_password:
                     self.instance.onboarding_config.est_password = _get_secret()
@@ -788,6 +802,8 @@ class ClmDeviceModelOnboardingForm(forms.Form):
                 self.instance.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.CMP)
             if self.cleaned_data['pki_protocol_est'] is True:
                 self.instance.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.EST)
+            if self.cleaned_data['pki_protocol_rest'] is True:
+                self.instance.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.REST)
 
             self.instance.onboarding_config.full_clean()
             self.instance.onboarding_config.save()
@@ -936,6 +952,7 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
     pki_protocol_cmp = forms.BooleanField(label='CMP - Shared-Secret (HMAC)', required=False)
     pki_protocol_est = forms.BooleanField(label='EST - Username & Password', required=False)
     pki_protocol_manual = forms.BooleanField(label='Manual', required=False)
+    pki_protocol_rest = forms.BooleanField(label='REST - Username & Password', required=False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the form."""
@@ -956,6 +973,9 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
             HTML('</div>'),
             HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_manual'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
+            Field('pki_protocol_rest'),
             HTML('</div>'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
@@ -999,11 +1019,19 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
             self.instance.no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD)
             if self.instance.no_onboarding_config.est_password == '':
                 self.instance.no_onboarding_config.est_password = _get_secret()
-        else:
-            self.instance.no_onboarding_config.est_password = ''
 
         if self.cleaned_data['pki_protocol_manual'] is True:
             self.instance.no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.MANUAL)
+
+        if self.cleaned_data['pki_protocol_rest'] is True:
+            self.instance.no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD)
+            if self.instance.no_onboarding_config.est_password == '':
+                self.instance.no_onboarding_config.est_password = _get_secret()
+
+        est_enabled = self.cleaned_data['pki_protocol_est'] is True
+        rest_enabled = self.cleaned_data['pki_protocol_rest'] is True
+        if not est_enabled and not rest_enabled:
+            self.instance.no_onboarding_config.est_password = ''
 
         self.instance.no_onboarding_config.full_clean()
         self.instance.no_onboarding_config.save()

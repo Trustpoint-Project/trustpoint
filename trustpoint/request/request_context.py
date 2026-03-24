@@ -44,6 +44,10 @@ class BaseRequestContext(LoggerMixin):
     client_certificate: x509.Certificate | None = None
     client_intermediate_certificate: list[x509.Certificate] | None = None
 
+    # The authenticated user who triggered this request, if applicable (e.g. manual web UI issuance).
+    # None for machine-to-machine protocol flows (CMP, EST).
+    actor: Any | None = None
+
     # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
     event: Event | None = None
 
@@ -179,6 +183,7 @@ class CmpBaseRequestContext(HttpBaseRequestContext):
     cmp_shared_secret: str | None = None
     error_code: PKIFailureInfo | None = None
     error_details: str | None = None
+    implicit_confirm: bool = False
 
     # Client-side fields
     cmp_server_host: str | None = None
@@ -190,6 +195,14 @@ class CmpBaseRequestContext(HttpBaseRequestContext):
 @dataclass(kw_only=True)
 class RestBaseRequestContext(HttpBaseRequestContext):
     """Shared context for all REST API requests."""
+
+    rest_username: str | None = None
+    rest_password: str | None = None
+
+
+@dataclass(kw_only=True)
+class RestCertificateRequestContext(RestBaseRequestContext, BaseCertificateRequestContext):
+    """REST context for certificate enrollment requests."""
 
 
 @dataclass(kw_only=True)
@@ -213,6 +226,33 @@ class CmpCertificateRequestContext(CmpBaseRequestContext, BaseCertificateRequest
 @dataclass(kw_only=True)
 class CmpRevocationRequestContext(CmpBaseRequestContext, BaseRevocationRequestContext):
     """CMP context for certificate revocation requests (RR)."""
+
+@dataclass(kw_only=True)
+class CmpCertConfRequestContext(CmpBaseRequestContext, BaseRevocationRequestContext):
+    """CMP context for certificate confirmation requests (certConf).
+
+    Holds the parsed certHash, certReqId, and optional statusInfo from the
+    certConf body as defined in RFC 4210 Section 5.3.18 and profiled by
+    RFC 9483 Section 4.1.1.
+
+    Also inherits :class:`BaseRevocationRequestContext` so that the
+    ``credential_to_revoke`` field can be populated by the authorization
+    component when the EE signals rejection (cert_conf_status == 2), enabling
+    the operation processor to revoke the certificate via the standard
+    revocation pipeline.
+    """
+
+    cert_hash: bytes | None = None
+    """DER-encoded hash over the confirmed certificate (certHash field)."""
+
+    cert_req_id: int | None = None
+    """certReqId from the CertStatus structure (MUST be 0 per RFC 9483)."""
+
+    cert_conf_status: int | None = None
+    """PKIStatus from statusInfo, if present. 0=accepted, 2=rejection."""
+
+    cert_conf_status_string: str | None = None
+    """Human-readable statusString from statusInfo, if present."""
 
 
 @dataclass(kw_only=True)

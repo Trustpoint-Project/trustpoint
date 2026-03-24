@@ -1,5 +1,6 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
+{% load internationalization_tags %}
 
 {% block content %}
 
@@ -47,7 +48,7 @@
                 </td>
                 <td>{{ domain.devices.count }}</td>
                 <td>{{ domain.signature_suite }}</td>
-                <td>{{ domain.created_at }}</td>
+                <td>{{ domain.created_at|local_datetime }}</td>
 
                 <td><a href="config/{{ domain.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a></td>
                 <td><a href="delete/{{ domain.id }}/" class="btn btn-danger tp-table-btn w-100">{% trans 'Delete' %}</a></td>

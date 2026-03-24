@@ -1,5 +1,5 @@
 FROM python:3.14-slim-trixie
-COPY --from=ghcr.io/astral-sh/uv:0.10.12 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.0 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -71,7 +71,6 @@ USER www-data
 RUN uv sync --group docs --python-preference only-system
 RUN uv pip install gunicorn[gevent]
 USER root
-
 RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
              /var/www/html/trustpoint/trustpoint/collected_static \
              /var/www/html/trustpoint/docker/trustpoint/nginx/tls && \

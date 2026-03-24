@@ -53,6 +53,7 @@
                 <div class="tp-menu-collapse {% if page_category == 'devices' %}show{% endif %}">
                     <a href="{% url 'devices:devices' %}" class="tp-menu-item {% if page_name == 'devices' %}tp-menu-active{% endif %}">{% trans 'Devices' %}</a>
                     <a href="{% url 'devices:opc_ua_gds' %}" class="tp-menu-item {% if page_name == 'opc_ua_gds' %}tp-menu-active{% endif %}">{% trans 'OPC UA GDS' %}</a>
+                    <a href="{% url 'devices:zero_touch_credentials' %}" class="tp-menu-item {% if page_name == 'zero_touch_credentials' %}tp-menu-active{% endif %}">{% trans 'Zero-Touch Onboarding' %}</a>
                 </div>
             </div>
 
@@ -74,7 +75,6 @@
                     <a href="{% url 'pki:certificates' %}" class="tp-menu-item {% if page_name == 'certificates' %}tp-menu-active{% endif %}">{% trans 'Certificates' %}</a>
                     <a href="{% url 'pki:cert_profiles' %}" class="tp-menu-item {% if page_name == 'cert_profiles' %}tp-menu-active{% endif %}">{% trans 'Certificate Profiles' %}</a>
                     <a href="{% url 'pki:truststores' %}" class="tp-menu-item {% if page_name == 'truststores' %}tp-menu-active{% endif %}">{% trans 'Truststores' %}</a>
-                    <a href="{% url 'pki:owner_credentials' %}" class="tp-menu-item {% if page_name == 'owner_credentials' %}tp-menu-active{% endif %}">{% trans 'DevOwnerIDs' %}</a>
                 </div>
             </div>
             <div class="tp-menu-group">
@@ -100,6 +100,7 @@
                 <div class="tp-menu-collapse {% if page_category == 'management' %}show{% endif %}">
                     <a href="{% url 'management:settings' %}" class="tp-menu-item {% if page_name == 'settings' %}tp-menu-active{% endif %}">{% trans "Settings" %}</a>
                     <a href="{% url 'management:logging-files' %}" class="tp-menu-item {% if page_name == 'logging' %}tp-menu-active{% endif %}">{% trans "Logging" %}</a>
+                    <a href="{% url 'management:audit-log' %}" class="tp-menu-item {% if page_name == 'audit_log' %}tp-menu-active{% endif %}">{% trans "Audit Log" %}</a>
                     <a href="{% url 'management:tls' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "TLS" %}</a>
                     <a href="{% url 'management:backups' %}" class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}">{% trans "Backups" %}</a>
                     <a href="{% url 'management:key_storage' %}" class="tp-menu-item {% if page_name == 'key_storage' %}tp-menu-active{% endif %}">{% trans "Key Storage" %}</a>

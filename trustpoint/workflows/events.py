@@ -48,6 +48,20 @@ class Events:
         handler='certificate_request',
     )
 
+    rest_enroll = Event(
+        key='rest_enroll',
+        protocol='rest',
+        operation='enroll',
+        handler='certificate_request',
+    )
+
+    rest_reenroll = Event(
+        key='rest_reenroll',
+        protocol='rest',
+        operation='reenroll',
+        handler='certificate_request',
+    )
+
     # Device lifecycle
     device_created = Event(
         key='device_created',

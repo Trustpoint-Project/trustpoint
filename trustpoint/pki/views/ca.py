@@ -12,6 +12,7 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext as _
 from django.views.generic import ListView
 
+from management.models.audit_log import AuditLog
 from pki.models import CaModel
 from trustpoint.views.base import BulkDeleteView, ContextDataMixin
 
@@ -120,6 +121,15 @@ class CaBulkDeleteConfirmView(BulkDeleteView):
         try:
             cas_to_delete = list(queryset)
             self._delete_cas_hierarchically(cas_to_delete)
+
+            actor = self.request.user if self.request.user.is_authenticated else None
+            for ca in cas_to_delete:
+                AuditLog.create_entry(
+                    operation_type=AuditLog.OperationType.CA_DELETED,
+                    target=ca,
+                    target_display=f'CA: {ca.unique_name}',
+                    actor=actor,
+                )
 
             messages.success(self.request, _('Successfully deleted {count} CA(s).').format(count=deleted_count))
             return HttpResponseRedirect(self.success_url)

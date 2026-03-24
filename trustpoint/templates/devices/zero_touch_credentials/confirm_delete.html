@@ -1,0 +1,69 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+{% load crispy_forms_filters %}
+
+{% block content %}
+    <form method="POST" autocomplete="off">
+        {% csrf_token %}
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h1>{% trans 'Confirm Zero-Touch Credential Deletion' %}</h1>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="tp-card-centered-content">
+                    {% for owner_credential in owner_credentials %}
+                        <h2>({{ forloop.counter }}) {% trans 'Zero-Touch Credential' %}: {{ owner_credential.unique_name }}</h2>
+                        <hr class="hr-m">
+                        <div class="tp-kvp-list">
+                            <div>
+                                <div>{% trans 'Zero-Touch Credential Certificate' %}</div>
+                                <div>
+                                    {% with cert=owner_credential.dev_owner_id_credential.credential.certificate %}
+                                    {% if cert %}
+                                    <a href="{% url 'pki:certificate-detail' pk=cert.id %}">
+                                        {% if cert.common_name %}
+                                            CN: {{ cert.common_name }}
+                                        {% else %}
+                                            {% trans 'Zero-Touch Credential Certificate' %}
+                                        {% endif %}
+                                    </a>
+                                    {% else %}
+                                        {% trans 'Pending enrollment' %}
+                                    {% endif %}
+                                    {% endwith %}
+                                </div>
+                            </div>
+                            <div>
+                                <div>{% trans 'Serial Number' %}</div>
+                                <div>{{ owner_credential.dev_owner_id_credential.credential.certificate.serial_number|default:"—" }}</div>
+                            </div>
+                            <div>
+                                <div>Fingerprint (SHA256)</div>
+                                <div>{{ owner_credential.dev_owner_id_credential.credential.certificate.sha256_fingerprint|default:"—" }}</div>
+                            </div>
+                            <div>
+                                <div>{% trans 'Valid for number of IDevIDs' %}</div>
+                                <div>{{ owner_credential.idevid_ref_set.count }}</div>
+                            </div>
+                            <div>
+                                <div>{% trans 'Number of issued credentials' %}</div>
+                                <div>{{ owner_credential.dev_owner_id_credentials.count }}</div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'devices:zero_touch_credentials' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                    <button type="submit" class="btn btn-danger">{% trans 'Delete Zero-Touch Credentials' %}</button>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock content %}

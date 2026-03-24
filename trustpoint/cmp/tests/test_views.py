@@ -213,7 +213,7 @@ class TestCmpInitializationRequestView:
         view.post(request, domain='test_domain')
         
         # Verify CmpAuthorization was initialized with correct operations
-        mock_authz_cls.assert_called_once_with(['initialization', 'certification', 'revocation'])
+        mock_authz_cls.assert_called_once_with(['initialization', 'certification', 'revocation', 'certconf'])
 
 
 class TestCmpCertificationRequestView:

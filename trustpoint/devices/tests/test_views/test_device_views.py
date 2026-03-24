@@ -556,7 +556,7 @@ class TestIssuedCredentialRevocationView:
         url = reverse('devices:devices_credential_revoke', kwargs={'pk': 1})
 
 
-        with patch('devices.views.AbstractIssuedCredentialRevocationView.get_object') as mock_get:
+        with patch('devices.views.revoke.AbstractIssuedCredentialRevocationView.get_object') as mock_get:
             mock_issued_cred = Mock()
             mock_cert = Mock()
 
