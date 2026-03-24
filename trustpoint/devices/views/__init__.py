@@ -1,6 +1,10 @@
 """Views for the devices application."""
 
-
+from .agents import (
+    AgentCreateChooseTypeView,
+    AgentCreateOneToNOnboardingView,
+    AgentTableView,
+)
 from .browser_onboarding import (
     DeviceBrowserOnboardingCancelView,
     DeviceBrowserOnboardingOTPView,
@@ -77,6 +81,9 @@ from .tables import (
 )
 
 __all__ = [
+    'AgentCreateChooseTypeView',
+    'AgentCreateOneToNOnboardingView',
+    'AgentTableView',
     'DeviceBrowserCredentialDownloadView',
     'DeviceBrowserOnboardingCancelView',
     'DeviceBrowserOnboardingOTPView',

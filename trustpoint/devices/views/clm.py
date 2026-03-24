@@ -239,6 +239,7 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             and self.object.domain
             and self.object.no_onboarding_config
             and self.object.no_onboarding_config.get_pki_protocols()
+            and self.object.device_type != DeviceModel.DeviceType.AGENT_ONE_TO_N
         ):
             context['issue_app_cred_no_onboarding_url'] = (
                 f'{self.page_category}:{self.page_name}_no_onboarding_clm_issue_application_credential'
@@ -266,7 +267,12 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
                 )
 
         context['issue_app_cred_onboarding_url'] = ''
-        if self.object.domain and self.object.onboarding_config and self.object.onboarding_config.get_pki_protocols():
+        if (
+            self.object.domain
+            and self.object.onboarding_config
+            and self.object.onboarding_config.get_pki_protocols()
+            and self.object.device_type != DeviceModel.DeviceType.AGENT_ONE_TO_N
+        ):
             context['issue_app_cred_onboarding_url'] = (
                 f'{self.page_category}:{self.page_name}_onboarding_clm_issue_application_credential'
             )
