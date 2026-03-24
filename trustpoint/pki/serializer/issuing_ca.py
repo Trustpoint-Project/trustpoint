@@ -64,3 +64,36 @@ class IssuingCaSerializer(serializers.ModelSerializer[CaModel]):
     def get_common_name(self, obj: CaModel) -> str:
         """Get the common name of the CA."""
         return obj.common_name
+
+
+class IssuingCaImportSerializer(serializers.Serializer[CaModel]):
+    """Serializer for importing an Issuing CA from separate PEM-encoded files."""
+
+    unique_name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='',
+        help_text='Optional unique name for the Issuing CA. Derived from the certificate CN if omitted.',
+    )
+    private_key_pem = serializers.CharField(
+        help_text='PEM-encoded private key (PKCS#1, PKCS#8, or SEC1 for EC keys).',
+        style={'base_template': 'textarea.html'},
+    )
+    private_key_password = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='',
+        help_text='Optional password for an encrypted private key.',
+        style={'input_type': 'password'},
+    )
+    ca_certificate_pem = serializers.CharField(
+        help_text='PEM-encoded Issuing CA certificate.',
+        style={'base_template': 'textarea.html'},
+    )
+    certificate_chain_pem = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='',
+        help_text='Optional PEM-encoded certificate chain (intermediate + root CAs, concatenated).',
+        style={'base_template': 'textarea.html'},
+    )

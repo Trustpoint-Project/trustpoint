@@ -119,7 +119,7 @@ Next, use the CMP protocol with a shared secret to request the domain credential
 Explanation of the Key Parameters:
 
 - ``-cmd ir``: Initialization Request to obtain a new certificate.
-- ``-implicit_confirm``: Enables implicit confirmation to finalize the certificate enrollment.
+- ``-implicit_confirm``: Enables implicit confirmation to finalize the certificate enrollment (optional).
 - ``-server``: The URL of the Trustpoint CMP endpoint. Replace this with the actual server URL in your setup.
 - ``-ref 11``: Reference identifier provided during device registration.
 - ``-secret pass:None``: The shared secret for onboarding. Replace ``None`` with the actual secret provided by Trustpoint.

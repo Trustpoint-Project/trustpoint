@@ -99,7 +99,6 @@ class CmpSharedSecretCommandBuilderTests(SimpleTestCase):
 
         assert 'openssl cmp' in cmd
         assert '-cmd ir' in cmd
-        assert '-implicit_confirm' in cmd
         assert '-tls_used' in cmd
         assert '-server https://127.0.0.1/.well-known/cmp/p/test' in cmd
         assert '-ref 123' in cmd
@@ -127,7 +126,6 @@ class CmpSharedSecretCommandBuilderTests(SimpleTestCase):
 
         assert 'openssl cmp' in cmd
         assert '-cmd cr' in cmd
-        assert '-implicit_confirm' in cmd
         assert '-tls_used' in cmd
         assert '-server https://127.0.0.1/.well-known/cmp/p/test' in cmd
         assert '-ref 456' in cmd
@@ -217,7 +215,6 @@ class CmpClientCertificateCommandBuilderTests(SimpleTestCase):
 
         assert 'openssl cmp' in cmd
         assert '-cmd ir' in cmd
-        assert '-implicit_confirm' in cmd
         assert '-tls_used' in cmd
         assert '-server https://127.0.0.1/.well-known/cmp/p/test' in cmd
         assert 'domain_credential_key.pem' in cmd
@@ -238,7 +235,6 @@ class CmpClientCertificateCommandBuilderTests(SimpleTestCase):
 
         assert 'openssl cmp' in cmd
         assert '-cmd cr' in cmd
-        assert '-implicit_confirm' in cmd
         assert '-tls_used' in cmd
         assert '-server https://127.0.0.1/.well-known/cmp/p/test' in cmd
         assert 'key-1.pem' in cmd

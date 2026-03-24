@@ -69,7 +69,6 @@ class CmpSharedSecretCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
-            '-implicit_confirm \\\n'
             '-tls_used \\\n'
             f'-server {host} \\\n'
             f'-ref {pk} \\\n'
@@ -99,7 +98,6 @@ class CmpSharedSecretCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd ir \\\n'
-            '-implicit_confirm \\\n'
             '-tls_used \\\n'
             f'-server {host} \\\n'
             f'-ref {pk} \\\n'
@@ -258,7 +256,6 @@ class CmpClientCertificateCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd cr \\\n'
-            '-implicit_confirm \\\n'
             '-tls_used \\\n'
             '-trusted domain-credential-full-chain.pem \\\n'
             f'-server {host} \\\n'
@@ -286,7 +283,6 @@ class CmpClientCertificateCommandBuilder:
         return (
             'openssl cmp \\\n'
             '-cmd ir \\\n'
-            '-implicit_confirm \\\n'
             f'-server {host} \\\n'
             '-tls_used \\\n'
             '-cert idevid.pem \\\n'
@@ -414,6 +410,105 @@ class EstClientCertificateCommandBuilder:
             The constructed command.
         """
         return 'openssl pkcs7 \\\n-print_certs \\\n-inform DER \\\n-in cacerts.p7b \\\n-out cacerts.pem'
+
+
+class AokiCmpIDevIDCommandBuilder:
+    """Builds AOKI CMP commands with IDevID authentication."""
+
+    @staticmethod
+    def get_keygen_command() -> str:
+        """Get the key generation command for domain credential."""
+        return (
+            'openssl genrsa \\\n'
+            '  -out domain_credential_key.pem \\\n'
+            '  2048'
+        )
+
+    @staticmethod
+    def get_cmp_ir_command(host: str) -> str:
+        """Get the CMP Initial Request (IR) command for AOKI with IDevID."""
+        return (
+            'openssl cmp \\\n'
+            '  -cmd ir \\\n'
+            f'  -server {host} \\\n'
+            '  -cert idevid.pem \\\n'
+            '  -key idevid_pk.pem \\\n'
+            '  -extracerts idevid_ca.pem \\\n'
+            '  -subject "/CN=Trustpoint Domain Credential" \\\n'
+            '  -newkey domain_credential_key.pem \\\n'
+            '  -certout domain_credential.pem \\\n'
+            '  -chainout chain_without_root.pem \\\n'
+            '  -extracertsout full_chain.pem \\\n'
+            '  -trusted ownerid_ca.pem'
+        )
+
+
+class AokiEstIDevIDCommandBuilder:
+    """Builds AOKI EST commands with IDevID authentication."""
+
+    @staticmethod
+    def get_aoki_init_command(host: str) -> str:
+        """Get the AOKI initialization request command."""
+        return (
+            f'curl --cert idevid.pem \\\n'
+            f'  --key idevid_pk.pem \\\n'
+            f'  --cacert ownerid_ca.pem \\\n'
+            f'  -o aoki_init_response.json \\\n'
+            f'{host}/aoki/init'
+        )
+
+    @staticmethod
+    def get_aoki_init_response_example() -> str:
+        """Get an example AOKI initialization response JSON."""
+        return """{
+  "aoki-init": {
+    "version": "1.0",
+    "owner-id-cert": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----",
+    "tls-truststore": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----",
+    "enrollment-info": {
+      "protocols": [
+        {
+          "protocol": "EST",
+          "url": "https://127.0.0.1:443/.well-known/est/domain/domain_credential/simpleenroll"
+        }
+      ]
+    }
+  }
+}"""
+
+    @staticmethod
+    def get_keygen_command() -> str:
+        """Get the key generation command for domain credential."""
+        return (
+            'openssl genrsa \\\n'
+            '  -out domain_credential_key.pem \\\n'
+            '  2048'
+        )
+
+    @staticmethod
+    def get_csr_command() -> str:
+        """Get the CSR generation command for AOKI EST enrollment."""
+        return (
+            'openssl req \\\n'
+            '  -new \\\n'
+            '  -key domain_credential_key.pem \\\n'
+            '  -outform DER \\\n'
+            '  -out domain_credential.der \\\n'
+            '  -subj "/CN=Trustpoint-Domain-Credential"'
+        )
+
+    @staticmethod
+    def get_curl_enroll_command(host: str) -> str:
+        """Get the curl EST enrollment command for AOKI with IDevID."""
+        return (
+            f'curl --cert domain_credential.pem \\\n'
+            f'  --key domain_credential_key.pem \\\n'
+            f'  --cacert trust_store.pem \\\n'
+            f'  --header "Content-Type: application/pkcs10" \\\n'
+            f'  --data-binary "@domain_credential.der" \\\n'
+            f'  -o domain_certificate.p7c \\\n'
+            f'{host}'
+        )
 
 
 class RestUsernamePasswordCommandBuilder:

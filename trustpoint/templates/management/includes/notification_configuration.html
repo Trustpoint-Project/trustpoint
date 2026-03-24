@@ -22,11 +22,10 @@
         </div>
         {% endif %}
 
-        <form method="POST" enctype="multipart/form-data" id="notification_configuration">
+        <form method="POST" action="{% url 'management:settings-notifications' %}" enctype="multipart/form-data" id="notification_configuration">
             {% csrf_token %}
-            <input type="hidden" name="notification_configuration" value="1">
             <fieldset class="form-group tp-form-group">
-                {% crispy notification_form %}
+                {% crispy form %}
             </fieldset>
         </form>
     </div>

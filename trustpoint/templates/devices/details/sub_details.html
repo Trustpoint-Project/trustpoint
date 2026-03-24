@@ -1,4 +1,5 @@
 {% load i18n %}
+{% load internationalization_tags %}
 {% block sub_details %}
     {% if short %}
         <h2 class="text-start">{{ device.device_name }}</h2>
@@ -11,11 +12,11 @@
         </li>
         <li>
             <div>{% trans 'Creation date' %}</div>
-            <div>{{ device.created_at }}</div>
+            <div>{{ device.created_at|local_datetime }}</div>
         </li>
         <li>
             <div>{% trans 'Updated date' %}</div>
-            <div>{{ device.updated_at }}</div>
+            <div>{{ device.updated_at|local_datetime }}</div>
         </li>
         {% if short %}
             <li>
@@ -141,7 +142,7 @@
             </li>
             <li>
                 <div>{% trans 'Created at' %}</div>
-                <div>{{ device.domain.issuing_ca.created_at }}</div>
+                <div>{{ device.domain.issuing_ca.created_at|local_datetime }}</div>
             </li>
         </ul>
     {% endif %}

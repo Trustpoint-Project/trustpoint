@@ -66,6 +66,18 @@
   height: 100% !important;
 }
 
+[data-bs-theme="light"] {
+  --chart-grid-color: rgba(20, 20, 20, 0.3);
+  --chart-border-color: #2d2d2d;
+  --chart-text-color: #2d2d2d;
+}
+
+[data-bs-theme="dark"] {
+  --chart-grid-color: rgba(222, 226, 230, 0.2);
+  --chart-border-color: #dee2e6;
+  --chart-text-color: #dee2e6;
+}
+
 .bar-chart-legend {
   overflow-y: auto;
   flex: 1;

@@ -1,20 +1,28 @@
-"""Settings views."""
+"""Settings views with dedicated views for each setting type."""
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
 from django.core.management import call_command
 from django.shortcuts import redirect
-from django.urls import reverse, reverse_lazy
+from django.urls import reverse_lazy
+from django.utils import translation
 from django.utils.translation import gettext as _
 from django.views import View
+from django.views.generic import TemplateView
 from django.views.generic.edit import FormView
 
-from management.forms import NotificationConfigForm, SecurityConfigForm
-from management.models import LoggingConfig, NotificationConfig, SecurityConfig
+from management.forms import (
+    InternationalizationConfigForm,
+    LoggingConfigForm,
+    NotificationConfigForm,
+    SecurityConfigForm,
+)
+from management.models import InternationalizationConfig, LoggingConfig, NotificationConfig, SecurityConfig
+from management.models.audit_log import AuditLog
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
 from pki.util.keys import AutoGenPkiKeyAlgorithm
@@ -22,116 +30,167 @@ from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
 
 if TYPE_CHECKING:
-    from typing import Any
-
     from django.http import HttpRequest, HttpResponse
 
 
-LOG_LEVELS=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
-class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[SecurityConfigForm]):
-    """A view for managing security settings in the Trustpoint application.
-
-    This view handles the display and processing of the SecurityConfigForm,
-    allowing users to configure security-related settings such as security mode,
-    auto-generated PKI, and notification configurations.
-    """
-    template_name = 'management/settings.html'
-    form_class = SecurityConfigForm
-    success_url = reverse_lazy('management:settings')
+class SettingsFormViewMixin[FormType: (
+    InternationalizationConfigForm | LoggingConfigForm | NotificationConfigForm | SecurityConfigForm
+)](
+    PageContextMixin,
+    SecurityLevelMixin,
+    LoggerMixin,
+    FormView[FormType],
+):
+    """Base mixin for all settings form views."""
 
     page_category = 'management'
     page_name = 'settings'
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle POST requests for both SecurityConfig and NotificationConfig forms.
+    setting_type: str = 'general'
 
-        Parameters
-        ----------
-        request : HttpRequest
-            The HTTP request object.
-        *args : tuple
-            Positional arguments.
-        **kwargs : dict
-            Keyword arguments.
+    def get_success_url(self) -> str:
+        """Return the URL to redirect to after successful form submission."""
+        return f"{reverse_lazy('management:settings')}?tab={self.setting_type}"
 
-        Returns:
-        -------
-        HttpResponse
-            A response object.
-        """
-        # Check which form was submitted
-        if 'security_configuration' in request.POST:
-            # Handle SecurityConfigForm
-            form = self.get_form()
-            if form.is_valid():
-                return self.form_valid(form)
-            return self.form_invalid(form)
-        if 'notification_configuration' in request.POST:
-            notification_config = NotificationConfig.get()
-            notification_form = NotificationConfigForm(request.POST, instance=notification_config)
-            self.logger.debug('NotificationConfigForm validation: is_valid=%s', notification_form.is_valid())
-            if notification_form.is_valid():
-                # Get the enabled status before and after
-                was_enabled = notification_config.enabled
+    def form_valid(self, form: FormType) -> HttpResponse:
+        """Handle valid form submission."""
+        form.save()
+        messages.success(self.request, _('Your changes were saved successfully.'))
+        return super().form_valid(form)
 
-                notification_form.save()
+    def form_invalid(self, form: FormType) -> HttpResponse:
+        """Handle invalid form submission."""
+        messages.error(self.request, _('Error saving the configuration'))
+        return super().form_invalid(form)
 
-                notification_config.refresh_from_db()
-                cleaned_enabled = notification_config.enabled
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Build the context dictionary for rendering the page."""
+        context = super().get_context_data(**kwargs)
+        context['page_category'] = self.page_category
+        context['page_name'] = self.page_name
+        context['setting_type'] = self.setting_type
+        return context
 
-                if cleaned_enabled:
-                    needs_init = not notification_config.notification_cycle_enabled or not was_enabled
 
-                    if needs_init:
-                        try:
-                            notification_config.notification_cycle_enabled = True
-                            notification_config.save(update_fields=['notification_cycle_enabled'])
+class SettingsTabView(TemplateView):
+    """Main settings view with tab interface."""
 
-                            call_command('init_notifications')
+    template_name = 'management/settings.html'
 
-                            if not was_enabled:
-                                messages.success(
-                                    request,
-                                    _('Notifications enabled and notification cycle initialized.')
-                                )
-                            else:
-                                messages.success(
-                                    request,
-                                    _('Notification configuration saved and cycle reinitialized.')
-                                )
-                        except Exception:  # pylint: disable=broad-except
-                            self.logger.exception('Error initializing notifications')
-                            messages.error(
-                                request,
-                                _('Notifications saved but error initializing notification cycle.')
-                            )
-                    else:
-                        messages.success(request, _('Notification configuration saved successfully.'))
-                else:
-                    if notification_config.notification_cycle_enabled:
-                        notification_config.notification_cycle_enabled = False
-                        notification_config.save(update_fields=['notification_cycle_enabled'])
-                    messages.success(request, _('Notifications disabled successfully.'))
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Build the context for the settings page."""
+        context = super().get_context_data(**kwargs)
+        context['page_category'] = 'management'
+        context['page_name'] = 'settings'
 
-                return redirect(self.success_url)
-            self.logger.error('Notification form errors: %s', notification_form.errors)
-            self.logger.error('Notification form non-field errors: %s', notification_form.non_field_errors())
-            messages.error(request, _('Error saving notification configuration'))
-            return self.render_to_response(
-                self.get_context_data(notification_form=notification_form)
-            )
-        return super().post(request, *args, **kwargs)
+        context['active_tab'] = self.request.GET.get('tab', 'language')
+
+        internationalization_view = InternationalizationSettingsView()
+        internationalization_view.request = self.request
+        internationalization_view.setup(self.request)
+        context['internationalization_form'] = internationalization_view.get_form()
+
+        security_view = SecuritySettingsView()
+        security_view.request = self.request
+        security_view.setup(self.request)
+        context['security_form'] = security_view.get_form()
+        context['notification_configurations_json'] = SecurityConfig.get_settings_preview_json()
+
+        logging_view = LoggingSettingsView()
+        logging_view.request = self.request
+        logging_view.setup(self.request)
+        context['logging_form'] = logging_view.get_form()
+        context['loglevels'] = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+        current_level_num = logging.getLogger().getEffectiveLevel()
+        context['current_loglevel'] = logging.getLevelName(current_level_num)
+
+        notification_view = NotificationSettingsView()
+        notification_view.request = self.request
+        notification_view.setup(self.request)
+        context['notification_form'] = notification_view.get_form()
+        context['notification_config'] = NotificationConfig.get()
+
+        return context
+
+
+
+
+
+class InternationalizationSettingsView(SettingsFormViewMixin[InternationalizationConfigForm]):
+    """View for managing internationalization settings."""
+
+    template_name = 'management/includes/internationalization_configuration.html'
+    form_class = InternationalizationConfigForm
+    setting_type = 'internationalization'
+
+    def get_initial(self) -> dict[str, Any]:
+        """Get initial form data with current internationalization settings."""
+        initial = super().get_initial()
+
+        config, _ = InternationalizationConfig.objects.get_or_create(
+            id=1,
+            defaults={
+                'date_format': InternationalizationConfig.DateFormatChoices.YYYY_MM_DD_24_SEC,
+                'language': translation.get_language() or InternationalizationConfig.LanguageChoices.EN,
+                'timezone': 'UTC',
+            },
+        )
+
+        initial['date_format'] = config.date_format
+        initial['language'] = config.language
+        initial['timezone'] = config.timezone
+        return initial
+
+    def form_valid(self, form: InternationalizationConfigForm) -> HttpResponse:
+        """Handle valid internationalization form submission."""
+        date_format = form.cleaned_data['date_format']
+        language = form.cleaned_data['language']
+        timezone = form.cleaned_data['timezone']
+
+        self.logger.info(
+            'Changing internationalization settings to: date_format=%s, language=%s, timezone=%s',
+            date_format,
+            language,
+            timezone,
+        )
+
+        InternationalizationConfig.objects.update_or_create(
+            id=1,
+            defaults={
+                'date_format': date_format,
+                'language': language,
+                'timezone': timezone,
+            },
+        )
+
+        translation.activate(language)
+
+        response = redirect(self.get_success_url())
+        response.set_cookie(
+            key='django_language',
+            value=language,
+            max_age=365 * 24 * 60 * 60,
+            path='/',
+            samesite='Lax',
+        )
+
+        messages.success(self.request,_('Internationalization configuration saved successfully.'))
+        return response
+
+
+class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
+    """View for managing security settings."""
+
+    template_name = 'management/includes/security_configuration.html'
+    form_class = SecurityConfigForm
+    setting_type = 'security'
+    success_url = reverse_lazy('management:settings-security')
 
     def get_form_kwargs(self) -> dict[str, Any]:
         """Get the keyword arguments for instantiating the form.
 
-        This method retrieves or creates the `SecurityConfig` instance
-        and includes it in the form's keyword arguments.
-
         Returns:
-        -------
-        dict
-            The keyword arguments for the form, including the `instance`.
+            The keyword arguments for the form, including the instance.
         """
         kwargs = super().get_form_kwargs()
         try:
@@ -142,23 +201,30 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         return kwargs
 
     def form_valid(self, form: SecurityConfigForm) -> HttpResponse:
-        """Handle valid form submission.
+        """Handle valid security form submission.
 
         This method processes the form data, applies security settings,
         and displays success messages to the user.
 
-        Parameters
-        ----------
-        form : SecurityConfigForm
-            The form instance containing the submitted data.
+        Parameters:
+            form: The form instance containing the submitted data.
 
         Returns:
-        -------
-        HttpResponse
             A redirect response to the success URL.
         """
         old_conf = SecurityConfig.objects.get(pk=form.instance.pk) if form.instance.pk else None
         form.save()
+
+        # --- Audit log ---
+        security_mode_display = form.instance.get_security_mode_display()
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.SECURITY_CONFIG_CHANGED,
+            target=form.instance,
+            target_display=f'SecurityConfig: {security_mode_display}',
+            actor=actor,
+        )
+        # -----------------
 
         if 'security_mode' in form.changed_data:
             old_value = getattr(old_conf, 'security_mode', None) if old_conf else None
@@ -206,24 +272,10 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
                 self.logger.info('Auto-generated PKI disabled')
 
         messages.success(self.request, _('Your changes were saved successfully.'))
-        return super().form_valid(form)
+        return redirect(self.get_success_url())
 
     def form_invalid(self, form: SecurityConfigForm) -> HttpResponse:
-        """Handle invalid form submission.
-
-        This method displays an error message and re-renders the form
-        with validation errors.
-
-        Parameters
-        ----------
-        form : SecurityConfigForm
-            The form instance containing the submitted data.
-
-        Returns:
-        -------
-        HttpResponse
-            A response rendering the form with errors.
-        """
+        """Handle invalid security form submission."""
         messages.error(self.request, _('Error saving the configuration'))
         extra: dict[str, Any] = {'form': form}
         if hasattr(form, '_violations'):
@@ -233,69 +285,137 @@ class SettingsView(PageContextMixin, SecurityLevelMixin, LoggerMixin, FormView[S
         return self.render_to_response(self.get_context_data(**extra))
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Build the context dictionary for rendering the settings page.
-
-        This method adds page metadata, notification configurations, log levels,
-        task execution status, and the current log level to the context.
-
-        Parameters
-        ----------
-        **kwargs : dict
-            Additional context variables.
-
-        Returns:
-        -------
-        dict[str, Any]
-            The context dictionary for the template.
-        """
+        """Build the context dictionary for the security settings page."""
         context = super().get_context_data(**kwargs)
-        context['page_category'] = 'management'
-        context['page_name'] = 'settings'
-
         context['notification_configurations_json'] = SecurityConfig.get_settings_preview_json()
-        context['loglevels'] = LOG_LEVELS
+        return context
+
+
+class LoggingSettingsView(SettingsFormViewMixin[LoggingConfigForm]):
+    """View for managing logging settings."""
+
+    template_name = 'management/includes/log_configuration.html'
+    form_class = LoggingConfigForm
+    setting_type = 'log'
+
+    def get_initial(self) -> dict[str, Any]:
+        """Get initial form data with current log level."""
+        initial = super().get_initial()
+        current_level_num = logging.getLogger().getEffectiveLevel()
+        initial['loglevel'] = logging.getLevelName(current_level_num)
+        return initial
+
+    def form_valid(self, form: LoggingConfigForm) -> HttpResponse:
+        """Handle valid logging form submission."""
+        level = form.cleaned_data['loglevel']
+        self.logger.info('Changing log level to: %s', level)
+
+        logger = logging.getLogger()
+        logger.setLevel(getattr(logging, level))
+
+        LoggingConfig.objects.update_or_create(
+            id=1,
+            defaults={'log_level': level}
+        )
+
+        self.logger.info('Log level successfully changed to: %s', level)
+        messages.success(self.request, _('Log level changed to %(level)s') % {'level': level})
+        return redirect(self.get_success_url())
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Build the context dictionary for the logging settings page."""
+        context = super().get_context_data(**kwargs)
+        context['loglevels'] = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
         current_level_num = logging.getLogger().getEffectiveLevel()
         context['current_loglevel'] = logging.getLevelName(current_level_num)
+        return context
 
-        # Add notification configuration form
+
+class NotificationSettingsView(SettingsFormViewMixin[NotificationConfigForm]):
+    """View for managing notification settings."""
+
+    template_name = 'management/includes/notification_configuration.html'
+    form_class = NotificationConfigForm
+    setting_type = 'notifications'
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Get the keyword arguments for instantiating the form."""
+        kwargs = super().get_form_kwargs()
         notification_config = NotificationConfig.get()
-        context['notification_form'] = NotificationConfigForm(instance=notification_config)
-        context['notification_config'] = notification_config
+        kwargs['instance'] = notification_config
+        return kwargs
 
+    def form_valid(self, form: NotificationConfigForm) -> HttpResponse:
+        """Handle valid notification form submission."""
+        notification_config = form.instance
+        was_enabled = notification_config.enabled
+
+        form.save()
+        notification_config.refresh_from_db()
+        cleaned_enabled = notification_config.enabled
+
+        if cleaned_enabled:
+            needs_init = not notification_config.notification_cycle_enabled or not was_enabled
+
+            if needs_init:
+                try:
+                    notification_config.notification_cycle_enabled = True
+                    notification_config.save(update_fields=['notification_cycle_enabled'])
+
+                    call_command('init_notifications')
+
+                    if not was_enabled:
+                        messages.success(
+                            self.request,
+                            _('Notifications enabled and notification cycle initialized.')
+                        )
+                    else:
+                        messages.success(
+                            self.request,
+                            _('Notification configuration saved and cycle reinitialized.')
+                        )
+                except Exception:
+                    self.logger.exception('Error initializing notifications')
+                    messages.error(
+                        self.request,
+                        _('Notifications saved but error initializing notification cycle.')
+                    )
+            else:
+                messages.success(self.request, _('Notification configuration saved successfully.'))
+        else:
+            if notification_config.notification_cycle_enabled:
+                notification_config.notification_cycle_enabled = False
+                notification_config.save(update_fields=['notification_cycle_enabled'])
+            messages.success(self.request, _('Notifications disabled successfully.'))
+
+        return redirect(self.get_success_url())
+
+    def form_invalid(self, form: NotificationConfigForm) -> HttpResponse:
+        """Handle invalid notification form submission."""
+        self.logger.error('Notification form errors: %s', form.errors)
+        self.logger.error('Notification form non-field errors: %s', form.non_field_errors())
+        messages.error(self.request, _('Error saving notification configuration'))
+        return super().form_invalid(form)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Build the context dictionary for the notification settings page."""
+        context = super().get_context_data(**kwargs)
+        notification_config = NotificationConfig.get()
+        context['notification_form'] = context.get('form', self.get_form())
+        context['notification_config'] = notification_config
         return context
 
 
 class ChangeLogLevelView(View):
-    """A view for changing the logging level in the Trustpoint application.
+    """Deprecated view for changing the logging level."""
 
-    This view handles POST requests to update the logging level dynamically.
-    """
     def post(self, request: HttpRequest) -> HttpResponse:
-        """Handle POST requests to change the logging level.
-
-        This method validates the provided log level, updates the logger
-        and database configuration if valid, and redirects back to the settings page.
-
-        Parameters
-        ----------
-        request : HttpRequest
-            The HTTP request object containing the POST data.
-
-        Returns:
-        -------
-        HttpResponse
-            A redirect response to the settings page.
-        """
-        level = request.POST.get('loglevel', '').upper()
-        if level not in LOG_LEVELS:
-            messages.error(request, f'Invalid log level: {level}')
+        """Handle POST requests to change the logging level."""
+        form = LoggingConfigForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, _('Log level updated successfully.'))
         else:
-            logger = logging.getLogger()
-            logger.setLevel(getattr(logging, level))
-            LoggingConfig.objects.update_or_create(
-                id=1,
-                defaults={'log_level': level}
-            )
-            messages.success(request, f'Log level set to {level}')
+            messages.error(request, _('Invalid log level.'))
 
-        return redirect(reverse('management:settings'))
+        return redirect(reverse_lazy('management:settings') + '?tab=log')
