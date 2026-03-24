@@ -243,7 +243,14 @@ class WorkflowRuntimeService:
             raise
 
     @transaction.atomic
-    def resolve_approval(self, *, approval: Workflow2Approval, decision: str) -> None:
+    def resolve_approval(
+        self,
+        *,
+        approval: Workflow2Approval,
+        decision: str,
+        decided_by: str | None = None,
+        comment: str | None = None,
+    ) -> None:
         if decision not in {"approved", "rejected"}:
             raise ValueError("decision must be 'approved' or 'rejected'")
 
@@ -287,7 +294,9 @@ class WorkflowRuntimeService:
             else Workflow2Approval.STATUS_REJECTED
         )
         approval.decided_at = timezone.now()
-        approval.save(update_fields=["status", "decided_at"])
+        approval.decided_by = decided_by or None
+        approval.comment = comment or None
+        approval.save(update_fields=["status", "decided_at", "decided_by", "comment"])
 
         run_index = int(inst.run_count) + 1
         terminal_reject = next_step == "$reject"
@@ -313,6 +322,8 @@ class WorkflowRuntimeService:
             output={
                 "decision": decision,
                 "selected_outcome": selected_outcome,
+                "comment": comment or "",
+                "decided_by": decided_by or "",
             },
             error=None,
             created_at=timezone.now(),

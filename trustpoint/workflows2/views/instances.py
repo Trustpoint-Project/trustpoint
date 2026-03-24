@@ -1,7 +1,6 @@
 # workflows2/views/instances.py
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from django.contrib import messages
@@ -15,32 +14,16 @@ from django.views import View
 from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Approval, Workflow2Instance, Workflow2Job, Workflow2StepRun
+from workflows2.views.presentation import (
+    compact_value,
+    describe_event_context,
+    describe_step,
+    pretty_json,
+    resolve_source_context,
+    status_badge_class,
+    summarize_named_values,
+)
 from workflows2.services.runtime import WorkflowRuntimeService
-
-
-def _pretty_json(obj: Any) -> str:
-    return json.dumps(obj, indent=2, sort_keys=True, ensure_ascii=False)
-
-
-def _status_badge_class(status: str | None) -> str:
-    s = (status or "").strip().lower()
-    if s in {"ok", "success", "succeeded", "done", "completed"}:
-        return "text-bg-success"
-    if s in {"failed", "error"}:
-        return "text-bg-danger"
-    if s in {"awaiting", "paused"}:
-        return "text-bg-warning"
-    if s in {"running"}:
-        return "text-bg-primary"
-    if s in {"queued"}:
-        return "text-bg-secondary"
-    if s in {"cancelled", "canceled"}:
-        return "text-bg-dark"
-    if s in {"rejected"}:
-        return "text-bg-danger"
-    if s in {"stopped"}:
-        return "text-bg-info"
-    return "text-bg-secondary"
 
 
 def _safe_str(x: Any) -> str:
@@ -133,6 +116,12 @@ class Workflow2InstanceDetailView(LoginRequiredMixin, View):
         jobs = list(Workflow2Job.objects.filter(instance=inst).order_by("-created_at")[:50])
 
         step_meta = _get_step_meta(inst)
+        current_step = describe_step(inst.current_step, step_meta)
+        event_source = inst.event_json.get('source') if isinstance(inst.event_json, dict) else None
+        source_context = resolve_source_context(inst.run.source_json if inst.run_id else event_source)
+        event_context = describe_event_context(inst.event_json)
+        vars_summary = summarize_named_values(inst.vars_json)
+        latest_step_run = step_runs[-1] if step_runs else None
 
         # Render-ready list of "step run items"
         step_run_items: list[dict[str, Any]] = []
@@ -144,10 +133,12 @@ class Workflow2InstanceDetailView(LoginRequiredMixin, View):
                 {
                     "r": r,
                     "meta": m,
-                    "badge": _status_badge_class(r.status),
-                    "vars_delta_pretty": _pretty_json(r.vars_delta) if r.vars_delta is not None else "",
-                    "output_pretty": _pretty_json(r.output) if r.output is not None else "",
-                    "params_pretty": _pretty_json(params) if params else "",
+                    "badge": status_badge_class(r.status),
+                    "vars_delta_pretty": pretty_json(r.vars_delta) if r.vars_delta is not None else "",
+                    "output_pretty": pretty_json(r.output) if r.output is not None else "",
+                    "params_pretty": pretty_json(params) if params else "",
+                    "output_summary": compact_value(r.output),
+                    "vars_delta_summary": compact_value(r.vars_delta),
                     "has_details": bool(r.error or r.output or r.vars_delta or params or m.get("description")),
                 }
             )
@@ -165,9 +156,14 @@ class Workflow2InstanceDetailView(LoginRequiredMixin, View):
                 "jobs": jobs,
                 "step_run_items": step_run_items,
                 "step_meta": step_meta,
-                "event_pretty": _pretty_json(inst.event_json),
-                "vars_pretty": _pretty_json(inst.vars_json),
-                "inst_badge": _status_badge_class(inst.status),
+                "current_step": current_step,
+                "latest_step_run": latest_step_run,
+                "source_context": source_context,
+                "event_context": event_context,
+                "vars_summary": vars_summary,
+                "event_pretty": pretty_json(inst.event_json),
+                "vars_pretty": pretty_json(inst.vars_json),
+                "inst_badge": status_badge_class(inst.status),
                 "cfg_mode": cfg_mode,
             },
         )

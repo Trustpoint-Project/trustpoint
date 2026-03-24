@@ -96,6 +96,9 @@ class WorkflowDispatchService:
         stale = int(getattr(cfg, "worker_stale_after_seconds", 30) or 30)
         return "db" if self._worker_available(stale_after_seconds=stale) else "sync"
 
+    def runs_inline(self) -> bool:
+        return self._effective_mode() == "sync"
+
     def _drain_jobs_in_process(self, *, worker_id: str = "inline-worker", max_ticks: int = 200) -> None:
         """
         Drain runnable jobs until nothing is claimable (blocked or empty).
@@ -129,7 +132,7 @@ class WorkflowDispatchService:
 
         raise RuntimeError("Inline drain exceeded max_ticks (possible infinite job loop)")
 
-    def _drain_after_commit(self, run_id: str) -> None:
+    def _drain_after_commit(self, run_id: str | None = None) -> None:
         """
         Runs after commit: drain and recompute run status.
         """
@@ -137,8 +140,9 @@ class WorkflowDispatchService:
             self._drain_jobs_in_process(worker_id="inline-worker")
         finally:
             try:
-                run = Workflow2Run.objects.get(id=run_id)
-                self.runtime.recompute_run_status(run)
+                if run_id:
+                    run = Workflow2Run.objects.get(id=run_id)
+                    self.runtime.recompute_run_status(run)
             except Exception:
                 # don't crash commit hook
                 pass
@@ -237,6 +241,33 @@ class WorkflowDispatchService:
 
         return DispatchOutcome(status="running", run=run, instances=instances)
 
+    def continue_instance(self, *, instance: Workflow2Instance) -> Workflow2Job:
+        """
+        Queue a continuation step for an existing instance and respect the same
+        inline-vs-worker execution policy as normal event dispatch.
+        """
+        job = Workflow2Job.objects.create(
+            instance=instance,
+            kind=Workflow2Job.KIND_RUN,
+            status=Workflow2Job.STATUS_QUEUED,
+        )
+
+        run_id = getattr(instance, "run_id", None)
+        if run_id:
+            run = Workflow2Run.objects.get(id=run_id)
+            self.runtime.recompute_run_status(run)
+
+        if self.runs_inline():
+            if connection.in_atomic_block:
+                transaction.on_commit(lambda rid=str(run_id) if run_id else None: self._drain_after_commit(rid))
+            else:
+                self._drain_jobs_in_process(worker_id="inline-worker")
+                if run_id:
+                    run = Workflow2Run.objects.get(id=run_id)
+                    self.runtime.recompute_run_status(run)
+
+        return job
+
     @transaction.atomic
     def get_or_create_run(
         self,
@@ -249,7 +280,7 @@ class WorkflowDispatchService:
         if idempotency_key:
             existing = (
                 Workflow2Run.objects.select_for_update()
-                .filter(trigger_on=on, idempotency_key=idempotency_key, finalized=False)
+                .filter(trigger_on=on, idempotency_key=idempotency_key)
                 .order_by("-created_at")
                 .first()
             )

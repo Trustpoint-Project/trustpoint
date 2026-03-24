@@ -13,32 +13,77 @@ from django.views import View
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Instance, Workflow2Job, Workflow2Run
 from workflows2.services.runtime import WorkflowRuntimeService
+from workflows2.views.presentation import (
+    build_step_meta_from_ir,
+    describe_event_context,
+    describe_step,
+    pretty_json,
+    resolve_source_context,
+    status_badge_class,
+    summarize_source,
+)
 
 
 class Workflow2RunListView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest) -> HttpResponse:
-        qs = Workflow2Run.objects.all().order_by('-created_at')
+        base_qs = Workflow2Run.objects.annotate(instance_count=Count('instances')).order_by('-created_at')
 
         status = request.GET.get('status')
-        trigger_on = request.GET.get('trigger_on')
+        trigger_on = (request.GET.get('trigger_on') or '').strip()
+        show_no_match = request.GET.get('show_no_match') == '1'
+        if status == Workflow2Run.STATUS_NO_MATCH:
+            show_no_match = True
 
+        qs = base_qs
+        if not show_no_match:
+            qs = qs.exclude(status=Workflow2Run.STATUS_NO_MATCH)
         if status:
             qs = qs.filter(status=status)
         if trigger_on:
-            qs = qs.filter(trigger_on=trigger_on)
-
-        qs = qs.annotate(instance_count=Count('instances'))
+            qs = qs.filter(trigger_on__icontains=trigger_on)
 
         paginator = Paginator(qs, 25)
         page_obj = paginator.get_page(request.GET.get('page'))
+        run_rows = [
+            {
+                'run': run,
+                'badge': status_badge_class(run.status),
+                'source_summary': summarize_source(run.source_json),
+                'is_no_match': run.status == Workflow2Run.STATUS_NO_MATCH,
+                'has_instances': bool(run.instance_count),
+            }
+            for run in page_obj.object_list
+        ]
+
+        hidden_no_match_count = 0 if show_no_match else base_qs.filter(status=Workflow2Run.STATUS_NO_MATCH).count()
+        active_statuses = [
+            Workflow2Run.STATUS_QUEUED,
+            Workflow2Run.STATUS_RUNNING,
+            Workflow2Run.STATUS_AWAITING,
+            Workflow2Run.STATUS_PAUSED,
+        ]
+        completed_statuses = [
+            Workflow2Run.STATUS_SUCCEEDED,
+            Workflow2Run.STATUS_REJECTED,
+            Workflow2Run.STATUS_FAILED,
+            Workflow2Run.STATUS_CANCELLED,
+            Workflow2Run.STATUS_STOPPED,
+        ]
 
         return render(
             request,
             'workflows2/runs_list.html',
             {
                 'page_obj': page_obj,
+                'run_rows': run_rows,
                 'status': status or '',
-                'trigger_on': trigger_on or '',
+                'trigger_on': trigger_on,
+                'show_no_match': show_no_match,
+                'hidden_no_match_count': hidden_no_match_count,
+                'summary_total': qs.count(),
+                'summary_active': qs.filter(status__in=active_statuses).count(),
+                'summary_awaiting': qs.filter(status=Workflow2Run.STATUS_AWAITING).count(),
+                'summary_completed': qs.filter(status__in=completed_statuses).count(),
                 'status_choices': Workflow2Run.STATUS_CHOICES,
             },
         )
@@ -48,13 +93,43 @@ class Workflow2RunDetailView(LoginRequiredMixin, View):
     def get(self, request: HttpRequest, run_id: int) -> HttpResponse:
         run = get_object_or_404(Workflow2Run, id=run_id)
         instances = Workflow2Instance.objects.filter(run=run).select_related('definition').order_by('created_at')
+        source_context = resolve_source_context(run.source_json)
+        event_context = describe_event_context(run.event_json)
+
+        instance_rows = [
+            {
+                'instance': inst,
+                'badge': status_badge_class(inst.status),
+                'current_step': describe_step(
+                    inst.current_step,
+                    build_step_meta_from_ir(inst.definition.ir_json if inst.definition_id else None),
+                ),
+            }
+            for inst in instances
+        ]
+        status_counts: dict[str, int] = {}
+        for inst in instances:
+            status_counts[inst.get_status_display()] = status_counts.get(inst.get_status_display(), 0) + 1
+
+        outcome_summary = [
+            {'label': label, 'value': str(count), 'meta': ''}
+            for label, count in status_counts.items()
+        ]
 
         return render(
             request,
             'workflows2/run_detail.html',
             {
                 'run': run,
-                'instances': instances,
+                'instance_rows': instance_rows,
+                'run_badge': status_badge_class(run.status),
+                'source_summary': source_context['summary'],
+                'source_context': source_context,
+                'source_pretty': pretty_json(run.source_json),
+                'event_pretty': pretty_json(run.event_json),
+                'event_context': event_context,
+                'outcome_summary': outcome_summary,
+                'is_no_match': run.status == Workflow2Run.STATUS_NO_MATCH,
             },
         )
 

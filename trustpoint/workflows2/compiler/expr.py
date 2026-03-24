@@ -102,6 +102,12 @@ def _tokenize(s: str) -> list[Token]:
             add('IDENT', s[start:i], start)
             continue
 
+        if ch == '$':
+            raise CompileError(
+                "Unexpected '$' in expression. Expressions already live inside ${...}; "
+                "reference values as vars.name or event.path inside that wrapper instead of nesting ${...}.",
+            )
+
         raise CompileError(f"Unexpected character '{ch}' in expression")
 
     add('EOF', '', n)

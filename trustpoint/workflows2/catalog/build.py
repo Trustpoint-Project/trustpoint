@@ -5,6 +5,7 @@ from typing import Any
 
 from workflows2.catalog.presets import PRESETS
 from workflows2.catalog.steps import COMMON_STEP_FIELDS, step_specs
+from workflows2.catalog.trigger_sources import build_trigger_source_catalog
 from workflows2.compiler.compiler import COMPUTE_OPERATORS
 from workflows2.compiler.conditions import COMPARE_OPERATORS, CONDITION_OPERATORS
 from workflows2.compiler.expr import ALLOWED_REF_ROOTS, EXPRESSION_FUNCTION_GROUPS
@@ -96,6 +97,7 @@ def build_context_catalog() -> dict[str, Any]:
         'events': sorted(events, key=lambda x: x['key']),
         'steps': steps,
         'presets': presets,
+        'trigger_sources': build_trigger_source_catalog(),
         'dsl': {
             'conditions': {
                 'operators': list(CONDITION_OPERATORS),
@@ -116,7 +118,7 @@ def build_context_catalog() -> dict[str, Any]:
             },
         },
         'meta': {
-            'version': 4,
+            'version': 5,
             'common_step_fields': [
                 {
                     'key': f.key,

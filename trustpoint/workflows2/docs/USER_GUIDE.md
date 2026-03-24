@@ -142,13 +142,14 @@ Writes literal or templated values into workflow vars.
 mark_ok:
   type: set
   vars:
-    result: ok
-    message: Status was ${vars.http_status}
+    vars.result: ok
+    vars.message: Status was ${vars.http_status}
 ```
 
 Important:
 
-- `set.vars` uses plain variable names like `result`, not `vars.result`.
+- Prefer `set.vars` keys in `vars.<name>` form for consistency with webhook capture, compute, and references.
+- Legacy plain keys are still accepted by the compiler, but the editor now writes `vars.<name>`.
 
 ### `compute`
 

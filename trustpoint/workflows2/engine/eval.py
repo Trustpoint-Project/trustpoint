@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from .context import RuntimeContext
@@ -233,6 +234,9 @@ def _resolve_ref(path: list[Any], ctx: RuntimeContext) -> Any:
 def _compare(lval: Any, op: Any, rval: Any) -> bool:
     if op not in ('==', '!=', '<', '<=', '>', '>='):
         raise ExecutionError(f'Unsupported compare op: {op}')
+
+    lval, rval = _normalize_compare_values(lval, rval)
+
     try:
         if op == '==':
             return lval == rval
@@ -249,6 +253,40 @@ def _compare(lval: Any, op: Any, rval: Any) -> bool:
     except TypeError:
         return False
     return False
+
+
+_NUMERIC_STRING_RE = re.compile(r'^-?\d+(?:\.\d+)?$')
+
+
+def _normalize_compare_values(lval: Any, rval: Any) -> tuple[Any, Any]:
+    if _is_numeric_value(lval) and isinstance(rval, str):
+        coerced = _parse_numeric_string(rval)
+        if coerced is not None:
+            return lval, coerced
+
+    if _is_numeric_value(rval) and isinstance(lval, str):
+        coerced = _parse_numeric_string(lval)
+        if coerced is not None:
+            return coerced, rval
+
+    return lval, rval
+
+
+def _is_numeric_value(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _parse_numeric_string(value: str) -> int | float | None:
+    text = value.strip()
+    if not text or not _NUMERIC_STRING_RE.fullmatch(text):
+        return None
+
+    try:
+        if '.' in text:
+            return float(text)
+        return int(text)
+    except ValueError:
+        return None
 
 
 def _call(name: str, args: list[Any]) -> Any:

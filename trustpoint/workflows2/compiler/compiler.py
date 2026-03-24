@@ -432,7 +432,30 @@ class WorkflowCompiler:
         vars_map = step.get('vars')
         if not isinstance(vars_map, dict):
             raise CompileError('"set.vars" must be a mapping', path=f'{base}.vars')
-        return {'vars': compile_templates_deep(vars_map, path=f'{base}.vars')}
+
+        compiled_map = compile_templates_deep(vars_map, path=f'{base}.vars')
+        normalized: dict[str, Any] = {}
+
+        for raw_key, compiled_value in compiled_map.items():
+            if not isinstance(raw_key, str) or not raw_key.strip():
+                raise CompileError('set.vars keys must be non-empty strings', path=f'{base}.vars')
+
+            key = raw_key.strip()
+            if key.startswith('vars.'):
+                key = key.split('.', 1)[1].strip()
+
+            if not key:
+                raise CompileError('set.vars keys must be "vars.<name>" or "<name>"', path=f'{base}.vars.{raw_key}')
+
+            if key in normalized:
+                raise CompileError(
+                    f'Duplicate set.vars target "{key}"',
+                    path=f'{base}.vars.{raw_key}',
+                )
+
+            normalized[key] = compiled_value
+
+        return {'vars': normalized}
 
     @staticmethod
     def _compile_compute_params(step: dict[str, Any], base: str) -> dict[str, Any]:

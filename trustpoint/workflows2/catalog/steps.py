@@ -251,10 +251,10 @@ def step_specs() -> list[StepSpec]:
                 StepField(
                     key='vars',
                     title='vars',
-                    description='Mapping of variable names to literal or templated values.',
+                    description='Mapping of vars.<name> to literal or templated values.',
                     required=True,
                     field_kind='vars_mapping',
-                    scaffold={'result': 'value'},
+                    scaffold={'vars.result': 'value'},
                 ),
             ],
         ),
