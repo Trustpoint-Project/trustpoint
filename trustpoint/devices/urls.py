@@ -543,4 +543,14 @@ urlpatterns = [
         devices_help_views.AokiEstHelpView.as_view(),
         name='zero_touch_credentials-aoki_est_help',
     ),
+    path(
+        'zero-touch-credentials/aoki-setup-demo-env/',
+        devices_help_views.AokiSetupDemoEnvView.as_view(),
+        name='zero_touch_credentials-aoki_setup_demo_env',
+    ),
+    path(
+        'zero-touch-credentials/aoki-demo-download/<str:filename>',
+        devices_help_views.AokiDemoDownloadView.as_view(),
+        name='zero_touch_credentials-aoki_demo_download',
+    ),
 ]
