@@ -55,6 +55,7 @@ function renderNodeHeader({
   caseIndex,
   kind,
   path,
+  saveMode,
   stepId,
 }) {
   const removable = canRemoveNode(path);
@@ -101,6 +102,7 @@ function renderCompareNode({
   catalog,
   node,
   path,
+  saveMode,
   stepId,
   triggerKey,
 }) {
@@ -157,14 +159,20 @@ function renderCompareNode({
       </div>
     </div>
 
-    <div class="wf2-logic-tree-actions">
-      ${renderActionButton(
-        actionAttribute,
-        'save-logic-compare-node',
-        'Save',
-        ` data-step-id="${escapeHtml(stepId)}" data-case-index="${caseIndex}" data-condition-path="${pathAttr}"`,
-      )}
-    </div>
+    ${
+      saveMode === 'footer'
+        ? ''
+        : `
+            <div class="wf2-logic-tree-actions">
+              ${renderActionButton(
+                actionAttribute,
+                'save-logic-compare-node',
+                'Save',
+                ` data-step-id="${escapeHtml(stepId)}" data-case-index="${caseIndex}" data-condition-path="${pathAttr}"`,
+              )}
+            </div>
+          `
+    }
   `;
 }
 
@@ -175,6 +183,7 @@ function renderExistsNode({
   catalog,
   node,
   path,
+  saveMode,
   stepId,
   triggerKey,
 }) {
@@ -198,14 +207,20 @@ function renderExistsNode({
       })}
     </div>
 
-    <div class="wf2-logic-tree-actions">
-      ${renderActionButton(
-        actionAttribute,
-        'save-logic-exists-node',
-        'Save',
-        ` data-step-id="${escapeHtml(stepId)}" data-case-index="${caseIndex}" data-condition-path="${pathAttr}"`,
-      )}
-    </div>
+    ${
+      saveMode === 'footer'
+        ? ''
+        : `
+            <div class="wf2-logic-tree-actions">
+              ${renderActionButton(
+                actionAttribute,
+                'save-logic-exists-node',
+                'Save',
+                ` data-step-id="${escapeHtml(stepId)}" data-case-index="${caseIndex}" data-condition-path="${pathAttr}"`,
+              )}
+            </div>
+          `
+    }
   `;
 }
 
@@ -216,6 +231,7 @@ function renderChildrenBlock({
   catalog,
   children,
   path,
+  saveMode,
   stepId,
   triggerKey,
 }) {
@@ -233,6 +249,7 @@ function renderChildrenBlock({
             nested: true,
             node: childNode,
             path: [...path, index],
+            saveMode,
             stepId,
             triggerKey,
           }),
@@ -261,6 +278,7 @@ export function renderLogicConditionTree({
   path,
   stepId,
   triggerKey = null,
+  saveMode = 'section',
 }) {
   const kind = getConditionKind(node);
   const pathAttr = escapeHtml(encodeConditionPath(path));
@@ -275,6 +293,7 @@ export function renderLogicConditionTree({
       catalog,
       node,
       path,
+      saveMode,
       stepId,
       triggerKey,
     });
@@ -286,6 +305,7 @@ export function renderLogicConditionTree({
       catalog,
       node,
       path,
+      saveMode,
       stepId,
       triggerKey,
     });
@@ -300,6 +320,7 @@ export function renderLogicConditionTree({
           nested: true,
           node: node?.not || { compare: { left: '${vars.value}', op: '==', right: '' } },
           path: [...path, 'not'],
+          saveMode,
           stepId,
           triggerKey,
         })}
@@ -313,6 +334,7 @@ export function renderLogicConditionTree({
       catalog,
       children: Array.isArray(node?.[kind]) ? node[kind] : [],
       path,
+      saveMode,
       stepId,
       triggerKey,
     });
@@ -329,6 +351,7 @@ export function renderLogicConditionTree({
         caseIndex,
         kind,
         path,
+        saveMode,
         stepId,
       })}
 

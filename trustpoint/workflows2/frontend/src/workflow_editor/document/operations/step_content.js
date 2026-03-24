@@ -16,6 +16,16 @@ function getTypedStep(rootObj, stepId, expectedType) {
   return stepObj;
 }
 
+function ensureUniqueKey(target, key, label) {
+  if (Object.prototype.hasOwnProperty.call(target, key)) {
+    throw new Error(`Duplicate ${label} "${key}".`);
+  }
+}
+
+function normalizeSetVarKey(rawValue, fallback = 'vars.result') {
+  return normalizeVarsTarget(rawValue, fallback);
+}
+
 export function addLogicCase({ yamlText, stepId }) {
   const rootObj = parseRoot(yamlText);
   const stepObj = getTypedStep(rootObj, stepId, 'logic');
@@ -80,6 +90,24 @@ export function setLogicDefaultOutcome({ yamlText, stepId, outcome }) {
   };
 }
 
+export function replaceLogicStepContent({ yamlText, stepId, cases, defaultOutcome }) {
+  const rootObj = parseRoot(yamlText);
+  const stepObj = getTypedStep(rootObj, stepId, 'logic');
+
+  stepObj.cases = ensureArray(cases, []).map((item) => ({
+    when: item?.when && typeof item.when === 'object' && !Array.isArray(item.when)
+      ? item.when
+      : createConditionNode('compare'),
+    outcome: String(item?.outcome || '').trim() || 'ok',
+  }));
+  stepObj.default = String(defaultOutcome || '').trim() || 'fail';
+
+  return {
+    yamlText: stringifyRoot(rootObj),
+    changed: true,
+  };
+}
+
 export function addWebhookCaptureRule({ yamlText, stepId }) {
   const rootObj = parseRoot(yamlText);
   const stepObj = getTypedStep(rootObj, stepId, 'webhook');
@@ -134,6 +162,33 @@ export function removeWebhookCaptureRule({ yamlText, stepId, target }) {
   if (!Object.keys(stepObj.capture).length) {
     delete stepObj.capture;
   }
+
+  return {
+    yamlText: stringifyRoot(rootObj),
+    changed: true,
+  };
+}
+
+export function replaceWebhookCaptureRules({ yamlText, stepId, rows }) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return {
+      yamlText,
+      changed: false,
+    };
+  }
+
+  const rootObj = parseRoot(yamlText);
+  const stepObj = getTypedStep(rootObj, stepId, 'webhook');
+  const nextCapture = {};
+
+  for (const row of rows) {
+    const target = normalizeVarsTarget(row?.target, 'vars.http_status');
+    const source = String(row?.source || '').trim() || 'status_code';
+    ensureUniqueKey(nextCapture, target, 'capture target');
+    nextCapture[target] = source;
+  }
+
+  stepObj.capture = nextCapture;
 
   return {
     yamlText: stringifyRoot(rootObj),
@@ -211,12 +266,45 @@ export function removeComputeAssignment({ yamlText, stepId, target }) {
   };
 }
 
+export function replaceComputeAssignments({ yamlText, stepId, rows }) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return {
+      yamlText,
+      changed: false,
+    };
+  }
+
+  const rootObj = parseRoot(yamlText);
+  const stepObj = getTypedStep(rootObj, stepId, 'compute');
+  const nextAssignments = {};
+
+  for (const row of rows) {
+    const target = normalizeVarsTarget(row?.target, 'vars.result');
+    const operator = String(row?.operator || '').trim() || 'add';
+    const args = parseMultilineArgs(row?.argsText);
+    ensureUniqueKey(nextAssignments, target, 'compute target');
+    nextAssignments[target] = {
+      [operator]: args.length ? args : ['${vars.a}', 1],
+    };
+  }
+
+  stepObj.set = nextAssignments;
+
+  return {
+    yamlText: stringifyRoot(rootObj),
+    changed: true,
+  };
+}
+
 export function addSetVarEntry({ yamlText, stepId }) {
   const rootObj = parseRoot(yamlText);
   const stepObj = getTypedStep(rootObj, stepId, 'set');
 
   stepObj.vars = ensureObject(stepObj.vars, {});
-  const key = makeUniqueKey(Object.keys(stepObj.vars), 'result');
+  const key = makeUniqueKey(
+    Object.keys(stepObj.vars).map((item) => normalizeSetVarKey(item, 'vars.result')),
+    'vars.result',
+  );
   stepObj.vars[key] = 'value';
 
   return {
@@ -234,7 +322,14 @@ export function updateSetVarEntry({ yamlText, stepId, oldKey, newKey, value }) {
     throw new Error(`Var entry "${oldKey}" not found.`);
   }
 
-  const normalizedKey = String(newKey || '').trim() || oldKey;
+  const normalizedKey = normalizeSetVarKey(newKey, oldKey || 'vars.result');
+  const existingKeys = Object.keys(stepObj.vars)
+    .filter((key) => key !== oldKey)
+    .map((key) => normalizeSetVarKey(key, 'vars.result'));
+  if (existingKeys.includes(normalizedKey)) {
+    throw new Error(`Duplicate vars entry "${normalizedKey}".`);
+  }
+
   if (normalizedKey !== oldKey) {
     delete stepObj.vars[oldKey];
   }
@@ -260,6 +355,32 @@ export function removeSetVarEntry({ yamlText, stepId, key }) {
   }
 
   delete stepObj.vars[key];
+
+  return {
+    yamlText: stringifyRoot(rootObj),
+    changed: true,
+  };
+}
+
+export function replaceSetVarEntries({ yamlText, stepId, rows }) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return {
+      yamlText,
+      changed: false,
+    };
+  }
+
+  const rootObj = parseRoot(yamlText);
+  const stepObj = getTypedStep(rootObj, stepId, 'set');
+  const nextVars = {};
+
+  for (const row of rows) {
+    const key = normalizeSetVarKey(row?.key, 'vars.result');
+    ensureUniqueKey(nextVars, key, 'vars entry');
+    nextVars[key] = parseScalarValue(row?.value);
+  }
+
+  stepObj.vars = nextVars;
 
   return {
     yamlText: stringifyRoot(rootObj),

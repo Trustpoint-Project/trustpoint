@@ -39,6 +39,30 @@ export function getWorkflow(rootObj) {
   return rootObj.workflow;
 }
 
+export function getTrigger(rootObj, { create = true } = {}) {
+  if (!rootObj.trigger || typeof rootObj.trigger !== 'object' || Array.isArray(rootObj.trigger)) {
+    if (!create) {
+      throw new Error('trigger block not found');
+    }
+    rootObj.trigger = {};
+  }
+
+  return rootObj.trigger;
+}
+
+export function getTriggerSources(rootObj, { create = true } = {}) {
+  const trigger = getTrigger(rootObj, { create });
+
+  if (!trigger.sources || typeof trigger.sources !== 'object' || Array.isArray(trigger.sources)) {
+    if (!create) {
+      throw new Error('trigger.sources block not found');
+    }
+    trigger.sources = {};
+  }
+
+  return trigger.sources;
+}
+
 export function getSteps(workflow, { create = true } = {}) {
   if (!workflow.steps || typeof workflow.steps !== 'object' || Array.isArray(workflow.steps)) {
     if (!create) {

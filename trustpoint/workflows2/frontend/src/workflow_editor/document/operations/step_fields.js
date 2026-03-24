@@ -74,6 +74,42 @@ export function setStepFieldValue({
   };
 }
 
+export function setMultipleStepFieldValues({
+  yamlText,
+  catalog,
+  stepId,
+  updates,
+}) {
+  if (!Array.isArray(updates) || !updates.length) {
+    return {
+      yamlText,
+      changed: false,
+    };
+  }
+
+  const rootObj = parseRoot(yamlText);
+  const { stepObj, stepType } = getStepFieldContext(rootObj, catalog, stepId);
+
+  for (const update of updates) {
+    const fieldKey = String(update?.fieldKey || '').trim();
+    if (!fieldKey) {
+      continue;
+    }
+
+    const fieldSpec = getFieldSpec(catalog, stepType, fieldKey, { excludeKeys: ['type'] });
+    if (!fieldSpec) {
+      throw new Error(`Unknown field "${fieldKey}" for step type "${stepType}".`);
+    }
+
+    stepObj[fieldKey] = parseFieldValue(update?.rawValue, fieldSpec);
+  }
+
+  return {
+    yamlText: stringifyRoot(rootObj),
+    changed: true,
+  };
+}
+
 export function addOptionalStepField({
   yamlText,
   catalog,

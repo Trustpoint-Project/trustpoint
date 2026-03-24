@@ -12,6 +12,7 @@ export function renderStructuredStepFields({
     actionAttribute: 'data-graph-overlay-action',
     availableVarNames,
     catalog,
+    saveMode: 'footer',
     stepData,
     stepId,
     stepType,

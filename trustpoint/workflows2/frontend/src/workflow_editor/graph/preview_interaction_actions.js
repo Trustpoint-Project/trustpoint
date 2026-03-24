@@ -49,7 +49,7 @@ export async function deleteCurrentSelection(state, callbacks) {
 
   if (state.selectedNodeId) {
     const confirmed = window.confirm(
-      `Delete step "${state.selectedNodeId}"?\n\nOutgoing edges will be removed. Incoming linear edges will be removed. Incoming outcome edges will be rerouted to $end.`,
+      `Delete step "${state.selectedNodeId}"?\n\nOutgoing edges will be removed. Incoming edges that targeted this step will be removed as well.`,
     );
     if (!confirmed) {
       return false;

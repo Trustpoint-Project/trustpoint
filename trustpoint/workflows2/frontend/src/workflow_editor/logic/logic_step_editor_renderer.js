@@ -17,6 +17,7 @@ export function renderLogicStepEditor({
   actionAttribute = 'data-graph-overlay-action',
   availableVarNames = [],
   catalog,
+  saveMode = 'section',
   stepData,
   stepId,
   triggerKey = null,
@@ -49,17 +50,20 @@ export function renderLogicStepEditor({
             )}
           </div>
 
-          ${renderLogicConditionTree({
-            actionAttribute,
-            availableVarNames,
-            caseIndex: index,
-            catalog,
-            nested: false,
-            node: whenNode,
-            path: [],
-            stepId,
-            triggerKey,
-          })}
+          <div data-logic-case-when="true">
+            ${renderLogicConditionTree({
+              actionAttribute,
+              availableVarNames,
+              caseIndex: index,
+              catalog,
+              nested: false,
+              node: whenNode,
+              path: [],
+              saveMode,
+              stepId,
+              triggerKey,
+            })}
+          </div>
 
           <div class="wf2-logic-case-outcome mt-3">
             <label class="form-label form-label-sm mb-1">Outcome</label>
@@ -70,12 +74,16 @@ export function renderLogicStepEditor({
                 data-logic-case-outcome-input="true"
                 value="${escapeHtml(item?.outcome ?? '')}"
               >
-              ${renderButton(
-                actionAttribute,
-                'save-logic-case-outcome',
-                'Save outcome',
-                ` data-step-id="${escapeHtml(stepId)}" data-case-index="${index}"`,
-              )}
+              ${
+                saveMode === 'footer'
+                  ? ''
+                  : renderButton(
+                      actionAttribute,
+                      'save-logic-case-outcome',
+                      'Save outcome',
+                      ` data-step-id="${escapeHtml(stepId)}" data-case-index="${index}"`,
+                    )
+              }
             </div>
           </div>
         </div>
@@ -101,7 +109,11 @@ export function renderLogicStepEditor({
           data-logic-default-input="true"
           value="${escapeHtml(stepData?.default ?? '')}"
         >
-        ${renderButton(actionAttribute, 'save-logic-default', 'Save', ` data-step-id="${escapeHtml(stepId)}"`)}
+        ${
+          saveMode === 'footer'
+            ? ''
+            : renderButton(actionAttribute, 'save-logic-default', 'Save', ` data-step-id="${escapeHtml(stepId)}"`)
+        }
       </div>
     </div>
   `;

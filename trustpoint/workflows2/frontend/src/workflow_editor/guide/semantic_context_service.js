@@ -55,6 +55,13 @@ function buildInvalidContext(message) {
     pathLabel: '(invalid)',
     parseMessage: message,
     triggerKey: null,
+    currentTriggerSources: {
+      trustpoint: false,
+      caIds: [],
+      domainIds: [],
+      deviceIds: [],
+    },
+    triggerSourceFieldKey: null,
     stepIds: [],
     stepSummaries: [],
     currentStartStep: null,
@@ -97,6 +104,33 @@ export function deriveSemanticContext(yamlText, offset) {
 
     const triggerKey =
       typeof rootObj?.trigger?.on === 'string' ? rootObj.trigger.on : null;
+
+    const triggerSourcesObj =
+      rootObj?.trigger?.sources && typeof rootObj.trigger.sources === 'object' && !Array.isArray(rootObj.trigger.sources)
+        ? rootObj.trigger.sources
+        : {};
+
+    const currentTriggerSources = {
+      trustpoint: Boolean(triggerSourcesObj.trustpoint),
+      caIds: Array.isArray(triggerSourcesObj.ca_ids)
+        ? triggerSourcesObj.ca_ids.filter((value) => Number.isInteger(value))
+        : [],
+      domainIds: Array.isArray(triggerSourcesObj.domain_ids)
+        ? triggerSourcesObj.domain_ids.filter((value) => Number.isInteger(value))
+        : [],
+      deviceIds: Array.isArray(triggerSourcesObj.device_ids)
+        ? triggerSourcesObj.device_ids
+            .filter((value) => typeof value === 'string' && value.trim())
+            .map((value) => value.trim())
+        : [],
+    };
+
+    const triggerSourceFieldKey =
+      path[0] === 'trigger' &&
+      path[1] === 'sources' &&
+      typeof path[2] === 'string'
+        ? path[2]
+        : null;
 
     const stepsObj =
       rootObj?.workflow?.steps && typeof rootObj.workflow.steps === 'object'
@@ -192,6 +226,8 @@ export function deriveSemanticContext(yamlText, offset) {
       pathLabel: pathToString(path),
       parseMessage: 'YAML parsed successfully.',
       triggerKey,
+      currentTriggerSources,
+      triggerSourceFieldKey,
       stepIds,
       stepSummaries,
       currentStartStep,

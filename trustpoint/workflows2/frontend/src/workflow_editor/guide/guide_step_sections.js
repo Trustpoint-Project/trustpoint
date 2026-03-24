@@ -21,6 +21,7 @@ import {
 } from './guide_layout.js';
 import { renderLogicStepGuide } from './guide_logic_step_renderer.js';
 import { renderStructuredStepEditor } from '../steps/structured_step_editor_renderer.js';
+import { APPROVAL_OUTCOME_PRESETS } from '../document/approval_outcome_presets.js';
 import { getStep, parseRoot } from '../document/yaml_document.js';
 
 function readCurrentStepData(yamlText, stepId) {
@@ -68,18 +69,24 @@ function renderVariableSummaryChips(varNames, { prefix = 'vars.', emptyLabel = '
     .join('');
 }
 
-function renderVariableScopeSection(context) {
+function renderStepSummarySection(context) {
+  const reachability = context.availableVarNames?.length || context.producedVarNames?.length
+    ? 'Workflow vars shown here follow guaranteed incoming paths only.'
+    : 'No workflow vars are guaranteed here yet.';
+
   return renderGuideSection({
-    title: 'Variable scope',
-    description: 'Only workflow vars guaranteed on every incoming reachable path are considered available here.',
+    title: 'Step summary',
+    description: 'Compact runtime reference for the current step.',
     body: `
+      <div class="text-muted mb-3">${escapeHtml(reachability)}</div>
+
       <div class="mb-3">
-        <div class="fw-semibold mb-1">Available before this step</div>
+        <div class="fw-semibold mb-1">Workflow vars available here</div>
         <div>${renderVariableSummaryChips(context.availableVarNames, { emptyLabel: 'No workflow vars are guaranteed here yet.' })}</div>
       </div>
 
       <div>
-        <div class="fw-semibold mb-1">Written by this step</div>
+        <div class="fw-semibold mb-1">Workflow vars written by this step</div>
         <div>${renderVariableSummaryChips(context.producedVarNames, { emptyLabel: 'This step does not define workflow vars.' })}</div>
       </div>
     `,
@@ -207,6 +214,24 @@ function renderNonLogicStepSpecificSection(context, catalog, presentFieldKeys, y
     });
   }
 
+  if (context.stepType === 'approval') {
+    return renderGuideSection({
+      title: 'Approval outcome presets',
+      description: 'Apply a common approved/rejected naming pair to the current approval step.',
+      body: renderGuideButtonRow(
+        APPROVAL_OUTCOME_PRESETS
+          .map((preset) =>
+            renderActionButton(
+              'apply-approval-outcome-preset',
+              preset.label,
+              ` data-approved-outcome="${escapeHtml(preset.approved)}" data-rejected-outcome="${escapeHtml(preset.rejected)}" title="${escapeHtml(preset.description)}"`,
+            ),
+          )
+          .join(''),
+      ),
+    });
+  }
+
   return '';
 }
 
@@ -267,7 +292,7 @@ export function renderStepGuide(context, catalog, yamlText = '') {
   const variableSections =
     contextSupportsVariableInsertion(context) && context.stepType !== 'logic'
       ? `
-        ${renderVariableScopeSection(context)}
+        ${renderStepSummarySection(context)}
 
         ${renderGuideSection({
           title: 'Insert event variable',

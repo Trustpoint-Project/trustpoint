@@ -61,7 +61,7 @@ export function cleanupFlowForDeletedStep(flow, deletedStepId) {
   const nextFlow = [];
   let deletedOutgoingEdgeCount = 0;
   let removedIncomingLinearEdgeCount = 0;
-  let reroutedIncomingOutcomeEdgeCount = 0;
+  let removedIncomingOutcomeEdgeCount = 0;
 
   for (const rawEdge of flow || []) {
     const edge = normalizeFlowEdge(rawEdge);
@@ -76,12 +76,7 @@ export function cleanupFlowForDeletedStep(flow, deletedStepId) {
 
     if (edge.to === deletedStepId) {
       if (isNonEmptyString(edge.on)) {
-        nextFlow.push({
-          from: edge.from,
-          on: edge.on,
-          to: '$end',
-        });
-        reroutedIncomingOutcomeEdgeCount += 1;
+        removedIncomingOutcomeEdgeCount += 1;
       } else {
         removedIncomingLinearEdgeCount += 1;
       }
@@ -95,7 +90,7 @@ export function cleanupFlowForDeletedStep(flow, deletedStepId) {
     flow: normalizeFlow(nextFlow),
     deletedOutgoingEdgeCount,
     removedIncomingLinearEdgeCount,
-    reroutedIncomingOutcomeEdgeCount,
+    reroutedIncomingOutcomeEdgeCount: removedIncomingOutcomeEdgeCount,
   };
 }
 

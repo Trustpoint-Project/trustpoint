@@ -80,16 +80,18 @@ export function renderLogicStepGuide(context, catalog, yamlText = '') {
     })}
 
     ${renderGuideSection({
-      title: 'Variable scope',
-      description: 'Only workflow vars guaranteed on every incoming reachable path are available before this logic step runs.',
+      title: 'Step summary',
+      description: 'Compact runtime reference for this logic step.',
       body: `
+        <div class="text-muted mb-3">Workflow vars shown here follow guaranteed incoming paths only.</div>
+
         <div class="mb-3">
-          <div class="fw-semibold mb-1">Available before this step</div>
+          <div class="fw-semibold mb-1">Workflow vars available here</div>
           <div>${renderVariableSummaryChips(context.availableVarNames, { emptyLabel: 'No workflow vars are guaranteed here yet.' })}</div>
         </div>
 
         <div>
-          <div class="fw-semibold mb-1">Written by this step</div>
+          <div class="fw-semibold mb-1">Workflow vars written by this step</div>
           <div>${renderVariableSummaryChips(context.producedVarNames, { emptyLabel: 'Logic steps do not write workflow vars directly.' })}</div>
         </div>
       `,

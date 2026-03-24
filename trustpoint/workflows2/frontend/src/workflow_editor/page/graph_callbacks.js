@@ -23,6 +23,10 @@ import {
   removeLogicCase,
   removeSetVarEntry,
   removeWebhookCaptureRule,
+  replaceComputeAssignments,
+  replaceLogicStepContent,
+  replaceSetVarEntries,
+  replaceWebhookCaptureRules,
   setLogicCaseOutcome,
   setLogicDefaultOutcome,
   updateComputeAssignment,
@@ -32,6 +36,7 @@ import {
 import {
   addOptionalStepField,
   removeOptionalStepField,
+  setMultipleStepFieldValues,
   setStepFieldValue,
 } from '../document/operations/step_fields.js';
 import { setWorkflowStart } from '../document/operations/workflow.js';
@@ -79,6 +84,72 @@ export function createGraphCallbacks({
       );
     },
 
+    async onSaveStepEditor(stepId, stepType, draft) {
+      let nextYaml = getYamlText();
+
+      nextYaml = setStepTitle({
+        yamlText: nextYaml,
+        stepId,
+        title: draft?.title,
+      }).yamlText;
+
+      if (Array.isArray(draft?.fieldUpdates) && draft.fieldUpdates.length) {
+        nextYaml = setMultipleStepFieldValues({
+          yamlText: nextYaml,
+          catalog: getCatalog(),
+          stepId,
+          updates: draft.fieldUpdates,
+        }).yamlText;
+      }
+
+      if (stepType === 'logic') {
+        nextYaml = replaceLogicStepContent({
+          yamlText: nextYaml,
+          stepId,
+          cases: draft?.cases,
+          defaultOutcome: draft?.defaultOutcome,
+        }).yamlText;
+      }
+
+      if (stepType === 'webhook' && Array.isArray(draft?.captureRows) && draft.captureRows.length) {
+        nextYaml = replaceWebhookCaptureRules({
+          yamlText: nextYaml,
+          stepId,
+          rows: draft.captureRows,
+        }).yamlText;
+      }
+
+      if (stepType === 'compute' && Array.isArray(draft?.computeRows) && draft.computeRows.length) {
+        nextYaml = replaceComputeAssignments({
+          yamlText: nextYaml,
+          stepId,
+          rows: draft.computeRows,
+        }).yamlText;
+      }
+
+      if (stepType === 'set' && Array.isArray(draft?.setVarRows) && draft.setVarRows.length) {
+        nextYaml = replaceSetVarEntries({
+          yamlText: nextYaml,
+          stepId,
+          rows: draft.setVarRows,
+        }).yamlText;
+      }
+
+      if (nextYaml === getYamlText()) {
+        setStatus(`No pending changes for "${stepId}".`);
+        return {
+          yamlText: nextYaml,
+          changed: false,
+        };
+      }
+
+      applyYamlMutation(nextYaml, `Saved all editor changes for "${stepId}".`);
+      return {
+        yamlText: nextYaml,
+        changed: true,
+      };
+    },
+
     async onSaveStepField(stepId, fieldKey, rawValue) {
       return applyStepMutation(
         applyYamlMutation,
@@ -90,6 +161,26 @@ export function createGraphCallbacks({
           rawValue,
         }),
         `Saved field "${fieldKey}" for "${stepId}".`,
+      );
+    },
+
+    async onSaveStepFields(stepId, updates) {
+      const result = setMultipleStepFieldValues({
+        yamlText: getYamlText(),
+        catalog: getCatalog(),
+        stepId,
+        updates,
+      });
+
+      if (!result.changed) {
+        setStatus(`No field changes detected for "${stepId}".`);
+        return result;
+      }
+
+      return applyStepMutation(
+        applyYamlMutation,
+        result,
+        `Saved ${updates.length} field${updates.length === 1 ? '' : 's'} for "${stepId}".`,
       );
     },
 
@@ -213,6 +304,25 @@ export function createGraphCallbacks({
       );
     },
 
+    async onSaveAllWebhookCaptureRules(stepId, rows) {
+      const result = replaceWebhookCaptureRules({
+        yamlText: getYamlText(),
+        stepId,
+        rows,
+      });
+
+      if (!result.changed) {
+        setStatus(`No capture rules to save for "${stepId}".`);
+        return result;
+      }
+
+      return applyStepMutation(
+        applyYamlMutation,
+        result,
+        `Saved ${rows.length} capture rule${rows.length === 1 ? '' : 's'} for "${stepId}".`,
+      );
+    },
+
     async onRemoveWebhookCaptureRule(stepId, target) {
       return applyStepMutation(
         applyYamlMutation,
@@ -233,6 +343,25 @@ export function createGraphCallbacks({
       );
     },
 
+    async onSaveAllComputeAssignments(stepId, rows) {
+      const result = replaceComputeAssignments({
+        yamlText: getYamlText(),
+        stepId,
+        rows,
+      });
+
+      if (!result.changed) {
+        setStatus(`No compute assignments to save for "${stepId}".`);
+        return result;
+      }
+
+      return applyStepMutation(
+        applyYamlMutation,
+        result,
+        `Saved ${rows.length} compute assignment${rows.length === 1 ? '' : 's'} for "${stepId}".`,
+      );
+    },
+
     async onRemoveComputeAssignment(stepId, target) {
       return applyStepMutation(
         applyYamlMutation,
@@ -250,6 +379,25 @@ export function createGraphCallbacks({
         applyYamlMutation,
         updateSetVarEntry({ yamlText: getYamlText(), stepId, oldKey, newKey, value }),
         `Updated vars entry "${oldKey}" on "${stepId}".`,
+      );
+    },
+
+    async onSaveAllSetVarEntries(stepId, rows) {
+      const result = replaceSetVarEntries({
+        yamlText: getYamlText(),
+        stepId,
+        rows,
+      });
+
+      if (!result.changed) {
+        setStatus(`No vars to save for "${stepId}".`);
+        return result;
+      }
+
+      return applyStepMutation(
+        applyYamlMutation,
+        result,
+        `Saved ${rows.length} var entr${rows.length === 1 ? 'y' : 'ies'} for "${stepId}".`,
       );
     },
 

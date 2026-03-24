@@ -2,6 +2,8 @@ import { escapeHtml } from '../shared/dom.js';
 import { renderStructuredStepFields } from './graph_step_structured_fields_renderer.js';
 import { fitPanelToViewport, placePanelNearNode } from './graph_overlay_position.js';
 import { renderInlineVariablePicker } from '../variables/inline_variable_picker.js';
+import { getStepFieldSuggestions } from '../document/step_field_suggestions.js';
+import { APPROVAL_OUTCOME_PRESETS } from '../document/approval_outcome_presets.js';
 
 function hasOwn(obj, key) {
   return !!obj && Object.prototype.hasOwnProperty.call(obj, key);
@@ -149,37 +151,38 @@ function renderEventVariableReferences(catalog, triggerKey) {
   `;
 }
 
-function renderRuntimeContextSection(catalog, graph, node) {
+function renderStepSummarySection(catalog, graph, node) {
+  const reachability = node.is_unreachable
+    ? 'This step is currently unreachable from workflow.start.'
+    : 'This step is reachable from workflow.start.';
+
   return renderSection(
-    'Runtime context',
+    'Step summary',
     `
-      <div class="wf2-runtime-scope-grid">
-        <div class="wf2-runtime-scope-card">
-          <div class="wf2-runtime-scope-title">Event variables</div>
-          <div class="wf2-runtime-scope-description">Always available from the selected trigger.</div>
-          ${renderEventVariableReferences(catalog, graph?.trigger_key)}
-        </div>
+      <div class="small text-muted mb-3">${escapeHtml(reachability)}</div>
 
-        <div class="wf2-runtime-scope-card">
-          <div class="wf2-runtime-scope-title">Workflow vars before this step</div>
-          <div class="wf2-runtime-scope-description">Only vars guaranteed across every incoming reachable path are shown.</div>
-          ${renderVariableReferenceChips(node.available_var_names, {
-            emptyLabel: node.is_unreachable
-              ? 'This step is currently unreachable from workflow.start.'
-              : 'No workflow vars are guaranteed here yet.',
-          })}
-        </div>
+      <div class="mb-3">
+        <div class="fw-semibold mb-1">Trigger variables</div>
+        ${renderEventVariableReferences(catalog, graph?.trigger_key)}
+      </div>
 
-        <div class="wf2-runtime-scope-card">
-          <div class="wf2-runtime-scope-title">Written by this step</div>
-          <div class="wf2-runtime-scope-description">Vars this step defines when it runs successfully.</div>
-          ${renderVariableReferenceChips(node.produced_var_names, {
-            emptyLabel: 'This step does not define workflow vars.',
-          })}
-        </div>
+      <div class="mb-3">
+        <div class="fw-semibold mb-1">Workflow vars available here</div>
+        ${renderVariableReferenceChips(node.available_var_names, {
+          emptyLabel: node.is_unreachable
+            ? 'Unavailable while the step is unreachable.'
+            : 'No workflow vars are guaranteed here yet.',
+        })}
+      </div>
+
+      <div>
+        <div class="fw-semibold mb-1">Workflow vars written by this step</div>
+        ${renderVariableReferenceChips(node.produced_var_names, {
+          emptyLabel: 'This step does not define workflow vars.',
+        })}
       </div>
     `,
-    'Use this scope to avoid referencing workflow vars before they are guaranteed to exist.',
+    'Compact runtime reference for the current step.',
   );
 }
 
@@ -243,6 +246,7 @@ function renderFieldRow(stepId, field, currentValue, removable, runtimeContext) 
         availableVarNames: runtimeContext.availableVarNames,
       })
     : '';
+  const suggestions = getStepFieldSuggestions(runtimeContext.stepType, field.key);
 
   return `
     <div class="border rounded p-2 mb-2" data-step-field-row="${escapeHtml(field.key)}">
@@ -260,20 +264,37 @@ function renderFieldRow(stepId, field, currentValue, removable, runtimeContext) 
         ${pickerHtml}
       </div>
 
-      <div class="d-flex gap-2">
-        <button
-          type="button"
-          class="btn btn-sm btn-outline-primary"
-          data-graph-overlay-action="save-step-field"
-          data-step-id="${escapeHtml(stepId)}"
-          data-field-key="${escapeHtml(field.key)}"
-        >
-          Save
-        </button>
+      ${
+        suggestions.length
+          ? `
+            <div class="wf2-structured-hint-card">
+              <div class="wf2-structured-hint-title">Suggested snippets</div>
+              <div class="wf2-structured-hint-chip-row">
+                ${suggestions
+                  .map(
+                    (item) => `
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-outline-secondary"
+                        data-graph-overlay-action="apply-step-field-suggestion"
+                        data-suggestion-value="${escapeHtml(encodeURIComponent(item.value))}"
+                        title="${escapeHtml(item.description)}"
+                      >
+                        ${escapeHtml(item.label)}
+                      </button>
+                    `,
+                  )
+                  .join('')}
+              </div>
+            </div>
+          `
+          : ''
+      }
 
-        ${
-          removable
-            ? `
+      ${
+        removable
+          ? `
+            <div class="d-flex gap-2">
               <button
                 type="button"
                 class="btn btn-sm btn-outline-danger"
@@ -283,10 +304,19 @@ function renderFieldRow(stepId, field, currentValue, removable, runtimeContext) 
               >
                 Remove
               </button>
-            `
-            : ''
-        }
-      </div>
+            </div>
+          `
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderFieldSectionContent(rowsHtml, { emptyLabel, hasRows }) {
+  return `
+    <div data-step-field-section="true">
+      ${rowsHtml}
+      ${hasRows ? '' : `<div class="small text-muted">${escapeHtml(emptyLabel)}</div>`}
     </div>
   `;
 }
@@ -309,6 +339,29 @@ function renderMissingOptionalFieldButtons(stepId, fields) {
               data-field-key="${escapeHtml(field.key)}"
             >
               Add ${escapeHtml(field.title || field.key)}
+            </button>
+          `,
+        )
+        .join('')}
+    </div>
+  `;
+}
+
+function renderApprovalOutcomePresetButtons() {
+  return `
+    <div class="d-flex flex-wrap gap-2">
+      ${APPROVAL_OUTCOME_PRESETS
+        .map(
+          (preset) => `
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-secondary"
+              data-graph-overlay-action="apply-approval-outcome-preset"
+              data-approved-outcome="${escapeHtml(preset.approved)}"
+              data-rejected-outcome="${escapeHtml(preset.rejected)}"
+              title="${escapeHtml(preset.description)}"
+            >
+              ${escapeHtml(preset.label)}
             </button>
           `,
         )
@@ -410,40 +463,60 @@ export function renderGraphStepEditorOverlay({
   );
 
   const requiredFieldsHtml = requiredFields.length
-    ? requiredFields
-        .map((field) =>
-          renderFieldRow(
-            node.id,
-            field,
-            stepData?.[field.key],
-            false,
-            {
-              availableVarNames: node.available_var_names || [],
-              catalog,
-              triggerKey: graph.trigger_key,
-            },
-          ),
-        )
-        .join('')
-    : '<div class="small text-muted">No simple required fields.</div>';
+    ? renderFieldSectionContent(
+        requiredFields
+          .map((field) =>
+            renderFieldRow(
+              node.id,
+                field,
+                stepData?.[field.key],
+                false,
+                {
+                  availableVarNames: node.available_var_names || [],
+                  catalog,
+                  stepType,
+                  triggerKey: graph.trigger_key,
+                },
+              ),
+          )
+          .join(''),
+        {
+          emptyLabel: 'No simple required fields.',
+          hasRows: true,
+        },
+      )
+    : renderFieldSectionContent('', {
+        emptyLabel: 'No simple required fields.',
+        hasRows: false,
+      });
 
   const presentOptionalFieldsHtml = presentOptionalFields.length
-    ? presentOptionalFields
-        .map((field) =>
-          renderFieldRow(
-            node.id,
-            field,
-            stepData?.[field.key],
-            true,
-            {
-              availableVarNames: node.available_var_names || [],
-              catalog,
-              triggerKey: graph.trigger_key,
-            },
-          ),
-        )
-        .join('')
-    : '<div class="small text-muted">No simple optional fields currently present.</div>';
+    ? renderFieldSectionContent(
+        presentOptionalFields
+          .map((field) =>
+            renderFieldRow(
+              node.id,
+                field,
+                stepData?.[field.key],
+                true,
+                {
+                  availableVarNames: node.available_var_names || [],
+                  catalog,
+                  stepType,
+                  triggerKey: graph.trigger_key,
+                },
+              ),
+          )
+          .join(''),
+        {
+          emptyLabel: 'No simple optional fields currently present.',
+          hasRows: true,
+        },
+      )
+    : renderFieldSectionContent('', {
+        emptyLabel: 'No simple optional fields currently present.',
+        hasRows: false,
+      });
 
   const structuredHtml = renderStructuredStepFields({
     availableVarNames: node.available_var_names || [],
@@ -476,36 +549,32 @@ export function renderGraphStepEditorOverlay({
       </div>
 
       <div class="wf2-graph-floating-body">
-        ${renderRuntimeContextSection(catalog, graph, node)}
-
         ${renderSection(
           'Title',
           `
-            <div class="wf2-graph-editor-inline-row">
-              <input
-                type="text"
-                class="form-control form-control-sm"
-                data-node-title-input="true"
-                value="${escapeHtml(stepData?.title ?? node.title ?? '')}"
-              >
-              <button
-                type="button"
-                class="btn btn-sm btn-outline-primary"
-                data-graph-overlay-action="save-node-title"
-                data-step-id="${escapeHtml(node.id)}"
-              >
-                Save
-              </button>
-            </div>
+            <input
+              type="text"
+              class="form-control form-control-sm"
+              data-node-title-input="true"
+              value="${escapeHtml(stepData?.title ?? node.title ?? '')}"
+            >
           `,
           'Use the node title for a concise label in the graph.',
         )}
 
-        ${structuredHtml
+        ${structuredHtml && stepType !== 'webhook'
           ? renderSection(
               'Managed content',
               structuredHtml,
               'These step-specific structures are easier to edit here than in raw YAML.',
+            )
+          : ''}
+
+        ${stepType === 'approval'
+          ? renderSection(
+              'Approval outcome presets',
+              renderApprovalOutcomePresetButtons(),
+              'Apply a common approved/rejected naming pair before saving the step.',
             )
           : ''}
 
@@ -526,9 +595,20 @@ export function renderGraphStepEditorOverlay({
           renderMissingOptionalFieldButtons(node.id, missingOptionalFields),
           'Add documented optional fields without switching back to YAML.',
         )}
+
+        ${structuredHtml && stepType === 'webhook'
+          ? renderSection(
+              'Managed content',
+              structuredHtml,
+              'These step-specific structures are easier to edit here than in raw YAML.',
+            )
+          : ''}
+
+        ${renderStepSummarySection(catalog, graph, node)}
       </div>
 
       <div class="wf2-graph-floating-footer">
+
         <button
           type="button"
           class="btn btn-sm btn-outline-primary"
@@ -546,6 +626,16 @@ export function renderGraphStepEditorOverlay({
           data-step-id="${escapeHtml(node.id)}"
         >
           Delete
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-sm btn-primary ms-auto"
+          data-graph-overlay-action="save-step-editor"
+          data-step-id="${escapeHtml(node.id)}"
+          data-step-type="${escapeHtml(stepType)}"
+        >
+          Save changes
         </button>
       </div>
     </div>

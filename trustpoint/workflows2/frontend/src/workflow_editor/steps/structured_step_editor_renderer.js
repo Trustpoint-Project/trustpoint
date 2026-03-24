@@ -1,13 +1,23 @@
 import { escapeHtml } from '../shared/dom.js';
 import { renderLogicStepEditor } from '../logic/logic_step_editor_renderer.js';
+import { WEBHOOK_CAPTURE_SOURCE_OPTIONS } from '../document/webhook_capture_sources.js';
 import { renderInlineVariablePicker } from '../variables/inline_variable_picker.js';
 
-function renderButton(actionAttribute, action, label, extraAttrs = '', tone = 'primary') {
+function normalizeSetVarDisplayKey(key) {
+  const trimmed = String(key || '').trim();
+  if (!trimmed) {
+    return 'vars.result';
+  }
+
+  return trimmed.startsWith('vars.') ? trimmed : `vars.${trimmed}`;
+}
+
+function renderButton(actionAttribute, action, label, extraAttrs = '', tone = 'primary', disabled = false) {
   return `
     <button
       type="button"
       class="btn btn-sm btn-outline-${tone}"
-      ${actionAttribute}="${escapeHtml(action)}"${extraAttrs}
+      ${actionAttribute}="${escapeHtml(action)}"${extraAttrs}${disabled ? ' disabled' : ''}
     >
       ${escapeHtml(label)}
     </button>
@@ -41,13 +51,62 @@ function renderRowShell({
   `;
 }
 
-function renderWebhookCaptureEditor({ actionAttribute, stepId, stepData }) {
+function renderSectionActions(content) {
+  return `<div class="wf2-structured-section-actions">${content}</div>`;
+}
+
+function renderWebhookCaptureSourcePicker(actionAttribute, currentValue = '') {
+  return `
+    <div class="wf2-structured-hint-card">
+      <div class="wf2-structured-hint-title">Known response sources</div>
+      <div class="wf2-structured-hint-description">
+        Pick a documented response source or use a dotted path like <code>body.some_value</code>.
+      </div>
+      <div class="wf2-structured-hint-chip-row">
+        ${WEBHOOK_CAPTURE_SOURCE_OPTIONS
+          .map((item) =>
+            renderButton(
+              actionAttribute,
+              'apply-webhook-capture-source',
+              item.value,
+              ` data-capture-source-value="${escapeHtml(item.value)}" title="${escapeHtml(item.description)}"`,
+              currentValue === item.value ? 'primary' : 'secondary',
+            ),
+          )
+          .join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderWebhookCaptureReference() {
+  return `
+    <div class="wf2-structured-hint-card">
+      <div class="wf2-structured-hint-title">Capture reference</div>
+      <div class="wf2-structured-hint-list">
+        ${WEBHOOK_CAPTURE_SOURCE_OPTIONS
+          .map(
+            (item) => `
+              <div class="wf2-structured-hint-list-item">
+                <code>${escapeHtml(item.value)}</code>
+                <span>${escapeHtml(item.description)}</span>
+              </div>
+            `,
+          )
+          .join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderWebhookCaptureEditor({ actionAttribute, saveMode, stepId, stepData }) {
   const capture =
     stepData?.capture && typeof stepData.capture === 'object' && !Array.isArray(stepData.capture)
       ? stepData.capture
       : {};
 
-  const rows = Object.entries(capture)
+  const entries = Object.entries(capture);
+  const rows = entries
     .map(([target, source]) =>
       renderRowShell({
         label: target,
@@ -75,28 +134,22 @@ function renderWebhookCaptureEditor({ actionAttribute, stepId, stepData }) {
               >
             </div>
           </div>
+
+          ${renderWebhookCaptureSourcePicker(actionAttribute, String(source || ''))}
         `,
-        footer: `
-          ${renderButton(
-            actionAttribute,
-            'save-webhook-capture-rule',
-            'Save',
-            ` data-step-id="${escapeHtml(stepId)}" data-capture-target="${escapeHtml(target)}"`,
-          )}
-          ${renderButton(
-            actionAttribute,
-            'remove-webhook-capture-rule',
-            'Remove',
-            ` data-step-id="${escapeHtml(stepId)}" data-capture-target="${escapeHtml(target)}"`,
-            'danger',
-          )}
-        `,
+        footer: renderButton(
+          actionAttribute,
+          'remove-webhook-capture-rule',
+          'Remove',
+          ` data-step-id="${escapeHtml(stepId)}" data-capture-target="${escapeHtml(target)}"`,
+          'danger',
+        ),
       }),
     )
     .join('');
 
   return `
-    <div class="wf2-structured-section">
+    <div class="wf2-structured-section" data-structured-step-section="webhook-capture">
       <div class="wf2-structured-section-header">
         <div>
           <div class="wf2-structured-section-title">Capture rules</div>
@@ -106,11 +159,24 @@ function renderWebhookCaptureEditor({ actionAttribute, stepId, stepData }) {
         </div>
       </div>
 
+      ${renderWebhookCaptureReference()}
       ${rows || '<div class="small text-muted mb-2">No capture rules yet.</div>'}
 
-      <div class="wf2-structured-section-actions">
+      ${renderSectionActions(`
         ${renderButton(actionAttribute, 'add-webhook-capture-rule', 'Add capture rule', ` data-step-id="${escapeHtml(stepId)}"`)}
-      </div>
+        ${
+          saveMode === 'footer'
+            ? ''
+            : renderButton(
+                actionAttribute,
+                'save-all-webhook-capture-rules',
+                'Save all capture rules',
+                ` data-step-id="${escapeHtml(stepId)}"`,
+                'primary',
+                !entries.length,
+              )
+        }
+      `)}
     </div>
   `;
 }
@@ -121,6 +187,7 @@ function renderComputeAssignmentsEditor({
   stepId,
   stepData,
   catalog,
+  saveMode,
   triggerKey,
 }) {
   const assignments =
@@ -129,8 +196,9 @@ function renderComputeAssignmentsEditor({
       : {};
 
   const operators = catalog?.dsl?.compute?.operators || [];
+  const entries = Object.entries(assignments);
 
-  const rows = Object.entries(assignments)
+  const rows = entries
     .map(([target, spec]) => {
       const operator = spec && typeof spec === 'object' ? Object.keys(spec)[0] || 'add' : 'add';
       const args = spec && typeof spec === 'object' && Array.isArray(spec[operator]) ? spec[operator] : [];
@@ -181,27 +249,19 @@ function renderComputeAssignmentsEditor({
             </div>
           </div>
         `,
-        footer: `
-          ${renderButton(
-            actionAttribute,
-            'save-compute-assignment',
-            'Save',
-            ` data-step-id="${escapeHtml(stepId)}" data-compute-target="${escapeHtml(target)}"`,
-          )}
-          ${renderButton(
-            actionAttribute,
-            'remove-compute-assignment',
-            'Remove',
-            ` data-step-id="${escapeHtml(stepId)}" data-compute-target="${escapeHtml(target)}"`,
-            'danger',
-          )}
-        `,
+        footer: renderButton(
+          actionAttribute,
+          'remove-compute-assignment',
+          'Remove',
+          ` data-step-id="${escapeHtml(stepId)}" data-compute-target="${escapeHtml(target)}"`,
+          'danger',
+        ),
       });
     })
     .join('');
 
   return `
-    <div class="wf2-structured-section">
+    <div class="wf2-structured-section" data-structured-step-section="compute-assignments">
       <div class="wf2-structured-section-header">
         <div>
           <div class="wf2-structured-section-title">Compute assignments</div>
@@ -213,9 +273,21 @@ function renderComputeAssignmentsEditor({
 
       ${rows || '<div class="small text-muted mb-2">No assignments yet.</div>'}
 
-      <div class="wf2-structured-section-actions">
+      ${renderSectionActions(`
         ${renderButton(actionAttribute, 'add-compute-assignment', 'Add assignment', ` data-step-id="${escapeHtml(stepId)}"`)}
-      </div>
+        ${
+          saveMode === 'footer'
+            ? ''
+            : renderButton(
+                actionAttribute,
+                'save-all-compute-assignments',
+                'Save all assignments',
+                ` data-step-id="${escapeHtml(stepId)}"`,
+                'primary',
+                !entries.length,
+              )
+        }
+      `)}
     </div>
   `;
 }
@@ -226,6 +298,7 @@ function renderSetVarsEditor({
   stepId,
   stepData,
   catalog,
+  saveMode,
   triggerKey,
 }) {
   const varsMap =
@@ -233,21 +306,23 @@ function renderSetVarsEditor({
       ? stepData.vars
       : {};
 
-  const rows = Object.entries(varsMap)
+  const entries = Object.entries(varsMap);
+
+  const rows = entries
     .map(([key, value]) =>
       renderRowShell({
-        label: key,
+        label: normalizeSetVarDisplayKey(key),
         description: 'Assign a literal or template value into workflow vars.',
         rowAttr: `data-set-var-row="${escapeHtml(key)}"`,
         body: `
           <div class="wf2-structured-form-grid">
             <div class="wf2-structured-field">
-              <label class="form-label form-label-sm mb-1">Var name</label>
+              <label class="form-label form-label-sm mb-1">Target var</label>
               <input
                 type="text"
                 class="form-control form-control-sm"
                 data-set-var-key-input="true"
-                value="${escapeHtml(key)}"
+                value="${escapeHtml(normalizeSetVarDisplayKey(key))}"
               >
             </div>
 
@@ -269,27 +344,19 @@ function renderSetVarsEditor({
             </div>
           </div>
         `,
-        footer: `
-          ${renderButton(
-            actionAttribute,
-            'save-set-var-entry',
-            'Save',
-            ` data-step-id="${escapeHtml(stepId)}" data-set-var-key="${escapeHtml(key)}"`,
-          )}
-          ${renderButton(
-            actionAttribute,
-            'remove-set-var-entry',
-            'Remove',
-            ` data-step-id="${escapeHtml(stepId)}" data-set-var-key="${escapeHtml(key)}"`,
-            'danger',
-          )}
-        `,
+        footer: renderButton(
+          actionAttribute,
+          'remove-set-var-entry',
+          'Remove',
+          ` data-step-id="${escapeHtml(stepId)}" data-set-var-key="${escapeHtml(key)}"`,
+          'danger',
+        ),
       }),
     )
     .join('');
 
   return `
-    <div class="wf2-structured-section">
+    <div class="wf2-structured-section" data-structured-step-section="set-vars">
       <div class="wf2-structured-section-header">
         <div>
           <div class="wf2-structured-section-title">Variables</div>
@@ -301,9 +368,21 @@ function renderSetVarsEditor({
 
       ${rows || '<div class="small text-muted mb-2">No vars yet.</div>'}
 
-      <div class="wf2-structured-section-actions">
+      ${renderSectionActions(`
         ${renderButton(actionAttribute, 'add-set-var-entry', 'Add var', ` data-step-id="${escapeHtml(stepId)}"`)}
-      </div>
+        ${
+          saveMode === 'footer'
+            ? ''
+            : renderButton(
+                actionAttribute,
+                'save-all-set-var-entries',
+                'Save all vars',
+                ` data-step-id="${escapeHtml(stepId)}"`,
+                'primary',
+                !entries.length,
+              )
+        }
+      `)}
     </div>
   `;
 }
@@ -312,6 +391,7 @@ export function renderStructuredStepEditor({
   actionAttribute = 'data-graph-overlay-action',
   availableVarNames = [],
   catalog,
+  saveMode = 'section',
   stepData,
   stepId,
   stepType,
@@ -322,6 +402,7 @@ export function renderStructuredStepEditor({
       actionAttribute,
       availableVarNames,
       catalog,
+      saveMode,
       stepData,
       stepId,
       triggerKey,
@@ -329,7 +410,12 @@ export function renderStructuredStepEditor({
   }
 
   if (stepType === 'webhook') {
-    return renderWebhookCaptureEditor({ actionAttribute, stepId, stepData });
+    return renderWebhookCaptureEditor({
+      actionAttribute,
+      saveMode,
+      stepId,
+      stepData,
+    });
   }
 
   if (stepType === 'compute') {
@@ -339,6 +425,7 @@ export function renderStructuredStepEditor({
       stepId,
       stepData,
       catalog,
+      saveMode,
       triggerKey,
     });
   }
@@ -350,6 +437,7 @@ export function renderStructuredStepEditor({
       stepId,
       stepData,
       catalog,
+      saveMode,
       triggerKey,
     });
   }

@@ -5,10 +5,18 @@ import {
   removeComputeAssignment,
   removeSetVarEntry,
   removeWebhookCaptureRule,
+  replaceComputeAssignments,
+  replaceSetVarEntries,
+  replaceWebhookCaptureRules,
   updateComputeAssignment,
   updateSetVarEntry,
   updateWebhookCaptureRule,
 } from '../document/operations/step_content.js';
+import {
+  readComputeAssignmentRows,
+  readSetVarRows,
+  readWebhookCaptureRows,
+} from '../steps/structured_step_editor_state.js';
 import { readValue } from './guide_action_helpers.js';
 
 function readStepId(button, context) {
@@ -46,6 +54,21 @@ export async function executeGuideStructuredStepAction(action, bag) {
           source: readValue(row, '[data-capture-source-input="true"]'),
         }),
         `Updated capture rule on "${stepId}".`,
+      );
+      return true;
+    }
+
+    if (action === 'save-all-webhook-capture-rules') {
+      const stepId = readStepId(button, context);
+      const section = button.closest('[data-structured-step-section="webhook-capture"]');
+      applyResult(
+        applyYamlMutation,
+        replaceWebhookCaptureRules({
+          yamlText,
+          stepId,
+          rows: readWebhookCaptureRows(section),
+        }),
+        `Saved capture rules on "${stepId}".`,
       );
       return true;
     }
@@ -92,6 +115,21 @@ export async function executeGuideStructuredStepAction(action, bag) {
       return true;
     }
 
+    if (action === 'save-all-compute-assignments') {
+      const stepId = readStepId(button, context);
+      const section = button.closest('[data-structured-step-section="compute-assignments"]');
+      applyResult(
+        applyYamlMutation,
+        replaceComputeAssignments({
+          yamlText,
+          stepId,
+          rows: readComputeAssignmentRows(section),
+        }),
+        `Saved compute assignments on "${stepId}".`,
+      );
+      return true;
+    }
+
     if (action === 'remove-compute-assignment') {
       const stepId = readStepId(button, context);
       applyResult(
@@ -129,6 +167,21 @@ export async function executeGuideStructuredStepAction(action, bag) {
           value: readValue(row, '[data-set-var-value-input="true"]'),
         }),
         `Updated vars entry on "${stepId}".`,
+      );
+      return true;
+    }
+
+    if (action === 'save-all-set-var-entries') {
+      const stepId = readStepId(button, context);
+      const section = button.closest('[data-structured-step-section="set-vars"]');
+      applyResult(
+        applyYamlMutation,
+        replaceSetVarEntries({
+          yamlText,
+          stepId,
+          rows: readSetVarRows(section),
+        }),
+        `Saved vars entries on "${stepId}".`,
       );
       return true;
     }

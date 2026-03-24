@@ -2,6 +2,8 @@ export function edgeId(edge) {
   return `${edge.from}|${edge.on || ''}|${edge.to}`;
 }
 
+const HIDDEN_VIRTUAL_NODE_IDS = new Set(['$end']);
+
 function buildVirtualNode(id) {
   return {
     id,
@@ -15,7 +17,9 @@ function buildVirtualNode(id) {
 }
 
 export function normalizeGraph(graph) {
-  const realNodes = Array.isArray(graph?.nodes) ? graph.nodes : [];
+  const realNodes = Array.isArray(graph?.nodes)
+    ? graph.nodes.filter((node) => node?.id && !HIDDEN_VIRTUAL_NODE_IDS.has(node.id))
+    : [];
   const realNodeIds = new Set(realNodes.map((node) => node.id));
   const edges = Array.isArray(graph?.edges) ? graph.edges : [];
 
@@ -23,7 +27,7 @@ export function normalizeGraph(graph) {
   const seenVirtual = new Set();
 
   function ensureVirtual(id) {
-    if (!id || realNodeIds.has(id) || seenVirtual.has(id)) {
+    if (!id || HIDDEN_VIRTUAL_NODE_IDS.has(id) || realNodeIds.has(id) || seenVirtual.has(id)) {
       return;
     }
 

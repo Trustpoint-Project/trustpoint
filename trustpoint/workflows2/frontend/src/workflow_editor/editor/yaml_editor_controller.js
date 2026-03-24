@@ -1,38 +1,109 @@
 import { indentWithTab, redo, undo } from '@codemirror/commands';
 import { EditorState } from '@codemirror/state';
-import { EditorView, keymap } from '@codemirror/view';
+import {
+  defaultHighlightStyle,
+  HighlightStyle,
+  syntaxHighlighting,
+} from '@codemirror/language';
 import { yaml as yamlLanguage } from '@codemirror/lang-yaml';
+import { tags } from '@lezer/highlight';
+import { EditorView, keymap } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
+
+function buildEditorHighlightStyle() {
+  return HighlightStyle.define([
+    {
+      tag: [tags.propertyName, tags.attributeName, tags.labelName],
+      color: 'var(--wf2-editor-key)',
+      fontWeight: '600',
+    },
+    {
+      tag: [tags.string],
+      color: 'var(--wf2-editor-string)',
+    },
+    {
+      tag: [tags.number],
+      color: 'var(--wf2-editor-number)',
+    },
+    {
+      tag: [tags.bool, tags.null, tags.atom, tags.keyword],
+      color: 'var(--wf2-editor-atom)',
+      fontWeight: '600',
+    },
+    {
+      tag: [tags.comment],
+      color: 'var(--wf2-editor-comment)',
+      fontStyle: 'italic',
+    },
+    {
+      tag: [tags.operator, tags.separator, tags.punctuation, tags.bracket],
+      color: 'var(--wf2-editor-punctuation)',
+    },
+    {
+      tag: [tags.invalid],
+      color: 'var(--wf2-editor-invalid)',
+      textDecoration: 'underline wavy var(--wf2-editor-invalid)',
+    },
+  ]);
+}
 
 function buildEditorTheme() {
   return EditorView.theme({
     '&': {
       height: '68vh',
-      border: '1px solid #dee2e6',
+      border: '1px solid var(--wf2-editor-border)',
       borderRadius: '0.5rem',
-      backgroundColor: '#fff',
+      backgroundColor: 'var(--wf2-editor-surface)',
+      color: 'var(--wf2-editor-text)',
       fontSize: '0.95rem',
     },
     '.cm-scroller': {
       fontFamily:
         'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
       lineHeight: '1.5',
+      color: 'var(--wf2-editor-text)',
     },
     '.cm-content': {
       padding: '0.75rem 0',
+      caretColor: 'var(--wf2-editor-accent)',
+    },
+    '.cm-line': {
+      padding: '0 0.85rem',
     },
     '.cm-gutters': {
-      backgroundColor: '#fafafa',
-      borderRight: '1px solid #e9ecef',
+      backgroundColor: 'var(--wf2-editor-gutter)',
+      borderRight: '1px solid var(--wf2-editor-border-soft)',
+      color: 'var(--wf2-editor-muted)',
+    },
+    '.cm-gutterElement': {
+      padding: '0 0.55rem 0 0.75rem',
     },
     '.cm-activeLineGutter': {
-      backgroundColor: '#f1f3f5',
+      backgroundColor: 'var(--wf2-editor-active-gutter)',
     },
     '.cm-activeLine': {
-      backgroundColor: '#fcfcfd',
+      backgroundColor: 'transparent',
+      boxShadow: 'inset 3px 0 0 var(--wf2-editor-active-line)',
     },
     '.cm-focused': {
       outline: 'none',
+    },
+    '.cm-cursor, .cm-dropCursor': {
+      borderLeftColor: 'var(--wf2-editor-accent)',
+    },
+    '.cm-matchingBracket': {
+      backgroundColor: 'var(--wf2-editor-selection)',
+      outline: '1px solid var(--wf2-editor-border-soft)',
+      color: 'var(--wf2-editor-text)',
+    },
+    '.cm-nonmatchingBracket': {
+      outline: '1px solid var(--wf2-editor-invalid)',
+      color: 'var(--wf2-editor-invalid)',
+    },
+    '.cm-panels, .cm-tooltip, .cm-completionInfo': {
+      backgroundColor: 'var(--wf2-editor-surface)',
+      color: 'var(--wf2-editor-text)',
+      border: '1px solid var(--wf2-editor-border)',
     },
   });
 }
@@ -72,6 +143,8 @@ export function createWorkflowEditor({
       extensions: [
         basicSetup,
         yamlLanguage(),
+        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        syntaxHighlighting(buildEditorHighlightStyle()),
         keymap.of([indentWithTab]),
         buildEditorTheme(),
         EditorView.updateListener.of((update) => {

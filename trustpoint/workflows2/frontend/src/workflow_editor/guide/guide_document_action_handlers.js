@@ -16,6 +16,12 @@ import {
   insertWebhookCaptureRule,
   setCurrentScalarValue,
 } from '../document/operations/guide_insertions.js';
+import {
+  addTriggerSourceValue,
+  removeTriggerSourceValue,
+  setTriggerTrustpoint,
+} from '../document/operations/trigger_sources.js';
+import { setStepFieldValue } from '../document/operations/step_fields.js';
 import { setWorkflowStart } from '../document/operations/workflow.js';
 import { readValue } from './guide_action_helpers.js';
 
@@ -215,6 +221,107 @@ export async function executeGuideDocumentAction(action, bag) {
         }),
         `Set value to ${rawValue}.`,
       );
+      return true;
+    }
+
+    if (action === 'apply-current-field-suggestion') {
+      const encodedValue = button.getAttribute('data-suggestion-value');
+      const rawValue = encodedValue == null ? null : decodeURIComponent(encodedValue);
+      if (rawValue == null || !context?.stepId || !context?.fieldKey) {
+        fail('No current step field selected for this suggestion.', 'warning');
+        return true;
+      }
+
+      applyYamlMutation(
+        setStepFieldValue({
+          yamlText,
+          catalog,
+          stepId: context.stepId,
+          fieldKey: context.fieldKey,
+          rawValue,
+        }).yamlText,
+        `Applied suggestion for "${context.fieldKey}".`,
+      );
+      return true;
+    }
+
+    if (action === 'apply-approval-outcome-preset') {
+      if (!catalog || !context?.stepId) {
+        fail('No approval step selected.', 'warning');
+        return true;
+      }
+
+      const approvedOutcome = button.getAttribute('data-approved-outcome') || 'approved';
+      const rejectedOutcome = button.getAttribute('data-rejected-outcome') || 'rejected';
+
+      let nextYaml = setStepFieldValue({
+        yamlText,
+        catalog,
+        stepId: context.stepId,
+        fieldKey: 'approved_outcome',
+        rawValue: approvedOutcome,
+      }).yamlText;
+
+      nextYaml = setStepFieldValue({
+        yamlText: nextYaml,
+        catalog,
+        stepId: context.stepId,
+        fieldKey: 'rejected_outcome',
+        rawValue: rejectedOutcome,
+      }).yamlText;
+
+      applyYamlMutation(nextYaml, `Applied approval outcome preset to "${context.stepId}".`);
+      return true;
+    }
+
+    if (action === 'set-trigger-trustpoint') {
+      const enabled = button.getAttribute('data-trigger-trustpoint') === 'true';
+      const result = setTriggerTrustpoint({ yamlText, enabled });
+      if (!result.changed) {
+        setStatus(enabled ? 'Trigger is already trustpoint-wide.' : 'Trigger already uses explicit source filters.');
+        return true;
+      }
+
+      applyYamlMutation(
+        result.yamlText,
+        enabled ? 'Trigger is now trustpoint-wide.' : 'Trigger now uses explicit source filters.',
+      );
+      return true;
+    }
+
+    if (action === 'add-trigger-source-value') {
+      const sourceKind = button.getAttribute('data-trigger-source-kind');
+      const rawValue = button.getAttribute('data-trigger-source-value');
+      if (!sourceKind || rawValue == null) {
+        fail('No trigger source selected.', 'warning');
+        return true;
+      }
+
+      const result = addTriggerSourceValue({ yamlText, sourceKind, rawValue });
+      if (!result.changed) {
+        setStatus('That source filter is already present.');
+        return true;
+      }
+
+      applyYamlMutation(result.yamlText, 'Added trigger source filter.');
+      return true;
+    }
+
+    if (action === 'remove-trigger-source-value') {
+      const sourceKind = button.getAttribute('data-trigger-source-kind');
+      const rawValue = button.getAttribute('data-trigger-source-value');
+      if (!sourceKind || rawValue == null) {
+        fail('No trigger source selected.', 'warning');
+        return true;
+      }
+
+      const result = removeTriggerSourceValue({ yamlText, sourceKind, rawValue });
+      if (!result.changed) {
+        setStatus('That source filter is already absent.');
+        return true;
+      }
+
+      applyYamlMutation(result.yamlText, 'Removed trigger source filter.');
       return true;
     }
 

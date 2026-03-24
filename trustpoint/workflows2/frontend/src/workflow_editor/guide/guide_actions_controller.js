@@ -20,6 +20,36 @@ export function createGuideActionsController({
     return null;
   }
 
+  containerEl.addEventListener('input', (event) => {
+    const filterInput = event.target.closest('[data-wf2-source-filter-input="true"]');
+    if (!filterInput) {
+      return;
+    }
+
+    const group = filterInput.closest('[data-wf2-source-group="true"]');
+    if (!group) {
+      return;
+    }
+
+    const needle = String(filterInput.value || '').trim().toLowerCase();
+    const entries = [...group.querySelectorAll('[data-wf2-source-entry="true"]')];
+    let visibleCount = 0;
+
+    entries.forEach((entry) => {
+      const haystack = String(entry.getAttribute('data-search-text') || '').toLowerCase();
+      const isVisible = !needle || haystack.includes(needle);
+      entry.hidden = !isVisible;
+      if (isVisible) {
+        visibleCount += 1;
+      }
+    });
+
+    const emptyState = group.querySelector('[data-wf2-source-empty-state="true"]');
+    if (emptyState) {
+      emptyState.hidden = visibleCount > 0;
+    }
+  });
+
   containerEl.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-wf2-action]');
     if (!button) {
@@ -70,6 +100,19 @@ export function createGuideActionsController({
         button,
       );
       setStatus('Inserted runtime snippet into the current field.');
+      return;
+    }
+
+    if (action === 'apply-webhook-capture-source') {
+      const row = button.closest('[data-capture-row]');
+      const sourceInput = row?.querySelector('[data-capture-source-input="true"]');
+      if (!sourceInput) {
+        actionContext.fail('No capture source field found.', 'warning');
+        return;
+      }
+
+      sourceInput.value = button.getAttribute('data-capture-source-value') || '';
+      setStatus('Applied capture source suggestion.');
       return;
     }
 

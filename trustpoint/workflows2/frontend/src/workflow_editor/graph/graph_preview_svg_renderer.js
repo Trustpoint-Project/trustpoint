@@ -22,6 +22,21 @@ function edgePath(from, to) {
   };
 }
 
+function implicitEndPath(from, layout) {
+  const x1 = from.x + from.w;
+  const y1 = from.y + from.h / 2;
+  const x2 = Math.min(layout.width - 18, x1 + 54);
+  const dx = Math.max(26, (x2 - x1) / 2);
+
+  return {
+    path: `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y1}, ${x2} ${y1}`,
+    labelX: (x1 + x2) / 2,
+    labelY: y1 - 8,
+    terminalX: Math.min(layout.width - 34, x2 - 2),
+    terminalY: y1 - 8,
+  };
+}
+
 function renderConnectionPreview(connectPreview) {
   if (!connectPreview) {
     return '';
@@ -46,10 +61,10 @@ export function renderGraphSvg(
   const defs = `
     <defs>
       <marker id="wf2-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-        <path d="M0,0 L0,6 L8,3 z" fill="#6c757d"></path>
+        <path d="M0,0 L0,6 L8,3 z" fill="var(--wf2-graph-edge-color)"></path>
       </marker>
       <marker id="wf2-arrow-selected" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-        <path d="M0,0 L0,6 L8,3 z" fill="#0d6efd"></path>
+        <path d="M0,0 L0,6 L8,3 z" fill="var(--wf2-graph-accent)"></path>
       </marker>
     </defs>
   `;
@@ -69,7 +84,43 @@ export function renderGraphSvg(
     .map((edge) => {
       const from = layout.positions.get(edge.from);
       const to = layout.positions.get(edge.to);
-      if (!from || !to) {
+      if (!from) {
+        return '';
+      }
+
+      if (!to && edge.to === '$end') {
+        const { path, labelX, labelY, terminalX, terminalY } = implicitEndPath(from, layout);
+        const selected = edge.id === selectedEdgeId;
+
+        return `
+          <g class="wf2-graph-edge ${selected ? 'is-selected' : ''}" data-edge-id="${escapeHtml(edge.id)}">
+            <path
+              d="${path}"
+              fill="none"
+              stroke="${selected ? 'var(--wf2-graph-accent)' : 'var(--wf2-graph-edge-color)'}"
+              stroke-width="${selected ? '3' : '2'}"
+              marker-end="url(#${selected ? 'wf2-arrow-selected' : 'wf2-arrow'})"
+            ></path>
+            ${
+              edge.on
+                ? `
+                  <text
+                    x="${labelX}"
+                    y="${labelY}"
+                    class="wf2-graph-edge-label"
+                    data-edge-label-id="${escapeHtml(edge.id)}"
+                  >
+                    ${escapeHtml(edge.on)}
+                  </text>
+                `
+                : ''
+            }
+            <text x="${terminalX}" y="${terminalY}" class="wf2-graph-edge-label">END</text>
+          </g>
+        `;
+      }
+
+      if (!to) {
         return '';
       }
 
@@ -81,7 +132,7 @@ export function renderGraphSvg(
           <path
             d="${path}"
             fill="none"
-            stroke="${selected ? '#0d6efd' : '#6c757d'}"
+            stroke="${selected ? 'var(--wf2-graph-accent)' : 'var(--wf2-graph-edge-color)'}"
             stroke-width="${selected ? '3' : '2'}"
             marker-end="url(#${selected ? 'wf2-arrow-selected' : 'wf2-arrow'})"
           ></path>
@@ -114,8 +165,16 @@ export function renderGraphSvg(
       const selected = node.id === selectedNodeId;
       const dragging = node.id === dragNodeId;
       const unreachable = !!node.is_unreachable;
-      const fill = node.is_virtual ? '#fff8e1' : (unreachable ? '#fff8f1' : '#ffffff');
-      const stroke = selected ? '#0d6efd' : (unreachable ? '#f59f00' : '#adb5bd');
+      const fill = node.is_virtual
+        ? 'var(--wf2-graph-virtual-fill)'
+        : unreachable
+          ? 'var(--wf2-graph-unreachable-fill)'
+          : 'var(--wf2-graph-node-fill)';
+      const stroke = selected
+        ? 'var(--wf2-graph-accent)'
+        : unreachable
+          ? 'var(--wf2-graph-warning)'
+          : 'var(--wf2-graph-node-stroke)';
       const dash = node.is_virtual ? '6 4' : (unreachable ? '8 4' : 'none');
 
       return `

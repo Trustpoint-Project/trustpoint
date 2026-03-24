@@ -1,6 +1,12 @@
 import { parseConditionPath, parseEdgeId, readInputValue } from './preview_helpers.js';
 import { insertInlineVariableIntoScope } from '../variables/inline_variable_picker.js';
 import {
+  readComputeAssignmentRows,
+  readSetVarRows,
+  readWebhookCaptureRows,
+} from '../steps/structured_step_editor_state.js';
+import { readGraphStepEditorDraft } from './step_editor_draft.js';
+import {
   clearCanvasMenu,
   clearEditor,
   clearSelection,
@@ -52,6 +58,39 @@ export async function handleGraphAction({
     return;
   }
 
+  if (action === 'apply-step-field-suggestion') {
+    const row = actionEl.closest('[data-step-field-row]');
+    const input = row?.querySelector('[data-step-field-input="true"]');
+    if (input) {
+      input.value = decodeURIComponent(actionEl.getAttribute('data-suggestion-value') || '');
+    }
+    return;
+  }
+
+  if (action === 'apply-approval-outcome-preset') {
+    const approvedRow = scope.querySelector('[data-step-field-row="approved_outcome"]');
+    const rejectedRow = scope.querySelector('[data-step-field-row="rejected_outcome"]');
+    const approvedInput = approvedRow?.querySelector('[data-step-field-input="true"]');
+    const rejectedInput = rejectedRow?.querySelector('[data-step-field-input="true"]');
+
+    if (approvedInput) {
+      approvedInput.value = actionEl.getAttribute('data-approved-outcome') || '';
+    }
+    if (rejectedInput) {
+      rejectedInput.value = actionEl.getAttribute('data-rejected-outcome') || '';
+    }
+    return;
+  }
+
+  if (action === 'apply-webhook-capture-source') {
+    const row = actionEl.closest('[data-capture-row]');
+    const sourceInput = row?.querySelector('[data-capture-source-input="true"]');
+    if (sourceInput) {
+      sourceInput.value = actionEl.getAttribute('data-capture-source-value') || '';
+    }
+    return;
+  }
+
   if (action === 'context-add-step') {
     const stepType = actionEl.getAttribute('data-step-type');
     if (!stepType) {
@@ -80,11 +119,33 @@ export async function handleGraphAction({
     return;
   }
 
+  if (action === 'save-step-editor') {
+    const stepId = actionEl.getAttribute('data-step-id');
+    const stepType = actionEl.getAttribute('data-step-type') || '';
+    const draft = readGraphStepEditorDraft(scope, stepType);
+    await callbacks.onSaveStepEditor(stepId, stepType, draft);
+    clearEditor(state);
+    clearCanvasMenu(state);
+    render();
+    return;
+  }
+
   if (action === 'save-step-field') {
     const stepId = actionEl.getAttribute('data-step-id');
     const fieldKey = actionEl.getAttribute('data-field-key');
     const row = actionEl.closest('[data-step-field-row]');
     await callbacks.onSaveStepField(stepId, fieldKey, readInputValue(row, '[data-step-field-input="true"]'));
+    return;
+  }
+
+  if (action === 'save-step-field-section') {
+    const stepId = actionEl.getAttribute('data-step-id');
+    const section = actionEl.closest('[data-step-field-section="true"]');
+    const updates = [...(section?.querySelectorAll('[data-step-field-row]') || [])].map((row) => ({
+      fieldKey: row.getAttribute('data-step-field-row'),
+      rawValue: readInputValue(row, '[data-step-field-input="true"]'),
+    }));
+    await callbacks.onSaveStepFields(stepId, updates);
     return;
   }
 
@@ -204,6 +265,13 @@ export async function handleGraphAction({
     return;
   }
 
+  if (action === 'save-all-webhook-capture-rules') {
+    const stepId = actionEl.getAttribute('data-step-id');
+    const section = actionEl.closest('[data-structured-step-section="webhook-capture"]');
+    await callbacks.onSaveAllWebhookCaptureRules(stepId, readWebhookCaptureRows(section));
+    return;
+  }
+
   if (action === 'remove-webhook-capture-rule') {
     await callbacks.onRemoveWebhookCaptureRule(
       actionEl.getAttribute('data-step-id'),
@@ -226,6 +294,13 @@ export async function handleGraphAction({
       readInputValue(row, '[data-compute-operator-input="true"]'),
       readInputValue(row, '[data-compute-args-input="true"]'),
     );
+    return;
+  }
+
+  if (action === 'save-all-compute-assignments') {
+    const stepId = actionEl.getAttribute('data-step-id');
+    const section = actionEl.closest('[data-structured-step-section="compute-assignments"]');
+    await callbacks.onSaveAllComputeAssignments(stepId, readComputeAssignmentRows(section));
     return;
   }
 
@@ -253,6 +328,13 @@ export async function handleGraphAction({
     return;
   }
 
+  if (action === 'save-all-set-var-entries') {
+    const stepId = actionEl.getAttribute('data-step-id');
+    const section = actionEl.closest('[data-structured-step-section="set-vars"]');
+    await callbacks.onSaveAllSetVarEntries(stepId, readSetVarRows(section));
+    return;
+  }
+
   if (action === 'remove-set-var-entry') {
     await callbacks.onRemoveSetVarEntry(
       actionEl.getAttribute('data-step-id'),
@@ -269,7 +351,7 @@ export async function handleGraphAction({
   if (action === 'delete-step') {
     const stepId = actionEl.getAttribute('data-step-id');
     const confirmed = window.confirm(
-      `Delete step "${stepId}"?\n\nOutgoing edges will be removed. Incoming linear edges will be removed. Incoming outcome edges will be rerouted to $end.`,
+      `Delete step "${stepId}"?\n\nOutgoing edges will be removed. Incoming edges that targeted this step will be removed as well.`,
     );
     if (!confirmed) {
       return;

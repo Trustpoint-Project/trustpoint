@@ -12,6 +12,7 @@ import {
   renderGuideMeta,
   renderGuideSection,
 } from './guide_layout.js';
+import { renderTriggerSourcesGuide } from './guide_trigger_sources_renderer.js';
 
 export function renderRootGuide(catalog) {
   return `
@@ -62,11 +63,7 @@ export function renderTriggerGuide(context, catalog) {
   }
 
   if (context.area === 'trigger.sources') {
-    return renderGuideSection({
-      title: 'Source filters',
-      description: 'Configure whether this trigger applies trustpoint-wide, or only to selected CA IDs, domain IDs, or device IDs.',
-      body: '',
-    });
+    return renderTriggerSourcesGuide(context, catalog);
   }
 
   return renderGuideSection({

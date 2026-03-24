@@ -1,4 +1,6 @@
 import { escapeHtml, renderChips } from '../shared/dom.js';
+import { WEBHOOK_CAPTURE_SOURCE_OPTIONS } from '../document/webhook_capture_sources.js';
+import { getStepFieldSuggestions } from '../document/step_field_suggestions.js';
 import {
   findStepSpec,
   renderActionButton,
@@ -205,10 +207,30 @@ export function renderFieldSpecificOptions(catalog, context) {
     return '';
   }
 
+  const suggestions = getStepFieldSuggestions(context?.stepType, context?.fieldKey);
+  const suggestionHtml = suggestions.length
+    ? `
+        <div class="mb-2">
+          <div class="fw-semibold mb-1">Suggested snippets</div>
+          <div class="d-flex flex-wrap gap-2">
+            ${suggestions
+              .map((item) =>
+                renderActionButton(
+                  'apply-current-field-suggestion',
+                  item.label,
+                  ` data-suggestion-value="${escapeHtml(encodeURIComponent(item.value))}" title="${escapeHtml(item.description)}"`,
+                ),
+              )
+              .join('')}
+          </div>
+        </div>
+      `
+    : '';
+
   switch (fieldMeta.field_kind) {
     case 'template':
     case 'text':
-      return renderExpressionDsl(catalog, { insertableFunctions: true });
+      return suggestionHtml + renderExpressionDsl(catalog, { insertableFunctions: true });
 
     case 'condition':
       return renderConditionDsl(catalog, { insertMode: 'mapping' });
@@ -223,22 +245,23 @@ export function renderFieldSpecificOptions(catalog, context) {
       return renderScalarSetterButtons(fieldMeta.enum || []);
 
     case 'outcome':
-      return renderOutcomeSetterButtons(context);
+      return suggestionHtml + renderOutcomeSetterButtons(context);
 
     case 'compute_mapping':
       return renderComputeDsl(catalog, { insertable: true });
 
     case 'capture_mapping':
       return `
+        ${suggestionHtml}
         <div class="mb-2">
           <div class="fw-semibold mb-1">Capture sources</div>
           ${renderScalarSetterButtons(
-            ['status_code', 'body', 'headers', 'headers.x-request-id', 'body.some_value'],
+            WEBHOOK_CAPTURE_SOURCE_OPTIONS.map((item) => item.value),
           )}
         </div>
       `;
 
     default:
-      return '';
+      return suggestionHtml;
   }
 }

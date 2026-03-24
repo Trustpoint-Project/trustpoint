@@ -114,6 +114,40 @@ function buildNodes(stepsObj, edges) {
   });
 }
 
+function warnOnMissingOutcomeMappings(issues, stepsObj, edges) {
+  const mappedOutcomesByStep = new Map();
+
+  for (const edge of edges) {
+    if (!edge?.on) {
+      continue;
+    }
+
+    if (!mappedOutcomesByStep.has(edge.from)) {
+      mappedOutcomesByStep.set(edge.from, new Set());
+    }
+    mappedOutcomesByStep.get(edge.from).add(edge.on);
+  }
+
+  for (const [stepId, stepObj] of Object.entries(stepsObj)) {
+    const outcomes = extractStepOutcomes(stepObj);
+    if (!outcomes.length) {
+      continue;
+    }
+
+    const mapped = mappedOutcomesByStep.get(stepId) || new Set();
+    const missing = outcomes.filter((outcome) => !mapped.has(outcome));
+    if (!missing.length) {
+      continue;
+    }
+
+    pushIssue(
+      issues,
+      'warning',
+      `Step "${stepId}" has unlinked outcomes: ${missing.join(', ')}`,
+    );
+  }
+}
+
 function collectReachableSteps(start, stepsObj, edges) {
   if (!start || !Object.prototype.hasOwnProperty.call(stepsObj, start)) {
     return new Set();
@@ -236,6 +270,8 @@ export function parseDraftWorkflowGraph(yamlText) {
 
     edges.push(edge);
   }
+
+  warnOnMissingOutcomeMappings(issues, stepsObj, edges);
 
   const nodes = buildNodes(stepsObj, edges);
   const hasValidStart = !!(start && Object.prototype.hasOwnProperty.call(stepsObj, start));
