@@ -6,8 +6,10 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 
+from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.compiler.compiler import compile_workflow_yaml
-from workflows2.models import Workflow2Definition
+from workflows2.models import Workflow2Approval, Workflow2Definition, Workflow2Instance, Workflow2Job, Workflow2Run
+from workflows2.services.dispatch import EventSource, WorkflowDispatchService
 
 
 GRAPH_YAML = """\
@@ -42,6 +44,43 @@ workflow:
 """
 
 
+APPROVAL_CONTINUE_YAML = """\
+schema: trustpoint.workflow.v2
+name: Approval Continue Example
+enabled: true
+
+trigger:
+  on: workflows2.test
+  sources:
+    trustpoint: true
+
+workflow:
+  start: approve
+
+  steps:
+    approve:
+      type: approval
+      approved_outcome: approved
+      rejected_outcome: needs_review
+      timeout_seconds: 3600
+
+    mark_review:
+      type: set
+      vars:
+        result: reviewed
+
+  flow:
+    - from: approve
+      on: approved
+      to: $end
+    - from: approve
+      on: needs_review
+      to: mark_review
+    - from: mark_review
+      to: $end
+"""
+
+
 class Workflow2HttpViewTests(TestCase):
     def setUp(self) -> None:
         self.user = get_user_model().objects.create_user(
@@ -60,13 +99,56 @@ class Workflow2HttpViewTests(TestCase):
             ir_hash=ir["meta"]["ir_hash"],
         )
 
+    def _store_approval_definition(self) -> Workflow2Definition:
+        ir = compile_workflow_yaml(APPROVAL_CONTINUE_YAML, compiler_version="test")
+        return Workflow2Definition.objects.create(
+            name="Approval Continue Example",
+            enabled=True,
+            trigger_on=ir["trigger"]["on"],
+            yaml_text=APPROVAL_CONTINUE_YAML,
+            ir_json=ir,
+            ir_hash=ir["meta"]["ir_hash"],
+        )
+
     def test_context_catalog_requires_login(self) -> None:
         response = self.client.get(reverse("workflows2:context_catalog"))
         self.assertEqual(response.status_code, 302)
 
+    def test_context_catalog_includes_trigger_source_lists(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("workflows2:context_catalog"))
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        self.assertIn("trigger_sources", payload)
+        self.assertEqual(sorted(payload["trigger_sources"].keys()), ["cas", "devices", "domains"])
+        self.assertIsInstance(payload["trigger_sources"]["cas"], list)
+        self.assertIsInstance(payload["trigger_sources"]["domains"], list)
+        self.assertIsInstance(payload["trigger_sources"]["devices"], list)
+
     def test_runs_list_requires_login(self) -> None:
         response = self.client.get(reverse("workflows2:runs-list"))
         self.assertEqual(response.status_code, 302)
+
+    def test_runs_list_hides_no_match_runs_by_default(self) -> None:
+        self.client.force_login(self.user)
+        run = Workflow2Run.objects.create(
+            trigger_on="est.simpleenroll",
+            event_json={"est": {"operation": "simpleenroll"}},
+            source_json={},
+            status=Workflow2Run.STATUS_NO_MATCH,
+            finalized=True,
+        )
+
+        response = self.client.get(reverse("workflows2:runs-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, str(run.id))
+        self.assertContains(response, "No-match trigger attempts are hidden by default.")
+
+        visible_response = self.client.get(reverse("workflows2:runs-list"), {"show_no_match": "1"})
+        self.assertEqual(visible_response.status_code, 200)
+        self.assertContains(visible_response, str(run.id))
 
     def test_definition_graph_endpoint_uses_service_shape(self) -> None:
         definition = self._store_definition()
@@ -106,3 +188,72 @@ class Workflow2HttpViewTests(TestCase):
 
         self.assertIn("$end", node_ids)
         self.assertIn("$reject", node_ids)
+
+    def test_approval_resolve_continues_inline_when_no_worker_is_present(self) -> None:
+        self.client.force_login(self.user)
+
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.INLINE
+        cfg.save()
+
+        self._store_approval_definition()
+        svc = WorkflowDispatchService()
+        with self.captureOnCommitCallbacks(execute=True):
+            instances = svc.emit_event(
+                on="workflows2.test",
+                event={"device": {"id": "dev-1"}},
+                source=EventSource(trustpoint=True),
+            )
+
+        inst = instances[0]
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_AWAITING)
+
+        approval = Workflow2Approval.objects.get(instance=inst, step_id="approve")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("workflows2:approvals-resolve", args=[approval.id]),
+                {"decision": "rejected", "comment": "Needs review"},
+            )
+
+        self.assertEqual(response.status_code, 302)
+
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.vars_json.get("result"), "reviewed")
+        self.assertEqual(
+            Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(),
+            0,
+        )
+
+    def test_detail_pages_render_for_run_instance_and_approval(self) -> None:
+        self.client.force_login(self.user)
+
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.INLINE
+        cfg.save()
+
+        self._store_approval_definition()
+        svc = WorkflowDispatchService()
+        with self.captureOnCommitCallbacks(execute=True):
+            instances = svc.emit_event(
+                on="workflows2.test",
+                event={"device": {"id": "dev-1", "common_name": "Router-01"}},
+                source=EventSource(trustpoint=True, domain_id=123, device_id="dev-1"),
+            )
+
+        inst = instances[0]
+        approval = Workflow2Approval.objects.get(instance=inst, step_id="approve")
+
+        run_response = self.client.get(reverse("workflows2:runs-detail", args=[inst.run_id]))
+        self.assertEqual(run_response.status_code, 200)
+        self.assertContains(run_response, "Workflow instances")
+
+        instance_response = self.client.get(reverse("workflows2:instances-detail", args=[inst.id]))
+        self.assertEqual(instance_response.status_code, 200)
+        self.assertContains(instance_response, "Execution timeline")
+
+        approval_response = self.client.get(reverse("workflows2:approvals-detail", args=[approval.id]))
+        self.assertEqual(approval_response.status_code, 200)
+        self.assertContains(approval_response, "Approval review")

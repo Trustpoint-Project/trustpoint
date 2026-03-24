@@ -195,6 +195,33 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         self.assertEqual(len(a), len(b))
         self.assertEqual(a[0].run_id, b[0].run_id)
 
+    def test_get_or_create_run_idempotency_reuses_finalized_run(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.save()
+
+        self._store_def(YAML_TWO_WORKFLOWS, name="A")
+        svc = WorkflowDispatchService()
+
+        first = svc.emit_event(
+            on="device.created",
+            event={"x": 1},
+            source=EventSource(trustpoint=True),
+            idempotency_key="done-key",
+        )
+        run = Workflow2Run.objects.get(id=first[0].run_id)
+        run.finalized = True
+        run.status = Workflow2Run.STATUS_SUCCEEDED
+        run.save(update_fields=["finalized", "status", "updated_at"])
+
+        second = svc.emit_event(
+            on="device.created",
+            event={"x": 1},
+            source=EventSource(trustpoint=True),
+            idempotency_key="done-key",
+        )
+        self.assertEqual(first[0].run_id, second[0].run_id)
+
     def test_worker_cancels_on_expired_lease(self) -> None:
         d = self._store_def(YAML_TWO_WORKFLOWS, name="A")
         runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
@@ -289,3 +316,26 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         self.assertEqual(continued.status, "succeeded")
         self.assertEqual(continued.outcome, "continue_ok")
         self.assertIsNone(continued.next_step)
+
+    def test_resolve_approval_persists_comment_and_decider(self) -> None:
+        d = self._store_def(YAML_APPROVAL_REJECT, name="approval-metadata")
+        runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
+
+        inst = runtime.create_instance(definition=d, event={"device": {"id": "x"}})
+        runtime.run_one_step(inst)
+
+        approval = Workflow2Approval.objects.get(instance=inst, step_id="approve")
+        runtime.resolve_approval(
+            approval=approval,
+            decision="approved",
+            decided_by="workflow-tester",
+            comment="Looks good.",
+        )
+
+        approval.refresh_from_db()
+        step_run = Workflow2StepRun.objects.get(instance=inst, run_index=2)
+
+        self.assertEqual(approval.decided_by, "workflow-tester")
+        self.assertEqual(approval.comment, "Looks good.")
+        self.assertEqual(step_run.output["decided_by"], "workflow-tester")
+        self.assertEqual(step_run.output["comment"], "Looks good.")

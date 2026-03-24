@@ -218,6 +218,22 @@ class CompilerTests(SimpleTestCase):
         with self.assertRaises(CompileError):
             compile_workflow_yaml(yaml_text, compiler_version="test")
 
+    def test_set_accepts_vars_prefixed_keys_and_normalizes_ir(self) -> None:
+        yaml_text = VALID_YAML.replace(
+            "    stop_ok:\n      type: set\n      vars: {}\n",
+            """    stop_ok:
+      type: set
+      vars:
+        vars.result: ok
+        vars.message: Status was ${vars.http_status}
+""",
+        )
+
+        ir = compile_workflow_yaml(yaml_text, compiler_version="test")
+        vars_map = ir["workflow"]["steps"]["stop_ok"]["params"]["vars"]
+        self.assertEqual(vars_map["result"], "ok")
+        self.assertEqual(vars_map["message"]["kind"], "template")
+
     def test_expr_disallows_unknown_function(self) -> None:
         yaml_text = VALID_YAML.replace(
             "stop_ok:",
@@ -237,6 +253,18 @@ class CompilerTests(SimpleTestCase):
 
         with self.assertRaises(CompileError):
             compile_workflow_yaml(yaml_text, compiler_version="test")
+
+    def test_expr_error_explains_nested_template_refs(self) -> None:
+        yaml_text = VALID_YAML.replace(
+            "${vars.http_status}",
+            "${str(${vars.http_status})}",
+            1,
+        )
+
+        with self.assertRaises(CompileError) as ctx:
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertIn("Expressions already live inside ${...}", str(ctx.exception))
 
     def test_allows_implicit_end_for_non_outcome_step(self) -> None:
         yaml_text = """\
