@@ -180,8 +180,7 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
             case OnboardingProtocol.OPC_GDS_PUSH:
                 error_messages = self._validate_case_opc_gds_push_onboarding()
             case OnboardingProtocol.AOKI:
-                err_msg = 'AOKI is not yet supported as onboarding protocol.'
-                raise ValidationError(err_msg)
+                error_messages = self._validate_case_aoki_onboarding()
             case OnboardingProtocol.BRSKI:
                 err_msg = 'BRSKI is not yet supported as onboarding protocol.'
                 raise ValidationError(err_msg)
@@ -250,6 +249,18 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
             The error_messages gathered.
         """
         return {}
+
+    def _validate_case_aoki_onboarding(self) -> dict[str, str]:
+        """Validates case OnboardingProtocol.AOKI."""
+        error_messages = {}
+
+        if self.est_password != '':
+            error_messages['est_password'] = 'EST password must not be set for AOKI onboarding.'  # noqa: S105
+
+        if self.cmp_shared_secret != '':
+            error_messages['cmp_shared_secret'] = 'CMP shared-secret must not be set for AOKI onboarding.'  # noqa: S105
+
+        return error_messages
 
     def _validate_case_cmp_shared_secret_onboarding(self) -> dict[str, str]:
         """Validates case OnboardingProtocol.CMP_SHARED_SECRET.

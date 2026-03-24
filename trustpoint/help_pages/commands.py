@@ -435,10 +435,10 @@ class AokiCmpIDevIDCommandBuilder:
             '  -key idevid_pk.pem \\\n'
             '  -extracerts idevid_ca.pem \\\n'
             '  -subject "/CN=Trustpoint Domain Credential" \\\n'
-            '  -newkey domain_credential_key.pem \\\n'
-            '  -certout domain_credential.pem \\\n'
+            '  -newkey domain-credential-key.pem \\\n'
+            '  -certout domain-credential-certificate.pem \\\n'
             '  -chainout chain_without_root.pem \\\n'
-            '  -extracertsout full_chain.pem \\\n'
+            '  -extracertsout domain-credential-full-chain.pem \\\n'
             '  -trusted ownerid_ca.pem'
         )
 
@@ -501,8 +501,8 @@ class AokiEstIDevIDCommandBuilder:
     def get_curl_enroll_command(host: str) -> str:
         """Get the curl EST enrollment command for AOKI with IDevID."""
         return (
-            f'curl --cert domain_credential.pem \\\n'
-            f'  --key domain_credential_key.pem \\\n'
+            f'curl --cert domain-credential-cert.pem \\\n'
+            f'  --key domain-credential-key.pem \\\n'
             f'  --cacert trust_store.pem \\\n'
             f'  --header "Content-Type: application/pkcs10" \\\n'
             f'  --data-binary "@domain_credential.der" \\\n'
