@@ -613,10 +613,10 @@ class AgentOnboardingCreateForm(OnboardingCreateForm):
         widget=forms.HiddenInput(),
     )
 
-    # EST is the only allowed PKI protocol for agents — submitted as hidden input.
+    # REST is the only allowed PKI protocol for agents — submitted as hidden input.
     onboarding_pki_protocols = forms.MultipleChoiceField(
-        choices=[(OnboardingPkiProtocol.EST, OnboardingPkiProtocol.EST.label)],
-        initial=[OnboardingPkiProtocol.EST],
+        choices=[(OnboardingPkiProtocol.REST, OnboardingPkiProtocol.REST.label)],
+        initial=[OnboardingPkiProtocol.REST],
         widget=forms.MultipleHiddenInput(),
     )
 
@@ -625,8 +625,8 @@ class AgentOnboardingCreateForm(OnboardingCreateForm):
         super().__init__(*args, **kwargs)
 
         # Ensure hidden fields carry the correct pre-selected values.
-        self.initial['onboarding_protocol'] = str(OnboardingProtocol.EST_USERNAME_PASSWORD.value)
-        self.initial['onboarding_pki_protocols'] = [str(OnboardingPkiProtocol.EST.value)]
+        self.initial['onboarding_protocol'] = str(OnboardingProtocol.REST.value)
+        self.initial['onboarding_pki_protocols'] = [str(OnboardingPkiProtocol.REST.value)]
 
         self.helper = FormHelper()
         self.helper.form_tag = False
@@ -637,7 +637,7 @@ class AgentOnboardingCreateForm(OnboardingCreateForm):
             Field('domain'),
             HTML(
                 '<div class="alert alert-info mt-3" role="alert">'
-                + str(_('Onboarding protocol: EST - Username & Password (fixed). PKI protocol: EST (fixed).'))
+                + str(_('Onboarding protocol: EST - Username & Password (fixed). PKI protocol: REST (fixed).'))
                 + '</div>'
             ),
             Field('onboarding_protocol'),
