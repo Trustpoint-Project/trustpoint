@@ -8,7 +8,7 @@ from pathlib import Path
 
 import django
 
-BUILD_AUTODOCS = True
+BUILD_AUTODOCS = False
 
 # -- Path setup -------------------------------------------------------------
 # Ensures Sphinx can find the project's modules for autodoc and autoapi.
