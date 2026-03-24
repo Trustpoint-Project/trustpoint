@@ -2,52 +2,229 @@
 {% load i18n %}
 {% block content %}
 
-<div class="card">
-  <div class="card-header">
-    <h1 class="mb-0">{% trans "Approval" %} {{ approval.id }}</h1>
-  </div>
-
-  <div class="card-body">
-    <p><strong>{% trans "Status" %}:</strong> {{ approval.get_status_display }}</p>
-    <p><strong>{% trans "Step" %}:</strong> {{ approval.step_id }}</p>
-    <p><strong>{% trans "Instance" %}:</strong>
-      <a href="{% url 'workflows2:instances-detail' inst.id %}">{{ inst.id }}</a>
-    </p>
-
-    {% if approval.expires_at %}
-      <p><strong>{% trans "Expires" %}:</strong> {{ approval.expires_at|date:"Y-m-d H:i:s" }}</p>
-    {% endif %}
-
-    {% if approval.status == "pending" and inst.status == "awaiting" %}
-      <div class="d-flex gap-2 mb-3 flex-wrap">
-        <form method="post" action="{% url 'workflows2:approvals-resolve' approval.id %}">
-          {% csrf_token %}
-          <input type="hidden" name="decision" value="approved">
-          <button class="btn btn-success" type="submit">{% trans "Approve" %}</button>
-        </form>
-
-        <form method="post" action="{% url 'workflows2:approvals-resolve' approval.id %}">
-          {% csrf_token %}
-          <input type="hidden" name="decision" value="rejected">
-          <button class="btn btn-danger" type="submit">{% trans "Reject" %}</button>
-        </form>
+<div class="container-fluid py-3">
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body d-flex flex-wrap align-items-start justify-content-between gap-3">
+      <div>
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+          <h1 class="h3 mb-0">{% trans "Approval review" %}</h1>
+          <span class="badge {{ approval_badge }}">{{ approval.get_status_display }}</span>
+          {% if can_resolve %}
+            <span class="badge text-bg-warning">{% trans "Awaiting decision" %}</span>
+          {% endif %}
+        </div>
+        <div class="fw-semibold">{{ step_display.title }}</div>
+        <div class="text-muted small">
+          <div><strong>{% trans "Approval ID" %}:</strong> <code>{{ approval.id }}</code></div>
+          <div><strong>{% trans "Step" %}:</strong> <code>{{ approval.step_id }}</code></div>
+        </div>
       </div>
-    {% endif %}
 
-    <hr>
-
-    <h2>{% trans "Vars" %}</h2>
-    <pre style="white-space: pre-wrap;">{{ vars_pretty }}</pre>
-
-    <h2>{% trans "Event" %}</h2>
-    <pre style="white-space: pre-wrap;">{{ event_pretty }}</pre>
+      <div class="text-muted small">
+        <div><strong>{% trans "Created" %}:</strong> {{ approval.created_at|date:"Y-m-d H:i:s" }}</div>
+        {% if approval.expires_at %}
+          <div><strong>{% trans "Expires" %}:</strong> {{ approval.expires_at|date:"Y-m-d H:i:s" }}</div>
+        {% endif %}
+        {% if approval.decided_at %}
+          <div><strong>{% trans "Decided" %}:</strong> {{ approval.decided_at|date:"Y-m-d H:i:s" }}</div>
+        {% endif %}
+      </div>
+    </div>
   </div>
 
-  <div class="card-footer d-flex justify-content-between align-items-center">
-    <a href="{% url 'workflows2:approvals-list' %}" class="btn btn-secondary">{% trans "Back" %}</a>
-    <a href="{% url 'workflows2:instances-detail' inst.id %}" class="btn btn-outline-secondary">
-      {% trans "Instance" %}
-    </a>
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-xl-5">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-body fw-semibold">{% trans "Decision" %}</div>
+        <div class="card-body">
+          <div class="row g-2 mb-3">
+            <div class="col-12 col-md-6">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="text-muted small text-uppercase">{% trans "Approve outcome" %}</div>
+                <div class="fw-semibold"><code>{{ step_meta.approved_outcome|default:"—" }}</code></div>
+              </div>
+            </div>
+            <div class="col-12 col-md-6">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="text-muted small text-uppercase">{% trans "Reject outcome" %}</div>
+                <div class="fw-semibold"><code>{{ step_meta.rejected_outcome|default:"—" }}</code></div>
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="text-muted small text-uppercase">{% trans "Timeout" %}</div>
+                <div class="fw-semibold">
+                  {% if step_meta.timeout_seconds %}
+                    {{ step_meta.timeout_seconds }}s
+                  {% else %}
+                    —
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {% if can_resolve %}
+            <form method="post" action="{% url 'workflows2:approvals-resolve' approval.id %}">
+              {% csrf_token %}
+              <div class="mb-3">
+                <label class="form-label">{% trans "Comment" %}</label>
+                <textarea class="form-control" name="comment" rows="4" placeholder="{% trans 'Optional note for this decision' %}"></textarea>
+              </div>
+              <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-success" type="submit" name="decision" value="approved">
+                  {% trans "Approve and continue" %}
+                </button>
+                <button class="btn btn-danger" type="submit" name="decision" value="rejected">
+                  {% trans "Reject and continue" %}
+                </button>
+              </div>
+            </form>
+          {% else %}
+            <div class="alert alert-secondary mb-0">
+              <div class="fw-semibold">{% trans "Decision recorded" %}</div>
+              <div class="small mt-2">
+                <div><strong>{% trans "Instance status" %}:</strong> {{ inst.get_status_display }}</div>
+                {% if approval.decided_by %}
+                  <div><strong>{% trans "Decided by" %}:</strong> {{ approval.decided_by }}</div>
+                {% endif %}
+                {% if approval.comment %}
+                  <div class="mt-2"><strong>{% trans "Comment" %}:</strong></div>
+                  <div>{{ approval.comment }}</div>
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-7">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-body fw-semibold">{% trans "Workflow context" %}</div>
+        <div class="card-body">
+          <div class="row g-3 mb-3">
+            <div class="col-12 col-md-4">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="text-muted small text-uppercase">{% trans "Definition" %}</div>
+                <div class="fw-semibold">
+                  <a href="{% url 'workflows2:definitions_edit' inst.definition.id %}">{{ inst.definition.name }}</a>
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-md-4">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="text-muted small text-uppercase">{% trans "Instance" %}</div>
+                <div class="mb-1"><span class="badge {{ instance_badge }}">{{ inst.get_status_display }}</span></div>
+                <div><a href="{% url 'workflows2:instances-detail' inst.id %}"><code>{{ inst.id }}</code></a></div>
+              </div>
+            </div>
+            <div class="col-12 col-md-4">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="text-muted small text-uppercase">{% trans "Run" %}</div>
+                {% if inst.run_id %}
+                  <div class="mb-1"><span class="badge {{ run_badge }}">{{ inst.run.get_status_display }}</span></div>
+                  <div><a href="{% url 'workflows2:runs-detail' inst.run.id %}"><code>{{ inst.run.id }}</code></a></div>
+                {% else %}
+                  <div class="text-muted">—</div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="text-muted small text-uppercase mb-2">{% trans "Source context" %}</div>
+                {% for row in source_context.rows %}
+                  <div class="mb-2">
+                    <div class="text-muted small">{{ row.label }}</div>
+                    <div class="fw-semibold">{{ row.value }}</div>
+                    {% if row.meta %}
+                      <div class="text-muted small">{{ row.meta }}</div>
+                    {% endif %}
+                  </div>
+                {% empty %}
+                  <div class="text-muted">{% trans "No source context recorded." %}</div>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="col-12 col-lg-6">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="text-muted small text-uppercase mb-2">{% trans "Event summary" %}</div>
+                {% for row in event_context %}
+                  <div class="mb-2">
+                    <div class="text-muted small">{{ row.label }}</div>
+                    <div class="fw-semibold">{{ row.value }}</div>
+                  </div>
+                {% empty %}
+                  <div class="text-muted">{% trans "No human-friendly event summary was available." %}</div>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-header bg-body fw-semibold">{% trans "Current workflow vars" %}</div>
+    <div class="card-body">
+      {% if vars_summary %}
+        <div class="row g-3">
+          {% for row in vars_summary %}
+            <div class="col-12 col-md-6 col-xl-3">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="text-muted small text-uppercase">{{ row.label }}</div>
+                <div class="fw-semibold">{{ row.value }}</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="text-muted">{% trans "No workflow vars are currently stored." %}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-header bg-body fw-semibold">{% trans "Technical details" %}</div>
+    <div class="card-body">
+      <div class="accordion" id="approvalTechnical">
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="approvalVarsHeading">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#approvalVarsBody" aria-expanded="false" aria-controls="approvalVarsBody">
+              {% trans "Raw workflow vars" %}
+            </button>
+          </h2>
+          <div id="approvalVarsBody" class="accordion-collapse collapse" aria-labelledby="approvalVarsHeading" data-bs-parent="#approvalTechnical">
+            <div class="accordion-body">
+              <pre class="mb-0" style="white-space: pre-wrap;">{{ vars_pretty }}</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="approvalEventHeading">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#approvalEventBody" aria-expanded="false" aria-controls="approvalEventBody">
+              {% trans "Raw trigger event" %}
+            </button>
+          </h2>
+          <div id="approvalEventBody" class="accordion-collapse collapse" aria-labelledby="approvalEventHeading" data-bs-parent="#approvalTechnical">
+            <div class="accordion-body">
+              <pre class="mb-0" style="white-space: pre-wrap;">{{ event_pretty }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="d-flex flex-wrap gap-2">
+    <a href="{% url 'workflows2:approvals-list' %}" class="btn btn-outline-secondary">{% trans "Back to approvals" %}</a>
+    <a href="{% url 'workflows2:instances-detail' inst.id %}" class="btn btn-outline-primary">{% trans "Open instance" %}</a>
   </div>
 </div>
 

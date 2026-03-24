@@ -2,66 +2,149 @@
 {% load i18n %}
 {% block content %}
 
-<div class="card">
-  <div class="card-header">
-    <h1 class="mb-0">{% trans "Workflow Runs" %}</h1>
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+    <div>
+      <h1 class="h4 mb-0">{% trans "Workflow Runs" %}</h1>
+      <div class="text-muted small">{% trans "Trigger executions and their resulting workflow instances." %}</div>
+    </div>
   </div>
-  <div class="card-body">
 
-    <form method="get" class="row g-2 mb-3">
-      <div class="col-md-4">
-        <label class="form-label">{% trans "Status" %}</label>
-        <select name="status" class="form-select">
-          <option value="">{% trans "All" %}</option>
-          {% for val,label in status_choices %}
-            <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Visible runs" %}</div>
+          <div class="fs-4 fw-semibold">{{ summary_total }}</div>
+        </div>
       </div>
-
-      <div class="col-md-6">
-        <label class="form-label">{% trans "Trigger" %}</label>
-        <input name="trigger_on" class="form-control" value="{{ trigger_on }}" placeholder="device.created">
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Active" %}</div>
+          <div class="fs-4 fw-semibold">{{ summary_active }}</div>
+        </div>
       </div>
-
-      <div class="col-md-2 d-flex align-items-end">
-        <button class="btn btn-primary w-100" type="submit">{% trans "Filter" %}</button>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Awaiting" %}</div>
+          <div class="fs-4 fw-semibold">{{ summary_awaiting }}</div>
+        </div>
       </div>
-    </form>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Completed" %}</div>
+          <div class="fs-4 fw-semibold">{{ summary_completed }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    <table class="table">
-      <thead>
-        <tr>
-          <th>{% trans "Status" %}</th>
-          <th>{% trans "Trigger" %}</th>
-          <th>{% trans "Instances" %}</th>
-          <th>{% trans "Created" %}</th>
-          <th>{% trans "Updated" %}</th>
-          <th>{% trans "Details" %}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for run in page_obj %}
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-12 col-lg-4">
+          <label class="form-label">{% trans "Status" %}</label>
+          <select name="status" class="form-select">
+            <option value="">{% trans "All" %}</option>
+            {% for val, label in status_choices %}
+              <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-12 col-lg-5">
+          <label class="form-label">{% trans "Trigger" %}</label>
+          <input name="trigger_on" class="form-control" value="{{ trigger_on }}" placeholder="est.simpleenroll">
+        </div>
+
+        <div class="col-12 col-lg-3">
+          <div class="form-check mb-2">
+            <input class="form-check-input" type="checkbox" name="show_no_match" value="1" id="showNoMatch" {% if show_no_match %}checked{% endif %}>
+            <label class="form-check-label" for="showNoMatch">
+              {% trans "Include no-match runs" %}
+            </label>
+          </div>
+          <button class="btn btn-primary w-100" type="submit">{% trans "Apply filters" %}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if hidden_no_match_count %}
+    <div class="alert alert-info">
+      <div class="fw-semibold">{% trans "No-match trigger attempts are hidden by default." %}</div>
+      <div class="small">
+        {% blocktrans with count=hidden_no_match_count %}
+          {{ count }} run(s) did not match any active Workflow 2 definition and are hidden from this list.
+        {% endblocktrans %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
           <tr>
-            <td>{{ run.get_status_display }}</td>
-            <td>{{ run.trigger_on }}</td>
-            <td>{{ run.instance_count }}</td>
-            <td>{{ run.created_at|date:"Y-m-d H:i" }}</td>
-            <td>{{ run.updated_at|date:"Y-m-d H:i" }}</td>
-            <td>
-              <a class="btn btn-primary tp-table-btn" href="{% url 'workflows2:runs-detail' run.id %}">
-                {% trans "Open" %}
-              </a>
-            </td>
+            <th>{% trans "Run" %}</th>
+            <th>{% trans "Trigger" %}</th>
+            <th>{% trans "Source" %}</th>
+            <th>{% trans "Instances" %}</th>
+            <th>{% trans "Updated" %}</th>
+            <th class="text-end">{% trans "Open" %}</th>
           </tr>
-        {% empty %}
-          <tr><td colspan="6" class="middle">{% trans "No runs found." %}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
-    {% include 'trustpoint/pagination.html' with page_obj=page_obj %}
+        </thead>
+        <tbody>
+          {% for row in run_rows %}
+            <tr>
+              <td>
+                <div class="d-flex flex-column gap-1">
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="badge {{ row.badge }}">{{ row.run.get_status_display }}</span>
+                    {% if row.is_no_match %}
+                      <span class="badge text-bg-secondary">{% trans "No definition matched" %}</span>
+                    {% endif %}
+                  </div>
+                  <div class="small"><code>{{ row.run.id }}</code></div>
+                  <div class="text-muted small">{{ row.run.created_at|date:"Y-m-d H:i" }}</div>
+                </div>
+              </td>
+              <td>
+                <div class="fw-semibold">{{ row.run.trigger_on }}</div>
+              </td>
+              <td>
+                <div>{{ row.source_summary }}</div>
+              </td>
+              <td>
+                <div class="fw-semibold">{{ row.run.instance_count }}</div>
+                {% if not row.has_instances %}
+                  <div class="text-muted small">{% trans "No instances were created." %}</div>
+                {% endif %}
+              </td>
+              <td>{{ row.run.updated_at|date:"Y-m-d H:i" }}</td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'workflows2:runs-detail' row.run.id %}">
+                  {% trans "Open" %}
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">{% trans "No runs found." %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
+
+  {% include 'trustpoint/pagination.html' with page_obj=page_obj %}
 </div>
 
 {% endblock %}

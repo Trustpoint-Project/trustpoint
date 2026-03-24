@@ -2,62 +2,140 @@
 {% load i18n %}
 {% block content %}
 
-<div class="card">
-  <div class="card-header">
-    <h1 class="mb-0">{% trans "Approvals" %}</h1>
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+    <div>
+      <h1 class="h4 mb-0">{% trans "Approvals" %}</h1>
+      <div class="text-muted small">{% trans "Review and resolve approval steps that are blocking workflow execution." %}</div>
+    </div>
   </div>
-  <div class="card-body">
 
-    <form method="get" class="row g-2 mb-3">
-      <div class="col-md-10">
-        <label class="form-label">{% trans "Status" %}</label>
-        <select name="status" class="form-select">
-          <option value="">{% trans "All" %}</option>
-          {% for val,label in status_choices %}
-            <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Visible approvals" %}</div>
+          <div class="fs-4 fw-semibold">{{ summary_total }}</div>
+        </div>
       </div>
-      <div class="col-md-2 d-flex align-items-end">
-        <button class="btn btn-primary w-100" type="submit">{% trans "Filter" %}</button>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Pending" %}</div>
+          <div class="fs-4 fw-semibold">{{ summary_pending }}</div>
+        </div>
       </div>
-    </form>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Resolved" %}</div>
+          <div class="fs-4 fw-semibold">{{ summary_resolved }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Expired" %}</div>
+          <div class="fs-4 fw-semibold">{{ summary_expired }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    <table class="table">
-      <thead>
-        <tr>
-          <th>{% trans "Status" %}</th>
-          <th>{% trans "Step" %}</th>
-          <th>{% trans "Created" %}</th>
-          <th>{% trans "Expires" %}</th>
-          <th>{% trans "Instance" %}</th>
-          <th>{% trans "Details" %}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for a in page_obj %}
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-12 col-md-8 col-xl-4">
+          <label class="form-label">{% trans "Status" %}</label>
+          <select name="status" class="form-select">
+            <option value="">{% trans "All" %}</option>
+            {% for val, label in status_choices %}
+              <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-4 col-xl-2">
+          <button class="btn btn-primary w-100" type="submit">{% trans "Apply filters" %}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
           <tr>
-            <td>{{ a.get_status_display }}</td>
-            <td>{{ a.step_id }}</td>
-            <td>{{ a.created_at|date:"Y-m-d H:i" }}</td>
-            <td>{% if a.expires_at %}{{ a.expires_at|date:"Y-m-d H:i" }}{% endif %}</td>
-            <td>
-              <a href="{% url 'workflows2:instances-detail' a.instance.id %}">{{ a.instance.id }}</a>
-            </td>
-            <td>
-              <a class="btn btn-primary tp-table-btn" href="{% url 'workflows2:approvals-detail' a.id %}">
-                {% trans "Open" %}
-              </a>
-            </td>
+            <th>{% trans "Approval" %}</th>
+            <th>{% trans "Workflow" %}</th>
+            <th>{% trans "Instance" %}</th>
+            <th>{% trans "Created" %}</th>
+            <th>{% trans "Expires" %}</th>
+            <th class="text-end">{% trans "Open" %}</th>
           </tr>
-        {% empty %}
-          <tr><td colspan="6" class="middle">{% trans "No approvals." %}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-
-    {% include 'trustpoint/pagination.html' with page_obj=page_obj %}
+        </thead>
+        <tbody>
+          {% for row in approval_rows %}
+            <tr>
+              <td>
+                <div class="d-flex flex-column gap-1">
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="badge {{ row.badge }}">{{ row.approval.get_status_display }}</span>
+                    {% if row.can_resolve %}
+                      <span class="badge text-bg-warning">{% trans "Action required" %}</span>
+                    {% endif %}
+                  </div>
+                  <div class="fw-semibold">{{ row.step_meta.title }}</div>
+                  <div class="text-muted small"><code>{{ row.approval.step_id }}</code></div>
+                </div>
+              </td>
+              <td>
+                <div class="fw-semibold">{{ row.approval.instance.definition.name }}</div>
+                {% if row.approval.instance.run_id %}
+                  <div class="small">
+                    <span class="badge {{ row.run_badge }}">{{ row.approval.instance.run.get_status_display }}</span>
+                    <a href="{% url 'workflows2:runs-detail' row.approval.instance.run.id %}" class="ms-1">
+                      <code>{{ row.approval.instance.run.id }}</code>
+                    </a>
+                  </div>
+                {% endif %}
+              </td>
+              <td>
+                <div>
+                  <span class="badge {{ row.instance_badge }}">{{ row.approval.instance.get_status_display }}</span>
+                </div>
+                <div class="small mt-1">
+                  <a href="{% url 'workflows2:instances-detail' row.approval.instance.id %}"><code>{{ row.approval.instance.id }}</code></a>
+                </div>
+              </td>
+              <td>{{ row.approval.created_at|date:"Y-m-d H:i" }}</td>
+              <td>
+                {% if row.approval.expires_at %}
+                  {{ row.approval.expires_at|date:"Y-m-d H:i" }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'workflows2:approvals-detail' row.approval.id %}">
+                  {% trans "Review" %}
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted py-4">{% trans "No approvals found." %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
+
+  {% include 'trustpoint/pagination.html' with page_obj=page_obj %}
 </div>
 
 {% endblock %}

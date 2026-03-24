@@ -2,52 +2,203 @@
 {% load i18n %}
 {% block content %}
 
-<div class="card">
-  <div class="card-header">
-    <h1 class="mb-0">{% trans "Run" %} {{ run.id }}</h1>
-  </div>
-  <div class="card-body">
-    <p><strong>{% trans "Trigger" %}:</strong> {{ run.trigger_on }}</p>
-    <p><strong>{% trans "Status" %}:</strong> {{ run.get_status_display }}</p>
-    <p><strong>{% trans "Created" %}:</strong> {{ run.created_at|date:"Y-m-d H:i" }}</p>
+<div class="container-fluid py-3">
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body d-flex flex-wrap align-items-start justify-content-between gap-3">
+      <div>
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+          <h1 class="h3 mb-0">{% trans "Workflow run" %}</h1>
+          <span class="badge {{ run_badge }}">{{ run.get_status_display }}</span>
+          {% if is_no_match %}
+            <span class="badge text-bg-secondary">{% trans "No matching workflow" %}</span>
+          {% endif %}
+        </div>
+        <div class="text-muted small">
+          <div><strong>{% trans "Trigger" %}:</strong> <code>{{ run.trigger_on }}</code></div>
+          <div><strong>{% trans "Run ID" %}:</strong> <code>{{ run.id }}</code></div>
+        </div>
+      </div>
 
-    <hr>
-
-    <h2>{% trans "Instances" %}</h2>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>{% trans "Definition" %}</th>
-          <th>{% trans "Status" %}</th>
-          <th>{% trans "Current step" %}</th>
-          <th>{% trans "Runs" %}</th>
-          <th>{% trans "Updated" %}</th>
-          <th>{% trans "Details" %}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for inst in instances %}
-          <tr>
-            <td>{{ inst.definition.name }}</td>
-            <td>{{ inst.get_status_display }}</td>
-            <td>{{ inst.current_step }}</td>
-            <td>{{ inst.run_count }}</td>
-            <td>{{ inst.updated_at|date:"Y-m-d H:i" }}</td>
-            <td>
-              <a class="btn btn-primary tp-table-btn" href="{% url 'workflows2:instances-detail' inst.id %}">
-                {% trans "Open" %}
-              </a>
-            </td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="6" class="middle">{% trans "No instances." %}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+      <div class="text-muted small">
+        <div><strong>{% trans "Created" %}:</strong> {{ run.created_at|date:"Y-m-d H:i:s" }}</div>
+        <div><strong>{% trans "Last update" %}:</strong> {{ run.updated_at|date:"Y-m-d H:i:s" }}</div>
+        <div><strong>{% trans "Instances" %}:</strong> {{ instance_rows|length }}</div>
+      </div>
+    </div>
   </div>
 
-  <div class="card-footer d-flex justify-content-between align-items-center">
-    <a href="{% url 'workflows2:runs-list' %}" class="btn btn-secondary">{% trans "Back" %}</a>
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-lg-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-body fw-semibold">{% trans "Source context" %}</div>
+        <div class="card-body">
+          <div class="fw-semibold mb-3">{{ source_summary }}</div>
+          {% if source_context.rows %}
+            <div class="list-group list-group-flush">
+              {% for row in source_context.rows %}
+                <div class="list-group-item px-0">
+                  <div class="text-muted small text-uppercase">{{ row.label }}</div>
+                  <div class="fw-semibold">{{ row.value }}</div>
+                  {% if row.meta %}
+                    <div class="text-muted small">{{ row.meta }}</div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-muted">{% trans "No source context was recorded for this run." %}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-body fw-semibold">{% trans "Event summary" %}</div>
+        <div class="card-body">
+          {% if event_context %}
+            <div class="list-group list-group-flush">
+              {% for row in event_context %}
+                <div class="list-group-item px-0">
+                  <div class="text-muted small text-uppercase">{{ row.label }}</div>
+                  <div class="fw-semibold">{{ row.value }}</div>
+                  {% if row.meta %}
+                    <div class="text-muted small">{{ row.meta }}</div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-muted">
+              {% trans "This run only contains raw event payload data. Open the technical details below if you need the full JSON." %}
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-body fw-semibold">{% trans "Outcome overview" %}</div>
+        <div class="card-body">
+          {% if outcome_summary %}
+            <div class="row g-2">
+              {% for row in outcome_summary %}
+                <div class="col-12">
+                  <div class="border rounded-3 p-3 h-100">
+                    <div class="text-muted small text-uppercase">{{ row.label }}</div>
+                    <div class="display-6 fw-semibold mb-0">{{ row.value }}</div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% elif is_no_match %}
+            <div class="alert alert-info mb-0">
+              <div class="fw-semibold">{% trans "No workflow matched this trigger." %}</div>
+              <div class="small mt-2">
+                {% trans "The event was emitted, but no enabled Workflow 2 definition matched the trigger and source scope at that moment." %}
+              </div>
+            </div>
+          {% else %}
+            <div class="text-muted">{% trans "No instance results were recorded for this run yet." %}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 bg-body">
+      <div class="fw-semibold">{% trans "Workflow instances" %}</div>
+      <a href="{% url 'workflows2:runs-list' %}" class="btn btn-sm btn-outline-secondary">{% trans "Back to runs" %}</a>
+    </div>
+    <div class="card-body">
+      {% if instance_rows %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr>
+                <th>{% trans "Workflow" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Current position" %}</th>
+                <th>{% trans "Activity" %}</th>
+                <th class="text-end">{% trans "Open" %}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in instance_rows %}
+                <tr>
+                  <td>
+                    <div class="fw-semibold">{{ row.instance.definition.name }}</div>
+                    <div class="text-muted small"><code>{{ row.instance.id }}</code></div>
+                  </td>
+                  <td><span class="badge {{ row.badge }}">{{ row.instance.get_status_display }}</span></td>
+                  <td>
+                    {% if row.current_step %}
+                      <div class="fw-semibold">{{ row.current_step.title }}</div>
+                      <div class="text-muted small"><code>{{ row.current_step.id }}</code></div>
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <div class="small text-muted">{% trans "Step runs" %}: {{ row.instance.run_count }}</div>
+                    <div class="small text-muted">{% trans "Updated" %}: {{ row.instance.updated_at|date:"Y-m-d H:i" }}</div>
+                  </td>
+                  <td class="text-end">
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'workflows2:instances-detail' row.instance.id %}">
+                      {% trans "Open instance" %}
+                    </a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% elif is_no_match %}
+        <div class="alert alert-info mb-0">
+          <div class="fw-semibold">{% trans "No matching workflow" %}</div>
+          <div class="small mt-2">
+            {% trans "This trigger emission did not create any workflow instance." %}
+          </div>
+        </div>
+      {% else %}
+        <div class="text-muted">{% trans "No instances were recorded for this run." %}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-header bg-body fw-semibold">{% trans "Technical details" %}</div>
+    <div class="card-body">
+      <div class="accordion" id="runTechnicalDetails">
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="runSourceHeading">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#runSourceBody" aria-expanded="false" aria-controls="runSourceBody">
+              {% trans "Raw source payload" %}
+            </button>
+          </h2>
+          <div id="runSourceBody" class="accordion-collapse collapse" aria-labelledby="runSourceHeading" data-bs-parent="#runTechnicalDetails">
+            <div class="accordion-body">
+              <pre class="mb-0" style="white-space: pre-wrap;">{{ source_pretty }}</pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="runEventHeading">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#runEventBody" aria-expanded="false" aria-controls="runEventBody">
+              {% trans "Raw event payload" %}
+            </button>
+          </h2>
+          <div id="runEventBody" class="accordion-collapse collapse" aria-labelledby="runEventHeading" data-bs-parent="#runTechnicalDetails">
+            <div class="accordion-body">
+              <pre class="mb-0" style="white-space: pre-wrap;">{{ event_pretty }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
