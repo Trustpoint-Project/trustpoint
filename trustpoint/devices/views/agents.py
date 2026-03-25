@@ -1,24 +1,31 @@
 """Table View listing devices that are registered as automation agents (1-to-1 or 1-to-n)."""
 
+import secrets  # noqa: PLC0415
 import uuid
 from typing import Any
 
 from django.db.models import QuerySet
 from django.http import HttpResponse
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views.generic.base import TemplateView
 from django.views.generic.edit import FormView
 from django.views.generic.list import ListView
 
+from agents.models import (
+    AgentAssignedProfile,
+    AgentWorkflowDefinition,
+    TrustpointAgent,
+)
 from devices.forms import (
     AgentOnboardingCreateForm,
 )
-
-# noinspection PyUnresolvedReferences
 from devices.models import (
     DeviceModel,
 )
 from devices.views.tables import AbstractDeviceTableView
+from onboarding.enums import NoOnboardingPkiProtocol
+from onboarding.models import NoOnboardingConfigModel
 from trustpoint.page_context import (
     DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
@@ -32,10 +39,7 @@ class AgentTableView(AbstractDeviceTableView):
 
     template_name = 'devices/agents.html'
 
-    # Use the existing 'devices' page_name so that the base-class reverse() calls for
-    # device_revoke_url and device_delete_url resolve to valid URL patterns.
-    # Agent devices share the same bulk-action endpoints as generic devices.
-    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def get_queryset(self) -> QuerySet[DeviceModel]:
         """Filter queryset to only include agent device types, filtered by UI filters."""
@@ -49,7 +53,6 @@ class AgentTableView(AbstractDeviceTableView):
 
         context = super().get_context_data(**kwargs)
 
-        # Correct the page_name so the 'Agents' sidebar item is highlighted.
         context['page_name'] = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
         device_pks = [d.pk for d in context['devices']]
@@ -69,9 +72,6 @@ class AgentTableView(AbstractDeviceTableView):
         return context
 
 
-# ------------------------------------------------ Agent Create Views -------------------------------------------------
-
-
 class AgentCreateChooseTypeView(PageContextMixin, TemplateView):
     """Landing page for agent device creation — lets the operator choose 1-to-1 or 1-to-n."""
 
@@ -82,14 +82,7 @@ class AgentCreateChooseTypeView(PageContextMixin, TemplateView):
     page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add cancel and creation target URLs to context.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            Context dict with agent-type creation URLs.
-        """
+        """Add cancel and creation target URLs to context."""
         context = super().get_context_data(**kwargs)
         context['cancel_url'] = f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_AGENTS_SUBCATEGORY}'
         context['create_one_to_n_url'] = (
@@ -112,28 +105,13 @@ class AgentCreateOneToNOnboardingView(PageContextMixin, FormView[AgentOnboarding
     page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add cancel URL to context.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            Context dict with cancel URL.
-        """
+        """Add cancel URL to context."""
         context = super().get_context_data(**kwargs)
         context['cancel_create_url'] = f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_AGENTS_SUBCATEGORY}'
         return context
 
     def form_valid(self, form: AgentOnboardingCreateForm) -> HttpResponse:
         """Save the form as an AGENT_ONE_TO_N device."""
-        import secrets  # noqa: PLC0415
-
-        from django.utils import timezone  # noqa: PLC0415
-
-        from agents.models import AgentAssignedProfile, AgentWorkflowDefinition, TrustpointAgent  # noqa: PLC0415
-        from onboarding.enums import NoOnboardingPkiProtocol  # noqa: PLC0415
-        from onboarding.models import NoOnboardingConfigModel  # noqa: PLC0415
-
         self.object = form.save(device_type=DeviceModel.DeviceType.AGENT_ONE_TO_N)
         agent_uuid = uuid.uuid4().hex.upper()
         TrustpointAgent.objects.create(
@@ -169,7 +147,6 @@ class AgentCreateOneToNOnboardingView(PageContextMixin, FormView[AgentOnboarding
             device=managed_device,
         )
 
-        # Assign the default 'Domain Credential Update' workflow to the managed device.
         default_wf = AgentWorkflowDefinition.objects.filter(
             name='Domain Credential Update', is_active=True
         ).first()
@@ -200,11 +177,7 @@ class AgentCreateOneToNOnboardingView(PageContextMixin, FormView[AgentOnboarding
 
 
 class AgentCreateOneToOneOnboardingView(PageContextMixin, FormView[AgentOnboardingCreateForm]):
-    """Create a new 1-to-1 agent device using the standard onboarding form.
-
-    A 1-to-1 agent is exclusively associated with one device.  The device record
-    type is ``AGENT_ONE_TO_ONE`` so the system knows the agent IS the device.
-    """
+    """Create a new 1-to-1 agent device using the standard onboarding form."""
 
     http_method_names = ('get', 'post')
     form_class = AgentOnboardingCreateForm
@@ -214,32 +187,14 @@ class AgentCreateOneToOneOnboardingView(PageContextMixin, FormView[AgentOnboardi
     page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add cancel URL and 1-to-1 flag to context.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            Context dict with cancel URL and agent type indicator.
-        """
+        """Add cancel URL and 1-to-1 flag to context."""
         context = super().get_context_data(**kwargs)
         context['cancel_create_url'] = f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_AGENTS_SUBCATEGORY}'
         context['is_one_to_one_agent'] = True
         return context
 
     def form_valid(self, form: AgentOnboardingCreateForm) -> HttpResponse:
-        """Save the form as an AGENT_ONE_TO_ONE device.
-
-        Args:
-            form: The valid form.
-
-        Returns:
-            Redirect to the CLM page for the created device.
-        """
-        from django.utils import timezone  # noqa: PLC0415
-
-        from agents.models import AgentAssignedProfile, AgentWorkflowDefinition, TrustpointAgent  # noqa: PLC0415
-
+        """Save the form as an AGENT_ONE_TO_ONE device."""
         self.object = form.save(device_type=DeviceModel.DeviceType.AGENT_ONE_TO_ONE)
         agent_uuid = uuid.uuid4().hex.upper()
         agent = TrustpointAgent.objects.create(
@@ -265,14 +220,10 @@ class AgentCreateOneToOneOnboardingView(PageContextMixin, FormView[AgentOnboardi
         return super().form_valid(form)
 
     def get_success_url(self) -> str:
-        """Return the CLM URL for the newly created 1-to-1 agent device.
-
-        Returns:
-            URL string for the device's certificate lifecycle management page.
-        """
+        """Return the CLM URL for the newly created 1-to-1 agent device."""
         return str(
             reverse_lazy(
-                f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management',
+                f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_AGENTS_SUBCATEGORY}_certificate_lifecycle_management',
                 kwargs={'pk': self.object.id},
             )
         )
