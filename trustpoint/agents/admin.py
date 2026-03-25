@@ -1,7 +1,7 @@
 """Admin registrations for the agents application."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import admin
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 @admin.register(TrustpointAgent)
-class TrustpointAgentAdmin(admin.ModelAdmin):
+class TrustpointAgentAdmin(admin.ModelAdmin[TrustpointAgent]):
     """Admin for TrustpointAgent."""
 
     list_display = ('name', 'agent_id', 'is_active', 'poll_interval_seconds', 'last_seen_at')
@@ -26,7 +26,7 @@ class TrustpointAgentAdmin(admin.ModelAdmin):
 
 
 @admin.register(AgentWorkflowDefinition)
-class AgentWorkflowDefinitionAdmin(admin.ModelAdmin):
+class AgentWorkflowDefinitionAdmin(admin.ModelAdmin[AgentWorkflowDefinition]):
     """Admin for AgentWorkflowDefinition."""
 
     list_display = ('name', 'is_active', 'created_at', 'updated_at')
@@ -36,17 +36,17 @@ class AgentWorkflowDefinitionAdmin(admin.ModelAdmin):
 
 
 @admin.register(AgentAssignedProfile)
-class AgentAssignedProfileAdmin(admin.ModelAdmin):
+class AgentAssignedProfileAdmin(admin.ModelAdmin[AgentAssignedProfile]):
     """Admin for AgentAssignedProfile."""
 
-    list_display: ClassVar = (
+    list_display = (
         'agent', 'workflow_definition', 'renewal_threshold_days',
         'last_certificate_update', 'next_certificate_update_scheduled', 'enabled',
     )
-    list_filter: ClassVar = ('enabled',)
-    search_fields: ClassVar = ('agent__name', 'workflow_definition__name')
-    readonly_fields: ClassVar = ('last_certificate_update', 'created_at', 'updated_at')
-    actions: ClassVar = ['force_renewal']
+    list_filter = ('enabled',)
+    search_fields = ('agent__name', 'workflow_definition__name')
+    readonly_fields = ('last_certificate_update', 'created_at', 'updated_at')
+    actions: list[str] = ['force_renewal']  # noqa: RUF012
 
     @admin.action(description='Force renewal on next check-in (set scheduled time to now)')
     def force_renewal(self, request: HttpRequest, queryset: Any) -> None:

@@ -5,12 +5,12 @@ from __future__ import annotations
 import ipaddress
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Any, override
 
 from cryptography import x509
 from django.contrib import messages
 from django.core.management import call_command
-from django.http import FileResponse, Http404, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -2225,7 +2225,7 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
     page_category = DEVICES_PAGE_CATEGORY
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
 
-    def get(self, request: Any, *args: Any, **kwargs: Any) -> FileResponse:
+    def get(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponse:
         """Build and return the filled agent_setup.json profile as a file download."""
         del args, kwargs
         device: DeviceModel = self.get_object()
@@ -2249,7 +2249,7 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
 
         profile_template = Path(__file__).parent.parent / 'agents' / 'default' / 'agent_setup.json'
         with profile_template.open(encoding='utf-8') as fh:
-            raw: dict = json.load(fh)
+            raw: dict[str, Any] = json.load(fh)
 
         profile = raw['profile']
         profile['onboarding']['device'] = device.common_name
@@ -2261,7 +2261,7 @@ class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
         filled_bytes = json.dumps(raw, indent=2).encode('utf-8')
 
         import io  # noqa: PLC0415
-        return FileResponse(
+        return FileResponse(  # type: ignore[return-value]
             io.BytesIO(filled_bytes),
             as_attachment=True,
             filename='agent_setup.json',

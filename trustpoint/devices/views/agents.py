@@ -64,7 +64,8 @@ class AgentTableView(AbstractDeviceTableView):
         )
         agents_by_device: dict[int, list[TrustpointAgent]] = {}
         for agent in agents_qs:
-            agents_by_device.setdefault(agent.device_id, []).append(agent)
+            if agent.device_id is not None:
+                agents_by_device.setdefault(agent.device_id, []).append(agent)
         for device in context['devices']:
             device.agent_list = agents_by_device.get(device.pk, [])
 

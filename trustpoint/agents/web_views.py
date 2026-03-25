@@ -46,18 +46,16 @@ class AgentWorkflowDefinitionConfigView(LoggerMixin, UpdateView[AgentWorkflowDef
     success_url = reverse_lazy('agents:profiles')
     template_name = 'agents/profiles/config.html'
     context_object_name = 'profile'
-    fields: ClassVar[list[str]] = [
+    fields: ClassVar[list[str]] = [  # type: ignore[misc]
         'name',
         'profile',
         'is_active',
     ]
 
-    def get_object(self, _queryset: QuerySet[Any] | None = None) -> AgentWorkflowDefinition | None:
+    def get_object(self, _queryset: QuerySet[Any] | None = None) -> AgentWorkflowDefinition:
         """Retrieve the AgentWorkflowDefinition object based on the primary key in the URL."""
         pk = self.kwargs.get('pk')
-        if pk:
-            return get_object_or_404(AgentWorkflowDefinition, pk=pk)
-        return None
+        return get_object_or_404(AgentWorkflowDefinition, pk=pk)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data for JSON editor."""
@@ -220,7 +218,7 @@ class AgentWorkflowDefinitionBulkDeleteConfirmView(BulkDeleteView):
 class AgentManagedDeviceTableView(LoggerMixin, ListView['DeviceModel']):
     """List all AGENT_MANAGED_DEVICE devices in the same domain as a 1-to-n agent's device."""
 
-    http_method_names: ClassVar[list[str]] = ['get']
+    http_method_names: ClassVar[list[str]] = ['get']  # type: ignore[misc]
     template_name = 'agents/targets/list.html'
     context_object_name = 'devices'
     paginate_by = 25
@@ -276,7 +274,7 @@ class ManagedDeviceCreateForm(forms.Form):
 class AgentManagedDeviceCreateView(LoggerMixin, FormView[ManagedDeviceCreateForm]):
     """Create a new AGENT_MANAGED_DEVICE record under a 1-to-n agent."""
 
-    http_method_names: ClassVar[list[str]] = ['get', 'post']
+    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
     template_name = 'agents/targets/create.html'
     form_class = ManagedDeviceCreateForm
 
@@ -362,7 +360,7 @@ class AgentManagedDeviceDeleteView(BulkDeleteView):
         return str(reverse_lazy('agents:targets-list', kwargs={'agent_id': self.kwargs['agent_id']}))
 
     @property
-    def ignore_url(self) -> str:  # type: ignore[override]
+    def ignore_url(self) -> str:
         """Return the list URL to go back without deleting."""
         return str(reverse_lazy('agents:targets-list', kwargs={'agent_id': self.kwargs['agent_id']}))
 
@@ -400,16 +398,18 @@ class AgentAssignedProfileForm(forms.ModelForm[AgentAssignedProfile]):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Restrict the workflow queryset to active definitions."""
+        from django.forms import ModelChoiceField  # noqa: PLC0415
+
         super().__init__(*args, **kwargs)
-        self.fields['workflow_definition'].queryset = (  # type: ignore[union-attr]
-            AgentWorkflowDefinition.objects.filter(is_active=True).order_by('name')
-        )
+        field = self.fields['workflow_definition']
+        if isinstance(field, ModelChoiceField):
+            field.queryset = AgentWorkflowDefinition.objects.filter(is_active=True).order_by('name')
 
 
 class AgentAssignedProfileTableView(LoggerMixin, ListView[AgentAssignedProfile]):
     """List all workflow profiles assigned to a specific 1-to-1 agent."""
 
-    http_method_names: ClassVar[list[str]] = ['get']
+    http_method_names: ClassVar[list[str]] = ['get']  # type: ignore[misc]
     template_name = 'agents/assigned_profiles/list.html'
     context_object_name = 'assigned_profiles'
     paginate_by = 25
@@ -433,7 +433,7 @@ class AgentAssignedProfileTableView(LoggerMixin, ListView[AgentAssignedProfile])
 class AgentAssignedProfileCreateView(LoggerMixin, FormView[AgentAssignedProfileForm]):
     """Assign a new workflow profile to a 1-to-1 agent."""
 
-    http_method_names: ClassVar[list[str]] = ['get', 'post']
+    http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
     template_name = 'agents/assigned_profiles/create.html'
     form_class = AgentAssignedProfileForm
 
@@ -484,7 +484,7 @@ class AgentAssignedProfileDeleteView(BulkDeleteView):
         )
 
     @property
-    def ignore_url(self) -> str:  # type: ignore[override]
+    def ignore_url(self) -> str:
         """Return the list URL to go back without deleting."""
         return str(
             reverse_lazy('agents:assigned-profiles-list', kwargs={'agent_id': self.kwargs['agent_id']})

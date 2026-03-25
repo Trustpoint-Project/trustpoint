@@ -36,6 +36,7 @@ import time
 import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 log = logging.getLogger(__name__)
@@ -167,7 +168,8 @@ def save_credentials(response_json: str, local_storage: dict[str, str]) -> None:
         raise SystemExit(1)
 
     cert_pem: str = str(data['certificate'])
-    chain: list[str] = [str(c) for c in data.get('certificate_chain', [])]  # type: ignore[union-attr]
+    chain_raw = data.get('certificate_chain', [])
+    chain: list[str] = [str(c) for c in (chain_raw if isinstance(chain_raw, list) else [])]
 
     cert_path = local_storage.get('certificate_path', '')
     if cert_path:
@@ -242,7 +244,7 @@ class _JobResult:
     error_message: str = ''
 
 
-def _execute_renewal_job(params: PollParams, job: dict, cert_pem_urlencoded: str) -> _JobResult:
+def _execute_renewal_job(params: PollParams, job: dict[str, Any], cert_pem_urlencoded: str) -> _JobResult:
     """Execute a single renewal job and return its result.
 
     Generates a fresh key and CSR, POSTs to the resolved enrollment path,
@@ -255,7 +257,7 @@ def _execute_renewal_job(params: PollParams, job: dict, cert_pem_urlencoded: str
     :returns: A :class:`_JobResult` with ``success`` and ``error_message``.
     """
     profile_id: int = job['profile_id']
-    cert_req: dict = job['workflow_profile'].get('certificate_request', {})
+    cert_req: dict[str, Any] = job['workflow_profile'].get('certificate_request', {})
     cert_profile: str = cert_req.get('certificate_profile', 'domain_credential')
     enroll_url: str = params.base_url.rstrip('/') + cert_req.get('path', '')
 
@@ -312,7 +314,7 @@ def _acknowledge_job(params: PollParams, result_url: str, result: _JobResult, ce
             '-o', ack_path,
             result_url,
         ])
-        ack: dict = json.loads(Path(ack_path).read_text(encoding='utf-8'))
+        ack: dict[str, Any] = json.loads(Path(ack_path).read_text(encoding='utf-8'))
         log.info(
             '[job %d] Acknowledged. Next renewal due: %s',
             result.profile_id,
@@ -323,7 +325,7 @@ def _acknowledge_job(params: PollParams, result_url: str, result: _JobResult, ce
         Path(result_body_path).unlink(missing_ok=True)
 
 
-def _fetch_jobs(params: PollParams, cert_pem_urlencoded: str) -> dict:
+def _fetch_jobs(params: PollParams, cert_pem_urlencoded: str) -> dict[str, Any]:
     """Call ``GET /api/agents/jobs/`` and return the parsed response.
 
     :param params: Polling configuration.
@@ -340,7 +342,8 @@ def _fetch_jobs(params: PollParams, cert_pem_urlencoded: str) -> dict:
             '-o', jobs_json_path,
             jobs_url,
         ])
-        return json.loads(Path(jobs_json_path).read_text(encoding='utf-8'))
+        result: dict[str, Any] = json.loads(Path(jobs_json_path).read_text(encoding='utf-8'))
+        return result
     finally:
         Path(jobs_json_path).unlink(missing_ok=True)
 
@@ -358,7 +361,7 @@ def _poll_once(params: PollParams, cert_pem_urlencoded: str) -> int:
 
     jobs_response = _fetch_jobs(params, cert_pem_urlencoded)
     poll_interval: int = jobs_response.get('poll_interval_seconds', 300)
-    jobs: list[dict] = jobs_response.get('jobs', [])
+    jobs: list[dict[str, Any]] = jobs_response.get('jobs', [])
     log.info('[poll] %d pending job(s), next poll in %ds', len(jobs), poll_interval)
 
     for job in jobs:
@@ -423,9 +426,9 @@ def main() -> None:
         raise SystemExit(1)
 
     with profile_path.open(encoding='utf-8') as fh:
-        raw_profile: dict = json.load(fh)
+        raw_profile: dict[str, Any] = json.load(fh)
 
-    profile: dict = raw_profile['profile']
+    profile: dict[str, Any] = raw_profile['profile']
     onboarding: dict[str, str] = profile['onboarding']
     cert_request: dict[str, str] = profile['certificate_request']
     local_storage: dict[str, str] = profile.get('local_storage', {})
