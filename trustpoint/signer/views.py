@@ -92,7 +92,8 @@ class SignerAddFileImportPkcs12View(SignerContextMixin, FormView[SignerAddFileIm
     def form_valid(self, form: SignerAddFileImportPkcs12Form) -> HttpResponse:
         """Handle the case where the form is valid."""
         signer = form.created_signer
-        actor = self.request.user if self.request.user.is_authenticated else None
+        user = getattr(self.request, 'user', None)
+        actor = user if user is not None and user.is_authenticated else None
 
         AuditLog.create_entry(
             operation_type=AuditLog.OperationType.SIGNER_ADDED,
@@ -117,7 +118,8 @@ class SignerAddFileImportSeparateFilesView(SignerContextMixin, FormView[SignerAd
     def form_valid(self, form: SignerAddFileImportSeparateFilesForm) -> HttpResponse:
         """Handle the case where the form is valid."""
         signer = form.created_signer
-        actor = self.request.user if self.request.user.is_authenticated else None
+        user = getattr(self.request, 'user', None)
+        actor = user if user is not None and user.is_authenticated else None
 
         AuditLog.create_entry(
             operation_type=AuditLog.OperationType.SIGNER_ADDED,
@@ -199,7 +201,8 @@ class SignerBulkDeleteConfirmView(SignerContextMixin, BulkDeleteView):
         queryset = self.get_queryset()
         signers_to_delete = list(queryset)
         deleted_count = len(signers_to_delete)
-        actor = self.request.user if self.request.user.is_authenticated else None
+        user = getattr(self.request, 'user', None)
+        actor = user if user is not None and user.is_authenticated else None
 
         try:
             response = super().form_valid(form)
@@ -265,7 +268,8 @@ class SignHashView(LoggerMixin, SignerContextMixin, FormView[SignHashForm]):
                 signature=signature_hex
             )
 
-            actor = self.request.user if self.request.user.is_authenticated else None
+            user = getattr(self.request, 'user', None)
+            actor = user if user is not None and user.is_authenticated else None
             AuditLog.create_entry(
                 operation_type=AuditLog.OperationType.HASH_SIGNED,
                 target=signer,
