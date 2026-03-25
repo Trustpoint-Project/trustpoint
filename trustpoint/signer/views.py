@@ -17,7 +17,6 @@ from django.views.generic import DetailView, ListView
 from django.views.generic.edit import FormView
 
 from management.models.audit_log import AuditLog
-
 from signer.forms import (
     SignerAddFileImportPkcs12Form,
     SignerAddFileImportSeparateFilesForm,
