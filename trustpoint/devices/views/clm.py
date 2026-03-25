@@ -294,6 +294,18 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
             self.object.device_type == DeviceModel.DeviceType.AGENT_MANAGED_DEVICE
         )
 
+        _agent_device_types = (
+            DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+            DeviceModel.DeviceType.AGENT_ONE_TO_N,
+        )
+        is_agent_device = self.object.device_type in _agent_device_types
+        context['is_agent_device'] = is_agent_device
+        context['issue_domain_cred_agent_url'] = (
+            f'{self.page_category}:{self.page_name}_agent_setup_profile_help'
+            if is_agent_device
+            else ''
+        )
+
         context['device_form'] = self.get_device_form()
         if self.object.onboarding_config:
             context['onboarding_form'] = self.get_onboarding_form()

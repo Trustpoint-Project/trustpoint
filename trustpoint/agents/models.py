@@ -10,10 +10,6 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-# ---------------------------------------------------------------------------
-# Workflow step JSON schema — used by AgentWorkflowDefinition.clean()
-# ---------------------------------------------------------------------------
-
 WORKFLOW_STEP_SCHEMA = {
     'type': 'array',
     'items': {
@@ -177,10 +173,6 @@ class TrustpointAgent(models.Model):
                 )
 
 
-# ---------------------------------------------------------------------------
-# AgentWorkflowDefinition
-# ---------------------------------------------------------------------------
-
 class AgentWorkflowDefinition(models.Model):
     """A reusable automation workflow for a specific device family or firmware variant."""
 
@@ -229,10 +221,6 @@ class AgentWorkflowDefinition(models.Model):
         except jsonschema.ValidationError as exc:
             raise ValidationError({'profile': f'Steps validation error: {exc.message}'}) from exc
 
-
-# ---------------------------------------------------------------------------
-# AgentAssignedProfile
-# ---------------------------------------------------------------------------
 
 class AgentAssignedProfile(models.Model):
     """Links a workflow profile to an agent with per-assignment renewal settings."""

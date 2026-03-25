@@ -232,6 +232,17 @@ urlpatterns = [
             '_certificate_lifecycle_management_issue_domain_credential_rest_username_password'
         ),
     ),
+    # Agent setup profile help & download
+    path(
+        'certificate-lifecycle-management/<int:pk>/agent/setup-profile/',
+        devices_help_views.AgentDomainCredentialHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_agent_setup_profile_help',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/agent/setup-profile/download/',
+        devices_help_views.AgentSetupProfileDownloadView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_agent_setup_profile_download',
+    ),
     path(
         'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/',
         views.DeviceOnboardingIssueNewApplicationCredentialView.as_view(),

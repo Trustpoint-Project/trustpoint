@@ -118,11 +118,21 @@ class AgentWorkflowDefinitionConfigView(LoggerMixin, UpdateView[AgentWorkflowDef
     def _default_profile_json() -> str:
         """Return a default workflow profile as JSON string."""
         default_profile = {
-            'vendor': 'Vendor Name',
-            'device_family': 'Device Family',
-            'firmware_hint': '1.0',
-            'version': '1.0',
-            'description': 'Description of the workflow',
+            'metadata': {
+                'agent_type': '1-to-n',
+                'version': '1.0',
+                'description': 'Description of the workflow',
+            },
+            'device': {
+                'vendor': 'Vendor Name',
+                'device_family': 'Device Family',
+                'firmware': '1.0',
+            },
+            'certificate_request': {
+                'certificate_profile': 'domain_credential',
+                'url': '{{ endpoint }}',
+                'path': '{{ path }}',
+            },
             'steps': [
                 {
                     'type': 'goto',
