@@ -29,7 +29,7 @@ class WbmSubmitCsrParser(ParsingComponent, LoggerMixin):
     """Parse a POST /submit-csr/ request body into context fields."""
 
     def parse(self, context: BaseRequestContext) -> None:
-        """Extract ``job_id`` and ``csr_pem`` from the JSON body."""
+        """Extract ``profile_id`` and ``csr_pem`` from the JSON body."""
         if not isinstance(context, WbmAgentRequestContext):
             return
         context.operation = 'submit-csr'
@@ -44,17 +44,17 @@ class WbmSubmitCsrParser(ParsingComponent, LoggerMixin):
             exc_msg = 'Request body is not valid JSON.'
             raise ValueError(exc_msg) from exc
 
-        job_id = body.get('job_id')
+        profile_id = body.get('profile_id')
         csr_pem = body.get('csr_pem', '')
 
-        if job_id is None:
-            exc_msg = "'job_id' is required."
+        if profile_id is None:
+            exc_msg = "'profile_id' is required."
             raise ValueError(exc_msg)
         if not csr_pem:
             exc_msg = "'csr_pem' is required."
             raise ValueError(exc_msg)
 
-        context.submit_csr_job_id = int(job_id)
+        context.submit_csr_profile_id = int(profile_id)
         context.submit_csr_csr_pem = csr_pem
 
 
@@ -62,7 +62,7 @@ class WbmPushResultParser(ParsingComponent, LoggerMixin):
     """Parse a POST /push-result/ request body into context fields."""
 
     def parse(self, context: BaseRequestContext) -> None:
-        """Extract ``job_id``, ``status``, and ``detail`` from the JSON body."""
+        """Extract ``profile_id``, ``status``, and ``detail`` from the JSON body."""
         if not isinstance(context, WbmAgentRequestContext):
             return
         context.operation = 'push-result'
@@ -77,13 +77,11 @@ class WbmPushResultParser(ParsingComponent, LoggerMixin):
             exc_msg = 'Request body is not valid JSON.'
             raise ValueError(exc_msg) from exc
 
-        job_id = body.get('job_id')
-        if job_id is None:
-            exc_msg = "'job_id' is required."
+        profile_id = body.get('profile_id')
+        if profile_id is None:
+            exc_msg = "'profile_id' is required."
             raise ValueError(exc_msg)
 
-        from agents.models import WbmJob  # noqa: PLC0415 - local import avoids circular dependency at module load
-
-        context.push_result_job_id = int(job_id)
-        context.push_result_status = body.get('status', WbmJob.Status.FAILED)
+        context.push_result_profile_id = int(profile_id)
+        context.push_result_status = body.get('status', 'failed')
         context.push_result_detail = body.get('detail', '')

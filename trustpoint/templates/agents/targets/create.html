@@ -5,7 +5,7 @@
 <div class="card">
     <div class="card-header d-flex align-items-center justify-content-between">
         <h1 class="mb-0">{% trans "Add Managed Device" %}</h1>
-        <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-sm btn-outline-secondary">
+        <a href="{% url 'agents:targets-list' agent_id=agent.pk %}" class="btn btn-sm btn-outline-secondary">
             <i class="fas fa-arrow-left"></i> {% trans "Back" %}
         </a>
     </div>
@@ -76,80 +76,12 @@
                         </div>
                     </div>
                 </div>
-
-                <h2>{% trans "Certificate Settings" %}</h2>
-                <hr class="hr-m">
-                <div class="tp-kvp-list">
-                    <div>
-                        <div>
-                            {% trans "Certificate Profile" %} <span class="text-danger">*</span>
-                        </div>
-                        <div>
-                            <select class="form-select {% if form.certificate_profile.errors %}is-invalid{% endif %}"
-                                    name="certificate_profile"
-                                    id="id_certificate_profile"
-                                    required>
-                                <option value="">{{ form.certificate_profile.field.empty_label }}</option>
-                                {% for value, label in form.certificate_profile.field.choices %}
-                                    {% if value %}
-                                        <option value="{{ value }}"
-                                            {% if form.certificate_profile.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>
-                                            {{ label }}
-                                        </option>
-                                    {% endif %}
-                                {% endfor %}
-                            </select>
-                            {% for error in form.certificate_profile.errors %}
-                                <div class="invalid-feedback">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                    </div>
-
-                    <div>
-                        <div>{% trans "Workflow Definition" %} <span class="text-danger">*</span></div>
-                        <div>
-                            <select class="form-select {% if form.workflow.errors %}is-invalid{% endif %}"
-                                    name="workflow"
-                                    id="id_workflow"
-                                    required>
-                                <option value="">{{ form.workflow.field.empty_label }}</option>
-                                {% for value, label in form.workflow.field.choices %}
-                                    {% if value %}
-                                        <option value="{{ value }}"
-                                            {% if form.workflow.value|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>
-                                            {{ label }}
-                                        </option>
-                                    {% endif %}
-                                {% endfor %}
-                            </select>
-                            {% for error in form.workflow.errors %}
-                                <div class="invalid-feedback">{{ error }}</div>
-                            {% endfor %}
-                        </div>
-                    </div>
-
-                    <div>
-                        <div>{% trans "Renewal Threshold (days)" %}</div>
-                        <div>
-                            <input type="number"
-                                   class="form-control {% if form.renewal_threshold_days.errors %}is-invalid{% endif %}"
-                                   name="renewal_threshold_days"
-                                   value="{{ form.renewal_threshold_days.value|default:'30' }}"
-                                   id="id_renewal_threshold_days"
-                                   min="0" />
-                            {% for error in form.renewal_threshold_days.errors %}
-                                <div class="invalid-feedback">{{ error }}</div>
-                            {% endfor %}
-                            <small class="form-text text-muted">{{ form.renewal_threshold_days.help_text }}</small>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
 
         <div class="card-footer d-flex justify-content-between tp-sticky-footer">
             <div class="m-1">
-                <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-secondary">
+                <a href="{% url 'agents:targets-list' agent_id=agent.pk %}" class="btn btn-secondary">
                     {% trans "Cancel" %}
                 </a>
             </div>

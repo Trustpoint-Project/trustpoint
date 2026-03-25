@@ -20,49 +20,40 @@
                     <th>{% trans "Device Name" %}</th>
                     <th>{% trans "Serial Number" %}</th>
                     <th>{% trans "IP Address" %}</th>
-                    <th>{% trans "Certificate Profile" %}</th>
-                    <th>{% trans "Workflow" %}</th>
-                    <th>{% trans "Enabled" %}</th>
-                    <th>{% trans "Renewal Threshold (days)" %}</th>
+                    <th>{% trans "Domain" %}</th>
+                    <th>{% trans "Actions" %}</th>
                 </tr>
             </thead>
             <tbody>
                 {# colspan must match the number of columns above #}
-                {% for target in page_obj %}
+                {% for device in page_obj %}
                     <tr>
                         <td class="row_checkbox">
-                            <input type="checkbox" name="row_checkbox" value="{{ target.pk }}"/>
+                            <input type="checkbox" name="row_checkbox" value="{{ device.pk }}"/>
                         </td>
-                        <td>{{ target.device.common_name }}</td>
-                        <td>{{ target.device.serial_number|default:"—" }}</td>
-                        <td>{{ target.device.ip_address|default:"—" }}</td>
+                        <td>{{ device.common_name }}</td>
+                        <td>{{ device.serial_number|default:"—" }}</td>
+                        <td>{{ device.ip_address|default:"—" }}</td>
                         <td>
-                            {% if target.certificate_profile %}
-                                {{ target.certificate_profile.unique_name }}
+                            {% if device.domain %}
+                                {{ device.domain }}
                             {% else %}
                                 <span class="text-muted">—</span>
                             {% endif %}
                         </td>
-                        <td>
-                            {% if target.workflow %}
-                                {{ target.workflow.name }}
-                            {% else %}
-                                <span class="text-muted">—</span>
-                            {% endif %}
+                        <td class="text-nowrap">
+                            {% for device_agent in device.agents.all %}
+                                <a href="{% url 'agents:assigned-profiles-list' agent_id=device_agent.pk %}"
+                                   class="btn btn-sm btn-primary">
+                                    <i class="fas fa-id-card"></i> {% trans "Profiles" %}
+                                </a>
+                            {% endfor %}
                         </td>
-                        <td>
-                            {% if target.enabled %}
-                                <span class="badge bg-success">{% trans "Active" %}</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{% trans "Disabled" %}</span>
-                            {% endif %}
-                        </td>
-                        <td>{{ target.renewal_threshold_days }}</td>
                     </tr>
                 {% empty %}
                     <tr>
-                        <td colspan="8" class="middle">
-                            {% trans "No devices have been assigned to this agent yet." %}
+                        <td colspan="6" class="middle">
+                            {% trans "No managed devices found in this agent's domain." %}
                         </td>
                     </tr>
                 {% endfor %}
@@ -80,7 +71,7 @@
             </button>
         </div>
         <div class="m-1">
-            <a class="btn btn-primary ms-2" href="{% url 'agents:targets-create' agent.pk %}">
+            <a class="btn btn-primary ms-2" href="{% url 'agents:targets-create' agent_id=agent.pk %}">
                 <i class="fas fa-plus"></i> {% trans "Add Device" %}
             </a>
         </div>

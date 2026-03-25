@@ -8,8 +8,8 @@ from rest_framework import serializers
 class WbmSubmitCsrRequestSerializer(serializers.Serializer[Any]):
     r"""Serializer for POST /agents/wbm/submit-csr/ request bodies."""
 
-    job_id = serializers.IntegerField(
-        help_text='Primary key of the AgentJob in PENDING_CSR state.',
+    profile_id = serializers.IntegerField(
+        help_text='Primary key of the AgentAssignedProfile to renew.',
     )
     csr_pem = serializers.CharField(
         help_text=(
@@ -26,8 +26,8 @@ class WbmSubmitCsrRequestSerializer(serializers.Serializer[Any]):
 class WbmPushResultRequestSerializer(serializers.Serializer[Any]):
     """Serializer for POST /agents/wbm/push-result/ request bodies."""
 
-    job_id = serializers.IntegerField(
-        help_text='Primary key of the AgentJob in IN_PROGRESS state.',
+    profile_id = serializers.IntegerField(
+        help_text='Primary key of the AgentAssignedProfile being reported on.',
     )
     status = serializers.ChoiceField(
         choices=['succeeded', 'failed'],

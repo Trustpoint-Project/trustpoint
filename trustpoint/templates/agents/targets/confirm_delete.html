@@ -13,25 +13,24 @@
             <div class="tp-card-centered-content">
                 <p class="text-muted">
                     {% blocktrans with agent_name=agent.name %}
-                        The following devices will be removed from agent <strong>{{ agent_name }}</strong>
-                        and permanently deleted:
+                        The following managed devices will be permanently deleted (associated with agent <strong>{{ agent_name }}</strong>):
                     {% endblocktrans %}
                 </p>
-                {% for target in targets %}
-                    <h2>({{ forloop.counter }}) {{ target.device.common_name }}</h2>
+                {% for device in devices %}
+                    <h2>({{ forloop.counter }}) {{ device.common_name }}</h2>
                     <hr class="hr-m">
                     <div class="tp-kvp-list">
                         <div>
                             <div>{% trans "Serial Number" %}</div>
-                            <div>{{ target.device.serial_number|default:"—" }}</div>
+                            <div>{{ device.serial_number|default:"—" }}</div>
                         </div>
                         <div>
                             <div>{% trans "IP Address" %}</div>
-                            <div>{{ target.device.ip_address|default:"—" }}</div>
+                            <div>{{ device.ip_address|default:"—" }}</div>
                         </div>
                         <div>
-                            <div>{% trans "Certificate Profile" %}</div>
-                            <div>{{ target.certificate_profile.unique_name|default:"—" }}</div>
+                            <div>{% trans "Domain" %}</div>
+                            <div>{{ device.domain|default:"—" }}</div>
                         </div>
                     </div>
                 {% endfor %}
@@ -40,7 +39,7 @@
 
         <div class="card-footer d-flex justify-content-between tp-sticky-footer">
             <div class="m-1">
-                <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-secondary">
+                <a href="{% url 'agents:targets-list' agent_id=agent.pk %}" class="btn btn-secondary">
                     {% trans "Cancel" %}
                 </a>
             </div>

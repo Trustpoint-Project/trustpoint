@@ -1,14 +1,8 @@
-"""Models for the agents application.
-
-Contains:
-- TrustpointAgent: generic identity record for any automation agent
-- AgentWorkflowDefinition: reusable automation profile for executing jobs on managed devices
-- AgentCertificateTarget: certificate target on a managed device
-- AgentJob: audit record for a single agent certificate-provisioning operation
-"""
+"""Models for the agents application."""
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta
 from typing import ClassVar
 
 import jsonschema
@@ -50,30 +44,8 @@ WORKFLOW_STEP_SCHEMA = {
     },
 }
 
-
-# ---------------------------------------------------------------------------
-# TrustpointAgent
-# ---------------------------------------------------------------------------
-
 class TrustpointAgent(models.Model):
-    """A registered automation agent deployed inside a production cell.
-
-    Acts as the identity anchor for all agent-executed job types.
-    WBM certificate pushing is the first supported capability.
-
-    **1-to-1 agent** (``DeviceType.AGENT_ONE_TO_ONE``):
-    The associated ``DeviceModel`` represents the agent itself.  It is treated
-    like a standalone device — the domain credential *and* all other issued
-    certificates belong to that single device record.  Exactly one
-    ``TrustpointAgent`` may be linked to the device.
-
-    **1-to-n agent** (``DeviceType.AGENT_ONE_TO_N``):
-    The associated ``DeviceModel`` represents the agent process only and holds
-    *only* its domain credential (LDevID).  Every device managed by the agent
-    is a separate ``DeviceModel`` (type ``AGENT_MANAGED_DEVICE``) referenced via
-    ``WbmCertificateTarget.device``.  Application certificates are issued to
-    those managed-device records, not to the agent device itself.
-    """
+    """A registered automation agent deployed inside a production cell."""
 
     class Capability(models.TextChoices):
         """Known job types an agent may support. An agent may declare multiple."""
@@ -95,12 +67,7 @@ class TrustpointAgent(models.Model):
             "Must match AGENT_ID in the agent's runtime config."
         ),
     )
-    # The DeviceModel this agent is registered against.
-    # For AGENT_ONE_TO_ONE: the device IS the agent — it owns the domain credential
-    # and all application certificates.  Only one TrustpointAgent may link to it.
-    # For AGENT_ONE_TO_N: the device represents the agent process only and carries
-    # exclusively the domain credential.  Managed devices are referenced via
-    # WbmCertificateTarget.device (must be AGENT_MANAGED_DEVICE, not this record).
+
     device = models.ForeignKey(
         'devices.DeviceModel',
         verbose_name=_('Device'),
@@ -114,9 +81,7 @@ class TrustpointAgent(models.Model):
             'Application certificates are issued to separate managed-device records.'
         ),
     )
-    # SHA-256 fingerprint (hex, uppercase, no colons) of the mTLS client certificate
-    # issued to this agent by Trustpoint. Verified on every REST API request.
-    # Updated automatically when a new agent cert is issued via the registration flow.
+
     certificate_fingerprint = models.CharField(
         verbose_name=_('Certificate Fingerprint (SHA-256)'),
         max_length=64,
@@ -126,8 +91,7 @@ class TrustpointAgent(models.Model):
             'Revoke the cert to decommission the agent at the TLS layer.'
         ),
     )
-    # JSON array of Capability values, e.g. ["wbm_cert_push"].
-    # JSONField keeps us SQLite-compatible (ArrayField requires PostgreSQL).
+
     capabilities = models.JSONField(
         verbose_name=_('Capabilities'),
         default=list,
@@ -185,11 +149,7 @@ class TrustpointAgent(models.Model):
         self._validate_device_association()
 
     def _validate_device_association(self) -> None:
-        """Validate device FK constraints based on the device type.
-
-        - The linked device must be of an agent type.
-        - For AGENT_ONE_TO_ONE devices only one TrustpointAgent may be linked.
-        """
+        """Validate device FK constraints based on the device type."""
         if self.device_id is None:
             return
 
@@ -199,7 +159,11 @@ class TrustpointAgent(models.Model):
         if device is None:
             raise ValidationError({'device': 'Selected device does not exist.'})
 
-        _agent_types = (DeviceModel.DeviceType.AGENT_ONE_TO_ONE, DeviceModel.DeviceType.AGENT_ONE_TO_N)
+        _agent_types = (
+            DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+            DeviceModel.DeviceType.AGENT_ONE_TO_N,
+            DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
+        )
         if device.device_type not in _agent_types:
             raise ValidationError({'device': 'The associated device must be of an agent type.'})
 
@@ -218,18 +182,7 @@ class TrustpointAgent(models.Model):
 # ---------------------------------------------------------------------------
 
 class AgentWorkflowDefinition(models.Model):
-    """A reusable automation workflow for a specific device family or firmware variant.
-
-    Defines how the agent should interact with a managed device — for example
-    via its Web-Based Management (WBM) interface — in order to push a
-    certificate.  The workflow is expressed as a JSON object containing:
-    - Device metadata (vendor, device_family, firmware_hint, version, description)
-    - Array of typed automation steps (e.g. ``goto``, ``click``, ``fill``, ``uploadFile``)
-
-    The profile is validated against :data:`WORKFLOW_STEP_SCHEMA` on save.
-    Workflows are intentionally decoupled from credentials and device
-    identities so that one definition can be reused across many targets.
-    """
+    """A reusable automation workflow for a specific device family or firmware variant."""
 
     name = models.CharField(
         verbose_name=_('Name'),
@@ -267,7 +220,6 @@ class AgentWorkflowDefinition(models.Model):
 
     def clean(self) -> None:
         """Validate the workflow profile against the step schema."""
-        # Profile should be a dict containing 'steps' array and optional metadata
         if not isinstance(self.profile, dict):
             raise ValidationError({'profile': 'Profile must be a JSON object.'})
 
@@ -279,210 +231,89 @@ class AgentWorkflowDefinition(models.Model):
 
 
 # ---------------------------------------------------------------------------
-# AgentCertificateTarget
+# AgentAssignedProfile
 # ---------------------------------------------------------------------------
 
-class AgentCertificateTarget(models.Model):
-    """A certificate target on a *managed* device.
+class AgentAssignedProfile(models.Model):
+    """Links a workflow profile to an agent with per-assignment renewal settings."""
 
-    Each target represents one certificate that the agent should keep
-    provisioned on a managed device.  The agent reaches the device over the
-    network (e.g. via its WBM interface) and pushes the certificate using the
-    linked workflow.
-
-    **Device ownership rules:**
-
-    - For a 1-to-n agent (``AGENT_ONE_TO_N``): ``device`` must be of type
-      ``AGENT_MANAGED_DEVICE`` — never the agent's own ``DeviceModel``.  All
-      application certificates are issued to this managed-device record.
-    - For a 1-to-1 agent (``AGENT_ONE_TO_ONE``): ``device`` must be the agent's
-      own ``DeviceModel`` (the agent IS the device).
-    """
-
-    device = models.ForeignKey(
-        'devices.DeviceModel',
-        verbose_name=_('Device'),
-        on_delete=models.CASCADE,
-        related_name='agent_targets',
-        help_text=_(
-            'The managed device that owns this certificate target. '
-            'For 1-to-n agents this must be an Agent Managed Device, not the agent device itself. '
-            "For 1-to-1 agents this must be the agent's own device."
-        ),
-    )
-    certificate_profile = models.ForeignKey(
-        'pki.CertificateProfileModel',
-        verbose_name=_('Certificate Profile'),
-        on_delete=models.PROTECT,
-        related_name='agent_targets',
-    )
-    workflow = models.ForeignKey(
-        'agents.AgentWorkflowDefinition',
-        verbose_name=_('Workflow Definition'),
-        on_delete=models.PROTECT,
-        related_name='targets',
-        null=True,
-        blank=True,
-    )
-    # The agent responsible for executing pushes to this target.
-    # PROTECT prevents accidental deletion of an agent that still owns active targets.
     agent = models.ForeignKey(
         'agents.TrustpointAgent',
         verbose_name=_('Agent'),
-        on_delete=models.PROTECT,
-        related_name='agent_targets',
-        help_text=_('The agent deployed in the production cell that can reach this device.'),
+        on_delete=models.CASCADE,
+        related_name='assigned_profiles',
+        help_text=_('The 1-to-1 agent this profile is assigned to.'),
     )
-    enabled = models.BooleanField(verbose_name=_('Enabled'), default=True)
+    workflow_definition = models.ForeignKey(
+        'agents.AgentWorkflowDefinition',
+        verbose_name=_('Agent Profile'),
+        on_delete=models.PROTECT,
+        related_name='assigned_to',
+        help_text=_('The workflow / renewal profile applied to this agent.'),
+    )
     renewal_threshold_days = models.PositiveIntegerField(
         verbose_name=_('Renewal Threshold (days)'),
         default=30,
         help_text=_(
-            "Trustpoint will include this target in the agent's check-in response when the "
-            'currently issued certificate expires within this many days. Set to 0 to only push '
-            'when explicitly triggered by an operator.'
+            'Trustpoint will trigger certificate renewal when the currently '
+            'issued certificate expires within this many days.'
         ),
     )
-    push_requested = models.BooleanField(
-        verbose_name=_('Push Requested'),
-        default=False,
+    last_certificate_update = models.DateTimeField(
+        verbose_name=_('Last Certificate Update'),
+        null=True,
+        blank=True,
+        help_text=_('Timestamp of the most recent successful certificate issuance for this profile.'),
+    )
+    next_certificate_update_scheduled = models.DateTimeField(
+        verbose_name=_('Next Certificate Update'),
+        null=True,
+        blank=True,
         help_text=_(
-            "Set to True by the operator ('push now') to force a push on the next check-in, "
-            'regardless of the certificate expiry window. Cleared automatically once the agent '
-            'picks up the job.'
+            'Manually scheduled next renewal trigger time. '
+            'Set to a past datetime to force immediate renewal, or a future datetime to delay it. '
+            'Cleared automatically after the next successful certificate update.'
         ),
+    )
+    enabled = models.BooleanField(
+        verbose_name=_('Enabled'),
+        default=True,
+        help_text=_('Disabled assignments are skipped during renewal scheduling.'),
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        """Meta options for AgentCertificateTarget."""
+        """Meta options for AgentAssignedProfile."""
 
-        unique_together: ClassVar = [('device', 'agent', 'certificate_profile')]
-        verbose_name = _('Agent Certificate Target')
-        verbose_name_plural = _('Agent Certificate Targets')
+        unique_together: ClassVar = [('agent', 'workflow_definition')]
+        verbose_name = _('Agent Assigned Profile')
+        verbose_name_plural = _('Agent Assigned Profiles')
 
     def __str__(self) -> str:
         """Return a human-readable representation."""
-        return f'AgentCertificateTarget({self.device} via {self.agent})'
+        return f'AgentAssignedProfile({self.agent.name} / {self.workflow_definition.name})'
+
+    @property
+    def next_certificate_update(self) -> datetime:
+        """Return the datetime at which renewal should be triggered."""
+        from django.utils import timezone  # noqa: PLC0415
+
+        if self.next_certificate_update_scheduled is not None:
+            return self.next_certificate_update_scheduled
+        if self.last_certificate_update is not None:
+            return self.last_certificate_update + timedelta(days=self.renewal_threshold_days)
+        return timezone.now()
 
     def clean(self) -> None:
-        """Validate device-ownership rules based on the linked agent type.
-
-        - 1-to-n agent (AGENT_ONE_TO_N): ``device`` must be of type
-          AGENT_MANAGED_DEVICE, never the agent's own DeviceModel.
-          Application certificates are issued to the managed-device record,
-          not to the agent device.
-        - 1-to-1 agent (AGENT_ONE_TO_ONE): ``device`` must be the agent's own
-          DeviceModel (the agent IS the device).
-        """
-        from devices.models import DeviceModel  # noqa: PLC0415
-
-        if self.agent_id is None or self.device_id is None:
+        """Validate that the linked agent has an associated device."""
+        if self.agent_id is None:
             return
 
         agent: TrustpointAgent | None = (
             TrustpointAgent.objects.select_related('device').filter(pk=self.agent_id).first()
         )
         if agent is None or agent.device is None:
-            return
-
-        device: DeviceModel | None = DeviceModel.objects.filter(pk=self.device_id).first()
-        if device is None:
-            return
-
-        if agent.device.device_type == DeviceModel.DeviceType.AGENT_ONE_TO_N:
-            if device.pk == agent.device.pk:
-                raise ValidationError({
-                    'device': (
-                        'For a 1-to-n agent the target device must be an Agent Managed Device, '
-                        'not the agent device itself.'
-                    )
-                })
-            if device.device_type != DeviceModel.DeviceType.AGENT_MANAGED_DEVICE:
-                raise ValidationError({
-                    'device': (
-                        'For a 1-to-n agent the target device must be of type Agent Managed Device.'
-                    )
-                })
-
-        elif agent.device.device_type == DeviceModel.DeviceType.AGENT_ONE_TO_ONE:
-            if device.pk != agent.device.pk:
-                raise ValidationError({
-                    'device': (
-                        "For a 1-to-1 agent the target device must be the agent's own device."
-                    )
-                })
-
-
-# ---------------------------------------------------------------------------
-# AgentJob
-# ---------------------------------------------------------------------------
-
-class AgentJob(models.Model):
-    """Audit record for a single agent certificate-provisioning operation.
-
-    Created by Trustpoint when the agent requests to push a certificate to
-    a managed device.  Closed when the agent reports the result.
-    """
-
-    class Status(models.TextChoices):
-        """Lifecycle state of the job."""
-
-        PENDING_CSR = 'pending_csr', _('Pending CSR')
-        IN_PROGRESS = 'in_progress', _('In Progress')
-        SUCCEEDED = 'succeeded', _('Succeeded')
-        FAILED = 'failed', _('Failed')
-
-    target = models.ForeignKey(
-        'agents.AgentCertificateTarget',
-        verbose_name=_('Certificate Target'),
-        on_delete=models.CASCADE,
-        related_name='jobs',
-    )
-    status = models.CharField(
-        verbose_name=_('Status'),
-        max_length=20,
-        choices=Status,
-        default=Status.IN_PROGRESS,
-        db_index=True,
-    )
-    # Certificate material.
-    # The private key is generated by the agent and never transmitted to Trustpoint.
-    # key_spec and subject are sent to the agent in the check-in response so it can
-    # build a correct CSR. Trustpoint signs the CSR and stores only the issued cert.
-    key_spec = models.CharField(
-        verbose_name=_('Key Spec'),
-        max_length=40,
-        default='EC_P256',
-        help_text=_("Algorithm and size for key generation, e.g. 'EC_P256', 'RSA_2048'."),
-    )
-    subject = models.JSONField(
-        verbose_name=_('Subject'),
-        default=dict,
-        help_text=_(
-            'X.509 subject attributes to embed in the CSR, '
-            'e.g. {"CN": "device.example.com", "O": "Acme"}.'
-        ),
-    )
-    csr_pem = models.TextField(
-        verbose_name=_('CSR (PEM)'),
-        blank=True,
-        help_text=_('Stored after the agent submits the CSR, before the cert is issued.'),
-    )
-    cert_pem = models.TextField(verbose_name=_('Certificate (PEM)'), blank=True)
-    ca_bundle_pem = models.TextField(verbose_name=_('CA Bundle (PEM)'), blank=True)
-
-    started_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    result_detail = models.TextField(verbose_name=_('Result Detail'), blank=True)
-
-    class Meta:
-        """Meta options for AgentJob."""
-
-        verbose_name = _('Agent Job')
-        verbose_name_plural = _('Agent Jobs')
-
-    def __str__(self) -> str:
-        """Return a human-readable representation."""
-        return f'AgentJob({self.pk} {self.status} → {self.target})'
+            raise ValidationError({
+                'agent': 'The selected agent must have an associated device.'
+            })

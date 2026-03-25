@@ -37,18 +37,13 @@ class WbmSubmitCsrResponder(AbstractMessageResponder):
 
     @staticmethod
     def build_response(context: BaseRequestContext) -> None:
-        """Return the signed certificate and CA bundle from the job."""
+        """Return the signed certificate and CA bundle from the processor output."""
         if not isinstance(context, WbmAgentRequestContext):
             return
 
-        job = context.submit_csr_job
-        if job is None:
-            exc_msg = 'submit_csr_job not set; cannot build submit-csr response.'
-            raise ValueError(exc_msg)
-
         payload = {
-            'cert_pem': job.cert_pem,
-            'ca_bundle_pem': job.ca_bundle_pem,
+            'cert_pem': context.submit_csr_cert_pem,
+            'ca_bundle_pem': context.submit_csr_ca_bundle_pem,
         }
         context.http_response_status = 200
         context.http_response_content_type = _JSON_CONTENT_TYPE

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from agents.request_context import AgentRequestContext
 
 if TYPE_CHECKING:
-    from agents.models import WbmJob
+    from agents.models import AgentAssignedProfile
 
 
 @dataclass(kw_only=True)
@@ -29,13 +29,16 @@ class WbmAgentRequestContext(AgentRequestContext):
 
     # -- submit-csr input / output --------------------------------------------
     # Set by WbmSubmitCsrParser
-    submit_csr_job_id: int | None = None
+    submit_csr_profile_id: int | None = None
     submit_csr_csr_pem: str | None = None
     # Set by WbmSubmitCsrAuthorization (fetched once, shared with processor)
-    submit_csr_job: WbmJob | None = None
+    submit_csr_profile: AgentAssignedProfile | None = None
+    # Set by WbmSubmitCsrProcessor
+    submit_csr_cert_pem: str = ''
+    submit_csr_ca_bundle_pem: str = ''
 
     # -- push-result input ----------------------------------------------------
     # Set by WbmPushResultParser
-    push_result_job_id: int | None = None
+    push_result_profile_id: int | None = None
     push_result_status: str | None = None
     push_result_detail: str = ''

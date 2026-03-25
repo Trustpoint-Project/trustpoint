@@ -5,9 +5,8 @@ from typing import TYPE_CHECKING, Any
 
 from django.utils import timezone
 
-from agents.models import AgentCertificateTarget, AgentJob
+from agents.models import AgentAssignedProfile
 from agents.wbm.request_context import WbmAgentRequestContext
-from pki.models import IssuedCredentialModel
 from request.operation_processor.base import AbstractOperationProcessor
 from trustpoint.logger import LoggerMixin
 
@@ -16,20 +15,16 @@ if TYPE_CHECKING:
 
 
 class WbmCheckInProcessor(AbstractOperationProcessor, LoggerMixin):
-    """Discover due targets for the calling agent and create PENDING_CSR jobs.
+    """Discover due assigned profiles for the calling agent and return renewal descriptors.
 
-    A target is *due* when either:
-
-    - ``push_requested`` is ``True`` (operator-triggered), or
-    - The most recently issued certificate expires within
-      ``target.renewal_threshold_days`` days (automatic renewal window).
-
-    For each due target a :class:`~agents.models.WbmJob` with status
-    ``PENDING_CSR`` is created and ``push_requested`` is cleared atomically.
+    A profile is *due* when ``next_certificate_update`` is in the past, which
+    covers both automatic renewal (``last_certificate_update + threshold``) and
+    operator-forced renewal (``next_certificate_update_scheduled`` set to a past
+    datetime).
     """
 
     def process_operation(self, context: BaseRequestContext) -> None:
-        """Populate ``context.pending_jobs`` with descriptors for each due target."""
+        """Populate ``context.pending_jobs`` with descriptors for each due profile."""
         if not isinstance(context, WbmAgentRequestContext):
             return
 
@@ -37,16 +32,19 @@ class WbmCheckInProcessor(AbstractOperationProcessor, LoggerMixin):
             exc_msg = 'Agent not set on context.'
             raise ValueError(exc_msg)
 
-        targets = (
-            AgentCertificateTarget.objects.filter(agent=context.agent, enabled=True)
-            .select_related('device', 'certificate_profile', 'workflow')
+        profiles = (
+            AgentAssignedProfile.objects.filter(agent=context.agent, enabled=True)
+            .select_related('workflow_definition', 'agent__device')
         )
 
+        now = timezone.now()
         context.pending_jobs = [
-            self._create_job(target) for target in targets if self._is_due(target)
+            self._build_descriptor(profile)
+            for profile in profiles
+            if profile.next_certificate_update <= now
         ]
         self.logger.info(
-            'Check-in for agent %s: %d job(s) pending.',
+            'Check-in for agent %s: %d profile(s) pending.',
             context.agent.agent_id,
             len(context.pending_jobs),
         )
@@ -54,55 +52,23 @@ class WbmCheckInProcessor(AbstractOperationProcessor, LoggerMixin):
     # -- helpers ---------------------------------------------------------------
 
     @staticmethod
-    def _is_due(target: AgentCertificateTarget) -> bool:
-        """Return True if the target needs a certificate push in this cycle."""
-        if target.push_requested:
-            return True
-        if target.renewal_threshold_days == 0:
-            return False
-
-        latest = (
-            IssuedCredentialModel.objects.filter(
-                device=target.device,
-                issued_using_cert_profile=target.certificate_profile.unique_name,
-            )
-            .select_related('credential__certificate')
-            .order_by('-created_at')
-            .first()
+    def _build_descriptor(profile: AgentAssignedProfile) -> dict[str, Any]:
+        """Build a renewal descriptor for *profile*."""
+        # key_spec, subject, certificate_profile_name and workflow steps all
+        # come from the workflow definition's profile JSON.
+        workflow_profile: dict[str, Any] = (
+            profile.workflow_definition.profile if profile.workflow_definition else {}
         )
-        if latest is None:
-            # No certificate has ever been issued — treat as due.
-            return True
+        key_spec: str = workflow_profile.get('key_algorithm', 'EC_P256')
+        subject: dict[str, str] = workflow_profile.get('subject', {})
 
-        cert = latest.credential.certificate
-        if cert is None:
-            return True
-
-        days_left = (cert.not_valid_after - timezone.now()).days
-        return days_left < target.renewal_threshold_days
-
-    @staticmethod
-    def _create_job(target: AgentCertificateTarget) -> dict[str, Any]:
-        """Create a PENDING_CSR job for *target* and return its descriptor dict."""
-        # Determine key_spec and subject from the certificate profile.
-        profile = target.certificate_profile.profile
-        key_spec: str = profile.get('key_algorithm', 'EC_P256')
-        subject: dict[str, str] = profile.get('subject', {})
-
-        job = AgentJob.objects.create(
-            target=target,
-            status=AgentJob.Status.PENDING_CSR,
-            key_spec=key_spec,
-            subject=subject,
-        )
-
-        # Clear the operator-requested flag atomically (no race with other workers).
-        AgentCertificateTarget.objects.filter(pk=target.pk).update(push_requested=False)
+        device = profile.agent.device
+        base_url = f'https://{device.ip_address}' if device and device.ip_address else ''
 
         return {
-            'job_id': job.pk,
-            'base_url': target.base_url,
-            'key_spec': job.key_spec,
-            'subject': job.subject,
-            'workflow': target.workflow.profile,
+            'profile_id': profile.pk,
+            'base_url': base_url,
+            'key_spec': key_spec,
+            'subject': subject,
+            'workflow': workflow_profile,
         }

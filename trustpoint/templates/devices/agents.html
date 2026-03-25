@@ -19,7 +19,7 @@
     <table class="table" id="devices-table">
       <thead>
         <tr>
-          <th><input type="checkbox"/></th>
+          <th id="checkbox-column"><input type="checkbox"/></th>
           <th data-col="name">{% trans 'Device' %}</th>
           <th data-col="type">{% trans 'Type' %}</th>
           <th class="text-nowrap" data-col="domain">{% trans 'Domain' %}</th>
@@ -65,9 +65,15 @@
           <td data-col="actions" class="text-nowrap">
             <div class="d-flex gap-1">
               {% for agent in device.agent_list %}
-                <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-primary tp-table-btn">
-                  <i class="fas fa-server"></i> {% trans 'Devices' %}
-                </a>
+                {% if device.device_type == 4 %}
+                  <a href="{% url 'agents:targets-list' agent_id=agent.pk %}" class="btn btn-primary tp-table-btn">
+                    <i class="fas fa-server"></i> {% trans 'Devices' %}
+                  </a>
+                {% else %}
+                  <a href="{% url 'agents:assigned-profiles-list' agent_id=agent.pk %}" class="btn btn-primary tp-table-btn">
+                    <i class="fas fa-id-card"></i> {% trans 'Profiles' %}
+                  </a>
+                {% endif %}
               {% endfor %}
               {{ device.clm_button|safe }}
             </div>

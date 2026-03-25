@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from django.utils import timezone
 
-from agents.models import AgentJob
+from agents.models import AgentAssignedProfile
 from agents.wbm.request_context import WbmAgentRequestContext
 from request.operation_processor.base import AbstractOperationProcessor
 from trustpoint.logger import LoggerMixin
@@ -15,40 +15,38 @@ if TYPE_CHECKING:
 
 
 class WbmPushResultProcessor(AbstractOperationProcessor, LoggerMixin):
-    """Close the WBM job with the result reported by the agent."""
+    """Record the push result reported by the agent on the assigned profile."""
 
     def process_operation(self, context: BaseRequestContext) -> None:
-        """Update the job status and record the completion timestamp."""
+        """Update the assigned profile's last_certificate_update on success."""
         if not isinstance(context, WbmAgentRequestContext):
             return
 
-        if context.push_result_job_id is None:
-            exc_msg = 'push_result_job_id not set on context.'
+        if context.push_result_profile_id is None:
+            exc_msg = 'push_result_profile_id not set on context.'
             raise ValueError(exc_msg)
 
-        # Map incoming status string to a known Status choice; default to FAILED.
         raw_status = context.push_result_status or ''
-        valid_statuses = {s.value for s in AgentJob.Status}
-        status = raw_status if raw_status in valid_statuses else AgentJob.Status.FAILED
+        succeeded = raw_status == 'succeeded'
 
-        updated = AgentJob.objects.filter(
-            pk=context.push_result_job_id,
-            status=AgentJob.Status.IN_PROGRESS,
-        ).update(
-            status=status,
-            result_detail=context.push_result_detail,
-            completed_at=timezone.now(),
-        )
-
-        if not updated:
-            exc_msg = (
-                f'Job {context.push_result_job_id} not found or not in IN_PROGRESS state '
-                'when attempting to close it.'
+        if succeeded:
+            updated = AgentAssignedProfile.objects.filter(
+                pk=context.push_result_profile_id,
+            ).update(
+                last_certificate_update=timezone.now(),
+                next_certificate_update_scheduled=None,
             )
-            raise ValueError(exc_msg)
+
+            if not updated:
+                exc_msg = (
+                    f'AgentAssignedProfile {context.push_result_profile_id} not found '
+                    'when attempting to record push result.'
+                )
+                raise ValueError(exc_msg)
 
         self.logger.info(
-            'Job %s closed with status=%s.',
-            context.push_result_job_id,
-            status,
+            'Push result for profile %s: status=%s detail=%s.',
+            context.push_result_profile_id,
+            raw_status,
+            context.push_result_detail,
         )

@@ -1,14 +1,17 @@
 """Admin registrations for the agents application."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.contrib import admin
 
-from agents.models import AgentCertificateTarget, AgentJob, AgentWorkflowDefinition, TrustpointAgent
+from agents.models import (
+    AgentAssignedProfile,
+    AgentWorkflowDefinition,
+    TrustpointAgent,
+)
 
 if TYPE_CHECKING:
-    from django.db.models import QuerySet
     from django.http import HttpRequest
 
 
@@ -32,30 +35,23 @@ class AgentWorkflowDefinitionAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at', 'updated_at')
 
 
-@admin.register(AgentCertificateTarget)
-class AgentCertificateTargetAdmin(admin.ModelAdmin):
-    """Admin for AgentCertificateTarget."""
+@admin.register(AgentAssignedProfile)
+class AgentAssignedProfileAdmin(admin.ModelAdmin):
+    """Admin for AgentAssignedProfile."""
 
     list_display: ClassVar = (
-        'device', 'agent', 'certificate_profile', 'enabled', 'renewal_threshold_days', 'push_requested',
+        'agent', 'workflow_definition', 'renewal_threshold_days',
+        'last_certificate_update', 'next_certificate_update_scheduled', 'enabled',
     )
-    list_filter: ClassVar = ('enabled', 'push_requested')
-    search_fields: ClassVar = ('device__common_name', 'agent__name')
-    readonly_fields: ClassVar = ('created_at', 'updated_at')
-    actions: ClassVar = ['request_push']
+    list_filter: ClassVar = ('enabled',)
+    search_fields: ClassVar = ('agent__name', 'workflow_definition__name')
+    readonly_fields: ClassVar = ('last_certificate_update', 'created_at', 'updated_at')
+    actions: ClassVar = ['force_renewal']
 
-    @admin.action(description='Request immediate certificate push on next check-in')
-    def request_push(self, request: HttpRequest, queryset: QuerySet) -> None:
-        """Set push_requested=True for all selected targets."""
-        updated = queryset.update(push_requested=True)
-        self.message_user(request, f'{updated} target(s) flagged for immediate push.')
+    @admin.action(description='Force renewal on next check-in (set scheduled time to now)')
+    def force_renewal(self, request: HttpRequest, queryset: Any) -> None:
+        """Set next_certificate_update_scheduled to now for all selected profiles."""
+        from django.utils import timezone  # noqa: PLC0415
 
-
-@admin.register(AgentJob)
-class AgentJobAdmin(admin.ModelAdmin):
-    """Admin for AgentJob."""
-
-    list_display = ('pk', 'target', 'status', 'key_spec', 'started_at', 'completed_at')
-    list_filter = ('status', 'key_spec')
-    search_fields = ('target__device__common_name',)
-    readonly_fields = ('started_at', 'completed_at', 'csr_pem', 'cert_pem', 'ca_bundle_pem')
+        updated = queryset.update(next_certificate_update_scheduled=timezone.now())
+        self.message_user(request, f'{updated} profile(s) scheduled for immediate renewal.')

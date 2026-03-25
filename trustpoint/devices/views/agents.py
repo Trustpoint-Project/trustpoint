@@ -125,15 +125,14 @@ class AgentCreateOneToNOnboardingView(PageContextMixin, FormView[AgentOnboarding
         return context
 
     def form_valid(self, form: AgentOnboardingCreateForm) -> HttpResponse:
-        """Save the form as an AGENT_ONE_TO_N device.
+        """Save the form as an AGENT_ONE_TO_N device."""
+        import secrets  # noqa: PLC0415
 
-        Args:
-            form: The valid form.
+        from django.utils import timezone  # noqa: PLC0415
 
-        Returns:
-            Redirect to the CLM page for the created device.
-        """
-        from agents.models import TrustpointAgent  # noqa: PLC0415
+        from agents.models import AgentAssignedProfile, AgentWorkflowDefinition, TrustpointAgent  # noqa: PLC0415
+        from onboarding.enums import NoOnboardingPkiProtocol  # noqa: PLC0415
+        from onboarding.models import NoOnboardingConfigModel  # noqa: PLC0415
 
         self.object = form.save(device_type=DeviceModel.DeviceType.AGENT_ONE_TO_N)
         agent_uuid = uuid.uuid4().hex.upper()
@@ -143,6 +142,47 @@ class AgentCreateOneToNOnboardingView(PageContextMixin, FormView[AgentOnboarding
             certificate_fingerprint=agent_uuid,
             device=self.object,
         )
+
+        _allowed_chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+        no_onboarding_config = NoOnboardingConfigModel()
+        no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD)
+        no_onboarding_config.est_password = ''.join(secrets.choice(_allowed_chars) for _ in range(16))
+        no_onboarding_config.full_clean()
+        no_onboarding_config.save()
+
+        managed_device = DeviceModel(
+            common_name=f'{self.object.common_name} (self)',
+            serial_number=self.object.serial_number,
+            ip_address=self.object.ip_address,
+            domain=self.object.domain,
+            device_type=DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
+            no_onboarding_config=no_onboarding_config,
+        )
+        managed_device.full_clean()
+        managed_device.save()
+
+        managed_device_uuid = uuid.uuid4().hex.upper()
+        managed_agent = TrustpointAgent.objects.create(
+            name=f'{self.object.common_name} (self)',
+            agent_id=managed_device_uuid,
+            certificate_fingerprint=managed_device_uuid,
+            device=managed_device,
+        )
+
+        # Assign the default 'Domain Credential Update' workflow to the managed device.
+        default_wf = AgentWorkflowDefinition.objects.filter(
+            name='Domain Credential Update', is_active=True
+        ).first()
+        if default_wf is not None:
+            AgentAssignedProfile.objects.get_or_create(
+                agent=managed_agent,
+                workflow_definition=default_wf,
+                defaults={
+                    'renewal_threshold_days': 30,
+                    'next_certificate_update_scheduled': timezone.now(),
+                },
+            )
+
         return super().form_valid(form)
 
     def get_success_url(self) -> str:
@@ -196,16 +236,32 @@ class AgentCreateOneToOneOnboardingView(PageContextMixin, FormView[AgentOnboardi
         Returns:
             Redirect to the CLM page for the created device.
         """
-        from agents.models import TrustpointAgent  # noqa: PLC0415
+        from django.utils import timezone  # noqa: PLC0415
+
+        from agents.models import AgentAssignedProfile, AgentWorkflowDefinition, TrustpointAgent  # noqa: PLC0415
 
         self.object = form.save(device_type=DeviceModel.DeviceType.AGENT_ONE_TO_ONE)
         agent_uuid = uuid.uuid4().hex.upper()
-        TrustpointAgent.objects.create(
+        agent = TrustpointAgent.objects.create(
             name=self.object.common_name,
             agent_id=agent_uuid,
             certificate_fingerprint=agent_uuid,
             device=self.object,
         )
+
+        default_wf = AgentWorkflowDefinition.objects.filter(
+            name='Domain Credential Update', is_active=True
+        ).first()
+        if default_wf is not None:
+            AgentAssignedProfile.objects.get_or_create(
+                agent=agent,
+                workflow_definition=default_wf,
+                defaults={
+                    'renewal_threshold_days': 30,
+                    'next_certificate_update_scheduled': timezone.now(),
+                },
+            )
+
         return super().form_valid(form)
 
     def get_success_url(self) -> str:
