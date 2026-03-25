@@ -290,6 +290,9 @@ class AbstractCertificateLifecycleManagementSummaryView(PageContextMixin, Detail
         context['OnboardingPkiProtocol'] = OnboardingPkiProtocol
         context['NoOnboardingPkiProtocol'] = NoOnboardingPkiProtocol
         context['OnboardingStatus'] = OnboardingStatus
+        context['is_agent_managed_device'] = (
+            self.object.device_type == DeviceModel.DeviceType.AGENT_MANAGED_DEVICE
+        )
 
         context['device_form'] = self.get_device_form()
         if self.object.onboarding_config:

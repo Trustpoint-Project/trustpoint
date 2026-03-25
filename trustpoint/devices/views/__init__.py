@@ -3,6 +3,7 @@
 from .agents import (
     AgentCreateChooseTypeView,
     AgentCreateOneToNOnboardingView,
+    AgentCreateOneToOneOnboardingView,
     AgentTableView,
 )
 from .browser_onboarding import (
@@ -83,6 +84,7 @@ from .tables import (
 __all__ = [
     'AgentCreateChooseTypeView',
     'AgentCreateOneToNOnboardingView',
+    'AgentCreateOneToOneOnboardingView',
     'AgentTableView',
     'DeviceBrowserCredentialDownloadView',
     'DeviceBrowserOnboardingCancelView',

@@ -21,25 +21,7 @@ from workflows.events import Events
 
 @method_decorator(csrf_exempt, name='dispatch')
 class RestEnrollView(LoggerMixin, View):
-    """Handles REST certificate enrollment requests (initial enrollment).
-
-    POST /.well-known/rest/<domain>/<cert_profile>/enroll/
-
-    Request body (JSON)::
-
-        {
-            "csr": "<PEM or Base64-DER encoded PKCS#10 CSR>"
-        }
-
-    Authentication: HTTP Basic Auth (username:password) or mTLS client certificate.
-
-    Response (JSON, HTTP 200)::
-
-        {
-            "certificate": "<PEM certificate>",
-            "certificate_chain": ["<PEM ca cert>", ...]
-        }
-    """
+    """Handles REST certificate enrollment requests (initial enrollment)."""
 
     EVENT = Events.rest_enroll
 

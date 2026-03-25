@@ -30,6 +30,11 @@ urlpatterns = [
         views.AgentCreateOneToNOnboardingView.as_view(),
         name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create_one_to_n',
     ),
+    path(
+        'agents/create/1-to-1/',
+        views.AgentCreateOneToOneOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create_one_to_one',
+    ),
     # Create Views
     path(
         'create/', views.DeviceCreateChooseOnboardingView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'

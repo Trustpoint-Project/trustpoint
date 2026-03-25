@@ -90,16 +90,21 @@ class ManagedDeviceCreateForm(forms.Form):
 
     @transaction.atomic
     def save(self, agent: TrustpointAgent) -> AgentCertificateTarget:
-        """Create the DeviceModel + NoOnboardingConfig + AgentCertificateTarget atomically."""
-        from devices.models import DeviceModel  # noqa: PLC0415
-        from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol  # noqa: PLC0415
-
-        # Always use EST (no-onboarding) with EST_USERNAME_PASSWORD
-        no_onboarding_config = NoOnboardingConfigModel()
-        no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD])
+        """Create the DeviceModel + OnboardingConfig + AgentCertificateTarget atomically."""
         import secrets as _secrets  # noqa: PLC0415
-        no_onboarding_config.est_password = _secrets.token_urlsafe(16)
-        no_onboarding_config.save()
+
+        from devices.models import DeviceModel  # noqa: PLC0415
+        from onboarding.enums import OnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus  # noqa: PLC0415
+        from onboarding.models import OnboardingConfigModel  # noqa: PLC0415
+
+        # Agent-managed devices are onboarded via the agent using REST with a generated password.
+        onboarding_config = OnboardingConfigModel(
+            onboarding_status=OnboardingStatus.PENDING,
+            onboarding_protocol=OnboardingProtocol.AGENT,
+            est_password=_secrets.token_urlsafe(16),
+        )
+        onboarding_config.set_pki_protocols([OnboardingPkiProtocol.REST])
+        onboarding_config.save()
 
         device = DeviceModel(
             common_name=self.cleaned_data['common_name'],
@@ -108,7 +113,7 @@ class ManagedDeviceCreateForm(forms.Form):
             device_type=DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
             domain=agent.device.domain if agent.device else None,
         )
-        device.no_onboarding_config = no_onboarding_config
+        device.onboarding_config = onboarding_config
         device.save()
 
         target = AgentCertificateTarget(

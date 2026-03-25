@@ -151,37 +151,22 @@ class DeviceModel(CustomDeleteActionModel):
             error_messages['opc_gds_push_renewal_interval'] = 'Renewal interval must be at least 1 hour.'
 
     _AGENT_EST_PROTOCOLS = frozenset({
-        OnboardingProtocol.EST_USERNAME_PASSWORD,
+        OnboardingProtocol.REST_USERNAME_PASSWORD,
     })
 
     def _validate_agent_device(self, error_messages: dict[str, str]) -> None:
-        """Validate agent device type constraints.
-
-        **1-to-1 agent** (``AGENT_ONE_TO_ONE``): the device IS the agent and is
-        treated as a standalone device.  The domain credential and all other
-        issued certificates belong to this device record.
-
-        **1-to-n agent** (``AGENT_ONE_TO_N``): the device represents the agent
-        process only.  It holds exclusively the domain credential (LDevID).
-        Application certificates are issued to separate ``GENERIC_DEVICE``
-        records that are managed by the agent via ``WbmCertificateTarget``.
-
-        Both agent types must use EST - Username & Password onboarding with
-        EST as the only enabled PKI protocol.  No-onboarding is not allowed.
-
-        :param error_messages: Mutable dict to collect field-level error strings.
-        """
+        """Validate agent device type constraints."""
         if not self.onboarding_config:
             error_messages['device_type'] = 'Agent devices must use onboarding configuration.'
         else:
             protocol = OnboardingProtocol(self.onboarding_config.onboarding_protocol)
             if protocol not in self._AGENT_EST_PROTOCOLS:
                 error_messages['onboarding_config'] = (
-                    'Agent devices must use EST - Username & Password as onboarding protocol.'
+                    'Agent devices must use REST - Username & Password as onboarding protocol.'
                 )
             if self.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP):
                 error_messages['onboarding_config'] = (
-                    'Agent devices must only have EST enabled as PKI protocol.'
+                    'Agent devices must only have REST enabled as PKI protocol.'
                 )
         if self.no_onboarding_config:
             error_messages['no_onboarding_config'] = 'Agent devices cannot use no-onboarding configuration.'

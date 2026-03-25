@@ -57,6 +57,7 @@ ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS = [
     (OnboardingProtocol.AOKI.value, OnboardingProtocol.AOKI.label),
     (OnboardingProtocol.BRSKI.value, OnboardingProtocol.BRSKI.label),
     (OnboardingProtocol.OPC_GDS_PUSH.value, OnboardingProtocol.OPC_GDS_PUSH.label),
+    (OnboardingProtocol.AGENT.value, OnboardingProtocol.AGENT.label),
 ]
 
 
@@ -600,15 +601,14 @@ class AgentOnboardingCreateForm(OnboardingCreateForm):
     """Specialised onboarding form for agent devices.
 
     The onboarding protocol is fixed to EST - Username & Password and the PKI
-    protocol is fixed to EST.  Both values are submitted as hidden fields so
+    protocol is fixed to REST.  Both values are submitted as hidden fields so
     form.save() can read them via cleaned_data without exposing the choices to
     the user.
     """
 
-    # Fixed to EST - Username & Password; submitted as hidden input.
     onboarding_protocol = forms.ChoiceField(
-        choices=[(OnboardingProtocol.EST_USERNAME_PASSWORD.value, OnboardingProtocol.EST_USERNAME_PASSWORD.label)],
-        initial=OnboardingProtocol.EST_USERNAME_PASSWORD,
+        choices=[(OnboardingProtocol.REST_USERNAME_PASSWORD.value, OnboardingProtocol.REST_USERNAME_PASSWORD.label)],
+        initial=OnboardingProtocol.REST_USERNAME_PASSWORD,
         label=_('Onboarding Protocol'),
         widget=forms.HiddenInput(),
     )
@@ -625,7 +625,7 @@ class AgentOnboardingCreateForm(OnboardingCreateForm):
         super().__init__(*args, **kwargs)
 
         # Ensure hidden fields carry the correct pre-selected values.
-        self.initial['onboarding_protocol'] = str(OnboardingProtocol.REST.value)
+        self.initial['onboarding_protocol'] = str(OnboardingProtocol.REST_USERNAME_PASSWORD.value)
         self.initial['onboarding_pki_protocols'] = [str(OnboardingPkiProtocol.REST.value)]
 
         self.helper = FormHelper()
@@ -637,7 +637,7 @@ class AgentOnboardingCreateForm(OnboardingCreateForm):
             Field('domain'),
             HTML(
                 '<div class="alert alert-info mt-3" role="alert">'
-                + str(_('Onboarding protocol: EST - Username & Password (fixed). PKI protocol: REST (fixed).'))
+                + str(_('Onboarding protocol: REST - Username & Password (fixed). PKI protocol: REST (fixed).'))
                 + '</div>'
             ),
             Field('onboarding_protocol'),
@@ -840,6 +840,7 @@ class ClmDeviceModelOnboardingForm(forms.Form):
             if onboarding_protocol_selected in (
                 OnboardingProtocol.EST_USERNAME_PASSWORD,
                 OnboardingProtocol.REST_USERNAME_PASSWORD,
+                OnboardingProtocol.AGENT,
             ):
                 self.instance.onboarding_config.cmp_shared_secret = ''
                 if not self.instance.onboarding_config.est_password:

@@ -1,0 +1,35 @@
+{
+  "type": "agent_setup_profile",
+  "name": "Agent Setup",
+  "profile": {
+    "metadata": {
+      "agent_type": ["1-to-1", "1-to-n"],
+      "version": "1.0",
+      "description": "Initial onboarding profile for a new agent. Used once to bootstrap the agent's domain credential (LDevID) using a shared secret. After successful setup the agent switches to the Domain Credential Update profile for subsequent renewals via mTLS."
+    },
+    "device": {
+      "vendor": "Generic",
+      "device_family": "Device",
+      "firmware": "1.0"
+    },
+    "local_storage": {
+      "os_path": "/etc/trustpoint/certs",
+      "certificate_path": "{{ os_path }}/{{ certificate_profile }}-certificate.pem",
+      "certificate_chain_path": "{{ os_path }}/{{ certificate_profile }}-full-chain.pem",
+      "csr_path": "{{ os_path }}/{{ certificate_profile }}-csr.pem",
+      "private_key_path": "{{ os_path }}/{{ certificate_profile }}-key.pem",
+      "crl_path": "{{ os_path }}/{{ certificate_profile }}-crl.pem",
+      "tls_cert_path": "{{ os_path }}/trustpoint-tls.pem"
+    },
+    "certificate_request": {
+      "certificate_profile": "domain_credential",
+      "url": "{{ endpoint }}",
+      "path": "{{ path }}"
+    },
+    "onboarding": {
+      "device": "{{ device }}",
+      "secret": "{{ secret }}",
+      "tls_cert_pem": "{{ tls_cert_pem }}"
+    }
+  }
+}

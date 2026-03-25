@@ -811,14 +811,14 @@ class NoOnboardingRestUsernamePasswordStrategy(HelpPageStrategy):
         domain_name = help_context.domain_unique_name
 
         def _get_enroll_path(cert_profile_name: str) -> str:
-            return f'{host_base}/.well-known/rest/{domain_name}/{cert_profile_name}/enroll/'
+            return f'{host_base}/rest/{domain_name}/{cert_profile_name}/enroll/'
 
         summary = HelpSection(
             _non_lazy('Summary'),
             [
                 HelpRow(
                     _non_lazy('Certificate Enrollment URL'),
-                    f'{host_base}/.well-known/rest/{domain_name}/<certificate_profile>/enroll/',
+                    f'{host_base}/rest/{domain_name}/<certificate_profile>/enroll/',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -935,7 +935,7 @@ class OnboardingDomainCredentialRestUsernamePasswordStrategy(HelpPageStrategy):
         est_password = onboarding_config.est_password
         host_base = help_context.host_base
         domain_name = help_context.domain_unique_name
-        enroll_url = f'{host_base}/.well-known/rest/{domain_name}/domain_credential/enroll/'
+        enroll_url = f'{host_base}/rest/{domain_name}/domain_credential/enroll/'
 
         summary = HelpSection(
             _non_lazy('Summary'),
@@ -1018,22 +1018,22 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
         domain_name = help_context.domain_unique_name
 
         def _get_enroll_path(cert_profile_name: str) -> str:
-            return f'{host_base}/.well-known/rest/{domain_name}/{cert_profile_name}/enroll/'
+            return f'{host_base}/rest/{domain_name}/{cert_profile_name}/enroll/'
 
         def _get_reenroll_path(cert_profile_name: str) -> str:
-            return f'{host_base}/.well-known/rest/{domain_name}/{cert_profile_name}/reenroll/'
+            return f'{host_base}/rest/{domain_name}/{cert_profile_name}/reenroll/'
 
         summary = HelpSection(
             _non_lazy('Summary'),
             [
                 HelpRow(
                     _non_lazy('Initial Enrollment URL'),
-                    f'{host_base}/.well-known/rest/{domain_name}/<certificate_profile>/enroll/',
+                    f'{host_base}/rest/{domain_name}/<certificate_profile>/enroll/',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
                     _non_lazy('Renewal URL'),
-                    f'{host_base}/.well-known/rest/{domain_name}/<certificate_profile>/reenroll/',
+                    f'{host_base}/rest/{domain_name}/<certificate_profile>/reenroll/',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(

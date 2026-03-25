@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load static %}
+{% load internationalization_tags %}
 
 {% block content %}
 
@@ -15,16 +16,19 @@
   {% include 'devices/table_filter.html' with table_url='devices:agents' %}
 
   <div class="card-body text-start pt-0" style="overflow: auto; flex-grow: 1; max-height: 90%;">
-    <table class="table">
+    <table class="table" id="devices-table">
       <thead>
         <tr>
           <th><input type="checkbox"/></th>
-          <th>{% trans 'Device' %}</th>
-          <th>{% trans 'Type' %}</th>
-          <th>{% trans 'Domain' %}</th>
-          <th>{% trans 'Onboarding Status' %}</th>
-          <th>{% trans 'Devices' %}</th>
-          <th>{% trans 'Onboarding' %}</th>
+          <th data-col="name">{% trans 'Device' %}</th>
+          <th data-col="type">{% trans 'Type' %}</th>
+          <th class="text-nowrap" data-col="domain">{% trans 'Domain' %}</th>
+          <th class="text-nowrap" data-col="serial_number">{% trans 'Serial Number' %}</th>
+          <th class="text-nowrap" data-col="created_at">{% trans 'Created at' %}</th>
+          <th class="text-nowrap" data-col="onboarding">{% trans 'Onboarding' %}</th>
+          <th class="text-nowrap" data-col="onboarding_protocol">{% trans 'Onboarding Protocol' %}</th>
+          <th class="text-nowrap" data-col="pki_protocols">{% trans 'PKI Protocols' %}</th>
+          <th class="text-nowrap" data-col="actions">{% trans 'Actions' %}</th>
         </tr>
       </thead>
       <tbody>
@@ -33,28 +37,45 @@
           <td class="row_checkbox">
             <input type="checkbox" name="row_checkbox" value="{{ device.id }}"/>
           </td>
-          <td>{{ device.common_name }}</td>
-          <td>{{ device.get_device_type_display }}</td>
-          <td>
+          <td data-col="name">{{ device.common_name }}</td>
+          <td data-col="type">{{ device.get_device_type_display }}</td>
+          <td data-col="domain">
             {% if device.domain %}
               <a href="{% url 'pki:domains-detail' device.domain.pk %}">{{ device.domain }}</a>
             {% else %}
               <span class="text-muted">{% trans 'No domain' %}</span>
             {% endif %}
           </td>
-          <td>{{ device.onboarding_config.get_onboarding_status_display }}</td>
-          <td>
-            {% for agent in device.agent_list %}
-              <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-sm btn-primary">
-                <i class="fas fa-server"></i> {% trans 'Manage' %}
-              </a>
-            {% endfor %}
+          <td data-col="serial_number">{{ device.serial_number }}</td>
+          <td data-col="created_at">{{ device.created_at|local_datetime }}</td>
+          <td data-col="onboarding">
+            {% with p=device.onboarding_progress %}
+            <span class="tp-status-badge tp-status-{{ p.status_key }}"
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
+                  data-bs-html="true"
+                  title="{{ p.tooltip }}">
+                <span class="tp-status-dot"></span>
+                {{ p.status_label }}
+            </span>
+            {% endwith %}
           </td>
-          <td>{{ device.clm_button| safe }}</td>
+          <td data-col="onboarding_protocol">{{ device.onboarding_progress.onboarding_protocol }}</td>
+          <td data-col="pki_protocols">{{ device.onboarding_progress.pki_protocols }}</td>
+          <td data-col="actions" class="text-nowrap">
+            <div class="d-flex gap-1">
+              {% for agent in device.agent_list %}
+                <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-primary tp-table-btn">
+                  <i class="fas fa-server"></i> {% trans 'Devices' %}
+                </a>
+              {% endfor %}
+              {{ device.clm_button|safe }}
+            </div>
+          </td>
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="text-center">{% trans 'No agent devices have been added yet.' %}</td>
+          <td colspan="10" class="text-center">{% trans 'No agent devices have been added yet.' %}</td>
         </tr>
         {% endfor %}
       </tbody>
