@@ -16,6 +16,8 @@ from django.views import View
 from django.views.generic import DetailView, ListView
 from django.views.generic.edit import FormView
 
+from management.models.audit_log import AuditLog
+
 from signer.forms import (
     SignerAddFileImportPkcs12Form,
     SignerAddFileImportSeparateFilesForm,
@@ -90,6 +92,15 @@ class SignerAddFileImportPkcs12View(SignerContextMixin, FormView[SignerAddFileIm
 
     def form_valid(self, form: SignerAddFileImportPkcs12Form) -> HttpResponse:
         """Handle the case where the form is valid."""
+        signer = form.created_signer
+        actor = self.request.user if self.request.user.is_authenticated else None
+
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.SIGNER_ADDED,
+            target=signer,
+            target_display=f'Signer: {signer.unique_name}',
+            actor=actor,
+        )
         messages.success(
             self.request,
             _('Successfully added Signer {name}.').format(name=form.cleaned_data['unique_name']),
@@ -106,6 +117,15 @@ class SignerAddFileImportSeparateFilesView(SignerContextMixin, FormView[SignerAd
 
     def form_valid(self, form: SignerAddFileImportSeparateFilesForm) -> HttpResponse:
         """Handle the case where the form is valid."""
+        signer = form.created_signer
+        actor = self.request.user if self.request.user.is_authenticated else None
+
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.SIGNER_ADDED,
+            target=signer,
+            target_display=f'Signer: {signer.unique_name}',
+            actor=actor,
+        )
         messages.success(
             self.request,
             _('Successfully added Signer {name}.').format(name=form.cleaned_data['unique_name']),
@@ -178,10 +198,21 @@ class SignerBulkDeleteConfirmView(SignerContextMixin, BulkDeleteView):
     def form_valid(self, form: Any) -> HttpResponse:
         """Delete the selected Signers on valid form."""
         queryset = self.get_queryset()
-        deleted_count = queryset.count() if queryset else 0
+        signers_to_delete = list(queryset)
+        deleted_count = len(signers_to_delete)
+        actor = self.request.user if self.request.user.is_authenticated else None
 
         try:
             response = super().form_valid(form)
+
+            for signer in signers_to_delete:
+                AuditLog.create_entry(
+                    operation_type=AuditLog.OperationType.SIGNER_DELETED,
+                    target=signer,
+                    target_display=f'Signer: {signer}',
+                    actor=actor,
+                )
+
         except (ProtectedError, ValidationError):
             messages.error(
                 self.request,
@@ -233,6 +264,14 @@ class SignHashView(LoggerMixin, SignerContextMixin, FormView[SignHashForm]):
                 signer=signer,
                 hash_value=hash_value,
                 signature=signature_hex
+            )
+
+            actor = self.request.user if self.request.user.is_authenticated else None
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.HASH_SIGNED,
+                target=signer,
+                target_display=f'Signer: {signer}',
+                actor=actor,
             )
 
             messages.success(
