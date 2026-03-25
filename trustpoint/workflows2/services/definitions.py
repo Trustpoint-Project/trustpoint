@@ -1,4 +1,5 @@
-# workflows2/services/definitions.py
+"""Create, update, and compile stored Workflow 2 definitions."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -12,6 +13,8 @@ from workflows2.models import Workflow2Definition
 
 @dataclass(frozen=True)
 class CompileResult:
+    """Return object for definition compilation attempts."""
+
     ok: bool
     ir: dict[str, Any] | None
     error: str | None
@@ -19,22 +22,23 @@ class CompileResult:
 
 
 class WorkflowDefinitionService:
-    """
-    Format YAML + compile + persist Workflow2Definition.
+    """Format YAML + compile + persist Workflow2Definition.
 
     Design:
       - UI YAML is canonicalized before compile and before saving to DB.
       - The DB YAML is the single source of truth (stable formatting).
     """
 
-    def __init__(self, *, compiler_version: str = "workflows2-ui") -> None:
+    def __init__(self, *, compiler_version: str = 'workflows2-ui') -> None:
+        """Initialize the service with the compiler version label to record."""
         self.compiler_version = compiler_version
 
     def compile_yaml(self, yaml_text: str) -> CompileResult:
+        """Format and compile YAML without saving a definition."""
         try:
             formatted = format_yaml_text(yaml_text)
         except Exception as e:  # noqa: BLE001
-            return CompileResult(ok=False, ir=None, error=f"YAML format failed: {e!s}", formatted_yaml=None)
+            return CompileResult(ok=False, ir=None, error=f'YAML format failed: {e!s}', formatted_yaml=None)
 
         try:
             ir = compile_workflow_yaml(formatted, compiler_version=self.compiler_version)
@@ -42,25 +46,25 @@ class WorkflowDefinitionService:
         except CompileError as e:
             return CompileResult(ok=False, ir=None, error=str(e), formatted_yaml=formatted)
         except Exception as e:  # noqa: BLE001
-            return CompileResult(ok=False, ir=None, error=f"Unexpected error: {e!s}", formatted_yaml=formatted)
+            return CompileResult(ok=False, ir=None, error=f'Unexpected error: {e!s}', formatted_yaml=formatted)
 
     @staticmethod
     def _extract_trigger_on(ir: dict[str, Any]) -> str:
-        trig = ir.get("trigger")
+        trig = ir.get('trigger')
         if isinstance(trig, dict):
-            on = trig.get("on")
+            on = trig.get('on')
             if isinstance(on, str):
                 return on
-        return ""
+        return ''
 
     @staticmethod
     def _extract_ir_hash(ir: dict[str, Any]) -> str:
-        meta = ir.get("meta")
+        meta = ir.get('meta')
         if isinstance(meta, dict):
-            h = meta.get("ir_hash")
+            h = meta.get('ir_hash')
             if isinstance(h, str) and h:
                 return h
-        return "missing-ir-hash"
+        return 'missing-ir-hash'
 
     def create_definition(
         self,
@@ -69,6 +73,7 @@ class WorkflowDefinitionService:
         enabled: bool,
         yaml_text: str,
     ) -> tuple[Workflow2Definition | None, CompileResult]:
+        """Create a new definition from validated YAML text."""
         res = self.compile_yaml(yaml_text)
         if not res.ok or res.ir is None or res.formatted_yaml is None:
             return None, res
@@ -91,6 +96,7 @@ class WorkflowDefinitionService:
         enabled: bool,
         yaml_text: str,
     ) -> tuple[Workflow2Definition | None, CompileResult]:
+        """Update an existing definition from validated YAML text."""
         res = self.compile_yaml(yaml_text)
         if not res.ok or res.ir is None or res.formatted_yaml is None:
             return None, res
@@ -101,5 +107,5 @@ class WorkflowDefinitionService:
         definition.yaml_text = res.formatted_yaml
         definition.ir_json = res.ir
         definition.ir_hash = self._extract_ir_hash(res.ir)
-        definition.save(update_fields=["name", "enabled", "trigger_on", "yaml_text", "ir_json", "ir_hash"])
+        definition.save(update_fields=['name', 'enabled', 'trigger_on', 'yaml_text', 'ir_json', 'ir_hash'])
         return definition, res

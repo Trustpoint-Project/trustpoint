@@ -1,4 +1,5 @@
-# workflows2/events/policies.py
+"""Step policy sets used by Workflow 2 trigger definitions."""
+
 from __future__ import annotations
 
 from workflows2.compiler.step_types import StepTypes

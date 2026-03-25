@@ -1,8 +1,9 @@
-# workflows2/models.py
+"""Database models used by the Workflow 2 compiler, runtime, and UI."""
 from __future__ import annotations
 
 import uuid
 from datetime import timedelta
+from typing import ClassVar
 
 from django.db import models
 from django.utils import timezone
@@ -30,18 +31,22 @@ class Workflow2Definition(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
-        indexes = [
+        """Database indexes for definition lookups."""
+
+        indexes = (
             models.Index(fields=['enabled']),
             models.Index(fields=['trigger_on']),
             models.Index(fields=['ir_hash']),
-        ]
+        )
 
     def __str__(self) -> str:
+        """Return a human-readable representation of the definition."""
         return f'{self.name} ({self.id})'
 
 
 class Workflow2Run(models.Model):
-    """A bundle/run representing one trigger emission that may create N instances.
+    """A bundle/run representing one trigger emission that may create multiple instances.
+
     This is what you'll later use for EST gating / UI grouping.
     """
 
@@ -58,7 +63,7 @@ class Workflow2Run(models.Model):
 
     STATUS_NO_MATCH = 'no_match'
 
-    STATUS_CHOICES = [
+    STATUS_CHOICES: ClassVar[tuple[tuple[str, str], ...]] = (
         (STATUS_QUEUED, 'Queued'),
         (STATUS_RUNNING, 'Running'),
         (STATUS_AWAITING, 'Awaiting'),
@@ -69,7 +74,7 @@ class Workflow2Run(models.Model):
         (STATUS_FAILED, 'Failed'),
         (STATUS_CANCELLED, 'Cancelled'),
         (STATUS_NO_MATCH, 'No match'),
-    ]
+    )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -78,7 +83,7 @@ class Workflow2Run(models.Model):
     source_json = models.JSONField(default=dict)
 
     # Optional idempotency key (for EST polling use-cases etc.)
-    idempotency_key = models.CharField(max_length=128, null=True, blank=True, db_index=True)
+    idempotency_key = models.CharField(max_length=128, blank=True, default='', db_index=True)
 
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_QUEUED)
     finalized = models.BooleanField(default=False)
@@ -87,14 +92,17 @@ class Workflow2Run(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        indexes = [
+        """Database indexes for run lookups and filtering."""
+
+        indexes = (
             models.Index(fields=['trigger_on', 'created_at']),
             models.Index(fields=['status']),
             models.Index(fields=['finalized']),
             models.Index(fields=['idempotency_key']),
-        ]
+        )
 
     def __str__(self) -> str:
+        """Return a human-readable representation of the run."""
         return f'Run {self.id} ({self.trigger_on}) {self.status}'
 
 
@@ -117,7 +125,7 @@ class Workflow2Instance(models.Model):
     STATUS_FAILED = 'failed'
     STATUS_CANCELLED = 'cancelled'
 
-    STATUS_CHOICES = [
+    STATUS_CHOICES: ClassVar[tuple[tuple[str, str], ...]] = (
         (STATUS_QUEUED, 'Queued'),
         (STATUS_RUNNING, 'Running'),
         (STATUS_AWAITING, 'Awaiting'),
@@ -127,7 +135,7 @@ class Workflow2Instance(models.Model):
         (STATUS_REJECTED, 'Rejected'),
         (STATUS_FAILED, 'Failed'),
         (STATUS_CANCELLED, 'Cancelled'),
-    ]
+    )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -152,38 +160,40 @@ class Workflow2Instance(models.Model):
 
     # current_step points to NEXT step to execute.
     # For approval awaiting, we keep current_step = approval step id.
-    current_step = models.CharField(max_length=200, null=True, blank=True)
+    current_step = models.CharField(max_length=200, blank=True, default='')
     run_count = models.PositiveIntegerField(default=0)
 
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        indexes = [
+        """Database indexes for instance monitoring queries."""
+
+        indexes = (
             models.Index(fields=['status']),
             models.Index(fields=['created_at']),
             models.Index(fields=['run', 'status']),
-        ]
+        )
 
     def __str__(self) -> str:
+        """Return a human-readable representation of the instance."""
         return f'Instance {self.id} ({self.status})'
 
 
 class Workflow2Approval(models.Model):
-    """Persisted approval request for an approval step.
-    """
+    """Persist a pending or resolved approval step decision."""
 
     STATUS_PENDING = 'pending'
     STATUS_APPROVED = 'approved'
     STATUS_REJECTED = 'rejected'
     STATUS_EXPIRED = 'expired'
 
-    STATUS_CHOICES = [
+    STATUS_CHOICES: ClassVar[tuple[tuple[str, str], ...]] = (
         (STATUS_PENDING, 'Pending'),
         (STATUS_APPROVED, 'Approved'),
         (STATUS_REJECTED, 'Rejected'),
         (STATUS_EXPIRED, 'Expired'),
-    ]
+    )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -200,18 +210,21 @@ class Workflow2Approval(models.Model):
     expires_at = models.DateTimeField(null=True, blank=True)
 
     decided_at = models.DateTimeField(null=True, blank=True)
-    decided_by = models.CharField(max_length=128, null=True, blank=True)
-    comment = models.TextField(null=True, blank=True)
+    decided_by = models.CharField(max_length=128, blank=True, default='')
+    comment = models.TextField(blank=True, default='')
 
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
-        indexes = [
+        """Database indexes for approval queue lookups."""
+
+        indexes = (
             models.Index(fields=['status', 'expires_at']),
             models.Index(fields=['instance', 'step_id']),
-        ]
+        )
 
     def __str__(self) -> str:
+        """Return a human-readable representation of the approval."""
         return f'Approval {self.id} ({self.status})'
 
 
@@ -232,22 +245,25 @@ class Workflow2StepRun(models.Model):
     step_type = models.CharField(max_length=50)
 
     status = models.CharField(max_length=16)
-    outcome = models.CharField(max_length=100, null=True, blank=True)
-    next_step = models.CharField(max_length=200, null=True, blank=True)
+    outcome = models.CharField(max_length=100, blank=True, default='')
+    next_step = models.CharField(max_length=200, blank=True, default='')
+    error = models.TextField(blank=True, default='')
 
     vars_delta = models.JSONField(null=True, blank=True)
     output = models.JSONField(null=True, blank=True)
-    error = models.TextField(null=True, blank=True)
 
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
-        indexes = [
+        """Database indexes for step-run history queries."""
+
+        indexes = (
             models.Index(fields=['instance', 'run_index']),
             models.Index(fields=['step_id']),
-        ]
+        )
 
     def __str__(self) -> str:
+        """Return a human-readable representation of the step run."""
         return f'Run {self.run_index} ({self.step_id})'
 
 
@@ -260,10 +276,10 @@ class Workflow2Job(models.Model):
     KIND_RUN = 'run'
     KIND_RESUME = 'resume'
 
-    KIND_CHOICES = [
+    KIND_CHOICES: ClassVar[tuple[tuple[str, str], ...]] = (
         (KIND_RUN, 'Run'),
         (KIND_RESUME, 'Resume'),
-    ]
+    )
 
     STATUS_QUEUED = 'queued'
     STATUS_RUNNING = 'running'
@@ -271,13 +287,13 @@ class Workflow2Job(models.Model):
     STATUS_FAILED = 'failed'
     STATUS_CANCELLED = 'cancelled'
 
-    STATUS_CHOICES = [
+    STATUS_CHOICES: ClassVar[tuple[tuple[str, str], ...]] = (
         (STATUS_QUEUED, 'Queued'),
         (STATUS_RUNNING, 'Running'),
         (STATUS_DONE, 'Done'),
         (STATUS_FAILED, 'Failed'),
         (STATUS_CANCELLED, 'Cancelled'),
-    ]
+    )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -294,22 +310,29 @@ class Workflow2Job(models.Model):
 
     attempts = models.PositiveIntegerField(default=0)
     max_attempts = models.PositiveIntegerField(default=0)
-    last_error = models.TextField(null=True, blank=True)
+    last_error = models.TextField(blank=True, default='')
 
     locked_until = models.DateTimeField(null=True, blank=True)
-    locked_by = models.CharField(max_length=128, null=True, blank=True)
+    locked_by = models.CharField(max_length=128, blank=True, default='')
 
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        indexes = [
+        """Database indexes for queue polling and worker bookkeeping."""
+
+        indexes = (
             models.Index(fields=['status', 'run_after']),
             models.Index(fields=['locked_until']),
             models.Index(fields=['instance', 'status']),
-        ]
+        )
+
+    def __str__(self) -> str:
+        """Return a human-readable representation of the job."""
+        return f'Job {self.id} ({self.kind}, {self.status})'
 
     def lease_expired(self) -> bool:
+        """Return whether the job lease has expired or is absent."""
         if self.locked_until is None:
             return True
         return self.locked_until <= timezone.now()
@@ -324,15 +347,22 @@ class Workflow2Job(models.Model):
 
         self.status = self.STATUS_QUEUED
         self.locked_until = None
-        self.locked_by = None
+        self.locked_by = ''
 
 
 class Workflow2WorkerHeartbeat(models.Model):
+    """Track the last-seen timestamp for a workflow worker process."""
+
     worker_id = models.CharField(max_length=128, unique=True)
     last_seen = models.DateTimeField(default=timezone.now)
 
+    def __str__(self) -> str:
+        """Return a human-readable representation of the worker heartbeat."""
+        return f'Worker {self.worker_id}'
+
     @classmethod
     def beat(cls, worker_id: str) -> None:
+        """Record a heartbeat for the given worker identifier."""
         cls.objects.update_or_create(
             worker_id=worker_id,
             defaults={'last_seen': timezone.now()},
@@ -340,7 +370,8 @@ class Workflow2WorkerHeartbeat(models.Model):
 
 
 class Workflow2DefinitionUiState(models.Model):
-    """Editor-only UI layout state (positions, waypoints, viewport).
+    """Editor-only UI layout state.
+
     Keyed by (definition, ir_hash) so layout is resilient to workflow changes.
     """
 
@@ -360,11 +391,14 @@ class Workflow2DefinitionUiState(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = [('definition', 'ir_hash')]
-        indexes = [
+        """Database constraints for editor UI state snapshots."""
+
+        unique_together = (('definition', 'ir_hash'),)
+        indexes = (
             models.Index(fields=['definition', 'ir_hash']),
             models.Index(fields=['ir_hash']),
-        ]
+        )
 
     def __str__(self) -> str:
+        """Return a human-readable representation of the UI state."""
         return f'UIState {self.definition} {self.ir_hash[:8]}'

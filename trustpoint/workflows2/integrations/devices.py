@@ -1,4 +1,5 @@
-# workflows2/integrations/devices.py
+"""Signal integration that emits Workflow 2 events for device changes."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -13,7 +14,13 @@ from workflows.events import Events
 
 
 @receiver(post_save, sender=DeviceModel)
-def on_device_created(sender: type[DeviceModel], instance: DeviceModel, created: bool, **_kwargs: Any) -> None:
+def on_device_created(
+    _sender: type[DeviceModel],
+    instance: DeviceModel,
+    created: bool,  # noqa: FBT001
+    **_kwargs: Any,
+) -> None:
+    """Dispatch Workflow 2 runs for newly created devices."""
     if not created:
         return
 

@@ -1,4 +1,5 @@
-# workflows2/events/triggers.py
+"""Canonical trigger identifiers used by Workflow 2."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,8 +12,6 @@ class Triggers:
 
     Use these everywhere instead of string literals.
     """
-    DEVICE_CREATED: ClassVar[str] = "device.created"
-    EST_SIMPLEENROLL: ClassVar[str] = "est.simpleenroll"
-    # Add more as you implement them:
-    # DEVICE_UPDATED: ClassVar[str] = "device.updated"
-    # ENROLLMENT_CREATED: ClassVar[str] = "enrollment.created"
+
+    DEVICE_CREATED: ClassVar[str] = 'device.created'
+    EST_SIMPLEENROLL: ClassVar[str] = 'est.simpleenroll'

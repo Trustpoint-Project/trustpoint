@@ -1,4 +1,5 @@
-# workflows2/events/context.py
+"""Context variable metadata used by Workflow 2 triggers."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,8 +8,7 @@ from typing import Any
 
 @dataclass(frozen=True)
 class ContextVar:
-    """
-    One entry in the variable catalog.
+    """One entry in the variable catalog.
 
     path:
       Exact path users type in templates.
@@ -30,46 +30,50 @@ class ContextVar:
       Optional extra explanation for the editor UI.
     """
     path: str
-    type: str = "any"
-    description: str = ""
+    type: str = 'any'
+    description: str = ''
     example: Any = None
 
-    title: str = ""
-    group: str = ""
-    help_text: str = ""
+    title: str = ''
+    group: str = ''
+    help_text: str = ''
 
     @property
     def template(self) -> str:
-        return "${" + self.path + "}"
+        """Return the `${...}` template form for this context variable."""
+        return '${' + self.path + '}'
 
     @property
     def label(self) -> str:
+        """Return the UI label for this context variable."""
         if self.title.strip():
             return self.title.strip()
-        last = self.path.split(".")[-1] if self.path else ""
-        return last.replace("_", " ").strip() or self.path
+        last = self.path.split('.')[-1] if self.path else ''
+        return last.replace('_', ' ').strip() or self.path
 
     @property
     def resolved_group(self) -> str:
+        """Return the group name used for picker organization."""
         g = self.group.strip()
         if g:
             return g
 
-        parts = [p for p in self.path.split(".") if p]
+        parts = [p for p in self.path.split('.') if p]
         if len(parts) >= 2:
-            return ".".join(parts[:2])
+            return '.'.join(parts[:2])
         if len(parts) == 1:
             return parts[0]
-        return "other"
+        return 'other'
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the context variable for JSON catalog responses."""
         return {
-            "path": self.path,
-            "type": self.type,
-            "description": self.description,
-            "example": self.example,
-            "title": self.label,
-            "group": self.resolved_group,
-            "template": self.template,
-            "help_text": self.help_text,
+            'path': self.path,
+            'type': self.type,
+            'description': self.description,
+            'example': self.example,
+            'title': self.label,
+            'group': self.resolved_group,
+            'template': self.template,
+            'help_text': self.help_text,
         }

@@ -1,4 +1,4 @@
-# workflows2/compiler/expr.py
+"""Parse and validate Workflow 2 expressions."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,27 +6,99 @@ from typing import Any
 
 from .errors import CompileError
 
-
 # ----------------------------- AST nodes ----------------------------- #
+
 
 @dataclass(frozen=True)
 class RefExpr:
+    """Reference expression such as `event.device.id`."""
+
     path: list[str]  # e.g. ["event","device","common_name"]
 
 
 @dataclass(frozen=True)
 class CallExpr:
+    """Function-call expression such as `lower(vars.name)`."""
+
     name: str
     args: list[Any]  # args are AST nodes or literals
 
 
 # ----------------------------- tokenization ----------------------------- #
 
+
 @dataclass(frozen=True)
 class Token:
+    """One token produced by the expression tokenizer."""
+
     typ: str
     val: str
     pos: int
+
+
+_MISSING = object()
+
+
+def _is_number_start(s: str, i: int) -> bool:
+    return s[i].isdigit() or (s[i] == '-' and i + 1 < len(s) and s[i + 1].isdigit())
+
+
+def _scan_punctuation_token(s: str, i: int) -> tuple[Token, int]:
+    ch = s[i]
+    return Token(typ=ch, val=ch, pos=i), i + 1
+
+
+def _scan_string_token(s: str, start: int) -> tuple[Token, int]:
+    quote = s[start]
+    i = start + 1
+    n = len(s)
+    buf: list[str] = []
+
+    while i < n:
+        ch = s[i]
+        if ch == '\\':
+            if i + 1 >= n:
+                msg = 'Unterminated escape sequence in string literal'
+                raise CompileError(msg)
+            buf.append(s[i + 1])
+            i += 2
+            continue
+        if ch == quote:
+            return Token(typ='STRING', val=''.join(buf), pos=start), i + 1
+        buf.append(ch)
+        i += 1
+
+    msg = 'Unterminated string literal'
+    raise CompileError(msg)
+
+
+def _scan_number_token(s: str, start: int) -> tuple[Token, int]:
+    i = start + 1
+    n = len(s)
+    has_dot = False
+
+    while i < n:
+        ch = s[i]
+        if ch.isdigit():
+            i += 1
+            continue
+        if ch == '.' and not has_dot:
+            has_dot = True
+            i += 1
+            continue
+        break
+
+    return Token(typ='NUMBER', val=s[start:i], pos=start), i
+
+
+def _scan_ident_token(s: str, start: int) -> tuple[Token, int]:
+    i = start + 1
+    n = len(s)
+
+    while i < n and (s[i].isalnum() or s[i] == '_'):
+        i += 1
+
+    return Token(typ='IDENT', val=s[start:i], pos=start), i
 
 
 def _tokenize(s: str) -> list[Token]:
@@ -34,87 +106,49 @@ def _tokenize(s: str) -> list[Token]:
     i = 0
     n = len(s)
 
-    def add(typ: str, val: str, pos: int) -> None:
-        tokens.append(Token(typ=typ, val=val, pos=pos))
-
     while i < n:
         ch = s[i]
 
-        # whitespace
         if ch.isspace():
             i += 1
             continue
 
-        # punctuation
         if ch in '(),.':
-            add(ch, ch, i)
-            i += 1
+            token, i = _scan_punctuation_token(s, i)
+            tokens.append(token)
             continue
 
-        # string literal (single or double)
-        if ch in ("'", '"'):
-            quote = ch
-            start = i
-            i += 1
-            buf: list[str] = []
-            while i < n:
-                c = s[i]
-                if c == '\\':
-                    if i + 1 >= n:
-                        raise CompileError('Unterminated escape sequence in string literal')
-                    buf.append(s[i + 1])
-                    i += 2
-                    continue
-                if c == quote:
-                    i += 1
-                    add('STRING', ''.join(buf), start)
-                    break
-                buf.append(c)
-                i += 1
-            else:
-                raise CompileError('Unterminated string literal')
+        if ch in {"'", '"'}:
+            token, i = _scan_string_token(s, i)
+            tokens.append(token)
             continue
 
-        # number literal: int or float
-        if ch.isdigit() or (ch == '-' and i + 1 < n and s[i + 1].isdigit()):
-            start = i
-            i += 1
-            has_dot = False
-            while i < n:
-                c = s[i]
-                if c.isdigit():
-                    i += 1
-                    continue
-                if c == '.' and not has_dot:
-                    has_dot = True
-                    i += 1
-                    continue
-                break
-            add('NUMBER', s[start:i], start)
+        if _is_number_start(s, i):
+            token, i = _scan_number_token(s, i)
+            tokens.append(token)
             continue
 
-        # identifier
         if ch.isalpha() or ch == '_':
-            start = i
-            i += 1
-            while i < n and (s[i].isalnum() or s[i] == '_'):
-                i += 1
-            add('IDENT', s[start:i], start)
+            token, i = _scan_ident_token(s, i)
+            tokens.append(token)
             continue
 
         if ch == '$':
-            raise CompileError(
+            msg = (
                 "Unexpected '$' in expression. Expressions already live inside ${...}; "
-                "reference values as vars.name or event.path inside that wrapper instead of nesting ${...}.",
+                'reference values as vars.name or event.path inside that wrapper instead of nesting ${...}.'
             )
+            raise CompileError(msg)
 
-        raise CompileError(f"Unexpected character '{ch}' in expression")
+        msg = f"Unexpected character '{ch}' in expression"
+        raise CompileError(msg)
 
-    add('EOF', '', n)
+    tokens.append(Token(typ='EOF', val='', pos=n))
     return tokens
 
 
 # ----------------------------- parser ----------------------------- #
+
 
 class _Parser:
     def __init__(self, tokens: list[Token], *, path: str) -> None:
@@ -128,7 +162,8 @@ class _Parser:
     def eat(self, typ: str) -> Token:
         t = self.cur()
         if t.typ != typ:
-            raise CompileError(f'Expected {typ} but found {t.typ}', path=self.path)
+            msg = f'Expected {typ} but found {t.typ}'
+            raise CompileError(msg, path=self.path)
         self.i += 1
         return t
 
@@ -140,57 +175,76 @@ class _Parser:
     def parse(self) -> Any:
         expr = self.parse_primary()
         if self.cur().typ != 'EOF':
-            raise CompileError('Unexpected trailing tokens in expression', path=self.path)
+            msg = 'Unexpected trailing tokens in expression'
+            raise CompileError(msg, path=self.path)
         return expr
 
+    def _ident_literal_value(self, ident: str) -> Any:
+        low = ident.lower()
+        if low == 'true':
+            return True
+        if low == 'false':
+            return False
+        if low == 'null':
+            return None
+        return _MISSING
+
+    def _parse_call_expr(self, ident: str) -> CallExpr:
+        self.eat('(')
+        args: list[Any] = []
+
+        if self.cur().typ != ')':
+            while True:
+                args.append(self.parse_primary())
+                if self.maybe(','):
+                    continue
+                break
+
+        self.eat(')')
+        return CallExpr(name=ident, args=args)
+
+    def _parse_ref_expr(self, ident: str) -> RefExpr:
+        path = [ident]
+        while self.maybe('.'):
+            path.append(self.eat('IDENT').val)
+        return RefExpr(path=path)
+
+    def _parse_ident_primary(self) -> Any:
+        ident = self.eat('IDENT').val
+        literal = self._ident_literal_value(ident)
+        if literal is not _MISSING:
+            return literal
+
+        if self.cur().typ == '(':
+            return self._parse_call_expr(ident)
+
+        return self._parse_ref_expr(ident)
+
+    def _parse_number_primary(self) -> int | float:
+        raw = self.eat('NUMBER').val
+        try:
+            if '.' in raw:
+                return float(raw)
+            return int(raw)
+        except ValueError as e:
+            msg = 'Invalid number literal'
+            raise CompileError(msg, path=self.path) from e
+
+    def _parse_string_primary(self) -> str:
+        return self.eat('STRING').val
+
     def parse_primary(self) -> Any:
-        t = self.cur()
+        current_type = self.cur().typ
 
-        if t.typ == 'IDENT':
-            ident = self.eat('IDENT').val
+        if current_type == 'IDENT':
+            return self._parse_ident_primary()
+        if current_type == 'NUMBER':
+            return self._parse_number_primary()
+        if current_type == 'STRING':
+            return self._parse_string_primary()
 
-            # literals by identifier
-            low = ident.lower()
-            if low == 'true':
-                return True
-            if low == 'false':
-                return False
-            if low == 'null':
-                return None
-
-            # call: ident(...)
-            if self.cur().typ == '(':
-                self.eat('(')
-                args: list[Any] = []
-                if self.cur().typ != ')':
-                    while True:
-                        args.append(self.parse_primary())
-                        if self.maybe(','):
-                            continue
-                        break
-                self.eat(')')
-                return CallExpr(name=ident, args=args)
-
-            # ref: ident(.ident)*
-            path = [ident]
-            while self.maybe('.'):
-                seg = self.eat('IDENT').val
-                path.append(seg)
-            return RefExpr(path=path)
-
-        if t.typ == 'NUMBER':
-            raw = self.eat('NUMBER').val
-            try:
-                if '.' in raw:
-                    return float(raw)
-                return int(raw)
-            except ValueError as e:
-                raise CompileError('Invalid number literal', path=self.path) from e
-
-        if t.typ == 'STRING':
-            return self.eat('STRING').val
-
-        raise CompileError(f'Invalid expression token: {t.typ}', path=self.path)
+        msg = f'Invalid expression token: {current_type}'
+        raise CompileError(msg, path=self.path)
 
 
 # ----------------------------- allowlist + public API ----------------------------- #
@@ -237,12 +291,11 @@ ALLOWED_FUNCTIONS = {
 
 
 def parse_expr(expr: str, *, path: str) -> Any:
-    """
-    Parse and validate a single expression string (no surrounding ${}).
-    """
+    """Parse and validate a single expression string without the `${}` wrapper."""
     expr = (expr or '').strip()
     if not expr:
-        raise CompileError('Empty expression', path=path)
+        msg = 'Empty expression'
+        raise CompileError(msg, path=path)
 
     tokens = _tokenize(expr)
     ast = _Parser(tokens, path=path).parse()
@@ -251,17 +304,19 @@ def parse_expr(expr: str, *, path: str) -> Any:
 
 
 def parse_required_expr_string(value: Any, *, path: str) -> Any:
-    """
-    Requires value to be a string of the form: ${ ... }
-    And requires it to be a *single* expression (no template text).
-    Returns parsed+validated AST.
+    """Parse a required `${...}` expression string.
+
+    The value must be a string containing exactly one expression and no extra
+    template text.
     """
     if not isinstance(value, str):
-        raise CompileError('Expected expression string like ${...}', path=path)
+        msg = 'Expected expression string like ${...}'
+        raise CompileError(msg, path=path)
 
     s = value.strip()
     if not (s.startswith('${') and s.endswith('}')):
-        raise CompileError('Expected expression string like ${...}', path=path)
+        msg = 'Expected expression string like ${...}'
+        raise CompileError(msg, path=path)
 
     inner = s[2:-1].strip()
     return parse_expr(inner, path=path)
@@ -270,26 +325,23 @@ def parse_required_expr_string(value: Any, *, path: str) -> Any:
 def _validate_ast(node: Any, *, path: str) -> None:
     if isinstance(node, RefExpr):
         if not node.path:
-            raise CompileError('Invalid ref', path=path)
+            msg = 'Invalid ref'
+            raise CompileError(msg, path=path)
         if node.path[0] not in ALLOWED_REF_ROOTS:
-            raise CompileError(
-                'Invalid expression. Use event.* / vars.* or allowlisted functions.',
-                path=path,
-            )
+            msg = 'Invalid expression. Use event.* / vars.* or allowlisted functions.'
+            raise CompileError(msg, path=path)
         return
 
     if isinstance(node, CallExpr):
         if node.name not in ALLOWED_FUNCTIONS:
-            raise CompileError(
-                f'Function "{node.name}" is not allowed.',
-                path=path,
-            )
+            msg = f'Function "{node.name}" is not allowed.'
+            raise CompileError(msg, path=path)
         for a in node.args:
             _validate_ast(a, path=path)
         return
 
-    # literals
     if isinstance(node, (str, int, float, bool)) or node is None:
         return
 
-    raise CompileError('Unsupported expression node', path=path)
+    msg = 'Unsupported expression node'
+    raise CompileError(msg, path=path)

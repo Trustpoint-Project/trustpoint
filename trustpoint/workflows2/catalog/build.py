@@ -1,4 +1,5 @@
-# workflows2/catalog/build.py
+"""Build the editor context catalog for the Workflow 2 frontend."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -19,79 +20,77 @@ def _sorted_or_none(value: Any) -> list[str] | None:
 
 
 def build_context_catalog() -> dict[str, Any]:
+    """Return the metadata catalog consumed by the Workflow 2 editor."""
     reg = get_event_registry()
 
-    events: list[dict[str, Any]] = []
-    for spec in reg.all_specs():
-        events.append(
-            {
-                'key': spec.key,
-                'title': getattr(spec, 'title', '') or spec.key,
-                'group': spec.key.split('.', 1)[0] if '.' in spec.key else spec.key,
-                'description': spec.description,
-                'allowed_step_types': (
-                    sorted(list(spec.allowed_step_types))
-                    if spec.allowed_step_types is not None
-                    else None
-                ),
-                'context_vars': [
-                    {
-                        'path': v.path,
-                        'title': getattr(v, 'title', '') or v.path,
-                        'type': v.type,
-                        'description': v.description,
-                        'example': v.example,
-                    }
-                    for v in (spec.context_vars or [])
-                ],
-            }
-        )
+    events = [
+        {
+            'key': spec.key,
+            'title': getattr(spec, 'title', '') or spec.key,
+            'group': spec.key.split('.', 1)[0] if '.' in spec.key else spec.key,
+            'description': spec.description,
+            'allowed_step_types': (
+                sorted(spec.allowed_step_types)
+                if spec.allowed_step_types is not None
+                else None
+            ),
+            'context_vars': [
+                {
+                    'path': variable.path,
+                    'title': getattr(variable, 'title', '') or variable.path,
+                    'type': variable.type,
+                    'description': variable.description,
+                    'example': variable.example,
+                }
+                for variable in (spec.context_vars or [])
+            ],
+        }
+        for spec in reg.all_specs()
+    ]
 
-    steps: list[dict[str, Any]] = []
-    for s in step_specs():
-        steps.append(
-            {
-                'type': s.type,
-                'title': s.title,
-                'description': s.description,
-                'category': s.category,
-                'fields': [
-                    {
-                        'key': f.key,
-                        'title': f.title,
-                        'description': f.description,
-                        'required': bool(f.required),
-                        'field_kind': f.field_kind,
-                        'default': f.default,
-                        'scaffold': f.scaffold,
-                        'enum': list(f.enum) if f.enum is not None else None,
-                        'group': f.group,
-                    }
-                    for f in s.fields
-                ],
-                'scaffold': {
-                    'type': s.type,
-                    **{
-                        f.key: (f.scaffold if f.scaffold is not None else f.default)
-                        for f in s.fields
-                        if f.required
-                    },
+    steps = [
+        {
+            'type': step.type,
+            'title': step.title,
+            'description': step.description,
+            'category': step.category,
+            'fields': [
+                {
+                    'key': field.key,
+                    'title': field.title,
+                    'description': field.description,
+                    'required': bool(field.required),
+                    'field_kind': field.field_kind,
+                    'default': field.default,
+                    'scaffold': field.scaffold,
+                    'enum': list(field.enum) if field.enum is not None else None,
+                    'group': field.group,
+                }
+                for field in step.fields
+            ],
+            'scaffold': {
+                'type': step.type,
+                **{
+                    field.key: (field.scaffold if field.scaffold is not None else field.default)
+                    for field in step.fields
+                    if field.required
                 },
-            }
-        )
+            },
+        }
+        for step in step_specs()
+    ]
 
-    presets: list[dict[str, Any]] = []
-    for p in PRESETS:
-        presets.append(
-            {
-                'id': p.id,
-                'title': p.title,
-                'description': p.description,
-                'areas': sorted(list(getattr(p, 'areas', set()))),
-                'triggers': _sorted_or_none(getattr(p, 'triggers', None)),
-                'step_types': _sorted_or_none(getattr(p, 'step_types', None)),
-            }
-        )
+    presets = [
+        {
+            'id': preset.id,
+            'title': preset.title,
+            'description': preset.description,
+            'areas': sorted(getattr(preset, 'areas', set())),
+            'triggers': _sorted_or_none(getattr(preset, 'triggers', None)),
+            'step_types': _sorted_or_none(getattr(preset, 'step_types', None)),
+        }
+        for preset in PRESETS
+    ]
 
     return {
         'events': sorted(events, key=lambda x: x['key']),

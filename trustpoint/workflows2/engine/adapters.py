@@ -1,4 +1,4 @@
-# workflows2/engine/adapters.py
+"""Runtime adapters for sending emails and webhooks."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,38 +10,15 @@ from django.core.mail import EmailMultiAlternatives
 
 @dataclass(frozen=True)
 class WebhookResponse:
+    """Normalized webhook response returned by adapter implementations."""
+
     status_code: int
     body: Any
     headers: dict[str, str]
 
 
 class EmailAdapter(Protocol):
-    def send(
-        self,
-        *,
-        to: list[str],
-        cc: list[str],
-        bcc: list[str],
-        subject: str,
-        body: str,
-    ) -> None: ...
-
-
-class WebhookAdapter(Protocol):
-    def request(
-        self,
-        *,
-        method: str,
-        url: str,
-        headers: dict[str, str],
-        body: Any,
-        timeout_seconds: int,
-    ) -> WebhookResponse: ...
-
-
-class DjangoEmailAdapter:
-    def __init__(self, *, default_from_email: str | None = None) -> None:
-        self.default_from_email = default_from_email or getattr(settings, "DEFAULT_FROM_EMAIL", None)
+    """Protocol for email-sending backends."""
 
     def send(
         self,
@@ -52,8 +29,45 @@ class DjangoEmailAdapter:
         subject: str,
         body: str,
     ) -> None:
+        """Send one email message."""
+        ...
+
+
+class WebhookAdapter(Protocol):
+    """Protocol for webhook HTTP backends."""
+
+    def request(
+        self,
+        *,
+        method: str,
+        url: str,
+        headers: dict[str, str],
+        body: Any,
+        timeout_seconds: int,
+    ) -> WebhookResponse:
+        """Execute one webhook request and return a normalized response."""
+        ...
+
+
+class DjangoEmailAdapter:
+    """Send email through Django's configured email backend."""
+
+    def __init__(self, *, default_from_email: str | None = None) -> None:
+        """Initialize the adapter with an optional default sender address."""
+        self.default_from_email = default_from_email or getattr(settings, 'DEFAULT_FROM_EMAIL', None)
+
+    def send(
+        self,
+        *,
+        to: list[str],
+        cc: list[str],
+        bcc: list[str],
+        subject: str,
+        body: str,
+    ) -> None:
+        """Send one email message."""
         if not to:
-            raise ValueError("email.to must not be empty")
+            raise ValueError('email.to must not be empty')
 
         msg = EmailMultiAlternatives(
             subject=subject,
@@ -67,8 +81,7 @@ class DjangoEmailAdapter:
 
 
 class RequestsWebhookAdapter:
-    """
-    HTTP client adapter using requests.
+    """HTTP client adapter using requests.
 
     TLS verification behavior:
     - If verify_tls=False: disables TLS verification (not recommended except local dev).
@@ -90,6 +103,7 @@ class RequestsWebhookAdapter:
         verify_tls: bool = True,
         ca_bundle: str | None = None,
     ) -> None:
+        """Initialize webhook TLS verification settings."""
         self.verify_tls = verify_tls
         self.ca_bundle = ca_bundle
 
@@ -104,13 +118,13 @@ class RequestsWebhookAdapter:
             return self.ca_bundle
 
         # 2) Environment override (very common in containers / corporate environments)
-        env_bundle = os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get("SSL_CERT_FILE")
+        env_bundle = os.environ.get('REQUESTS_CA_BUNDLE') or os.environ.get('SSL_CERT_FILE')
         if env_bundle:
             return env_bundle
 
         # 3) If system CA bundle exists, prefer it (helps when corp CA is installed to OS store)
         #    If neither exists, fall back to requests default (certifi).
-        candidates = ("/etc/ssl/cert.pem", "/etc/ssl/certs/ca-certificates.crt", "/etc/ssl/certs")
+        candidates = ('/etc/ssl/cert.pem', '/etc/ssl/certs/ca-certificates.crt', '/etc/ssl/certs')
         for p in candidates:
             if os.path.exists(p):
                 return p
@@ -126,24 +140,25 @@ class RequestsWebhookAdapter:
         body: Any,
         timeout_seconds: int,
     ) -> WebhookResponse:
-        import requests  # keep local import so tests can stub easily
+        """Execute one webhook HTTP request and normalize the response."""
+        import requests  # type: ignore[import-untyped]  # keep local import so tests can stub easily
 
         m = method.upper().strip()
-        if m not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
-            raise ValueError(f"Unsupported method: {method}")
+        if m not in {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'}:
+            raise ValueError(f'Unsupported method: {method}')
 
         kwargs: dict[str, Any] = {
-            "headers": headers or {},
-            "timeout": timeout_seconds,
-            "verify": self._resolve_verify(),
+            'headers': headers or {},
+            'timeout': timeout_seconds,
+            'verify': self._resolve_verify(),
         }
 
         if body is None:
             pass
         elif isinstance(body, (dict, list)):
-            kwargs["json"] = body
+            kwargs['json'] = body
         else:
-            kwargs["data"] = body
+            kwargs['data'] = body
 
         try:
             resp = requests.request(m, url, **kwargs)

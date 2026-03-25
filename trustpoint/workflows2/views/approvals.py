@@ -1,12 +1,14 @@
-# workflows2/views/approvals.py
+"""Approval queue and resolution views for Workflow 2."""
+
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
-from django.db.models import Case, IntegerField, Value, When
 from django.db import transaction
-from django.http import HttpRequest, HttpResponse
+from django.db.models import Case, IntegerField, Value, When
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
@@ -23,9 +25,21 @@ from workflows2.views.presentation import (
     summarize_named_values,
 )
 
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from django.http import HttpRequest, HttpResponse
+
+
+def _json_object(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
 
 class Workflow2ApprovalListView(LoginRequiredMixin, View):
+    """List workflow approvals with status and context summaries."""
+
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the paginated approval queue."""
         base_qs = Workflow2Approval.objects.select_related(
             'instance',
             'instance__definition',
@@ -87,7 +101,10 @@ class Workflow2ApprovalListView(LoginRequiredMixin, View):
 
 
 class Workflow2ApprovalDetailView(LoginRequiredMixin, View):
-    def get(self, request: HttpRequest, approval_id) -> HttpResponse:
+    """Show a single approval request in context."""
+
+    def get(self, request: HttpRequest, approval_id: UUID) -> HttpResponse:
+        """Render the detail page for one approval request."""
         approval = get_object_or_404(
             Workflow2Approval.objects.select_related('instance', 'instance__definition', 'instance__run'),
             id=approval_id,
@@ -100,8 +117,9 @@ class Workflow2ApprovalDetailView(LoginRequiredMixin, View):
             'type': 'approval',
             'description': '',
         }})
-        event_source = inst.event_json.get('source') if isinstance(inst.event_json, dict) else None
-        source_context = resolve_source_context(inst.run.source_json if inst.run_id else event_source)
+        event_source = _json_object(inst.event_json).get('source')
+        run = inst.run if inst.run_id else None
+        source_context = resolve_source_context(run.source_json if run is not None else event_source)
         event_context = describe_event_context(inst.event_json)
         vars_summary = summarize_named_values(inst.vars_json)
 
@@ -118,7 +136,7 @@ class Workflow2ApprovalDetailView(LoginRequiredMixin, View):
                 'vars_summary': vars_summary,
                 'approval_badge': status_badge_class(approval.status),
                 'instance_badge': status_badge_class(inst.status),
-                'run_badge': status_badge_class(inst.run.status if inst.run_id else None),
+                'run_badge': status_badge_class(run.status if run is not None else None),
                 'can_resolve': approval.status == Workflow2Approval.STATUS_PENDING
                 and inst.status == Workflow2Instance.STATUS_AWAITING,
                 'event_pretty': pretty_json(inst.event_json),
@@ -130,7 +148,8 @@ class Workflow2ApprovalDetailView(LoginRequiredMixin, View):
 class Workflow2ApprovalResolveView(LoginRequiredMixin, View):
     """Approve/Reject and continue with the normal dispatch execution policy."""
 
-    def post(self, request: HttpRequest, approval_id) -> HttpResponse:
+    def post(self, request: HttpRequest, approval_id: UUID) -> HttpResponse:
+        """Resolve an approval and continue execution if the workflow can proceed."""
         decision = (request.POST.get('decision') or '').strip().lower()
         comment = (request.POST.get('comment') or '').strip()
         if decision not in {'approved', 'rejected'}:
@@ -179,11 +198,11 @@ class Workflow2ApprovalResolveView(LoginRequiredMixin, View):
 def _get_approval_step_meta(approval: Workflow2Approval) -> dict[str, str | int | None]:
     instance = approval.instance
     definition = instance.definition if instance else None
-    ir = definition.ir_json if definition and isinstance(definition.ir_json, dict) else {}
-    workflow = ir.get('workflow') if isinstance(ir.get('workflow'), dict) else {}
-    steps = workflow.get('steps') if isinstance(workflow.get('steps'), dict) else {}
-    step = steps.get(approval.step_id) if isinstance(steps, dict) else None
-    params = step.get('params') if isinstance(step, dict) and isinstance(step.get('params'), dict) else {}
+    ir = _json_object(definition.ir_json if definition else None)
+    workflow = _json_object(ir.get('workflow'))
+    steps = _json_object(workflow.get('steps'))
+    step = _json_object(steps.get(approval.step_id))
+    params = _json_object(step.get('params'))
 
     return {
         'title': (

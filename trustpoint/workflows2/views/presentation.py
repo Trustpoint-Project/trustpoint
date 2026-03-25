@@ -1,3 +1,5 @@
+"""Presentation helpers shared by the Workflow 2 monitoring views."""
+
 from __future__ import annotations
 
 import json
@@ -8,30 +10,35 @@ from pki.models.ca import CaModel
 from pki.models.domain import DomainModel
 
 
+def _json_object(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def pretty_json(obj: Any) -> str:
+    """Render JSON in a stable, human-readable way for templates."""
     return json.dumps(obj, indent=2, sort_keys=True, ensure_ascii=False)
 
 
 def status_badge_class(status: str | None) -> str:
+    """Map a workflow status to the Bootstrap badge class used in templates."""
     value = (status or '').strip().lower()
-    if value in {'ok', 'success', 'succeeded', 'done', 'completed', 'approved'}:
-        return 'text-bg-success'
-    if value in {'failed', 'error', 'rejected'}:
-        return 'text-bg-danger'
-    if value in {'awaiting', 'paused', 'pending', 'expired'}:
-        return 'text-bg-warning'
-    if value in {'running'}:
-        return 'text-bg-primary'
-    if value in {'queued', 'no_match'}:
-        return 'text-bg-secondary'
-    if value in {'cancelled', 'canceled'}:
-        return 'text-bg-dark'
-    if value in {'stopped'}:
-        return 'text-bg-info'
+    badge_by_group = {
+        'text-bg-success': {'ok', 'success', 'succeeded', 'done', 'completed', 'approved'},
+        'text-bg-danger': {'failed', 'error', 'rejected'},
+        'text-bg-warning': {'awaiting', 'paused', 'pending', 'expired'},
+        'text-bg-primary': {'running'},
+        'text-bg-secondary': {'queued', 'no_match'},
+        'text-bg-dark': {'cancelled', 'canceled'},
+        'text-bg-info': {'stopped'},
+    }
+    for badge_class, statuses in badge_by_group.items():
+        if value in statuses:
+            return badge_class
     return 'text-bg-secondary'
 
 
 def summarize_source(source_json: dict[str, Any] | None) -> str:
+    """Return a compact one-line summary for a source scope object."""
     source = source_json if isinstance(source_json, dict) else {}
     if source.get('trustpoint'):
         return 'Trustpoint-wide trigger'
@@ -48,21 +55,20 @@ def summarize_source(source_json: dict[str, Any] | None) -> str:
 
 
 def compact_value(value: Any, *, max_length: int = 96) -> str:
+    """Shorten a value for summary cards while preserving useful context."""
     if value is None:
         return '—'
     if isinstance(value, bool):
         return 'true' if value else 'false'
-    if isinstance(value, (dict, list)):
-        text = json.dumps(value, ensure_ascii=False, sort_keys=True)
-    else:
-        text = str(value)
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True) if isinstance(value, (dict, list)) else str(value)
     if len(text) <= max_length:
         return text
     return f'{text[: max_length - 1]}…'
 
 
 def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]:
-    source = source_json if isinstance(source_json, dict) else {}
+    """Resolve source scope identifiers into human-readable labels."""
+    source = _json_object(source_json)
     rows: list[dict[str, str]] = []
 
     rows.append(
@@ -79,10 +85,11 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
             ca = CaModel.objects.filter(pk=ca_id).only('id', 'unique_name').first()
         except (TypeError, ValueError):
             ca = None
+        ca_title = ca.unique_name if ca is not None else f'CA #{ca_id}'
         rows.append(
             {
                 'label': 'Certificate authority',
-                'value': ca.unique_name if ca else f'CA #{ca_id}',
+                'value': ca_title,
                 'meta': f'ID {ca_id}',
             }
         )
@@ -94,12 +101,12 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
         except (TypeError, ValueError):
             domain = None
         meta = f'ID {domain_id}'
-        if domain and domain.issuing_ca_id:
+        if domain is not None and domain.issuing_ca is not None:
             meta = f'{meta} · issuing CA {domain.issuing_ca.unique_name}'
         rows.append(
             {
                 'label': 'Domain',
-                'value': domain.unique_name if domain else f'Domain #{domain_id}',
+                'value': domain.unique_name if domain is not None else f'Domain #{domain_id}',
                 'meta': meta,
             }
         )
@@ -111,14 +118,14 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
         except (TypeError, ValueError):
             device = None
         meta_parts = [f'ID {device_id}']
-        if device and device.serial_number:
+        if device is not None and device.serial_number:
             meta_parts.append(f'S/N {device.serial_number}')
-        if device and device.domain_id:
+        if device is not None and device.domain is not None:
             meta_parts.append(f'Domain {device.domain.unique_name}')
         rows.append(
             {
                 'label': 'Device',
-                'value': device.common_name if device else f'Device #{device_id}',
+                'value': device.common_name if device is not None else f'Device #{device_id}',
                 'meta': ' · '.join(meta_parts),
             }
         )
@@ -134,31 +141,33 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
 
 
 def describe_event_context(event_json: dict[str, Any] | None) -> list[dict[str, str]]:
-    event = event_json if isinstance(event_json, dict) else {}
+    """Return friendly event metadata rows for run and instance detail views."""
+    event = _json_object(event_json)
     rows: list[dict[str, str]] = []
 
-    device = event.get('device')
-    if isinstance(device, dict):
+    device = _json_object(event.get('device'))
+    if device:
         device_title = device.get('common_name') or device.get('serial_number') or device.get('id')
         if device_title:
             rows.append({'label': 'Event device', 'value': str(device_title), 'meta': ''})
         if device.get('serial_number'):
             rows.append({'label': 'Serial number', 'value': str(device['serial_number']), 'meta': ''})
-        if device.get('domain_id') is not None:
+        domain_id = device.get('domain_id')
+        if isinstance(domain_id, (str, int)):
             try:
-                domain = DomainModel.objects.filter(pk=device.get('domain_id')).only('unique_name').first()
+                domain = DomainModel.objects.filter(pk=domain_id).only('unique_name').first()
             except (TypeError, ValueError):
                 domain = None
             rows.append(
                 {
                     'label': 'Device domain',
-                    'value': domain.unique_name if domain else f'Domain #{device["domain_id"]}',
+                    'value': domain.unique_name if domain is not None else f'Domain #{domain_id}',
                     'meta': '',
                 }
             )
 
-    est = event.get('est')
-    if isinstance(est, dict):
+    est = _json_object(event.get('est'))
+    if est:
         if est.get('operation'):
             rows.append({'label': 'EST operation', 'value': str(est['operation']), 'meta': ''})
         if est.get('cert_profile'):
@@ -168,31 +177,31 @@ def describe_event_context(event_json: dict[str, Any] | None) -> list[dict[str, 
 
 
 def summarize_named_values(values: dict[str, Any] | None, *, limit: int = 8) -> list[dict[str, str]]:
+    """Return a compact summary of named values such as workflow vars."""
     if not isinstance(values, dict):
         return []
-
-    rows: list[dict[str, str]] = []
-    for name in sorted(values.keys())[:limit]:
-        rows.append(
-            {
-                'label': str(name),
-                'value': compact_value(values.get(name)),
-                'meta': '',
-            }
-        )
-    return rows
+    return [
+        {
+            'label': str(name),
+            'value': compact_value(values.get(name)),
+            'meta': '',
+        }
+        for name in sorted(values.keys())[:limit]
+    ]
 
 
 def build_step_meta_from_ir(ir_json: dict[str, Any] | None) -> dict[str, dict[str, str]]:
-    ir = ir_json if isinstance(ir_json, dict) else {}
-    workflow = ir.get('workflow') if isinstance(ir.get('workflow'), dict) else {}
-    steps = workflow.get('steps') if isinstance(workflow.get('steps'), dict) else {}
+    """Build a map of step identifiers to display metadata from compiled IR."""
+    ir = _json_object(ir_json)
+    workflow = _json_object(ir.get('workflow'))
+    steps = _json_object(workflow.get('steps'))
 
     meta: dict[str, dict[str, str]] = {}
-    for step_id, step in steps.items():
-        if not isinstance(step, dict):
+    for step_id, step_value in steps.items():
+        step = _json_object(step_value)
+        if not step:
             continue
-        params = step.get('params') if isinstance(step.get('params'), dict) else {}
+        params = _json_object(step.get('params'))
         meta[str(step_id)] = {
             'id': str(step_id),
             'type': str(step.get('type') or ''),
@@ -203,6 +212,7 @@ def build_step_meta_from_ir(ir_json: dict[str, Any] | None) -> dict[str, dict[st
 
 
 def describe_step(step_id: str | None, step_meta: dict[str, dict[str, str]]) -> dict[str, str] | None:
+    """Return the display metadata for one step identifier."""
     if not step_id:
         return None
 

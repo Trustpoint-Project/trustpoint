@@ -1,4 +1,5 @@
-# workflows2/services/graph.py
+"""Build graph payloads for Workflow 2 definitions and instances."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,12 +7,13 @@ from typing import Any
 
 from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2StepRun
 
-
-_END_NODE_IDS = {"$end", "$reject"}
+_END_NODE_IDS = {'$end', '$reject'}
 
 
 @dataclass(frozen=True)
 class GraphNode:
+    """A graph node rendered by the Workflow 2 UI."""
+
     id: str
     type: str
     title: str | None
@@ -23,14 +25,15 @@ class GraphNode:
 
 @dataclass(frozen=True)
 class GraphEdge:
+    """A directed edge rendered by the Workflow 2 UI."""
+
     frm: str
     to: str
     on: str | None  # outcome name or None for linear edges
 
 
 class IRGraphAdapter:
-    """
-    Convert compiled IR into a UI-friendly graph representation.
+    """Convert compiled IR into a UI-friendly graph representation.
 
     - Derived from IR (YAML stays source of truth).
     - No layout in v1.
@@ -40,9 +43,10 @@ class IRGraphAdapter:
     """
 
     def to_graph(self, ir: dict[str, Any]) -> dict[str, Any]:
-        wf = self._get_dict(ir, "workflow")
-        steps = self._get_dict(wf, "steps")
-        transitions = self._get_dict(wf, "transitions")
+        """Convert one compiled workflow IR document into graph JSON."""
+        wf = self._get_dict(ir, 'workflow')
+        steps = self._get_dict(wf, 'steps')
+        transitions = self._get_dict(wf, 'transitions')
 
         edges = self._build_edges(transitions)
 
@@ -54,17 +58,17 @@ class IRGraphAdapter:
             if not isinstance(step_id, str) or not isinstance(s, dict):
                 continue
 
-            typ = s.get("type")
+            typ = s.get('type')
             if not isinstance(typ, str):
-                typ = "unknown"
+                typ = 'unknown'
 
-            title = s.get("title")
+            title = s.get('title')
             if title is not None and not isinstance(title, str):
                 title = None
 
-            produces = bool(s.get("produces_outcome", False))
+            produces = bool(s.get('produces_outcome', False))
 
-            outcomes_raw = s.get("outcomes") or []
+            outcomes_raw = s.get('outcomes') or []
             outcomes: list[str] = [o for o in outcomes_raw if isinstance(o, str)]
 
             # A real step is terminal when it has no outgoing edge.
@@ -83,12 +87,12 @@ class IRGraphAdapter:
             )
 
         # Add virtual end/reject nodes if referenced by flow.
-        if "$end" in referenced_targets:
+        if '$end' in referenced_targets:
             nodes.append(
                 GraphNode(
-                    id="$end",
-                    type="end",
-                    title="End",
+                    id='$end',
+                    type='end',
+                    title='End',
                     produces_outcome=False,
                     outcomes=[],
                     is_terminal=True,
@@ -96,12 +100,12 @@ class IRGraphAdapter:
                 )
             )
 
-        if "$reject" in referenced_targets:
+        if '$reject' in referenced_targets:
             nodes.append(
                 GraphNode(
-                    id="$reject",
-                    type="reject",
-                    title="Reject",
+                    id='$reject',
+                    type='reject',
+                    title='Reject',
                     produces_outcome=False,
                     outcomes=[],
                     is_terminal=True,
@@ -111,17 +115,17 @@ class IRGraphAdapter:
 
         nodes.sort(key=lambda n: n.id)
 
-        start = wf.get("start")
+        start = wf.get('start')
         if not isinstance(start, str) or not start:
             start = None
 
         return {
-            "ir_version": ir.get("ir_version"),
-            "name": ir.get("name"),
-            "enabled": bool(ir.get("enabled", True)),
-            "start": start,
-            "nodes": [n.__dict__ for n in nodes],
-            "edges": [{"from": e.frm, "to": e.to, "on": e.on} for e in edges],
+            'ir_version': ir.get('ir_version'),
+            'name': ir.get('name'),
+            'enabled': bool(ir.get('enabled', True)),
+            'start': start,
+            'nodes': [n.__dict__ for n in nodes],
+            'edges': [{'from': e.frm, 'to': e.to, 'on': e.on} for e in edges],
         }
 
     @staticmethod
@@ -137,15 +141,15 @@ class IRGraphAdapter:
             if not isinstance(frm, str) or not isinstance(tr, dict):
                 continue
 
-            kind = tr.get("kind")
-            if kind == "linear":
-                to = tr.get("to")
+            kind = tr.get('kind')
+            if kind == 'linear':
+                to = tr.get('to')
                 if isinstance(to, str):
                     out.append(GraphEdge(frm=frm, to=to, on=None))
                 continue
 
-            if kind == "by_outcome":
-                m = tr.get("map")
+            if kind == 'by_outcome':
+                m = tr.get('map')
                 if not isinstance(m, dict):
                     continue
                 for outcome, to in m.items():
@@ -153,52 +157,56 @@ class IRGraphAdapter:
                         out.append(GraphEdge(frm=frm, to=to, on=outcome))
                 continue
 
-        out.sort(key=lambda e: (e.frm, "" if e.on is None else e.on, e.to))
+        out.sort(key=lambda e: (e.frm, '' if e.on is None else e.on, e.to))
         return out
 
 
 class WorkflowGraphService:
-    """
-    Model-aware helpers for Flow UI:
-    - definition_graph(definition) -> nodes/edges derived from IR
-    - instance_overlay(instance) -> per-step status overlay derived from StepRun history
+    """Provide graph payloads for definitions and instance overlays.
+
+    This keeps graph shaping centralized so saved-definition and draft graph
+    endpoints stay aligned.
     """
 
     def __init__(self) -> None:
+        """Create a graph service backed by the default IR adapter."""
         self.adapter = IRGraphAdapter()
 
     def graph_from_ir(self, *, ir: dict[str, Any]) -> dict[str, Any]:
+        """Return graph JSON derived from a compiled IR document."""
         return self.adapter.to_graph(ir or {})
 
     def definition_graph(self, *, definition: Workflow2Definition) -> dict[str, Any]:
+        """Return graph JSON for a saved workflow definition."""
         base = self.graph_from_ir(ir=definition.ir_json or {})
-        base["definition_id"] = str(definition.id)
-        base["ir_hash"] = definition.ir_hash
+        base['definition_id'] = str(definition.id)
+        base['ir_hash'] = definition.ir_hash
         return base
 
     def instance_overlay(self, *, instance: Workflow2Instance) -> dict[str, Any]:
+        """Return step-run status overlay data for one workflow instance."""
         runs = list(
             Workflow2StepRun.objects.filter(instance=instance)
-            .order_by("run_index")
-            .only("step_id", "status", "outcome", "error", "run_index", "step_type", "next_step")
+            .order_by('run_index')
+            .only('step_id', 'status', 'outcome', 'error', 'run_index', 'step_type', 'next_step')
         )
 
         per_step: dict[str, dict[str, Any]] = {}
         for r in runs:
             per_step[r.step_id] = {
-                "last_run_index": r.run_index,
-                "status": r.status,
-                "outcome": r.outcome,
-                "error": r.error,
-                "step_type": r.step_type,
-                "next_step": r.next_step,
+                'last_run_index': r.run_index,
+                'status': r.status,
+                'outcome': r.outcome,
+                'error': r.error,
+                'step_type': r.step_type,
+                'next_step': r.next_step,
             }
 
         return {
-            "instance_id": str(instance.id),
-            "definition_id": str(instance.definition_id),
-            "instance_status": instance.status,
-            "current_step": instance.current_step,
-            "run_count": instance.run_count,
-            "steps": per_step,
+            'instance_id': str(instance.id),
+            'definition_id': str(instance.definition_id),
+            'instance_status': instance.status,
+            'current_step': instance.current_step,
+            'run_count': instance.run_count,
+            'steps': per_step,
         }

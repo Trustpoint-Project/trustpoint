@@ -1,12 +1,14 @@
-# workflows2/views/runs.py
+"""Monitoring views for Workflow 2 runs."""
+
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count
-from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 
@@ -23,9 +25,15 @@ from workflows2.views.presentation import (
     summarize_source,
 )
 
+if TYPE_CHECKING:
+    from django.http import HttpRequest, HttpResponse
+
 
 class Workflow2RunListView(LoginRequiredMixin, View):
+    """List workflow runs with filtering and status summaries."""
+
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the paginated run list."""
         base_qs = Workflow2Run.objects.annotate(instance_count=Count('instances')).order_by('-created_at')
 
         status = request.GET.get('status')
@@ -90,7 +98,10 @@ class Workflow2RunListView(LoginRequiredMixin, View):
 
 
 class Workflow2RunDetailView(LoginRequiredMixin, View):
+    """Show one workflow run with its instances and event context."""
+
     def get(self, request: HttpRequest, run_id: int) -> HttpResponse:
+        """Render the detail page for one workflow run."""
         run = get_object_or_404(Workflow2Run, id=run_id)
         instances = Workflow2Instance.objects.filter(run=run).select_related('definition').order_by('created_at')
         source_context = resolve_source_context(run.source_json)
@@ -135,7 +146,10 @@ class Workflow2RunDetailView(LoginRequiredMixin, View):
 
 
 class Workflow2RunRunInlineView(LoginRequiredMixin, View):
+    """Execute all runnable instances in a run inline."""
+
     def post(self, request: HttpRequest, run_id: int) -> HttpResponse:
+        """Run all non-terminal instances in the selected run inline."""
         run = get_object_or_404(Workflow2Run, id=run_id)
 
         executor = WorkflowExecutor()
@@ -165,7 +179,10 @@ class Workflow2RunRunInlineView(LoginRequiredMixin, View):
 
 
 class Workflow2RunCancelView(LoginRequiredMixin, View):
+    """Cancel a workflow run and its queued/running jobs."""
+
     def post(self, request: HttpRequest, run_id: int) -> HttpResponse:
+        """Cancel the selected run and all non-terminal instances."""
         run = get_object_or_404(Workflow2Run, id=run_id)
 
         with transaction.atomic():

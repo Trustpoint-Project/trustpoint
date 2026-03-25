@@ -1,4 +1,4 @@
-# workflows2/engine/eval.py
+"""Evaluate Workflow 2 expressions, templates, and conditions at runtime."""
 from __future__ import annotations
 
 import json
@@ -10,7 +10,8 @@ from .errors import ExecutionError
 
 
 def eval_expr(expr_ir: Any, ctx: RuntimeContext) -> Any:
-    """Evaluate expression IR produced by compiler/templates._expr_to_ir:
+    """Evaluate expression IR produced by the compiler.
+
     - {"kind":"ref","path":[...]}
     - {"kind":"lit","value":...}
     - {"kind":"call","name":..., "args":[...]}
@@ -42,7 +43,8 @@ def eval_expr(expr_ir: Any, ctx: RuntimeContext) -> Any:
 
 
 def render_template(value: Any, ctx: RuntimeContext) -> Any:
-    """Render either:
+    """Render templates or nested template-bearing structures.
+
     - raw strings (returned as-is)
     - compiled template IR {"kind":"template","parts":[...]}
     - nested structures already processed by compiler (dict/list)
@@ -202,7 +204,8 @@ def eval_condition(cond_ir: Any, ctx: RuntimeContext) -> bool:
 
 
 def _eval_value(v: Any, ctx: RuntimeContext) -> Any:
-    """Evaluate a value that may be:
+    """Evaluate a value that may contain expression or template IR.
+
     - expression IR {"kind":"ref"/"lit"/"call"}
     - template IR {"kind":"template"...}
     - plain literal
@@ -239,17 +242,17 @@ def _compare(lval: Any, op: Any, rval: Any) -> bool:
 
     try:
         if op == '==':
-            return lval == rval
+            return bool(lval == rval)
         if op == '!=':
-            return lval != rval
+            return bool(lval != rval)
         if op == '<':
-            return lval < rval
+            return bool(lval < rval)
         if op == '<=':
-            return lval <= rval
+            return bool(lval <= rval)
         if op == '>':
-            return lval > rval
+            return bool(lval > rval)
         if op == '>=':
-            return lval >= rval
+            return bool(lval >= rval)
     except TypeError:
         return False
     return False

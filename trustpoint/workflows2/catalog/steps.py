@@ -1,4 +1,5 @@
-# workflows2/catalog/steps.py
+"""Static metadata that describes supported Workflow 2 step types."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -28,6 +29,8 @@ FieldKind = Literal[
 
 @dataclass(frozen=True)
 class StepField:
+    """Describe one editable field on a step type."""
+
     key: str
     title: str
     description: str
@@ -41,6 +44,8 @@ class StepField:
 
 @dataclass(frozen=True)
 class StepSpec:
+    """Describe a supported step type for the editor catalog."""
+
     type: str
     title: str
     description: str
@@ -69,6 +74,7 @@ COMMON_STEP_FIELDS: tuple[StepField, ...] = (
 
 
 def step_specs() -> list[StepSpec]:
+    """Return the step definitions shown in the Workflow 2 editor."""
     return [
         StepSpec(
             type='logic',

@@ -1,4 +1,5 @@
-# workflows2/compiler/conditions.py
+"""Compile Workflow 2 condition trees into IR fragments."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -82,8 +83,10 @@ CONDITION_OPERATORS: tuple[dict[str, Any], ...] = (
 
 
 def compile_condition(cond: Any, *, path: str) -> dict[str, Any]:
+    """Compile one condition tree node into condition IR."""
     if not isinstance(cond, dict) or len(cond) != 1:
-        raise CompileError('Condition must be a mapping with exactly one operator', path=path)
+        msg = 'Condition must be a mapping with exactly one operator'
+        raise CompileError(msg, path=path)
 
     op, val = next(iter(cond.items()))
 
@@ -96,20 +99,24 @@ def compile_condition(cond: Any, *, path: str) -> dict[str, Any]:
 
     if op in ('and', 'or'):
         if not isinstance(val, list) or not val:
-            raise CompileError(f'"{op}" expects a non-empty list', path=path)
+            msg = f'"{op}" expects a non-empty list'
+            raise CompileError(msg, path=path)
         return {'op': op, 'args': [compile_condition(c, path=f'{path}.{op}[{i}]') for i, c in enumerate(val)]}
 
     if op == 'compare':
         if not isinstance(val, dict):
-            raise CompileError('"compare" expects a mapping', path=path)
+            msg = '"compare" expects a mapping'
+            raise CompileError(msg, path=path)
         left = _compile_value(val.get('left'), path=f'{path}.compare.left')
         right = _compile_value(val.get('right'), path=f'{path}.compare.right')
         cmp_op = val.get('op')
         if cmp_op not in COMPARE_OPERATORS:
-            raise CompileError('compare.op must be one of == != < <= > >=', path=f'{path}.compare.op')
+            msg = 'compare.op must be one of == != < <= > >='
+            raise CompileError(msg, path=f'{path}.compare.op')
         return {'op': 'compare', 'cmp': cmp_op, 'left': left, 'right': right}
 
-    raise CompileError(f'Unknown condition operator "{op}"', path=path)
+    msg = f'Unknown condition operator "{op}"'
+    raise CompileError(msg, path=path)
 
 
 def _compile_value(v: Any, *, path: str) -> Any:
@@ -124,7 +131,9 @@ def _compile_value(v: Any, *, path: str) -> Any:
             parts = compiled['parts']
             if len(parts) == 1 and parts[0]['kind'] == 'expr':
                 return parts[0]['expr']
-            raise CompileError('Condition values must be a single ${...} expression or a literal', path=path)
+            msg = 'Condition values must be a single ${...} expression or a literal'
+            raise CompileError(msg, path=path)
         return {'kind': 'lit', 'value': v}
 
-    raise CompileError('Unsupported value type in condition', path=path)
+    msg = 'Unsupported value type in condition'
+    raise CompileError(msg, path=path)

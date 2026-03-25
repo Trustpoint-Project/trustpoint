@@ -1,4 +1,5 @@
-# workflows2/views/dev.py
+"""Developer-only compiler playground for Workflow 2 YAML."""
+
 from __future__ import annotations
 
 from django.conf import settings
@@ -12,51 +13,52 @@ from workflows2.compiler.errors import CompileError
 
 
 class Workflow2DevView(LoginRequiredMixin, View):
-    """
-    Dev-only YAML → IR compiler playground.
+    """Dev-only YAML → IR compiler playground.
 
     GET  renders a textarea
     POST compiles YAML and shows IR or errors
     """
 
-    template_name = "workflows2/dev.html"
+    template_name = 'workflows2/dev.html'
 
     def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the dev playground with a sample workflow."""
         if not settings.DEBUG:
-            return HttpResponse("Not available.", status=404)
+            return HttpResponse('Not available.', status=404)
 
         return render(
             request,
             self.template_name,
             {
-                "yaml_text": DEFAULT_SAMPLE_YAML,
-                "ir_json": None,
-                "error": None,
+                'yaml_text': DEFAULT_SAMPLE_YAML,
+                'ir_json': None,
+                'error': None,
             },
         )
 
     def post(self, request: HttpRequest) -> HttpResponse:
+        """Compile posted YAML and render either IR or a compiler error."""
         if not settings.DEBUG:
-            return HttpResponse("Not available.", status=404)
+            return HttpResponse('Not available.', status=404)
 
-        yaml_text = request.POST.get("yaml_text", "") or ""
+        yaml_text = request.POST.get('yaml_text', '') or ''
         ir_json = None
         error = None
 
         try:
-            ir_json = compile_workflow_yaml(yaml_text, compiler_version="workflows2-dev")
+            ir_json = compile_workflow_yaml(yaml_text, compiler_version='workflows2-dev')
         except CompileError as e:
             error = str(e)
-        except Exception as e:  # noqa: BLE001 (dev page)
-            error = f"Unexpected error: {e!s}"
+        except (ValueError, TypeError) as exc:
+            error = f'Unexpected error: {exc!s}'
 
         return render(
             request,
             self.template_name,
             {
-                "yaml_text": yaml_text,
-                "ir_json": ir_json,
-                "error": error,
+                'yaml_text': yaml_text,
+                'ir_json': ir_json,
+                'error': error,
             },
         )
 

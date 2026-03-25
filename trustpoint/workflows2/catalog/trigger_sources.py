@@ -1,3 +1,5 @@
+"""Expose available trigger source filters for the editor catalog."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -7,6 +9,7 @@ from pki.models import CaModel, DomainModel
 
 
 def build_trigger_source_catalog() -> dict[str, Any]:
+    """Return human-readable CA, domain, and device choices for trigger filters."""
     cas = [
         {
             'id': ca.id,
@@ -23,7 +26,7 @@ def build_trigger_source_catalog() -> dict[str, Any]:
             'title': domain.unique_name,
             'active': bool(domain.is_active),
             'issuing_ca_id': domain.issuing_ca_id,
-            'issuing_ca_title': domain.issuing_ca.unique_name if domain.issuing_ca_id else '',
+            'issuing_ca_title': domain.issuing_ca.unique_name if domain.issuing_ca is not None else '',
         }
         for domain in (
             DomainModel.objects.select_related('issuing_ca')
@@ -38,7 +41,7 @@ def build_trigger_source_catalog() -> dict[str, Any]:
             'title': device.common_name,
             'serial_number': device.serial_number or '',
             'domain_id': device.domain_id,
-            'domain_title': device.domain.unique_name if device.domain_id else '',
+            'domain_title': device.domain.unique_name if device.domain is not None else '',
         }
         for device in (
             DeviceModel.objects.select_related('domain')

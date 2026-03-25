@@ -1,3 +1,5 @@
+"""URL routes for the Workflow 2 app."""
+
 from django.urls import path
 
 from workflows2.views.approvals import (
@@ -41,7 +43,7 @@ urlpatterns = [
     # API
     path('api/triggers/', Workflow2TriggerCatalogView.as_view(), name='api_triggers'),
     path('api/definitions/<uuid:pk>/graph/', Workflow2DefinitionGraphView.as_view(), name='api_definition_graph'),
-    path("api/graph-from-yaml/", Workflow2GraphFromYamlView.as_view(), name="api_graph_from_yaml"),
+    path('api/graph-from-yaml/', Workflow2GraphFromYamlView.as_view(), name='api_graph_from_yaml'),
 
     # Dev
     path('dev/', Workflow2DevView.as_view(), name='dev'),
@@ -55,7 +57,11 @@ urlpatterns = [
     # Instances
     path('instances/<uuid:instance_id>/', Workflow2InstanceDetailView.as_view(), name='instances-detail'),
     path('instances/<uuid:instance_id>/resume/', Workflow2InstanceResumeView.as_view(), name='instances-resume'),
-    path('instances/<uuid:instance_id>/run-inline/', Workflow2InstanceRunInlineView.as_view(), name='instances-run-inline'),
+    path(
+        'instances/<uuid:instance_id>/run-inline/',
+        Workflow2InstanceRunInlineView.as_view(),
+        name='instances-run-inline',
+    ),
     path('instances/<uuid:instance_id>/cancel/', Workflow2InstanceCancelView.as_view(), name='instances-cancel'),
 
     # Approvals
@@ -63,5 +69,5 @@ urlpatterns = [
     path('approvals/<uuid:approval_id>/', Workflow2ApprovalDetailView.as_view(), name='approvals-detail'),
     path('approvals/<uuid:approval_id>/resolve/', Workflow2ApprovalResolveView.as_view(), name='approvals-resolve'),
 
-    path("api/context-catalog/", ContextCatalogView.as_view(), name="context_catalog"),
+    path('api/context-catalog/', ContextCatalogView.as_view(), name='context_catalog'),
 ]

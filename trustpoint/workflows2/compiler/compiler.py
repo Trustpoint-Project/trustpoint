@@ -1,17 +1,18 @@
-# workflows2/compiler/compiler.py
+"""Compile Workflow 2 YAML documents into normalized IR."""
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal, cast
 
 from workflows2.compiler.step_types import StepTypes
 from workflows2.events.registry import get_event_registry
 
 from .conditions import compile_condition
 from .errors import CompileError
+from .expr import parse_required_expr_string
 from .hashing import sha256_json, sha256_text
 from .lint import SchemaLinter
-from .templates import compile_template, compile_templates_deep
+from .templates import _expr_to_ir, compile_template, compile_templates_deep
 from .yaml_loader import load_yaml_text
 
 HttpMethod = Literal['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
@@ -32,13 +33,19 @@ _ALLOWED_COMPUTE_OPS: set[str] = set(COMPUTE_OPERATORS)
 
 _END_TARGETS: set[str] = {'$end', '$reject'}
 
+VARS_PATH_MIN_PARTS = 2
+MIN_CAPTURE_TARGET_PARTS = 2
+
 
 @dataclass(frozen=True)
 class TriggerIR:
+    """Normalized trigger configuration stored in compiled IR."""
+
     on: str
     sources: dict[str, Any]
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the trigger IR to a plain dictionary."""
         return {
             'on': self.on,
             'sources': self.sources,
@@ -47,6 +54,8 @@ class TriggerIR:
 
 @dataclass(frozen=True)
 class CompileMeta:
+    """Hashes and provenance metadata attached to compiled IR."""
+
     compiler_version: str
     source_hash: str
     ir_hash: str
@@ -58,12 +67,14 @@ class WorkflowCompiler:
     SUPPORTED_SCHEMA = 'trustpoint.workflow.v2'
     IR_VERSION = 'v2'
 
-    OUTCOME_TYPES: set[str] = {StepTypes.LOGIC, StepTypes.APPROVAL}
+    OUTCOME_TYPES: ClassVar[set[str]] = {StepTypes.LOGIC, StepTypes.APPROVAL}
 
     def __init__(self, *, compiler_version: str = 'dev') -> None:
+        """Initialize the compiler with a version label for IR metadata."""
         self.compiler_version = compiler_version
 
     def compile(self, yaml_text: str) -> dict[str, Any]:
+        """Compile one workflow YAML document into normalized IR."""
         src = load_yaml_text(yaml_text)
         SchemaLinter().lint(src)
         self._validate_top_level(src)
@@ -72,7 +83,8 @@ class WorkflowCompiler:
 
         apply_raw = src.get('apply', []) or []
         if not isinstance(apply_raw, list):
-            raise CompileError('"apply" must be a list', path='apply')
+            msg = '"apply" must be a list'
+            raise CompileError(msg, path='apply')
         apply_ir = [compile_condition(c, path=f'apply[{i}]') for i, c in enumerate(apply_raw)]
 
         wf_raw = src['workflow']
@@ -82,7 +94,8 @@ class WorkflowCompiler:
         self._validate_steps_allowed_for_trigger(trigger_ir, steps_ir)
 
         if start_id not in steps_ir:
-            raise CompileError('workflow.start must reference an existing step id', path='workflow.start')
+            msg = 'workflow.start must reference an existing step id'
+            raise CompileError(msg, path='workflow.start')
 
         transitions_ir = self._compile_flow(flow_raw, steps_ir)
         self._validate_flow_completeness(steps_ir, transitions_ir)
@@ -114,42 +127,50 @@ class WorkflowCompiler:
     def _validate_top_level(cls, src: dict[str, Any]) -> None:
         schema = src.get('schema')
         if schema != cls.SUPPORTED_SCHEMA:
+            msg = f'Unsupported or missing "schema" (expected {cls.SUPPORTED_SCHEMA})'
             raise CompileError(
-                f'Unsupported or missing "schema" (expected {cls.SUPPORTED_SCHEMA})',
+                msg,
                 path='schema',
             )
 
         name = src.get('name')
         if not isinstance(name, str) or not name.strip():
-            raise CompileError('"name" must be a non-empty string', path='name')
+            msg = '"name" must be a non-empty string'
+            raise CompileError(msg, path='name')
 
         trigger = src.get('trigger')
         if not isinstance(trigger, dict):
-            raise CompileError('"trigger" must be a mapping', path='trigger')
+            msg = '"trigger" must be a mapping'
+            raise CompileError(msg, path='trigger')
 
         workflow = src.get('workflow')
         if not isinstance(workflow, dict):
-            raise CompileError('"workflow" must be a mapping', path='workflow')
+            msg = '"workflow" must be a mapping'
+            raise CompileError(msg, path='workflow')
 
     @staticmethod
     def _extract_workflow_parts(wf_raw: dict[str, Any]) -> tuple[str, dict[str, Any], list[Any]]:
         start_id = wf_raw.get('start')
         if not isinstance(start_id, str) or not start_id.strip():
-            raise CompileError('"workflow.start" must be a non-empty string', path='workflow.start')
+            msg = '"workflow.start" must be a non-empty string'
+            raise CompileError(msg, path='workflow.start')
         start_id = start_id.strip()
 
         steps_raw = wf_raw.get('steps')
         if not isinstance(steps_raw, dict) or not steps_raw:
-            raise CompileError('"workflow.steps" must be a non-empty object', path='workflow.steps')
+            msg = '"workflow.steps" must be a non-empty object'
+            raise CompileError(msg, path='workflow.steps')
 
         flow_raw = wf_raw.get('flow', [])
         if flow_raw is None:
             flow_raw = []
         if not isinstance(flow_raw, list):
-            raise CompileError('"workflow.flow" must be a list', path='workflow.flow')
+            msg = '"workflow.flow" must be a list'
+            raise CompileError(msg, path='workflow.flow')
 
         if len(steps_raw) > 1 and len(flow_raw) == 0:
-            raise CompileError('"workflow.flow" must be a non-empty list', path='workflow.flow')
+            msg = '"workflow.flow" must be a non-empty list'
+            raise CompileError(msg, path='workflow.flow')
 
         return start_id, steps_raw, flow_raw
 
@@ -158,8 +179,9 @@ class WorkflowCompiler:
         on = trigger.get('on')
         if not isinstance(on, str) or not on.strip():
             keys = ', '.join(sorted(str(k) for k in trigger))
+            msg = f'"trigger.on" must be a non-empty string (trigger keys: {keys})'
             raise CompileError(
-                f'"trigger.on" must be a non-empty string (trigger keys: {keys})',
+                msg,
                 path=f'{path}.on',
             )
         on = on.strip()
@@ -167,14 +189,16 @@ class WorkflowCompiler:
         reg = get_event_registry()
         if not reg.is_known(on):
             known = ', '.join(reg.all_keys())
+            msg = f'Unknown trigger.on "{on}". Allowed: {known}'
             raise CompileError(
-                f'Unknown trigger.on "{on}". Allowed: {known}',
+                msg,
                 path=f'{path}.on',
             )
 
         sources = trigger.get('sources', {}) or {}
         if not isinstance(sources, dict):
-            raise CompileError('"trigger.sources" must be a mapping', path=f'{path}.sources')
+            msg = '"trigger.sources" must be a mapping'
+            raise CompileError(msg, path=f'{path}.sources')
 
         trustpoint = bool(sources.get('trustpoint', False))
         ca_ids = sources.get('ca_ids', []) or []
@@ -182,15 +206,19 @@ class WorkflowCompiler:
         device_ids = sources.get('device_ids', []) or []
 
         if not isinstance(ca_ids, list) or any(not isinstance(x, int) for x in ca_ids):
-            raise CompileError('"trigger.sources.ca_ids" must be a list[int]', path=f'{path}.sources.ca_ids')
+            msg = '"trigger.sources.ca_ids" must be a list[int]'
+            raise CompileError(msg, path=f'{path}.sources.ca_ids')
         if not isinstance(domain_ids, list) or any(not isinstance(x, int) for x in domain_ids):
-            raise CompileError('"trigger.sources.domain_ids" must be a list[int]', path=f'{path}.sources.domain_ids')
+            msg = '"trigger.sources.domain_ids" must be a list[int]'
+            raise CompileError(msg, path=f'{path}.sources.domain_ids')
         if not isinstance(device_ids, list) or any(not isinstance(x, str) for x in device_ids):
-            raise CompileError('"trigger.sources.device_ids" must be a list[str]', path=f'{path}.sources.device_ids')
+            msg = '"trigger.sources.device_ids" must be a list[str]'
+            raise CompileError(msg, path=f'{path}.sources.device_ids')
 
         if not trustpoint and not (ca_ids or domain_ids or device_ids):
+            msg = 'If trigger.sources.trustpoint is false, at least one of ca_ids/domain_ids/device_ids must be set'
             raise CompileError(
-                'If trigger.sources.trustpoint is false, at least one of ca_ids/domain_ids/device_ids must be set',
+                msg,
                 path=f'{path}.sources',
             )
 
@@ -218,8 +246,9 @@ class WorkflowCompiler:
         for step_id, s in steps_ir.items():
             typ = s.get('type')
             if typ not in allowed_set:
+                msg = f'Step type "{typ}" is not allowed for trigger "{trigger_ir.on}"'
                 raise CompileError(
-                    f'Step type "{typ}" is not allowed for trigger "{trigger_ir.on}"',
+                    msg,
                     path=f'workflow.steps.{step_id}.type',
                 )
 
@@ -228,25 +257,30 @@ class WorkflowCompiler:
 
         for step_id, step in steps.items():
             if not isinstance(step_id, str) or not step_id.strip():
-                raise CompileError('Step id must be a non-empty string', path='workflow.steps')
+                msg = 'Step id must be a non-empty string'
+                raise CompileError(msg, path='workflow.steps')
             if not isinstance(step, dict):
-                raise CompileError('Step must be a mapping', path=f'workflow.steps.{step_id}')
+                msg = 'Step must be a mapping'
+                raise CompileError(msg, path=f'workflow.steps.{step_id}')
 
             typ = step.get('type')
             if not isinstance(typ, str) or not typ.strip():
-                raise CompileError('Step "type" must be a non-empty string', path=f'workflow.steps.{step_id}.type')
+                msg = 'Step "type" must be a non-empty string'
+                raise CompileError(msg, path=f'workflow.steps.{step_id}.type')
             typ = typ.strip()
 
             if typ not in StepTypes.all():
                 allowed = ', '.join(sorted(StepTypes.all()))
+                msg = f'Unknown step type "{typ}". Allowed: {allowed}'
                 raise CompileError(
-                    f'Unknown step type "{typ}". Allowed: {allowed}',
+                    msg,
                     path=f'workflow.steps.{step_id}.type',
                 )
 
             title = step.get('title')
             if title is not None and not isinstance(title, str):
-                raise CompileError('"title" must be a string', path=f'workflow.steps.{step_id}.title')
+                msg = '"title" must be a string'
+                raise CompileError(msg, path=f'workflow.steps.{step_id}.title')
 
             params = self._compile_step_params(step_id, typ, step)
             produces, outcomes = self._step_outcomes(typ, params)
@@ -277,27 +311,33 @@ class WorkflowCompiler:
         if typ == StepTypes.APPROVAL:
             return self._compile_approval_params(step, base)
 
-        raise CompileError(f'Unknown step type "{typ}"', path=f'{base}.type')
+        msg = f'Unknown step type "{typ}"'
+        raise CompileError(msg, path=f'{base}.type')
 
     @staticmethod
     def _compile_email_params(step: dict[str, Any], base: str) -> dict[str, Any]:
         to = step.get('to')
         if not isinstance(to, list) or not to or any(not isinstance(x, str) for x in to):
-            raise CompileError('"email.to" must be a non-empty list[str]', path=f'{base}.to')
+            msg = '"email.to" must be a non-empty list[str]'
+            raise CompileError(msg, path=f'{base}.to')
 
         cc = step.get('cc', []) or []
         bcc = step.get('bcc', []) or []
         if not isinstance(cc, list) or any(not isinstance(x, str) for x in cc):
-            raise CompileError('"email.cc" must be a list[str]', path=f'{base}.cc')
+            msg = '"email.cc" must be a list[str]'
+            raise CompileError(msg, path=f'{base}.cc')
         if not isinstance(bcc, list) or any(not isinstance(x, str) for x in bcc):
-            raise CompileError('"email.bcc" must be a list[str]', path=f'{base}.bcc')
+            msg = '"email.bcc" must be a list[str]'
+            raise CompileError(msg, path=f'{base}.bcc')
 
         subject_raw = step.get('subject')
         body_raw = step.get('body')
         if not isinstance(subject_raw, str):
-            raise CompileError('"email.subject" must be a string', path=f'{base}.subject')
+            msg = '"email.subject" must be a string'
+            raise CompileError(msg, path=f'{base}.subject')
         if not isinstance(body_raw, str):
-            raise CompileError('"email.body" must be a string', path=f'{base}.body')
+            msg = '"email.body" must be a string'
+            raise CompileError(msg, path=f'{base}.body')
 
         return {
             'to': to,
@@ -308,83 +348,132 @@ class WorkflowCompiler:
         }
 
     @staticmethod
-    def _compile_webhook_params(step: dict[str, Any], base: str) -> dict[str, Any]:
-        method = step.get('method')
-        if method not in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE'):
-            raise CompileError('"webhook.method" must be one of GET/POST/PUT/PATCH/DELETE', path=f'{base}.method')
+    def _require_non_empty_string(value: Any, *, path: str, label: str) -> str:
+        if not isinstance(value, str) or not value.strip():
+            msg = f'{label} must be a non-empty string'
+            raise CompileError(msg, path=path)
+        return value.strip()
 
-        url = step.get('url')
-        if not isinstance(url, str) or not url.strip():
-            raise CompileError('"webhook.url" must be a non-empty string', path=f'{base}.url')
+    @staticmethod
+    def _require_positive_int(value: Any, *, path: str, label: str) -> int:
+        if not isinstance(value, int) or value <= 0:
+            msg = f'{label} must be a positive int'
+            raise CompileError(msg, path=path)
+        return value
 
-        headers = step.get('headers', {}) or {}
-        if not isinstance(headers, dict) or any(not isinstance(k, str) for k in headers.keys()):
-            raise CompileError('"webhook.headers" must be a mapping with string keys', path=f'{base}.headers')
-        headers_ir = compile_templates_deep(headers, path=f'{base}.headers')
+    @staticmethod
+    def _require_webhook_method(value: Any, *, path: str) -> HttpMethod:
+        if value not in ('GET', 'POST', 'PUT', 'PATCH', 'DELETE'):
+            msg = '"webhook.method" must be one of GET/POST/PUT/PATCH/DELETE'
+            raise CompileError(msg, path=path)
+        return cast('HttpMethod', value)
 
-        body = step.get('body')
+    @staticmethod
+    def _compile_webhook_headers(headers: Any, *, path: str) -> dict[str, Any]:
+        if not isinstance(headers, dict) or any(not isinstance(k, str) for k in headers):
+            msg = '"webhook.headers" must be a mapping with string keys'
+            raise CompileError(msg, path=path)
+        return cast('dict[str, Any]', compile_templates_deep(headers, path=path))
+
+    @staticmethod
+    def _compile_webhook_body(body: Any, *, path: str) -> Any:
         if body is None:
-            body_ir = None
-        elif isinstance(body, (str, list, dict)):
-            body_ir = compile_templates_deep(body, path=f'{base}.body')
-        else:
-            raise CompileError('"webhook.body" must be string/list/mapping/null', path=f'{base}.body')
+            return None
+        if isinstance(body, (str, list, dict)):
+            return compile_templates_deep(body, path=path)
 
-        timeout_seconds = step.get('timeout_seconds', 10)
-        if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:
-            raise CompileError('"timeout_seconds" must be a positive int', path=f'{base}.timeout_seconds')
+        msg = '"webhook.body" must be string/list/mapping/null'
+        raise CompileError(msg, path=path)
 
-        capture = step.get('capture', {}) or {}
+    @staticmethod
+    def _parse_capture_target(key: Any, *, path: str) -> list[str]:
+        if not isinstance(key, str) or not key.startswith('vars.'):
+            msg = 'Capture key must be "vars.<name>"'
+            raise CompileError(msg, path=path)
+
+        parts = key.split('.')
+        if len(parts) != MIN_CAPTURE_TARGET_PARTS or not parts[1]:
+            msg = 'Capture key must be "vars.<name>" (single name)'
+            raise CompileError(msg, path=path)
+
+        return ['vars', parts[1]]
+
+    @staticmethod
+    def _parse_capture_source(value: Any, *, path: str) -> list[str]:
+        if not isinstance(value, str) or not value.strip():
+            msg = 'Capture value must be a non-empty string'
+            raise CompileError(msg, path=path)
+
+        source = value.strip()
+
+        if source in {'status_code', 'body', 'headers'}:
+            return [source]
+
+        if source.startswith('headers.'):
+            rest = source[len('headers.') :].strip()
+            if not rest:
+                msg = 'Capture source must be "headers.<name>"'
+                raise CompileError(msg, path=path)
+            return ['headers', rest]
+
+        if source.startswith('body.'):
+            rest = source[len('body.') :].strip()
+            if not rest:
+                msg = 'Capture source must be "body.<path>"'
+                raise CompileError(msg, path=path)
+            return ['body', *[part for part in rest.split('.') if part]]
+
+        msg = 'Unknown capture source. Allowed: status_code | body | headers | headers.<name> | body.<path>'
+        raise CompileError(msg, path=path)
+
+    @staticmethod
+    def _compile_webhook_capture(capture: Any, *, path: str) -> list[dict[str, Any]]:
         if not isinstance(capture, dict):
-            raise CompileError('"webhook.capture" must be a mapping', path=f'{base}.capture')
+            msg = '"webhook.capture" must be a mapping'
+            raise CompileError(msg, path=path)
 
-        LEGACY_KEYS = {'status_code', 'body', 'headers'}
-        if any(str(k) in LEGACY_KEYS for k in capture.keys()):
-            raise CompileError(
+        legacy_keys = {'status_code', 'body', 'headers'}
+        if any(str(key) in legacy_keys for key in capture):
+            msg = (
                 'Legacy webhook.capture format is not supported anymore. '
-                'Use "vars.<name>: <source>" (e.g. vars.http_status: status_code).',
-                path=f'{base}.capture',
+                'Use "vars.<name>: <source>" (e.g. vars.http_status: status_code).'
             )
+            raise CompileError(msg, path=path)
 
-        def _parse_vars_target(key: Any, *, path: str) -> list[str]:
-            if not isinstance(key, str) or not key.startswith('vars.'):
-                raise CompileError('Capture key must be "vars.<name>"', path=path)
-            parts = key.split('.')
-            if len(parts) != 2 or not parts[1]:
-                raise CompileError('Capture key must be "vars.<name>" (single name)', path=path)
-            return ['vars', parts[1]]
+        rules: list[dict[str, Any]] = []
+        for key, value in capture.items():
+            item_path = f'{path}.{key}'
+            target = WorkflowCompiler._parse_capture_target(key, path=item_path)
+            source = WorkflowCompiler._parse_capture_source(value, path=item_path)
+            rules.append({'target': target, 'source': source})
 
-        def _parse_source(val: Any, *, path: str) -> list[str]:
-            if not isinstance(val, str) or not val.strip():
-                raise CompileError('Capture value must be a non-empty string', path=path)
-            s = val.strip()
+        return rules
 
-            if s in {'status_code', 'body', 'headers'}:
-                return [s]
-
-            if s.startswith('headers.'):
-                rest = s[len('headers.') :].strip()
-                if not rest:
-                    raise CompileError('Capture source must be "headers.<name>"', path=path)
-                return ['headers', rest]
-
-            if s.startswith('body.'):
-                rest = s[len('body.') :].strip()
-                if not rest:
-                    raise CompileError('Capture source must be "body.<path>"', path=path)
-                segs = [p for p in rest.split('.') if p]
-                return ['body', *segs]
-
-            raise CompileError(
-                'Unknown capture source. Allowed: status_code | body | headers | headers.<name> | body.<path>',
-                path=path,
-            )
-
-        capture_rules: list[dict[str, Any]] = []
-        for k, v in capture.items():
-            target = _parse_vars_target(k, path=f'{base}.capture.{k}')
-            source = _parse_source(v, path=f'{base}.capture.{k}')
-            capture_rules.append({'target': target, 'source': source})
+    @staticmethod
+    def _compile_webhook_params(step: dict[str, Any], base: str) -> dict[str, Any]:
+        method = WorkflowCompiler._require_webhook_method(step.get('method'), path=f'{base}.method')
+        url = WorkflowCompiler._require_non_empty_string(
+            step.get('url'),
+            path=f'{base}.url',
+            label='"webhook.url"',
+        )
+        headers_ir = WorkflowCompiler._compile_webhook_headers(
+            step.get('headers', {}) or {},
+            path=f'{base}.headers',
+        )
+        body_ir = WorkflowCompiler._compile_webhook_body(
+            step.get('body'),
+            path=f'{base}.body',
+        )
+        timeout_seconds = WorkflowCompiler._require_positive_int(
+            step.get('timeout_seconds', 10),
+            path=f'{base}.timeout_seconds',
+            label='"timeout_seconds"',
+        )
+        capture_rules = WorkflowCompiler._compile_webhook_capture(
+            step.get('capture', {}) or {},
+            path=f'{base}.capture',
+        )
 
         return {
             'method': method,
@@ -401,22 +490,27 @@ class WorkflowCompiler:
         default = step.get('default')
 
         if not isinstance(cases, list) or not cases:
-            raise CompileError('"logic.cases" must be a non-empty list', path=f'{base}.cases')
+            msg = '"logic.cases" must be a non-empty list'
+            raise CompileError(msg, path=f'{base}.cases')
         if not isinstance(default, str) or not default.strip():
-            raise CompileError('"logic.default" must be a non-empty string', path=f'{base}.default')
+            msg = '"logic.default" must be a non-empty string'
+            raise CompileError(msg, path=f'{base}.default')
 
         cases_ir: list[dict[str, Any]] = []
         for i, c in enumerate(cases):
             if not isinstance(c, dict):
-                raise CompileError('Each case must be a mapping', path=f'{base}.cases[{i}]')
+                msg = 'Each case must be a mapping'
+                raise CompileError(msg, path=f'{base}.cases[{i}]')
 
             when = c.get('when')
             outcome = c.get('outcome')
 
             if when is None:
-                raise CompileError('Case missing "when"', path=f'{base}.cases[{i}].when')
+                msg = 'Case missing "when"'
+                raise CompileError(msg, path=f'{base}.cases[{i}].when')
             if not isinstance(outcome, str) or not outcome.strip():
-                raise CompileError('Case "outcome" must be a non-empty string', path=f'{base}.cases[{i}].outcome')
+                msg = 'Case "outcome" must be a non-empty string'
+                raise CompileError(msg, path=f'{base}.cases[{i}].outcome')
 
             cases_ir.append(
                 {
@@ -431,25 +525,29 @@ class WorkflowCompiler:
     def _compile_set_params(step: dict[str, Any], base: str) -> dict[str, Any]:
         vars_map = step.get('vars')
         if not isinstance(vars_map, dict):
-            raise CompileError('"set.vars" must be a mapping', path=f'{base}.vars')
+            msg = '"set.vars" must be a mapping'
+            raise CompileError(msg, path=f'{base}.vars')
 
         compiled_map = compile_templates_deep(vars_map, path=f'{base}.vars')
         normalized: dict[str, Any] = {}
 
         for raw_key, compiled_value in compiled_map.items():
             if not isinstance(raw_key, str) or not raw_key.strip():
-                raise CompileError('set.vars keys must be non-empty strings', path=f'{base}.vars')
+                msg = 'set.vars keys must be non-empty strings'
+                raise CompileError(msg, path=f'{base}.vars')
 
             key = raw_key.strip()
             if key.startswith('vars.'):
                 key = key.split('.', 1)[1].strip()
 
             if not key:
-                raise CompileError('set.vars keys must be "vars.<name>" or "<name>"', path=f'{base}.vars.{raw_key}')
+                msg = 'set.vars keys must be "vars.<name>" or "<name>"'
+                raise CompileError(msg, path=f'{base}.vars.{raw_key}')
 
             if key in normalized:
+                msg = f'Duplicate set.vars target "{key}"'
                 raise CompileError(
-                    f'Duplicate set.vars target "{key}"',
+                    msg,
                     path=f'{base}.vars.{raw_key}',
                 )
 
@@ -459,17 +557,25 @@ class WorkflowCompiler:
 
     @staticmethod
     def _compile_compute_params(step: dict[str, Any], base: str) -> dict[str, Any]:
-        from .expr import parse_required_expr_string
-        from .templates import _expr_to_ir
-
         set_map = step.get('set')
         if not isinstance(set_map, dict) or not set_map:
-            raise CompileError('"compute.set" must be a non-empty mapping', path=f'{base}.set')
+            msg = '"compute.set" must be a non-empty mapping'
+            raise CompileError(msg, path=f'{base}.set')
 
         out: dict[str, Any] = {}
         for target, rhs in set_map.items():
-            if not isinstance(target, str) or not target.startswith('vars.') or len(target.split('.')) < 2:
-                raise CompileError('compute.set keys must be "vars.<name>"', path=f'{base}.set')
+            if not isinstance(target, str):
+                msg = 'compute.set keys must be "vars.<path>"'
+                raise CompileError(msg, path=f'{base}.set')
+
+            parts = target.split('.')
+            if (
+                parts[0] != 'vars'
+                or len(parts) < VARS_PATH_MIN_PARTS
+                or any(not part.strip() for part in parts[1:])
+            ):
+                msg = 'compute.set keys must be "vars.<path>"'
+                raise CompileError(msg, path=f'{base}.set')
 
             if isinstance(rhs, str):
                 ast = parse_required_expr_string(rhs, path=f'{base}.set.{target}')
@@ -481,31 +587,37 @@ class WorkflowCompiler:
                 out[target] = {'kind': 'expr', 'expr': expr_ir}
                 continue
 
-            raise CompileError(
-                'compute.set values must be either an expression string like "${add(...)}" or an op mapping like {add: [...]}',
-                path=f'{base}.set.{target}',
+            msg = (
+                'compute.set values must be either an expression string like '
+                '"${add(...)}" or an op mapping like {add: [...]}'
             )
+            raise CompileError(msg, path=f'{base}.set.{target}')
 
         return {'set': out}
 
     @staticmethod
     def _compile_compute_yaml_op(node: dict[str, Any], *, path: str) -> dict[str, Any]:
         if not isinstance(node, dict):
-            raise CompileError('Compute op must be a mapping', path=path)
+            msg = 'Compute op must be a mapping'
+            raise CompileError(msg, path=path)
 
         if len(node) != 1:
-            raise CompileError('Compute op must have exactly one operator key', path=path)
+            msg = 'Compute op must have exactly one operator key'
+            raise CompileError(msg, path=path)
 
         op, args = next(iter(node.items()))
 
         if not isinstance(op, str) or not op:
-            raise CompileError('Compute operator must be a non-empty string', path=path)
+            msg = 'Compute operator must be a non-empty string'
+            raise CompileError(msg, path=path)
 
         if op not in _ALLOWED_COMPUTE_OPS:
-            raise CompileError(f'Compute operator "{op}" is not allowed', path=f'{path}.{op}')
+            msg = f'Compute operator "{op}" is not allowed'
+            raise CompileError(msg, path=f'{path}.{op}')
 
         if not isinstance(args, list) or not args:
-            raise CompileError(f'Compute operator "{op}" requires a non-empty list of args', path=f'{path}.{op}')
+            msg = f'Compute operator "{op}" requires a non-empty list of args'
+            raise CompileError(msg, path=f'{path}.{op}')
 
         compiled_args = [
             WorkflowCompiler._compile_compute_value(a, path=f'{path}.{op}[{i}]')
@@ -521,32 +633,32 @@ class WorkflowCompiler:
         if isinstance(v, str):
             s = v.strip()
             if s.startswith('${') and s.endswith('}'):
-                from .expr import parse_required_expr_string
-                from .templates import _expr_to_ir
-
                 ast = parse_required_expr_string(s, path=path)
-                return _expr_to_ir(ast)
+                return cast('dict[str, Any]', _expr_to_ir(ast))
 
             return {'kind': 'lit', 'value': v}
 
         if isinstance(v, (int, float, bool)) or v is None:
             return {'kind': 'lit', 'value': v}
 
-        raise CompileError('Invalid compute value type', path=path)
+        msg = 'Invalid compute value type'
+        raise CompileError(msg, path=path)
 
     @staticmethod
     def _compile_approval_params(step: dict[str, Any], base: str) -> dict[str, Any]:
         a = step.get('approved_outcome')
         r = step.get('rejected_outcome')
         if not isinstance(a, str) or not a.strip():
-            raise CompileError('"approval.approved_outcome" must be a non-empty string', path=f'{base}.approved_outcome')
+            msg = '"approval.approved_outcome" must be a non-empty string'
+            raise CompileError(msg, path=f'{base}.approved_outcome')
         if not isinstance(r, str) or not r.strip():
-            raise CompileError('"approval.rejected_outcome" must be a non-empty string', path=f'{base}.rejected_outcome')
+            msg = '"approval.rejected_outcome" must be a non-empty string'
+            raise CompileError(msg, path=f'{base}.rejected_outcome')
 
         timeout_seconds = step.get('timeout_seconds')
-        if timeout_seconds is not None:
-            if not isinstance(timeout_seconds, int) or timeout_seconds <= 0:
-                raise CompileError('"approval.timeout_seconds" must be a positive int', path=f'{base}.timeout_seconds')
+        if timeout_seconds is not None and (not isinstance(timeout_seconds, int) or timeout_seconds <= 0):
+            msg = '"approval.timeout_seconds" must be a positive int'
+            raise CompileError(msg, path=f'{base}.timeout_seconds')
 
         out: dict[str, Any] = {
             'approved_outcome': a.strip(),
@@ -574,51 +686,82 @@ class WorkflowCompiler:
         return False, []
 
     @staticmethod
+    def _parse_flow_item(item: Any, *, index: int, steps_ir: dict[str, Any]) -> tuple[str, str, str | None]:
+        if not isinstance(item, dict):
+            msg = 'Each flow item must be a mapping'
+            raise CompileError(msg, path=f'workflow.flow[{index}]')
+
+        frm = item.get('from')
+        to = item.get('to')
+        on = item.get('on')
+
+        if not isinstance(frm, str) or frm not in steps_ir:
+            msg = '"from" must reference an existing step id'
+            raise CompileError(msg, path=f'workflow.flow[{index}].from')
+
+        if not isinstance(to, str) or not to.strip():
+            msg = '"to" must be a non-empty string'
+            raise CompileError(msg, path=f'workflow.flow[{index}].to')
+        to = to.strip()
+
+        if to not in steps_ir and to not in _END_TARGETS:
+            msg = '"to" must reference an existing step id or be $end/$reject'
+            raise CompileError(msg, path=f'workflow.flow[{index}].to')
+
+        if on is None:
+            return frm, to, None
+
+        if not isinstance(on, str) or not on.strip():
+            msg = '"on" must be a non-empty string'
+            raise CompileError(msg, path=f'workflow.flow[{index}].on')
+
+        return frm, to, on.strip()
+
+    @staticmethod
+    def _add_flow_transition(
+        transitions: dict[str, Any],
+        *,
+        frm: str,
+        to: str,
+        on: str | None,
+        index: int,
+    ) -> None:
+        if on is None:
+            if frm in transitions:
+                msg = 'Duplicate transition for step'
+                raise CompileError(msg, path=f'workflow.flow[{index}].from')
+            transitions[frm] = {'kind': 'linear', 'to': to}
+            return
+
+        existing = transitions.get(frm)
+        if existing is None:
+            transitions[frm] = {'kind': 'by_outcome', 'map': {on: to}}
+            return
+
+        if existing.get('kind') != 'by_outcome':
+            msg = 'Cannot mix linear and outcome transitions for the same step'
+            raise CompileError(msg, path=f'workflow.flow[{index}].from')
+
+        target_map = existing['map']
+        if on in target_map:
+            msg = 'Duplicate (from,on) transition'
+            raise CompileError(msg, path=f'workflow.flow[{index}].on')
+
+        target_map[on] = to
+
+    @staticmethod
     def _compile_flow(flow: list[Any], steps_ir: dict[str, Any]) -> dict[str, Any]:
         transitions: dict[str, Any] = {}
 
-        for i, t in enumerate(flow):
-            if not isinstance(t, dict):
-                raise CompileError('Each flow item must be a mapping', path=f'workflow.flow[{i}]')
-
-            frm = t.get('from')
-            to = t.get('to')
-            on = t.get('on', None)
-
-            if not isinstance(frm, str) or frm not in steps_ir:
-                raise CompileError('"from" must reference an existing step id', path=f'workflow.flow[{i}].from')
-
-            if not isinstance(to, str) or not to.strip():
-                raise CompileError('"to" must be a non-empty string', path=f'workflow.flow[{i}].to')
-            to = to.strip()
-
-            if to not in steps_ir and to not in _END_TARGETS:
-                raise CompileError('"to" must reference an existing step id or be $end/$reject', path=f'workflow.flow[{i}].to')
-
-            if on is None:
-                if frm in transitions:
-                    raise CompileError('Duplicate transition for step', path=f'workflow.flow[{i}].from')
-                transitions[frm] = {'kind': 'linear', 'to': to}
-                continue
-
-            if not isinstance(on, str) or not on.strip():
-                raise CompileError('"on" must be a non-empty string', path=f'workflow.flow[{i}].on')
-
-            existing = transitions.get(frm)
-            if existing is None:
-                transitions[frm] = {'kind': 'by_outcome', 'map': {on.strip(): to}}
-                continue
-
-            if existing.get('kind') != 'by_outcome':
-                raise CompileError(
-                    'Cannot mix linear and outcome transitions for the same step',
-                    path=f'workflow.flow[{i}].from',
-                )
-
-            m = existing['map']
-            if on.strip() in m:
-                raise CompileError('Duplicate (from,on) transition', path=f'workflow.flow[{i}].on')
-            m[on.strip()] = to
+        for index, item in enumerate(flow):
+            frm, to, on = WorkflowCompiler._parse_flow_item(item, index=index, steps_ir=steps_ir)
+            WorkflowCompiler._add_flow_transition(
+                transitions,
+                frm=frm,
+                to=to,
+                on=on,
+                index=index,
+            )
 
         return transitions
 
@@ -631,25 +774,19 @@ class WorkflowCompiler:
 
             if produces:
                 if tr is None or tr.get('kind') != 'by_outcome':
-                    raise CompileError(
-                        'Outcome-producing step requires outcome transitions',
-                        path=f'workflow.flow({step_id})',
-                    )
+                    msg = 'Outcome-producing step requires outcome transitions'
+                    raise CompileError(msg, path=f'workflow.flow({step_id})')
                 mapped = set(tr['map'].keys())
                 missing = [o for o in outs if o not in mapped]
                 if missing:
-                    raise CompileError(
-                        f'Missing flow mappings for outcomes: {missing}',
-                        path=f'workflow.flow({step_id})',
-                    )
+                    msg = f'Missing flow mappings for outcomes: {missing}'
+                    raise CompileError(msg, path=f'workflow.flow({step_id})')
             else:
                 if tr is None:
                     continue
                 if tr.get('kind') != 'linear':
-                    raise CompileError(
-                        'Non-outcome step requires a linear transition (or omit it to end)',
-                        path=f'workflow.flow({step_id})',
-                    )
+                    msg = 'Non-outcome step requires a linear transition (or omit it to end)'
+                    raise CompileError(msg, path=f'workflow.flow({step_id})')
 
     @staticmethod
     def _collect_reachable_steps(start_id: str, steps_ir: dict[str, Any], transitions: dict[str, Any]) -> set[str]:
@@ -677,9 +814,11 @@ class WorkflowCompiler:
                 if not isinstance(target_map, dict):
                     continue
 
-                for target in target_map.values():
-                    if isinstance(target, str) and target in steps_ir:
-                        pending.append(target)
+                pending.extend(
+                    target
+                    for target in target_map.values()
+                    if isinstance(target, str) and target in steps_ir
+                )
 
         return reachable
 
@@ -690,55 +829,77 @@ class WorkflowCompiler:
             return
 
         detail = ', '.join(unreachable)
+        msg = f'Unreachable steps from workflow.start "{start_id}": {detail}'
         raise CompileError(
-            f'Unreachable steps from workflow.start "{start_id}": {detail}',
+            msg,
             path='workflow.steps',
             details={'unreachable_steps': unreachable},
         )
 
     @staticmethod
-    def _extract_step_produced_vars(step_ir: dict[str, Any]) -> set[str]:
+    def _extract_set_step_vars(params: dict[str, Any]) -> set[str]:
         produced: set[str] = set()
+        vars_map = params.get('vars')
+        if not isinstance(vars_map, dict):
+            return produced
+
+        for key in vars_map:
+            if isinstance(key, str) and key.strip():
+                produced.add(key.strip())
+        return produced
+
+    @staticmethod
+    def _extract_compute_step_vars(params: dict[str, Any]) -> set[str]:
+        produced: set[str] = set()
+        set_map = params.get('set')
+        if not isinstance(set_map, dict):
+            return produced
+
+        for target in set_map:
+            if not (isinstance(target, str) and target.startswith('vars.')):
+                continue
+            name = target.split('.', 1)[1].strip()
+            if name:
+                produced.add(name)
+        return produced
+
+    @staticmethod
+    def _extract_webhook_step_vars(params: dict[str, Any]) -> set[str]:
+        produced: set[str] = set()
+        capture = params.get('capture')
+        if not isinstance(capture, list):
+            return produced
+
+        for rule in capture:
+            if not isinstance(rule, dict):
+                continue
+            target = rule.get('target')
+            if (
+                isinstance(target, list)
+                and len(target) >= VARS_PATH_MIN_PARTS
+                and target[0] == 'vars'
+                and isinstance(target[1], str)
+                and target[1].strip()
+            ):
+                produced.add(target[1].strip())
+
+        return produced
+
+    @staticmethod
+    def _extract_step_produced_vars(step_ir: dict[str, Any]) -> set[str]:
         step_type = step_ir.get('type')
         params = step_ir.get('params') or {}
 
         if step_type == StepTypes.SET:
-            vars_map = params.get('vars')
-            if isinstance(vars_map, dict):
-                for key in vars_map:
-                    if isinstance(key, str) and key.strip():
-                        produced.add(key.strip())
-            return produced
+            return WorkflowCompiler._extract_set_step_vars(params)
 
         if step_type == StepTypes.COMPUTE:
-            set_map = params.get('set')
-            if isinstance(set_map, dict):
-                for target in set_map:
-                    if not (isinstance(target, str) and target.startswith('vars.')):
-                        continue
-                    name = target.split('.', 1)[1].strip()
-                    if name:
-                        produced.add(name)
-            return produced
+            return WorkflowCompiler._extract_compute_step_vars(params)
 
         if step_type == StepTypes.WEBHOOK:
-            capture = params.get('capture')
-            if isinstance(capture, list):
-                for rule in capture:
-                    if not isinstance(rule, dict):
-                        continue
-                    target = rule.get('target')
-                    if (
-                        isinstance(target, list)
-                        and len(target) >= 2
-                        and target[0] == 'vars'
-                        and isinstance(target[1], str)
-                        and target[1].strip()
-                    ):
-                        produced.add(target[1].strip())
-            return produced
+            return WorkflowCompiler._extract_webhook_step_vars(params)
 
-        return produced
+        return set()
 
     @staticmethod
     def _build_step_predecessors(
@@ -768,6 +929,48 @@ class WorkflowCompiler:
 
         return predecessors
 
+    @staticmethod
+    def _build_initial_available_var_maps(
+        *,
+        start_id: str,
+        steps_ir: dict[str, Any],
+        reachable: set[str],
+        produced_by_step: dict[str, set[str]],
+        produced_universe: set[str],
+    ) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
+        available_before: dict[str, set[str]] = {}
+        available_after: dict[str, set[str]] = {}
+
+        for step_id in steps_ir:
+            if step_id not in reachable or step_id == start_id:
+                available_before[step_id] = set()
+            else:
+                available_before[step_id] = set(produced_universe)
+
+            available_after[step_id] = set(available_before[step_id]) | produced_by_step.get(step_id, set())
+
+        return available_before, available_after
+
+    @staticmethod
+    def _get_step_available_before(
+        *,
+        step_id: str,
+        start_id: str,
+        predecessors: dict[str, set[str]],
+        available_after: dict[str, set[str]],
+    ) -> set[str]:
+        if step_id == start_id:
+            return set()
+
+        incoming = list(predecessors.get(step_id, set()))
+        if not incoming:
+            return set()
+
+        next_before = set(available_after[incoming[0]])
+        for predecessor_id in incoming[1:]:
+            next_before &= available_after[predecessor_id]
+        return next_before
+
     def _compute_available_vars_before_step(
         self,
         start_id: str,
@@ -780,20 +983,18 @@ class WorkflowCompiler:
             step_id: self._extract_step_produced_vars(step_ir)
             for step_id, step_ir in steps_ir.items()
         }
+
         produced_universe: set[str] = set()
         for step_id in reachable:
             produced_universe.update(produced_by_step.get(step_id, set()))
 
-        available_before: dict[str, set[str]] = {}
-        available_after: dict[str, set[str]] = {}
-
-        for step_id in steps_ir:
-            if step_id not in reachable or step_id == start_id:
-                available_before[step_id] = set()
-            else:
-                available_before[step_id] = set(produced_universe)
-
-            available_after[step_id] = set(available_before[step_id]) | produced_by_step.get(step_id, set())
+        available_before, available_after = self._build_initial_available_var_maps(
+            start_id=start_id,
+            steps_ir=steps_ir,
+            reachable=reachable,
+            produced_by_step=produced_by_step,
+            produced_universe=produced_universe,
+        )
 
         changed = True
         while changed:
@@ -803,17 +1004,12 @@ class WorkflowCompiler:
                 if step_id not in reachable:
                     continue
 
-                if step_id == start_id:
-                    next_before: set[str] = set()
-                else:
-                    incoming = list(predecessors.get(step_id, set()))
-                    if not incoming:
-                        next_before = set()
-                    else:
-                        next_before = set(available_after[incoming[0]])
-                        for predecessor_id in incoming[1:]:
-                            next_before &= available_after[predecessor_id]
-
+                next_before = self._get_step_available_before(
+                    step_id=step_id,
+                    start_id=start_id,
+                    predecessors=predecessors,
+                    available_after=available_after,
+                )
                 next_after = set(next_before) | produced_by_step.get(step_id, set())
 
                 if next_before != available_before[step_id]:
@@ -865,7 +1061,7 @@ class WorkflowCompiler:
             ref_path = expr_ir.get('path')
             if not (isinstance(ref_path, list) and ref_path):
                 return
-            if ref_path[0] != 'vars' or len(ref_path) < 2:
+            if ref_path[0] != 'vars' or len(ref_path) < VARS_PATH_MIN_PARTS:
                 return
 
             var_name = ref_path[1]
@@ -887,6 +1083,39 @@ class WorkflowCompiler:
                     path=f'{path}.args[{index}]',
                 )
             return
+
+    def _validate_template_parts_refs(
+        self,
+        parts: Any,
+        *,
+        available_vars: set[str],
+        step_id: str,
+        path: str,
+    ) -> None:
+        for index, part in enumerate(parts or []):
+            if isinstance(part, dict) and part.get('kind') == 'expr':
+                self._validate_expr_ir_refs(
+                    part.get('expr'),
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    path=f'{path}.parts[{index}]',
+                )
+
+    def _validate_nested_mapping_refs(
+        self,
+        mapping: dict[str, Any],
+        *,
+        available_vars: set[str],
+        step_id: str,
+        path: str,
+    ) -> None:
+        for key, nested in mapping.items():
+            self._validate_compiled_value_refs(
+                nested,
+                available_vars=available_vars,
+                step_id=step_id,
+                path=f'{path}.{key}',
+            )
 
     def _validate_compiled_value_refs(
         self,
@@ -911,14 +1140,12 @@ class WorkflowCompiler:
 
         kind = value.get('kind')
         if kind == 'template':
-            for index, part in enumerate(value.get('parts') or []):
-                if isinstance(part, dict) and part.get('kind') == 'expr':
-                    self._validate_expr_ir_refs(
-                        part.get('expr'),
-                        available_vars=available_vars,
-                        step_id=step_id,
-                        path=f'{path}.parts[{index}]',
-                    )
+            self._validate_template_parts_refs(
+                value.get('parts'),
+                available_vars=available_vars,
+                step_id=step_id,
+                path=path,
+            )
             return
 
         if kind in {'ref', 'call'}:
@@ -930,7 +1157,7 @@ class WorkflowCompiler:
             )
             return
 
-        if kind in {'expr'}:
+        if kind == 'expr':
             self._validate_expr_ir_refs(
                 value.get('expr'),
                 available_vars=available_vars,
@@ -942,13 +1169,12 @@ class WorkflowCompiler:
         if kind == 'lit':
             return
 
-        for key, nested in value.items():
-            self._validate_compiled_value_refs(
-                nested,
-                available_vars=available_vars,
-                step_id=step_id,
-                path=f'{path}.{key}',
-            )
+        self._validate_nested_mapping_refs(
+            value,
+            available_vars=available_vars,
+            step_id=step_id,
+            path=path,
+        )
 
     def _validate_condition_refs(
         self,
@@ -1004,6 +1230,112 @@ class WorkflowCompiler:
                 path=f'{path}.compare.right',
             )
 
+    def _validate_email_step_refs(
+        self,
+        params: dict[str, Any],
+        *,
+        available_vars: set[str],
+        step_id: str,
+        base: str,
+    ) -> None:
+        self._validate_compiled_value_refs(
+            params.get('subject'),
+            available_vars=available_vars,
+            step_id=step_id,
+            path=f'{base}.subject',
+        )
+        self._validate_compiled_value_refs(
+            params.get('body'),
+            available_vars=available_vars,
+            step_id=step_id,
+            path=f'{base}.body',
+        )
+
+    def _validate_webhook_step_refs(
+        self,
+        params: dict[str, Any],
+        *,
+        available_vars: set[str],
+        step_id: str,
+        base: str,
+    ) -> None:
+        self._validate_compiled_value_refs(
+            params.get('url'),
+            available_vars=available_vars,
+            step_id=step_id,
+            path=f'{base}.url',
+        )
+        self._validate_compiled_value_refs(
+            params.get('headers'),
+            available_vars=available_vars,
+            step_id=step_id,
+            path=f'{base}.headers',
+        )
+        self._validate_compiled_value_refs(
+            params.get('body'),
+            available_vars=available_vars,
+            step_id=step_id,
+            path=f'{base}.body',
+        )
+
+    def _validate_logic_step_refs(
+        self,
+        params: dict[str, Any],
+        *,
+        available_vars: set[str],
+        step_id: str,
+        base: str,
+    ) -> None:
+        for index, item in enumerate(params.get('cases') or []):
+            if not isinstance(item, dict):
+                continue
+            self._validate_condition_refs(
+                item.get('when'),
+                available_vars=available_vars,
+                step_id=step_id,
+                path=f'{base}.cases[{index}].when',
+            )
+
+    def _validate_set_step_refs(
+        self,
+        params: dict[str, Any],
+        *,
+        available_vars: set[str],
+        step_id: str,
+        base: str,
+    ) -> None:
+        self._validate_compiled_value_refs(
+            params.get('vars'),
+            available_vars=available_vars,
+            step_id=step_id,
+            path=f'{base}.vars',
+        )
+
+    def _validate_compute_step_refs(
+        self,
+        params: dict[str, Any],
+        *,
+        available_vars: set[str],
+        step_id: str,
+        base: str,
+    ) -> None:
+        current_available = set(available_vars)
+        set_map = params.get('set') or {}
+        if not isinstance(set_map, dict):
+            return
+
+        for target, spec in set_map.items():
+            self._validate_compiled_value_refs(
+                spec.get('expr') if isinstance(spec, dict) else spec,
+                available_vars=current_available,
+                step_id=step_id,
+                path=f'{base}.set.{target}',
+            )
+            if isinstance(target, str) and target.startswith('vars.'):
+                name = target.split('.', 1)[1].strip()
+                if name:
+                    current_available.add(name)
+
     def _validate_step_variable_references(
         self,
         start_id: str,
@@ -1022,79 +1354,48 @@ class WorkflowCompiler:
             available_vars = set(available_before.get(step_id, set()))
 
             if step_type == StepTypes.EMAIL:
-                self._validate_compiled_value_refs(
-                    params.get('subject'),
+                self._validate_email_step_refs(
+                    params,
                     available_vars=available_vars,
                     step_id=step_id,
-                    path=f'{base}.subject',
-                )
-                self._validate_compiled_value_refs(
-                    params.get('body'),
-                    available_vars=available_vars,
-                    step_id=step_id,
-                    path=f'{base}.body',
+                    base=base,
                 )
                 continue
 
             if step_type == StepTypes.WEBHOOK:
-                self._validate_compiled_value_refs(
-                    params.get('url'),
+                self._validate_webhook_step_refs(
+                    params,
                     available_vars=available_vars,
                     step_id=step_id,
-                    path=f'{base}.url',
-                )
-                self._validate_compiled_value_refs(
-                    params.get('headers'),
-                    available_vars=available_vars,
-                    step_id=step_id,
-                    path=f'{base}.headers',
-                )
-                self._validate_compiled_value_refs(
-                    params.get('body'),
-                    available_vars=available_vars,
-                    step_id=step_id,
-                    path=f'{base}.body',
+                    base=base,
                 )
                 continue
 
             if step_type == StepTypes.LOGIC:
-                for index, item in enumerate(params.get('cases') or []):
-                    if not isinstance(item, dict):
-                        continue
-                    self._validate_condition_refs(
-                        item.get('when'),
-                        available_vars=available_vars,
-                        step_id=step_id,
-                        path=f'{base}.cases[{index}].when',
-                    )
+                self._validate_logic_step_refs(
+                    params,
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    base=base,
+                )
                 continue
 
             if step_type == StepTypes.SET:
-                self._validate_compiled_value_refs(
-                    params.get('vars'),
+                self._validate_set_step_refs(
+                    params,
                     available_vars=available_vars,
                     step_id=step_id,
-                    path=f'{base}.vars',
+                    base=base,
                 )
                 continue
 
             if step_type == StepTypes.COMPUTE:
-                current_available = set(available_vars)
-                set_map = params.get('set') or {}
-                if not isinstance(set_map, dict):
-                    continue
-
-                for target, spec in set_map.items():
-                    self._validate_compiled_value_refs(
-                        spec.get('expr') if isinstance(spec, dict) else spec,
-                        available_vars=current_available,
-                        step_id=step_id,
-                        path=f'{base}.set.{target}',
-                    )
-                    if isinstance(target, str) and target.startswith('vars.'):
-                        name = target.split('.', 1)[1].strip()
-                        if name:
-                            current_available.add(name)
+                self._validate_compute_step_refs(
+                    params,
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    base=base,
+                )
 
     def _build_meta(self, yaml_text: str, ir: dict[str, Any]) -> CompileMeta:
         source_hash = sha256_text(yaml_text)
@@ -1107,4 +1408,5 @@ class WorkflowCompiler:
 
 
 def compile_workflow_yaml(yaml_text: str, *, compiler_version: str = 'dev') -> dict[str, Any]:
+    """Convenience wrapper that compiles Workflow 2 YAML into IR."""
     return WorkflowCompiler(compiler_version=compiler_version).compile(yaml_text)
