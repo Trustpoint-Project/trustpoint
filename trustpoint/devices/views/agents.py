@@ -1,6 +1,6 @@
 """Table View listing devices that are registered as automation agents (1-to-1 or 1-to-n)."""
 
-import secrets  # noqa: PLC0415
+import secrets
 import uuid
 from typing import Any
 
