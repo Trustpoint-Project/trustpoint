@@ -1,5 +1,6 @@
 """Tests for request/message_responder.py."""
 
+import json
 from typing import Any
 from unittest.mock import Mock
 
@@ -11,8 +12,20 @@ from request.message_responder.est import (
     EstErrorMessageResponder,
     EstMessageResponder,
 )
-from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
-from workflows.models import State
+from request.message_responder.rest import (
+    RestCertificateMessageResponder,
+    RestErrorMessageResponder,
+    RestMessageResponder,
+)
+from request.request_context import (
+    BaseRequestContext,
+    EstBaseRequestContext,
+    EstCertificateRequestContext,
+    RestBaseRequestContext,
+    RestCertificateRequestContext,
+)
+from workflows2.models import Workflow2Run
+from workflows2.services.dispatch import DispatchOutcome
 
 
 @pytest.mark.django_db
@@ -25,55 +38,45 @@ class TestEstMessageResponder:
         with pytest.raises(TypeError, match='EstMessageResponder requires a subclass of EstBaseRequestContext.'):
             EstMessageResponder.build_response(context)
 
-    def test_build_response_no_enrollment_request(self) -> None:
-        """Test build_response when enrollment_request is None."""
+    def test_build_response_pending_workflow2_outcome(self) -> None:
+        """Test build_response with a pending Workflow 2 run."""
         context = Mock(spec=EstCertificateRequestContext)
-        context.enrollment_request = None
-
-        with pytest.raises(ValueError, match='No enrollment request is set in the context'):
-            EstCertificateMessageResponder.build_response(context)
-
-    def test_build_response_awaiting_state(self) -> None:
-        """Test build_response with AWAITING state."""
-        context = Mock(spec=EstCertificateRequestContext)
-        enrollment_request = Mock()
-        enrollment_request.aggregated_state = State.AWAITING
-        context.enrollment_request = enrollment_request
+        run = Mock()
+        run.status = Workflow2Run.STATUS_AWAITING
+        context.workflow2_outcome = DispatchOutcome(status='blocked', run=run, instances=[Mock()])
 
         EstCertificateMessageResponder.build_response(context)
 
         assert context.http_response_status == 202
         assert context.http_response_content_type == 'text/plain'
-        assert context.http_response_content == 'Enrollment request pending manual approval.'
+        assert context.http_response_content == 'Enrollment request pending workflow approval.'
 
-    def test_build_response_rejected_state(self) -> None:
-        """Test build_response with REJECTED state."""
+    def test_build_response_rejected_workflow2_outcome(self) -> None:
+        """Test build_response with a rejected Workflow 2 run."""
         context = Mock(spec=EstCertificateRequestContext)
-        enrollment_request = Mock()
-        enrollment_request.aggregated_state = State.REJECTED
-        context.enrollment_request = enrollment_request
+        run = Mock()
+        run.status = Workflow2Run.STATUS_REJECTED
+        context.workflow2_outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
 
         EstCertificateMessageResponder.build_response(context)
 
-        enrollment_request.finalize.assert_called_once_with(State.REJECTED)
         assert context.http_response_status == 403
         assert context.http_response_content_type == 'text/plain'
-        assert context.http_response_content == 'Enrollment request Rejected.'
+        assert context.http_response_content == 'Enrollment request rejected by workflow.'
 
-    def test_build_response_failed_state(self) -> None:
-        """Test build_response with FAILED state."""
+    def test_build_response_failed_workflow2_outcome(self) -> None:
+        """Test build_response with a failed Workflow 2 run."""
         context = Mock(spec=EstCertificateRequestContext)
-        enrollment_request = Mock()
-        enrollment_request.aggregated_state = State.FAILED
-        enrollment_request.id = 123
-        context.enrollment_request = enrollment_request
+        run = Mock()
+        run.id = 'run-123'
+        run.status = Workflow2Run.STATUS_FAILED
+        context.workflow2_outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
 
         EstCertificateMessageResponder.build_response(context)
 
         assert context.http_response_status == 500
         assert context.http_response_content_type == 'text/plain'
-        assert 'Workflow failed' in context.http_response_content
-        assert '/workflows/requests/123' in context.http_response_content
+        assert '/workflows2/runs/run-123/' in context.http_response_content
 
     def test_build_response_simpleenroll_valid(
         self,
@@ -84,10 +87,7 @@ class TestEstMessageResponder:
         cert = device_instance_onboarding['cert']
 
         context = Mock(spec=EstCertificateRequestContext)
-        enrollment_request = Mock()
-        enrollment_request.aggregated_state = State.APPROVED
-        enrollment_request.is_valid.return_value = True
-        context.enrollment_request = enrollment_request
+        context.workflow2_outcome = None
         context.operation = 'simpleenroll'
         context.issued_certificate = cert
         context.est_encoding = 'pem'
@@ -95,7 +95,6 @@ class TestEstMessageResponder:
 
         EstMessageResponder.build_response(context)
 
-        enrollment_request.finalize.assert_called_once_with(State.FINALIZED)
         assert context.http_response_status == 200
         assert context.http_response_content_type == 'application/x-pem-file'
         assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED
@@ -109,10 +108,7 @@ class TestEstMessageResponder:
         cert = device_instance['cert']
 
         context = Mock(spec=EstCertificateRequestContext)
-        enrollment_request = Mock()
-        enrollment_request.aggregated_state = State.APPROVED
-        enrollment_request.is_valid.return_value = True
-        context.enrollment_request = enrollment_request
+        context.workflow2_outcome = None
         context.operation = 'simplereenroll'
         context.issued_certificate = cert
         context.est_encoding = 'pem'
@@ -120,26 +116,8 @@ class TestEstMessageResponder:
 
         EstMessageResponder.build_response(context)
 
-        enrollment_request.finalize.assert_called_once_with(State.FINALIZED)
         assert context.http_response_status == 200
         assert context.http_response_content_type == 'application/x-pem-file'
-
-    def test_build_response_invalid_request(self) -> None:
-        """Test build_response with invalid enrollment request."""
-        context = Mock(spec=EstCertificateRequestContext)
-        context.http_response_status = None
-        context.http_response_content = None
-        context.http_response_content_type = None
-        enrollment_request = Mock()
-        enrollment_request.aggregated_state = State.APPROVED
-        enrollment_request.is_valid.return_value = False
-        context.enrollment_request = enrollment_request
-
-        EstMessageResponder.build_response(context)
-
-        assert context.http_response_status == 500
-        assert context.http_response_content_type == 'text/plain'
-        assert context.http_response_content == 'No suitable responder found for this EST message.'
 
     def test_build_response_unsupported_operation(self) -> None:
         """Test build_response with unsupported operation."""
@@ -147,10 +125,7 @@ class TestEstMessageResponder:
         context.http_response_status = None
         context.http_response_content = None
         context.http_response_content_type = None
-        enrollment_request = Mock()
-        enrollment_request.aggregated_state = State.APPROVED
-        enrollment_request.is_valid.return_value = True
-        context.enrollment_request = enrollment_request
+        context.workflow2_outcome = None
         context.operation = 'unsupported'
 
         EstMessageResponder.build_response(context)
@@ -167,6 +142,7 @@ class TestEstCertificateMessageResponder:
     def test_build_response_no_issued_certificate(self) -> None:
         """Test build_response when issued_certificate is None."""
         context = Mock(spec=EstCertificateRequestContext)
+        context.workflow2_outcome = None
         context.issued_certificate = None
 
         with pytest.raises(ValueError, match='Issued certificate is not set in the context'):
@@ -181,6 +157,7 @@ class TestEstCertificateMessageResponder:
         device = device_instance_onboarding['device']
 
         context = Mock(spec=EstCertificateRequestContext)
+        context.workflow2_outcome = None
         context.issued_certificate = cert
         context.est_encoding = 'pem'
         context.device = device
@@ -202,6 +179,7 @@ class TestEstCertificateMessageResponder:
         device = device_instance_onboarding['device']
 
         context = Mock(spec=EstCertificateRequestContext)
+        context.workflow2_outcome = None
         context.issued_certificate = cert
         context.est_encoding = 'der'
         context.device = device
@@ -222,6 +200,7 @@ class TestEstCertificateMessageResponder:
         device = device_instance_onboarding['device']
 
         context = Mock(spec=EstCertificateRequestContext)
+        context.workflow2_outcome = None
         context.issued_certificate = cert
         context.est_encoding = 'base64_der'
         context.device = device
@@ -242,6 +221,7 @@ class TestEstCertificateMessageResponder:
         device = device_instance_onboarding['device']
 
         context = Mock(spec=EstCertificateRequestContext)
+        context.workflow2_outcome = None
         context.issued_certificate = cert
         context.est_encoding = 'pkcs7'
         context.device = device
@@ -263,6 +243,7 @@ class TestEstCertificateMessageResponder:
         device = device_instance['device']
 
         context = Mock(spec=EstCertificateRequestContext)
+        context.workflow2_outcome = None
         context.issued_certificate = cert
         context.est_encoding = 'pem'
         context.device = device
@@ -281,6 +262,7 @@ class TestEstCertificateMessageResponder:
         cert = device_instance['cert']
 
         context = Mock(spec=EstCertificateRequestContext)
+        context.workflow2_outcome = None
         context.issued_certificate = cert
         context.est_encoding = 'pem'
         context.device = None
@@ -298,6 +280,7 @@ class TestEstCertificateMessageResponder:
         cert = device_instance['cert']
 
         context = Mock(spec=EstCertificateRequestContext)
+        context.workflow2_outcome = None
         context.issued_certificate = cert
         context.est_encoding = 'invalid_encoding'
         context.device = None
@@ -306,6 +289,64 @@ class TestEstCertificateMessageResponder:
 
         # Should handle the error gracefully
         assert context.http_response_status in [200, 500]
+
+
+@pytest.mark.django_db
+class TestRestMessageResponder:
+    """Tests for REST workflow-aware responders."""
+
+    def test_build_response_pending_workflow2_outcome(self) -> None:
+        """Test REST response when Workflow 2 is still waiting."""
+        context = Mock(spec=RestCertificateRequestContext)
+        run = Mock()
+        run.status = Workflow2Run.STATUS_AWAITING
+        context.workflow2_outcome = DispatchOutcome(status='blocked', run=run, instances=[Mock()])
+
+        RestCertificateMessageResponder.build_response(context)
+
+        assert context.http_response_status == 202
+        assert context.http_response_content_type == 'application/json'
+        payload = json.loads(context.http_response_content)
+        assert payload['status'] == 'pending'
+
+    def test_build_response_failed_workflow2_outcome(self) -> None:
+        """Test REST response when Workflow 2 failed."""
+        context = Mock(spec=RestCertificateRequestContext)
+        run = Mock()
+        run.id = 'run-123'
+        run.status = Workflow2Run.STATUS_FAILED
+        context.workflow2_outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
+
+        RestCertificateMessageResponder.build_response(context)
+
+        assert context.http_response_status == 500
+        assert context.http_response_content_type == 'application/json'
+        payload = json.loads(context.http_response_content)
+        assert payload['status'] == 'failed'
+        assert '/workflows2/runs/run-123/' in payload['detail']
+
+    def test_build_response_valid_without_workflow2_match(
+        self,
+        device_instance_onboarding: dict[str, Any],
+    ) -> None:
+        """Test REST success response when no workflow2 definition matched."""
+        device = device_instance_onboarding['device']
+        cert = device_instance_onboarding['cert']
+
+        context = Mock(spec=RestCertificateRequestContext)
+        context.workflow2_outcome = None
+        context.operation = 'enroll'
+        context.issued_certificate = cert
+        context.issued_certificate_chain = None
+        context.device = device
+
+        RestMessageResponder.build_response(context)
+
+        assert context.http_response_status == 200
+        assert context.http_response_content_type == 'application/json'
+        payload = json.loads(context.http_response_content)
+        assert 'certificate' in payload
+        assert device.onboarding_config.onboarding_status == OnboardingStatus.ONBOARDED
 
 
 @pytest.mark.django_db
@@ -350,3 +391,24 @@ class TestEstErrorMessageResponder:
         assert context.http_response_status == 400
         assert context.http_response_content_type == 'text/plain'
         assert context.http_response_content == 'An error occurred processing the EST request.'
+
+
+@pytest.mark.django_db
+class TestRestErrorMessageResponder:
+    """Tests for RestErrorMessageResponder class."""
+
+    def test_build_response_default_values(self) -> None:
+        """Test build_response with default REST error values."""
+        context = Mock(spec=RestBaseRequestContext)
+        context.http_response_status = None
+        context.http_response_content = None
+        context.http_response_content_type = None
+
+        RestErrorMessageResponder.build_response(context)
+
+        assert context.http_response_status == 500
+        assert context.http_response_content_type == 'application/json'
+        assert json.loads(context.http_response_content) == {
+            'status': 'error',
+            'detail': 'An error occurred processing the REST request.',
+        }

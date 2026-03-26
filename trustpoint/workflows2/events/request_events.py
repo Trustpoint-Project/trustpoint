@@ -1,12 +1,4 @@
-"""Event definitions for the workflows app.
-
-This module centralizes the supported workflow events and provides helpers to
-enumerate protocols and operations.
-
-Normalization rules:
-- protocol and operation are stored in lowercase.
-- callers of operations_for() are normalized to lowercase.
-"""
+"""Canonical request-pipeline events owned by Workflow 2."""
 
 from __future__ import annotations
 
@@ -15,14 +7,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Event:
-    """Represents a single event.
-
-    Attributes:
-        key: Internal name for the event.
-        protocol: Protocol or source namespace (lowercase).
-        operation: Operation within the protocol namespace (lowercase).
-        handler: Handler key used by the routing/handler layer.
-    """
+    """Describe one request-pipeline event emitted into workflows2."""
 
     key: str
     protocol: str
@@ -31,9 +16,8 @@ class Event:
 
 
 class Events:
-    """Central definition of all supported events in one place."""
+    """Central definition of request events supported by workflows2."""
 
-    # EST
     est_simpleenroll = Event(
         key='est_simpleenroll',
         protocol='est',
@@ -62,7 +46,6 @@ class Events:
         handler='certificate_request',
     )
 
-    # Device lifecycle
     device_created = Event(
         key='device_created',
         protocol='device',
@@ -86,16 +69,22 @@ class Events:
 
     @classmethod
     def all(cls) -> list[Event]:
-        """Return every Event defined on this class."""
-        return [v for v in vars(cls).values() if isinstance(v, Event)]
+        """Return every request event defined on this class."""
+        return [value for value in vars(cls).values() if isinstance(value, Event)]
 
     @classmethod
     def protocols(cls) -> list[str]:
-        """Return the unique list of non-empty protocol names."""
-        return sorted({e.protocol for e in cls.all() if e.protocol})
+        """Return the unique request protocols."""
+        return sorted({event.protocol for event in cls.all() if event.protocol})
 
     @classmethod
     def operations_for(cls, protocol: str) -> list[str]:
-        """Return all operations available for a given protocol."""
-        p = (protocol or '').strip().lower()
-        return sorted({e.operation for e in cls.all() if e.protocol == p and e.operation})
+        """Return all operations for the given protocol."""
+        normalized_protocol = (protocol or '').strip().lower()
+        return sorted(
+            {
+                event.operation
+                for event in cls.all()
+                if event.protocol == normalized_protocol and event.operation
+            }
+        )

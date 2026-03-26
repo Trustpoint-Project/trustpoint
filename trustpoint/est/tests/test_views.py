@@ -145,14 +145,13 @@ def test_extract_requested_domain_not_found():
 
 def test_est_simple_enrollment_mixin_event():
     """Test that EstSimpleEnrollmentMixin has correct EVENT attribute."""
-    from workflows.events import Events
+    from workflows2.events.request_events import Events
     assert EstSimpleEnrollmentMixin.EVENT == Events.est_simpleenroll
 
 
 @patch('est.views.EstErrorMessageResponder')
 @patch('est.views.EstMessageResponder')
 @patch('est.views.OperationProcessor')
-@patch('est.views.WorkflowHandler')
 @patch('est.views.Workflow2Handler')
 @patch('est.views.EstAuthorization')
 @patch('est.views.EstAuthentication')
@@ -166,7 +165,6 @@ def test_process_enrollment_success(
     mock_auth,
     mock_authz,
     mock_workflow2,
-    mock_workflow,
     mock_processor,
     mock_responder,
     mock_error_responder,
@@ -212,7 +210,6 @@ def test_process_enrollment_success(
     mock_auth.return_value.authenticate.assert_called_once_with(mock_ctx)
     mock_authz.return_value.authorize.assert_called_once_with(mock_ctx)
     mock_workflow2.return_value.handle.assert_called_once_with(mock_ctx)
-    mock_workflow.return_value.handle.assert_called_once_with(mock_ctx)
     mock_processor.return_value.process_operation.assert_called_once_with(mock_ctx)
     mock_responder.build_response.assert_called_once_with(mock_ctx)
     mock_error_responder.build_response.assert_not_called()
@@ -314,7 +311,7 @@ def test_est_simple_enrollment_view_post(mock_process, request_factory):
 
 def test_est_simple_reenrollment_view_event():
     """Test that EstSimpleReEnrollmentView has correct EVENT attribute."""
-    from workflows.events import Events
+    from workflows2.events.request_events import Events
     assert EstSimpleReEnrollmentView.EVENT == Events.est_simplereenroll
 
 
@@ -327,7 +324,7 @@ def test_est_simple_reenrollment_view_csrf_exempt():
 @patch('est.views.EstErrorMessageResponder')
 @patch('est.views.EstMessageResponder')
 @patch('est.views.OperationProcessor')
-@patch('est.views.WorkflowHandler')
+@patch('est.views.Workflow2Handler')
 @patch('est.views.EstAuthorization')
 @patch('est.views.EstAuthentication')
 @patch('est.views.EstMessageParser')
@@ -339,7 +336,7 @@ def test_est_simple_reenrollment_view_post_success(
     mock_parser,
     mock_auth,
     mock_authz,
-    mock_workflow,
+    mock_workflow2,
     mock_processor,
     mock_responder,
     mock_error_responder,
@@ -354,7 +351,8 @@ def test_est_simple_reenrollment_view_post_success(
     mock_ctx.http_response_status = 200
     mock_ctx.http_response_content_type = 'application/pkcs7-mime'
     mock_request_context.return_value = mock_ctx
-    
+    mock_workflow2.return_value.handle.return_value = Workflow2HandleResult.no_match()
+
     # Configure parser mock to return the context
     mock_parser.return_value.parse.return_value = mock_ctx
     
@@ -384,7 +382,7 @@ def test_est_simple_reenrollment_view_post_success(
     mock_auth.return_value.authenticate.assert_called_once_with(mock_ctx)
     mock_authz.return_value.authorize.assert_called_once()
     assert mock_authz.call_args[1]['allowed_operations'] == ['simplereenroll']
-    mock_workflow.return_value.handle.assert_called_once_with(mock_ctx)
+    mock_workflow2.return_value.handle.assert_called_once_with(mock_ctx)
     mock_processor.return_value.process_operation.assert_called_once_with(mock_ctx)
     mock_responder.build_response.assert_called_once_with(mock_ctx)
     mock_error_responder.build_response.assert_not_called()

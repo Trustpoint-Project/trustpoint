@@ -73,6 +73,25 @@ DEVICE_CONTEXT = ctx(
     ),
 )
 
+DEVICE_DOMAIN_CHANGE_CONTEXT = ctx(
+    ContextVar(
+        'event.device.old_domain_id',
+        'int',
+        'Previous domain ID before the device was moved.',
+        title='Previous domain ID',
+        group='event.device',
+        example=41,
+    ),
+    ContextVar(
+        'event.device.new_domain_id',
+        'int',
+        'New domain ID after the device was moved.',
+        title='New domain ID',
+        group='event.device',
+        example=42,
+    ),
+)
+
 EST_CONTEXT = ctx(
     ContextVar(
         'event.est.operation',
@@ -104,6 +123,40 @@ EST_CONTEXT = ctx(
         'CSR PEM payload.',
         title='CSR PEM',
         group='event.est',
+    ),
+)
+
+REST_CONTEXT = ctx(
+    ContextVar(
+        'event.rest.operation',
+        'string',
+        'REST enrollment operation name.',
+        title='REST operation',
+        group='event.rest',
+        example='enroll',
+    ),
+    ContextVar(
+        'event.rest.fingerprint',
+        'string',
+        'CSR fingerprint (SHA-256).',
+        title='CSR fingerprint',
+        group='event.rest',
+        example='0f2d7d8a...',
+    ),
+    ContextVar(
+        'event.rest.cert_profile',
+        'string',
+        'Requested certificate profile.',
+        title='Certificate profile',
+        group='event.rest',
+        example='tls-client',
+    ),
+    ContextVar(
+        'event.rest.csr_pem',
+        'string',
+        'CSR PEM payload.',
+        title='CSR PEM',
+        group='event.rest',
     ),
 )
 

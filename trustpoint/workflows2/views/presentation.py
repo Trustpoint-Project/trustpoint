@@ -166,14 +166,25 @@ def describe_event_context(event_json: dict[str, Any] | None) -> list[dict[str, 
                 }
             )
 
-    est = _json_object(event.get('est'))
-    if est:
-        if est.get('operation'):
-            rows.append({'label': 'EST operation', 'value': str(est['operation']), 'meta': ''})
-        if est.get('cert_profile'):
-            rows.append({'label': 'Certificate profile', 'value': str(est['cert_profile']), 'meta': ''})
+    _append_protocol_rows(rows, payload=_json_object(event.get('est')), protocol='EST')
+    _append_protocol_rows(rows, payload=_json_object(event.get('rest')), protocol='REST')
 
     return rows
+
+
+def _append_protocol_rows(
+    rows: list[dict[str, str]],
+    *,
+    payload: dict[str, Any],
+    protocol: str,
+) -> None:
+    """Append operation/profile rows for one protocol payload."""
+    if not payload:
+        return
+    if payload.get('operation'):
+        rows.append({'label': f'{protocol} operation', 'value': str(payload['operation']), 'meta': ''})
+    if payload.get('cert_profile'):
+        rows.append({'label': 'Certificate profile', 'value': str(payload['cert_profile']), 'meta': ''})
 
 
 def summarize_named_values(values: dict[str, Any] | None, *, limit: int = 8) -> list[dict[str, str]]:

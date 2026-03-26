@@ -19,8 +19,8 @@ if TYPE_CHECKING:
     from cmp.util import PKIFailureInfo
     from devices.models import DeviceModel
     from pki.models import CertificateProfileModel, CredentialModel, DomainModel, IssuedCredentialModel, TruststoreModel
-    from workflows.events import Event
-    from workflows.models import EnrollmentRequest
+    from workflows2.events.request_events import Event
+    from workflows2.services.dispatch import DispatchOutcome
 
 # Request context classes follow the naming convention of <Protocol><Operation>RequestContext
 
@@ -50,6 +50,7 @@ class BaseRequestContext(LoggerMixin):
 
     # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
     event: Event | None = None
+    workflow2_outcome: DispatchOutcome | None = None
 
     def error(self, ext_msg: str | bytes |None,
               http_status: int | None = None,
@@ -118,8 +119,6 @@ class BaseCertificateRequestContext(BaseRequestContext):
     request_data: dict[str, Any] | None = None
     validated_request_data: dict[str, Any] | None = None
 
-    # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
-    enrollment_request: EnrollmentRequest | None = None
     event: Event | None = None
 
 @dataclass(kw_only=True)

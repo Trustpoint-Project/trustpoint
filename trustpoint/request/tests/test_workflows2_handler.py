@@ -2,9 +2,9 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from request.request_context import BaseRequestContext, EstCertificateRequestContext
+from request.request_context import BaseRequestContext, EstCertificateRequestContext, RestCertificateRequestContext
 from request.workflows2_handler import Workflow2HandleResult, Workflow2Handler
-from workflows.events import Events
+from workflows2.events.request_events import Events
 from workflows2.events.triggers import Triggers
 from workflows2.models import Workflow2Run
 from workflows2.services.dispatch import DispatchOutcome
@@ -53,8 +53,7 @@ def test_workflows2_handler_blocks_est_simpleenroll_when_workflow_is_awaiting(te
         result = Workflow2Handler().handle(context)
 
     assert result.should_stop is True
-    assert context.http_response_status == 202
-    assert context.http_response_content == 'Enrollment request pending workflow approval.'
+    assert context.workflow2_outcome == outcome
     mock_service.return_value.emit_event_outcome.assert_called_once()
     assert mock_service.return_value.emit_event_outcome.call_args.kwargs['on'] == Triggers.EST_SIMPLEENROLL
 
@@ -93,7 +92,87 @@ def test_workflows2_handler_marks_est_gate_applied_on_success(test_csr_fixture) 
         result = Workflow2Handler().handle(context)
 
     assert result.mode == 'continue'
-    assert getattr(context, 'workflow2_gate_applied', False) is True
+    assert context.workflow2_outcome == outcome
+
+
+@pytest.mark.django_db
+def test_workflows2_handler_emits_est_simplereenroll_from_request_context(test_csr_fixture) -> None:
+    device = Mock()
+    device.id = 'device-1'
+    device.common_name = 'Device 1'
+    device.serial_number = 'SER-1'
+
+    issuing_ca = Mock()
+    issuing_ca.id = 11
+
+    domain = Mock()
+    domain.id = 7
+    domain.get_issuing_ca_or_value_error.return_value = issuing_ca
+
+    context = EstCertificateRequestContext(
+        event=Events.est_simplereenroll,
+        protocol='est',
+        operation='simplereenroll',
+        cert_profile_str='tls_client',
+        device=device,
+        domain=domain,
+        cert_requested=test_csr_fixture.get_cryptography_object(),
+    )
+
+    run = Mock()
+    run.status = Workflow2Run.STATUS_SUCCEEDED
+    outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
+
+    with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
+        mock_service.return_value.emit_event_outcome.return_value = outcome
+
+        result = Workflow2Handler().handle(context)
+
+    assert result.mode == 'continue'
+    call = mock_service.return_value.emit_event_outcome.call_args.kwargs
+    assert call['on'] == Triggers.EST_SIMPLEREENROLL
+    assert call['event']['est']['operation'] == 'simplereenroll'
+    assert context.workflow2_outcome == outcome
+
+
+@pytest.mark.django_db
+def test_workflows2_handler_emits_rest_enroll_from_request_context(test_csr_fixture) -> None:
+    device = Mock()
+    device.id = 'device-1'
+    device.common_name = 'Device 1'
+    device.serial_number = 'SER-1'
+
+    issuing_ca = Mock()
+    issuing_ca.id = 11
+
+    domain = Mock()
+    domain.id = 7
+    domain.get_issuing_ca_or_value_error.return_value = issuing_ca
+
+    context = RestCertificateRequestContext(
+        event=Events.rest_enroll,
+        protocol='rest',
+        operation='enroll',
+        cert_profile_str='tls_client',
+        device=device,
+        domain=domain,
+        cert_requested=test_csr_fixture.get_cryptography_object(),
+    )
+
+    run = Mock()
+    run.status = Workflow2Run.STATUS_SUCCEEDED
+    outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
+
+    with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
+        mock_service.return_value.emit_event_outcome.return_value = outcome
+
+        result = Workflow2Handler().handle(context)
+
+    assert result.mode == 'continue'
+    call = mock_service.return_value.emit_event_outcome.call_args.kwargs
+    assert call['on'] == Triggers.REST_ENROLL
+    assert call['event']['rest']['operation'] == 'enroll'
+    assert context.workflow2_outcome == outcome
 
 
 @pytest.mark.django_db
@@ -125,3 +204,83 @@ def test_workflows2_handler_emits_device_created_from_request_context() -> None:
     assert call['on'] == Triggers.DEVICE_CREATED
     assert call['event']['device']['id'] == 'device-1'
     assert call['source'].trustpoint is True
+
+
+@pytest.mark.django_db
+def test_workflows2_handler_emits_device_domain_changed_from_request_context() -> None:
+    device = Mock()
+    device.id = 'device-1'
+    device.common_name = 'Device 1'
+    device.serial_number = 'SER-1'
+    device.domain_id = 9
+    device.old_domain_id = 4
+
+    issuing_ca = Mock()
+    issuing_ca.id = 11
+
+    domain = Mock()
+    domain.id = 9
+    domain.get_issuing_ca_or_value_error.return_value = issuing_ca
+
+    context = BaseRequestContext(
+        event=Events.device_domain_changed,
+        device=device,
+        domain=domain,
+        protocol='device',
+        operation='domain changed',
+    )
+
+    run = Mock()
+    run.status = Workflow2Run.STATUS_SUCCEEDED
+    outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
+
+    with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
+        mock_service.return_value.emit_event_outcome.return_value = outcome
+
+        result = Workflow2Handler().handle(context)
+
+    assert result.mode == 'continue'
+    call = mock_service.return_value.emit_event_outcome.call_args.kwargs
+    assert call['on'] == Triggers.DEVICE_DOMAIN_CHANGED
+    assert call['event']['device']['old_domain_id'] == 4
+    assert call['event']['device']['new_domain_id'] == 9
+    assert call['source'].ca_id == 11
+
+
+@pytest.mark.django_db
+def test_workflows2_handler_emits_device_deleted_from_request_context() -> None:
+    device = Mock()
+    device.id = 'device-1'
+    device.common_name = 'Device 1'
+    device.serial_number = 'SER-1'
+    device.domain_id = 9
+
+    issuing_ca = Mock()
+    issuing_ca.id = 11
+
+    domain = Mock()
+    domain.id = 9
+    domain.get_issuing_ca_or_value_error.return_value = issuing_ca
+
+    context = BaseRequestContext(
+        event=Events.device_deleted,
+        device=device,
+        domain=domain,
+        protocol='device',
+        operation='deleted',
+    )
+
+    run = Mock()
+    run.status = Workflow2Run.STATUS_SUCCEEDED
+    outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
+
+    with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
+        mock_service.return_value.emit_event_outcome.return_value = outcome
+
+        result = Workflow2Handler().handle(context)
+
+    assert result.mode == 'continue'
+    call = mock_service.return_value.emit_event_outcome.call_args.kwargs
+    assert call['on'] == Triggers.DEVICE_DELETED
+    assert call['event']['device']['domain_id'] == 9
+    assert call['source'].ca_id == 11

@@ -285,7 +285,6 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'django_filters',
     'dbbackup',
-    'workflows.apps.WorkflowsConfig',
     'rest_framework',
     'drf_spectacular',
     'django_q',

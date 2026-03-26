@@ -83,7 +83,6 @@ urlpatterns += [
         name='javascript-catalog',
     ),
     path('', base.IndexView.as_view()),
-    path('workflows/', include('workflows.urls', namespace='workflows')),
     path("workflows2/", include("workflows2.urls", namespace="workflows2")),
 
     # API URLs

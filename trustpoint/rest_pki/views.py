@@ -14,9 +14,9 @@ from request.message_responder import RestErrorMessageResponder, RestMessageResp
 from request.operation_processor.general import OperationProcessor
 from request.request_context import RestCertificateRequestContext
 from request.request_validator import RestHttpRequestValidator
-from request.workflow_handler import WorkflowHandler
+from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
-from workflows.events import Events
+from workflows2.events.request_events import Events
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -78,7 +78,7 @@ class RestEnrollView(LoggerMixin, View):
             authorizer = RestAuthorization(allowed_operations=['enroll'])
             authorizer.authorize(ctx)
 
-            WorkflowHandler().handle(ctx)
+            Workflow2Handler().handle(ctx)
 
             OperationProcessor().process_operation(ctx)
 
@@ -146,7 +146,7 @@ class RestReEnrollView(LoggerMixin, View):
             authorizer = RestAuthorization(allowed_operations=['reenroll'])
             authorizer.authorize(ctx)
 
-            WorkflowHandler().handle(ctx)
+            Workflow2Handler().handle(ctx)
 
             OperationProcessor().process_operation(ctx)
 

@@ -5,7 +5,8 @@ from cryptography.hazmat.primitives.serialization import Encoding, pkcs7
 
 from onboarding.models import OnboardingStatus
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
-from workflows.models import State
+from request.workflows2_gate import get_workflow2_outcome, workflow2_run_detail_path
+from workflows2.models import Workflow2Run
 
 from .base import AbstractMessageResponder
 
@@ -35,55 +36,42 @@ class EstCertificateMessageResponder(EstMessageResponder):
     @staticmethod
     def _check_workflow_state(context: EstCertificateRequestContext) -> bool:
         """Check if the workflow state allows for certificate issuance."""
-        if not context.enrollment_request:
-            if getattr(context, 'workflow2_gate_applied', False) is True:
-                return True
-            exc_msg = 'No enrollment request is set in the context.'
-            raise ValueError(exc_msg)
+        workflow2_outcome = get_workflow2_outcome(context)
+        if workflow2_outcome is None or workflow2_outcome.status == 'no_match':
+            return True
 
-        enrollment_req = context.enrollment_request
-        enrollment_req.recompute_and_save()
-        enrollment_req.refresh_from_db(fields=['aggregated_state', 'finalized', 'updated_at'])
-        workflow_state = enrollment_req.aggregated_state
+        run_status = str(workflow2_outcome.run.status)
+        if run_status in {
+            Workflow2Run.STATUS_QUEUED,
+            Workflow2Run.STATUS_RUNNING,
+            Workflow2Run.STATUS_AWAITING,
+            Workflow2Run.STATUS_PAUSED,
+        }:
+            status = 202
+            detail = 'Enrollment request pending workflow approval.'
+        elif run_status == Workflow2Run.STATUS_REJECTED:
+            status = 403
+            detail = 'Enrollment request rejected by workflow.'
+        elif run_status in {
+            Workflow2Run.STATUS_FAILED,
+            Workflow2Run.STATUS_CANCELLED,
+            Workflow2Run.STATUS_STOPPED,
+        }:
+            detail = 'Enrollment request failed in workflow processing.'
+            run_path = workflow2_run_detail_path(context)
+            if run_path:
+                detail = f'{detail} Check here: -> {run_path}'
+            status = 500
+        elif run_status in {Workflow2Run.STATUS_NO_MATCH, Workflow2Run.STATUS_SUCCEEDED}:
+            return True
+        else:
+            status = 500
+            detail = f'Enrollment request is in an unsupported workflow state: {run_status}.'
 
-        # Ensure we use the latest aggregated_state derived from child instances.
-        # This is safe even if the handler already recomputed.
-
-        # Pending states: request exists but not yet approved.
-        if workflow_state in {State.AWAITING, State.RUNNING}:
-            context.http_response_status = 202
-            context.http_response_content_type = 'text/plain'
-            context.http_response_content = 'Enrollment request pending manual approval.'
-            # TODO(Air): Implement Retry-After header  # noqa: FIX002
-            return False
-
-        # Terminal negative outcomes.
-        if workflow_state == State.REJECTED:
-            enrollment_req.finalize(State.REJECTED)
-            context.http_response_status = 403
-            context.http_response_content_type = 'text/plain'
-            context.http_response_content = 'Enrollment request Rejected.'
-            return False
-
-        if workflow_state == State.ABORTED:
-            enrollment_req.finalize(State.ABORTED)
-            context.http_response_status = 409
-            context.http_response_content_type = 'text/plain'
-            context.http_response_content = 'Enrollment request aborted.'
-            return False
-
-        if workflow_state == State.FAILED:
-            context.http_response_status = 500
-            context.http_response_content_type = 'text/plain'
-            context.http_response_content = \
-                f'Workflow failed. Check here: -> /workflows/requests/{enrollment_req.id}'
-            return False
-        if not context.enrollment_request.is_valid():
-            context.http_response_status = 500
-            context.http_response_content_type = 'text/plain'
-            context.http_response_content = 'Enrollment request is not in a valid state for certificate issuance.'
-            return False
-        return True
+        context.http_response_status = status
+        context.http_response_content_type = 'text/plain'
+        context.http_response_content = detail
+        return False
 
     @staticmethod
     def _prepare_certificate_data(context: EstCertificateRequestContext) -> tuple[str | bytes, str]:
@@ -137,8 +125,6 @@ class EstCertificateMessageResponder(EstMessageResponder):
 
         cert, content_type = EstCertificateMessageResponder._prepare_certificate_data(context)
 
-        if context.enrollment_request:
-            context.enrollment_request.finalize(State.FINALIZED)
         if context.device and context.device.onboarding_config:
             context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
             context.device.onboarding_config.save()

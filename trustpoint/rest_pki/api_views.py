@@ -22,9 +22,9 @@ from request.message_responder import RestErrorMessageResponder, RestMessageResp
 from request.operation_processor.general import OperationProcessor
 from request.request_context import RestCertificateRequestContext
 from request.request_validator import RestHttpRequestValidator
-from request.workflow_handler import WorkflowHandler
+from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
-from workflows.events import Events
+from workflows2.events.request_events import Events
 
 from .serializers import CertificateEnrollRequestSerializer, CertificateEnrollResponseSerializer
 
@@ -212,7 +212,7 @@ class ApplicationCertificateEnrollView(LoggerMixin, APIView):
             ctx = cast('RestCertificateRequestContext', RestMessageParser().parse(ctx))
             ctx.device = device
             RestAuthorization(allowed_operations=['enroll']).authorize(ctx)
-            WorkflowHandler().handle(ctx)
+            Workflow2Handler().handle(ctx)
             OperationProcessor().process_operation(ctx)
             RestMessageResponder.build_response(ctx)
         except Exception:
@@ -228,4 +228,3 @@ class ApplicationCertificateEnrollView(LoggerMixin, APIView):
 
         drf_status = http_response.status_code or status.HTTP_500_INTERNAL_SERVER_ERROR
         return Response(body, status=drf_status)
-
