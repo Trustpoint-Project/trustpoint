@@ -161,7 +161,7 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
 
         cert_model = (
             IssuedCredentialModel.objects.filter(
-                credential__certificates__sha256_fingerprint=cert_hash_hex
+                credential__certificate__sha256_fingerprint=cert_hash_hex
             )
             .select_related('credential', 'device', 'domain')
             .first()

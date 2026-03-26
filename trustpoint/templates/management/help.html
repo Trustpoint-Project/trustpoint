@@ -38,7 +38,7 @@
                         Report a Bug
                     </h5>
                     <p class="text-muted">Found something broken or not working? Help us fix it.</p>
-                    <a href="https://github.com/Trustpoint-Project/trustpoint/issues/new?template=bug_report.md" 
+                    <a href="https://github.com/Trustpoint-Project/trustpoint/issues/new?template=bug_report.md"
                        target="_blank" class="btn btn-danger" aria-label="Report a bug on GitHub">
                         Report Bug
                     </a>
@@ -51,16 +51,46 @@
             <div class="card h-100">
                 <div class="card-body">
                     <h5>
-                        <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
-                            <use href="{% static 'img/icons.svg' %}#icon-book"></use>
-                        </svg>
-                        Documentation
+                    <svg class="bi me-2" fill="currentColor" role="img" width="20" height="20">
+                        <use href="{% static 'img/icons.svg' %}#icon-book"></use>
+                    </svg>
+                    Documentation
                     </h5>
-                    <p class="text-muted">Find setup instructions, tutorials, and advanced topics.</p>
-                    <a href="https://trustpoint.readthedocs.io/en/latest/" 
-                       target="_blank" class="btn btn-primary" aria-label="Visit the Trustpoint homepage">
-                        View Documentation
-                    </a>
+
+                <div id="docs-status-area">
+                    {% if build_in_progress %}
+                        <div class="text-center mb-3">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                            <span class="ms-2 small text-muted">Building docs... may take few minutes</span>
+                        </div>
+                    {% elif local_docs_available %}
+                        <span class="badge bg-success mb-2">Docs hosted locally</span>
+                        <div class="text-muted mb-3" style="font-size: 0.75rem;">
+                            <em>Got Updates? <a href="#" id="rebuild-docs-btn" data-url="{% url 'management:trigger_build_docs' %}" data-csrf="{{ csrf_token }}">Rebuild Docs</a></em>
+                        </div>
+                    {% else %}
+                        <span class="badge bg-secondary mb-2">Docs hosted externally (Requires Internet)</span>
+                        <div class="text-muted mb-3" style="font-size: 0.75rem;">
+                            <em>To host docs locally
+                                <kbd id="build-docs-btn"
+                                     class="user-select-all py-1 px-2"
+                                     style="cursor: pointer; border: 1px solid #555;"
+                                     data-url="{% url 'management:trigger_build_docs' %}"
+                                     data-csrf="{{ csrf_token }}">Click Here</kbd>
+                            </em>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div id="docs-loading" class="d-none text-center mb-3">
+                    <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                    <span class="ms-2 small text-muted">Building docs...</span>
+                </div>
+
+                <p class="text-muted">Find setup instructions, tutorials, and advanced topics.</p>
+                <a href="{% url 'management:local_docs' %}"
+                   {% if not local_docs_available %}target="_blank"{% endif %}
+                   class="btn btn-primary">View Documentation</a>
                 </div>
             </div>
         </div>
@@ -213,4 +243,6 @@
     </div>
 </div>
 
-{% endblock %}
+<script src="{% static 'js/build_docs.js' %}"></script>
+
+{% endblock content %}

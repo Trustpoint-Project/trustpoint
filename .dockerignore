@@ -7,14 +7,13 @@
 **/*.log.*
 **/db.sqlite3
 **/*.dump.gz
-docs
 .github
 .pytest_cache
 .ruff_cache
 **/.mypy_cache
 **/behave-report.html
 **/md-report.md
-
+docs/build/
 # Exclude sensitive files
 **/hsm_so_pin.txt
 **/hsm_pin.txt

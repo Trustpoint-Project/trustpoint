@@ -1,5 +1,5 @@
 FROM python:3.14-slim-trixie
-COPY --from=ghcr.io/astral-sh/uv:0.10.12 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.1 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -67,10 +67,9 @@ RUN if [ "${BRANCH}" != "" ]; then \
     chown www-data:www-data /var/www/html/trustpoint/
 
 USER www-data
-RUN uv sync --python-preference only-system
+RUN uv sync --group docs --python-preference only-system
 RUN uv pip install gunicorn[gevent]
 USER root
-
 
 
 RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
