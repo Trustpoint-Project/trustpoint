@@ -73,7 +73,6 @@ class AgentWorkflowDefinitionConfigView(LoggerMixin, UpdateView[AgentWorkflowDef
             context['profile_json'] = self._default_profile_json()
             return context
 
-        # Handle different JSON formats
         cleaned_raw = (
             raw_json.encode('utf-8').decode('unicode_escape')
             if isinstance(raw_json, str)
@@ -92,7 +91,6 @@ class AgentWorkflowDefinitionConfigView(LoggerMixin, UpdateView[AgentWorkflowDef
             )
             return context
 
-        # Invalid JSON typed by the user - render as-is to revise
         context['json_valid'] = False
         context['profile_json'] = cleaned_raw
         return context
@@ -108,7 +106,6 @@ class AgentWorkflowDefinitionConfigView(LoggerMixin, UpdateView[AgentWorkflowDef
                 initial['profile'] = self._default_profile_json()
             initial['is_active'] = self.object.is_active
         else:
-            # For new objects, provide a default profile with example steps
             initial['profile'] = self._default_profile_json()
         return initial
 

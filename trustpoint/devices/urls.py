@@ -473,6 +473,11 @@ urlpatterns = [
         views.DeviceBulkDeleteView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_delete',
     ),
+    re_path(
+        r'^agents/delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
+        views.AgentsBulkDeleteView.as_view(),
+        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_device_delete',
+    ),
 
     path(
         'zero-touch-credentials/',

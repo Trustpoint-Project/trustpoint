@@ -41,6 +41,16 @@ class AgentTableView(AbstractDeviceTableView):
 
     page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
+    @property
+    def device_revoke_url_name(self) -> str:
+        """Returns the URL name for the device revoke action, using the devices subcategory."""
+        return f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_revoke'
+
+    @property
+    def device_delete_url_name(self) -> str:
+        """Returns the URL name for the device delete action, using the agents subcategory."""
+        return f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_AGENTS_SUBCATEGORY}_device_delete'
+
     def get_queryset(self) -> QuerySet[DeviceModel]:
         """Filter queryset to only include agent device types, filtered by UI filters."""
         _agent_types = [DeviceModel.DeviceType.AGENT_ONE_TO_ONE, DeviceModel.DeviceType.AGENT_ONE_TO_N]
@@ -71,6 +81,8 @@ class AgentTableView(AbstractDeviceTableView):
 
         context['create_url'] = f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create'
         return context
+
+
 
 
 class AgentCreateChooseTypeView(PageContextMixin, TemplateView):
@@ -164,17 +176,8 @@ class AgentCreateOneToNOnboardingView(PageContextMixin, FormView[AgentOnboarding
         return super().form_valid(form)
 
     def get_success_url(self) -> str:
-        """Return the CLM URL for the newly created agent device.
-
-        Returns:
-            URL string for the device's certificate lifecycle management page.
-        """
-        return str(
-            reverse_lazy(
-                f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_DEVICES_SUBCATEGORY}_certificate_lifecycle_management',
-                kwargs={'pk': self.object.id},
-            )
-        )
+        """Return the agents list URL after successfully creating a 1-to-n agent device."""
+        return str(reverse_lazy(f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_AGENTS_SUBCATEGORY}'))
 
 
 class AgentCreateOneToOneOnboardingView(PageContextMixin, FormView[AgentOnboardingCreateForm]):
@@ -221,10 +224,5 @@ class AgentCreateOneToOneOnboardingView(PageContextMixin, FormView[AgentOnboardi
         return super().form_valid(form)
 
     def get_success_url(self) -> str:
-        """Return the CLM URL for the newly created 1-to-1 agent device."""
-        return str(
-            reverse_lazy(
-                f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_AGENTS_SUBCATEGORY}_certificate_lifecycle_management',
-                kwargs={'pk': self.object.id},
-            )
-        )
+        """Return the agents list URL after successfully creating a 1-to-1 agent device."""
+        return str(reverse_lazy(f'{DEVICES_PAGE_CATEGORY}:{DEVICES_PAGE_AGENTS_SUBCATEGORY}'))

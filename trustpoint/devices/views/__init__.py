@@ -33,6 +33,7 @@ from .credential_issuance import (
     OpcUaGdsSelectCertificateProfileNewApplicationCredentialView,
 )
 from .delete import (
+    AgentsBulkDeleteView,
     DeviceBulkDeleteView,
     OpcUaGdsBulkDeleteView,
     OpcUaGdsPushBulkDeleteView,
@@ -85,6 +86,7 @@ __all__ = [
     'AgentCreateChooseTypeView',
     'AgentCreateOneToNOnboardingView',
     'AgentCreateOneToOneOnboardingView',
+    'AgentsBulkDeleteView',
     'AgentTableView',
     'DeviceBrowserCredentialDownloadView',
     'DeviceBrowserOnboardingCancelView',
