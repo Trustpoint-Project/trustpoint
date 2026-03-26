@@ -1,10 +1,11 @@
 """SetupWizard Models."""
 from datetime import UTC
-from typing import Any, Final
+from typing import Any, Final, ClassVar, Self
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy
 
 
 class SetupWizardCompletedModel(models.Model):
@@ -105,10 +106,10 @@ class SetupWizardCompletedModel(models.Model):
             return True
 
 
-class SetupWizardConfigurationModel(models.Model):
+class SetupWizardConfigModel(models.Model):
     """Model that holds the data that will be applied when the setup wizard is completed."""
 
-    SINGLETON_ID: Final[int] = 1
+    SINGLETON_ID: ClassVar[Final[int]] = 1
 
     singleton_id = models.PositiveSmallIntegerField(
         primary_key=True,
@@ -117,5 +118,42 @@ class SetupWizardConfigurationModel(models.Model):
         help_text='Singleton primary key. Always 1.',
     )
 
-    inject_demo_data = models.BooleanField(default=False, help_text='Inject demo data.')
+    class CryptoStorageType(models.IntegerChoices):
+        SoftwareStorage = 0, gettext_lazy('Software Storage')
+        HsmStorage = 1, gettext_lazy('HSM Storage')
+
+    crypto_storage = models.PositiveSmallIntegerField(
+        choices=CryptoStorageType,
+        null=False,
+        blank=False,
+        default=CryptoStorageType.SoftwareStorage,
+    )
+
+    inject_demo_data = models.BooleanField(
+        default=True,
+        null=False,
+        blank=False,
+        help_text='Inject demo data.',
+    )
+
+    @classmethod
+    def get_singleton(cls) -> Self:
+        obj, _ = cls.objects.get_or_create(pk=cls.SINGLETON_ID)
+        return obj
+
+    def clean(self) -> None:
+        super().clean()
+        if self.pk is not None and self.pk != self.SINGLETON_ID:
+            err_msg = {'singleton_id': gettext_lazy('singleton_id must always be 1.')}
+            raise ValidationError(err_msg)
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+
+        if self.pk is None:
+            self.pk = self.SINGLETON_ID
+        elif self.pk != self.SINGLETON_ID:
+            err_msg  = 'Only the singleton row with pk=1 is allowed.'
+            raise ValidationError(err_msg)
+
+        return super().save(*args, **kwargs)
 
