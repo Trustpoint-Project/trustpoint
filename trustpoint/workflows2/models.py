@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import ClassVar
 
-from django.db import models
+from django.db import IntegrityError, models, transaction
 from django.utils import timezone
+
+ACTIVE_JOB_STATUSES: tuple[str, str] = ('queued', 'running')
 
 
 class Workflow2Definition(models.Model):
@@ -301,6 +303,7 @@ class Workflow2Job(models.Model):
         (STATUS_FAILED, 'Failed'),
         (STATUS_CANCELLED, 'Cancelled'),
     )
+    ACTIVE_STATUSES: ClassVar[tuple[str, str]] = ACTIVE_JOB_STATUSES
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -333,6 +336,13 @@ class Workflow2Job(models.Model):
             models.Index(fields=['locked_until']),
             models.Index(fields=['instance', 'status']),
         )
+        constraints = (
+            models.UniqueConstraint(
+                fields=['instance'],
+                condition=models.Q(status__in=ACTIVE_JOB_STATUSES),
+                name='wf2_job_one_active_per_instance',
+            ),
+        )
 
     def __str__(self) -> str:
         """Return a human-readable representation of the job."""
@@ -355,6 +365,47 @@ class Workflow2Job(models.Model):
         self.status = self.STATUS_QUEUED
         self.locked_until = None
         self.locked_by = ''
+
+    @classmethod
+    @transaction.atomic
+    def get_or_create_active(
+        cls,
+        *,
+        instance: Workflow2Instance,
+        kind: str,
+        run_after: datetime | None = None,
+    ) -> tuple[Workflow2Job, bool]:
+        """Return the single active job for an instance, creating it if absent."""
+        locked_instance = Workflow2Instance.objects.select_for_update().get(id=instance.id)
+        existing = (
+            cls.objects.select_for_update()
+            .filter(instance=locked_instance, status__in=cls.ACTIVE_STATUSES)
+            .order_by('created_at', 'id')
+            .first()
+        )
+        if existing is not None:
+            return existing, False
+
+        try:
+            return (
+                cls.objects.create(
+                    instance=locked_instance,
+                    kind=kind,
+                    status=cls.STATUS_QUEUED,
+                    run_after=run_after or timezone.now(),
+                ),
+                True,
+            )
+        except IntegrityError:
+            existing = (
+                cls.objects.select_for_update()
+                .filter(instance=locked_instance, status__in=cls.ACTIVE_STATUSES)
+                .order_by('created_at', 'id')
+                .first()
+            )
+            if existing is None:
+                raise
+            return existing, False
 
 
 class Workflow2WorkerHeartbeat(models.Model):

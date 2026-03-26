@@ -267,10 +267,9 @@ class Workflow2InstanceResumeView(LoginRequiredMixin, View):
                 inst.status = Workflow2Instance.STATUS_QUEUED
                 inst.save(update_fields=['status', 'updated_at'])
 
-                Workflow2Job.objects.create(
+                Workflow2Job.get_or_create_active(
                     instance=inst,
                     kind=Workflow2Job.KIND_RUN,
-                    status=Workflow2Job.STATUS_QUEUED,
                     run_after=timezone.now(),
                 )
 

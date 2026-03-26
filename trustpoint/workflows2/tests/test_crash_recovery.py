@@ -92,3 +92,29 @@ class CrashRecoveryTests(TestCase):
 
         inst.refresh_from_db()
         self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+
+    def test_manual_resume_reuses_existing_active_job(self) -> None:
+        d = self._mk_definition()
+        runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
+        inst = runtime.create_instance(definition=d, event={"device": {"common_name": "dev1"}})
+
+        inst.status = Workflow2Instance.STATUS_PAUSED
+        inst.save(update_fields=["status", "updated_at"])
+
+        existing = Workflow2Job.objects.create(
+            instance=inst,
+            kind=Workflow2Job.KIND_RUN,
+            status=Workflow2Job.STATUS_QUEUED,
+        )
+
+        worker = Workflow2DbWorker(runtime=runtime, lease_seconds=5, batch_limit=5, worker_id="test-worker")
+        resume_job = worker.resume_instance(instance=inst)
+
+        self.assertEqual(resume_job.id, existing.id)
+        self.assertEqual(
+            Workflow2Job.objects.filter(
+                instance=inst,
+                status__in=[Workflow2Job.STATUS_QUEUED, Workflow2Job.STATUS_RUNNING],
+            ).count(),
+            1,
+        )

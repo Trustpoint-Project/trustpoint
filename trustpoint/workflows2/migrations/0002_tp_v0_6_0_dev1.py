@@ -54,6 +54,10 @@ class Migration(migrations.Migration):
             field=models.CharField(blank=True, default='', max_length=100),
         ),
         migrations.AddConstraint(
+            model_name='workflow2job',
+            constraint=models.UniqueConstraint(condition=models.Q(('status__in', ('queued', 'running'))), fields=('instance',), name='wf2_job_one_active_per_instance'),
+        ),
+        migrations.AddConstraint(
             model_name='workflow2run',
             constraint=models.UniqueConstraint(condition=models.Q(('idempotency_key', ''), _negated=True), fields=('trigger_on', 'idempotency_key'), name='wf2_run_on_idem_uniq'),
         ),

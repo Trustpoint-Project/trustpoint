@@ -17,6 +17,7 @@ BUILD_LOCAL=false
 PG_IMAGE="postgres:15.14"
 MAILPIT_IMAGE="axllent/mailpit:v1.27"
 SFTPGO_IMAGE="drakkan/sftpgo:2.6.x-slim"
+WF2_WORKER_NAME="trustpoint-worker"
 
 # Fixed trustpoint ports
 APP_HTTP_HOST=80
@@ -39,6 +40,13 @@ DEF_SFTPGO_WEB_PORT=8080
 DEF_SFTPGO_ADMIN_USER="admin"
 DEF_SFTPGO_ADMIN_PASS="testing321"
 SFTPGO_ROOT="${PWD}/sftpgo-data"
+WF2_FOLDER="${PWD}/workflow2Folder"
+WF2_WORKER_ENV_FILE="${WF2_FOLDER}/worker.env"
+WF2_WORKER_README="${WF2_FOLDER}/README.txt"
+DEF_WF2_WORKER_LEASE=30
+DEF_WF2_WORKER_BATCH=10
+DEF_WF2_WORKER_SLEEP=1
+MAILPIT_PROBE_TIMEOUT=20
 
 # Timeouts
 READINESS_TIMEOUT=90
@@ -68,6 +76,15 @@ running(){ docker ps --format '{{.Names}}' | grep -Fxq "$1"; }
 ensure_network(){ docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null; }
 ensure_volumes(){ docker volume inspect "$VOL_DB" >/dev/null 2>&1 || docker volume create "$VOL_DB" >/dev/null; }
 stop_one(){ local n="$1"; exists "$n" || return 0; running "$n" && docker stop "$n" >/dev/null || true; docker rm "$n" >/dev/null || true; }
+container_state(){ local n="$1"; exists "$n" || { echo "absent"; return; }; docker inspect -f '{{.State.Status}}' "$n" 2>/dev/null || echo "unknown"; }
+container_health(){ local n="$1" h=""; exists "$n" || { echo "-"; return; }; h="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$n" 2>/dev/null || true)"; echo "${h:--}"; }
+container_image(){ local n="$1"; exists "$n" || { echo "-"; return; }; docker inspect -f '{{.Config.Image}}' "$n" 2>/dev/null || echo "-"; }
+container_host_port(){ local n="$1" spec="$2" p=""; exists "$n" || return 0; p="$(docker port "$n" "$spec" 2>/dev/null | awk -F: 'NR==1 {print $NF}')" || true; echo "${p}"; }
+container_env(){ local n="$1" key="$2"; exists "$n" || return 0; docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$n" 2>/dev/null | sed -n "s/^${key}=//p" | head -n1; }
+print_container_status_row(){
+  local n="$1"
+  printf "%-20s %-10s %-10s %s\n" "$n" "$(container_state "$n")" "$(container_health "$n")" "$(container_image "$n")"
+}
 
 # quick TCP connect test (true if something accepts on host:port)
 tcp_check(){ local host="$1" port="$2" ts=$(( $(date +%s) + ${3:-5} )); while (( $(date +%s) < ts )); do (exec 3<>"/dev/tcp/$host/$port") >/dev/null 2>&1 && { exec 3>&- 3<&-; return 0; }; sleep 1; done; return 1; }
@@ -90,7 +107,7 @@ ask_password(){ local prompt="$1" def="$2" pw; while true; do ask "$prompt" "$de
 mask(){ local s="$1" n=${#1}; (( n<=2 )) && { printf '%s' '**'; return; }; printf '%*s' $((n-2)) '' | tr ' ' '*'; printf '%s' "${s: -2}"; }
 
 # -------------------------- Wizard state -------------------------------------
-EN_APP=false; EN_PG=false; EN_MAILPIT=false; EN_SFTPGO=false
+EN_APP=false; EN_PG=false; EN_MAILPIT=false; EN_SFTPGO=false; EN_WF2_WORKER=false
 
 DB_INTERNAL=true
 DB_HOST="$DEF_DB_HOST_INTERNAL"   # default host when internal
@@ -115,9 +132,12 @@ SFTPGO_ADMIN_PASS="$DEF_SFTPGO_ADMIN_PASS"
 
 TLS_FP_FOUND=""
 TLS_FP_ELAPSED=0
+WF2_WORKER_LEASE="$DEF_WF2_WORKER_LEASE"
+WF2_WORKER_BATCH="$DEF_WF2_WORKER_BATCH"
+WF2_WORKER_SLEEP="$DEF_WF2_WORKER_SLEEP"
 
 # CLI target flags
-ONLY_APP=false; ONLY_DB=false; ONLY_MAIL=false; ONLY_SFTP=false
+ONLY_APP=false; ONLY_DB=false; ONLY_MAIL=false; ONLY_SFTP=false; ONLY_WF2_WORKER=false
 NOWAIT=false
 
 # -------------------------- Steps --------------------------------------------
@@ -211,6 +231,13 @@ step_helpers(){
   fi
 }
 
+step_workflows2_worker(){
+  $EN_APP || return 0
+  EN_WF2_WORKER=$(
+    ask_yes_no "Delegate workflows2 tasks to a dedicated worker container?" "n" && echo true || echo false
+  )
+}
+
 show_plan(){
   echo
   echo "==================== Configuration Summary (Planned) ===================="
@@ -244,6 +271,12 @@ show_plan(){
   echo
   printf "%-22s %s\n" "Mailpit enabled:" "$EN_MAILPIT"
   $EN_MAILPIT && printf "%-22s %s\n" "Mailpit ports:" "SMTP ${MAILPIT_SMTP_PORT}, UI ${MAILPIT_UI_PORT}"
+  echo
+  printf "%-22s %s\n" "workflows2 worker:" "$EN_WF2_WORKER"
+  $EN_WF2_WORKER && {
+    printf "%-22s %s\n" "Worker container:" "${WF2_WORKER_NAME}"
+    printf "%-22s %s\n" "workflow2 folder:" "${WF2_FOLDER}"
+  }
   echo
   printf "%-22s %s\n" "SFTPGo enabled:" "$EN_SFTPGO"
   $EN_SFTPGO && {
@@ -319,6 +352,46 @@ start_sftpgo(){
     "$SFTPGO_IMAGE" >/dev/null
 }
 
+prepare_workflows2_worker_folder(){
+  $EN_WF2_WORKER || return 0
+  mkdir -p "$WF2_FOLDER"
+  chmod 700 "$WF2_FOLDER" 2>/dev/null || true
+  cat > "$WF2_WORKER_README" <<EOF
+This folder was created by tp_wizard.sh for the optional dedicated workflows2 worker.
+
+Files:
+- worker.env : environment passed to the worker container
+
+Container:
+- ${WF2_WORKER_NAME}
+EOF
+  chmod 644 "$WF2_WORKER_README" 2>/dev/null || true
+
+  cat > "$WF2_WORKER_ENV_FILE" <<EOF
+POSTGRES_DB=${APP_DB_NAME}
+DATABASE_USER=${APP_DB_USER}
+DATABASE_PASSWORD=${APP_DB_PASS}
+DATABASE_HOST=${APP_DB_HOST}
+DATABASE_PORT=${APP_DB_PORT}
+TRUSTPOINT_SERVICE_ROLE=worker
+WORKFLOWS2_WORKER_ID=${WF2_WORKER_NAME}
+WORKFLOWS2_WORKER_LEASE=${WF2_WORKER_LEASE}
+WORKFLOWS2_WORKER_BATCH=${WF2_WORKER_BATCH}
+WORKFLOWS2_WORKER_SLEEP=${WF2_WORKER_SLEEP}
+DEFAULT_FROM_EMAIL=no-reply@trustpoint.local
+EOF
+
+  if $EN_MAILPIT; then
+    cat >> "$WF2_WORKER_ENV_FILE" <<EOF
+EMAIL_HOST=mailpit
+EMAIL_PORT=1025
+EMAIL_USE_TLS=0
+EMAIL_USE_SSL=0
+EOF
+  fi
+  chmod 600 "$WF2_WORKER_ENV_FILE" 2>/dev/null || true
+}
+
 start_app(){
   $EN_APP || return 0
   local name="trustpoint"
@@ -329,8 +402,12 @@ start_app(){
 
   log "Starting trustpoint..."
   local smtp_env=()
+  local workflows_env=( -e "WORKFLOWS2_RUN_MODE=sync" )
   if $EN_MAILPIT; then
     smtp_env+=( -e "EMAIL_HOST=mailpit" -e "EMAIL_PORT=1025" -e "EMAIL_USE_TLS=0" -e "EMAIL_USE_SSL=0" -e "DEFAULT_FROM_EMAIL=no-reply@trustpoint.local" )
+  fi
+  if $EN_WF2_WORKER; then
+    workflows_env=( -e "WORKFLOWS2_RUN_MODE=db" )
   fi
   docker run -d --name "$name" --network "$NET" \
     -p "${APP_HTTP_HOST}:80" \
@@ -341,6 +418,18 @@ start_app(){
     -e "DATABASE_HOST=$APP_DB_HOST" \
     -e "DATABASE_PORT=$APP_DB_PORT" \
     "${smtp_env[@]}" \
+    "${workflows_env[@]}" \
+    "$APP_IMAGE" >/dev/null
+}
+
+start_workflows2_worker(){
+  $EN_WF2_WORKER || return 0
+  local name="$WF2_WORKER_NAME"
+  stop_one "$name"
+  prepare_workflows2_worker_folder
+  log "Starting dedicated workflows2 worker..."
+  docker run -d --name "$name" --network "$NET" \
+    --env-file "$WF2_WORKER_ENV_FILE" \
     "$APP_IMAGE" >/dev/null
 }
 
@@ -499,15 +588,142 @@ wait_tls_fingerprint(){
   return 1
 }
 
+mailpit_has_subject(){
+  local subject="$1"
+  have curl || return 2
+  local until=$(( $(date +%s) + MAILPIT_PROBE_TIMEOUT ))
+  local api="http://127.0.0.1:${MAILPIT_UI_PORT}/api/v1/messages"
+  while (( $(date +%s) < until )); do
+    if curl -fsS "$api" 2>/dev/null | grep -Fq "$subject"; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+probe_mailpit_from_container(){
+  local container="$1" label="$2"
+  exists "$container" || return 0
+
+  local subject="trustpoint wizard ${label} mailpit probe $(date +%s)"
+  log "Sending Mailpit probe email from ${label} container..."
+
+  if ! docker exec -e "PROBE_SUBJECT=${subject}" "$container" bash -lc \
+    'cd /var/www/html/trustpoint && uv run trustpoint/manage.py shell -c '"'"'\'"'"''"'"'import os; from django.conf import settings; from django.core.mail import send_mail; subject=os.environ["PROBE_SUBJECT"]; send_mail(subject, "Trustpoint Mailpit probe.", getattr(settings, "DEFAULT_FROM_EMAIL", None), ["demo@trustpoint.local"], fail_silently=False)'"'"'\'"'"''"'" \
+    >/dev/null 2>&1; then
+    warn "Mailpit probe failed from ${label} container."
+    return 1
+  fi
+
+  if ! have curl; then
+    warn "curl not found on host; Mailpit probe from ${label} was sent but API verification was skipped."
+    return 0
+  fi
+
+  if mailpit_has_subject "$subject"; then
+    ok "Mailpit received the ${label} probe email."
+    return 0
+  fi
+
+  warn "Mailpit SMTP accepted the ${label} probe email, but it did not appear in the Mailpit UI within ${MAILPIT_PROBE_TIMEOUT}s."
+  return 1
+}
+
+verify_mailpit_delivery(){
+  $EN_MAILPIT || return 0
+  $EN_APP && probe_mailpit_from_container trustpoint "web" || true
+  $EN_WF2_WORKER && probe_mailpit_from_container "$WF2_WORKER_NAME" "workflows2-worker" || true
+}
+
+show_runtime_status(){
+  local net_state="absent" vol_state="absent"
+  docker network inspect "$NET" >/dev/null 2>&1 && net_state="present"
+  docker volume inspect "$VOL_DB" >/dev/null 2>&1 && vol_state="present"
+
+  echo
+  echo "=========================== Runtime Status (Live) ========================"
+  printf "%-22s %s\n" "Network:" "${NET} (${net_state})"
+  printf "%-22s %s\n" "DB volume:" "${VOL_DB} (${vol_state})"
+  printf "%-22s %s\n" "workflow2 folder:" "$([ -d "$WF2_FOLDER" ] && echo "${WF2_FOLDER} (present)" || echo "${WF2_FOLDER} (absent)")"
+  echo
+  printf "%-20s %-10s %-10s %s\n" "Container" "State" "Health" "Image"
+  print_container_status_row trustpoint
+  print_container_status_row postgres
+  print_container_status_row mailpit
+  print_container_status_row sftpgo
+  print_container_status_row "$WF2_WORKER_NAME"
+  echo
+
+  if exists trustpoint; then
+    local http_port https_port wf_mode db_host db_port db_name db_user db_pass
+    http_port="$(container_host_port trustpoint 80/tcp)"
+    https_port="$(container_host_port trustpoint 443/tcp)"
+    wf_mode="$(container_env trustpoint WORKFLOWS2_RUN_MODE)"
+    db_host="$(container_env trustpoint DATABASE_HOST)"
+    db_port="$(container_env trustpoint DATABASE_PORT)"
+    db_name="$(container_env trustpoint POSTGRES_DB)"
+    db_user="$(container_env trustpoint DATABASE_USER)"
+    db_pass="$(container_env trustpoint DATABASE_PASSWORD)"
+
+    [[ -n "$http_port" ]] && printf "%-22s %s\n" "trustpoint HTTP:" "http://localhost:${http_port}"
+    [[ -n "$https_port" ]] && printf "%-22s %s\n" "trustpoint HTTPS:" "https://localhost:${https_port}"
+    printf "%-22s %s\n" "workflows2 mode:" "${wf_mode:-unset}"
+    if [[ -n "$db_host" || -n "$db_port" || -n "$db_name" || -n "$db_user" ]]; then
+      printf "%-22s %s\n" "DB connect:" "host=${db_host:-?} port=${db_port:-?} db=${db_name:-?} user=${db_user:-?} pass=$(mask "${db_pass:-}")"
+    fi
+  fi
+
+  if exists postgres; then
+    local pg_port
+    pg_port="$(container_host_port postgres 5432/tcp)"
+    [[ -n "$pg_port" ]] && printf "%-22s %s\n" "PostgreSQL:" "tcp://localhost:${pg_port}"
+  fi
+
+  if exists mailpit; then
+    local mailpit_ui mailpit_smtp
+    mailpit_ui="$(container_host_port mailpit 8025/tcp)"
+    mailpit_smtp="$(container_host_port mailpit 1025/tcp)"
+    [[ -n "$mailpit_ui" ]] && printf "%-22s %s\n" "Mailpit UI:" "http://localhost:${mailpit_ui}"
+    [[ -n "$mailpit_smtp" ]] && printf "%-22s %s\n" "Mailpit SMTP:" "localhost:${mailpit_smtp}"
+  fi
+
+  if exists "$WF2_WORKER_NAME"; then
+    local worker_db worker_lease worker_batch worker_sleep
+    worker_db="$(container_env "$WF2_WORKER_NAME" DATABASE_HOST)"
+    worker_lease="$(container_env "$WF2_WORKER_NAME" WORKFLOWS2_WORKER_LEASE)"
+    worker_batch="$(container_env "$WF2_WORKER_NAME" WORKFLOWS2_WORKER_BATCH)"
+    worker_sleep="$(container_env "$WF2_WORKER_NAME" WORKFLOWS2_WORKER_SLEEP)"
+    printf "%-22s %s\n" "workflows2 worker:" "${WF2_WORKER_NAME}"
+    [[ -n "$worker_db" ]] && printf "%-22s %s\n" "worker DB host:" "${worker_db}"
+    [[ -n "$worker_lease" || -n "$worker_batch" || -n "$worker_sleep" ]] && \
+      printf "%-22s %s\n" "worker tuning:" "lease=${worker_lease:-?} batch=${worker_batch:-?} sleep=${worker_sleep:-?}"
+  fi
+
+  if exists sftpgo; then
+    local sftpgo_web sftpgo_sftp sftpgo_admin
+    sftpgo_web="$(container_host_port sftpgo 8080/tcp)"
+    sftpgo_sftp="$(container_host_port sftpgo 2022/tcp)"
+    sftpgo_admin="$(container_env sftpgo SFTPGO_DEFAULT_ADMIN_USERNAME)"
+    [[ -n "$sftpgo_web" ]] && printf "%-22s %s\n" "SFTPGo Web:" "http://localhost:${sftpgo_web}/web/admin"
+    [[ -n "$sftpgo_sftp" ]] && printf "%-22s %s\n" "SFTPGo SFTP:" "sftp://localhost:${sftpgo_sftp}"
+    [[ -n "$sftpgo_admin" ]] && printf "%-22s %s\n" "SFTPGo admin:" "${sftpgo_admin}"
+    printf "%-22s %s\n" "SFTPGo data dir:" "${SFTPGO_ROOT}"
+  fi
+
+  echo "========================================================================="
+}
+
 # -------------------------- Summary ------------------------------------------
 final_summary(){
   echo
   echo "========================= Runtime Summary (Actual) ======================="
   printf "%-22s %s\n" "Network:" "$NET"
-  printf "%-22s %s\n" "Containers:" "$(docker ps --format '{{.Names}}' | grep -E '^(trustpoint|postgres|mailpit|sftpgo)$' || true)"
+  printf "%-22s %s\n" "Containers:" "$(docker ps --format '{{.Names}}' | grep -E '^(trustpoint|postgres|mailpit|sftpgo|trustpoint-worker)$' || true)"
   echo
   if $EN_APP; then
     printf "%-22s %s\n" "trustpoint:" "http://localhost:80  |  https://localhost:443"
+    printf "%-22s %s\n" "workflows2 mode:" "$([ "$EN_WF2_WORKER" = true ] && echo 'db (dedicated worker)' || echo 'sync (inline in web)')"
   fi
   if $DB_INTERNAL; then
     printf "%-22s %s\n" "PostgreSQL:" "tcp://localhost:${DB_PORT}  (container port 5432)"
@@ -516,6 +732,10 @@ final_summary(){
     printf "%-22s %s\n" "DB connect:" "host=${APP_DB_HOST} port=${APP_DB_PORT} db=${APP_DB_NAME} user=${APP_DB_USER} pass=$(mask "$APP_DB_PASS")"
   fi
   $EN_MAILPIT && printf "%-22s %s\n" "Mailpit UI:" "http://localhost:${MAILPIT_UI_PORT}  (SMTP :${MAILPIT_SMTP_PORT})"
+  if $EN_WF2_WORKER; then
+    printf "%-22s %s\n" "workflows2 worker:" "${WF2_WORKER_NAME}"
+    printf "%-22s %s\n" "workflow2 folder:" "${WF2_FOLDER}"
+  fi
   if $EN_SFTPGO; then
     local PORT; PORT="$(sftpgo_web_port)"
     printf "%-22s %s\n" "SFTPGo Web:" "http://localhost:${PORT}/web/admin"
@@ -550,15 +770,19 @@ wizard(){
   step_postgres_config
   step_app_db_binding
   step_helpers
+  step_workflows2_worker
   show_plan
   ask_yes_no "Proceed with these settings?" "y" || { warn "Aborted by user."; exit 1; }
   $DB_INTERNAL && ensure_volumes
   start_postgres
   start_mailpit
   start_sftpgo
+  $EN_WF2_WORKER || stop_one "$WF2_WORKER_NAME"
   start_app
+  start_workflows2_worker
   $NOWAIT || await_readiness
   $NOWAIT || provision_sftpgo_backup_user
+  $NOWAIT || verify_mailpit_delivery
   $NOWAIT || wait_tls_fingerprint || true
   final_summary
 }
@@ -568,13 +792,14 @@ usage(){
   cat <<'EOF'
 Commands:
   (no command)       Run interactive wizard
-  up [demo|trustpoint|db|mail|sftp] [--nowait]
-  down [demo|trustpoint|db|mail|sftp]
-  logs [trustpoint|db|mail|sftp]
+  up [demo|trustpoint|db|mail|sftp|worker] [--nowait]
+  down [demo|trustpoint|db|mail|sftp|worker]
+  logs [trustpoint|db|mail|sftp|worker]
+  status
   nuke
   help
 
-Also supported (legacy): --only trustpoint|db|mail|sftp|demo
+Also supported (legacy): --only trustpoint|db|mail|sftp|worker|demo
 EOF
 }
 
@@ -585,7 +810,8 @@ map_only_to_flags(){
     db)   ONLY_DB=true ;;
     mail) ONLY_MAIL=true ;;
     sftp) ONLY_SFTP=true ;;
-    *) die "Unknown target: $1 (use trustpoint|db|mail|sftp|demo)";;
+    worker) ONLY_WF2_WORKER=true ;;
+    *) die "Unknown target: $1 (use trustpoint|db|mail|sftp|worker|demo)";;
   esac
 }
 
@@ -593,7 +819,7 @@ set_targets_from_args(){
   local any=false
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      demo|trustpoint|app|db|mail|sftp) map_only_to_flags "$1"; any=true; shift ;;
+      demo|trustpoint|app|db|mail|sftp|worker) map_only_to_flags "$1"; any=true; shift ;;
       --only) map_only_to_flags "${2:-}"; any=true; shift 2 ;;
       --nowait) NOWAIT=true; shift ;;
       *) die "Unknown option/target: $1" ;;
@@ -605,8 +831,7 @@ set_targets_from_args(){
 start_selected(){
   ensure_network
   if $ONLY_DB; then DB_INTERNAL=true; fi
-  if $ONLY_APP; then
-    EN_APP=true
+  if $ONLY_APP || $ONLY_WF2_WORKER; then
     # If internal DB is (or will be) used, set app connection to container:5432
     if $DB_INTERNAL; then
       APP_DB_HOST="$DEF_DB_HOST_INTERNAL"; APP_DB_PORT=5432
@@ -614,7 +839,35 @@ start_selected(){
       APP_DB_HOST="$DB_HOST"; APP_DB_PORT="$DB_PORT"
     fi
     APP_DB_NAME="$DB_NAME"; APP_DB_USER="$DB_USER"; APP_DB_PASS="$DB_PASS"
+  fi
+  if $ONLY_APP; then
+    EN_APP=true
     # Prefer local image if present; otherwise pull repo:latest
+    if ask_yes_no "Do you want to buid locally (No = pull from Docker Hub)" "y"; then
+      if build_trustpoint_image; then
+        BUILD_LOCAL=true
+        APP_IMAGE="trustpoint:local"
+      else
+        warn "Local build failed"
+        if ask_yes_no "Do you want to pull from Docker Hub" "y"; then
+          BUILD_LOCAL=false
+          APP_IMAGE="${TP_REPO}:latest"
+          pull_trustpoint_image
+        else
+          nuke_cmd ;
+          exit 1;
+        fi
+      fi
+    else
+      BUILD_LOCAL=false
+      APP_IMAGE="${TP_REPO}:latest"
+      pull_trustpoint_image
+    fi
+    EN_WF2_WORKER=$(
+      ask_yes_no "Delegate workflows2 tasks to a dedicated worker container?" "n" && echo true || echo false
+    )
+  elif $ONLY_WF2_WORKER; then
+    EN_WF2_WORKER=true
     if ask_yes_no "Do you want to buid locally (No = pull from Docker Hub)" "y"; then
       if build_trustpoint_image; then
         BUILD_LOCAL=true
@@ -639,21 +892,25 @@ start_selected(){
   $ONLY_DB   && { EN_PG=true; ensure_volumes; start_postgres; }
   $ONLY_MAIL && { EN_MAILPIT=true; start_mailpit; }
   $ONLY_SFTP && { EN_SFTPGO=true; start_sftpgo; }
+  $EN_WF2_WORKER || { $ONLY_APP && stop_one "$WF2_WORKER_NAME"; }
   $ONLY_APP  && start_app
+  $EN_WF2_WORKER && start_workflows2_worker
 
   $NOWAIT || await_readiness
   $NOWAIT || provision_sftpgo_backup_user
+  $NOWAIT || verify_mailpit_delivery
   $NOWAIT || wait_tls_fingerprint || true
   final_summary
 }
 
 down_selected(){
   local done=false
-  $ONLY_APP   && stop_one trustpoint && done=true
+  $ONLY_APP   && { stop_one trustpoint; stop_one "$WF2_WORKER_NAME"; done=true; }
   $ONLY_DB    && stop_one postgres   && done=true
   $ONLY_MAIL  && stop_one mailpit    && done=true
   $ONLY_SFTP  && stop_one sftpgo     && done=true
-  $done || { stop_one trustpoint; stop_one postgres; stop_one mailpit; stop_one sftpgo; }
+  $ONLY_WF2_WORKER && stop_one "$WF2_WORKER_NAME" && done=true
+  $done || { stop_one trustpoint; stop_one postgres; stop_one mailpit; stop_one sftpgo; stop_one "$WF2_WORKER_NAME"; }
   ok "Stopped."
 }
 
@@ -662,25 +919,25 @@ logs_selected(){
   $ONLY_DB && target="postgres"
   $ONLY_MAIL && target="mailpit"
   $ONLY_SFTP && target="sftpgo"
+  $ONLY_WF2_WORKER && target="$WF2_WORKER_NAME"
   exists "$target" || die "Container not found: $target"
   docker logs -f "$target"
 }
 
 nuke_cmd(){
-  read -r -p "Remove ALL project containers, network, and DB volume (and ./sftpgo-data)? [y/N] " a; [[ "${a}" == "y" ]] || exit 0
+  read -r -p "Remove ALL project containers, network, DB volume, ./sftpgo-data, and ./workflow2Folder? [y/N] " a; [[ "${a}" == "y" ]] || exit 0
   read -r -p "Are you sure? This is destructive. [y/N] " b; [[ "${b}" == "y" ]] || exit 0
-  stop_one trustpoint; stop_one postgres; stop_one mailpit; stop_one sftpgo
+  stop_one trustpoint; stop_one postgres; stop_one mailpit; stop_one sftpgo; stop_one "$WF2_WORKER_NAME"
   docker network rm "$NET" >/dev/null 2>&1 || true
   docker volume rm "$VOL_DB" >/dev/null 2>&1 || true
   if [[ -d "$SFTPGO_ROOT" ]]; then rm -rf "$SFTPGO_ROOT"; fi
+  if [[ -d "$WF2_FOLDER" ]]; then rm -rf "$WF2_FOLDER"; fi
   ok "Project resources removed."
 }
 
 # -------------------------- Arg parsing & dispatch ----------------------------
-preflight
-ensure_network
-
 cmd="${1:-}"
+preflight
 case "$cmd" in
   "" ) wizard ;;
   help) usage ;;
@@ -698,6 +955,11 @@ case "$cmd" in
     shift || true
     set_targets_from_args "$@"
     logs_selected
+    ;;
+  status)
+    shift || true
+    [[ $# -eq 0 ]] || die "status does not take targets. Use it without arguments."
+    show_runtime_status
     ;;
   nuke) nuke_cmd ;;
   *) usage; die "Unknown command: $cmd" ;;

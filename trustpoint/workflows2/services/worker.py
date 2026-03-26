@@ -174,12 +174,12 @@ class Workflow2DbWorker:
         instance.status = Workflow2Instance.STATUS_QUEUED
         instance.save(update_fields=['status', 'updated_at'])
 
-        return Workflow2Job.objects.create(
+        job, _created = Workflow2Job.get_or_create_active(
             instance=instance,
             kind=Workflow2Job.KIND_RUN,
-            status=Workflow2Job.STATUS_QUEUED,
             run_after=timezone.now(),
         )
+        return job
 
     def resume_instance(self, *, instance: Workflow2Instance) -> Workflow2Job:
         """Resume an instance by delegating to the retry flow."""
@@ -253,13 +253,11 @@ class Workflow2DbWorker:
                 self._mark_done(job)
 
                 if not step_res.terminal:
-                    Workflow2Job.objects.create(
+                    _next_job, created_next = Workflow2Job.get_or_create_active(
                         instance=inst,
                         kind=Workflow2Job.KIND_RUN,
-                        status=Workflow2Job.STATUS_QUEUED,
                         run_after=timezone.now(),
                     )
-                    created_next = True
                 elif inst.run_id:
                     run = Workflow2Run.objects.select_for_update().get(id=inst.run_id)
                     self.runtime.recompute_run_status(run)

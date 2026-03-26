@@ -266,10 +266,10 @@ class WorkflowDispatchService:
 
     def continue_instance(self, *, instance: Workflow2Instance) -> Workflow2Job:
         """Queue the next job for an existing instance and apply normal dispatch policy."""
-        job = Workflow2Job.objects.create(
+        job, _created = Workflow2Job.get_or_create_active(
             instance=instance,
             kind=Workflow2Job.KIND_RUN,
-            status=Workflow2Job.STATUS_QUEUED,
+            run_after=timezone.now(),
         )
 
         run_id = getattr(instance, 'run_id', None)
@@ -413,4 +413,9 @@ class WorkflowDispatchService:
             instance.status = Workflow2Instance.STATUS_QUEUED
             instance.save(update_fields=['status', 'updated_at'])
 
-        return Workflow2Job.objects.create(instance=instance, kind=kind, status=Workflow2Job.STATUS_QUEUED)
+        job, _created = Workflow2Job.get_or_create_active(
+            instance=instance,
+            kind=kind,
+            run_after=timezone.now(),
+        )
+        return job

@@ -236,6 +236,51 @@ class DispatchTests(TestCase):
             2,
         )
 
+    def test_workflow2job_unique_active_constraint_rejects_duplicate_active_job(self) -> None:
+        definition = self._store_definition()
+        runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
+        instance = runtime.create_instance(definition=definition, event={"device": {"common_name": "dev1"}})
+
+        Workflow2Job.objects.create(
+            instance=instance,
+            kind=Workflow2Job.KIND_RUN,
+            status=Workflow2Job.STATUS_QUEUED,
+        )
+
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Workflow2Job.objects.create(
+                    instance=instance,
+                    kind=Workflow2Job.KIND_RUN,
+                    status=Workflow2Job.STATUS_RUNNING,
+                )
+
+    def test_continue_instance_reuses_existing_active_job(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.save()
+
+        definition = self._store_definition()
+        runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
+        instance = runtime.create_instance(definition=definition, event={"device": {"common_name": "dev1"}})
+        existing = Workflow2Job.objects.create(
+            instance=instance,
+            kind=Workflow2Job.KIND_RUN,
+            status=Workflow2Job.STATUS_QUEUED,
+        )
+
+        svc = WorkflowDispatchService()
+        job = svc.continue_instance(instance=instance)
+
+        self.assertEqual(job.id, existing.id)
+        self.assertEqual(
+            Workflow2Job.objects.filter(
+                instance=instance,
+                status__in=[Workflow2Job.STATUS_QUEUED, Workflow2Job.STATUS_RUNNING],
+            ).count(),
+            1,
+        )
+
     def test_emit_event_outcome_returns_exact_run_from_dispatch_call(self) -> None:
         definition = self._store_definition()
         now = timezone.now()
