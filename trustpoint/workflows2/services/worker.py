@@ -142,7 +142,7 @@ class Workflow2DbWorker:
             job.status = Workflow2Job.STATUS_FAILED
             job.last_error = err
             job.locked_until = None
-            job.locked_by = None
+            job.locked_by = ''
             job.save(update_fields=['status', 'last_error', 'locked_until', 'locked_by', 'updated_at'])
 
             if inst.status not in {
@@ -277,8 +277,8 @@ class Workflow2DbWorker:
         job = Workflow2Job.objects.select_for_update().get(id=job.id)
         job.status = Workflow2Job.STATUS_DONE
         job.locked_until = None
-        job.locked_by = None
-        job.last_error = None
+        job.locked_by = ''
+        job.last_error = ''
         job.save(update_fields=['status', 'locked_until', 'locked_by', 'last_error', 'updated_at'])
 
     @transaction.atomic
@@ -319,7 +319,7 @@ class Workflow2DbWorker:
         job.status = Workflow2Job.STATUS_FAILED
         job.last_error = err
         job.locked_until = None
-        job.locked_by = None
+        job.locked_by = ''
         job.save(update_fields=['status', 'last_error', 'locked_until', 'locked_by', 'updated_at'])
 
         if inst.status not in {

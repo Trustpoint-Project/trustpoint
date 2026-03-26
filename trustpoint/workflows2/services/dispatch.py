@@ -159,11 +159,12 @@ class WorkflowDispatchService:
         idempotency_key: str | None = None,
     ) -> list[Workflow2Instance]:
         """Dispatch an event and return any created workflow instances."""
+        normalized_idempotency_key = idempotency_key or ''
         run = self.get_or_create_run(
             on=on,
             event=event,
             source=source,
-            idempotency_key=idempotency_key,
+            idempotency_key=normalized_idempotency_key,
         )
 
         existing = list(Workflow2Instance.objects.filter(run=run).order_by('created_at'))
@@ -214,11 +215,11 @@ class WorkflowDispatchService:
             event=event,
             source=source,
             initial_vars=initial_vars,
-            idempotency_key=idempotency_key,
+            idempotency_key=idempotency_key or '',
         )
 
         run = (
-            Workflow2Run.objects.filter(trigger_on=on, idempotency_key=idempotency_key)
+            Workflow2Run.objects.filter(trigger_on=on, idempotency_key=idempotency_key or '')
             .order_by('-created_at')
             .first()
         )
@@ -280,10 +281,11 @@ class WorkflowDispatchService:
         idempotency_key: str | None = None,
     ) -> Workflow2Run:
         """Return an existing idempotent run or create a new one."""
-        if idempotency_key:
+        normalized_idempotency_key = idempotency_key or ''
+        if normalized_idempotency_key:
             existing = (
                 Workflow2Run.objects.select_for_update()
-                .filter(trigger_on=on, idempotency_key=idempotency_key)
+                .filter(trigger_on=on, idempotency_key=normalized_idempotency_key)
                 .order_by('-created_at')
                 .first()
             )
@@ -294,7 +296,7 @@ class WorkflowDispatchService:
             trigger_on=on,
             event_json=event,
             source_json=asdict(source),
-            idempotency_key=idempotency_key,
+            idempotency_key=normalized_idempotency_key,
             status=Workflow2Run.STATUS_QUEUED,
             finalized=False,
         )

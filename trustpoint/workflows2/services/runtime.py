@@ -96,7 +96,7 @@ class WorkflowRuntimeService:
             }:
                 return instance
 
-            if instance.current_step is None:
+            if not instance.current_step:
                 instance.status = Workflow2Instance.STATUS_SUCCEEDED
                 instance.save(update_fields=['status', 'updated_at'])
                 self._recompute_run_if_present(instance)
@@ -147,8 +147,8 @@ class WorkflowRuntimeService:
                 step_id=step_id,
                 step_type=step_type,
                 status='failed',
-                outcome=None,
-                next_step=None,
+                outcome='',
+                next_step='',
                 vars_delta={},
                 output=None,
                 error=err,
@@ -175,8 +175,8 @@ class WorkflowRuntimeService:
             step_id=approval.step_id,
             step_type='approval',
             status=payload['status'],
-            outcome=payload['selected_outcome'],
-            next_step=payload['next_step_id'],
+            outcome=payload['selected_outcome'] or '',
+            next_step=payload['next_step_id'] or '',
             vars_delta={},
             output={
                 'decision': payload['decision'],
@@ -184,7 +184,7 @@ class WorkflowRuntimeService:
                 'comment': payload['comment'] or '',
                 'decided_by': payload['decided_by'] or '',
             },
-            error=None,
+            error='',
             created_at=timezone.now(),
         )
 
@@ -200,13 +200,13 @@ class WorkflowRuntimeService:
         inst.run_count = run_index
         if terminal_reject:
             inst.status = Workflow2Instance.STATUS_REJECTED
-            inst.current_step = None
+            inst.current_step = ''
         elif terminal_end:
             inst.status = Workflow2Instance.STATUS_SUCCEEDED
-            inst.current_step = None
+            inst.current_step = ''
         else:
             inst.status = Workflow2Instance.STATUS_RUNNING
-            inst.current_step = next_step_id
+            inst.current_step = next_step_id or ''
 
         inst.save(update_fields=['run_count', 'status', 'current_step', 'updated_at'])
         self._recompute_run_if_present(inst)
@@ -231,7 +231,7 @@ class WorkflowRuntimeService:
                     msg = 'Instance is terminal/blocked; cannot run'
                     self._raise_runtime_state_error(msg)
 
-                if instance.current_step is None:
+                if not instance.current_step:
                     instance.status = Workflow2Instance.STATUS_SUCCEEDED
                     instance.save(update_fields=['status', 'updated_at'])
                     self._recompute_run_if_present(instance)
@@ -279,11 +279,11 @@ class WorkflowRuntimeService:
                     step_id=run.step_id,
                     step_type=run.step_type,
                     status=run.status,
-                    outcome=run.outcome,
-                    next_step=run.next_step,
+                    outcome=run.outcome or '',
+                    next_step=run.next_step or '',
                     vars_delta=run.vars_delta or {},
                     output=run.output,
-                    error=run.error,
+                    error=run.error or '',
                     created_at=timezone.now(),
                 )
 
@@ -300,13 +300,13 @@ class WorkflowRuntimeService:
 
                 if run.next_step is None:
                     instance.status = Workflow2Instance.STATUS_SUCCEEDED
-                    instance.current_step = None
+                    instance.current_step = ''
                     instance.save(update_fields=['vars_json', 'run_count', 'status', 'current_step', 'updated_at'])
                     self._recompute_run_if_present(instance)
                     return StepResult(run=run, terminal=True)
 
                 instance.status = Workflow2Instance.STATUS_RUNNING
-                instance.current_step = run.next_step
+                instance.current_step = run.next_step or ''
                 instance.save(update_fields=['vars_json', 'run_count', 'status', 'current_step', 'updated_at'])
                 self._recompute_run_if_present(instance)
                 return StepResult(run=run, terminal=False)
@@ -375,8 +375,8 @@ class WorkflowRuntimeService:
             else Workflow2Approval.STATUS_REJECTED
         )
         approval.decided_at = timezone.now()
-        approval.decided_by = decided_by or None
-        approval.comment = comment or None
+        approval.decided_by = decided_by or ''
+        approval.comment = comment or ''
         approval.save(update_fields=['status', 'decided_at', 'decided_by', 'comment'])
 
         run_index = int(inst.run_count) + 1

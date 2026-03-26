@@ -232,11 +232,11 @@ class Workflow2InstanceCancelView(LoginRequiredMixin, View):
             ).update(
                 status=Workflow2Job.STATUS_CANCELLED,
                 locked_until=None,
-                locked_by=None,
+                locked_by='',
             )
 
             inst.status = Workflow2Instance.STATUS_CANCELLED
-            inst.current_step = None
+            inst.current_step = ''
             inst.save(update_fields=['status', 'current_step', 'updated_at'])
 
             if inst.run_id:

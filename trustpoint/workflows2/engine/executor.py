@@ -22,6 +22,9 @@ OnStepRun = Callable[[StepRun], None]
 _TERMINAL_RUN_STATUSES = {'failed', 'awaiting', 'rejected'}
 _END_TARGETS = {'$end', '$reject'}
 
+CAPTURE_TARGET_PARTS = 2
+CAPTURE_SOURCE_MIN_PARTS = 1
+
 
 class WorkflowExecutor:
     """Deterministic IR executor.
@@ -61,16 +64,13 @@ class WorkflowExecutor:
             raise StepExecutionError(step_id, 'Missing step definition')
 
         step = steps.get(step_id)
-        assert isinstance(step, dict)
-
-        step_type = str(step.get('type') or '')
-        params = step.get('params') or {}
+        if not isinstance(step, dict):
+            raise StepExecutionError(step_id, 'Missing step definition')
 
         return self._execute_step(
             run_index=run_index,
             step_id=step_id,
-            step_type=step_type,
-            params=params,
+            step=step,
             transitions=transitions,
             ctx=ctx,
         )
@@ -88,17 +88,21 @@ class WorkflowExecutor:
             vars_json = legacy_kwargs.pop('vars')
         if legacy_kwargs:
             unexpected = ', '.join(sorted(legacy_kwargs))
-            raise TypeError(f'Unexpected keyword arguments: {unexpected}')
+            msg = f'Unexpected keyword arguments: {unexpected}'
+            raise TypeError(msg)
 
         wf = ir.get('workflow') or {}
         start = wf.get('start')
         steps: dict[str, Any] = wf.get('steps') or {}
         transitions: dict[str, Any] = wf.get('transitions') or {}
 
+        engine_step = '<engine>'
         if not isinstance(start, str) or start not in steps:
-            raise StepExecutionError('<engine>', 'Invalid start step')
+            msg = 'Invalid start step'
+            raise StepExecutionError(engine_step, msg)
         if not isinstance(steps, dict) or not isinstance(transitions, dict):
-            raise StepExecutionError('<engine>', 'Invalid IR workflow structure')
+            msg = 'Invalid IR workflow structure'
+            raise StepExecutionError(engine_step, msg)
 
         ctx = RuntimeContext(event=event, vars=dict(vars_json or {}))
         runs: list[StepRun] = []
@@ -170,14 +174,16 @@ class WorkflowExecutor:
         *,
         run_index: int,
         step_id: str,
-        step_type: str,
-        params: dict[str, Any],
+        step: dict[str, Any],
         transitions: Any,
         ctx: RuntimeContext,
     ) -> StepRun:
         vars_before = dict(ctx.vars)
         output: dict[str, Any] | None = None
         outcome: str | None = None
+
+        step_type = str(step.get('type') or '')
+        params = step.get('params') or {}
 
         if step_type == 'set':
             self._step_set(step_id, params, ctx)
@@ -304,13 +310,16 @@ class WorkflowExecutor:
         self.email.send(to=to, cc=cc, bcc=bcc, subject=subject, body=body)
         return {'sent': True, 'to': to}
 
-    def _step_webhook(self, step_id: str, params: dict[str, Any], ctx: RuntimeContext) -> dict[str, Any]:
-        method = params.get('method')
-        url = render_template(params.get('url'), ctx)
-        headers = render_template(params.get('headers', {}), ctx)
-        body = render_template(params.get('body'), ctx)
-        timeout_seconds = params.get('timeout_seconds', 10)
-        capture = params.get('capture', [])
+    @staticmethod
+    def _validate_webhook_inputs(
+        step_id: str,
+        values: dict[str, Any],
+    ) -> tuple[str, str, dict[str, Any], int, list[Any]]:
+        method = values.get('method')
+        url = values.get('url')
+        headers = values.get('headers')
+        timeout_seconds = values.get('timeout_seconds')
+        capture = values.get('capture')
 
         if not isinstance(method, str) or not method:
             raise StepExecutionError(step_id, 'Invalid webhook.method')
@@ -325,69 +334,115 @@ class WorkflowExecutor:
         if not isinstance(capture, list):
             raise StepExecutionError(step_id, 'Invalid webhook.capture (expected list)')
 
-        resp: WebhookResponse = self.webhook.request(
+        return method, url, headers, timeout_seconds, capture
+
+    @staticmethod
+    def _response_body_lookup(body: Any, path: list[str]) -> Any:
+        cur = body
+        for seg in path:
+            if isinstance(cur, dict) and seg in cur:
+                cur = cur[seg]
+            else:
+                return None
+        return cur
+
+    @staticmethod
+    def _response_header_lookup(headers: Any, name: str) -> Any:
+        if not isinstance(headers, dict):
+            return None
+        lower = {str(k).lower(): v for k, v in headers.items()}
+        return lower.get(name.lower())
+
+    @staticmethod
+    def _capture_var_name(rule: dict[str, Any]) -> str | None:
+        target = rule.get('target')
+        if not (
+            isinstance(target, list)
+            and len(target) == CAPTURE_TARGET_PARTS
+            and target[0] == 'vars'
+            and isinstance(target[1], str)
+            and target[1]
+        ):
+            return None
+        return target[1]
+
+    @staticmethod
+    def _capture_source(rule: dict[str, Any]) -> list[Any] | None:
+        source = rule.get('source')
+        if not (
+            isinstance(source, list)
+            and len(source) >= CAPTURE_SOURCE_MIN_PARTS
+            and isinstance(source[0], str)
+        ):
+            return None
+        return source
+
+    def _apply_webhook_capture_rules(
+        self,
+        *,
+        capture: list[Any],
+        response: WebhookResponse,
+        ctx: RuntimeContext,
+    ) -> None:
+        for rule in capture:
+            if not isinstance(rule, dict):
+                continue
+
+            var_name = self._capture_var_name(rule)
+            source = self._capture_source(rule)
+            if var_name is None or source is None:
+                continue
+
+            source_kind = source[0]
+            if source_kind == 'status_code':
+                ctx.vars[var_name] = response.status_code
+            elif source_kind == 'body':
+                if len(source) == 1:
+                    ctx.vars[var_name] = response.body
+                else:
+                    ctx.vars[var_name] = self._response_body_lookup(
+                        response.body,
+                        [str(x) for x in source[1:]],
+                    )
+            elif source_kind == 'headers':
+                if len(source) == 1:
+                    ctx.vars[var_name] = response.headers
+                else:
+                    ctx.vars[var_name] = self._response_header_lookup(
+                        response.headers,
+                        str(source[1]),
+                    )
+
+    def _step_webhook(self, step_id: str, params: dict[str, Any], ctx: RuntimeContext) -> dict[str, Any]:
+        values = {
+            'method': params.get('method'),
+            'url': render_template(params.get('url'), ctx),
+            'headers': render_template(params.get('headers', {}), ctx),
+            'body': render_template(params.get('body'), ctx),
+            'timeout_seconds': params.get('timeout_seconds', 10),
+            'capture': params.get('capture', []),
+        }
+
+        method, url, headers, timeout_seconds, capture = self._validate_webhook_inputs(step_id, values)
+        body = values['body']
+
+        response = self.webhook.request(
             method=method,
             url=url,
             headers={str(k): str(v) for k, v in headers.items()},
             body=body,
             timeout_seconds=timeout_seconds,
         )
+        self._apply_webhook_capture_rules(capture=capture, response=response, ctx=ctx)
+        return {'status_code': response.status_code}
 
-        def _get_from_body(path: list[str]) -> Any:
-            cur = resp.body
-            for seg in path:
-                if isinstance(cur, dict) and seg in cur:
-                    cur = cur[seg]
-                else:
-                    return None
-            return cur
-
-        def _get_from_headers(name: str) -> Any:
-            if not isinstance(resp.headers, dict):
-                return None
-            # case-insensitive lookup
-            lower = {str(k).lower(): v for k, v in resp.headers.items()}
-            return lower.get(name.lower())
-
-        for rule in capture:
-            if not isinstance(rule, dict):
-                continue
-            target = rule.get('target')
-            source = rule.get('source')
-
-            if not (
-                isinstance(target, list)
-                and len(target) == 2
-                and target[0] == 'vars'
-                and isinstance(target[1], str)
-                and target[1]
-            ):
-                continue
-            var_name = target[1]
-
-            if not (isinstance(source, list) and len(source) >= 1 and isinstance(source[0], str)):
-                continue
-
-            src0 = source[0]
-
-            if src0 == 'status_code':
-                ctx.vars[var_name] = resp.status_code
-            elif src0 == 'body':
-                if len(source) == 1:
-                    ctx.vars[var_name] = resp.body
-                else:
-                    ctx.vars[var_name] = _get_from_body([str(x) for x in source[1:]])
-            elif src0 == 'headers':
-                if len(source) == 1:
-                    ctx.vars[var_name] = resp.headers
-                else:
-                    # we compile headers.<name> as ["headers", "<name>"]
-                    ctx.vars[var_name] = _get_from_headers(str(source[1]))
-            else:
-                # unknown capture source => ignore (shouldn't happen if compiler validated)
-                continue
-
-        return {'status_code': resp.status_code}
+    @staticmethod
+    def _normalize_transition_target(to: str) -> str | None:
+        if to == '$end':
+            return None
+        if to == '$reject':
+            return '$reject'
+        return to
 
     def _choose_next(self, step_id: str, outcome: str | None, transitions: Any) -> str | None:
         if transitions is None:
@@ -399,32 +454,26 @@ class WorkflowExecutor:
             raise StepExecutionError(step_id, 'Invalid transitions format')
 
         kind = transitions.get('kind')
-
-        def _normalize_to(to: str) -> str | None:
-            if to == '$end':
-                return None
-            if to == '$reject':
-                return '$reject'
-            return to
-
         if kind == 'linear':
             nxt = transitions.get('to')
             if not isinstance(nxt, str):
                 raise StepExecutionError(step_id, 'Invalid linear transition')
-            return _normalize_to(nxt)
+            return self._normalize_transition_target(nxt)
 
-        if kind == 'by_outcome':
-            if outcome is None:
-                raise StepExecutionError(step_id, 'Missing outcome for outcome transition')
-            m = transitions.get('map')
-            if not isinstance(m, dict):
-                raise StepExecutionError(step_id, 'Invalid outcome map')
-            nxt = m.get(outcome)
-            if not isinstance(nxt, str):
-                raise StepExecutionError(step_id, f'No route for outcome "{outcome}"')
-            return _normalize_to(nxt)
+        if kind != 'by_outcome':
+            raise StepExecutionError(step_id, 'Unknown transition kind')
 
-        raise StepExecutionError(step_id, 'Unknown transition kind')
+        if outcome is None:
+            raise StepExecutionError(step_id, 'Missing outcome for outcome transition')
+
+        outcome_map = transitions.get('map')
+        if not isinstance(outcome_map, dict):
+            raise StepExecutionError(step_id, 'Invalid outcome map')
+
+        nxt = outcome_map.get(outcome)
+        if not isinstance(nxt, str):
+            raise StepExecutionError(step_id, f'No route for outcome "{outcome}"')
+        return self._normalize_transition_target(nxt)
 
     def _emit(self, run: StepRun) -> None:
         if self.on_step_run:
@@ -432,11 +481,7 @@ class WorkflowExecutor:
 
 
 def _delta(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
-    delta: dict[str, Any] = {}
-    for k, v in after.items():
-        if k not in before or before[k] != v:
-            delta[k] = v
-    return delta
+    return {k: v for k, v in after.items() if k not in before or before[k] != v}
 
 
 def _now() -> datetime:

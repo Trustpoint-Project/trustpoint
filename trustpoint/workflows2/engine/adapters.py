@@ -1,9 +1,12 @@
 """Runtime adapters for sending emails and webhooks."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol
 
+import requests
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 
@@ -67,9 +70,10 @@ class DjangoEmailAdapter:
     ) -> None:
         """Send one email message."""
         if not to:
-            raise ValueError('email.to must not be empty')
+            error_msg = 'email.to must not be empty'
+            raise ValueError(error_msg)
 
-        msg = EmailMultiAlternatives(
+        email_message = EmailMultiAlternatives(
             subject=subject,
             body=body,
             from_email=self.default_from_email,
@@ -77,7 +81,7 @@ class DjangoEmailAdapter:
             cc=cc,
             bcc=bcc,
         )
-        msg.send(fail_silently=False)
+        email_message.send(fail_silently=False)
 
 
 class RequestsWebhookAdapter:
@@ -108,28 +112,26 @@ class RequestsWebhookAdapter:
         self.ca_bundle = ca_bundle
 
     def _resolve_verify(self) -> bool | str:
-        import os
-
         if not self.verify_tls:
             return False
 
-        # 1) Explicitly passed in
         if self.ca_bundle:
             return self.ca_bundle
 
-        # 2) Environment override (very common in containers / corporate environments)
         env_bundle = os.environ.get('REQUESTS_CA_BUNDLE') or os.environ.get('SSL_CERT_FILE')
         if env_bundle:
             return env_bundle
 
-        # 3) If system CA bundle exists, prefer it (helps when corp CA is installed to OS store)
-        #    If neither exists, fall back to requests default (certifi).
-        candidates = ('/etc/ssl/cert.pem', '/etc/ssl/certs/ca-certificates.crt', '/etc/ssl/certs')
-        for p in candidates:
-            if os.path.exists(p):
-                return p
+        candidates = (
+            Path('/etc/ssl/cert.pem'),
+            Path('/etc/ssl/certs/ca-certificates.crt'),
+            Path('/etc/ssl/certs'),
+        )
+        for candidate in candidates:
+            if candidate.exists():
+                return str(candidate)
 
-        return True  # requests default (certifi)
+        return True
 
     def request(
         self,
@@ -141,44 +143,49 @@ class RequestsWebhookAdapter:
         timeout_seconds: int,
     ) -> WebhookResponse:
         """Execute one webhook HTTP request and normalize the response."""
-        import requests  # type: ignore[import-untyped]  # keep local import so tests can stub easily
+        normalized_method = method.upper().strip()
+        if normalized_method not in {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'}:
+            error_msg = f'Unsupported method: {method}'
+            raise ValueError(error_msg)
 
-        m = method.upper().strip()
-        if m not in {'GET', 'POST', 'PUT', 'PATCH', 'DELETE'}:
-            raise ValueError(f'Unsupported method: {method}')
-
-        kwargs: dict[str, Any] = {
+        verify = self._resolve_verify()
+        request_kwargs: dict[str, Any] = {
             'headers': headers or {},
-            'timeout': timeout_seconds,
-            'verify': self._resolve_verify(),
+            'verify': verify,
         }
 
         if body is None:
             pass
         elif isinstance(body, (dict, list)):
-            kwargs['json'] = body
+            request_kwargs['json'] = body
         else:
-            kwargs['data'] = body
+            request_kwargs['data'] = body
 
         try:
-            resp = requests.request(m, url, **kwargs)
-        except requests.exceptions.SSLError as e:
-            # Give a targeted hint without disabling TLS.
-            raise RuntimeError(
-                "TLS verification failed while calling webhook.\n"
-                "Fix options:\n"
-                "- Install/update CA certificates in the runtime (container/VM).\n"
-                "- If you're behind a corporate proxy, add the corporate root CA to the OS trust store.\n"
-                "- Or set REQUESTS_CA_BUNDLE=/path/to/ca-bundle.pem (or SSL_CERT_FILE=...).\n"
-                f"Effective verify setting was: {kwargs.get('verify')!r}\n"
-                f"Original error: {e!r}"
-            ) from e
+            resp = requests.request(
+                normalized_method,
+                url,
+                timeout=timeout_seconds,
+                **request_kwargs,
+            )
+        except requests.exceptions.SSLError as exc:
+            error_msg = (
+                'TLS verification failed while calling webhook.\n'
+                'Fix options:\n'
+                '- Install newer CA certificates in the runtime (container/VM).\n'
+                '- If you are behind a corporate proxy, add the corporate root CA to the OS trust store.\n'
+                '- Or configure REQUESTS_CA_BUNDLE=/path/to/ca-bundle.pem '
+                '(or SSL_CERT_FILE=...).\n'
+                f'Effective verify setting was: {verify!r}\n'
+                f'Original error: {exc!r}'
+            )
+            raise RuntimeError(error_msg) from exc
 
         resp_headers = {str(k): str(v) for k, v in resp.headers.items()}
 
         try:
             parsed_body: Any = resp.json()
-        except Exception:
+        except ValueError:
             parsed_body = resp.text
 
         return WebhookResponse(

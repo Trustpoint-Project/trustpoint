@@ -6,7 +6,6 @@ from __future__ import annotations
 class ExecutionError(RuntimeError):
     """Base class for Workflow 2 runtime failures."""
 
-    pass
 
 
 class StepExecutionError(ExecutionError):

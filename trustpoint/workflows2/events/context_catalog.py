@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 from workflows2.events.context import ContextVar
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 def ctx(*items: ContextVar) -> tuple[ContextVar, ...]:

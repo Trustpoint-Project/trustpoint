@@ -309,13 +309,13 @@ class Workflow2BundleApprovalRejectTests(TestCase):
 
         self.assertEqual(approval.status, Workflow2Approval.STATUS_APPROVED)
         self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
-        self.assertIsNone(inst.current_step)
+        self.assertEqual(inst.current_step, '')
 
         continued = Workflow2StepRun.objects.get(instance=inst, run_index=2)
         self.assertEqual(continued.step_id, "approve")
         self.assertEqual(continued.status, "succeeded")
         self.assertEqual(continued.outcome, "continue_ok")
-        self.assertIsNone(continued.next_step)
+        self.assertEqual(continued.next_step, '')
 
     def test_resolve_approval_persists_comment_and_decider(self) -> None:
         d = self._store_def(YAML_APPROVAL_REJECT, name="approval-metadata")

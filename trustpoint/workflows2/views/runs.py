@@ -195,7 +195,7 @@ class Workflow2RunCancelView(LoginRequiredMixin, View):
             ).update(
                 status=Workflow2Job.STATUS_CANCELLED,
                 locked_until=None,
-                locked_by=None,
+                locked_by='',
             )
 
             for inst in insts:
@@ -206,7 +206,7 @@ class Workflow2RunCancelView(LoginRequiredMixin, View):
                     Workflow2Instance.STATUS_STOPPED,
                 }:
                     inst.status = Workflow2Instance.STATUS_CANCELLED
-                    inst.current_step = None
+                    inst.current_step = ''
                     inst.save(update_fields=['status', 'current_step', 'updated_at'])
 
             run.status = Workflow2Run.STATUS_CANCELLED

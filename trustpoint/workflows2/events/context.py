@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+GROUP_PATH_PARTS = 2
+
 
 @dataclass(frozen=True)
 class ContextVar:
@@ -59,8 +61,8 @@ class ContextVar:
             return g
 
         parts = [p for p in self.path.split('.') if p]
-        if len(parts) >= 2:
-            return '.'.join(parts[:2])
+        if len(parts) >= GROUP_PATH_PARTS:
+            return '.'.join(parts[:GROUP_PATH_PARTS])
         if len(parts) == 1:
             return parts[0]
         return 'other'

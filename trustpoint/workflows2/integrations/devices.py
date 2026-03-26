@@ -15,7 +15,7 @@ from workflows.events import Events
 
 @receiver(post_save, sender=DeviceModel)
 def on_device_created(
-    _sender: type[DeviceModel],
+    sender: type[DeviceModel],  # noqa: ARG001
     instance: DeviceModel,
     created: bool,  # noqa: FBT001
     **_kwargs: Any,

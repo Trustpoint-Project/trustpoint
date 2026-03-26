@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from workflows2.events.context import ContextVar
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 @dataclass(frozen=True)
@@ -36,7 +39,8 @@ class EventRegistry:
         """Register or replace one event specification."""
         key = (spec.key or '').strip()
         if not key:
-            raise ValueError('EventSpec.key must be non-empty')
+            msg = 'EventSpec.key must be non-empty'
+            raise ValueError(msg)
 
         allowed = spec.allowed_step_types
         if allowed is not None:

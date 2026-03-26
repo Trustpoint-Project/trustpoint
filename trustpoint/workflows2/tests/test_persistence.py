@@ -48,11 +48,11 @@ class PersistenceTests(TestCase):
         inst.refresh_from_db()
 
         self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
-        self.assertIsNone(inst.current_step)
+        self.assertEqual(inst.current_step, '')
         self.assertEqual(inst.run_count, 1)
 
         runs = list(Workflow2StepRun.objects.filter(instance=inst).order_by("run_index"))
         self.assertEqual(len(runs), 1)
         self.assertEqual(runs[0].step_id, "stop_now")
         self.assertEqual(runs[0].status, "ok")
-        self.assertIsNone(runs[0].next_step)
+        self.assertEqual(runs[0].next_step, '')

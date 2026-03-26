@@ -39,6 +39,7 @@ dependencies = [
     "asyncua>=1.1.5",
     "django-q2>=1.9.0",
     "drf-yasg>=1.21.15",
+    "types-requests>=2.32.4.20260324",
 ]
 
 [dependency-groups]

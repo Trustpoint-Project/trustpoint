@@ -32,7 +32,7 @@ class SchemaLinter:
 
     _STEP_SPECS: ClassVar[dict[str, _StepSpec]] = {
         'email': _StepSpec(
-            allowed_keys={
+            allowed_keys=frozenset({
                 'type',
                 'title',
                 'to',
@@ -40,10 +40,10 @@ class SchemaLinter:
                 'bcc',
                 'subject',
                 'body',
-            }
+            })
         ),
         'webhook': _StepSpec(
-            allowed_keys={
+            allowed_keys=frozenset({
                 'type',
                 'title',
                 'method',
@@ -52,38 +52,38 @@ class SchemaLinter:
                 'body',
                 'timeout_seconds',
                 'capture',
-            }
+            })
         ),
         'logic': _StepSpec(
-            allowed_keys={
+            allowed_keys=frozenset({
                 'type',
                 'title',
                 'cases',
                 'default',
-            }
+            })
         ),
         'set': _StepSpec(
-            allowed_keys={
+            allowed_keys=frozenset({
                 'type',
                 'title',
                 'vars',
-            }
+            })
         ),
         'compute': _StepSpec(
-            allowed_keys={
+            allowed_keys=frozenset({
                 'type',
                 'title',
                 'set',
-            }
+            })
         ),
         'approval': _StepSpec(
-            allowed_keys={
+            allowed_keys=frozenset({
                 'type',
                 'title',
                 'approved_outcome',
                 'rejected_outcome',
                 'timeout_seconds',
-            }
+            })
         ),
     }
 
