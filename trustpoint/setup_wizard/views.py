@@ -1312,6 +1312,7 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
         }
         return error_messages.get(return_code, 'An unknown error occurred during auto restore password processing.')
 
+
 class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWizardTlsCertificateForm]):
     """View for generating TLS Server Credentials in the setup wizard.
 
@@ -1319,12 +1320,6 @@ class SetupWizardGenerateTlsServerCredentialView(LoggerMixin, FormView[StartupWi
     setup wizard. It provides a form for the user to input necessary information
     such as IP addresses and domain names, and processes the data to generate
     the required TLS certificates.
-
-    Attributes:
-        http_method_names (ClassVar[list[str]]): HTTP methods allowed for this view.
-        template_name (str): Path to the template used for rendering the form.
-        form_class (Form): The form class used to validate user input.
-        success_url (str): The URL to redirect to upon successful credential generation.
     """
 
     http_method_names = ('get', 'post')
