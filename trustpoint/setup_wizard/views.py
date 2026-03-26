@@ -428,6 +428,10 @@ class HsmSetupMixin(LoggerMixin):
         msg = 'Subclasses must implement get_expected_wizard_state()'
         raise NotImplementedError(msg)
 
+
+class SetupWizardConfigCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
+    pass
+
 class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
     """View for handling crypto storage setup during the setup wizard."""
 
