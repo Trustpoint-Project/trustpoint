@@ -9,10 +9,12 @@ from functools import partial
 from typing import Any, Literal
 
 from django.conf import settings
-from django.db import OperationalError, connection, transaction
+from django.db import IntegrityError, OperationalError, connection, transaction
 from django.utils import timezone
 
 from management.models.workflows2 import WorkflowExecutionConfig
+from workflows2.engine.context import RuntimeContext
+from workflows2.engine.eval import eval_condition
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import (
     Workflow2Definition,
@@ -159,6 +161,25 @@ class WorkflowDispatchService:
         idempotency_key: str | None = None,
     ) -> list[Workflow2Instance]:
         """Dispatch an event and return any created workflow instances."""
+        _, instances = self._emit_event_internal(
+            on=on,
+            event=event,
+            source=source,
+            initial_vars=initial_vars,
+            idempotency_key=idempotency_key,
+        )
+        return instances
+
+    def _emit_event_internal(
+        self,
+        *,
+        on: str,
+        event: dict[str, Any],
+        source: EventSource,
+        initial_vars: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> tuple[Workflow2Run, list[Workflow2Instance]]:
+        """Dispatch an event and return the exact run plus any created workflow instances."""
         normalized_idempotency_key = idempotency_key or ''
         run = self.get_or_create_run(
             on=on,
@@ -170,14 +191,19 @@ class WorkflowDispatchService:
         existing = list(Workflow2Instance.objects.filter(run=run).order_by('created_at'))
         if existing:
             self.runtime.recompute_run_status(run)
-            return existing
+            return run, existing
 
-        defs = self._select_definitions(on=on, source=source)
+        defs = self._select_definitions(
+            on=on,
+            event=event,
+            source=source,
+            initial_vars=initial_vars,
+        )
         if not defs:
             run.status = Workflow2Run.STATUS_NO_MATCH
             run.finalized = True
             run.save(update_fields=['status', 'finalized', 'updated_at'])
-            return []
+            return run, []
 
         mode = self._effective_mode()
 
@@ -198,7 +224,7 @@ class WorkflowDispatchService:
         else:
             self.runtime.recompute_run_status(run)
 
-        return out
+        return run, out
 
     def emit_event_outcome(
         self,
@@ -210,22 +236,13 @@ class WorkflowDispatchService:
         idempotency_key: str | None = None,
     ) -> DispatchOutcome:
         """Dispatch an event and return a high-level status summary."""
-        instances = self.emit_event(
+        run, instances = self._emit_event_internal(
             on=on,
             event=event,
             source=source,
             initial_vars=initial_vars,
             idempotency_key=idempotency_key or '',
         )
-
-        run = (
-            Workflow2Run.objects.filter(trigger_on=on, idempotency_key=idempotency_key or '')
-            .order_by('-created_at')
-            .first()
-        )
-        if run is None:
-            msg = 'emit_event created instances but no run was found'
-            raise RuntimeError(msg)
 
         if len(instances) == 0:
             self.runtime.recompute_run_status(run)
@@ -292,27 +309,68 @@ class WorkflowDispatchService:
             if existing is not None:
                 return existing
 
-        return Workflow2Run.objects.create(
-            trigger_on=on,
-            event_json=event,
-            source_json=asdict(source),
-            idempotency_key=normalized_idempotency_key,
-            status=Workflow2Run.STATUS_QUEUED,
-            finalized=False,
-        )
+        try:
+            return Workflow2Run.objects.create(
+                trigger_on=on,
+                event_json=event,
+                source_json=asdict(source),
+                idempotency_key=normalized_idempotency_key,
+                status=Workflow2Run.STATUS_QUEUED,
+                finalized=False,
+            )
+        except IntegrityError:
+            if not normalized_idempotency_key:
+                raise
 
-    def _select_definitions(self, *, on: str, source: EventSource) -> list[Workflow2Definition]:
+        existing = (
+            Workflow2Run.objects.select_for_update()
+            .filter(trigger_on=on, idempotency_key=normalized_idempotency_key)
+            .order_by('-created_at')
+            .first()
+        )
+        if existing is None:
+            msg = 'Run creation raced but no existing idempotent run was found'
+            raise RuntimeError(msg)
+        return existing
+
+    def _select_definitions(
+        self,
+        *,
+        on: str,
+        event: dict[str, Any],
+        source: EventSource,
+        initial_vars: dict[str, Any] | None,
+    ) -> list[Workflow2Definition]:
         """Return enabled definitions matching the trigger and source scope."""
         qs = Workflow2Definition.objects.filter(enabled=True, trigger_on=on).order_by('created_at')
         defs = list(qs)
 
         matched: list[Workflow2Definition] = []
+        ctx = RuntimeContext(event=event, vars=dict(initial_vars or {}))
         for d in defs:
-            trig = d.ir_json.get('trigger', {}) if isinstance(d.ir_json, dict) else {}
+            ir = d.ir_json if isinstance(d.ir_json, dict) else {}
+            if not bool(ir.get('enabled', True)):
+                continue
+
+            trig = ir.get('trigger', {}) if isinstance(ir, dict) else {}
             sources = trig.get('sources', {}) if isinstance(trig, dict) else {}
-            if self._matches_sources(sources, source):
-                matched.append(d)
+            if not self._matches_sources(sources, source):
+                continue
+
+            apply_items = ir.get('apply', [])
+            if not self._matches_apply(apply_items, ctx):
+                continue
+
+            matched.append(d)
         return matched
+
+    @staticmethod
+    def _matches_apply(apply_items: Any, ctx: RuntimeContext) -> bool:
+        if apply_items is None:
+            return True
+        if not isinstance(apply_items, list):
+            return False
+        return all(eval_condition(item, ctx) for item in apply_items)
 
     @staticmethod
     def _matches_sources(ir_sources: dict[str, Any], source: EventSource) -> bool:

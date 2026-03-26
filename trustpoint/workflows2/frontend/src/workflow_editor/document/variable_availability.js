@@ -14,7 +14,14 @@ function normalizeWorkflowVarName(rawName) {
 
   if (trimmed.startsWith('vars.')) {
     const stripped = trimmed.slice(5).trim();
-    return stripped || null;
+    if (!stripped || stripped.includes('.')) {
+      return null;
+    }
+    return stripped;
+  }
+
+  if (trimmed.includes('.')) {
+    return null;
   }
 
   return trimmed;

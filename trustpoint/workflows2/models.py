@@ -100,6 +100,13 @@ class Workflow2Run(models.Model):
             models.Index(fields=['finalized']),
             models.Index(fields=['idempotency_key']),
         )
+        constraints = (
+            models.UniqueConstraint(
+                fields=['trigger_on', 'idempotency_key'],
+                condition=~models.Q(idempotency_key=''),
+                name='wf2_run_on_idem_uniq',
+            ),
+        )
 
     def __str__(self) -> str:
         """Return a human-readable representation of the run."""

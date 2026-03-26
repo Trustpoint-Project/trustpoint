@@ -131,6 +131,46 @@ class Workflow2HttpViewTests(TestCase):
         response = self.client.get(reverse("workflows2:runs-list"))
         self.assertEqual(response.status_code, 302)
 
+    def test_definition_create_syncs_form_metadata_into_saved_yaml_and_ir(self) -> None:
+        self.client.force_login(self.user)
+
+        yaml_text = """\
+schema: trustpoint.workflow.v2
+name: YAML Name
+enabled: true
+
+trigger:
+  on: device.created
+  sources:
+    trustpoint: true
+
+workflow:
+  start: done
+  steps:
+    done:
+      type: set
+      vars: {}
+  flow: []
+"""
+
+        response = self.client.post(
+            reverse("workflows2:definitions_new"),
+            {
+                "name": "Form Name",
+                "yaml_text": yaml_text,
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+
+        definition = Workflow2Definition.objects.latest("created_at")
+        self.assertEqual(definition.name, "Form Name")
+        self.assertFalse(definition.enabled)
+        self.assertIn("name: Form Name", definition.yaml_text)
+        self.assertIn("enabled: false", definition.yaml_text)
+        self.assertEqual(definition.ir_json["name"], "Form Name")
+        self.assertFalse(definition.ir_json["enabled"])
+
     def test_runs_list_hides_no_match_runs_by_default(self) -> None:
         self.client.force_login(self.user)
         run = Workflow2Run.objects.create(

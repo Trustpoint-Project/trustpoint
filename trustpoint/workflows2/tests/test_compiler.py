@@ -218,6 +218,43 @@ class CompilerTests(SimpleTestCase):
         with self.assertRaises(CompileError):
             compile_workflow_yaml(yaml_text, compiler_version="test")
 
+    def test_set_disallows_dotted_var_targets(self) -> None:
+        yaml_text = VALID_YAML.replace(
+            "    stop_ok:\n      type: set\n      vars: {}\n",
+            """    stop_ok:
+      type: set
+      vars:
+        vars.user.id: 1
+""",
+        )
+
+        with self.assertRaises(CompileError) as ctx:
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertIn('single name', str(ctx.exception))
+
+    def test_compute_disallows_dotted_var_targets(self) -> None:
+        yaml_text = VALID_YAML.replace(
+            "stop_ok:",
+            """compute_stuff:
+      type: compute
+      set:
+        vars.user.id: ${add(1, 2)}
+
+    stop_ok:
+""",
+        )
+        yaml_text = yaml_text.replace(
+            "    - from: route_by_status\n      on: ok\n      to: stop_ok\n",
+            "    - from: route_by_status\n      on: ok\n      to: compute_stuff\n"
+            "    - from: compute_stuff\n      to: stop_ok\n",
+        )
+
+        with self.assertRaises(CompileError) as ctx:
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertIn('vars.<name>', str(ctx.exception))
+
     def test_set_accepts_vars_prefixed_keys_and_normalizes_ir(self) -> None:
         yaml_text = VALID_YAML.replace(
             "    stop_ok:\n      type: set\n      vars: {}\n",
@@ -265,6 +302,50 @@ class CompilerTests(SimpleTestCase):
             compile_workflow_yaml(yaml_text, compiler_version="test")
 
         self.assertIn("Expressions already live inside ${...}", str(ctx.exception))
+
+    def test_expr_rejects_missing_required_function_args(self) -> None:
+        yaml_text = VALID_YAML.replace(
+            "stop_ok:",
+            """compute_stuff:
+      type: compute
+      set:
+        vars.total: ${int()}
+
+    stop_ok:
+""",
+        )
+        yaml_text = yaml_text.replace(
+            "    - from: route_by_status\n      on: ok\n      to: stop_ok\n",
+            "    - from: route_by_status\n      on: ok\n      to: compute_stuff\n"
+            "    - from: compute_stuff\n      to: stop_ok\n",
+        )
+
+        with self.assertRaises(CompileError) as ctx:
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertIn('expects at least 1 argument', str(ctx.exception))
+
+    def test_expr_rejects_too_many_function_args(self) -> None:
+        yaml_text = VALID_YAML.replace(
+            "stop_ok:",
+            """compute_stuff:
+      type: compute
+      set:
+        vars.total: ${upper(event.device.common_name, "extra")}
+
+    stop_ok:
+""",
+        )
+        yaml_text = yaml_text.replace(
+            "    - from: route_by_status\n      on: ok\n      to: stop_ok\n",
+            "    - from: route_by_status\n      on: ok\n      to: compute_stuff\n"
+            "    - from: compute_stuff\n      to: stop_ok\n",
+        )
+
+        with self.assertRaises(CompileError) as ctx:
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertIn('expects at most 1 argument', str(ctx.exception))
 
     def test_allows_implicit_end_for_non_outcome_step(self) -> None:
         yaml_text = """\

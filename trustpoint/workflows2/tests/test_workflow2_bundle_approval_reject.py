@@ -339,3 +339,41 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         self.assertEqual(approval.comment, "Looks good.")
         self.assertEqual(step_run.output["decided_by"], "workflow-tester")
         self.assertEqual(step_run.output["comment"], "Looks good.")
+
+    def test_resolve_approval_marks_expired_when_timeout_has_passed(self) -> None:
+        d = self._store_def(YAML_APPROVAL_REJECT, name="approval-expiry")
+        runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
+
+        inst = runtime.create_instance(definition=d, event={"device": {"id": "x"}})
+        runtime.run_one_step(inst)
+
+        approval = Workflow2Approval.objects.get(instance=inst, step_id="approve")
+        approval.expires_at = timezone.now() - timedelta(seconds=1)
+        approval.save(update_fields=["expires_at"])
+
+        with self.assertRaisesMessage(ValueError, "Approval has expired"):
+            runtime.resolve_approval(approval=approval, decision="approved")
+
+        approval.refresh_from_db()
+        self.assertEqual(approval.status, Workflow2Approval.STATUS_EXPIRED)
+
+    def test_recompute_run_status_marks_single_cancelled_instance_run_cancelled(self) -> None:
+        d = self._store_def(YAML_TWO_WORKFLOWS, name="cancel-agg")
+        svc = WorkflowDispatchService(executor=WorkflowExecutor())
+        run = svc.get_or_create_run(
+            on="device.created",
+            event={"device": {"id": "x"}},
+            source=EventSource(trustpoint=True),
+            idempotency_key="cancelled-run",
+        )
+
+        inst = svc.runtime.create_instance(run=run, definition=d, event={"device": {"id": "x"}})
+        inst.status = Workflow2Instance.STATUS_CANCELLED
+        inst.current_step = ""
+        inst.save(update_fields=["status", "current_step", "updated_at"])
+
+        svc.runtime.recompute_run_status(run)
+
+        run.refresh_from_db()
+        self.assertEqual(run.status, Workflow2Run.STATUS_CANCELLED)
+        self.assertTrue(run.finalized)

@@ -540,8 +540,8 @@ class WorkflowCompiler:
             if key.startswith('vars.'):
                 key = key.split('.', 1)[1].strip()
 
-            if not key:
-                msg = 'set.vars keys must be "vars.<name>" or "<name>"'
+            if not key or '.' in key:
+                msg = 'set.vars keys must be "vars.<name>" or "<name>" (single name)'
                 raise CompileError(msg, path=f'{base}.vars.{raw_key}')
 
             if key in normalized:
@@ -571,10 +571,10 @@ class WorkflowCompiler:
             parts = target.split('.')
             if (
                 parts[0] != 'vars'
-                or len(parts) < VARS_PATH_MIN_PARTS
+                or len(parts) != VARS_PATH_MIN_PARTS
                 or any(not part.strip() for part in parts[1:])
             ):
-                msg = 'compute.set keys must be "vars.<path>"'
+                msg = 'compute.set keys must be "vars.<name>"'
                 raise CompileError(msg, path=f'{base}.set')
 
             if isinstance(rhs, str):

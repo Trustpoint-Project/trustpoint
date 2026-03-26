@@ -289,6 +289,23 @@ ALLOWED_FUNCTIONS = {
     for fn in group['functions']
 }
 
+_FUNCTION_ARITY: dict[str, tuple[int, int | None]] = {
+    'add': (0, None),
+    'mul': (0, None),
+    'sub': (2, 2),
+    'div': (2, 2),
+    'min': (1, None),
+    'max': (1, None),
+    'round': (1, 2),
+    'int': (1, 1),
+    'float': (1, 1),
+    'str': (1, 1),
+    'lower': (1, 1),
+    'upper': (1, 1),
+    'concat': (0, None),
+    'json': (1, 1),
+}
+
 
 def parse_expr(expr: str, *, path: str) -> Any:
     """Parse and validate a single expression string without the `${}` wrapper."""
@@ -336,6 +353,7 @@ def _validate_ast(node: Any, *, path: str) -> None:
         if node.name not in ALLOWED_FUNCTIONS:
             msg = f'Function "{node.name}" is not allowed.'
             raise CompileError(msg, path=path)
+        _validate_call_arity(node, path=path)
         for a in node.args:
             _validate_ast(a, path=path)
         return
@@ -345,3 +363,16 @@ def _validate_ast(node: Any, *, path: str) -> None:
 
     msg = 'Unsupported expression node'
     raise CompileError(msg, path=path)
+
+
+def _validate_call_arity(node: CallExpr, *, path: str) -> None:
+    min_args, max_args = _FUNCTION_ARITY[node.name]
+    count = len(node.args)
+
+    if count < min_args:
+        msg = f'Function "{node.name}" expects at least {min_args} argument(s)'
+        raise CompileError(msg, path=path)
+
+    if max_args is not None and count > max_args:
+        msg = f'Function "{node.name}" expects at most {max_args} argument(s)'
+        raise CompileError(msg, path=path)

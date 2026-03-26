@@ -10,6 +10,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Case, IntegerField, Value, When
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views import View
 
 from workflows2.engine.executor import WorkflowExecutor
@@ -35,11 +36,26 @@ def _json_object(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _expire_pending_approvals() -> None:
+    now = timezone.now()
+    Workflow2Approval.objects.filter(
+        status=Workflow2Approval.STATUS_PENDING,
+        expires_at__isnull=False,
+        expires_at__lte=now,
+    ).update(
+        status=Workflow2Approval.STATUS_EXPIRED,
+        decided_at=now,
+        decided_by='',
+        comment='',
+    )
+
+
 class Workflow2ApprovalListView(LoginRequiredMixin, View):
     """List workflow approvals with status and context summaries."""
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the paginated approval queue."""
+        _expire_pending_approvals()
         base_qs = Workflow2Approval.objects.select_related(
             'instance',
             'instance__definition',
@@ -105,6 +121,7 @@ class Workflow2ApprovalDetailView(LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest, approval_id: UUID) -> HttpResponse:
         """Render the detail page for one approval request."""
+        _expire_pending_approvals()
         approval = get_object_or_404(
             Workflow2Approval.objects.select_related('instance', 'instance__definition', 'instance__run'),
             id=approval_id,

@@ -7,7 +7,7 @@ from typing import Any
 
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.compiler.errors import CompileError
-from workflows2.compiler.yaml_format import format_yaml_text
+from workflows2.compiler.yaml_format import dump_yaml_text, parse_yaml_text
 from workflows2.models import Workflow2Definition
 
 
@@ -33,10 +33,41 @@ class WorkflowDefinitionService:
         """Initialize the service with the compiler version label to record."""
         self.compiler_version = compiler_version
 
-    def compile_yaml(self, yaml_text: str) -> CompileResult:
+    @staticmethod
+    def _prepare_source_yaml(
+        yaml_text: str,
+        *,
+        name: str | None = None,
+        enabled: bool | None = None,
+    ) -> str:
+        src = parse_yaml_text(yaml_text)
+        if src is None:
+            src = {}
+        if not isinstance(src, dict):
+            msg = 'Top-level YAML must be a mapping/object.'
+            raise CompileError(msg)
+
+        if name is not None:
+            src['name'] = name.strip()
+        if enabled is not None:
+            src['enabled'] = bool(enabled)
+
+        return dump_yaml_text(src)
+
+    def compile_yaml(
+        self,
+        yaml_text: str,
+        *,
+        name: str | None = None,
+        enabled: bool | None = None,
+    ) -> CompileResult:
         """Format and compile YAML without saving a definition."""
         try:
-            formatted = format_yaml_text(yaml_text)
+            formatted = self._prepare_source_yaml(
+                yaml_text,
+                name=name,
+                enabled=enabled,
+            )
         except Exception as e:  # noqa: BLE001
             return CompileResult(ok=False, ir=None, error=f'YAML format failed: {e!s}', formatted_yaml=None)
 
@@ -58,6 +89,17 @@ class WorkflowDefinitionService:
         return ''
 
     @staticmethod
+    def _extract_name(ir: dict[str, Any]) -> str:
+        name = ir.get('name')
+        if isinstance(name, str):
+            return name.strip()
+        return ''
+
+    @staticmethod
+    def _extract_enabled(ir: dict[str, Any]) -> bool:
+        return bool(ir.get('enabled', True))
+
+    @staticmethod
     def _extract_ir_hash(ir: dict[str, Any]) -> str:
         meta = ir.get('meta')
         if isinstance(meta, dict):
@@ -74,13 +116,17 @@ class WorkflowDefinitionService:
         yaml_text: str,
     ) -> tuple[Workflow2Definition | None, CompileResult]:
         """Create a new definition from validated YAML text."""
-        res = self.compile_yaml(yaml_text)
+        res = self.compile_yaml(
+            yaml_text,
+            name=name,
+            enabled=enabled,
+        )
         if not res.ok or res.ir is None or res.formatted_yaml is None:
             return None, res
 
         obj = Workflow2Definition.objects.create(
-            name=name.strip(),
-            enabled=enabled,
+            name=self._extract_name(res.ir),
+            enabled=self._extract_enabled(res.ir),
             trigger_on=self._extract_trigger_on(res.ir),
             yaml_text=res.formatted_yaml,
             ir_json=res.ir,
@@ -97,12 +143,16 @@ class WorkflowDefinitionService:
         yaml_text: str,
     ) -> tuple[Workflow2Definition | None, CompileResult]:
         """Update an existing definition from validated YAML text."""
-        res = self.compile_yaml(yaml_text)
+        res = self.compile_yaml(
+            yaml_text,
+            name=name,
+            enabled=enabled,
+        )
         if not res.ok or res.ir is None or res.formatted_yaml is None:
             return None, res
 
-        definition.name = name.strip()
-        definition.enabled = enabled
+        definition.name = self._extract_name(res.ir)
+        definition.enabled = self._extract_enabled(res.ir)
         definition.trigger_on = self._extract_trigger_on(res.ir)
         definition.yaml_text = res.formatted_yaml
         definition.ir_json = res.ir
