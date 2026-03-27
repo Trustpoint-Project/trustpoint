@@ -11,8 +11,19 @@ from django_stubs_ext.db.models import TypedModelMeta
 class CertificateProfileModel(models.Model):
     """Model representing a certificate profile."""
 
+    class ProfileCredentialType(models.TextChoices):
+        """Enum for credential types."""
+        APPLICATION = 'application', _('Application Credential')
+        CA = 'ca', _('Certificate Authority')
+        DOMAIN = 'domain', _('Domain Credential')
+
     unique_name = models.CharField(max_length=255, unique=True)
     display_name = models.CharField(max_length=255, blank=True, default='')
+    credential_type = models.CharField(
+        max_length=32,
+        choices=ProfileCredentialType.choices,
+        default=ProfileCredentialType.APPLICATION,
+    )
     profile_json = models.JSONField()
 
     created_at = models.DateTimeField(verbose_name=_('Created-At'), auto_now_add=True)

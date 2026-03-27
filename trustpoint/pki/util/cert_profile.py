@@ -18,6 +18,7 @@ from pydantic import (
     ConfigDict,
     Field,
     field_validator,
+    model_validator,
 )
 from trustpoint_core.oid import NameOid
 
@@ -285,9 +286,16 @@ class CertProfileModel(CertProfileBaseModel):
     """Model for a certificate profile."""
     type: Literal['cert_profile']
     display_name: str | None = None
+    credential_type: Literal['application', 'ca', 'domain'] = 'application'
     subject: ProfileSubjectModel = Field(validation_alias='subj', default=ProfileSubjectModel())
     extensions: ProfileExtensionsModel = Field(validation_alias='ext', default=ProfileExtensionsModel())
     validity: ValidityModel = Field(default=ValidityModel(days=10))
+
+    @model_validator(mode='after')
+    def mark_profile_type_as_set(self) -> 'CertProfileModel':
+        """This ensures 'credential_type' is never excluded by the dump 'exclude_unset=True'."""
+        self.__pydantic_fields_set__.add('credential_type')
+        return self
 
 
 class CertRequestModel(BaseModel):

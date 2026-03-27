@@ -126,6 +126,7 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
             error_message = f'This JSON is not a valid certificate profile: {e!s}'
             raise forms.ValidationError(error_message) from e
         self.instance.display_name = json_dict.get('display_name', '')
+        self.instance.credential_type = json_dict.get('credential_type', 'application')
 
         self._check_validity_against_security_config(validated)
 
