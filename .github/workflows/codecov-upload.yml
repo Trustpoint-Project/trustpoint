@@ -25,7 +25,7 @@ jobs:
         run: uv run pytest --cov=trustpoint --cov-report=xml --junitxml=junit.xml -o junit_family=legacy trustpoint/
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
