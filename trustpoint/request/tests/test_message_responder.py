@@ -2,11 +2,12 @@
 
 import json
 from typing import Any
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
 from onboarding.models import OnboardingStatus
+from request.message_responder.cmp import CmpCertificateWorkflowResponder, CmpInitializationResponder
 from request.message_responder.est import (
     EstCertificateMessageResponder,
     EstErrorMessageResponder,
@@ -19,6 +20,7 @@ from request.message_responder.rest import (
 )
 from request.request_context import (
     BaseRequestContext,
+    CmpCertificateRequestContext,
     EstBaseRequestContext,
     EstCertificateRequestContext,
     RestBaseRequestContext,
@@ -412,3 +414,56 @@ class TestRestErrorMessageResponder:
             'status': 'error',
             'detail': 'An error occurred processing the REST request.',
         }
+
+
+@pytest.mark.django_db
+class TestCmpCertificateWorkflowResponder:
+    """Tests for CMP workflow-aware enrollment responses."""
+
+    def test_build_response_pending_workflow2_outcome(self) -> None:
+        context = Mock(spec=CmpCertificateRequestContext)
+        context.operation = 'initialization'
+        context.workflow2_outcome = DispatchOutcome(
+            status='blocked',
+            run=Mock(status=Workflow2Run.STATUS_AWAITING),
+            instances=[Mock()],
+        )
+
+        with (
+            patch.object(CmpCertificateWorkflowResponder, '_resolve_issuer_credential', return_value=Mock()),
+            patch.object(CmpCertificateWorkflowResponder, '_build_sender_kid', return_value=Mock()),
+            patch.object(CmpInitializationResponder, '_build_base_ip_message', return_value=Mock()) as build_message,
+            patch.object(CmpCertificateWorkflowResponder, '_protect_pki_message', side_effect=lambda pki_message, **_: pki_message),
+            patch('request.message_responder.cmp.encoder.encode', return_value=b'cmp-pending'),
+        ):
+            handled = CmpCertificateWorkflowResponder.respond_if_needed(context)
+
+        assert handled is True
+        assert build_message.call_args.kwargs['status'] == 3
+        assert build_message.call_args.kwargs['status_text'] == 'Enrollment request pending workflow approval.'
+        assert context.http_response_status == 200
+        assert context.http_response_content == b'cmp-pending'
+        assert context.http_response_content_type == 'application/pkixcmp'
+
+    def test_build_response_rejected_workflow2_outcome(self) -> None:
+        context = Mock(spec=CmpCertificateRequestContext)
+        context.operation = 'initialization'
+        context.workflow2_outcome = DispatchOutcome(
+            status='completed',
+            run=Mock(status=Workflow2Run.STATUS_REJECTED),
+            instances=[Mock()],
+        )
+
+        with (
+            patch.object(CmpCertificateWorkflowResponder, '_resolve_issuer_credential', return_value=Mock()),
+            patch.object(CmpCertificateWorkflowResponder, '_build_sender_kid', return_value=Mock()),
+            patch.object(CmpInitializationResponder, '_build_base_ip_message', return_value=Mock()) as build_message,
+            patch.object(CmpCertificateWorkflowResponder, '_protect_pki_message', side_effect=lambda pki_message, **_: pki_message),
+            patch('request.message_responder.cmp.encoder.encode', return_value=b'cmp-rejected'),
+        ):
+            handled = CmpCertificateWorkflowResponder.respond_if_needed(context)
+
+        assert handled is True
+        assert build_message.call_args.kwargs['status'] == 2
+        assert build_message.call_args.kwargs['status_text'] == 'Enrollment request rejected by workflow.'
+        assert context.http_response_content == b'cmp-rejected'

@@ -18,6 +18,8 @@ class Triggers:
     DEVICE_DELETED: ClassVar[str] = 'device.deleted'
     CERTIFICATE_ISSUED: ClassVar[str] = 'certificate.issued'
     CERTIFICATE_REVOKED: ClassVar[str] = 'certificate.revoked'
+    CMP_INITIALIZATION: ClassVar[str] = 'cmp.initialization'
+    CMP_CERTIFICATION: ClassVar[str] = 'cmp.certification'
     EST_SIMPLEENROLL: ClassVar[str] = 'est.simpleenroll'
     EST_SIMPLEREENROLL: ClassVar[str] = 'est.simplereenroll'
     REST_ENROLL: ClassVar[str] = 'rest.enroll'

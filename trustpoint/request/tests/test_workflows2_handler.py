@@ -2,7 +2,12 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from request.request_context import BaseRequestContext, EstCertificateRequestContext, RestCertificateRequestContext
+from request.request_context import (
+    BaseRequestContext,
+    CmpCertificateRequestContext,
+    EstCertificateRequestContext,
+    RestCertificateRequestContext,
+)
 from request.workflows2_handler import Workflow2HandleResult, Workflow2Handler
 from workflows2.events.request_events import Events
 from workflows2.events.triggers import Triggers
@@ -205,6 +210,95 @@ def test_workflows2_handler_emits_rest_enroll_from_request_context(test_csr_fixt
     call = mock_service.return_value.emit_event_outcome.call_args.kwargs
     assert call['on'] == Triggers.REST_ENROLL
     assert call['event']['rest']['operation'] == 'enroll'
+    assert context.workflow2_outcome == outcome
+
+
+@pytest.mark.django_db
+def test_workflows2_handler_emits_cmp_initialization_from_request_context() -> None:
+    device = Mock()
+    device.id = 'device-1'
+    device.common_name = 'Device 1'
+    device.serial_number = 'SER-1'
+
+    issuing_ca = Mock()
+    issuing_ca.id = 11
+
+    domain = Mock()
+    domain.id = 7
+    domain.get_issuing_ca_or_value_error.return_value = issuing_ca
+
+    raw_message = Mock()
+    raw_message.body = b'cmp-ir-request'
+
+    context = CmpCertificateRequestContext(
+        event=Events.cmp_initialization,
+        raw_message=raw_message,
+        protocol='cmp',
+        operation='initialization',
+        cert_profile_str='domain_credential',
+        device=device,
+        domain=domain,
+    )
+
+    run = Mock()
+    run.status = Workflow2Run.STATUS_SUCCEEDED
+    outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
+
+    with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
+        mock_service.return_value.emit_event_outcome.return_value = outcome
+
+        result = Workflow2Handler().handle(context)
+
+    assert result.mode == 'continue'
+    call = mock_service.return_value.emit_event_outcome.call_args.kwargs
+    assert call['on'] == Triggers.CMP_INITIALIZATION
+    assert call['event']['cmp']['operation'] == 'initialization'
+    assert call['event']['cmp']['fingerprint']
+    assert 'csr_pem' not in call['event']['cmp']
+    assert context.workflow2_outcome == outcome
+
+
+@pytest.mark.django_db
+def test_workflows2_handler_emits_cmp_certification_from_request_context() -> None:
+    device = Mock()
+    device.id = 'device-1'
+    device.common_name = 'Device 1'
+    device.serial_number = 'SER-1'
+
+    issuing_ca = Mock()
+    issuing_ca.id = 11
+
+    domain = Mock()
+    domain.id = 7
+    domain.get_issuing_ca_or_value_error.return_value = issuing_ca
+
+    raw_message = Mock()
+    raw_message.body = b'cmp-cr-request'
+
+    context = CmpCertificateRequestContext(
+        event=Events.cmp_certification,
+        raw_message=raw_message,
+        protocol='cmp',
+        operation='certification',
+        cert_profile_str='tls_client',
+        device=device,
+        domain=domain,
+    )
+
+    run = Mock()
+    run.status = Workflow2Run.STATUS_SUCCEEDED
+    outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
+
+    with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
+        mock_service.return_value.emit_event_outcome.return_value = outcome
+
+        result = Workflow2Handler().handle(context)
+
+    assert result.mode == 'continue'
+    call = mock_service.return_value.emit_event_outcome.call_args.kwargs
+    assert call['on'] == Triggers.CMP_CERTIFICATION
+    assert call['event']['cmp']['operation'] == 'certification'
+    assert call['event']['cmp']['fingerprint']
     assert context.workflow2_outcome == outcome
 
 

@@ -285,6 +285,33 @@ REST_CONTEXT = ctx(
     ),
 )
 
+CMP_CONTEXT = ctx(
+    ContextVar(
+        'event.cmp.operation',
+        'string',
+        _('CMP operation name.'),
+        title=_('CMP operation'),
+        group='event.cmp',
+        example='initialization',
+    ),
+    ContextVar(
+        'event.cmp.fingerprint',
+        'string',
+        _('CMP request fingerprint (SHA-256 over the raw request body).'),
+        title=_('Request fingerprint'),
+        group='event.cmp',
+        example='0f2d7d8a...',
+    ),
+    ContextVar(
+        'event.cmp.cert_profile',
+        'string',
+        _('Requested certificate profile.'),
+        title=_('Certificate profile'),
+        group='event.cmp',
+        example='tls-client',
+    ),
+)
+
 SOURCE_CONTEXT = ctx(
     ContextVar(
         'event.source.trustpoint',

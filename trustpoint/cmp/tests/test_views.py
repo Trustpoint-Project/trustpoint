@@ -87,6 +87,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('cmp.views.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
@@ -99,6 +100,7 @@ class TestCmpInitializationRequestView:
         mock_parser_cls,
         mock_auth_cls,
         mock_authz_cls,
+        mock_workflow2_handler_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
@@ -128,6 +130,7 @@ class TestCmpInitializationRequestView:
         mock_parser_cls.return_value.parse.assert_called_once()
         mock_auth_cls.return_value.authenticate.assert_called_once()
         mock_authz_cls.return_value.authorize.assert_called_once()
+        mock_workflow2_handler_cls.return_value.handle.assert_called_once_with(mock_request_context)
         mock_processor_cls.return_value.process_operation.assert_called_once()
         mock_responder_cls.build_response.assert_called_once()
         
@@ -138,6 +141,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('cmp.views.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
@@ -150,6 +154,7 @@ class TestCmpInitializationRequestView:
         mock_parser_cls,
         mock_auth_cls,
         mock_authz_cls,
+        mock_workflow2_handler_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
@@ -184,6 +189,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('cmp.views.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
@@ -196,6 +202,7 @@ class TestCmpInitializationRequestView:
         mock_parser_cls,
         mock_auth_cls,
         mock_authz_cls,
+        mock_workflow2_handler_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
@@ -214,6 +221,7 @@ class TestCmpInitializationRequestView:
         
         # Verify CmpAuthorization was initialized with correct operations
         mock_authz_cls.assert_called_once_with(['initialization', 'certification', 'revocation', 'certconf'])
+        mock_workflow2_handler_cls.return_value.handle.assert_called_once_with(mock_request_context)
 
 
 class TestCmpCertificationRequestView:

@@ -162,8 +162,11 @@ class Workflow2HttpViewTests(TestCase):
 
         self.assertEqual(by_key["device.updated"]["group_title"], "Device lifecycle")
         self.assertEqual(by_key["certificate.revoked"]["group_title"], "Certificate lifecycle")
+        self.assertEqual(by_key["cmp.initialization"]["group_title"], "CMP")
+        self.assertEqual(by_key["cmp.certification"]["group_title"], "CMP")
         self.assertEqual(by_key["est.simpleenroll"]["group_title"], "EST")
         self.assertEqual(by_key["rest.enroll"]["group_title"], "REST")
+        self.assertIn("cmp", by_key["cmp.initialization"]["search_text"])
         self.assertIn("est", by_key["est.simpleenroll"]["search_text"])
 
     def test_runs_list_requires_login(self) -> None:

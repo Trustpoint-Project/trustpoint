@@ -18,7 +18,9 @@ from request.message_responder.cmp import CmpMessageResponder
 from request.operation_processor.general import OperationProcessor
 from request.request_context import BaseRequestContext, CmpCertificateRequestContext, HttpBaseRequestContext
 from request.request_validator.http_req import CmpHttpRequestValidator
+from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
+from workflows2.events.request_events import Events
 
 if TYPE_CHECKING:
     from typing import Any
@@ -104,6 +106,10 @@ class CmpRequestView(LoggerMixin, View):
 
             parser = CmpMessageParser()
             ctx = parser.parse(ctx)
+            if ctx.operation == 'initialization':
+                ctx.event = Events.cmp_initialization
+            elif ctx.operation == 'certification':
+                ctx.event = Events.cmp_certification
 
             authenticator = CmpAuthentication()
             authenticator.authenticate(ctx)
@@ -113,6 +119,7 @@ class CmpRequestView(LoggerMixin, View):
             )
             authorizer.authorize(ctx)
 
+            Workflow2Handler().handle(ctx)
             OperationProcessor().process_operation(ctx)
         except Exception:
             self.logger.exception('Error processing CMP request')

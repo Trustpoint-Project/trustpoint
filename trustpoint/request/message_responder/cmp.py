@@ -24,7 +24,9 @@ from request.request_context import (
     CmpRevocationRequestContext,
     HttpBaseRequestContext,
 )
+from request.workflows2_gate import get_workflow2_outcome
 from trustpoint.logger import LoggerMixin
+from workflows2.models import Workflow2Run
 
 if TYPE_CHECKING:
     from pki.models import CredentialModel
@@ -56,33 +58,30 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
     @staticmethod
     def build_response(context: BaseRequestContext) -> None:
         """Respond to a CMP message."""
-        responder: CmpMessageResponder
+        responder: CmpMessageResponder | None = None
         if (context.error_details is not None
             or (context.http_response_status and context.http_response_status >= HTTP_ERROR_STATUS_THRESHOLD)):
             responder = CmpErrorMessageResponder()
-            return responder.build_response(context)
-
-        if isinstance(context, CmpCertConfRequestContext):
+        elif CmpCertificateWorkflowResponder.respond_if_needed(context):
+            return None
+        elif isinstance(context, CmpCertConfRequestContext):
             responder = CmpPkiConfResponder()
-            return responder.build_response(context)
-
-        if isinstance(context, CmpCertificateRequestContext) and context.issued_certificate:
+        elif isinstance(context, CmpCertificateRequestContext) and context.issued_certificate:
             if context.operation == 'initialization':
                 responder = CmpInitializationResponder()
-                return responder.build_response(context)
-            if context.operation == 'certification':
+            elif context.operation == 'certification':
                 responder = CmpCertificationResponder()
-                return responder.build_response(context)
-        elif isinstance(context, CmpRevocationRequestContext):
-            if context.operation == 'revocation':
-                responder = CmpRevocationResponder()
-                return responder.build_response(context)
+        elif isinstance(context, CmpRevocationRequestContext) and context.operation == 'revocation':
+            responder = CmpRevocationResponder()
 
-        exc_msg = 'No suitable responder found for this CMP message.'
-        CmpMessageResponder.logger.warning(exc_msg)
-        context.http_response_status = 500
-        context.http_response_content = exc_msg
-        return CmpErrorMessageResponder().build_response(context)
+        if responder is None:
+            exc_msg = 'No suitable responder found for this CMP message.'
+            CmpMessageResponder.logger.warning(exc_msg)
+            context.http_response_status = 500
+            context.http_response_content = exc_msg
+            responder = CmpErrorMessageResponder()
+
+        return responder.build_response(context)
 
     @staticmethod
     def _get_encoded_protected_part(cmp_message: rfc4210.PKIMessage) -> bytes:
@@ -196,7 +195,7 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
         hmac_gen.update(encoded_protected_part)
         hmac_digest = hmac_gen.finalize()
 
-        binary_stuff = f'{int.from_bytes(hmac_digest, byteorder='big'):b}'.zfill(160)
+        binary_stuff = f"{int.from_bytes(hmac_digest, byteorder='big'):b}".zfill(160)
         pki_message['protection'] = rfc4210.PKIProtection(univ.BitString(binary_stuff)).subtype(
             explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 0)
         )
@@ -245,12 +244,14 @@ class CmpInitializationResponder(CmpMessageResponder):
     """Respond to a CMP initialization request (IR) with the issued certificate (IP)."""
 
     @staticmethod
-    def _build_base_ip_message(
+    def _build_base_ip_message(  # noqa: PLR0913
             parsed_message: rfc4210.PKIMessage,
-            issued_cert: x509.Certificate,
+            issued_cert: x509.Certificate | None,
             issuer_credential: CredentialModel,
             sender_kid: rfc2459.KeyIdentifier,
             signer_credential: CredentialModel | None = None,
+            status: int = 0,
+            status_text: str | None = None,
             ) -> rfc4210.PKIMessage:
         """Builds the IP response message (without the protection)."""
         ip_header = CmpInitializationResponder._build_response_message_header(
@@ -291,22 +292,25 @@ class CmpInitializationResponder(CmpMessageResponder):
         cert_response['certReqId'] = 0
 
         pki_status_info = rfc4210.PKIStatusInfo()
-        pki_status_info['status'] = 0
+        pki_status_info['status'] = status
+        if status_text:
+            pki_status_info['statusString'].append(status_text)
         cert_response['status'] = pki_status_info
 
-        cmp_cert = rfc4210.CMPCertificate().subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
-        )
+        if issued_cert is not None:
+            cmp_cert = rfc4210.CMPCertificate().subtype(
+                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
+            )
 
-        encoded_cert = issued_cert.public_bytes(encoding=Encoding.DER)
-        der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
-        cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
-        cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
-        cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
-        cert_or_enc_cert = rfc4210.CertOrEncCert()
-        cert_or_enc_cert['certificate'] = cmp_cert
+            encoded_cert = issued_cert.public_bytes(encoding=Encoding.DER)
+            der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
+            cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
+            cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
+            cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
+            cert_or_enc_cert = rfc4210.CertOrEncCert()
+            cert_or_enc_cert['certificate'] = cmp_cert
 
-        cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
+            cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
 
         ip_body['ip']['response'].append(cert_response)
 
@@ -375,11 +379,13 @@ class CmpCertificationResponder(CmpMessageResponder):
     """Respond to a CMP certification request (CR) with the issued certificate (CP)."""
 
     @staticmethod
-    def _build_base_cp_message(
+    def _build_base_cp_message(  # noqa: PLR0913
             parsed_message: rfc4210.PKIMessage,
-            issued_cert: x509.Certificate,
+            issued_cert: x509.Certificate | None,
             issuer_credential: CredentialModel,
             sender_kid: rfc2459.KeyIdentifier,
+            status: int = 0,
+            status_text: str | None = None,
     ) -> rfc4210.PKIMessage:
         """Builds the CR response message (without the protection)."""
         cp_header = CmpCertificationResponder._build_response_message_header(
@@ -412,22 +418,25 @@ class CmpCertificationResponder(CmpMessageResponder):
         cert_response['certReqId'] = 0
 
         pki_status_info = rfc4210.PKIStatusInfo()
-        pki_status_info['status'] = 0
+        pki_status_info['status'] = status
+        if status_text:
+            pki_status_info['statusString'].append(status_text)
         cert_response['status'] = pki_status_info
 
-        cmp_cert = rfc4210.CMPCertificate().subtype(
-            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
-        )
+        if issued_cert is not None:
+            cmp_cert = rfc4210.CMPCertificate().subtype(
+                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 0)
+            )
 
-        encoded_cert = issued_cert.public_bytes(encoding=Encoding.DER)
-        der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
-        cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
-        cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
-        cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
-        cert_or_enc_cert = rfc4210.CertOrEncCert()
-        cert_or_enc_cert['certificate'] = cmp_cert
+            encoded_cert = issued_cert.public_bytes(encoding=Encoding.DER)
+            der_cert, _ = decoder.decode(encoded_cert, asn1Spec=rfc4210.CMPCertificate())
+            cmp_cert.setComponentByName('tbsCertificate', der_cert['tbsCertificate'])
+            cmp_cert.setComponentByName('signatureValue', der_cert['signatureValue'])
+            cmp_cert.setComponentByName('signatureAlgorithm', der_cert['signatureAlgorithm'])
+            cert_or_enc_cert = rfc4210.CertOrEncCert()
+            cert_or_enc_cert['certificate'] = cmp_cert
 
-        cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
+            cert_response['certifiedKeyPair']['certOrEncCert'] = cert_or_enc_cert
 
         cp_body['cp']['response'].append(cert_response)
 
@@ -485,6 +494,123 @@ class CmpCertificationResponder(CmpMessageResponder):
         context.http_response_status = 200
         context.http_response_content = encoded_message
         context.http_response_content_type = 'application/pkixcmp'
+
+
+class CmpCertificateWorkflowResponder(CmpMessageResponder):
+    """Respond to CMP enrollment requests that are gated by workflows2."""
+
+    @staticmethod
+    def _resolve_issuer_credential(context: CmpCertificateRequestContext) -> CredentialModel | None:
+        if context.issuer_credential is not None:
+            return context.issuer_credential
+        if context.domain is None or context.domain.issuing_ca is None:
+            return None
+        return context.domain.issuing_ca.get_credential()
+
+    @staticmethod
+    def _build_sender_kid(credential: CredentialModel | None) -> rfc2459.KeyIdentifier:
+        if credential is None:
+            return rfc2459.KeyIdentifier(b'').subtype(
+                explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
+            )
+
+        sender_ski = x509.SubjectKeyIdentifier.from_public_key(credential.get_certificate().public_key())
+        return rfc2459.KeyIdentifier(sender_ski.digest).subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatSimple, 2)
+        )
+
+    @staticmethod
+    def _protect_pki_message(
+        pki_message: rfc4210.PKIMessage,
+        *,
+        context: CmpCertificateRequestContext,
+    ) -> rfc4210.PKIMessage:
+        if context.cmp_shared_secret:
+            return CmpCertificateWorkflowResponder._add_protection_shared_secret(
+                pki_message=pki_message,
+                context=context,
+            )
+        return CmpCertificateWorkflowResponder._sign_pki_message(
+            pki_message=pki_message,
+            context=context,
+        )
+
+    @staticmethod
+    def respond_if_needed(context: BaseRequestContext) -> bool:  # noqa: C901
+        """Build a CMP response when workflows2 paused or rejected enrollment."""
+        if not isinstance(context, CmpCertificateRequestContext):
+            return False
+
+        workflow2_outcome = get_workflow2_outcome(context)
+        if workflow2_outcome is None:
+            return False
+
+        run_status = str(workflow2_outcome.run.status)
+        if run_status == Workflow2Run.STATUS_SUCCEEDED:
+            return False
+
+        if run_status in {
+            Workflow2Run.STATUS_QUEUED,
+            Workflow2Run.STATUS_RUNNING,
+            Workflow2Run.STATUS_PAUSED,
+        }:
+            pki_status = 3  # waiting
+            detail = 'Enrollment request pending workflow processing.'
+        elif run_status == Workflow2Run.STATUS_AWAITING:
+            pki_status = 3  # waiting
+            detail = 'Enrollment request pending workflow approval.'
+        elif run_status == Workflow2Run.STATUS_REJECTED:
+            pki_status = 2  # rejection
+            detail = 'Enrollment request rejected by workflow.'
+        elif run_status in {
+            Workflow2Run.STATUS_FAILED,
+            Workflow2Run.STATUS_CANCELLED,
+            Workflow2Run.STATUS_STOPPED,
+        }:
+            pki_status = 2  # rejection
+            detail = 'Enrollment request failed in workflow processing.'
+        else:
+            pki_status = 2  # rejection
+            detail = f'Enrollment request is in an unsupported workflow state: {run_status}.'
+
+        issuing_ca_credential = CmpCertificateWorkflowResponder._resolve_issuer_credential(context)
+        if issuing_ca_credential is None:
+            return False
+
+        if context.operation == 'initialization':
+            signer_credential = context.owner_credential or issuing_ca_credential
+            sender_kid = CmpCertificateWorkflowResponder._build_sender_kid(signer_credential)
+            pki_message = CmpInitializationResponder._build_base_ip_message(  # noqa: SLF001
+                parsed_message=context.parsed_message,
+                issued_cert=None,
+                sender_kid=sender_kid,
+                issuer_credential=issuing_ca_credential,
+                signer_credential=signer_credential,
+                status=pki_status,
+                status_text=detail,
+            )
+        elif context.operation == 'certification':
+            sender_kid = CmpCertificateWorkflowResponder._build_sender_kid(issuing_ca_credential)
+            pki_message = CmpCertificationResponder._build_base_cp_message(  # noqa: SLF001
+                parsed_message=context.parsed_message,
+                issued_cert=None,
+                sender_kid=sender_kid,
+                issuer_credential=issuing_ca_credential,
+                status=pki_status,
+                status_text=detail,
+            )
+        else:
+            return False
+
+        pki_message = CmpCertificateWorkflowResponder._protect_pki_message(
+            pki_message,
+            context=context,
+        )
+
+        context.http_response_status = 200
+        context.http_response_content = encoder.encode(pki_message)
+        context.http_response_content_type = 'application/pkixcmp'
+        return True
 
 
 class CmpRevocationResponder(CmpMessageResponder):

@@ -11,7 +11,7 @@ from typing import Any, ClassVar, Literal
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509 import CertificateSigningRequest
 
-from request.request_context import BaseCertificateRequestContext, BaseRequestContext
+from request.request_context import BaseCertificateRequestContext, BaseRequestContext, HttpBaseRequestContext
 from trustpoint.logger import LoggerMixin
 from workflows2.events.payloads import build_device_snapshot, serialize_source
 from workflows2.events.triggers import Triggers
@@ -58,6 +58,20 @@ class Workflow2DispatchRequest:
 
 def _normalize_event_key(protocol: str | None, operation: str | None) -> tuple[str, str]:
     return (str(protocol or '').strip().lower(), str(operation or '').strip().lower())
+
+
+def _request_body_bytes(context: BaseRequestContext) -> bytes | None:
+    if not isinstance(context, HttpBaseRequestContext) or context.raw_message is None:
+        return None
+
+    raw_body = getattr(context.raw_message, 'body', b'') or b''
+    if isinstance(raw_body, bytes):
+        return raw_body
+    if isinstance(raw_body, bytearray):
+        return bytes(raw_body)
+    if isinstance(raw_body, str):
+        return raw_body.encode('utf-8')
+    return None
 
 
 def _build_certificate_request_dispatch(
@@ -147,6 +161,70 @@ def _build_rest_reenroll_dispatch(
         on=Triggers.REST_REENROLL,
         event_key='rest',
         operation='reenroll',
+    )
+
+
+def _build_cmp_request_dispatch(
+    context: BaseCertificateRequestContext,
+    *,
+    on: str,
+    operation: str,
+) -> Workflow2DispatchRequest | None:
+    if not context.device or not context.domain:
+        return None
+
+    request_body = _request_body_bytes(context)
+    if not request_body:
+        return None
+
+    issuing_ca = context.domain.get_issuing_ca_or_value_error()
+    source = EventSource(
+        trustpoint=False,
+        ca_id=issuing_ca.id,
+        domain_id=context.domain.id,
+        device_id=str(context.device.id),
+    )
+
+    fingerprint = hashlib.sha256(request_body).hexdigest()
+    event = {
+        'device': {
+            **build_device_snapshot(context.device),
+            'domain_id': context.domain.id,
+        },
+        'cmp': {
+            'operation': operation,
+            'fingerprint': fingerprint,
+            'cert_profile': context.cert_profile_str or '',
+        },
+        'source': serialize_source(source),
+    }
+
+    return Workflow2DispatchRequest(
+        on=on,
+        event=event,
+        source=source,
+        idempotency_key=fingerprint,
+        initial_vars={},
+    )
+
+
+def _build_cmp_initialization_dispatch(
+    context: BaseCertificateRequestContext,
+) -> Workflow2DispatchRequest | None:
+    return _build_cmp_request_dispatch(
+        context,
+        on=Triggers.CMP_INITIALIZATION,
+        operation='initialization',
+    )
+
+
+def _build_cmp_certification_dispatch(
+    context: BaseCertificateRequestContext,
+) -> Workflow2DispatchRequest | None:
+    return _build_cmp_request_dispatch(
+        context,
+        on=Triggers.CMP_CERTIFICATION,
+        operation='certification',
     )
 
 
@@ -270,6 +348,8 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
     """Handle certificate-request events for Workflow 2."""
 
     _DISPATCH_BUILDERS: ClassVar[dict[tuple[str, str], Workflow2DispatchBuilder]] = {
+        ('cmp', 'initialization'): _build_cmp_initialization_dispatch,
+        ('cmp', 'certification'): _build_cmp_certification_dispatch,
         ('est', 'simpleenroll'): _build_est_simpleenroll_dispatch,
         ('est', 'simplereenroll'): _build_est_simplereenroll_dispatch,
         ('rest', 'enroll'): _build_rest_enroll_dispatch,

@@ -46,6 +46,20 @@ class Events:
         handler='certificate_request',
     )
 
+    cmp_initialization = Event(
+        key='cmp_initialization',
+        protocol='cmp',
+        operation='initialization',
+        handler='certificate_request',
+    )
+
+    cmp_certification = Event(
+        key='cmp_certification',
+        protocol='cmp',
+        operation='certification',
+        handler='certificate_request',
+    )
+
     device_created = Event(
         key='device_created',
         protocol='device',
@@ -88,3 +102,24 @@ class Events:
                 if event.protocol == normalized_protocol and event.operation
             }
         )
+
+    @classmethod
+    def find(
+        cls,
+        protocol: str | None,
+        operation: str | None,
+        *,
+        handler: str | None = None,
+    ) -> Event | None:
+        """Return the matching request event for the given protocol and operation."""
+        normalized_protocol = (protocol or '').strip().lower()
+        normalized_operation = (operation or '').strip().lower()
+        normalized_handler = (handler or '').strip().lower()
+
+        for event in cls.all():
+            if event.protocol != normalized_protocol or event.operation != normalized_operation:
+                continue
+            if normalized_handler and event.handler != normalized_handler:
+                continue
+            return event
+        return None

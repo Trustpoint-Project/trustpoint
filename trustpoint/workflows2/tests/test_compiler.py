@@ -148,6 +148,20 @@ workflow:
 
         self.assertEqual(ir['workflow']['steps']['approve']['type'], 'approval')
 
+    def test_cmp_initialization_allows_approval_step(self) -> None:
+        yaml_text = self.APPROVAL_WORKFLOW_TEMPLATE.format(trigger_on='cmp.initialization')
+
+        ir = compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertEqual(ir['workflow']['steps']['approve']['type'], 'approval')
+
+    def test_cmp_certification_allows_approval_step(self) -> None:
+        yaml_text = self.APPROVAL_WORKFLOW_TEMPLATE.format(trigger_on='cmp.certification')
+
+        ir = compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertEqual(ir['workflow']['steps']['approve']['type'], 'approval')
+
     def test_yaml_key_on_is_not_boolean(self) -> None:
         ir = compile_workflow_yaml(VALID_YAML, compiler_version="test")
         self.assertEqual(ir["trigger"]["on"], "device.created")
