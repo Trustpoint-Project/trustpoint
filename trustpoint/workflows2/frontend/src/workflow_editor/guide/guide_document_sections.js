@@ -1,14 +1,15 @@
 import { escapeHtml, renderChips } from '../shared/dom.js';
 import {
   findTriggerSpec,
-  renderEventList,
+  getCatalogUiText,
   renderStepIdActions,
   renderStepTypeActions,
-  renderTriggerButtons,
+  renderTriggerCatalog,
 } from './guide_ui_helpers.js';
 import { renderExpressionDsl } from './guide_dsl_sections.js';
 import {
   renderGuideButtonRow,
+  renderGuideNote,
   renderGuideMeta,
   renderGuideSection,
 } from './guide_layout.js';
@@ -40,24 +41,43 @@ export function renderTriggerGuide(context, catalog) {
     ? findTriggerSpec(catalog, context.triggerKey)
     : null;
 
-  if (context.area === 'trigger.on') {
+  if (context.area === 'trigger' || context.area === 'trigger.on') {
     return `
       ${renderGuideSection({
-        title: 'Current trigger',
-        body: renderGuideMeta([
-          { label: 'Selected', value: triggerSpec?.title || triggerSpec?.key || 'None' },
-        ]),
+        title: getCatalogUiText(catalog, 'guide_trigger_current_title', 'Current trigger'),
+        body:
+          renderGuideMeta([
+            {
+              label: getCatalogUiText(catalog, 'guide_trigger_selected_label', 'Selected'),
+              value: triggerSpec?.title || triggerSpec?.key || getCatalogUiText(catalog, 'guide_trigger_none', 'None'),
+            },
+            ...(triggerSpec?.group_title
+              ? [
+                  {
+                    label: getCatalogUiText(catalog, 'guide_trigger_group_label', 'Group'),
+                    value: triggerSpec.group_title,
+                  },
+                ]
+              : []),
+          ]) +
+          renderGuideNote(
+            triggerSpec?.description || getCatalogUiText(
+              catalog,
+              'guide_trigger_note',
+              'Choose a documented trigger to unlock event-specific help.',
+            ),
+            'muted',
+          ),
       })}
 
       ${renderGuideSection({
-        title: 'Choose trigger',
-        description: 'Only documented triggers from the catalog are shown here.',
-        body: renderGuideButtonRow(renderTriggerButtons(catalog?.events || [], context.triggerKey || null)),
-      })}
-
-      ${renderGuideSection({
-        title: 'Available triggers',
-        body: renderEventList(catalog?.events || []),
+        title: getCatalogUiText(catalog, 'guide_trigger_browse_title', 'Browse triggers'),
+        description: getCatalogUiText(
+          catalog,
+          'guide_trigger_browse_description',
+          'Search documented triggers by name, key, group, or description.',
+        ),
+        body: renderTriggerCatalog(catalog?.events || [], context.triggerKey || null, catalog),
       })}
     `;
   }

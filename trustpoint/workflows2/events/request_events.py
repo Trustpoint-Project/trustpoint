@@ -53,10 +53,10 @@ class Events:
         handler='device_action',
     )
 
-    device_domain_changed = Event(
-        key='device_domain_changed',
+    device_updated = Event(
+        key='device_updated',
         protocol='device',
-        operation='domain changed',
+        operation='updated',
         handler='device_action',
     )
 

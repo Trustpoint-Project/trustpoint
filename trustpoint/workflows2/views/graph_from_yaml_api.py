@@ -7,6 +7,7 @@ from typing import Any
 
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.utils.translation import gettext as _
 from django.views import View
 
 from workflows2.compiler.compiler import compile_workflow_yaml
@@ -26,11 +27,11 @@ class Workflow2GraphFromYamlView(LoginRequiredMixin, View):
         try:
             payload = json.loads(request.body.decode('utf-8') or '{}')
         except json.JSONDecodeError:
-            return JsonResponse({'error': 'Invalid JSON body'}, status=400)
+            return JsonResponse({'error': _('Invalid JSON body')}, status=400)
 
         yaml_text = payload.get('yaml_text', '')
         if not isinstance(yaml_text, str) or not yaml_text.strip():
-            return JsonResponse({'error': 'yaml_text missing'}, status=400)
+            return JsonResponse({'error': _('yaml_text missing')}, status=400)
 
         try:
             ir = compile_workflow_yaml(yaml_text, compiler_version='workflows2-graph-api')

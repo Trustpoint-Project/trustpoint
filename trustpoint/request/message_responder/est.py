@@ -37,7 +37,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
     def _check_workflow_state(context: EstCertificateRequestContext) -> bool:
         """Check if the workflow state allows for certificate issuance."""
         workflow2_outcome = get_workflow2_outcome(context)
-        if workflow2_outcome is None or workflow2_outcome.status == 'no_match':
+        if workflow2_outcome is None:
             return True
 
         run_status = str(workflow2_outcome.run.status)
@@ -62,7 +62,7 @@ class EstCertificateMessageResponder(EstMessageResponder):
             if run_path:
                 detail = f'{detail} Check here: -> {run_path}'
             status = 500
-        elif run_status in {Workflow2Run.STATUS_NO_MATCH, Workflow2Run.STATUS_SUCCEEDED}:
+        elif run_status == Workflow2Run.STATUS_SUCCEEDED:
             return True
         else:
             status = 500

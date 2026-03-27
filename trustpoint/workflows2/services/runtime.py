@@ -540,12 +540,7 @@ class WorkflowRuntimeService:
             return
 
         run.status = WorkflowRuntimeService._derive_run_status(statuses)
-
-        no_match = getattr(run, 'STATUS_NO_MATCH', None)
         terminal_statuses = {'succeeded', 'rejected', 'cancelled', 'stopped'}
-        if isinstance(no_match, str) and no_match:
-            terminal_statuses.add(no_match)
-
         run.finalized = run.status in terminal_statuses
         run.save(update_fields=['status', 'finalized', 'updated_at'])
 

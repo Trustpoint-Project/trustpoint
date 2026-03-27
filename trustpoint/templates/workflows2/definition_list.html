@@ -1,12 +1,13 @@
 {% extends "trustpoint/base.html" %}
+{% load i18n %}
 {% block content %}
 <div class="container-fluid py-3">
   <div class="d-flex align-items-center justify-content-between mb-3">
     <div>
-      <h1 class="h4 mb-0">Workflows (v2)</h1>
-      <div class="text-muted small">YAML-first definitions compiled to IR on save.</div>
+      <h1 class="h4 mb-0">{% trans "Workflows (v2)" %}</h1>
+      <div class="text-muted small">{% trans "YAML-first definitions compiled to IR on save." %}</div>
     </div>
-    <a class="btn btn-primary" href="{% url 'workflows2:definitions_new' %}">New workflow</a>
+    <a class="btn btn-primary" href="{% url 'workflows2:definitions_new' %}">{% trans "New workflow" %}</a>
   </div>
 
   <div class="card">
@@ -14,10 +15,10 @@
       <table class="table table-hover mb-0 align-middle">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Enabled</th>
-            <th class="text-muted">Created</th>
-            <th class="text-muted">IR hash</th>
+            <th>{% trans "Name" %}</th>
+            <th>{% trans "Enabled" %}</th>
+            <th class="text-muted">{% trans "Created" %}</th>
+            <th class="text-muted">{% trans "IR hash" %}</th>
             <th></th>
           </tr>
         </thead>
@@ -27,20 +28,20 @@
               <td class="fw-semibold">{{ wf.name }}</td>
               <td>
                 {% if wf.enabled %}
-                  <span class="badge text-bg-success">Enabled</span>
+                  <span class="badge text-bg-success">{% trans "Enabled" %}</span>
                 {% else %}
-                  <span class="badge text-bg-secondary">Disabled</span>
+                  <span class="badge text-bg-secondary">{% trans "Disabled" %}</span>
                 {% endif %}
               </td>
               <td class="text-muted">{{ wf.created_at }}</td>
               <td class="text-muted"><code>{{ wf.ir_hash }}</code></td>
               <td class="text-end">
-                <a class="btn btn-sm btn-outline-primary" href="{% url 'workflows2:definitions_edit' wf.id %}">Edit</a>
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'workflows2:definitions_edit' wf.id %}">{% trans "Edit" %}</a>
               </td>
             </tr>
           {% empty %}
             <tr>
-              <td colspan="5" class="text-muted p-4">No workflows yet.</td>
+              <td colspan="5" class="text-muted p-4">{% trans "No workflows yet." %}</td>
             </tr>
           {% endfor %}
         </tbody>

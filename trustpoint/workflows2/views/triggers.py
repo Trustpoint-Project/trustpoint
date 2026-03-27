@@ -8,7 +8,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.views import View
 
-from workflows2.events.registry import get_event_registry
+from workflows2.catalog.build import build_event_catalog
 
 
 class Workflow2TriggerCatalogView(LoginRequiredMixin, View):
@@ -25,6 +25,4 @@ class Workflow2TriggerCatalogView(LoginRequiredMixin, View):
 
     def get(self, _request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Return the registered Workflow 2 trigger definitions."""
-        reg = get_event_registry()
-        events = [{'key': key, 'description': reg.describe(key) or ''} for key in reg.all_keys()]
-        return JsonResponse({'events': events})
+        return JsonResponse({'events': build_event_catalog()})

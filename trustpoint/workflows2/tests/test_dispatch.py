@@ -170,8 +170,7 @@ class DispatchTests(TestCase):
         )
 
         self.assertEqual(instances, [])
-        run = Workflow2Run.objects.latest("created_at")
-        self.assertEqual(run.status, Workflow2Run.STATUS_NO_MATCH)
+        self.assertEqual(Workflow2Run.objects.count(), 0)
 
     def test_dispatch_uses_compiled_enabled_state_as_runtime_source_of_truth(self) -> None:
         cfg = WorkflowExecutionConfig.load()
@@ -197,8 +196,22 @@ class DispatchTests(TestCase):
         )
 
         self.assertEqual(instances, [])
-        run = Workflow2Run.objects.latest("created_at")
-        self.assertEqual(run.status, Workflow2Run.STATUS_NO_MATCH)
+        self.assertEqual(Workflow2Run.objects.count(), 0)
+
+    def test_emit_event_outcome_returns_none_without_persisting_run(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.save()
+
+        svc = WorkflowDispatchService()
+        outcome = svc.emit_event_outcome(
+            on="device.created",
+            event={"device": {"common_name": "dev1"}},
+            source=EventSource(trustpoint=True),
+        )
+
+        self.assertIsNone(outcome)
+        self.assertEqual(Workflow2Run.objects.count(), 0)
 
     def test_workflow2run_unique_idempotency_constraint_rejects_duplicate_non_empty_key(self) -> None:
         Workflow2Run.objects.create(
@@ -324,6 +337,7 @@ class DispatchTests(TestCase):
                 source=EventSource(trustpoint=True),
             )
 
+        self.assertIsNotNone(outcome)
         self.assertEqual(outcome.run.id, expected_run.id)
         self.assertEqual(outcome.instances[0].run_id, expected_run.id)
         self.assertEqual(outcome.status, "completed")

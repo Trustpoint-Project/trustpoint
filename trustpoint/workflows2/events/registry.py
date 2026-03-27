@@ -5,10 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from django.utils.encoding import force_str
+from django.utils.functional import Promise
+
 from workflows2.events.context import ContextVar
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+
+TranslatedText = str | Promise
 
 
 @dataclass(frozen=True)
@@ -20,8 +26,11 @@ class EventSpec:
       - set(...) => only these step types may appear in workflow.steps for this trigger
     """
     key: str
-    title: str = ''
-    description: str = ''
+    title: TranslatedText = ''
+    description: TranslatedText = ''
+    group: str = ''
+    group_title: TranslatedText = ''
+    keywords: tuple[str, ...] = ()
     allowed_step_types: set[str] | None = None
     context_vars: tuple[ContextVar, ...] = ()
 
@@ -37,7 +46,7 @@ class EventRegistry:
 
     def register(self, spec: EventSpec) -> None:
         """Register or replace one event specification."""
-        key = (spec.key or '').strip()
+        key = force_str(spec.key or '').strip()
         if not key:
             msg = 'EventSpec.key must be non-empty'
             raise ValueError(msg)
@@ -49,26 +58,35 @@ class EventRegistry:
 
         ctx_vars: list[ContextVar] = []
         for v in (spec.context_vars or ()):
-            p = (v.path or '').strip()
+            p = force_str(v.path or '').strip()
             if not p:
                 continue
 
             ctx_vars.append(
                 ContextVar(
                     path=p,
-                    type=str(v.type or 'any'),
-                    description=str(v.description or ''),
+                    type=force_str(v.type or 'any'),
+                    description=v.description or '',
                     example=v.example,
-                    title=str(v.title or ''),
-                    group=str(v.group or ''),
-                    help_text=str(v.help_text or ''),
+                    title=v.title or '',
+                    group=v.group or '',
+                    help_text=v.help_text or '',
                 )
             )
 
+        keywords: list[str] = []
+        for raw_keyword in spec.keywords or ():
+            keyword = force_str(raw_keyword or '').strip()
+            if keyword:
+                keywords.append(keyword)
+
         self._specs[key] = EventSpec(
             key=key,
-            title=str(spec.title or '').strip(),
-            description=str(spec.description or ''),
+            title=spec.title or '',
+            description=spec.description or '',
+            group=force_str(spec.group or '').strip(),
+            group_title=spec.group_title or '',
+            keywords=tuple(keywords),
             allowed_step_types=allowed,
             context_vars=tuple(ctx_vars),
         )
@@ -97,7 +115,7 @@ class EventRegistry:
     def describe(self, key: str) -> str | None:
         """Return the description for a trigger key, if known."""
         spec = self.get(key)
-        return spec.description if spec else None
+        return force_str(spec.description) if spec else None
 
     def context_for(self, key: str) -> tuple[ContextVar, ...]:
         """Return the context variables for a trigger key, if known."""

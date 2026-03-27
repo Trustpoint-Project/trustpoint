@@ -26,7 +26,7 @@ from workflows2.models import (
 from workflows2.services.runtime import WorkflowRuntimeService
 from workflows2.services.worker import Workflow2DbWorker
 
-DispatchStatus = Literal['no_match', 'completed', 'blocked', 'running']
+DispatchStatus = Literal['completed', 'blocked', 'running']
 
 
 @dataclass(frozen=True)
@@ -178,7 +178,7 @@ class WorkflowDispatchService:
         source: EventSource,
         initial_vars: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
-    ) -> tuple[Workflow2Run, list[Workflow2Instance]]:
+    ) -> tuple[Workflow2Run | None, list[Workflow2Instance]]:
         """Dispatch an event and return the exact run plus any created workflow instances."""
         normalized_idempotency_key = idempotency_key or ''
         run = self.get_or_create_run(
@@ -200,10 +200,8 @@ class WorkflowDispatchService:
             initial_vars=initial_vars,
         )
         if not defs:
-            run.status = Workflow2Run.STATUS_NO_MATCH
-            run.finalized = True
-            run.save(update_fields=['status', 'finalized', 'updated_at'])
-            return run, []
+            run.delete()
+            return None, []
 
         mode = self._effective_mode()
 
@@ -234,8 +232,11 @@ class WorkflowDispatchService:
         source: EventSource,
         initial_vars: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
-    ) -> DispatchOutcome:
-        """Dispatch an event and return a high-level status summary."""
+    ) -> DispatchOutcome | None:
+        """Dispatch an event and return a high-level status summary.
+
+        Returns ``None`` when no enabled Workflow 2 definition matches the emitted event.
+        """
         run, instances = self._emit_event_internal(
             on=on,
             event=event,
@@ -245,10 +246,11 @@ class WorkflowDispatchService:
         )
 
         if len(instances) == 0:
-            self.runtime.recompute_run_status(run)
-            run.refresh_from_db(fields=['status', 'finalized', 'updated_at'])
-            return DispatchOutcome(status='no_match', run=run, instances=[])
+            return None
 
+        if run is None:
+            msg = 'Dispatch created instances without an associated run'
+            raise RuntimeError(msg)
         run.refresh_from_db(fields=['status', 'finalized', 'updated_at'])
 
         if run.status in {Workflow2Run.STATUS_AWAITING, Workflow2Run.STATUS_PAUSED}:

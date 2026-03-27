@@ -16,6 +16,10 @@ export function renderActionButton(action, label, extraAttrs = '') {
   );
 }
 
+export function getCatalogUiText(catalog, key, fallback) {
+  return catalog?.meta?.i18n?.[key] || fallback;
+}
+
 export function renderFieldChips(fields, currentFieldKey = null) {
   if (!Array.isArray(fields) || !fields.length) {
     return '<span class="text-muted">None</span>';
@@ -135,24 +139,95 @@ export function renderScalarSetterButtons(values, formatter = null) {
   );
 }
 
-export function renderTriggerButtons(events, currentTriggerKey = null) {
+function groupEvents(events) {
+  const groups = new Map();
+
+  (events || []).forEach((eventSpec) => {
+    const groupKey = eventSpec?.group || 'other';
+    const current = groups.get(groupKey) || {
+      key: groupKey,
+      title: eventSpec?.group_title || groupKey,
+      events: [],
+    };
+
+    current.events.push(eventSpec);
+    groups.set(groupKey, current);
+  });
+
+  return [...groups.values()].map((group) => ({
+    ...group,
+    events: [...group.events].sort((left, right) =>
+      String(left?.title || left?.key || '').localeCompare(String(right?.title || right?.key || '')),
+    ),
+  }));
+}
+
+export function renderTriggerCatalog(events, currentTriggerKey = null, catalog = null) {
   if (!Array.isArray(events) || !events.length) {
-    return '<span class="text-muted">None</span>';
+    return `<span class="text-muted">${escapeHtml(getCatalogUiText(catalog, 'guide_trigger_empty', 'No documented triggers available.'))}</span>`;
   }
 
-  return (
-    `<div class="d-flex flex-wrap gap-2">` +
-    events
-      .map((evt) =>
-        renderActionButton(
-          'set-current-scalar',
-          evt.title || evt.key,
-          ` data-scalar-value="${escapeHtml(evt.key)}"${currentTriggerKey === evt.key ? ' disabled' : ''}`,
-        ),
-      )
-      .join('') +
-    `</div>`
-  );
+  const searchPlaceholder = getCatalogUiText(catalog, 'guide_trigger_search_placeholder', 'Search triggers');
+  const noMatchesLabel = getCatalogUiText(catalog, 'guide_trigger_no_matches', 'No matching triggers.');
+  const selectAction = getCatalogUiText(catalog, 'guide_trigger_select_action', 'Use this trigger');
+  const selectedAction = getCatalogUiText(catalog, 'guide_trigger_selected_action', 'Selected');
+
+  return `
+    <div class="wf2-source-group" data-wf2-filter-group="true">
+      <div class="wf2-source-toolbar">
+        <input
+          type="search"
+          class="form-control form-control-sm"
+          placeholder="${escapeHtml(searchPlaceholder)}"
+          data-wf2-filter-input="true"
+        />
+      </div>
+
+      <div class="wf2-source-list">
+        ${groupEvents(events)
+          .map((group) => {
+            return `
+              <div class="mb-3" data-wf2-filter-section="true">
+                <div class="small text-uppercase text-muted fw-semibold mb-2">
+                  ${escapeHtml(group.title || group.key)} · ${group.events.length}
+                </div>
+
+                ${group.events
+                  .map((evt) => {
+                    const isSelected = currentTriggerKey === evt.key;
+                    const metaParts = [evt.key, evt.description].filter(Boolean);
+                    return `
+                      <div
+                        class="wf2-source-entry${isSelected ? ' wf2-source-entry-selected' : ''}"
+                        data-wf2-entry="true"
+                        data-search-text="${escapeHtml(evt.search_text || '')}"
+                      >
+                        <div class="wf2-source-entry-copy">
+                          <div class="wf2-source-entry-title">${escapeHtml(evt.title || evt.key || '')}</div>
+                          <div class="wf2-source-entry-meta">${escapeHtml(metaParts.join(' · '))}</div>
+                        </div>
+                        <div class="wf2-source-entry-actions">
+                          ${renderActionButton(
+                            'set-current-scalar',
+                            isSelected ? selectedAction : selectAction,
+                            ` data-scalar-value="${escapeHtml(evt.key)}"${isSelected ? ' disabled' : ''}`,
+                          )}
+                        </div>
+                      </div>
+                    `;
+                  })
+                  .join('')}
+              </div>
+            `;
+          })
+          .join('')}
+      </div>
+
+      <div class="wf2-source-empty text-muted" data-wf2-empty-state="true" hidden>
+        ${escapeHtml(noMatchesLabel)}
+      </div>
+    </div>
+  `;
 }
 
 export function buildVariableSuggestions(context, catalog) {
@@ -195,9 +270,12 @@ export function contextSupportsVariableInsertion(context) {
 
 export function renderEventList(events) {
   return renderChips(events, (evt) => {
+    const label = evt?.group_title
+      ? `${evt.title || evt.key || ''} · ${evt.group_title}`
+      : (evt.title || evt.key || '');
     return (
       `<span class="wf2-chip">` +
-      `<strong>${escapeHtml(evt.title || evt.key || '')}</strong>` +
+      `<strong>${escapeHtml(label)}</strong>` +
       ` &middot; ${escapeHtml(evt.key || '')}` +
       `</span>`
     );

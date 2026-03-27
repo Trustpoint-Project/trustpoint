@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from django.utils.functional import Promise
+from django.utils.translation import gettext_lazy as _
+
+TranslatedText = str | Promise
+
 PresetArea = Literal[
     'root',
     'trigger',
@@ -26,8 +31,8 @@ class Preset:
     """Describe a preset shown in the Workflow 2 guide."""
 
     id: str
-    title: str
-    description: str
+    title: TranslatedText
+    description: TranslatedText
 
     operation: PresetOperation
     payload: Any
@@ -40,8 +45,8 @@ class Preset:
 PRESETS: list[Preset] = [
     Preset(
         id='trigger_block',
-        title='Trigger block',
-        description='Insert a full trigger block with default sources.',
+        title=_('Trigger block'),
+        description=_('Insert a full trigger block with default sources.'),
         operation='merge_root',
         payload={
             'trigger': {
@@ -58,8 +63,8 @@ PRESETS: list[Preset] = [
     ),
     Preset(
         id='apply_exists_item',
-        title='Apply: exists condition',
-        description='Append an apply rule using exists.',
+        title=_('Apply: exists condition'),
+        description=_('Append an apply rule using exists.'),
         operation='append_list_item',
         payload={
             'exists': '${event.device.domain}',
@@ -68,8 +73,8 @@ PRESETS: list[Preset] = [
     ),
     Preset(
         id='apply_compare_item',
-        title='Apply: compare condition',
-        description='Append an apply rule using compare.',
+        title=_('Apply: compare condition'),
+        description=_('Append an apply rule using compare.'),
         operation='append_list_item',
         payload={
             'compare': {
@@ -82,8 +87,8 @@ PRESETS: list[Preset] = [
     ),
     Preset(
         id='workflow_skeleton',
-        title='Workflow skeleton',
-        description='Insert a minimal valid workflow with one set step.',
+        title=_('Workflow skeleton'),
+        description=_('Insert a minimal valid workflow with one set step.'),
         operation='merge_root',
         payload={
             'workflow': {
@@ -104,16 +109,16 @@ PRESETS: list[Preset] = [
     ),
     Preset(
         id='workflow_start_value',
-        title='Workflow: start value',
-        description='Set workflow.start to a step id.',
+        title=_('Workflow: start value'),
+        description=_('Set workflow.start to a step id.'),
         operation='set_value',
         payload='step_id',
         areas={'workflow', 'workflow.start'},
     ),
     Preset(
         id='flow_linear_edge',
-        title='Flow: linear edge',
-        description='Append a linear flow edge.',
+        title=_('Flow: linear edge'),
+        description=_('Append a linear flow edge.'),
         operation='append_list_item',
         payload={
             'from': 'step_a',
@@ -123,8 +128,8 @@ PRESETS: list[Preset] = [
     ),
     Preset(
         id='flow_outcome_edge',
-        title='Flow: outcome edge',
-        description='Append an outcome-based flow edge.',
+        title=_('Flow: outcome edge'),
+        description=_('Append an outcome-based flow edge.'),
         operation='append_list_item',
         payload={
             'from': 'step_a',
@@ -135,8 +140,8 @@ PRESETS: list[Preset] = [
     ),
     Preset(
         id='flow_to_end',
-        title='Flow: end workflow',
-        description='Append a flow edge that ends the workflow via "$end".',
+        title=_('Flow: end workflow'),
+        description=_('Append a flow edge that ends the workflow via "$end".'),
         operation='append_list_item',
         payload={
             'from': 'step_a',
@@ -146,8 +151,8 @@ PRESETS: list[Preset] = [
     ),
     Preset(
         id='flow_to_reject',
-        title='Flow: reject workflow',
-        description='Append a flow edge that rejects the workflow via "$reject".',
+        title=_('Flow: reject workflow'),
+        description=_('Append a flow edge that rejects the workflow via "$reject".'),
         operation='append_list_item',
         payload={
             'from': 'step_a',

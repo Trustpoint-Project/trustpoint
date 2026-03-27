@@ -50,6 +50,7 @@ class BaseRequestContext(LoggerMixin):
 
     # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
     event: Event | None = None
+    event_payload: dict[str, Any] | None = None
     workflow2_outcome: DispatchOutcome | None = None
 
     def error(self, ext_msg: str | bytes |None,

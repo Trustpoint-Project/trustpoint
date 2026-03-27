@@ -63,8 +63,6 @@ class Workflow2Run(models.Model):
     STATUS_FAILED = 'failed'
     STATUS_CANCELLED = 'cancelled'
 
-    STATUS_NO_MATCH = 'no_match'
-
     STATUS_CHOICES: ClassVar[tuple[tuple[str, str], ...]] = (
         (STATUS_QUEUED, 'Queued'),
         (STATUS_RUNNING, 'Running'),
@@ -75,7 +73,6 @@ class Workflow2Run(models.Model):
         (STATUS_REJECTED, 'Rejected'),
         (STATUS_FAILED, 'Failed'),
         (STATUS_CANCELLED, 'Cancelled'),
-        (STATUS_NO_MATCH, 'No match'),
     )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

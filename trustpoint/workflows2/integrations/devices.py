@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
 from django.db.models.signals import post_save, pre_delete, pre_save
@@ -10,6 +11,7 @@ from django.dispatch import receiver
 from devices.models import DeviceModel
 from request.request_context import BaseRequestContext
 from request.workflows2_handler import Workflow2Handler
+from workflows2.events.payloads import build_device_changes, build_device_snapshot
 from workflows2.events.request_events import Events
 
 if TYPE_CHECKING:
@@ -17,13 +19,19 @@ if TYPE_CHECKING:
 
 
 @receiver(pre_save, sender=DeviceModel)
-def cache_old_domain(
+def cache_previous_device_snapshot(
     sender: ModelBase,  # noqa: ARG001
     instance: DeviceModel,
     **_kwargs: Any,
 ) -> None:
-    """Cache the previous domain ID so Workflow 2 can detect domain moves."""
-    instance.old_domain_id = DeviceModel.objects.get(pk=instance.pk).domain_id if instance.pk else None  # type: ignore[attr-defined]
+    """Cache the previous device state so Workflow 2 can emit update diffs."""
+    if not instance.pk:
+        instance.workflow2_before_snapshot = None  # type: ignore[attr-defined]
+        return
+
+    with suppress(DeviceModel.DoesNotExist):
+        previous = DeviceModel.objects.get(pk=instance.pk)
+        instance.workflow2_before_snapshot = build_device_snapshot(previous)  # type: ignore[attr-defined]
 
 
 @receiver(post_save, sender=DeviceModel)
@@ -45,16 +53,28 @@ def on_device_saved(
         Workflow2Handler().handle(context)
         return
 
-    old_domain_id = getattr(instance, 'old_domain_id', None)
-    if old_domain_id != instance.domain_id and instance.domain_id is not None:
-        context = BaseRequestContext(
-            event=Events.device_domain_changed,
-            device=instance,
-            domain=instance.domain,
-            protocol=Events.device_domain_changed.protocol,
-            operation=Events.device_domain_changed.operation,
-        )
-        Workflow2Handler().handle(context)
+    before = getattr(instance, 'workflow2_before_snapshot', None)
+    after = build_device_snapshot(instance)
+    changes = build_device_changes(before, after)
+    if not changes:
+        return
+
+    context = BaseRequestContext(
+        event=Events.device_updated,
+        event_payload={
+            'device': {
+                **after,
+                'before': before or {},
+                'after': after,
+                'changes': changes,
+            },
+        },
+        device=instance,
+        domain=instance.domain,
+        protocol=Events.device_updated.protocol,
+        operation=Events.device_updated.operation,
+    )
+    Workflow2Handler().handle(context)
 
 
 @receiver(pre_delete, sender=DeviceModel)

@@ -11,12 +11,45 @@ from workflows2.services.dispatch import DispatchOutcome
 
 
 @pytest.mark.django_db
-def test_workflows2_handler_returns_no_match_without_event() -> None:
+def test_workflows2_handler_continues_without_event() -> None:
     context = BaseRequestContext(protocol='est', operation='simpleenroll')
 
     result = Workflow2Handler().handle(context)
 
-    assert result == Workflow2HandleResult.no_match()
+    assert result == Workflow2HandleResult.continue_processing()
+
+
+@pytest.mark.django_db
+def test_workflows2_handler_continues_when_no_definition_matches(test_csr_fixture) -> None:
+    device = Mock()
+    device.id = 'device-1'
+    device.common_name = 'Device 1'
+    device.serial_number = 'SER-1'
+
+    issuing_ca = Mock()
+    issuing_ca.id = 11
+
+    domain = Mock()
+    domain.id = 7
+    domain.get_issuing_ca_or_value_error.return_value = issuing_ca
+
+    context = EstCertificateRequestContext(
+        event=Events.est_simpleenroll,
+        protocol='est',
+        operation='simpleenroll',
+        cert_profile_str='tls_client',
+        device=device,
+        domain=domain,
+        cert_requested=test_csr_fixture.get_cryptography_object(),
+    )
+
+    with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
+        mock_service.return_value.emit_event_outcome.return_value = None
+
+        result = Workflow2Handler().handle(context)
+
+    assert result == Workflow2HandleResult.continue_processing()
+    assert context.workflow2_outcome is None
 
 
 @pytest.mark.django_db
@@ -207,13 +240,12 @@ def test_workflows2_handler_emits_device_created_from_request_context() -> None:
 
 
 @pytest.mark.django_db
-def test_workflows2_handler_emits_device_domain_changed_from_request_context() -> None:
+def test_workflows2_handler_emits_device_updated_from_request_context() -> None:
     device = Mock()
     device.id = 'device-1'
     device.common_name = 'Device 1'
     device.serial_number = 'SER-1'
     device.domain_id = 9
-    device.old_domain_id = 4
 
     issuing_ca = Mock()
     issuing_ca.id = 11
@@ -223,11 +255,22 @@ def test_workflows2_handler_emits_device_domain_changed_from_request_context() -
     domain.get_issuing_ca_or_value_error.return_value = issuing_ca
 
     context = BaseRequestContext(
-        event=Events.device_domain_changed,
+        event=Events.device_updated,
+        event_payload={
+            'device': {
+                'id': 'device-1',
+                'common_name': 'Device 1',
+                'serial_number': 'SER-1',
+                'domain_id': 9,
+                'before': {'domain_id': 4},
+                'after': {'domain_id': 9},
+                'changes': {'domain_id': {'before': 4, 'after': 9}},
+            },
+        },
         device=device,
         domain=domain,
         protocol='device',
-        operation='domain changed',
+        operation='updated',
     )
 
     run = Mock()
@@ -241,9 +284,11 @@ def test_workflows2_handler_emits_device_domain_changed_from_request_context() -
 
     assert result.mode == 'continue'
     call = mock_service.return_value.emit_event_outcome.call_args.kwargs
-    assert call['on'] == Triggers.DEVICE_DOMAIN_CHANGED
-    assert call['event']['device']['old_domain_id'] == 4
-    assert call['event']['device']['new_domain_id'] == 9
+    assert call['on'] == Triggers.DEVICE_UPDATED
+    assert call['event']['device']['before']['domain_id'] == 4
+    assert call['event']['device']['after']['domain_id'] == 9
+    assert call['event']['device']['changes']['domain_id']['before'] == 4
+    assert call['event']['device']['changes']['domain_id']['after'] == 9
     assert call['source'].ca_id == 11
 
 

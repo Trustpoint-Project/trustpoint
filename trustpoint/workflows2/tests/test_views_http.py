@@ -127,6 +127,45 @@ class Workflow2HttpViewTests(TestCase):
         self.assertIsInstance(payload["trigger_sources"]["domains"], list)
         self.assertIsInstance(payload["trigger_sources"]["devices"], list)
 
+    def test_context_catalog_includes_grouped_searchable_event_metadata(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("workflows2:context_catalog"))
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        by_key = {event["key"]: event for event in payload["events"]}
+
+        self.assertIn("device.updated", by_key)
+        self.assertEqual(by_key["device.updated"]["group"], "device_lifecycle")
+        self.assertEqual(by_key["device.updated"]["group_title"], "Device lifecycle")
+        self.assertIn("device updated", by_key["device.updated"]["search_text"])
+        self.assertIn("device lifecycle", by_key["device.updated"]["search_text"])
+        self.assertNotIn("before", by_key["device.updated"]["search_text"])
+
+        self.assertIn("certificate.issued", by_key)
+        self.assertEqual(by_key["certificate.issued"]["group"], "certificate_lifecycle")
+        self.assertEqual(by_key["certificate.issued"]["group_title"], "Certificate lifecycle")
+        self.assertIn("certificate issued", by_key["certificate.issued"]["search_text"])
+        self.assertNotIn("managed credential", by_key["certificate.issued"]["search_text"])
+
+        self.assertIn("guide_trigger_search_placeholder", payload["meta"]["i18n"])
+
+    def test_trigger_catalog_endpoint_includes_enriched_new_triggers(self) -> None:
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse("workflows2:api_triggers"))
+        self.assertEqual(response.status_code, 200)
+
+        payload = response.json()
+        by_key = {event["key"]: event for event in payload["events"]}
+
+        self.assertEqual(by_key["device.updated"]["group_title"], "Device lifecycle")
+        self.assertEqual(by_key["certificate.revoked"]["group_title"], "Certificate lifecycle")
+        self.assertEqual(by_key["est.simpleenroll"]["group_title"], "EST")
+        self.assertEqual(by_key["rest.enroll"]["group_title"], "REST")
+        self.assertIn("est", by_key["est.simpleenroll"]["search_text"])
+
     def test_runs_list_requires_login(self) -> None:
         response = self.client.get(reverse("workflows2:runs-list"))
         self.assertEqual(response.status_code, 302)
@@ -171,24 +210,24 @@ workflow:
         self.assertEqual(definition.ir_json["name"], "Form Name")
         self.assertFalse(definition.ir_json["enabled"])
 
-    def test_runs_list_hides_no_match_runs_by_default(self) -> None:
+    def test_runs_list_hides_unsupported_legacy_run_status(self) -> None:
         self.client.force_login(self.user)
         run = Workflow2Run.objects.create(
             trigger_on="est.simpleenroll",
             event_json={"est": {"operation": "simpleenroll"}},
             source_json={},
-            status=Workflow2Run.STATUS_NO_MATCH,
+            status="no_match",
             finalized=True,
         )
 
         response = self.client.get(reverse("workflows2:runs-list"))
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, str(run.id))
-        self.assertContains(response, "No-match trigger attempts are hidden by default.")
+        self.assertNotContains(response, "No-match trigger attempts are hidden by default.")
+        self.assertNotContains(response, "Include no-match runs")
 
-        visible_response = self.client.get(reverse("workflows2:runs-list"), {"show_no_match": "1"})
-        self.assertEqual(visible_response.status_code, 200)
-        self.assertContains(visible_response, str(run.id))
+        detail_response = self.client.get(reverse("workflows2:runs-detail", args=[run.id]))
+        self.assertEqual(detail_response.status_code, 404)
 
     def test_definition_graph_endpoint_uses_service_shape(self) -> None:
         definition = self._store_definition()

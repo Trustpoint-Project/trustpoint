@@ -1,5 +1,5 @@
 {% extends "trustpoint/base.html" %}
-{% load static %}
+{% load i18n static %}
 
 {% block content %}
 <div
@@ -11,18 +11,18 @@
   <div class="d-flex align-items-center justify-content-between mb-3">
     <div>
       {% if mode == "create" %}
-        <h1 class="h4 mb-0">New workflow (v2)</h1>
+        <h1 class="h4 mb-0">{% trans "New workflow (v2)" %}</h1>
       {% else %}
-        <h1 class="h4 mb-0">Edit workflow (v2)</h1>
-        <div class="text-muted small">ID: <code>{{ definition.id }}</code></div>
+        <h1 class="h4 mb-0">{% trans "Edit workflow (v2)" %}</h1>
+        <div class="text-muted small">{% trans "ID" %}: <code>{{ definition.id }}</code></div>
       {% endif %}
     </div>
-    <a class="btn btn-outline-secondary" href="{% url 'workflows2:definitions_list' %}">Back</a>
+    <a class="btn btn-outline-secondary" href="{% url 'workflows2:definitions_list' %}">{% trans "Back" %}</a>
   </div>
 
   {% if compile_error %}
     <div class="alert alert-danger">
-      <div class="fw-semibold">Compile error</div>
+      <div class="fw-semibold">{% trans "Compile error" %}</div>
       <div class="font-monospace mt-2" style="white-space: pre-wrap;">{{ compile_error }}</div>
     </div>
   {% endif %}
@@ -35,35 +35,35 @@
             {% csrf_token %}
 
             <div class="mb-3">
-              <label class="form-label">Name</label>
+              <label class="form-label">{{ form.name.label }}</label>
               {{ form.name }}
             </div>
 
             <div class="form-check mb-3">
               {{ form.enabled }}
-              <label class="form-check-label">Enabled</label>
+              <label class="form-check-label">{{ form.enabled.label }}</label>
             </div>
 
             <div class="mb-3">
               <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-                <label class="form-label mb-0">YAML</label>
+                <label class="form-label mb-0">{{ form.yaml_text.label }}</label>
                 <div class="d-flex gap-2">
                   <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-open-guide">
-                    Guide
+                    {% trans "Guide" %}
                   </button>
                   <button
                     type="button"
                     class="btn btn-sm btn-outline-secondary"
                     id="wf2-format-yaml"
                     disabled
-                    title="Formatting will be reconnected after semantic YAML document operations are added."
+                    title="{% trans 'Formatting will be reconnected after semantic YAML document operations are added.' %}"
                   >
-                    Format YAML
+                    {% trans "Format YAML" %}
                   </button>
                 </div>
               </div>
 
-              <div id="wf2-code-editor" class="wf2-editor-host" aria-label="Workflow YAML editor"></div>
+              <div id="wf2-code-editor" class="wf2-editor-host" aria-label="{% trans 'Workflow YAML editor' %}"></div>
 
               <div class="wf2-hidden-textarea">
                 {{ form.yaml_text }}
@@ -74,15 +74,15 @@
               {% endif %}
 
               <div class="form-text mt-2" id="wf2-editor-status">
-                Loading editor…
+                {% trans "Loading editor…" %}
               </div>
             </div>
 
             <div class="d-flex gap-2">
-              <button class="btn btn-primary" type="submit">Save &amp; Compile</button>
+              <button class="btn btn-primary" type="submit">{% trans "Save & Compile" %}</button>
               {% if mode == "edit" %}
                 <a class="btn btn-outline-secondary" href="{% url 'workflows2:definitions_edit' definition.id %}">
-                  Reload
+                  {% trans "Reload" %}
                 </a>
               {% endif %}
             </div>
@@ -94,16 +94,16 @@
     <div class="col-12 col-xl-5">
       <div class="card mb-3" id="wf2-graph-card" tabindex="0">
         <div class="card-header d-flex align-items-center justify-content-between">
-          <div class="fw-semibold">Interactive flow editor</div>
+          <div class="fw-semibold">{% trans "Interactive flow editor" %}</div>
           <div class="d-flex align-items-center gap-2">
-            <span class="text-muted small" id="wf2-graph-status">Loading…</span>
+            <span class="text-muted small" id="wf2-graph-status">{% trans "Loading…" %}</span>
             <button
               type="button"
               class="btn btn-sm btn-outline-secondary"
               id="wf2-graph-expand"
               aria-expanded="false"
             >
-              Expand
+              {% trans "Expand" %}
             </button>
           </div>
         </div>
@@ -111,9 +111,9 @@
         <div class="card-body wf2-graph-card-body">
           <div class="wf2-graph-issues-wrap">
             <div class="d-flex align-items-center justify-content-between mb-2">
-              <div class="fw-semibold">Issues</div>
+              <div class="fw-semibold">{% trans "Issues" %}</div>
               <div class="small text-muted">
-                Syntax, draft-graph, and editor issues
+                {% trans "Syntax, draft-graph, and editor issues" %}
               </div>
             </div>
 
@@ -122,23 +122,23 @@
               class="wf2-issues-panel"
               aria-live="polite"
             >
-              <div class="text-muted">No current issues.</div>
+              <div class="text-muted">{% trans "No current issues." %}</div>
             </div>
           </div>
 
           <div
             id="wf2-graph-editor"
             class="wf2-graph-editor-host"
-            aria-label="Interactive workflow graph editor"
+            aria-label="{% trans 'Interactive workflow graph editor' %}"
           >
-            Loading graph…
+            {% trans "Loading graph…" %}
           </div>
         </div>
       </div>
 
       <div class="card">
         <div class="card-header d-flex align-items-center justify-content-between">
-          <div class="fw-semibold">Compiled IR</div>
+          <div class="fw-semibold">{% trans "Compiled IR" %}</div>
           {% if definition %}
             <span class="text-muted small"><code>{{ definition.ir_hash }}</code></span>
           {% endif %}
@@ -147,7 +147,7 @@
           {% if ir_json %}
             <pre class="wf2-pretty-box mb-0">{{ ir_json|safe }}</pre>
           {% else %}
-            <div class="text-muted">Save to compile and display IR.</div>
+            <div class="text-muted">{% trans "Save to compile and display IR." %}</div>
           {% endif %}
         </div>
       </div>
@@ -158,41 +158,41 @@
 <aside id="wf2-guide-drawer" class="wf2-guide-drawer" aria-hidden="true">
   <div class="wf2-guide-drawer-header">
     <div>
-      <div class="wf2-guide-drawer-eyebrow">Workflow 2</div>
-      <div class="fw-semibold">Editor guide</div>
-      <div class="text-muted small">Context-aware DSL editing</div>
+      <div class="wf2-guide-drawer-eyebrow">{% trans "Workflow 2" %}</div>
+      <div class="fw-semibold">{% trans "Editor guide" %}</div>
+      <div class="text-muted small">{% trans "Context-aware DSL editing" %}</div>
     </div>
     <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-close-guide">
-      Close
+      {% trans "Close" %}
     </button>
   </div>
 
   <div class="wf2-guide-drawer-body">
     <div id="wf2-guide-content" class="wf2-guide-content">
-      Loading guide…
+      {% trans "Loading guide…" %}
     </div>
 
     <div class="wf2-guide-diagnostics small">
-      <div class="fw-semibold text-body mb-2">Diagnostics</div>
+      <div class="fw-semibold text-body mb-2">{% trans "Diagnostics" %}</div>
 
       <div class="wf2-guide-diagnostics-grid">
         <div class="wf2-guide-diagnostics-item">
-          <div class="wf2-guide-diagnostics-label">Catalog</div>
-          <div id="wf2-catalog-version">Loading…</div>
+          <div class="wf2-guide-diagnostics-label">{% trans "Catalog" %}</div>
+          <div id="wf2-catalog-version">{% trans "Loading…" %}</div>
         </div>
 
         <div class="wf2-guide-diagnostics-item">
-          <div class="wf2-guide-diagnostics-label">YAML</div>
-          <div id="wf2-parse-status" class="text-muted">Checking…</div>
+          <div class="wf2-guide-diagnostics-label">{% trans "YAML" %}</div>
+          <div id="wf2-parse-status" class="text-muted">{% trans "Checking…" %}</div>
         </div>
 
         <div class="wf2-guide-diagnostics-item">
-          <div class="wf2-guide-diagnostics-label">Cursor</div>
-          <div id="wf2-cursor-info">Line 1, column 1</div>
+          <div class="wf2-guide-diagnostics-label">{% trans "Cursor" %}</div>
+          <div id="wf2-cursor-info">{% trans "Line 1, column 1" %}</div>
         </div>
 
         <div class="wf2-guide-diagnostics-item">
-          <div class="wf2-guide-diagnostics-label">Path</div>
+          <div class="wf2-guide-diagnostics-label">{% trans "Path" %}</div>
           <code id="wf2-current-path">(root)</code>
         </div>
       </div>

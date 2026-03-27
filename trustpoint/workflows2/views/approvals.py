@@ -11,6 +11,7 @@ from django.db import transaction
 from django.db.models import Case, IntegerField, Value, When
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from django.views import View
 
 from workflows2.engine.executor import WorkflowExecutor
@@ -170,7 +171,7 @@ class Workflow2ApprovalResolveView(LoginRequiredMixin, View):
         decision = (request.POST.get('decision') or '').strip().lower()
         comment = (request.POST.get('comment') or '').strip()
         if decision not in {'approved', 'rejected'}:
-            messages.error(request, "Invalid decision. Must be 'approved' or 'rejected'.")
+            messages.error(request, _("Invalid decision. Must be 'approved' or 'rejected'."))
             return redirect('workflows2:approvals-detail', approval_id=approval_id)
 
         executor = WorkflowExecutor()
@@ -195,19 +196,31 @@ class Workflow2ApprovalResolveView(LoginRequiredMixin, View):
                 if inst.status == Workflow2Instance.STATUS_RUNNING and inst.current_step:
                     dispatch.continue_instance(instance=inst)
                     if continue_inline:
-                        success_message = f'Approval resolved: {decision}. Workflow continued inline.'
+                        success_message = _(
+                            'Approval resolved: %(decision)s. Workflow continued inline.'
+                        ) % {'decision': decision}
                     else:
-                        success_message = f'Approval resolved: {decision}. Next workflow step queued.'
+                        success_message = _(
+                            'Approval resolved: %(decision)s. Next workflow step queued.'
+                        ) % {'decision': decision}
                 elif inst.status == Workflow2Instance.STATUS_SUCCEEDED:
-                    success_message = f'Approval resolved: {decision}. Workflow ended successfully.'
+                    success_message = _(
+                        'Approval resolved: %(decision)s. Workflow ended successfully.'
+                    ) % {'decision': decision}
                 elif inst.status == Workflow2Instance.STATUS_REJECTED:
-                    success_message = f'Approval resolved: {decision}. Workflow ended rejected.'
+                    success_message = _(
+                        'Approval resolved: %(decision)s. Workflow ended rejected.'
+                    ) % {'decision': decision}
                 else:
-                    success_message = f'Approval resolved: {decision}.'
+                    success_message = _('Approval resolved: %(decision)s.') % {'decision': decision}
 
             messages.success(request, success_message)
         except Exception as e:  # noqa: BLE001
-            messages.error(request, f'Resolve failed: {type(e).__name__}: {e}')
+            messages.error(
+                request,
+                _('Resolve failed: %(type)s: %(error)s')
+                % {'type': type(e).__name__, 'error': e},
+            )
 
         return redirect('workflows2:approvals-detail', approval_id=approval_id)
 

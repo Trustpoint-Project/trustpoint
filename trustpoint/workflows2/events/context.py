@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from django.utils.encoding import force_str
+from django.utils.functional import Promise
+
+TranslatedText = str | Promise
+
 GROUP_PATH_PARTS = 2
 
 
@@ -33,34 +38,37 @@ class ContextVar:
     """
     path: str
     type: str = 'any'
-    description: str = ''
+    description: TranslatedText = ''
     example: Any = None
 
-    title: str = ''
-    group: str = ''
-    help_text: str = ''
+    title: TranslatedText = ''
+    group: TranslatedText = ''
+    help_text: TranslatedText = ''
 
     @property
     def template(self) -> str:
         """Return the `${...}` template form for this context variable."""
-        return '${' + self.path + '}'
+        return '${' + force_str(self.path) + '}'
 
     @property
     def label(self) -> str:
         """Return the UI label for this context variable."""
-        if self.title.strip():
-            return self.title.strip()
-        last = self.path.split('.')[-1] if self.path else ''
+        title = force_str(self.title or '').strip()
+        if title:
+            return title
+        path = force_str(self.path or '')
+        last = path.split('.')[-1] if path else ''
         return last.replace('_', ' ').strip() or self.path
 
     @property
     def resolved_group(self) -> str:
         """Return the group name used for picker organization."""
-        g = self.group.strip()
+        g = force_str(self.group or '').strip()
         if g:
             return g
 
-        parts = [p for p in self.path.split('.') if p]
+        path = force_str(self.path or '')
+        parts = [p for p in path.split('.') if p]
         if len(parts) >= GROUP_PATH_PARTS:
             return '.'.join(parts[:GROUP_PATH_PARTS])
         if len(parts) == 1:
@@ -70,12 +78,12 @@ class ContextVar:
     def to_dict(self) -> dict[str, Any]:
         """Serialize the context variable for JSON catalog responses."""
         return {
-            'path': self.path,
-            'type': self.type,
-            'description': self.description,
+            'path': force_str(self.path),
+            'type': force_str(self.type),
+            'description': force_str(self.description or ''),
             'example': self.example,
             'title': self.label,
             'group': self.resolved_group,
             'template': self.template,
-            'help_text': self.help_text,
+            'help_text': force_str(self.help_text or ''),
         }

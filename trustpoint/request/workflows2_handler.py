@@ -13,11 +13,12 @@ from cryptography.x509 import CertificateSigningRequest
 
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin
+from workflows2.events.payloads import build_device_snapshot, serialize_source
 from workflows2.events.triggers import Triggers
 from workflows2.models import Workflow2Run
 from workflows2.services.dispatch import DispatchOutcome, EventSource, WorkflowDispatchService
 
-Workflow2HandleMode = Literal['no_match', 'continue', 'stop']
+Workflow2HandleMode = Literal['continue', 'stop']
 Workflow2DispatchBuilder = Callable[[Any], 'Workflow2DispatchRequest | None']
 
 
@@ -27,11 +28,6 @@ class Workflow2HandleResult:
 
     mode: Workflow2HandleMode
     outcome: DispatchOutcome | None = None
-
-    @classmethod
-    def no_match(cls, outcome: DispatchOutcome | None = None) -> Workflow2HandleResult:
-        """Return a result indicating that no Workflow 2 definition matched."""
-        return cls(mode='no_match', outcome=outcome)
 
     @classmethod
     def continue_processing(cls, outcome: DispatchOutcome | None = None) -> Workflow2HandleResult:
@@ -48,11 +44,6 @@ class Workflow2HandleResult:
         """Return whether the request pipeline should stop immediately."""
         return self.mode == 'stop'
 
-    @property
-    def should_fallback_to_legacy(self) -> bool:
-        """Return whether the legacy workflow engine should be tried next."""
-        return False
-
 
 @dataclass(frozen=True)
 class Workflow2DispatchRequest:
@@ -67,15 +58,6 @@ class Workflow2DispatchRequest:
 
 def _normalize_event_key(protocol: str | None, operation: str | None) -> tuple[str, str]:
     return (str(protocol or '').strip().lower(), str(operation or '').strip().lower())
-
-
-def _serialize_source(source: EventSource) -> dict[str, Any]:
-    return {
-        'trustpoint': source.trustpoint,
-        'ca_id': source.ca_id,
-        'domain_id': source.domain_id,
-        'device_id': source.device_id,
-    }
 
 
 def _build_certificate_request_dispatch(
@@ -103,9 +85,7 @@ def _build_certificate_request_dispatch(
     fingerprint = hashlib.sha256(context.cert_requested.tbs_certrequest_bytes).hexdigest()
     event = {
         'device': {
-            'id': str(context.device.id),
-            'common_name': context.device.common_name or '',
-            'serial_number': context.device.serial_number or '',
+            **build_device_snapshot(context.device),
             'domain_id': context.domain.id,
         },
         event_key: {
@@ -114,7 +94,7 @@ def _build_certificate_request_dispatch(
             'cert_profile': context.cert_profile_str or '',
             'csr_pem': context.cert_requested.public_bytes(Encoding.PEM).decode('utf-8'),
         },
-        'source': _serialize_source(source),
+        'source': serialize_source(source),
     }
 
     return Workflow2DispatchRequest(
@@ -206,14 +186,14 @@ def _build_device_event_payload(context: BaseRequestContext, *, source: EventSou
         msg = '_build_device_event_payload requires a device.'
         raise ValueError(msg)
 
+    if isinstance(context.event_payload, dict):
+        event = dict(context.event_payload)
+        event['source'] = serialize_source(source)
+        return event
+
     return {
-        'device': {
-            'id': str(context.device.id),
-            'common_name': context.device.common_name or '',
-            'serial_number': context.device.serial_number or '',
-            'domain_id': source.domain_id,
-        },
-        'source': _serialize_source(source),
+        'device': {**build_device_snapshot(context.device), 'domain_id': source.domain_id},
+        'source': serialize_source(source),
     }
 
 
@@ -232,22 +212,18 @@ def _build_device_created_dispatch(context: BaseRequestContext) -> Workflow2Disp
     )
 
 
-def _build_device_domain_changed_dispatch(context: BaseRequestContext) -> Workflow2DispatchRequest | None:
+def _build_device_updated_dispatch(context: BaseRequestContext) -> Workflow2DispatchRequest | None:
     if not context.device:
         return None
 
-    old_domain_id = getattr(context.device, 'old_domain_id', None)
-    new_domain_id = getattr(context.device, 'domain_id', None)
-    if old_domain_id is None or new_domain_id is None or old_domain_id == new_domain_id:
+    if not isinstance(context.event_payload, dict):
         return None
 
     source = _build_device_source(context)
     event = _build_device_event_payload(context, source=source)
-    event['device']['old_domain_id'] = old_domain_id
-    event['device']['new_domain_id'] = new_domain_id
 
     return Workflow2DispatchRequest(
-        on=Triggers.DEVICE_DOMAIN_CHANGED,
+        on=Triggers.DEVICE_UPDATED,
         event=event,
         source=source,
         initial_vars={},
@@ -273,10 +249,12 @@ class Workflow2Handler(LoggerMixin):
     """Dispatch a request context to the matching Workflow 2 sub-handler."""
 
     def handle(self, context: BaseRequestContext) -> Workflow2HandleResult:
-        """Route the given request context by its legacy handler key."""
+        """Route the given request context by its registered handler key."""
+        context.workflow2_outcome = None
+
         if not context.event:
             self.logger.debug('Skipping workflows2 handling because no event is set on the request context.')
-            return Workflow2HandleResult.no_match()
+            return Workflow2HandleResult.continue_processing()
 
         handler_key = context.event.handler
         if handler_key == 'certificate_request':
@@ -285,7 +263,7 @@ class Workflow2Handler(LoggerMixin):
             return Workflow2DeviceActionHandler().handle(context)
 
         self.logger.debug('No workflows2 handler registered for event handler "%s".', handler_key)
-        return Workflow2HandleResult.no_match()
+        return Workflow2HandleResult.continue_processing()
 
 
 class Workflow2CertificateRequestHandler(LoggerMixin):
@@ -306,7 +284,7 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
 
         dispatch_request = self._build_dispatch_request(context)
         if dispatch_request is None:
-            return Workflow2HandleResult.no_match()
+            return Workflow2HandleResult.continue_processing()
 
         outcome = WorkflowDispatchService().emit_event_outcome(
             on=dispatch_request.on,
@@ -316,6 +294,8 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
             idempotency_key=dispatch_request.idempotency_key,
         )
         context.workflow2_outcome = outcome
+        if outcome is None:
+            return Workflow2HandleResult.continue_processing()
         return self._result_for_outcome(outcome)
 
     def _build_dispatch_request(
@@ -331,9 +311,6 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
     def _result_for_outcome(
         outcome: DispatchOutcome,
     ) -> Workflow2HandleResult:
-        if outcome.status == 'no_match':
-            return Workflow2HandleResult.no_match(outcome)
-
         if outcome.status in {'blocked', 'running'}:
             return Workflow2HandleResult.stop_processing(outcome)
 
@@ -355,7 +332,7 @@ class Workflow2DeviceActionHandler(LoggerMixin):
 
     _DISPATCH_BUILDERS: ClassVar[dict[tuple[str, str], Workflow2DispatchBuilder]] = {
         ('device', 'created'): _build_device_created_dispatch,
-        ('device', 'domain changed'): _build_device_domain_changed_dispatch,
+        ('device', 'updated'): _build_device_updated_dispatch,
         ('device', 'deleted'): _build_device_deleted_dispatch,
     }
 
@@ -363,11 +340,11 @@ class Workflow2DeviceActionHandler(LoggerMixin):
         """Dispatch one device-action event into Workflow 2."""
         builder = self._DISPATCH_BUILDERS.get(_normalize_event_key(context.protocol, context.operation))
         if builder is None:
-            return Workflow2HandleResult.no_match()
+            return Workflow2HandleResult.continue_processing()
 
         dispatch_request = builder(context)
         if dispatch_request is None:
-            return Workflow2HandleResult.no_match()
+            return Workflow2HandleResult.continue_processing()
 
         outcome = WorkflowDispatchService().emit_event_outcome(
             on=dispatch_request.on,
@@ -378,7 +355,7 @@ class Workflow2DeviceActionHandler(LoggerMixin):
         )
         context.workflow2_outcome = outcome
 
-        if outcome.status == 'no_match':
-            return Workflow2HandleResult.no_match(outcome)
+        if outcome is None:
+            return Workflow2HandleResult.continue_processing()
 
         return Workflow2HandleResult.continue_processing(outcome)

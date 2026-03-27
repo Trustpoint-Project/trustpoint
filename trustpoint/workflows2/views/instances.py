@@ -9,6 +9,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.translation import gettext as _
 from django.views import View
 
 from management.models.workflows2 import WorkflowExecutionConfig
@@ -209,9 +210,13 @@ class Workflow2InstanceRunInlineView(LoginRequiredMixin, View):
 
             inst = Workflow2Instance.objects.get(id=instance_id)
             runtime.run_instance(inst)
-            messages.success(request, 'Instance executed inline.')
+            messages.success(request, _('Instance executed inline.'))
         except Exception as e:  # noqa: BLE001
-            messages.error(request, f'Inline run failed: {type(e).__name__}: {e}')
+            messages.error(
+                request,
+                _('Inline run failed: %(type)s: %(error)s')
+                % {'type': type(e).__name__, 'error': e},
+            )
 
         return redirect('workflows2:instances-detail', instance_id=instance_id)
 
@@ -244,7 +249,7 @@ class Workflow2InstanceCancelView(LoginRequiredMixin, View):
                 runtime = WorkflowRuntimeService(executor=executor)
                 runtime.recompute_run_status(inst.run)
 
-        messages.success(request, 'Instance cancelled.')
+        messages.success(request, _('Instance cancelled.'))
         return redirect('workflows2:instances-detail', instance_id=inst.id)
 
 
@@ -261,7 +266,7 @@ class Workflow2InstanceResumeView(LoginRequiredMixin, View):
                 inst = Workflow2Instance.objects.select_for_update().get(id=instance_id)
 
                 if inst.status not in {Workflow2Instance.STATUS_FAILED, Workflow2Instance.STATUS_PAUSED}:
-                    messages.info(request, 'Instance is not failed/paused; nothing to retry.')
+                    messages.info(request, _('Instance is not failed/paused; nothing to retry.'))
                     return redirect('workflows2:instances-detail', instance_id=instance_id)
 
                 inst.status = Workflow2Instance.STATUS_QUEUED
@@ -277,11 +282,15 @@ class Workflow2InstanceResumeView(LoginRequiredMixin, View):
             if str(cfg.mode).lower() == WorkflowExecutionConfig.Mode.INLINE:
                 inst = Workflow2Instance.objects.get(id=instance_id)
                 runtime.run_instance(inst)
-                messages.success(request, 'Retry executed inline.')
+                messages.success(request, _('Retry executed inline.'))
             else:
-                messages.success(request, 'Retry job enqueued.')
+                messages.success(request, _('Retry job enqueued.'))
 
         except Exception as e:  # noqa: BLE001
-            messages.error(request, f'Retry failed: {type(e).__name__}: {e}')
+            messages.error(
+                request,
+                _('Retry failed: %(type)s: %(error)s')
+                % {'type': type(e).__name__, 'error': e},
+            )
 
         return redirect('workflows2:instances-detail', instance_id=instance_id)

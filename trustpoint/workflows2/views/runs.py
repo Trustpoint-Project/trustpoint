@@ -10,6 +10,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.translation import gettext as _
 from django.views import View
 
 from workflows2.engine.executor import WorkflowExecutor
@@ -34,17 +35,17 @@ class Workflow2RunListView(LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the paginated run list."""
-        base_qs = Workflow2Run.objects.annotate(instance_count=Count('instances')).order_by('-created_at')
+        supported_statuses = [choice[0] for choice in Workflow2Run.STATUS_CHOICES]
+        base_qs = (
+            Workflow2Run.objects.filter(status__in=supported_statuses)
+            .annotate(instance_count=Count('instances'))
+            .order_by('-created_at')
+        )
 
         status = request.GET.get('status')
         trigger_on = (request.GET.get('trigger_on') or '').strip()
-        show_no_match = request.GET.get('show_no_match') == '1'
-        if status == Workflow2Run.STATUS_NO_MATCH:
-            show_no_match = True
 
         qs = base_qs
-        if not show_no_match:
-            qs = qs.exclude(status=Workflow2Run.STATUS_NO_MATCH)
         if status:
             qs = qs.filter(status=status)
         if trigger_on:
@@ -57,13 +58,10 @@ class Workflow2RunListView(LoginRequiredMixin, View):
                 'run': run,
                 'badge': status_badge_class(run.status),
                 'source_summary': summarize_source(run.source_json),
-                'is_no_match': run.status == Workflow2Run.STATUS_NO_MATCH,
                 'has_instances': bool(run.instance_count),
             }
             for run in page_obj.object_list
         ]
-
-        hidden_no_match_count = 0 if show_no_match else base_qs.filter(status=Workflow2Run.STATUS_NO_MATCH).count()
         active_statuses = [
             Workflow2Run.STATUS_QUEUED,
             Workflow2Run.STATUS_RUNNING,
@@ -86,13 +84,11 @@ class Workflow2RunListView(LoginRequiredMixin, View):
                 'run_rows': run_rows,
                 'status': status or '',
                 'trigger_on': trigger_on,
-                'show_no_match': show_no_match,
-                'hidden_no_match_count': hidden_no_match_count,
                 'summary_total': qs.count(),
                 'summary_active': qs.filter(status__in=active_statuses).count(),
                 'summary_awaiting': qs.filter(status=Workflow2Run.STATUS_AWAITING).count(),
                 'summary_completed': qs.filter(status__in=completed_statuses).count(),
-                'status_choices': Workflow2Run.STATUS_CHOICES,
+                'status_choices': list(Workflow2Run.STATUS_CHOICES),
             },
         )
 
@@ -102,7 +98,8 @@ class Workflow2RunDetailView(LoginRequiredMixin, View):
 
     def get(self, request: HttpRequest, run_id: int) -> HttpResponse:
         """Render the detail page for one workflow run."""
-        run = get_object_or_404(Workflow2Run, id=run_id)
+        supported_statuses = [choice[0] for choice in Workflow2Run.STATUS_CHOICES]
+        run = get_object_or_404(Workflow2Run.objects.filter(status__in=supported_statuses), id=run_id)
         instances = Workflow2Instance.objects.filter(run=run).select_related('definition').order_by('created_at')
         source_context = resolve_source_context(run.source_json)
         event_context = describe_event_context(run.event_json)
@@ -140,7 +137,6 @@ class Workflow2RunDetailView(LoginRequiredMixin, View):
                 'event_pretty': pretty_json(run.event_json),
                 'event_context': event_context,
                 'outcome_summary': outcome_summary,
-                'is_no_match': run.status == Workflow2Run.STATUS_NO_MATCH,
             },
         )
 
@@ -171,9 +167,13 @@ class Workflow2RunRunInlineView(LoginRequiredMixin, View):
                 runtime.run_instance(inst)
 
             runtime.recompute_run_status(run)
-            messages.success(request, 'Run executed inline (all runnable instances processed).')
+            messages.success(request, _('Run executed inline (all runnable instances processed).'))
         except Exception as e:  # noqa: BLE001
-            messages.error(request, f'Inline run failed: {type(e).__name__}: {e}')
+            messages.error(
+                request,
+                _('Inline run failed: %(type)s: %(error)s')
+                % {'type': type(e).__name__, 'error': e},
+            )
 
         return redirect('workflows2:runs-detail', run_id=run.id)
 
@@ -213,5 +213,5 @@ class Workflow2RunCancelView(LoginRequiredMixin, View):
             run.finalized = True
             run.save(update_fields=['status', 'finalized', 'updated_at'])
 
-        messages.success(request, 'Run cancelled.')
+        messages.success(request, _('Run cancelled.'))
         return redirect('workflows2:runs-detail', run_id=run.id)

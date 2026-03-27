@@ -83,12 +83,70 @@ workflow:
 
 
 class CompilerTests(SimpleTestCase):
+    APPROVAL_WORKFLOW_TEMPLATE = """\
+schema: trustpoint.workflow.v2
+name: Approval by trigger
+enabled: true
+
+trigger:
+  on: {trigger_on}
+  sources:
+    trustpoint: true
+
+workflow:
+  start: approve
+
+  steps:
+    approve:
+      type: approval
+      approved_outcome: approved
+      rejected_outcome: rejected
+
+  flow:
+    - from: approve
+      on: approved
+      to: $end
+    - from: approve
+      on: rejected
+      to: $reject
+"""
+
     def test_compile_valid(self) -> None:
         ir = compile_workflow_yaml(VALID_YAML, compiler_version="test")
         self.assertEqual(ir["ir_version"], "v2")
         self.assertEqual(ir["trigger"]["on"], "device.created")
         self.assertTrue(ir["meta"]["source_hash"])
         self.assertTrue(ir["meta"]["ir_hash"])
+
+    def test_device_updated_disallows_approval_step(self) -> None:
+        yaml_text = self.APPROVAL_WORKFLOW_TEMPLATE.format(trigger_on='device.updated')
+
+        with self.assertRaises(CompileError) as ctx:
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertIn('not allowed for trigger "device.updated"', str(ctx.exception))
+
+    def test_certificate_issued_disallows_approval_step(self) -> None:
+        yaml_text = self.APPROVAL_WORKFLOW_TEMPLATE.format(trigger_on='certificate.issued')
+
+        with self.assertRaises(CompileError) as ctx:
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertIn('not allowed for trigger "certificate.issued"', str(ctx.exception))
+
+    def test_est_simpleenroll_allows_approval_step(self) -> None:
+        yaml_text = self.APPROVAL_WORKFLOW_TEMPLATE.format(trigger_on='est.simpleenroll')
+
+        ir = compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertEqual(ir['workflow']['steps']['approve']['type'], 'approval')
+
+    def test_rest_enroll_allows_approval_step(self) -> None:
+        yaml_text = self.APPROVAL_WORKFLOW_TEMPLATE.format(trigger_on='rest.enroll')
+
+        ir = compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertEqual(ir['workflow']['steps']['approve']['type'], 'approval')
 
     def test_yaml_key_on_is_not_boolean(self) -> None:
         ir = compile_workflow_yaml(VALID_YAML, compiler_version="test")

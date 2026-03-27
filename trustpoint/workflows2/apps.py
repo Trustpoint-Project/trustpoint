@@ -15,5 +15,5 @@ class Workflows2Config(AppConfig):
 
         register_builtin_events()
 
-        # Register signal integrations (v1)
-        from .integrations import devices  # noqa: F401, PLC0415
+        # Register signal integrations.
+        from .integrations import certificates, devices  # noqa: F401, PLC0415

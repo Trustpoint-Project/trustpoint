@@ -21,18 +21,20 @@ export function createGuideActionsController({
   }
 
   containerEl.addEventListener('input', (event) => {
-    const filterInput = event.target.closest('[data-wf2-source-filter-input="true"]');
+    const filterInput = event.target.closest(
+      '[data-wf2-filter-input="true"], [data-wf2-source-filter-input="true"]',
+    );
     if (!filterInput) {
       return;
     }
 
-    const group = filterInput.closest('[data-wf2-source-group="true"]');
+    const group = filterInput.closest('[data-wf2-filter-group="true"], [data-wf2-source-group="true"]');
     if (!group) {
       return;
     }
 
     const needle = String(filterInput.value || '').trim().toLowerCase();
-    const entries = [...group.querySelectorAll('[data-wf2-source-entry="true"]')];
+    const entries = [...group.querySelectorAll('[data-wf2-entry="true"], [data-wf2-source-entry="true"]')];
     let visibleCount = 0;
 
     entries.forEach((entry) => {
@@ -44,7 +46,14 @@ export function createGuideActionsController({
       }
     });
 
-    const emptyState = group.querySelector('[data-wf2-source-empty-state="true"]');
+    const sections = [...group.querySelectorAll('[data-wf2-filter-section="true"]')];
+    sections.forEach((section) => {
+      const sectionEntries = [...section.querySelectorAll('[data-wf2-entry="true"], [data-wf2-source-entry="true"]')];
+      const sectionVisible = sectionEntries.some((entry) => !entry.hidden);
+      section.hidden = !sectionVisible;
+    });
+
+    const emptyState = group.querySelector('[data-wf2-empty-state="true"], [data-wf2-source-empty-state="true"]');
     if (emptyState) {
       emptyState.hidden = visibleCount > 0;
     }

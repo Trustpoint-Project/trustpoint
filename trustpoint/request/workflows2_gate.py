@@ -35,7 +35,7 @@ def get_workflow2_outcome(context: BaseRequestContext) -> DispatchOutcome | None
 def workflow2_allows_certificate_issuance(context: BaseRequestContext) -> bool:
     """Return whether certificate issuance should continue for this request."""
     outcome = get_workflow2_outcome(context)
-    if outcome is None or outcome.status == 'no_match':
+    if outcome is None:
         return True
     return str(outcome.run.status) == Workflow2Run.STATUS_SUCCEEDED
 
@@ -43,6 +43,6 @@ def workflow2_allows_certificate_issuance(context: BaseRequestContext) -> bool:
 def workflow2_run_detail_path(context: BaseRequestContext) -> str | None:
     """Return a workflow2 run detail path for the current request, if available."""
     outcome = get_workflow2_outcome(context)
-    if outcome is None:
+    if outcome is None or outcome.run is None:
         return None
     return f'/workflows2/runs/{outcome.run.id}/'

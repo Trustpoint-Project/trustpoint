@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from django.utils.translation import gettext as _
+
 from devices.models import DeviceModel
 from pki.models.ca import CaModel
 from pki.models.domain import DomainModel
@@ -27,7 +29,7 @@ def status_badge_class(status: str | None) -> str:
         'text-bg-danger': {'failed', 'error', 'rejected'},
         'text-bg-warning': {'awaiting', 'paused', 'pending', 'expired'},
         'text-bg-primary': {'running'},
-        'text-bg-secondary': {'queued', 'no_match'},
+        'text-bg-secondary': {'queued'},
         'text-bg-dark': {'cancelled', 'canceled'},
         'text-bg-info': {'stopped'},
     }
@@ -41,17 +43,17 @@ def summarize_source(source_json: dict[str, Any] | None) -> str:
     """Return a compact one-line summary for a source scope object."""
     source = source_json if isinstance(source_json, dict) else {}
     if source.get('trustpoint'):
-        return 'Trustpoint-wide trigger'
+        return _('Trustpoint-wide trigger')
 
     parts: list[str] = []
     if source.get('ca_id') is not None:
-        parts.append(f'CA {source["ca_id"]}')
+        parts.append(_('CA %(id)s') % {'id': source['ca_id']})
     if source.get('domain_id') is not None:
-        parts.append(f'Domain {source["domain_id"]}')
+        parts.append(_('Domain %(id)s') % {'id': source['domain_id']})
     if source.get('device_id'):
-        parts.append(f'Device {source["device_id"]}')
+        parts.append(_('Device %(id)s') % {'id': source['device_id']})
 
-    return ' · '.join(parts) if parts else 'No source scope metadata'
+    return ' · '.join(parts) if parts else _('No source scope metadata')
 
 
 def compact_value(value: Any, *, max_length: int = 96) -> str:
@@ -73,8 +75,8 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
 
     rows.append(
         {
-            'label': 'Origin',
-            'value': 'Internal Trustpoint event' if source.get('trustpoint') else 'External request',
+            'label': _('Origin'),
+            'value': _('Internal Trustpoint event') if source.get('trustpoint') else _('External request'),
             'meta': '',
         }
     )
@@ -88,7 +90,7 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
         ca_title = ca.unique_name if ca is not None else f'CA #{ca_id}'
         rows.append(
             {
-                'label': 'Certificate authority',
+                'label': _('Certificate authority'),
                 'value': ca_title,
                 'meta': f'ID {ca_id}',
             }
@@ -105,8 +107,8 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
             meta = f'{meta} · issuing CA {domain.issuing_ca.unique_name}'
         rows.append(
             {
-                'label': 'Domain',
-                'value': domain.unique_name if domain is not None else f'Domain #{domain_id}',
+                'label': _('Domain'),
+                'value': domain.unique_name if domain is not None else _('Domain #%(id)s') % {'id': domain_id},
                 'meta': meta,
             }
         )
@@ -121,11 +123,11 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
         if device is not None and device.serial_number:
             meta_parts.append(f'S/N {device.serial_number}')
         if device is not None and device.domain is not None:
-            meta_parts.append(f'Domain {device.domain.unique_name}')
+            meta_parts.append(_('Domain %(name)s') % {'name': device.domain.unique_name})
         rows.append(
             {
-                'label': 'Device',
-                'value': device.common_name if device is not None else f'Device #{device_id}',
+                'label': _('Device'),
+                'value': device.common_name if device is not None else _('Device #%(id)s') % {'id': device_id},
                 'meta': ' · '.join(meta_parts),
             }
         )
@@ -145,31 +147,70 @@ def describe_event_context(event_json: dict[str, Any] | None) -> list[dict[str, 
     event = _json_object(event_json)
     rows: list[dict[str, str]] = []
 
-    device = _json_object(event.get('device'))
-    if device:
-        device_title = device.get('common_name') or device.get('serial_number') or device.get('id')
-        if device_title:
-            rows.append({'label': 'Event device', 'value': str(device_title), 'meta': ''})
-        if device.get('serial_number'):
-            rows.append({'label': 'Serial number', 'value': str(device['serial_number']), 'meta': ''})
-        domain_id = device.get('domain_id')
-        if isinstance(domain_id, (str, int)):
-            try:
-                domain = DomainModel.objects.filter(pk=domain_id).only('unique_name').first()
-            except (TypeError, ValueError):
-                domain = None
-            rows.append(
-                {
-                    'label': 'Device domain',
-                    'value': domain.unique_name if domain is not None else f'Domain #{domain_id}',
-                    'meta': '',
-                }
-            )
+    _append_device_rows(rows, device=_json_object(event.get('device')))
+    _append_certificate_rows(rows, certificate=_json_object(event.get('certificate')))
 
     _append_protocol_rows(rows, payload=_json_object(event.get('est')), protocol='EST')
     _append_protocol_rows(rows, payload=_json_object(event.get('rest')), protocol='REST')
 
     return rows
+
+
+def _append_device_rows(rows: list[dict[str, str]], *, device: dict[str, Any]) -> None:
+    """Append human-readable rows for device event payloads."""
+    if not device:
+        return
+
+    device_title = device.get('common_name') or device.get('serial_number') or device.get('id')
+    if device_title:
+        rows.append({'label': _('Event device'), 'value': str(device_title), 'meta': ''})
+    if device.get('serial_number'):
+        rows.append({'label': _('Serial number'), 'value': str(device['serial_number']), 'meta': ''})
+    domain_id = device.get('domain_id')
+    if isinstance(domain_id, (str, int)):
+        try:
+            domain = DomainModel.objects.filter(pk=domain_id).only('unique_name').first()
+        except (TypeError, ValueError):
+            domain = None
+        rows.append(
+            {
+                'label': _('Device domain'),
+                'value': domain.unique_name if domain is not None else _('Domain #%(id)s') % {'id': domain_id},
+                'meta': '',
+            }
+        )
+    changes = _json_object(device.get('changes'))
+    if changes:
+        rows.append(
+            {
+                'label': _('Changed fields'),
+                'value': ', '.join(sorted(changes.keys())),
+                'meta': '',
+            }
+        )
+
+
+def _append_certificate_rows(rows: list[dict[str, str]], *, certificate: dict[str, Any]) -> None:
+    """Append human-readable rows for certificate lifecycle payloads."""
+    if not certificate:
+        return
+
+    certificate_title = (
+        certificate.get('common_name')
+        or certificate.get('serial_number')
+        or certificate.get('sha256_fingerprint')
+        or certificate.get('id')
+    )
+    if certificate_title:
+        rows.append({'label': _('Certificate'), 'value': str(certificate_title), 'meta': ''})
+    if certificate.get('serial_number'):
+        rows.append({'label': _('Certificate serial'), 'value': str(certificate['serial_number']), 'meta': ''})
+    if certificate.get('cert_profile'):
+        rows.append({'label': _('Certificate profile'), 'value': str(certificate['cert_profile']), 'meta': ''})
+    if certificate.get('revocation_reason'):
+        rows.append(
+            {'label': _('Revocation reason'), 'value': str(certificate['revocation_reason']), 'meta': ''}
+        )
 
 
 def _append_protocol_rows(
@@ -182,9 +223,15 @@ def _append_protocol_rows(
     if not payload:
         return
     if payload.get('operation'):
-        rows.append({'label': f'{protocol} operation', 'value': str(payload['operation']), 'meta': ''})
+        rows.append(
+            {
+                'label': _('%(protocol)s operation') % {'protocol': protocol},
+                'value': str(payload['operation']),
+                'meta': '',
+            }
+        )
     if payload.get('cert_profile'):
-        rows.append({'label': 'Certificate profile', 'value': str(payload['cert_profile']), 'meta': ''})
+        rows.append({'label': _('Certificate profile'), 'value': str(payload['cert_profile']), 'meta': ''})
 
 
 def summarize_named_values(values: dict[str, Any] | None, *, limit: int = 8) -> list[dict[str, str]]:

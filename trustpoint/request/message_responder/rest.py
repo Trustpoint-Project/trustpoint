@@ -38,30 +38,30 @@ class RestCertificateMessageResponder(RestMessageResponder):
     def _check_workflow_state(context: RestCertificateRequestContext) -> bool:
         """Check if the workflow state allows for certificate issuance."""
         workflow2_outcome = get_workflow2_outcome(context)
-        if workflow2_outcome is None or workflow2_outcome.status == 'no_match':
+        if workflow2_outcome is None:
             return True
 
         run_status = str(workflow2_outcome.run.status)
+        response_status: int
+        response_payload: dict[str, str]
         if run_status in {
             Workflow2Run.STATUS_QUEUED,
             Workflow2Run.STATUS_RUNNING,
             Workflow2Run.STATUS_AWAITING,
             Workflow2Run.STATUS_PAUSED,
         }:
-            context.http_response_status = 202
-            context.http_response_content_type = 'application/json'
-            context.http_response_content = json.dumps(
-                {'status': 'pending', 'detail': 'Enrollment request pending workflow approval.'}
-            )
-            return False
-        if run_status == Workflow2Run.STATUS_REJECTED:
-            context.http_response_status = 403
-            context.http_response_content_type = 'application/json'
-            context.http_response_content = json.dumps(
-                {'status': 'rejected', 'detail': 'Enrollment request rejected by workflow.'}
-            )
-            return False
-        if run_status in {
+            response_status = 202
+            response_payload = {
+                'status': 'pending',
+                'detail': 'Enrollment request pending workflow approval.',
+            }
+        elif run_status == Workflow2Run.STATUS_REJECTED:
+            response_status = 403
+            response_payload = {
+                'status': 'rejected',
+                'detail': 'Enrollment request rejected by workflow.',
+            }
+        elif run_status in {
             Workflow2Run.STATUS_FAILED,
             Workflow2Run.STATUS_CANCELLED,
             Workflow2Run.STATUS_STOPPED,
@@ -70,19 +70,20 @@ class RestCertificateMessageResponder(RestMessageResponder):
             run_path = workflow2_run_detail_path(context)
             if run_path:
                 detail = f'{detail} Check here: -> {run_path}'
-            context.http_response_status = 500
-            context.http_response_content_type = 'application/json'
-            context.http_response_content = json.dumps({'status': 'failed', 'detail': detail})
-            return False
-        if run_status in {Workflow2Run.STATUS_NO_MATCH, Workflow2Run.STATUS_SUCCEEDED}:
+            response_status = 500
+            response_payload = {'status': 'failed', 'detail': detail}
+        elif run_status == Workflow2Run.STATUS_SUCCEEDED:
             return True
+        else:
+            response_status = 500
+            response_payload = {
+                'status': 'error',
+                'detail': f'Enrollment request is in an unsupported workflow state: {run_status}.',
+            }
 
-        context.http_response_status = 500
+        context.http_response_status = response_status
         context.http_response_content_type = 'application/json'
-        context.http_response_content = json.dumps({
-            'status': 'error',
-            'detail': f'Enrollment request is in an unsupported workflow state: {run_status}.',
-        })
+        context.http_response_content = json.dumps(response_payload)
         return False
 
     @staticmethod

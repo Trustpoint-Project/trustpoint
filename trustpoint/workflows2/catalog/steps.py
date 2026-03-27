@@ -5,7 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from django.utils.functional import Promise
+from django.utils.translation import gettext_lazy as _
+
 from workflows2.compiler.step_types import StepTypes
+
+TranslatedText = str | Promise
 
 FieldKind = Literal[
     'string',
@@ -32,8 +37,8 @@ class StepField:
     """Describe one editable field on a step type."""
 
     key: str
-    title: str
-    description: str
+    title: TranslatedText
+    description: TranslatedText
     required: bool = False
     field_kind: FieldKind = 'string'
     default: Any = None
@@ -47,8 +52,8 @@ class StepSpec:
     """Describe a supported step type for the editor catalog."""
 
     type: str
-    title: str
-    description: str
+    title: TranslatedText
+    description: TranslatedText
     category: str
     fields: list[StepField]
 
@@ -56,16 +61,16 @@ class StepSpec:
 COMMON_STEP_FIELDS: tuple[StepField, ...] = (
     StepField(
         key='type',
-        title='type',
-        description='Step type.',
+        title=_('type'),
+        description=_('Step type.'),
         required=True,
         field_kind='step_type',
         enum=tuple(sorted(StepTypes.all())),
     ),
     StepField(
         key='title',
-        title='title',
-        description='Optional human-readable UI label.',
+        title=_('title'),
+        description=_('Optional human-readable UI label.'),
         required=False,
         field_kind='string',
         default='',
@@ -78,14 +83,14 @@ def step_specs() -> list[StepSpec]:
     return [
         StepSpec(
             type='logic',
-            title='Logic routing',
-            description='Evaluate cases and return an outcome string.',
+            title=_('Logic routing'),
+            description=_('Evaluate cases and return an outcome string.'),
             category='step',
             fields=[
                 StepField(
                     key='cases',
-                    title='cases',
-                    description='Ordered list of conditions that each produce an outcome.',
+                    title=_('cases'),
+                    description=_('Ordered list of conditions that each produce an outcome.'),
                     required=True,
                     field_kind='condition_list',
                     scaffold=[
@@ -103,8 +108,8 @@ def step_specs() -> list[StepSpec]:
                 ),
                 StepField(
                     key='default',
-                    title='default outcome',
-                    description='Outcome returned when no case matches.',
+                    title=_('default outcome'),
+                    description=_('Outcome returned when no case matches.'),
                     required=True,
                     field_kind='outcome',
                     default='fail',
@@ -113,14 +118,14 @@ def step_specs() -> list[StepSpec]:
         ),
         StepSpec(
             type='webhook',
-            title='Webhook',
-            description='HTTP request via adapter.',
+            title=_('Webhook'),
+            description=_('HTTP request via adapter.'),
             category='step',
             fields=[
                 StepField(
                     key='method',
-                    title='method',
-                    description='HTTP method.',
+                    title=_('method'),
+                    description=_('HTTP method.'),
                     required=True,
                     field_kind='http_method',
                     default='POST',
@@ -128,40 +133,40 @@ def step_specs() -> list[StepSpec]:
                 ),
                 StepField(
                     key='url',
-                    title='url',
-                    description='Request URL (templated).',
+                    title=_('url'),
+                    description=_('Request URL (templated).'),
                     required=True,
                     field_kind='template',
                     default='https://example.com/api',
                 ),
                 StepField(
                     key='headers',
-                    title='headers',
-                    description='Request headers mapping.',
+                    title=_('headers'),
+                    description=_('Request headers mapping.'),
                     required=False,
                     field_kind='mapping',
                     scaffold={'x-request-id': 'request-id'},
                 ),
                 StepField(
                     key='body',
-                    title='body',
-                    description='Request body (YAML object, list, string, or null).',
+                    title=_('body'),
+                    description=_('Request body (YAML object, list, string, or null).'),
                     required=False,
                     field_kind='mapping',
                     scaffold={'example': 'value'},
                 ),
                 StepField(
                     key='timeout_seconds',
-                    title='timeout_seconds',
-                    description='Timeout in seconds.',
+                    title=_('timeout_seconds'),
+                    description=_('Timeout in seconds.'),
                     required=False,
                     field_kind='int',
                     default=10,
                 ),
                 StepField(
                     key='capture',
-                    title='capture',
-                    description='Capture response fields into vars using vars.<name>: <source>.',
+                    title=_('capture'),
+                    description=_('Capture response fields into vars using vars.<name>: <source>.'),
                     required=False,
                     field_kind='capture_mapping',
                     scaffold={'vars.http_status': 'status_code'},
@@ -170,46 +175,46 @@ def step_specs() -> list[StepSpec]:
         ),
         StepSpec(
             type='email',
-            title='Email',
-            description='Send an email via adapter.',
+            title=_('Email'),
+            description=_('Send an email via adapter.'),
             category='step',
             fields=[
                 StepField(
                     key='to',
-                    title='to',
-                    description='Recipient list.',
+                    title=_('to'),
+                    description=_('Recipient list.'),
                     required=True,
                     field_kind='list',
                     scaffold=['user@example.com'],
                 ),
                 StepField(
                     key='subject',
-                    title='subject',
-                    description='Email subject (templated).',
+                    title=_('subject'),
+                    description=_('Email subject (templated).'),
                     required=True,
                     field_kind='template',
                     default='Subject',
                 ),
                 StepField(
                     key='body',
-                    title='body',
-                    description='Email body (templated).',
+                    title=_('body'),
+                    description=_('Email body (templated).'),
                     required=True,
                     field_kind='text',
                     default='Body',
                 ),
                 StepField(
                     key='cc',
-                    title='cc',
-                    description='CC recipient list.',
+                    title=_('cc'),
+                    description=_('CC recipient list.'),
                     required=False,
                     field_kind='list',
                     scaffold=['cc@example.com'],
                 ),
                 StepField(
                     key='bcc',
-                    title='bcc',
-                    description='BCC recipient list.',
+                    title=_('bcc'),
+                    description=_('BCC recipient list.'),
                     required=False,
                     field_kind='list',
                     scaffold=['bcc@example.com'],
@@ -218,30 +223,30 @@ def step_specs() -> list[StepSpec]:
         ),
         StepSpec(
             type='approval',
-            title='Approval',
-            description='Pause until external approval decision.',
+            title=_('Approval'),
+            description=_('Pause until external approval decision.'),
             category='step',
             fields=[
                 StepField(
                     key='approved_outcome',
-                    title='approved_outcome',
-                    description='Outcome for approve.',
+                    title=_('approved_outcome'),
+                    description=_('Outcome for approve.'),
                     required=True,
                     field_kind='outcome',
                     default='approved',
                 ),
                 StepField(
                     key='rejected_outcome',
-                    title='rejected_outcome',
-                    description='Outcome for reject.',
+                    title=_('rejected_outcome'),
+                    description=_('Outcome for reject.'),
                     required=True,
                     field_kind='outcome',
                     default='rejected',
                 ),
                 StepField(
                     key='timeout_seconds',
-                    title='timeout_seconds',
-                    description='Optional timeout in seconds.',
+                    title=_('timeout_seconds'),
+                    description=_('Optional timeout in seconds.'),
                     required=False,
                     field_kind='int',
                     default=3600,
@@ -250,14 +255,14 @@ def step_specs() -> list[StepSpec]:
         ),
         StepSpec(
             type='set',
-            title='Set vars',
-            description='Write literal or templated values into vars.',
+            title=_('Set vars'),
+            description=_('Write literal or templated values into vars.'),
             category='step',
             fields=[
                 StepField(
                     key='vars',
-                    title='vars',
-                    description='Mapping of vars.<name> to literal or templated values.',
+                    title=_('vars'),
+                    description=_('Mapping of vars.<name> to literal or templated values.'),
                     required=True,
                     field_kind='vars_mapping',
                     scaffold={'vars.result': 'value'},
@@ -266,14 +271,14 @@ def step_specs() -> list[StepSpec]:
         ),
         StepSpec(
             type='compute',
-            title='Compute vars',
-            description='Assign vars via safe expressions or YAML operator mappings.',
+            title=_('Compute vars'),
+            description=_('Assign vars via safe expressions or YAML operator mappings.'),
             category='step',
             fields=[
                 StepField(
                     key='set',
-                    title='set',
-                    description='Mapping of vars.<name> to an expression or YAML operator mapping.',
+                    title=_('set'),
+                    description=_('Mapping of vars.<name> to an expression or YAML operator mapping.'),
                     required=True,
                     field_kind='compute_mapping',
                     scaffold={
