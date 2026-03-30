@@ -375,6 +375,39 @@ class TestSignerBulkDeleteConfirmView:
         view = SignerBulkDeleteConfirmView()
         assert view.success_url == reverse('signer:signer_list')
 
+    @patch('signer.views.AuditLog.create_entry')
+    def test_form_valid_creates_audit_log_on_delete(self, mock_create_entry):
+        """Test form_valid creates an audit log entry when deleting a signer."""
+        factory = RequestFactory()
+        request = factory.post('/signer/delete/1/')
+        request.user = Mock(is_authenticated=True)
+        request._messages = Mock()
+
+        view = SignerBulkDeleteConfirmView()
+        view.request = request
+
+        signer = Mock()
+        signer.unique_name = 'test-signer'
+
+        queryset = Mock()
+        queryset.__iter__ = Mock(return_value=iter([signer]))
+        queryset.delete = Mock()
+
+        view.get_queryset = Mock(return_value=queryset)
+
+        form = Mock()
+
+        response = view.form_valid(form)
+
+        assert response.status_code == 302
+        mock_create_entry.assert_called_once()
+
+        _, kwargs = mock_create_entry.call_args
+        assert kwargs['operation_type'] == AuditLog.OperationType.SIGNER_DELETED
+        assert kwargs['target'] == signer
+        assert kwargs['target_display'] == 'Signer: test-signer'
+        assert kwargs['actor'] == request.user
+
 
 @pytest.mark.django_db
 class TestSignHashView:
