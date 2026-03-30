@@ -63,10 +63,10 @@
 
 <script src="{% static 'js/settings.js' %}"></script>
 <script type="text/javascript">
-    // Built from SecurityConfig.get_settings_preview_json()
+
     const securityConfigurations = {{ notification_configurations_json|safe }};
 
-    // 0 < 1 < 2 < 3 < 4
+
     const securityModeOrder = ['0', '1', '2', '3', '4'];
 
     function getCurrentSecurityMode() {
@@ -92,10 +92,7 @@
         }
     }
 
-    /**
-     * Apply constraints only (max, disabling, hiding), without changing values.
-     * Use this on initial load so DB values are preserved.
-     */
+
     function applyStrictnessConstraints(securityLevel) {
         const settings = securityConfigurations[securityLevel] || {};
         const isLab = securityLevel === '0';
@@ -201,10 +198,7 @@
         } catch (e) { console.error(e); }
     }
 
-    /**
-     * Reset values to mode defaults (one-time) AND apply constraints.
-     * Use this only when user actually changes the mode.
-     */
+
     function resetToDefaultsAndApplyConstraints(securityLevel) {
         const settings = securityConfigurations[securityLevel] || {};
         const isLab = securityLevel === '0';
@@ -248,7 +242,7 @@
             resetProtocols('permitted_onboarding_protocols', 'raw_permitted_onboarding_protocols');
         } catch (e) { console.error(e); }
 
-        // Now enforce constraints on top
+
         applyStrictnessConstraints(securityLevel);
     }
 
@@ -256,7 +250,7 @@ function initSecurityUI() {
     const securityModeRadios = document.querySelectorAll('input[name="security_mode"]');
     if (securityModeRadios.length === 0) return;
 
-    // === NEW: tie algorithm visibility to auto_gen_pki checkbox ===
+
     const autoCheckbox = document.querySelector('input[name="auto_gen_pki"]');
     const algoField = document.querySelector('select[name="auto_gen_pki_key_algorithm"]');
     const algoGroup = algoField
@@ -266,7 +260,7 @@ function initSecurityUI() {
     function updateAlgoVisibility() {
         if (!algoGroup) return;
         if (!autoCheckbox) {
-            // If checkbox is missing, always show the field
+
             algoGroup.style.display = '';
             return;
         }
@@ -277,7 +271,7 @@ function initSecurityUI() {
         autoCheckbox.addEventListener('change', updateAlgoVisibility);
     }
     updateAlgoVisibility();
-    // === END NEW ===
+
 
     securityModeRadios.forEach(radio => {
         radio.addEventListener('change', function (event) {
@@ -299,10 +293,10 @@ function initSecurityUI() {
             }
 
             updateSettingsTable(newMode);
-            // On mode change: reset to that mode defaults (one-time)
+
             resetToDefaultsAndApplyConstraints(newMode);
 
-            // Re-evaluate algorithm visibility after mode-based checkbox changes
+
             updateAlgoVisibility();
         });
     });
@@ -311,9 +305,9 @@ function initSecurityUI() {
     if (checkedRadio) {
         const currentMode = checkedRadio.value;
         updateSettingsTable(currentMode);
-        // On initial load: only apply constraints, keep DB values
+
         applyStrictnessConstraints(currentMode);
-        // Ensure visibility matches initial auto_gen_pki value
+
         updateAlgoVisibility();
     }
 }

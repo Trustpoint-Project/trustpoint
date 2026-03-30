@@ -198,14 +198,14 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             mode_str = str(mode)
             defaults = SecurityConfig._MODE_DEFAULTS[mode_str]   # noqa: SLF001
 
-            # Numeric: Custom must be <= Default (max valid days)
+
             for field in ['max_cert_validity_days', 'max_crl_validity_days']:
                 val = cleaned_data.get(field)
                 default_val = defaults.get(field)
                 if default_val is not None and (val is None or val > default_val):
                     self.add_error(field, f'Maximum allowed for this level is {default_val}.')
 
-            # Minimums: Custom must be >= Default (RSA size)
+
             rsa_val = cleaned_data.get('rsa_minimum_key_size')
             default_rsa = defaults.get('rsa_minimum_key_size')
             if default_rsa is not None and (rsa_val is None or rsa_val < default_rsa):
@@ -214,7 +214,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                     f'Minimum key size for this level is {default_rsa}.',
                 )
 
-            # Booleans: Cannot enable if default is False
+
             for field in ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca']:
                 if not defaults.get(field) and cleaned_data.get(field):
                     self.add_error(field, 'This feature cannot be enabled at this security level.')
