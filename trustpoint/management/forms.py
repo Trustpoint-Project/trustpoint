@@ -86,7 +86,6 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 _('Advanced security settings'),
                 Field('auto_gen_pki', wrapper_class='form-check form-switch'),
                 'auto_gen_pki_key_algorithm',
-                # Add all the new fields below so they render in the UI
                 'rsa_minimum_key_size',
                 'max_cert_validity_days',
                 'max_crl_validity_days',
@@ -193,7 +192,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         cleaned_data = cleaned
         mode = cleaned_data.get('security_mode')
 
-        # Enforce limits if not in Lab / Custom mode
+
         if mode != SecurityConfig.SecurityModeChoices.LAB:
             mode_str = str(mode)
             defaults = SecurityConfig._MODE_DEFAULTS[mode_str]   # noqa: SLF001
