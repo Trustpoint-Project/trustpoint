@@ -74,7 +74,8 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 if field_name in self.fields:
                     self.fields[field_name].widget.attrs['disabled'] = 'disabled'
 
-
+        if self.instance and self.instance.auto_gen_pki:
+            self.fields['auto_gen_pki_key_algorithm'].widget.attrs['disabled'] = 'disabled'
 
         self.helper = FormHelper()
         self.helper.layout = Layout(
