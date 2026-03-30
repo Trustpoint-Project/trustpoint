@@ -94,6 +94,25 @@
 
                     {% include 'pki/devid_registration/table.html' %}
 
+                    <h2 class="mt-3">{% trans 'Domain Credential Profile' %}</h2>
+                    <hr class="hr-m">
+                    <div class="tp-kvp-list mb-3">
+                        <div>
+                            <div>{% trans 'Certificate Profile for Domain Credential' %}</div>
+                            <div>
+                                <select class="form-select" name="domain_credential_profile">
+                                    <option value="">{% trans 'Default (domain_credential)' %}</option>
+                                    {% for profile in domain_credential_profiles %}
+                                    <option value="{{ profile.id }}"
+                                        {% if profile.id == current_domain_credential_profile_id %}selected{% endif %}>
+                                        {{ profile.display_name|default:profile.unique_name }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
                     <h2 class="mt-3">{% trans 'Allowed Certificate Profiles' %}</h2>
                     <hr class="hr-m">
                     <div class="mb-3">
