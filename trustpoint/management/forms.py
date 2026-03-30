@@ -45,6 +45,8 @@ if TYPE_CHECKING:
 
 class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
     """Security configuration model form."""
+    _violations: list[str] | None = None
+    _violations_mode_label: str | None = None
 
     FEATURE_TO_FIELDS: ClassVar[dict[type[SecurityFeature], list[str]]] = {
         AutoGenPkiFeature: ['auto_gen_pki', 'auto_gen_pki_key_algorithm'],
@@ -124,9 +126,13 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         widget=forms.Select(attrs={'data-hide-at-sl': '[false, false, true, true, true]'}),
     )
 
-    RSA_KEY_CHOICES : ClassVar[list[tuple[object, str]]] = [
+    RSA_KEY_CHOICES: ClassVar[list[tuple[object, object]]] = [
         ('', _('None / Not Permitted')),
-        (1024, '1024'), (2048, '2048'), (3072, '3072'), (4096, '4096'), (8192, '8192')
+        (1024, '1024'),
+        (2048, '2048'),
+        (3072, '3072'),
+        (4096, '4096'),
+        (8192, '8192'),
     ]
     rsa_minimum_key_size = forms.ChoiceField(
         choices=RSA_KEY_CHOICES, required=False, widget=forms.Select()
@@ -171,7 +177,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             return None
 
         try:
-            return int(raw)
+            return int(str(raw))
         except (TypeError, ValueError) as err:
             raise ValidationError(_('Invalid RSA key size.')) from err
     def clean_auto_gen_pki_key_algorithm(self) -> AutoGenPkiKeyAlgorithm:
@@ -185,12 +191,14 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 
     def clean(self) -> dict[str, Any]:
         """Apply per-mode constraints on security settings."""
-        cleaned_data = super().clean()
+        cleaned: dict[str, Any] = super().clean() or {}
+        cleaned_data = cleaned
         mode = cleaned_data.get('security_mode')
 
         # Enforce limits if not in Lab / Custom mode
         if mode != SecurityConfig.SecurityModeChoices.LAB:
-            defaults = SecurityConfig._MODE_DEFAULTS[mode]  # noqa: SLF001
+            mode_str = str(mode)
+            defaults = SecurityConfig._MODE_DEFAULTS[mode_str]   # noqa: SLF001
 
             # Numeric: Custom must be <= Default (max valid days)
             for field in ['max_cert_validity_days', 'max_crl_validity_days']:
@@ -200,17 +208,20 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                     self.add_error(field, f'Maximum allowed for this level is {default_val}.')
 
             # Minimums: Custom must be >= Default (RSA size)
-            rsa_val = int(cleaned_data.get('rsa_minimum_key_size') or 0)
+            rsa_val = cleaned_data.get('rsa_minimum_key_size')
             default_rsa = defaults.get('rsa_minimum_key_size')
-            if default_rsa is not None and rsa_val < default_rsa:
-                self.add_error('rsa_minimum_key_size', f'Minimum key size for this level is {default_rsa}.')
+            if default_rsa is not None and (rsa_val is None or rsa_val < default_rsa):
+                self.add_error(
+                    'rsa_minimum_key_size',
+                    f'Minimum key size for this level is {default_rsa}.',
+                )
 
             # Booleans: Cannot enable if default is False
             for field in ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca']:
                 if not defaults.get(field) and cleaned_data.get(field):
                     self.add_error(field, 'This feature cannot be enabled at this security level.')
 
-        return cleaned_data
+        return cleaned
 
 
 class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
