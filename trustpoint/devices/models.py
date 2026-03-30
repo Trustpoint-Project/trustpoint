@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import secrets
+import uuid
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
@@ -49,6 +50,16 @@ class DeviceModel(CustomDeleteActionModel):
 
     common_name = models.CharField(_('Device'), max_length=100, default='', unique=True)
     serial_number = models.CharField(_('Serial-Number'), max_length=100, default='', blank=True, null=False)
+    rfc_4122_uuid = models.UUIDField(
+        _('Device UUID'),
+        default=uuid.uuid4,
+        unique=True,
+        editable=False,
+        help_text=_(
+            'RFC 4122 version 4 UUID uniquely identifying this device. '
+            'Auto-generated on device creation and immutable thereafter.'
+        ),
+    )
     ip_address = models.GenericIPAddressField(_('IP Address'), protocol='both', unpack_ipv4=True, null=True, blank=True)
     opc_server_port = models.PositiveIntegerField(_('OPC Server Port'), default=0, blank=True, null=False)
     domain = models.ForeignKey(
@@ -127,6 +138,20 @@ class DeviceModel(CustomDeleteActionModel):
     def est_username(self) -> str:
         """Gets the EST username."""
         return self.common_name
+
+    @property
+    def rfc_4122_uuid_str(self) -> str:
+        """Get the lowercase hyphenated RFC 4122 version 4 UUID string.
+
+        The returned value conforms to the following requirements:
+        - Lowercase hex with hyphens
+        - Not predictable or sequential
+        - Remains unchanged when the device is rebound to new hardware
+
+        Returns:
+            The UUID as a lowercase hyphenated string (e.g. '550e8400-e29b-41d4-a716-446655440000').
+        """
+        return str(self.rfc_4122_uuid)
 
     def clean(self) -> None:
         """Validation before saving the model."""

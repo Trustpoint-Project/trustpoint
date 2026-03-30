@@ -16,10 +16,15 @@ from pki.models.cert_profile import CertificateProfileModel
 from pki.util.cert_profile import CERT_PROFILE_KEYWORDS, JSONProfileVerifier
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
 from pki.util.cert_req_converter import JSONCertRequestConverter
+from request.template_vars import build_variable_map_from_models, resolve_string, resolve_template_variables
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from cryptography.x509.base import CertificateBuilder
+
+    from devices.models import DeviceModel
+    from pki.models.domain import DomainModel
+    from request.request_context import BaseRequestContext
 
 
 def _validity_days_from_components(
@@ -462,12 +467,22 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
         fields: Dynamically generated Django form fields
     """
 
-    def __init__(self, profile: dict[str, Any], *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        profile: dict[str, Any],
+        *args: Any,
+        device: DeviceModel | None = None,
+        domain: DomainModel | None = None,
+        **kwargs: Any,
+    ) -> None:
         """Initialize the form with a profile.
 
         Args:
             profile: Certificate profile definition (JSON format)
             *args: Additional positional arguments passed to parent form
+            device: Optional device model for resolving template variables
+                in field initial values (e.g. ``{{ device.rfc_4122_uuid }}``).
+            domain: Optional domain model for resolving template variables.
             **kwargs: Additional keyword arguments passed to parent form
         """
         super().__init__(*args, **kwargs)
@@ -477,7 +492,15 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
         field_builder = ProfileBasedFormFieldBuilder(self.profile)
         self.fields = field_builder.build_all_fields()
 
-    def get_certificate_builder(self) -> CertificateBuilder:
+        template_vars = build_variable_map_from_models(device=device, domain=domain)
+        if template_vars:
+            for field in self.fields.values():
+                if isinstance(field.initial, str):
+                    field.initial = resolve_string(field.initial, template_vars)
+
+    def get_certificate_builder(
+        self, request_context: BaseRequestContext | None = None,
+    ) -> CertificateBuilder:
         """Build a CertificateBuilder from the form data.
 
         This method converts the form data to JSON format and delegates
@@ -489,6 +512,9 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
         cert_request = self._form_data_to_json_request()
 
         validated_request = self.verifier.apply_profile_to_request(cert_request)
+
+        if request_context is not None:
+            validated_request = resolve_template_variables(validated_request, request_context)
 
         return JSONCertRequestConverter.from_json(validated_request)
 
