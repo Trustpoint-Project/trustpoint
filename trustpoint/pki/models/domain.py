@@ -37,6 +37,16 @@ class DomainModel(models.Model):
         related_name='domains',
     )
 
+    domain_credential_profile = models.ForeignKey(
+        CertificateProfileModel,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        verbose_name=_('Domain Credential Profile'),
+        related_name='domains_as_credential_profile',
+        help_text=_('Certificate profile used for issuing domain credentials. Defaults to "domain_credential".'),
+    )
+
     is_active = models.BooleanField(
         _('Active'),
         default=True,
@@ -70,7 +80,35 @@ class DomainModel(models.Model):
         super().save(**kwargs)
         if is_new_instance:
             self._add_default_profiles()
+        self._ensure_domain_credential_profile_allowed()
 
+    def get_domain_credential_profile(self) -> CertificateProfileModel:
+        """Get the certificate profile used for domain credentials."""
+        if self.domain_credential_profile is not None:
+            return self.domain_credential_profile
+        try:
+            return CertificateProfileModel.objects.get(unique_name='domain_credential')
+        except CertificateProfileModel.DoesNotExist:
+            err_msg = (
+                f'Domain {self.unique_name} has no domain credential profile configured '
+                f'and the default "domain_credential" profile does not exist.'
+            )
+            raise ValueError(err_msg) from None
+
+    def get_domain_credential_profile_name(self) -> str:
+        """Get the unique_name of the domain credential profile."""
+        if self.domain_credential_profile is not None:
+            return self.domain_credential_profile.unique_name
+        return 'domain_credential'
+
+    def _ensure_domain_credential_profile_allowed(self) -> None:
+        """Ensure the domain credential profile is in the allowed certificate profiles."""
+        if self.domain_credential_profile is None:
+            return
+        DomainAllowedCertificateProfileModel.objects.get_or_create(
+            domain=self,
+            certificate_profile=self.domain_credential_profile,
+        )
 
     @property
     def signature_suite(self) -> oid.SignatureSuite | None:
@@ -168,6 +206,11 @@ class DomainModel(models.Model):
         Returns:
             Set of rejected aliases due to duplication in the form of (alias, profile unique name)
         """
+        if self.domain_credential_profile is not None:
+            dc_id_str = str(self.domain_credential_profile.id)
+            if dc_id_str not in allowed_profile_data:
+                allowed_profile_data[dc_id_str] = ''
+
         existing_aliases = set()
         rejected_aliases = set()
         with transaction.atomic():

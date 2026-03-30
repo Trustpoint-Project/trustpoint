@@ -88,7 +88,8 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
         allowed_app_profiles = list(
-            domain.get_allowed_cert_profiles().exclude(certificate_profile__unique_name='domain_credential'))
+            domain.get_allowed_cert_profiles().exclude(
+                certificate_profile__unique_name=domain.get_domain_credential_profile_name()))
 
         return HelpContext(
             device=device,
@@ -522,7 +523,7 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
         enroll_cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_domain_credential_command(
             est_username=device.common_name,
             est_password=est_password,
-            host=f'{base}/domain_credential/simpleenroll/',
+            host=f'{base}/{help_context.domain.get_domain_credential_profile_name()}/simpleenroll/',
         )
 
         enroll_cmd_row = HelpRow(
@@ -935,7 +936,8 @@ class OnboardingDomainCredentialRestUsernamePasswordStrategy(HelpPageStrategy):
         est_password = onboarding_config.est_password
         host_base = help_context.host_base
         domain_name = help_context.domain_unique_name
-        enroll_url = f'{host_base}/.well-known/rest/{domain_name}/domain_credential/enroll/'
+        domain_cred_profile = help_context.domain.get_domain_credential_profile_name()
+        enroll_url = f'{host_base}/rest/{domain_name}/{domain_cred_profile}/enroll/'
 
         summary = HelpSection(
             _non_lazy('Summary'),
@@ -1803,10 +1805,11 @@ class AokiEstIDevIDStrategy(HelpPageStrategy):
         )
 
         aoki_init_cmd = AokiEstIDevIDCommandBuilder.get_aoki_init_command(help_context.host_base)
-        aoki_response = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example()
+        domain_cred_profile_name = help_context.domain.get_domain_credential_profile_name()
+        aoki_response = AokiEstIDevIDCommandBuilder.get_aoki_init_response_example(domain_cred_profile_name)
         keygen_cmd = AokiEstIDevIDCommandBuilder.get_keygen_command()
         csr_cmd = AokiEstIDevIDCommandBuilder.get_csr_command()
-        enroll_path = f'{help_context.host_est_path}/.well-known/est/domain/domain_credential/simpleenroll'
+        enroll_path = f'{help_context.host_est_path}/.well-known/est/domain/{domain_cred_profile_name}/simpleenroll'
         curl_cmd = AokiEstIDevIDCommandBuilder.get_curl_enroll_command(enroll_path)
 
         aoki_response_html = (
@@ -1880,7 +1883,8 @@ class AokiCmpHelpView(PageContextMixin, TemplateView):
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
         allowed_app_profiles = list(
-            domain.get_allowed_cert_profiles().exclude(certificate_profile__unique_name='domain_credential'))
+            domain.get_allowed_cert_profiles().exclude(
+                certificate_profile__unique_name=domain.get_domain_credential_profile_name()))
 
         return HelpContext(
             device=None,
@@ -1964,7 +1968,8 @@ class AokiEstHelpView(PageContextMixin, TemplateView):
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
         allowed_app_profiles = list(
-            domain.get_allowed_cert_profiles().exclude(certificate_profile__unique_name='domain_credential'))
+            domain.get_allowed_cert_profiles().exclude(
+                certificate_profile__unique_name=domain.get_domain_credential_profile_name()))
 
         return HelpContext(
             device=None,

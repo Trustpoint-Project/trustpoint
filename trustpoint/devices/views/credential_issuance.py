@@ -234,7 +234,8 @@ class AbstractSelectCertificateProfileNewApplicationCredentialView(PageContextMi
             raise ValueError(err_msg)
 
         allowed_app_profiles = list(
-            domain.get_allowed_cert_profiles().exclude(certificate_profile__unique_name='domain_credential'))
+            domain.get_allowed_cert_profiles().exclude(
+                certificate_profile__unique_name=domain.get_domain_credential_profile_name()))
         profile_list = DomainAllowedCertificateProfileModel.get_list_of_display_names(allowed_app_profiles)
 
         context['cert_profile_list'] = {}
