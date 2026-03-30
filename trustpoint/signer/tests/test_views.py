@@ -404,7 +404,7 @@ class TestSignerBulkDeleteConfirmView:
         mock_create_entry.assert_called_once()
 
         _, kwargs = mock_create_entry.call_args
-        assert kwargs['operation_type'] == AuditLog.OperationType.SIGNER_DELETED
+        assert kwargs['operation_type'] == 'AuditLog.OperationType.SIGNER_DELETED'
         assert kwargs['target'] == signer
         assert kwargs['target_display'] == 'Signer: test-signer'
         assert kwargs['actor'] == request.user
