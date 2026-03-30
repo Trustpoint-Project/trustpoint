@@ -36,9 +36,9 @@ urlpatterns = [
 
     # Signer delete
     re_path(
-    r'^delete/(?P<pks>([0-9]+/)*[0-9]*)/?$',
-    views.SignerBulkDeleteConfirmView.as_view(),
-    name='signer-delete_confirm',
+        r'^delete/(?P<pks>([0-9]+/)*[0-9]*)/?$',
+        views.SignerBulkDeleteConfirmView.as_view(),
+        name='signer-delete_confirm',
     ),
 
     # Sign hash view
