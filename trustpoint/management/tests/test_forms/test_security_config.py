@@ -57,7 +57,15 @@ class SecurityConfigFormTest(TestCase):
         form_data = {
             'security_mode': SecurityConfig.SecurityModeChoices.HARDENED,
             'auto_gen_pki': False,
-            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
+            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
+            # Hardened defaults from _MODE_DEFAULTS
+            'rsa_minimum_key_size': 4096,
+            'max_cert_validity_days': 365,
+            'max_crl_validity_days': 90,
+            'allow_ca_issuance': False,
+            'allow_auto_gen_pki': False,
+            'allow_self_signed_ca': False,
+            'require_physical_hsm': False,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -68,12 +76,18 @@ class SecurityConfigFormTest(TestCase):
         self.config.auto_gen_pki_key_algorithm = AutoGenPkiKeyAlgorithm.SECP256R1
         self.config.save()
 
-        # When algorithm field is disabled, it won't be in cleaned_data
-        # so we test with a form that excludes the field
         form_data = {
             'security_mode': SecurityConfig.SecurityModeChoices.BROWNFIELD,
             'auto_gen_pki': True,
-            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.SECP256R1  # Explicitly set the value
+            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.SECP256R1,
+            # Brownfield defaults from _MODE_DEFAULTS
+            'rsa_minimum_key_size': 1024,
+            'max_cert_validity_days': 1825,
+            'max_crl_validity_days': 365,
+            'allow_ca_issuance': False,
+            'allow_auto_gen_pki': True,
+            'allow_self_signed_ca': True,
+            'require_physical_hsm': False,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -82,11 +96,18 @@ class SecurityConfigFormTest(TestCase):
 
     def test_clean_auto_gen_pki_key_algorithm_returns_provided_value(self):
         """Test clean method uses the provided algorithm value."""
-        # Test that when a valid algorithm is provided, it's used
         form_data = {
             'security_mode': SecurityConfig.SecurityModeChoices.BROWNFIELD,
             'auto_gen_pki': True,
-            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
+            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
+            # Brownfield defaults from _MODE_DEFAULTS
+            'rsa_minimum_key_size': 1024,
+            'max_cert_validity_days': 1825,
+            'max_crl_validity_days': 365,
+            'allow_ca_issuance': False,
+            'allow_auto_gen_pki': True,
+            'allow_self_signed_ca': True,
+            'require_physical_hsm': False,
         }
         form = SecurityConfigForm(data=form_data)
         self.assertTrue(form.is_valid())
@@ -98,7 +119,15 @@ class SecurityConfigFormTest(TestCase):
         form_data = {
             'security_mode': SecurityConfig.SecurityModeChoices.BROWNFIELD,
             'auto_gen_pki': True,
-            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA4096
+            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA4096,
+            # Brownfield defaults from _MODE_DEFAULTS
+            'rsa_minimum_key_size': 1024,
+            'max_cert_validity_days': 1825,
+            'max_crl_validity_days': 365,
+            'allow_ca_issuance': False,
+            'allow_auto_gen_pki': True,
+            'allow_self_signed_ca': True,
+            'require_physical_hsm': False,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -132,10 +161,21 @@ class SecurityConfigFormTest(TestCase):
 
         for mode in SecurityConfig.SecurityModeChoices:
             instance = SecurityConfig.objects.get(pk=self.config.pk)
+
+
+            defaults = SecurityConfig._MODE_DEFAULTS[mode]  # type: ignore[attr-defined]
+
             form_data = {
                 'security_mode': mode,
-                'auto_gen_pki': False,
-                'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
+                'auto_gen_pki': defaults['allow_auto_gen_pki'],
+                'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
+                'rsa_minimum_key_size': defaults['rsa_minimum_key_size'] or '',
+                'max_cert_validity_days': defaults['max_cert_validity_days'],
+                'max_crl_validity_days': defaults['max_crl_validity_days'],
+                'allow_ca_issuance': defaults['allow_ca_issuance'],
+                'allow_auto_gen_pki': defaults['allow_auto_gen_pki'],
+                'allow_self_signed_ca': defaults['allow_self_signed_ca'],
+                'require_physical_hsm': defaults['require_physical_hsm'],
             }
             form = SecurityConfigForm(data=form_data, instance=instance)
             self.assertTrue(form.is_valid(), f"Form should be valid for mode {mode}")
