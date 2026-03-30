@@ -388,6 +388,7 @@ class TestSignerBulkDeleteConfirmView:
 
         signer = Mock()
         signer.unique_name = 'test-signer'
+        signer.__str__=Mock(return_value='test-signer')
 
         queryset = Mock()
         queryset.__iter__ = Mock(return_value=iter([signer]))
