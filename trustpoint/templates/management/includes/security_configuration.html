@@ -252,43 +252,71 @@
         applyStrictnessConstraints(securityLevel);
     }
 
-    function initSecurityUI() {
-        const securityModeRadios = document.querySelectorAll('input[name="security_mode"]');
-        if (securityModeRadios.length === 0) return;
+function initSecurityUI() {
+    const securityModeRadios = document.querySelectorAll('input[name="security_mode"]');
+    if (securityModeRadios.length === 0) return;
 
-        securityModeRadios.forEach(radio => {
-            radio.addEventListener('change', function (event) {
-                const previousMode = getCurrentSecurityMode();
-                const newMode = this.value;
+    // === NEW: tie algorithm visibility to auto_gen_pki checkbox ===
+    const autoCheckbox = document.querySelector('input[name="auto_gen_pki"]');
+    const algoField = document.querySelector('select[name="auto_gen_pki_key_algorithm"]');
+    const algoGroup = algoField
+        ? algoField.closest('.mb-3, .form-group, .tp-form-group')
+        : null;
 
-                if (previousMode !== null && previousMode !== newMode) {
-                    const oldIdx = securityModeOrder.indexOf(previousMode);
-                    const newIdx = securityModeOrder.indexOf(newMode);
-                    if (newIdx < oldIdx) {
-                        event.preventDefault();
-                        this.checked = false;
-                        const oldRadio = document.querySelector(
-                            `input[name="security_mode"][value="${previousMode}"]`
-                        );
-                        if (oldRadio) oldRadio.checked = true;
-                        return;
-                    }
-                }
-
-                updateSettingsTable(newMode);
-                // On mode change: reset to that mode defaults (one-time)
-                resetToDefaultsAndApplyConstraints(newMode);
-            });
-        });
-
-        const checkedRadio = document.querySelector('input[name="security_mode"]:checked');
-        if (checkedRadio) {
-            const currentMode = checkedRadio.value;
-            updateSettingsTable(currentMode);
-            // On initial load: only apply constraints, keep DB values
-            applyStrictnessConstraints(currentMode);
+    function updateAlgoVisibility() {
+        if (!algoGroup) return;
+        if (!autoCheckbox) {
+            // If checkbox is missing, always show the field
+            algoGroup.style.display = '';
+            return;
         }
+        algoGroup.style.display = autoCheckbox.checked ? '' : 'none';
     }
 
-    document.addEventListener('DOMContentLoaded', initSecurityUI);
+    if (autoCheckbox) {
+        autoCheckbox.addEventListener('change', updateAlgoVisibility);
+    }
+    updateAlgoVisibility();
+    // === END NEW ===
+
+    securityModeRadios.forEach(radio => {
+        radio.addEventListener('change', function (event) {
+            const previousMode = getCurrentSecurityMode();
+            const newMode = this.value;
+
+            if (previousMode !== null && previousMode !== newMode) {
+                const oldIdx = securityModeOrder.indexOf(previousMode);
+                const newIdx = securityModeOrder.indexOf(newMode);
+                if (newIdx < oldIdx) {
+                    event.preventDefault();
+                    this.checked = false;
+                    const oldRadio = document.querySelector(
+                        `input[name="security_mode"][value="${previousMode}"]`
+                    );
+                    if (oldRadio) oldRadio.checked = true;
+                    return;
+                }
+            }
+
+            updateSettingsTable(newMode);
+            // On mode change: reset to that mode defaults (one-time)
+            resetToDefaultsAndApplyConstraints(newMode);
+
+            // Re-evaluate algorithm visibility after mode-based checkbox changes
+            updateAlgoVisibility();
+        });
+    });
+
+    const checkedRadio = document.querySelector('input[name="security_mode"]:checked');
+    if (checkedRadio) {
+        const currentMode = checkedRadio.value;
+        updateSettingsTable(currentMode);
+        // On initial load: only apply constraints, keep DB values
+        applyStrictnessConstraints(currentMode);
+        // Ensure visibility matches initial auto_gen_pki value
+        updateAlgoVisibility();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', initSecurityUI);
 </script>
