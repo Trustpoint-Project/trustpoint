@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.hashes import SHA256
 from django.test import RequestFactory
 from django.urls import reverse
+from django.http import HttpResponse
 from trustpoint_core.serializer import CertificateSerializer, CredentialSerializer, PrivateKeySerializer
 
 from management.models import KeyStorageConfig
@@ -314,6 +315,25 @@ class TestSignerBulkDeleteConfirmView:
         """Test view has correct success URL."""
         view = SignerBulkDeleteConfirmView()
         assert view.success_url == reverse('signer:signer_list')
+
+    @patch('signer.views.messages.error')
+    def test_get_redirects_with_error_when_no_signers_selected(self, mock_messages_error):
+        """Test get redirects with error message when no signers are selected."""
+        factory = RequestFactory()
+        request = factory.get('/signer/delete/')
+
+        view = SignerBulkDeleteConfirmView()
+        view.request = request
+
+        queryset = Mock()
+        queryset.exists.return_value = False
+        view.get_queryset = Mock(return_value=queryset)
+
+        response = view.get(request)
+
+        assert response.status_code == 302
+        assert response.url == reverse('signer:signer_list')
+        mock_messages_error.assert_called_once()
 
 
 @pytest.mark.django_db
