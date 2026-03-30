@@ -211,7 +211,7 @@ class TestSignerAddFileImportPkcs12View:
 
         form = Mock()
         form.cleaned_data = {'unique_name': 'test-signer'}
-        form.save.return_value = signer
+        form.create_signer = signer
 
         response = view.form_valid(form)
 
