@@ -394,6 +394,7 @@ class TestSignerBulkDeleteConfirmView:
         queryset.delete = Mock()
 
         view.get_queryset = Mock(return_value=queryset)
+        view.queryset = queryset
 
         form = Mock()
 
