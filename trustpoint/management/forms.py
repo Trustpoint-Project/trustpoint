@@ -33,6 +33,7 @@ from management.models import (
 )
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
+from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
 from pki.models import CredentialModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from pki.util.x509 import CertificateVerifier
@@ -85,6 +86,16 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 _('Advanced security settings'),
                 Field('auto_gen_pki', wrapper_class='form-check form-switch'),
                 'auto_gen_pki_key_algorithm',
+                # Add all the new fields below so they render in the UI
+                'rsa_minimum_key_size',
+                'max_cert_validity_days',
+                'max_crl_validity_days',
+                Field('allow_ca_issuance', wrapper_class='form-check form-switch'),
+                Field('allow_auto_gen_pki', wrapper_class='form-check form-switch'),
+                Field('allow_self_signed_ca', wrapper_class='form-check form-switch'),
+                Field('require_physical_hsm', wrapper_class='form-check form-switch'),
+                'permitted_no_onboarding_pki_protocols',
+                'permitted_onboarding_protocols'
             ),
         )
 
@@ -113,10 +124,33 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         widget=forms.Select(attrs={'data-hide-at-sl': '[false, false, true, true, true]'}),
     )
 
+    RSA_KEY_CHOICES = [
+        ('', _('None / Not Permitted')),
+        (1024, '1024'), (2048, '2048'), (3072, '3072'), (4096, '4096'), (8192, '8192')
+    ]
+    rsa_minimum_key_size = forms.ChoiceField(
+        choices=RSA_KEY_CHOICES, required=False, widget=forms.Select()
+    )
+
+    permitted_no_onboarding_pki_protocols = forms.MultipleChoiceField(
+        choices=[(c.value, c.label) for c in NoOnboardingPkiProtocol],
+        widget=forms.CheckboxSelectMultiple, required=False
+    )
+    permitted_onboarding_protocols = forms.MultipleChoiceField(
+        choices=[(c.value, c.label) for c in OnboardingProtocol],
+        widget=forms.CheckboxSelectMultiple, required=False
+    )
+
     class Meta:
         """Meta configuration for SecurityConfigForm."""
         model = SecurityConfig
-        fields: ClassVar[list[str]] = ['security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm']
+        fields = [
+            'security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm',
+            'rsa_minimum_key_size', 'max_cert_validity_days', 'max_crl_validity_days',
+            'allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca',
+            'require_physical_hsm', 'permitted_no_onboarding_pki_protocols',
+            'permitted_onboarding_protocols'
+        ]
 
     def clean_auto_gen_pki_key_algorithm(self) -> AutoGenPkiKeyAlgorithm:
         """Keep the current value of `auto_gen_pki_key_algorithm` from the instance if the field was disabled."""
@@ -128,23 +162,31 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         return AutoGenPkiKeyAlgorithm(form_value)
 
     def clean(self) -> dict[str, Any]:
-        """Validate that existing data complies with the target security mode."""
-        cleaned_data = cast('dict[str, Any]', super().clean())
-        new_mode = cleaned_data.get('security_mode')
-        if not new_mode or not self.instance or not self.instance.pk:
-            return cleaned_data
+        cleaned_data = super().clean()
+        mode = cleaned_data.get('security_mode')
 
-        old_mode = self.instance.security_mode
-        # Only validate when moving to a strictly higher (stricter) level.
-        if int(new_mode) <= int(old_mode):
-            return cleaned_data
+        # Enforce limits if not in Lab / Custom mode
+        if mode != SecurityConfig.SecurityModeChoices.LAB:
+            defaults = SecurityConfig._MODE_DEFAULTS[mode]
 
-        violations = self.instance.check_mode_transition(new_mode)
-        if violations:
-            self._violations = violations
-            self._violations_mode_label = SecurityConfig.SecurityModeChoices(new_mode).label
-            msg = ''
-            raise ValidationError(msg, code='policy_violation')
+            # Numeric: Custom must be <= Default (max valid days)
+            for field in ['max_cert_validity_days', 'max_crl_validity_days']:
+                val = cleaned_data.get(field)
+                default_val = defaults.get(field)
+                if default_val is not None and (val is None or val > default_val):
+                    self.add_error(field, f"Maximum allowed for this level is {default_val}.")
+
+            # Minimums: Custom must be >= Default (RSA size)
+            rsa_val = int(cleaned_data.get('rsa_minimum_key_size') or 0)
+            default_rsa = defaults.get('rsa_minimum_key_size')
+            if default_rsa is not None and rsa_val < default_rsa:
+                self.add_error('rsa_minimum_key_size', f"Minimum key size for this level is {default_rsa}.")
+
+            # Booleans: Cannot enable if default is False
+            for field in ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca']:
+                if not defaults.get(field) and cleaned_data.get(field):
+                    self.add_error(field, "This feature cannot be enabled at this security level.")
+
         return cleaned_data
 
 

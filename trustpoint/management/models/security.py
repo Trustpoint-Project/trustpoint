@@ -60,7 +60,7 @@ class SecurityConfig(models.Model):
     class SecurityModeChoices(models.TextChoices):
         """Types of security modes."""
 
-        LAB = '0', _('Lab / Development')
+        LAB = '0', _('Lab / Custom')
         BROWNFIELD = '1', _('Brownfield Compatible')
         INDUSTRIAL = '2', _('Industrial Standard')
         HARDENED = '3', _('Hardened Production')
@@ -399,6 +399,8 @@ class SecurityConfig(models.Model):
                     onboarding_labels.get(v, str(v))
                     for v in defaults['permitted_onboarding_protocols']
                 ],
+                'raw_permitted_no_onboarding_pki_protocols': defaults['permitted_no_onboarding_pki_protocols'],
+                'raw_permitted_onboarding_protocols': defaults['permitted_onboarding_protocols'],
             }
         return json.dumps(preview)
 

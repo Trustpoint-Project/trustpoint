@@ -44,22 +44,6 @@
                 </div>
             </div>
 
-            <div>
-                <table id="security-settings-table" class="table">
-                    <colgroup>
-                        <col style="width: 40%;">
-                        <col style="width: 60%;">
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th>{% trans 'Setting' %}</th>
-                            <th>{% trans 'Value' %}</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
-
             <div id="mismatch_warning" class="alert alert-warning tp-d-none mt-3" role="alert">
                 <div class="d-flex align-items-center">
                     <svg class="bi flex-shrink-0 me-2" width="24" height="24" fill="currentColor" role="img" aria-label="State: ">
@@ -79,13 +63,24 @@
 
 <script src="{% static 'js/settings.js' %}"></script>
 <script type="text/javascript">
+    // Built from SecurityConfig.get_settings_preview_json()
     const securityConfigurations = {{ notification_configurations_json|safe }};
+
+    // 0 < 1 < 2 < 3 < 4
+    const securityModeOrder = ['0', '1', '2', '3', '4'];
+
+    function getCurrentSecurityMode() {
+        const checked = document.querySelector('input[name="security_mode"]:checked');
+        return checked ? checked.value : null;
+    }
 
     function updateSettingsTable(securityLevel) {
         const settings = securityConfigurations[securityLevel] || {};
         const tableBody = document.querySelector("#security-settings-table tbody");
+        if (!tableBody) return;
         tableBody.innerHTML = "";
         for (const [key, value] of Object.entries(settings)) {
+            if (key.startsWith('raw_')) continue;
             const row = document.createElement("tr");
             const settingCell = document.createElement("td");
             settingCell.textContent = key.replace(/_/g, " ").replace(/\b\w/g, char => char.toUpperCase());
@@ -97,14 +92,203 @@
         }
     }
 
-    document.addEventListener('DOMContentLoaded', function () {
-        const securityModeRadios = document.querySelectorAll('input[name="security_mode"]');
-        if (securityModeRadios) {
-            securityModeRadios.forEach(function (radio) {
-                radio.addEventListener('change', function () { updateSettingsTable(this.value); });
+    /**
+     * Apply constraints only (max, disabling, hiding), without changing values.
+     * Use this on initial load so DB values are preserved.
+     */
+    function applyStrictnessConstraints(securityLevel) {
+        const settings = securityConfigurations[securityLevel] || {};
+        const isLab = securityLevel === '0';
+
+        try {
+            ['max_cert_validity_days', 'max_crl_validity_days'].forEach(field => {
+                const input = document.querySelector(`input[name="${field}"]`);
+                if (!input) return;
+                const limit = settings[field];
+                if (isLab || limit === null) {
+                    input.removeAttribute('max');
+                } else {
+                    input.max = limit;
+                    const numVal = parseInt(input.value);
+                    if (input.value && !Number.isNaN(numVal) && numVal > limit) {
+                        input.value = limit;
+                    }
+                }
             });
-            const checkedRadio = document.querySelector('input[name="security_mode"]:checked');
-            if (checkedRadio) updateSettingsTable(checkedRadio.value);
+        } catch (e) { console.error(e); }
+
+        try {
+            const rsaSelect = document.querySelector('select[name="rsa_minimum_key_size"]');
+            if (rsaSelect) {
+                const defaultRsa = settings['rsa_minimum_key_size'];
+                Array.from(rsaSelect.options).forEach(opt => {
+                    if (isLab) {
+                        opt.disabled = false;
+                        opt.style.display = '';
+                    } else if (defaultRsa === null) {
+                        if (opt.value === '') {
+                            opt.disabled = false;
+                            opt.style.display = '';
+                        } else {
+                            opt.disabled = true;
+                            opt.style.display = 'none';
+                        }
+                    } else {
+                        if (opt.value === '') {
+                            opt.disabled = true;
+                            opt.style.display = 'none';
+                        } else {
+                            const optVal = parseInt(opt.value);
+                            const allowed = optVal >= defaultRsa;
+                            opt.disabled = !allowed;
+                            opt.style.display = allowed ? '' : 'none';
+                        }
+                    }
+                });
+                const selected = rsaSelect.selectedOptions[0];
+                if (selected && selected.disabled) {
+                    rsaSelect.value = defaultRsa === null ? '' : defaultRsa;
+                }
+            }
+        } catch (e) { console.error(e); }
+
+        try {
+            ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca', 'require_physical_hsm']
+                .forEach(field => {
+                    const checkbox = document.querySelector(`input[name="${field}"]`);
+                    if (!checkbox) return;
+                    const defaultVal = settings[field];
+                    if (isLab) {
+                        checkbox.disabled = false;
+                    } else {
+                        if (field.startsWith('allow_') && defaultVal === false) {
+                            checkbox.checked = false;
+                            checkbox.disabled = true;
+                        } else if (field.startsWith('require_') && defaultVal === true) {
+                            checkbox.checked = true;
+                            checkbox.disabled = true;
+                        } else {
+                            checkbox.disabled = false;
+                        }
+                    }
+                });
+        } catch (e) { console.error(e); }
+
+        try {
+            const applyProtocolConstraints = (fieldName, rawKey) => {
+                const rawAllowed = settings[rawKey] || [];
+                document.querySelectorAll(`input[name="${fieldName}"]`).forEach(cb => {
+                    const val = parseInt(cb.value);
+                    const allowedByDefault = rawAllowed.includes(val);
+                    const wrapper = cb.closest('div.form-check') || cb.parentElement;
+                    if (isLab) {
+                        cb.disabled = false;
+                        if (wrapper) wrapper.style.display = '';
+                    } else {
+                        if (!allowedByDefault) {
+                            cb.checked = false;
+                            cb.disabled = true;
+                            if (wrapper) wrapper.style.display = 'none';
+                        } else {
+                            cb.disabled = false;
+                            if (wrapper) wrapper.style.display = '';
+                        }
+                    }
+                });
+            };
+            applyProtocolConstraints('permitted_no_onboarding_pki_protocols', 'raw_permitted_no_onboarding_pki_protocols');
+            applyProtocolConstraints('permitted_onboarding_protocols', 'raw_permitted_onboarding_protocols');
+        } catch (e) { console.error(e); }
+    }
+
+    /**
+     * Reset values to mode defaults (one-time) AND apply constraints.
+     * Use this only when user actually changes the mode.
+     */
+    function resetToDefaultsAndApplyConstraints(securityLevel) {
+        const settings = securityConfigurations[securityLevel] || {};
+        const isLab = securityLevel === '0';
+
+        try {
+            ['max_cert_validity_days', 'max_crl_validity_days'].forEach(field => {
+                const input = document.querySelector(`input[name="${field}"]`);
+                if (!input) return;
+                const val = settings[field];
+                input.value = (val === null || val === undefined) ? '' : val;
+            });
+        } catch (e) { console.error(e); }
+
+        try {
+            const rsaSelect = document.querySelector('select[name="rsa_minimum_key_size"]');
+            if (rsaSelect) {
+                const defaultRsa = settings['rsa_minimum_key_size'];
+                rsaSelect.value = defaultRsa === null ? '' : defaultRsa;
+            }
+        } catch (e) { console.error(e); }
+
+        try {
+            ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca', 'require_physical_hsm']
+                .forEach(field => {
+                    const checkbox = document.querySelector(`input[name="${field}"]`);
+                    if (!checkbox) return;
+                    const val = settings[field];
+                    checkbox.checked = !!val;
+                });
+        } catch (e) { console.error(e); }
+
+        try {
+            const resetProtocols = (fieldName, rawKey) => {
+                const rawAllowed = settings[rawKey] || [];
+                document.querySelectorAll(`input[name="${fieldName}"]`).forEach(cb => {
+                    const val = parseInt(cb.value);
+                    cb.checked = rawAllowed.includes(val);
+                });
+            };
+            resetProtocols('permitted_no_onboarding_pki_protocols', 'raw_permitted_no_onboarding_pki_protocols');
+            resetProtocols('permitted_onboarding_protocols', 'raw_permitted_onboarding_protocols');
+        } catch (e) { console.error(e); }
+
+        // Now enforce constraints on top
+        applyStrictnessConstraints(securityLevel);
+    }
+
+    function initSecurityUI() {
+        const securityModeRadios = document.querySelectorAll('input[name="security_mode"]');
+        if (securityModeRadios.length === 0) return;
+
+        securityModeRadios.forEach(radio => {
+            radio.addEventListener('change', function (event) {
+                const previousMode = getCurrentSecurityMode();
+                const newMode = this.value;
+
+                if (previousMode !== null && previousMode !== newMode) {
+                    const oldIdx = securityModeOrder.indexOf(previousMode);
+                    const newIdx = securityModeOrder.indexOf(newMode);
+                    if (newIdx < oldIdx) {
+                        event.preventDefault();
+                        this.checked = false;
+                        const oldRadio = document.querySelector(
+                            `input[name="security_mode"][value="${previousMode}"]`
+                        );
+                        if (oldRadio) oldRadio.checked = true;
+                        return;
+                    }
+                }
+
+                updateSettingsTable(newMode);
+                // On mode change: reset to that mode defaults (one-time)
+                resetToDefaultsAndApplyConstraints(newMode);
+            });
+        });
+
+        const checkedRadio = document.querySelector('input[name="security_mode"]:checked');
+        if (checkedRadio) {
+            const currentMode = checkedRadio.value;
+            updateSettingsTable(currentMode);
+            // On initial load: only apply constraints, keep DB values
+            applyStrictnessConstraints(currentMode);
         }
-    });
+    }
+
+    document.addEventListener('DOMContentLoaded', initSecurityUI);
 </script>
