@@ -240,6 +240,36 @@ class TestSignerAddFileImportSeparateFilesView:
         view = SignerAddFileImportSeparateFilesView()
         assert view.success_url == reverse('signer:signer_list')
 
+    @patch('signer.views.AuditLog.create_entry')
+    def test_form_valid_creates_audit_log(self, mock_create_entry):
+        """Test form_valid creates an audit log entry."""
+        factory = RequestFactory()
+        request = factory.post('/signer/add/file-import/separate-files/')
+        request.user = Mock(is_authenticated=True)
+        request._messages = Mock()
+
+        view = SignerAddFileImportSeparateFilesView()
+        view.request = request
+
+        signer = Mock()
+        signer.unique_name = 'test-signer'
+
+        form = Mock()
+        form.cleaned_data = {'unique_name': 'test-signer'}
+        form.create_signer.return_value = signer
+        form.created_signer = signer
+
+        response = view.form_valid(form)
+
+        assert response.status_code == 302
+        mock_create_entry.assert_called_once()
+
+        _, kwargs = mock_create_entry.call_args
+        assert kwargs['operation_type'] == 'SIGNER_ADDED'
+        assert kwargs['target'] == signer
+        assert kwargs['target_display'] == 'Signer: test-signer'
+        assert kwargs['actor'] == request.user
+
 
 @pytest.mark.django_db
 class TestSignerConfigView:
