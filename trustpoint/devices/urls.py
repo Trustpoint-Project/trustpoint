@@ -35,7 +35,7 @@ urlpatterns = [
     path(
         'new-onboarding/',
         views.DeviceCreateAddOnboardingTypeView.as_view(),
-        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_new_onboarding'
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_new_onboarding',
     ),
     path(
         'opc-ua-gds/create/',
@@ -110,6 +110,11 @@ urlpatterns = [
         'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/cmp-shared-secret/',
         devices_help_views.DeviceNoOnboardingCmpSharedSecretHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_cmp_shared_secret_help',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/revoke/cmp/',
+        devices_help_views.DeviceCmpRevokeHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_revoke_cmp_help',
     ),
     path(
         (
