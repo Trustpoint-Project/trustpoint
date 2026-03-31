@@ -8,7 +8,6 @@ from devices.models import DeviceModel
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from management.models import NotificationModel, NotificationStatus
-from pki.models import IssuedCredentialModel
 
 new_status, created = NotificationStatus.objects.get_or_create(status='NEW')
 
