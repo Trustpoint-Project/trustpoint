@@ -36,6 +36,7 @@ from pki.models.ca import CaModel
 from pki.models.certificate import CertificateModel
 from pki.models.credential import OwnerCredentialModel
 from trustpoint.page_context import (
+    DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_CATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
@@ -462,6 +463,19 @@ class DeviceCertificateLifecycleManagementSummaryView(AbstractCertificateLifecyc
     """Certificate Lifecycle Management Summary View for devices."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    _AGENT_DEVICE_TYPES = (
+        DeviceModel.DeviceType.AGENT_ONE_TO_ONE,
+        DeviceModel.DeviceType.AGENT_ONE_TO_N,
+        DeviceModel.DeviceType.AGENT_MANAGED_DEVICE,
+    )
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Override page_name in context for agent devices so the sidebar highlights 'Agents'."""
+        context = super().get_context_data(**kwargs)
+        if self.object.device_type in self._AGENT_DEVICE_TYPES:
+            context['page_name'] = DEVICES_PAGE_AGENTS_SUBCATEGORY
+        return context
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
         """Redirect OPC UA GDS Push devices to their specific view if GDS Push is the only protocol."""

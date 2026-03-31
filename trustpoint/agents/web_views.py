@@ -16,6 +16,7 @@ from django.views.generic import FormView, ListView, UpdateView
 
 from agents.models import AgentAssignedProfile, AgentWorkflowDefinition, TrustpointAgent
 from trustpoint.logger import LoggerMixin
+from trustpoint.page_context import DEVICES_PAGE_AGENTS_SUBCATEGORY, DEVICES_PAGE_CATEGORY, PageContextMixin
 from trustpoint.views.base import BulkDeleteView
 
 if TYPE_CHECKING:
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     from devices.models import DeviceModel
 
 
-class AgentWorkflowDefinitionTableView(LoggerMixin, ListView[AgentWorkflowDefinition]):
+class AgentWorkflowDefinitionTableView(PageContextMixin, LoggerMixin, ListView[AgentWorkflowDefinition]):
     """View to list all Agent Workflow Definitions."""
 
     http_method_names = ('get',)
@@ -32,13 +33,15 @@ class AgentWorkflowDefinitionTableView(LoggerMixin, ListView[AgentWorkflowDefini
     template_name = 'agents/profiles/list.html'
     context_object_name = 'profiles'
     paginate_by = 25
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def get_queryset(self) -> QuerySet[AgentWorkflowDefinition]:
         """Return all workflow definitions ordered by name."""
         return AgentWorkflowDefinition.objects.all().order_by('name')
 
 
-class AgentWorkflowDefinitionConfigView(LoggerMixin, UpdateView[AgentWorkflowDefinition, Any]):
+class AgentWorkflowDefinitionConfigView(PageContextMixin, LoggerMixin, UpdateView[AgentWorkflowDefinition, Any]):
     """View to display and edit an Agent Workflow Definition."""
 
     http_method_names = ('get', 'post')
@@ -46,6 +49,8 @@ class AgentWorkflowDefinitionConfigView(LoggerMixin, UpdateView[AgentWorkflowDef
     success_url = reverse_lazy('agents:profiles')
     template_name = 'agents/profiles/config.html'
     context_object_name = 'profile'
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
     fields: ClassVar[list[str]] = [  # type: ignore[misc]
         'name',
         'profile',
@@ -177,7 +182,7 @@ class AgentWorkflowDefinitionConfigView(LoggerMixin, UpdateView[AgentWorkflowDef
         return super().form_valid(form)
 
 
-class AgentWorkflowDefinitionBulkDeleteConfirmView(BulkDeleteView):
+class AgentWorkflowDefinitionBulkDeleteConfirmView(PageContextMixin, BulkDeleteView):
     """View to confirm the deletion of multiple workflow definitions."""
 
     model = AgentWorkflowDefinition
@@ -186,6 +191,8 @@ class AgentWorkflowDefinitionBulkDeleteConfirmView(BulkDeleteView):
     template_name = 'agents/profiles/confirm_delete.html'
     context_object_name = 'profiles'
     queryset: QuerySet[AgentWorkflowDefinition]
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def get(
         self, request: HttpRequest, *args: Any, **kwargs: Any
@@ -212,13 +219,15 @@ class AgentWorkflowDefinitionBulkDeleteConfirmView(BulkDeleteView):
         return response
 
 
-class AgentManagedDeviceTableView(LoggerMixin, ListView['DeviceModel']):
+class AgentManagedDeviceTableView(PageContextMixin, LoggerMixin, ListView['DeviceModel']):
     """List all AGENT_MANAGED_DEVICE devices in the same domain as a 1-to-n agent's device."""
 
     http_method_names: ClassVar[list[str]] = ['get']  # type: ignore[misc]
     template_name = 'agents/targets/list.html'
     context_object_name = 'devices'
     paginate_by = 25
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def _get_agent(self) -> TrustpointAgent:
         """Return the 1-to-n agent identified by the URL kwarg, or 404."""
@@ -268,12 +277,14 @@ class ManagedDeviceCreateForm(forms.Form):
     )
 
 
-class AgentManagedDeviceCreateView(LoggerMixin, FormView[ManagedDeviceCreateForm]):
+class AgentManagedDeviceCreateView(PageContextMixin, LoggerMixin, FormView[ManagedDeviceCreateForm]):
     """Create a new AGENT_MANAGED_DEVICE record under a 1-to-n agent."""
 
     http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
     template_name = 'agents/targets/create.html'
     form_class = ManagedDeviceCreateForm
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def _get_agent(self) -> TrustpointAgent:
         """Return the 1-to-n agent, or 404."""
@@ -339,11 +350,13 @@ class AgentManagedDeviceCreateView(LoggerMixin, FormView[ManagedDeviceCreateForm
         return HttpResponseRedirect(self.get_success_url())
 
 
-class AgentManagedDeviceDeleteView(BulkDeleteView):
+class AgentManagedDeviceDeleteView(PageContextMixin, BulkDeleteView):
     """Confirm and bulk-delete AGENT_MANAGED_DEVICE records."""
 
     template_name = 'agents/targets/confirm_delete.html'
     context_object_name = 'devices'
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     @property
     def model(self) -> type[DeviceModel]:  # type: ignore[override]
@@ -403,13 +416,15 @@ class AgentAssignedProfileForm(forms.ModelForm[AgentAssignedProfile]):
             field.queryset = AgentWorkflowDefinition.objects.filter(is_active=True).order_by('name')
 
 
-class AgentAssignedProfileTableView(LoggerMixin, ListView[AgentAssignedProfile]):
+class AgentAssignedProfileTableView(PageContextMixin, LoggerMixin, ListView[AgentAssignedProfile]):
     """List all workflow profiles assigned to a specific 1-to-1 agent."""
 
     http_method_names: ClassVar[list[str]] = ['get']  # type: ignore[misc]
     template_name = 'agents/assigned_profiles/list.html'
     context_object_name = 'assigned_profiles'
     paginate_by = 25
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def get_queryset(self) -> QuerySet[AgentAssignedProfile]:
         """Return assigned profiles for the agent, newest first."""
@@ -427,12 +442,14 @@ class AgentAssignedProfileTableView(LoggerMixin, ListView[AgentAssignedProfile])
         return context
 
 
-class AgentAssignedProfileCreateView(LoggerMixin, FormView[AgentAssignedProfileForm]):
+class AgentAssignedProfileCreateView(PageContextMixin, LoggerMixin, FormView[AgentAssignedProfileForm]):
     """Assign a new workflow profile to a 1-to-1 agent."""
 
     http_method_names: ClassVar[list[str]] = ['get', 'post']  # type: ignore[misc]
     template_name = 'agents/assigned_profiles/create.html'
     form_class = AgentAssignedProfileForm
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def _get_agent(self) -> TrustpointAgent:
         """Return the agent identified by the URL kwarg, or 404."""
@@ -467,12 +484,14 @@ class AgentAssignedProfileCreateView(LoggerMixin, FormView[AgentAssignedProfileF
         return HttpResponseRedirect(self.get_success_url())
 
 
-class AgentAssignedProfileDeleteView(BulkDeleteView):
+class AgentAssignedProfileDeleteView(PageContextMixin, BulkDeleteView):
     """Confirm and execute bulk deletion of AgentAssignedProfile records."""
 
     model = AgentAssignedProfile
     template_name = 'agents/assigned_profiles/confirm_delete.html'
     context_object_name = 'assigned_profiles'
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_AGENTS_SUBCATEGORY
 
     def get_success_url(self) -> str:
         """Return to the assigned-profiles list after deletion."""

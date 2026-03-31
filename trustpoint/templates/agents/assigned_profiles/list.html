@@ -30,7 +30,11 @@
                         <td class="row_checkbox">
                             <input type="checkbox" name="row_checkbox" value="{{ assignment.pk }}"/>
                         </td>
-                        <td>{{ assignment.workflow_definition.name }}</td>
+                        <td>
+                            <a href="{% url 'agents:profiles-config' pk=assignment.workflow_definition.pk %}">
+                                {{ assignment.workflow_definition.name }}
+                            </a>
+                        </td>
                         <td>{{ assignment.renewal_threshold_days }}</td>
                         <td>
                             {% if assignment.last_certificate_update %}
