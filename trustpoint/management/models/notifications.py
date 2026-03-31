@@ -174,6 +174,8 @@ class NotificationModel(models.Model):
         WEAK_SIGNATURE_ALGORITHM = 'WEAK_SIG_ALGO'
         INSUFFICIENT_KEY_LENGTH = 'INSUFF_KEY_LEN'
         WEAK_ECC_CURVE = 'WEAK_ECC_CURVE'
+        CRL_EXPIRING = 'CRL_EXPIRING'
+        CRL_EXPIRED = 'CRL_EXPIRED'
 
         def get_message(self) -> NotificationMessage:
             """Returns the message for the given type.
@@ -284,6 +286,17 @@ class NotificationModel(models.Model):
                     _(
                         'The certificate {common_name} is using the {spki_ec_curve} ECC curve, '
                         'which is no longer recommended.'
+                    ),
+                ),
+                self.CRL_EXPIRING: NotificationMessage(
+                    _('CRL for CA {ca_name} is expiring soon'),
+                    _('The CRL for CA {ca_name} will expire on {next_update}. A new CRL should be generated.'),
+                ),
+                self.CRL_EXPIRED: NotificationMessage(
+                    _('CRL for CA {ca_name} has expired'),
+                    _(
+                        'The CRL for CA {ca_name} expired on {next_update}. '
+                        'Devices may no longer be able to verify revocation status.'
                     ),
                 ),
             }
@@ -483,6 +496,11 @@ class NotificationConfig(models.Model):
     issuing_ca_expiry_warning_days = models.PositiveIntegerField(
         default=30,
         help_text=_("Number of days before an issuing CA's certificate expiration to trigger a warning.")
+    )
+
+    crl_expiry_warning_days = models.PositiveIntegerField(
+        default=7,
+        help_text=_("Number of days before a CRL's expiration to trigger a 'CRL Expiring' warning.")
     )
 
     class Meta:

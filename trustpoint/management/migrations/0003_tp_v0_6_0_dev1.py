@@ -22,6 +22,16 @@ class Migration(migrations.Migration):
                 ('last_updated', models.DateTimeField(auto_now=True)),
             ],
         ),
+        migrations.AddField(
+            model_name='notificationconfig',
+            name='crl_expiry_warning_days',
+            field=models.PositiveIntegerField(default=7, help_text="Number of days before a CRL's expiration to trigger a 'CRL Expiring' warning."),
+        ),
+        migrations.AlterField(
+            model_name='notificationmodel',
+            name='message_type',
+            field=models.CharField(choices=[('C', 'custom'), ('TEST_CA', 'Issuing Ca Test'), ('TEST_DOMAIN', 'Domain Test'), ('TEST_CERT', 'Cert Test'), ('TEST_DEVICE', 'Device Test'), ('POP_TEST_DATA', 'Welcome Populate Test Data'), ('TP_DOCS', 'Trustpoint Documentation'), ('TP_INFO', 'Trustpoint Project Info'), ('WELCOME', 'Welcome Message'), ('SYS_NOT_HEALTHY', 'System Not Healthy'), ('VULNERABILITY', 'Vulnerability'), ('CERT_EXPIRING', 'Cert Expiring'), ('CERT_EXPIRED', 'Cert Expired'), ('CA_EXPIRING', 'Issuing Ca Expiring'), ('CA_EXPIRED', 'Issuing Ca Expired'), ('DOMAIN_NO_CA', 'Domain No Issuing Ca'), ('DEV_NOT_ONBRD', 'Device Not Onboarded'), ('DEV_ONBRD_FAIL', 'Device Onboarding Failed'), ('DEV_CERT_REV', 'Device Cert Revoked'), ('WEAK_SIG_ALGO', 'Weak Signature Algorithm'), ('INSUFF_KEY_LEN', 'Insufficient Key Length'), ('WEAK_ECC_CURVE', 'Weak Ecc Curve'), ('CRL_EXPIRING', 'Crl Expiring'), ('CRL_EXPIRED', 'Crl Expired')], default='C', max_length=32),
+        ),
         migrations.AlterField(
             model_name='securityconfig',
             name='permitted_no_onboarding_pki_protocols',
