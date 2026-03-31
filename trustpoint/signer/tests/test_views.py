@@ -8,7 +8,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.hashes import SHA256
 from django.test import RequestFactory
 from django.urls import reverse
-from django.http import HttpResponse
 from trustpoint_core.serializer import CertificateSerializer, CredentialSerializer, PrivateKeySerializer
 
 from management.models import KeyStorageConfig
