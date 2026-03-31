@@ -31,7 +31,7 @@ class RestEnrollView(LoggerMixin, View):
         self.logger.info('REST enroll request received: method=%s path=%s', request.method, request.path)
 
         domain_name = cast('str', kwargs.get('domain'))
-        cert_profile = cast('str', kwargs.get('cert_profile', 'domain_credential'))
+        cert_profile = cast('str | None', kwargs.get('cert_profile'))
 
         try:
             ctx = RestCertificateRequestContext(

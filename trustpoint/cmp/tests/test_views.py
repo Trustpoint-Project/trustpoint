@@ -121,7 +121,7 @@ class TestCmpInitializationRequestView:
         assert call_kwargs['domain_str'] == 'test_domain'
         assert call_kwargs['protocol'] == 'cmp'
         assert call_kwargs['operation'] == None
-        assert call_kwargs['cert_profile_str'] == 'domain_credential'
+        assert call_kwargs['cert_profile_str'] is None
         
         # Verify all processors were called
         mock_validator_cls.return_value.validate.assert_called_once()
@@ -255,7 +255,7 @@ class TestCmpCertificationRequestView:
         assert call_kwargs['domain_str'] == 'test_domain'
         assert call_kwargs['protocol'] == 'cmp'
         assert call_kwargs['operation'] == None
-        assert call_kwargs['cert_profile_str'] == 'domain_credential'  # Default for certification should be 'tls_client'? # TODO: better automatic cert profile selection
+        assert call_kwargs['cert_profile_str'] is None  # Resolved later by CertProfileParsing from domain
         
         # Verify all processors were called
         mock_validator_cls.return_value.validate.assert_called_once()

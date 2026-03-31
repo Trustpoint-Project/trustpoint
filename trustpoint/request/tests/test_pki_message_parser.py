@@ -426,6 +426,7 @@ class TestCertProfileParsing:
         """Test parsing with missing certificate template."""
         mock_context = Mock(spec=BaseCertificateRequestContext)
         mock_context.cert_profile_str = None
+        mock_context.domain = None
 
         parser = CertProfileParsing()
 
@@ -434,6 +435,34 @@ class TestCertProfileParsing:
             assert False, 'Expected ValueError to be raised'
         except ValueError as e:
             assert 'Certificate profile is missing in the request context.' in str(e)
+
+    def test_parse_resolves_cert_profile_from_domain(self):
+        """Test that cert profile is resolved from domain when not explicitly set."""
+        mock_domain = Mock()
+        mock_domain.get_domain_credential_profile_name.return_value = 'custom_domain_credential'
+
+        mock_context = Mock(spec=BaseCertificateRequestContext)
+        mock_context.cert_profile_str = None
+        mock_context.domain = mock_domain
+
+        parser = CertProfileParsing()
+        parser.parse(mock_context)
+
+        assert mock_context.cert_profile_str == 'custom_domain_credential'
+
+    def test_parse_resolves_default_domain_credential_from_domain(self):
+        """Test that cert profile defaults to 'domain_credential' when domain has no custom profile."""
+        mock_domain = Mock()
+        mock_domain.get_domain_credential_profile_name.return_value = 'domain_credential'
+
+        mock_context = Mock(spec=BaseCertificateRequestContext)
+        mock_context.cert_profile_str = None
+        mock_context.domain = mock_domain
+
+        parser = CertProfileParsing()
+        parser.parse(mock_context)
+
+        assert mock_context.cert_profile_str == 'domain_credential'
 
 
 class TestCmpPkiMessageParsing:
