@@ -1,0 +1,49 @@
+{
+    "type": "agent_profile",
+    "name": "WBM Generic",
+    "profile": {
+        "metadata": {
+            "agent_type": "1-to-n",
+            "version": "1.0",
+            "description": "Generic WBM workflow for pushing an application certificate to a managed device via its Web-Based Management interface."
+        },
+        "device": {
+            "vendor": "Generic",
+            "device_family": "WBM Device",
+            "firmware": "1.0"
+        },
+        "certificate_request": {
+            "certificate_profile": "default",
+            "url": "{{ endpoint }}",
+            "path": "{{ path }}"
+        },
+        "steps": [
+            {
+                "type": "goto",
+                "url": "https://device.example.com"
+            },
+            {
+                "type": "fill",
+                "selector": "#username",
+                "value": "admin"
+            },
+            {
+                "type": "fill",
+                "selector": "#password",
+                "value": "password"
+            },
+            {
+                "type": "click",
+                "selector": "#login-button"
+            },
+            {
+                "type": "waitFor",
+                "selector": ".dashboard",
+                "timeout_ms": 5000
+            },
+            {
+                "type": "screenshot"
+            }
+        ]
+    }
+}

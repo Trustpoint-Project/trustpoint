@@ -5,14 +5,15 @@ from __future__ import annotations
 import ipaddress
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Any, override
 
 from cryptography import x509
 from django.contrib import messages
 from django.core.management import call_command
-from django.http import FileResponse, Http404, HttpResponseRedirect
+from django.http import FileResponse, Http404, HttpResponse, HttpResponseRedirect
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import format_html
 from django.utils.safestring import SafeString
 from django.utils.translation import gettext as _non_lazy
 from django.utils.translation import gettext_lazy as _
@@ -812,14 +813,14 @@ class NoOnboardingRestUsernamePasswordStrategy(HelpPageStrategy):
         domain_name = help_context.domain_unique_name
 
         def _get_enroll_path(cert_profile_name: str) -> str:
-            return f'{host_base}/.well-known/rest/{domain_name}/{cert_profile_name}/enroll/'
+            return f'{host_base}/rest/{domain_name}/{cert_profile_name}/enroll/'
 
         summary = HelpSection(
             _non_lazy('Summary'),
             [
                 HelpRow(
                     _non_lazy('Certificate Enrollment URL'),
-                    f'{host_base}/.well-known/rest/{domain_name}/<certificate_profile>/enroll/',
+                    f'{host_base}/rest/{domain_name}/<certificate_profile>/enroll/',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -1020,22 +1021,22 @@ class ApplicationCertificateWithRestDomainCredentialStrategy(HelpPageStrategy):
         domain_name = help_context.domain_unique_name
 
         def _get_enroll_path(cert_profile_name: str) -> str:
-            return f'{host_base}/.well-known/rest/{domain_name}/{cert_profile_name}/enroll/'
+            return f'{host_base}/rest/{domain_name}/{cert_profile_name}/enroll/'
 
         def _get_reenroll_path(cert_profile_name: str) -> str:
-            return f'{host_base}/.well-known/rest/{domain_name}/{cert_profile_name}/reenroll/'
+            return f'{host_base}/rest/{domain_name}/{cert_profile_name}/reenroll/'
 
         summary = HelpSection(
             _non_lazy('Summary'),
             [
                 HelpRow(
                     _non_lazy('Initial Enrollment URL'),
-                    f'{host_base}/.well-known/rest/{domain_name}/<certificate_profile>/enroll/',
+                    f'{host_base}/rest/{domain_name}/<certificate_profile>/enroll/',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
                     _non_lazy('Renewal URL'),
-                    f'{host_base}/.well-known/rest/{domain_name}/<certificate_profile>/reenroll/',
+                    f'{host_base}/rest/{domain_name}/<certificate_profile>/reenroll/',
                     ValueRenderType.CODE,
                 ),
                 HelpRow(
@@ -2143,4 +2144,131 @@ class AokiDemoDownloadView(PageContextMixin, View):
             file_path.open('rb'),
             as_attachment=True,
             filename=filename,
+        )
+
+
+def _agent_get_est_password(device: DeviceModel) -> str:
+    """Return the EST/REST password from whichever config the agent device has."""
+    onboarding_config = getattr(device, 'onboarding_config', None)
+    if onboarding_config and onboarding_config.est_password:
+        return str(onboarding_config.est_password)
+    no_onboarding_config = getattr(device, 'no_onboarding_config', None)
+    if no_onboarding_config and no_onboarding_config.est_password:
+        return str(no_onboarding_config.est_password)
+    raise Http404(_('No REST password is configured for this agent device.'))
+
+
+class AgentSetupProfileStrategy(HelpPageStrategy):
+    """Strategy for building the agent setup-profile help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        est_password = _agent_get_est_password(device)
+
+        host_base = help_context.host_base
+        domain_name = help_context.domain_unique_name
+        enroll_path = f'/rest/{domain_name}/domain_credential/enroll/'
+        enroll_url = f'{host_base}{enroll_path}'
+        download_url = reverse(
+            'devices:devices_agent_setup_profile_download',
+            kwargs={'pk': device.pk},
+        )
+        host_ip = host_base.split('://')[-1].split(':')[0]
+        download_url_with_ip = f'{download_url}?host_ip={host_ip}'
+
+        download_btn = format_html(
+            '<a class="btn btn-primary w-100" href="{}">{}</a>',
+            download_url_with_ip,
+            _non_lazy('Download agent_setup.json'),
+        )
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(
+                    _non_lazy('Enrollment URL'),
+                    enroll_url,
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('REST Username'),
+                    device.common_name,
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('REST Password'),
+                    est_password,
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Download pre-filled Agent Setup Profile'),
+                    download_btn,
+                    ValueRenderType.PLAIN,
+                ),
+            ],
+        )
+
+        return [summary], _non_lazy(
+            'Help - Issue a Domain Credential for Agent'
+        )
+
+
+class AgentDomainCredentialHelpView(BaseHelpView):
+    """Help view for agent domain credential issuance via the agent_setup.json profile."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    strategy = AgentSetupProfileStrategy()
+
+
+class AgentSetupProfileDownloadView(PageContextMixin, DetailView[DeviceModel]):
+    """Generate and serve a pre-filled agent_setup.json for an agent device."""
+
+    http_method_names = ('get',)
+    model = DeviceModel
+    context_object_name = 'device'
+    page_category = DEVICES_PAGE_CATEGORY
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+
+    def get(self, request: Any, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Build and return the filled agent_setup.json profile as a file download."""
+        del args, kwargs
+        device: DeviceModel = self.get_object()
+        if not device.domain:
+            raise Http404(_('No domain is configured for this device.'))
+        est_password = _agent_get_est_password(device)
+
+        tls = ActiveTrustpointTlsServerCredentialModel.objects.first()
+        if not tls or not tls.credential:
+            raise Http404(_('No active Trustpoint TLS server credential found.'))
+        root_cert_model = tls.credential.get_last_in_chain()
+        if not root_cert_model:
+            raise Http404(_('TLS trust store root certificate is missing.'))
+        tls_cert_pem: str = root_cert_model.get_certificate_serializer().as_pem().decode('utf-8')
+
+        host_ip = request.GET.get('host_ip', '127.0.0.1')
+        port = request.META.get('SERVER_PORT', '443')
+        host_base = f'https://{host_ip}:{port}'
+        domain_name: str = device.domain.unique_name
+        enroll_path = f'/rest/{domain_name}/domain_credential/enroll/'
+
+        profile_template = Path(__file__).parent.parent / 'agents' / 'default' / 'agent_setup.json'
+        with profile_template.open(encoding='utf-8') as fh:
+            raw: dict[str, Any] = json.load(fh)
+
+        profile = raw['profile']
+        profile['onboarding']['device'] = device.common_name
+        profile['onboarding']['secret'] = est_password
+        profile['onboarding']['tls_cert_pem'] = tls_cert_pem
+        profile['certificate_request']['url'] = host_base
+        profile['certificate_request']['path'] = enroll_path
+
+        filled_bytes = json.dumps(raw, indent=2).encode('utf-8')
+
+        import io  # noqa: PLC0415
+        return FileResponse(  # type: ignore[return-value]
+            io.BytesIO(filled_bytes),
+            as_attachment=True,
+            filename='agent_setup.json',
+            content_type='application/json',
         )

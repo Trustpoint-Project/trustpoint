@@ -1,0 +1,207 @@
+{% extends "trustpoint/base.html" %}
+{% load static %}
+
+{% block title %}
+  {% if form.instance.pk %}
+    Edit Certificate Target - {{ agent.name }}
+  {% else %}
+    Add Certificate Target to {{ agent.name }}
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+  <div class="row mb-4">
+    <div class="col">
+      <h2>
+        <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-sm btn-outline-secondary me-2">
+          <i class="fas fa-arrow-left"></i> Back to Targets
+        </a>
+        {% if form.instance.pk %}
+          Edit Certificate Target
+        {% else %}
+          Add Certificate Target
+        {% endif %}
+      </h2>
+      <p class="text-muted">Agent: <strong>{{ agent.name }}</strong></p>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-lg-8">
+      <div class="card">
+        <div class="card-header bg-light">
+          <h5 class="mb-0">
+            {% if form.instance.pk %}
+              Edit Target
+            {% else %}
+              New Target
+            {% endif %}
+          </h5>
+        </div>
+        <div class="card-body">
+          <form method="post" class="needs-validation">
+            {% csrf_token %}
+
+            <div class="mb-3">
+              <label for="{{ form.device.id_for_label }}" class="form-label">
+                Device <span class="text-danger">*</span>
+              </label>
+              <select
+                id="{{ form.device.id_for_label }}"
+                name="{{ form.device.html_name }}"
+                class="form-select {% if form.device.errors %}is-invalid{% endif %}"
+                {% if form.device.field.required %}required{% endif %}>
+                <option value="">-- Select a Device --</option>
+                {% for value, label in form.device.field.choices %}
+                  {% if value != '' %}
+                    <option value="{{ value }}" {% if form.device.value == value|stringformat:'s' %}selected{% endif %}>
+                      {{ label }}
+                    </option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+              {% if form.device.errors %}
+                <div class="invalid-feedback d-block">
+                  {{ form.device.errors.0 }}
+                </div>
+              {% endif %}
+              <small class="form-text text-muted">
+                Select an AGENT_MANAGED_DEVICE device to be managed by this agent.
+              </small>
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ form.certificate_profile.id_for_label }}" class="form-label">
+                Certificate Profile
+              </label>
+              <select
+                id="{{ form.certificate_profile.id_for_label }}"
+                name="{{ form.certificate_profile.html_name }}"
+                class="form-select {% if form.certificate_profile.errors %}is-invalid{% endif %}">
+                <option value="">-- None --</option>
+                {% for value, label in form.certificate_profile.field.choices %}
+                  {% if value != '' %}
+                    <option value="{{ value }}" {% if form.certificate_profile.value == value|stringformat:'s' %}selected{% endif %}>
+                      {{ label }}
+                    </option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+              {% if form.certificate_profile.errors %}
+                <div class="invalid-feedback d-block">
+                  {{ form.certificate_profile.errors.0 }}
+                </div>
+              {% endif %}
+              <small class="form-text text-muted">
+                Optional certificate profile for this target.
+              </small>
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ form.workflow.id_for_label }}" class="form-label">
+                Workflow
+              </label>
+              <select
+                id="{{ form.workflow.id_for_label }}"
+                name="{{ form.workflow.html_name }}"
+                class="form-select {% if form.workflow.errors %}is-invalid{% endif %}">
+                <option value="">-- None --</option>
+                {% for value, label in form.workflow.field.choices %}
+                  {% if value != '' %}
+                    <option value="{{ value }}" {% if form.workflow.value == value|stringformat:'s' %}selected{% endif %}>
+                      {{ label }}
+                    </option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+              {% if form.workflow.errors %}
+                <div class="invalid-feedback d-block">
+                  {{ form.workflow.errors.0 }}
+                </div>
+              {% endif %}
+              <small class="form-text text-muted">
+                Optional workflow definition for this target.
+              </small>
+            </div>
+
+            <div class="mb-3">
+              <div class="form-check">
+                <input
+                  type="checkbox"
+                  id="{{ form.enabled.id_for_label }}"
+                  name="{{ form.enabled.html_name }}"
+                  class="form-check-input"
+                  {% if form.enabled.value %}checked{% endif %}>
+                <label class="form-check-label" for="{{ form.enabled.id_for_label }}">
+                  Enabled
+                </label>
+              </div>
+              <small class="form-text text-muted">
+                Enable certificate management for this target.
+              </small>
+            </div>
+
+            <div class="mb-3">
+              <label for="{{ form.renewal_threshold_days.id_for_label }}" class="form-label">
+                Renewal Threshold (days)
+              </label>
+              <input
+                type="number"
+                id="{{ form.renewal_threshold_days.id_for_label }}"
+                name="{{ form.renewal_threshold_days.html_name }}"
+                class="form-control {% if form.renewal_threshold_days.errors %}is-invalid{% endif %}"
+                value="{{ form.renewal_threshold_days.value|default:'' }}">
+              {% if form.renewal_threshold_days.errors %}
+                <div class="invalid-feedback d-block">
+                  {{ form.renewal_threshold_days.errors.0 }}
+                </div>
+              {% endif %}
+              <small class="form-text text-muted">
+                Days before certificate expiration to trigger renewal.
+              </small>
+            </div>
+
+            <div class="d-grid gap-2 d-sm-flex justify-content-sm-end">
+              <a href="{% url 'agents:targets-list' agent.pk %}" class="btn btn-secondary">
+                Cancel
+              </a>
+              <button type="submit" class="btn btn-primary">
+                {% if form.instance.pk %}
+                  Save Changes
+                {% else %}
+                  Add Target
+                {% endif %}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card">
+        <div class="card-header bg-light">
+          <h5 class="mb-0">Information</h5>
+        </div>
+        <div class="card-body">
+          <h6>About Certificate Targets</h6>
+          <p class="small text-muted">
+            A certificate target links a managed device to an agent, optionally associating a certificate
+            profile and workflow for automated certificate management.
+          </p>
+
+          <h6 class="mt-4">Fields</h6>
+          <ul class="small text-muted">
+            <li><strong>Device:</strong> The managed device to track</li>
+            <li><strong>Certificate Profile:</strong> Define certificate attributes</li>
+            <li><strong>Workflow:</strong> Define approval/notification steps</li>
+            <li><strong>Enabled:</strong> Activate/deactivate this target</li>
+            <li><strong>Renewal Threshold:</strong> Days before expiry to renew</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

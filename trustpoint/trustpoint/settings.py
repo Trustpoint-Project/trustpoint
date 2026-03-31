@@ -267,6 +267,7 @@ INSTALLED_APPS = [
     'signer.apps.SignerConfig',
     'aoki.apps.AokiConfig',
     'management.apps.ManagementConfig',
+    'agents.apps.AgentsConfig',
     'trustpoint_core',
     'django.contrib.admin',
     'django.contrib.auth',

@@ -1,0 +1,82 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <h1 class="mb-0">
+            {% blocktrans with agent_name=agent.name %}Assigned Profiles — {{ agent_name }}{% endblocktrans %}
+        </h1>
+        <a href="{% url 'devices:agents' %}" class="btn btn-sm btn-outline-secondary">
+            <i class="fas fa-arrow-left"></i> {% trans "Back to Agents" %}
+        </a>
+    </div>
+
+    <div class="card-body text-start" style="overflow-y: auto; flex: 1;">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th id="checkbox-column"><input type="checkbox"/></th>
+                    <th>{% trans "Agent Profile" %}</th>
+                    <th>{% trans "Renewal Threshold (days)" %}</th>
+                    <th>{% trans "Last Certificate Update" %}</th>
+                    <th>{% trans "Enabled" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {# colspan must match the number of columns above #}
+                {% for assignment in page_obj %}
+                    <tr>
+                        <td class="row_checkbox">
+                            <input type="checkbox" name="row_checkbox" value="{{ assignment.pk }}"/>
+                        </td>
+                        <td>
+                            <a href="{% url 'agents:profiles-config' pk=assignment.workflow_definition.pk %}">
+                                {{ assignment.workflow_definition.name }}
+                            </a>
+                        </td>
+                        <td>{{ assignment.renewal_threshold_days }}</td>
+                        <td>
+                            {% if assignment.last_certificate_update %}
+                                {{ assignment.last_certificate_update }}
+                            {% else %}
+                                <span class="text-muted">{% trans "Never" %}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if assignment.enabled %}
+                                <span class="badge bg-success">{% trans "Active" %}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{% trans "Disabled" %}</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="5" class="middle">
+                            {% trans "No profiles have been assigned to this agent yet." %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% include "trustpoint/pagination.html" %}
+    </div>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button type="button" class="btn btn-danger tp-table-select-btn me-2"
+                    data-tp-url="{% url 'agents:assigned-profiles-delete_confirm' agent_id=agent.pk %}">
+                {% trans "Remove selected" %}
+            </button>
+        </div>
+        <div class="m-1">
+            <a class="btn btn-primary ms-2"
+               href="{% url 'agents:assigned-profiles-create' agent_id=agent.pk %}">
+                {% trans "Assign Profile" %}
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock content %}

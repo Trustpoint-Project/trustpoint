@@ -5,6 +5,7 @@ from django.urls import path, re_path
 from devices.views import owner_credentials as ztc_views
 from help_pages import devices_help_views
 from trustpoint.page_context import (
+    DEVICES_PAGE_AGENTS_SUBCATEGORY,
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
     DEVICES_PAGE_OPC_UA_SUBCATEGORY,
 )
@@ -17,6 +18,23 @@ urlpatterns = [
     # Main Pages
     path('', views.DeviceTableView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}'),
     path('opc-ua-gds/', views.OpcUaGdsTableView.as_view(), name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'),
+    path('agents/', views.AgentTableView.as_view(), name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}'),
+    # Agent Create Views
+    path(
+        'agents/create/',
+        views.AgentCreateChooseTypeView.as_view(),
+        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create',
+    ),
+    path(
+        'agents/create/1-to-n/',
+        views.AgentCreateOneToNOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create_one_to_n',
+    ),
+    path(
+        'agents/create/1-to-1/',
+        views.AgentCreateOneToOneOnboardingView.as_view(),
+        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_create_one_to_one',
+    ),
     # Create Views
     path(
         'create/', views.DeviceCreateChooseOnboardingView.as_view(), name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_create'
@@ -213,6 +231,17 @@ urlpatterns = [
             f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'
             '_certificate_lifecycle_management_issue_domain_credential_rest_username_password'
         ),
+    ),
+    # Agent setup profile help & download
+    path(
+        'certificate-lifecycle-management/<int:pk>/agent/setup-profile/',
+        devices_help_views.AgentDomainCredentialHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_agent_setup_profile_help',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/agent/setup-profile/download/',
+        devices_help_views.AgentSetupProfileDownloadView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_agent_setup_profile_download',
     ),
     path(
         'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/',
@@ -443,6 +472,11 @@ urlpatterns = [
         r'^opc-ua-gds-push/delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
         views.DeviceBulkDeleteView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_delete',
+    ),
+    re_path(
+        r'^agents/delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
+        views.AgentsBulkDeleteView.as_view(),
+        name=f'{DEVICES_PAGE_AGENTS_SUBCATEGORY}_device_delete',
     ),
 
     path(

@@ -78,6 +78,9 @@ class DeviceModel(CustomDeleteActionModel):
         GENERIC_DEVICE = 0, _('Generic Device')
         OPC_UA_GDS = 1, _('OPC UA GDS')
         OPC_UA_GDS_PUSH = 2, _('OPC UA GDS Push')
+        AGENT_ONE_TO_ONE = 3, _('Agent (1-to-1)')
+        AGENT_ONE_TO_N = 4, _('Agent (1-to-n)')
+        AGENT_MANAGED_DEVICE = 5, _('Agent Managed Device')
 
     device_type = models.IntegerField(
         choices=DeviceType,
@@ -128,9 +131,49 @@ class DeviceModel(CustomDeleteActionModel):
         """Gets the EST username."""
         return self.common_name
 
+    def _validate_opc_ua_gds_push(self, error_messages: dict[str, str]) -> None:
+        """Validate OPC UA GDS Push-specific constraints.
+
+        :param error_messages: Mutable dict to collect field-level error strings.
+        """
+        if not self.onboarding_config:
+            error_messages['device_type'] = 'OPC UA GDS Push devices must use onboarding configuration.'
+        elif self.onboarding_config.onboarding_protocol != OnboardingProtocol.OPC_GDS_PUSH:
+            error_messages['device_type'] = 'OPC UA GDS Push devices must use OPC_GDS_PUSH onboarding protocol.'
+
+        if not self.ip_address:
+            error_messages['ip_address'] = 'OPC UA GDS Push devices must have an IP address.'
+
+        if not self.opc_server_port or self.opc_server_port == 0:
+            error_messages['opc_server_port'] = 'OPC UA GDS Push devices must have a valid OPC server port.'
+
+        if self.opc_gds_push_enable_periodic_update and self.opc_gds_push_renewal_interval < 1:
+            error_messages['opc_gds_push_renewal_interval'] = 'Renewal interval must be at least 1 hour.'
+
+    _AGENT_EST_PROTOCOLS = frozenset({
+        OnboardingProtocol.REST_USERNAME_PASSWORD,
+    })
+
+    def _validate_agent_device(self, error_messages: dict[str, str]) -> None:
+        """Validate agent device type constraints."""
+        if not self.onboarding_config:
+            error_messages['device_type'] = 'Agent devices must use onboarding configuration.'
+        else:
+            protocol = OnboardingProtocol(self.onboarding_config.onboarding_protocol)
+            if protocol not in self._AGENT_EST_PROTOCOLS:
+                error_messages['onboarding_config'] = (
+                    'Agent devices must use REST - Username & Password as onboarding protocol.'
+                )
+            if self.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP):
+                error_messages['onboarding_config'] = (
+                    'Agent devices must only have REST enabled as PKI protocol.'
+                )
+        if self.no_onboarding_config:
+            error_messages['no_onboarding_config'] = 'Agent devices cannot use no-onboarding configuration.'
+
     def clean(self) -> None:
         """Validation before saving the model."""
-        error_messages = {}
+        error_messages: dict[str, str] = {}
 
         if not (self.onboarding_config or self.no_onboarding_config):
             error_messages['onboarding_config'] = 'Either onboarding or no-onboarding has to be configured.'
@@ -139,21 +182,11 @@ class DeviceModel(CustomDeleteActionModel):
             error_messages['onboarding_config'] = 'Only one of onboarding or no-onboarding can be configured.'
 
         if self.device_type == DeviceModel.DeviceType.OPC_UA_GDS_PUSH:
-            if not self.onboarding_config:
-                error_messages['device_type'] = 'OPC UA GDS Push devices must use onboarding configuration.'
-            elif self.onboarding_config.onboarding_protocol != OnboardingProtocol.OPC_GDS_PUSH:
-                error_messages['device_type'] = 'OPC UA GDS Push devices must use OPC_GDS_PUSH onboarding protocol.'
+            self._validate_opc_ua_gds_push(error_messages)
 
-            if not self.ip_address:
-                error_messages['ip_address'] = 'OPC UA GDS Push devices must have an IP address.'
-
-            if not self.opc_server_port or self.opc_server_port == 0:
-                error_messages['opc_server_port'] = 'OPC UA GDS Push devices must have a valid OPC server port.'
-
-            if self.opc_gds_push_enable_periodic_update and self.opc_gds_push_renewal_interval < 1:
-                error_messages['opc_gds_push_renewal_interval'] = (
-                    'Renewal interval must be at least 1 hour.'
-                )
+        _agent_types = (DeviceModel.DeviceType.AGENT_ONE_TO_ONE, DeviceModel.DeviceType.AGENT_ONE_TO_N)
+        if self.device_type in _agent_types:
+            self._validate_agent_device(error_messages)
 
         if error_messages:
             raise ValidationError(error_messages)
