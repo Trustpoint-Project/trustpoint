@@ -3,12 +3,14 @@ from typing import Never
 
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
+from cmp.models import CmpTransactionModel
 from cmp.util import PKIFailureInfo
 from pki.models import IssuedCredentialModel
 from request.request_context import (
     BaseRequestContext,
     CmpBaseRequestContext,
     CmpCertConfRequestContext,
+    CmpPollRequestContext,
     CmpRevocationRequestContext,
 )
 from trustpoint.logger import LoggerMixin
@@ -190,6 +192,69 @@ class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
         raise ValueError(message)
 
 
+class CmpPollAuthorization(AuthorizationComponent, LoggerMixin):
+    """Authorize CMP pollReq messages against persisted CMP transaction state."""
+
+    def authorize(self, context: BaseRequestContext) -> None:
+        """Load and validate the CMP transaction for one pollReq."""
+        if not isinstance(context, CmpPollRequestContext):
+            return
+        if context.cmp_body_type != 'pollReq':
+            return
+
+        transaction_id = str(context.cmp_transaction_id or '').strip().lower()
+        if not transaction_id:
+            self._raise_authorization_error('CMP pollReq is missing a transactionID.', context)
+
+        try:
+            transaction = (
+                CmpTransactionModel.objects.select_related('device', 'domain')
+                .get(transaction_id=transaction_id)
+            )
+        except CmpTransactionModel.DoesNotExist:
+            self._raise_authorization_error(
+                f'No CMP transaction found for transactionID {transaction_id}.',
+                context,
+            )
+
+        if context.operation in (None, 'polling'):
+            context.operation = transaction.operation
+        elif context.operation != transaction.operation:
+            self._raise_authorization_error(
+                f'pollReq operation mismatch: expected {transaction.operation}, got {context.operation}.',
+                context,
+            )
+
+        if context.poll_cert_req_id != transaction.cert_req_id:
+            self._raise_authorization_error(
+                f'pollReq certReqId mismatch: expected {transaction.cert_req_id}, got {context.poll_cert_req_id}.',
+                context,
+            )
+
+        if (
+            context.device is not None
+            and transaction.device_id is not None
+            and context.device.id != transaction.device_id
+        ):
+            self._raise_authorization_error('pollReq device does not match the original CMP transaction.', context)
+        if (
+            context.domain is not None
+            and transaction.domain_id is not None
+            and context.domain.id != transaction.domain_id
+        ):
+            self._raise_authorization_error('pollReq domain does not match the original CMP transaction.', context)
+
+        context.cmp_transaction = transaction
+        context.device = context.device or transaction.device
+        context.domain = context.domain or transaction.domain
+        context.cert_profile_str = transaction.cert_profile or None
+        context.implicit_confirm = transaction.implicit_confirm
+
+    def _raise_authorization_error(self, message: str, context: BaseRequestContext) -> Never:
+        context.error('Unauthorized', http_status=403, cmp_code=PKIFailureInfo.NOT_AUTHORIZED)
+        raise ValueError(message)
+
+
 class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
     """Ensures the request is authorized for the specified operation."""
 
@@ -240,6 +305,8 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
             # component handles credential lookup for rejection-case revocation.
             CmpCertConfAuthorization().authorize(context)
             self.logger.info('CMP certConf body received for operation: %s', context.operation)
+        elif context.operation in ('initialization', 'certification') and body_type == 'pollReq':
+            self.logger.info('CMP pollReq body received for operation: %s', context.operation)
         else:
             err_msg = f'Expected CMP {context.operation} body, but got CMP {body_type.upper()} body.'
             raise ValueError(err_msg)
@@ -265,10 +332,11 @@ class CmpAuthorization(CompositeAuthorization):
         if allowed_operations is None:
             allowed_operations = ['certification', 'initialization']
 
+        self.add(ProtocolAuthorization(['cmp']))
+        self.add(CmpPollAuthorization())
         self.add(DomainScopeValidation())
         self.add(CertificateProfileAuthorization())
         self.add(OnboardingDomainCredentialAuthorization())
         self.add(DevOwnerIDAuthorization())
-        self.add(ProtocolAuthorization(['cmp']))
         self.add(CmpOperationAuthorization(allowed_operations))
         self.add(SecurityConfigAuthorization())

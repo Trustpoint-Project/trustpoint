@@ -14,6 +14,7 @@ from pyasn1.type import tag, univ, useful  # type: ignore[import-untyped]
 from pyasn1_modules import rfc2459, rfc4210  # type: ignore[import-untyped]
 from trustpoint_core.oid import HashAlgorithm, HmacAlgorithm
 
+from cmp.models import CmpTransactionModel
 from onboarding.models import OnboardingStatus
 from request.message_responder.base import AbstractMessageResponder
 from request.operation_processor import LocalCaCmpSignatureProcessor
@@ -21,12 +22,11 @@ from request.request_context import (
     CmpBaseRequestContext,
     CmpCertConfRequestContext,
     CmpCertificateRequestContext,
+    CmpPollRequestContext,
     CmpRevocationRequestContext,
     HttpBaseRequestContext,
 )
-from request.workflows2_gate import get_workflow2_outcome
 from trustpoint.logger import LoggerMixin
-from workflows2.models import Workflow2Run
 
 if TYPE_CHECKING:
     from pki.models import CredentialModel
@@ -62,7 +62,7 @@ class CmpMessageResponder(AbstractMessageResponder, LoggerMixin):
         if (context.error_details is not None
             or (context.http_response_status and context.http_response_status >= HTTP_ERROR_STATUS_THRESHOLD)):
             responder = CmpErrorMessageResponder()
-        elif CmpCertificateWorkflowResponder.respond_if_needed(context):
+        elif CmpTransactionResponder.respond_if_needed(context):
             return None
         elif isinstance(context, CmpCertConfRequestContext):
             responder = CmpPkiConfResponder()
@@ -496,13 +496,20 @@ class CmpCertificationResponder(CmpMessageResponder):
         context.http_response_content_type = 'application/pkixcmp'
 
 
-class CmpCertificateWorkflowResponder(CmpMessageResponder):
-    """Respond to CMP enrollment requests that are gated by workflows2."""
+class CmpTransactionResponder(CmpMessageResponder):
+    """Respond to CMP delayed-delivery transaction states and polling."""
 
     @staticmethod
-    def _resolve_issuer_credential(context: CmpCertificateRequestContext) -> CredentialModel | None:
+    def _resolve_issuer_credential(
+        context: CmpCertificateRequestContext | CmpPollRequestContext,
+    ) -> CredentialModel | None:
         if context.issuer_credential is not None:
             return context.issuer_credential
+
+        transaction_record = cast('CmpTransactionModel | None', getattr(context, 'cmp_transaction', None))
+        if transaction_record is not None and transaction_record.issuer_credential is not None:
+            return transaction_record.issuer_credential
+
         if context.domain is None or context.domain.issuing_ca is None:
             return None
         return context.domain.issuing_ca.get_credential()
@@ -523,90 +530,174 @@ class CmpCertificateWorkflowResponder(CmpMessageResponder):
     def _protect_pki_message(
         pki_message: rfc4210.PKIMessage,
         *,
-        context: CmpCertificateRequestContext,
+        context: CmpCertificateRequestContext | CmpPollRequestContext,
     ) -> rfc4210.PKIMessage:
         if context.cmp_shared_secret:
-            return CmpCertificateWorkflowResponder._add_protection_shared_secret(
+            return CmpTransactionResponder._add_protection_shared_secret(
                 pki_message=pki_message,
                 context=context,
             )
-        return CmpCertificateWorkflowResponder._sign_pki_message(
+        return CmpTransactionResponder._sign_pki_message(
             pki_message=pki_message,
             context=context,
         )
 
     @staticmethod
-    def respond_if_needed(context: BaseRequestContext) -> bool:  # noqa: C901
-        """Build a CMP response when workflows2 paused or rejected enrollment."""
-        if not isinstance(context, CmpCertificateRequestContext):
-            return False
-
-        workflow2_outcome = get_workflow2_outcome(context)
-        if workflow2_outcome is None:
-            return False
-
-        run_status = str(workflow2_outcome.run.status)
-        if run_status == Workflow2Run.STATUS_SUCCEEDED:
-            return False
-
-        if run_status in {
-            Workflow2Run.STATUS_QUEUED,
-            Workflow2Run.STATUS_RUNNING,
-            Workflow2Run.STATUS_PAUSED,
-        }:
-            pki_status = 3  # waiting
-            detail = 'Enrollment request pending workflow processing.'
-        elif run_status == Workflow2Run.STATUS_AWAITING:
-            pki_status = 3  # waiting
-            detail = 'Enrollment request pending workflow approval.'
-        elif run_status == Workflow2Run.STATUS_REJECTED:
-            pki_status = 2  # rejection
-            detail = 'Enrollment request rejected by workflow.'
-        elif run_status in {
-            Workflow2Run.STATUS_FAILED,
-            Workflow2Run.STATUS_CANCELLED,
-            Workflow2Run.STATUS_STOPPED,
-        }:
-            pki_status = 2  # rejection
-            detail = 'Enrollment request failed in workflow processing.'
+    def _build_pollrep_message(
+        *,
+        context: CmpPollRequestContext,
+        detail: str,
+        check_after_seconds: int,
+    ) -> rfc4210.PKIMessage:
+        sender_kid = CmpTransactionResponder._build_sender_kid(None)
+        issuer_credential = CmpTransactionResponder._resolve_issuer_credential(context)
+        if issuer_credential is not None:
+            sender_kid = CmpTransactionResponder._build_sender_kid(issuer_credential)
+            issuer_cert = issuer_credential.get_certificate()
         else:
-            pki_status = 2  # rejection
-            detail = f'Enrollment request is in an unsupported workflow state: {run_status}.'
+            issuer_cert = None
 
-        issuing_ca_credential = CmpCertificateWorkflowResponder._resolve_issuer_credential(context)
+        pollrep_header = CmpTransactionResponder._build_response_message_header(
+            serialized_pyasn1_message=context.parsed_message,
+            sender_kid=sender_kid,
+            issuer_cert=issuer_cert,
+        )
+
+        pollrep_body = rfc4210.PKIBody()
+        pollrep_body['pollRep'] = rfc4210.PollRepContent().subtype(
+            explicitTag=tag.Tag(tag.tagClassContext, tag.tagFormatConstructed, 26)
+        )
+
+        cert_req = rfc4210.PollRepContent().componentType.clone()
+        cert_req['certReqId'] = int(context.poll_cert_req_id or 0)
+        cert_req['checkAfter'] = int(check_after_seconds)
+        if detail:
+            cert_req['reason'].append(detail)
+        pollrep_body['pollRep'].append(cert_req)
+
+        pollrep_message = rfc4210.PKIMessage()
+        pollrep_message['header'] = pollrep_header
+        pollrep_message['body'] = pollrep_body
+        return pollrep_message
+
+    @staticmethod
+    def _build_transaction_result_message(
+        *,
+        context: CmpCertificateRequestContext | CmpPollRequestContext,
+        issued_cert: x509.Certificate | None,
+        status: int,
+        status_text: str,
+    ) -> rfc4210.PKIMessage | None:
+        issuing_ca_credential = CmpTransactionResponder._resolve_issuer_credential(context)
         if issuing_ca_credential is None:
-            return False
+            return None
 
         if context.operation == 'initialization':
             signer_credential = context.owner_credential or issuing_ca_credential
-            sender_kid = CmpCertificateWorkflowResponder._build_sender_kid(signer_credential)
-            pki_message = CmpInitializationResponder._build_base_ip_message(  # noqa: SLF001
+            sender_kid = CmpTransactionResponder._build_sender_kid(signer_credential)
+            return CmpInitializationResponder._build_base_ip_message(  # noqa: SLF001
                 parsed_message=context.parsed_message,
-                issued_cert=None,
+                issued_cert=issued_cert,
                 sender_kid=sender_kid,
                 issuer_credential=issuing_ca_credential,
                 signer_credential=signer_credential,
-                status=pki_status,
-                status_text=detail,
+                status=status,
+                status_text=status_text,
             )
-        elif context.operation == 'certification':
-            sender_kid = CmpCertificateWorkflowResponder._build_sender_kid(issuing_ca_credential)
-            pki_message = CmpCertificationResponder._build_base_cp_message(  # noqa: SLF001
+
+        if context.operation == 'certification':
+            sender_kid = CmpTransactionResponder._build_sender_kid(issuing_ca_credential)
+            return CmpCertificationResponder._build_base_cp_message(  # noqa: SLF001
                 parsed_message=context.parsed_message,
-                issued_cert=None,
+                issued_cert=issued_cert,
                 sender_kid=sender_kid,
                 issuer_credential=issuing_ca_credential,
-                status=pki_status,
-                status_text=detail,
+                status=status,
+                status_text=status_text,
             )
-        else:
+
+        return None
+
+    @staticmethod
+    def _detail_for_transaction_status(transaction_record: CmpTransactionModel) -> tuple[int, str]:
+        if transaction_record.status in {
+            CmpTransactionModel.Status.PROCESSING,
+            CmpTransactionModel.Status.WAITING,
+        }:
+            detail = transaction_record.detail or 'Enrollment request pending workflow processing.'
+            return 3, detail
+
+        if transaction_record.status == CmpTransactionModel.Status.REJECTED:
+            return 2, transaction_record.detail or 'Enrollment request rejected.'
+        if transaction_record.status == CmpTransactionModel.Status.CANCELLED:
+            return 2, transaction_record.detail or 'Enrollment request cancelled.'
+        if transaction_record.status == CmpTransactionModel.Status.FAILED:
+            return 2, transaction_record.detail or 'Enrollment request failed.'
+
+        return 2, transaction_record.detail or f'Unsupported CMP transaction state: {transaction_record.status}.'
+
+    @staticmethod
+    def respond_if_needed(context: BaseRequestContext) -> bool:  # noqa: PLR0911
+        """Build a CMP response for delayed-delivery waiting, polling, or terminal transaction states."""
+        if isinstance(context, CmpPollRequestContext):
+            transaction_record = context.cmp_transaction
+            if transaction_record is None:
+                return False
+
+            if context.issued_certificate is not None:
+                pki_message = CmpTransactionResponder._build_transaction_result_message(
+                    context=context,
+                    issued_cert=context.issued_certificate,
+                    status=0,
+                    status_text='',
+                )
+            elif transaction_record.status in {
+                CmpTransactionModel.Status.PROCESSING,
+                CmpTransactionModel.Status.WAITING,
+            }:
+                pki_message = CmpTransactionResponder._build_pollrep_message(
+                    context=context,
+                    detail=transaction_record.detail,
+                    check_after_seconds=transaction_record.check_after_seconds,
+                )
+            else:
+                status, detail = CmpTransactionResponder._detail_for_transaction_status(transaction_record)
+                pki_message = CmpTransactionResponder._build_transaction_result_message(
+                    context=context,
+                    issued_cert=None,
+                    status=status,
+                    status_text=detail,
+                )
+
+            if pki_message is None:
+                return False
+
+            pki_message = CmpTransactionResponder._protect_pki_message(pki_message, context=context)
+            context.http_response_status = 200
+            context.http_response_content = encoder.encode(pki_message)
+            context.http_response_content_type = 'application/pkixcmp'
+            return True
+
+        if not isinstance(context, CmpCertificateRequestContext):
             return False
 
-        pki_message = CmpCertificateWorkflowResponder._protect_pki_message(
-            pki_message,
-            context=context,
-        )
+        transaction_record = context.cmp_transaction
+        if transaction_record is None:
+            return False
+        if context.issued_certificate is not None:
+            return False
 
+        status, detail = CmpTransactionResponder._detail_for_transaction_status(transaction_record)
+        pki_message = CmpTransactionResponder._build_transaction_result_message(
+            context=context,
+            issued_cert=None,
+            status=status,
+            status_text=detail,
+        )
+        if pki_message is None:
+            return False
+
+        pki_message = CmpTransactionResponder._protect_pki_message(pki_message, context=context)
         context.http_response_status = 200
         context.http_response_content = encoder.encode(pki_message)
         context.http_response_content_type = 'application/pkixcmp'

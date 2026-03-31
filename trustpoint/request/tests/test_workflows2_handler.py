@@ -235,6 +235,7 @@ def test_workflows2_handler_emits_cmp_initialization_from_request_context() -> N
         raw_message=raw_message,
         protocol='cmp',
         operation='initialization',
+        cmp_transaction_id='A1B2C3',
         cert_profile_str='domain_credential',
         device=device,
         domain=domain,
@@ -253,7 +254,9 @@ def test_workflows2_handler_emits_cmp_initialization_from_request_context() -> N
     call = mock_service.return_value.emit_event_outcome.call_args.kwargs
     assert call['on'] == Triggers.CMP_INITIALIZATION
     assert call['event']['cmp']['operation'] == 'initialization'
+    assert call['event']['cmp']['transaction_id'] == 'a1b2c3'
     assert call['event']['cmp']['fingerprint']
+    assert call['idempotency_key'] == 'a1b2c3'
     assert 'csr_pem' not in call['event']['cmp']
     assert context.workflow2_outcome == outcome
 
@@ -280,6 +283,7 @@ def test_workflows2_handler_emits_cmp_certification_from_request_context() -> No
         raw_message=raw_message,
         protocol='cmp',
         operation='certification',
+        cmp_transaction_id='D4E5F6',
         cert_profile_str='tls_client',
         device=device,
         domain=domain,
@@ -298,7 +302,9 @@ def test_workflows2_handler_emits_cmp_certification_from_request_context() -> No
     call = mock_service.return_value.emit_event_outcome.call_args.kwargs
     assert call['on'] == Triggers.CMP_CERTIFICATION
     assert call['event']['cmp']['operation'] == 'certification'
+    assert call['event']['cmp']['transaction_id'] == 'd4e5f6'
     assert call['event']['cmp']['fingerprint']
+    assert call['idempotency_key'] == 'd4e5f6'
     assert context.workflow2_outcome == outcome
 
 

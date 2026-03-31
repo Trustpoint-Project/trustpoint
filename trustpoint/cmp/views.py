@@ -16,9 +16,13 @@ from request.authorization import CmpAuthorization
 from request.message_parser import CmpMessageParser
 from request.message_responder.cmp import CmpMessageResponder
 from request.operation_processor.general import OperationProcessor
-from request.request_context import BaseRequestContext, CmpCertificateRequestContext, HttpBaseRequestContext
+from request.request_context import (
+    BaseRequestContext,
+    CmpBaseRequestContext,
+    CmpCertificateRequestContext,
+    HttpBaseRequestContext,
+)
 from request.request_validator.http_req import CmpHttpRequestValidator
-from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
 from workflows2.events.request_events import Events
 
@@ -105,10 +109,10 @@ class CmpRequestView(LoggerMixin, View):
             validator.validate(ctx)
 
             parser = CmpMessageParser()
-            ctx = parser.parse(ctx)
-            if ctx.operation == 'initialization':
+            ctx = cast('CmpBaseRequestContext', parser.parse(ctx))
+            if ctx.cmp_body_type == 'ir' and ctx.operation == 'initialization':
                 ctx.event = Events.cmp_initialization
-            elif ctx.operation == 'certification':
+            elif ctx.cmp_body_type == 'cr' and ctx.operation == 'certification':
                 ctx.event = Events.cmp_certification
 
             authenticator = CmpAuthentication()
@@ -119,7 +123,6 @@ class CmpRequestView(LoggerMixin, View):
             )
             authorizer.authorize(ctx)
 
-            Workflow2Handler().handle(ctx)
             OperationProcessor().process_operation(ctx)
         except Exception:
             self.logger.exception('Error processing CMP request')

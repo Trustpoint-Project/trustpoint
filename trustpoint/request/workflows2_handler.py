@@ -74,6 +74,14 @@ def _request_body_bytes(context: BaseRequestContext) -> bytes | None:
     return None
 
 
+def _cmp_transaction_id(context: BaseRequestContext) -> str | None:
+    transaction_id = getattr(context, 'cmp_transaction_id', None)
+    if not isinstance(transaction_id, str):
+        return None
+    normalized = transaction_id.strip().lower()
+    return normalized or None
+
+
 def _build_certificate_request_dispatch(
     context: BaseCertificateRequestContext,
     *,
@@ -186,6 +194,7 @@ def _build_cmp_request_dispatch(
     )
 
     fingerprint = hashlib.sha256(request_body).hexdigest()
+    transaction_id = _cmp_transaction_id(context)
     event = {
         'device': {
             **build_device_snapshot(context.device),
@@ -193,6 +202,7 @@ def _build_cmp_request_dispatch(
         },
         'cmp': {
             'operation': operation,
+            'transaction_id': transaction_id or '',
             'fingerprint': fingerprint,
             'cert_profile': context.cert_profile_str or '',
         },
@@ -203,7 +213,7 @@ def _build_cmp_request_dispatch(
         on=on,
         event=event,
         source=source,
-        idempotency_key=fingerprint,
+        idempotency_key=transaction_id or fingerprint,
         initial_vars={},
     )
 
