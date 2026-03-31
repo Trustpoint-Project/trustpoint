@@ -83,6 +83,32 @@ class CmpSharedSecretCommandBuilder:
         )
 
     @staticmethod
+    def get_dynamic_cert_revoke_command(
+        host: str, cred_number: int) -> str:
+        """Gets the dynamic certificate revoke command.
+
+        Args:
+            host: The full host name and url path, e.g. https://127.0.0.1/.well-known./cmp/p/...
+            pk: The primary key of the device in question used as Key Identifier (KID).
+            shared_secret: The shared secret.
+            cred_number: The credential number - counter of issued credentials.
+            sample_request: The sample certificate request in JSON format.
+
+        Returns:
+            The constructed command.
+        """
+        return (
+            'openssl cmp \\\n'
+            '-cmd rr \\\n'
+            f'-server {host} \\\n'
+            f'-cert domain-credential-certificate-{cred_number}.pem \\\n'
+            f'-key domain-credential-key-{cred_number}.pem \\\n'
+            f'-oldcert certificate-{cred_number}.pem \\\n'
+            f'-revreason 0 \\\n'
+            f'-trusted domain-credential-full-chain-{cred_number}.pem \\\n'
+        )
+
+    @staticmethod
     def get_domain_credential_profile_command(host: str, pk: int, shared_secret: str) -> str:
         """Get the domain credential profile command.
 
