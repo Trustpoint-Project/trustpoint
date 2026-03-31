@@ -335,6 +335,24 @@ class TestSignerBulkDeleteConfirmView:
         assert response.url == reverse('signer:signer_list')
         mock_messages_error.assert_called_once()
 
+    def test_get_renders_confirm_page_when_signers_are_selected(self):
+        """Test get renders confirm page when signers are selected."""
+        factory = RequestFactory()
+        request = factory.get('/signer/delete/1/')
+
+        view = SignerBulkDeleteConfirmView()
+        view.request = request
+
+        queryset = Mock()
+        queryset.exists.return_value = True
+        view.get_queryset = Mock(return_value=queryset)
+        view.object_list = queryset
+        view.kwargs = {}
+
+        response = view.get(request)
+
+        assert response.status_code == 200
+
 
 @pytest.mark.django_db
 class TestSignHashView:
