@@ -176,6 +176,11 @@ class NotificationModel(models.Model):
         WEAK_ECC_CURVE = 'WEAK_ECC_CURVE'
         CRL_EXPIRING = 'CRL_EXPIRING'
         CRL_EXPIRED = 'CRL_EXPIRED'
+        GDS_PUSH_FAILED = 'GDS_PUSH_FAIL'
+        SIGNER_KEY_EXPIRING = 'SIGN_KEY_EXP'
+        SIGNER_KEY_EXPIRED = 'SIGN_KEY_EXPRD'
+        TLS_CERT_EXPIRING = 'TLS_CERT_EXP'
+        TLS_CERT_EXPIRED = 'TLS_CERT_EXPRD'
 
         def get_message(self) -> NotificationMessage:
             """Returns the message for the given type.
@@ -297,6 +302,41 @@ class NotificationModel(models.Model):
                     _(
                         'The CRL for CA {ca_name} expired on {next_update}. '
                         'Devices may no longer be able to verify revocation status.'
+                    ),
+                ),
+                self.GDS_PUSH_FAILED: NotificationMessage(
+                    _('OPC UA GDS Push failed for device {device}'),
+                    _(
+                        'The OPC UA GDS Push operation failed for device {device}. '
+                        'Error: {error_message}'
+                    ),
+                ),
+                self.SIGNER_KEY_EXPIRING: NotificationMessage(
+                    _('Signing key {signer_name} is expiring soon'),
+                    _(
+                        'The signing key {signer_name} is set to expire on {not_valid_after}. '
+                        'Please renew the signing credential before expiration.'
+                    ),
+                ),
+                self.SIGNER_KEY_EXPIRED: NotificationMessage(
+                    _('Signing key {signer_name} has expired'),
+                    _(
+                        'The signing key {signer_name} expired on {not_valid_after}. '
+                        'Signing operations using this key will fail.'
+                    ),
+                ),
+                self.TLS_CERT_EXPIRING: NotificationMessage(
+                    _('Trustpoint TLS server certificate is expiring soon'),
+                    _(
+                        'The Trustpoint TLS server certificate expires on {not_valid_after}. '
+                        'Please renew or replace the TLS certificate before expiration to avoid service disruption.'
+                    ),
+                ),
+                self.TLS_CERT_EXPIRED: NotificationMessage(
+                    _('Trustpoint TLS server certificate has expired'),
+                    _(
+                        'The Trustpoint TLS server certificate expired on {not_valid_after}. '
+                        'Clients may no longer be able to establish secure connections to Trustpoint.'
                     ),
                 ),
             }

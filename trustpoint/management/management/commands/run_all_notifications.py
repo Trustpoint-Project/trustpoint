@@ -44,6 +44,9 @@ class Command(BaseCommand):
             'check_for_not_permitted_signature_algorithms',
             'check_for_insufficient_key_length',
             'check_for_not_permitted_ecc_curves',
+            'check_gds_push_failures',
+            'check_signer_key_validity',
+            'check_tls_certificate_validity',
         ]
 
         failed_commands = []
