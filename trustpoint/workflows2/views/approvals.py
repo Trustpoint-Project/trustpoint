@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -75,7 +75,7 @@ class Workflow2ApprovalListView(PageContextMixin, LoginRequiredMixin, View):
 
     page_category = 'workflows2'
     page_name = 'approvals-list'
-    SORT_OPTIONS = {
+    SORT_OPTIONS: ClassVar[dict[str, tuple[str, ...]]] = {
         'created': ('pending_first', '-created_at'),
         'created_asc': ('pending_first', 'created_at'),
         'expires': ('pending_first', 'expires_at', '-created_at'),
@@ -177,11 +177,11 @@ class Workflow2ApprovalDetailView(PageContextMixin, LoginRequiredMixin, View):
         source_context = resolve_source_context(run.source_json if run is not None else event_source)
         event_context = describe_event_context(inst.event_json)
         vars_summary = summarize_named_values(inst.vars_json)
+        timeout_seconds_raw = step_meta.get('timeout_seconds')
+        timeout_seconds = timeout_seconds_raw if isinstance(timeout_seconds_raw, int) else None
         timeout_context = _build_timeout_context(
             approval,
-            timeout_seconds=step_meta.get('timeout_seconds')
-            if isinstance(step_meta.get('timeout_seconds'), int)
-            else None,
+            timeout_seconds=timeout_seconds,
         )
 
         return render(

@@ -144,9 +144,8 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
             }
         )
 
-    summary = rows[0]['value'] if len(rows) == 1 else ' · '.join(
-        row['value'] for row in rows if row['label'] != 'Origin'
-    ) or rows[0]['value']
+    summary_parts = [row['value'] for row in rows if row['label'] != 'Origin' and row['value'] is not None]
+    summary = rows[0]['value'] if len(rows) == 1 else ' · '.join(summary_parts) or rows[0]['value']
 
     return {
         'summary': summary,
@@ -181,11 +180,17 @@ def _append_device_rows(rows: list[dict[str, str | None]], *, device: dict[str, 
                 'label': _('Event device'),
                 'value': str(device_title),
                 'meta': '',
-                'url': _safe_reverse('devices:devices_certificate_lifecycle_management', pk=device_id) if device_id else None,
+                'url': (
+                    _safe_reverse('devices:devices_certificate_lifecycle_management', pk=device_id)
+                    if device_id
+                    else None
+                ),
             }
         )
     if device.get('serial_number'):
-        rows.append({'label': _('Serial number'), 'value': str(device['serial_number']), 'meta': '', 'url': None})
+        rows.append(
+            {'label': _('Serial number'), 'value': str(device['serial_number']), 'meta': '', 'url': None}
+        )
     domain_id = device.get('domain_id')
     if isinstance(domain_id, (str, int)):
         try:
@@ -234,9 +239,23 @@ def _append_certificate_rows(rows: list[dict[str, str | None]], *, certificate: 
             }
         )
     if certificate.get('serial_number'):
-        rows.append({'label': _('Certificate serial'), 'value': str(certificate['serial_number']), 'meta': '', 'url': None})
+        rows.append(
+            {
+                'label': _('Certificate serial'),
+                'value': str(certificate['serial_number']),
+                'meta': '',
+                'url': None,
+            }
+        )
     if certificate.get('cert_profile'):
-        rows.append({'label': _('Certificate profile'), 'value': str(certificate['cert_profile']), 'meta': '', 'url': None})
+        rows.append(
+            {
+                'label': _('Certificate profile'),
+                'value': str(certificate['cert_profile']),
+                'meta': '',
+                'url': None,
+            }
+        )
     if certificate.get('revocation_reason'):
         rows.append(
             {'label': _('Revocation reason'), 'value': str(certificate['revocation_reason']), 'meta': '', 'url': None}

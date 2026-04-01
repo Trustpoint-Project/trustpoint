@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -37,7 +37,7 @@ class Workflow2RunListView(PageContextMixin, LoginRequiredMixin, View):
 
     page_category = 'workflows2'
     page_name = 'runs-list'
-    SORT_OPTIONS = {
+    SORT_OPTIONS: ClassVar[dict[str, str]] = {
         'created': '-created_at',
         'created_asc': 'created_at',
         'updated': '-updated_at',
