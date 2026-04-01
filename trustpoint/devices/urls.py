@@ -191,6 +191,14 @@ urlpatterns = [
         ),
     ),
     path(
+        'certificate-lifecycle-management/<int:pk>/simplereenroll/est/',
+        devices_help_views.EstSimpleReEnrollHelpView.as_view(),
+        name=(
+            f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}'
+            '_certificate_lifecycle_management_issue_domain_credential_est_username_password'
+        ),
+    ),
+    path(
         'opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/est-username-password/',
         devices_help_views.OpcUaGdsOnboardingDomainCredentialEstUsernamePasswordHelpView.as_view(),
         name=(

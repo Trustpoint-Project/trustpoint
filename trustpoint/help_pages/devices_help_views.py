@@ -559,12 +559,105 @@ class OnboardingDomainCredentialEstUsernamePasswordStrategy(HelpPageStrategy):
         ]
         return sections, _non_lazy('Help - Issue a Domain Credential using EST with username and password')
 
+class EstSimpleReEnrollStrategy(HelpPageStrategy):
+    """Strategy for building the onboarding est username and password help page."""
+
+    @override
+    def build_sections(self, help_context: HelpContext) -> tuple[list[HelpSection], str]:
+        device = help_context.get_device_or_http_404()
+        onboarding_config = getattr(device, 'onboarding_config', None)
+        if not onboarding_config:
+            raise Http404(_('Onboarding is not configured for this device.'))
+        est_password = onboarding_config.est_password
+        operation = 'simpleenroll'
+        base = help_context.host_est_path
+
+
+        summary = HelpSection(
+            _non_lazy('Summary'),
+            [
+                HelpRow(
+                    _non_lazy('Certificate Request URL'),
+                    f'{base}/{operation}',
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    _non_lazy('Required Public Key Type'),
+                    str(help_context.domain.public_key_info),
+                    ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    key=('EST-Username'),
+                    value=device.common_name,
+                    value_render_type=ValueRenderType.CODE,
+                ),
+                HelpRow(
+                    key=('EST-Password'),
+                    value=est_password,
+                    value_render_type=ValueRenderType.CODE,
+                ),
+            ],
+        )
+
+        openssl_req_cmd = EstUsernamePasswordCommandBuilder.get_domain_credential_profile_command()
+
+        openssl_req_cmd_row = HelpRow(
+            key=_non_lazy('OpenSSL Command'),
+            value=openssl_req_cmd,
+            value_render_type=ValueRenderType.CODE,
+        )
+
+        enroll_cmd = EstUsernamePasswordCommandBuilder.get_curl_enroll_domain_credential_command(
+            est_username=device.common_name,
+            est_password=est_password,
+            host=f'{base}/{help_context.domain.get_domain_credential_profile_name()}/simpleenroll/',
+        )
+
+        enroll_cmd_row = HelpRow(
+            key=_non_lazy('ReEnroll domain credential with curl'),
+            value=enroll_cmd,
+            value_render_type=ValueRenderType.CODE,
+        )
+
+        openssl_req_cmd_section = HelpSection(
+            heading=_non_lazy('Generate PKCS#10 CSR for the domain credential'),
+            rows=[openssl_req_cmd_row, enroll_cmd_row],
+            hidden=False,
+            css_id='domain_credential',
+        )
+
+        der_to_pem_convertion_section = HelpSection(
+            heading=_non_lazy('Convert the certificate from PKCS#7 to PEM format (Optional)'),
+            rows=[
+                HelpRow(
+                    key=_non_lazy('OpenSSL Command'),
+                    value=EstUsernamePasswordCommandBuilder.get_domain_credential_conversion_p7_pem_command(),
+                    value_render_type=ValueRenderType.CODE,
+                )
+            ],
+        )
+
+        sections = [
+            summary,
+            build_tls_trust_store_section(),
+            openssl_req_cmd_section,
+            der_to_pem_convertion_section,
+        ]
+        return sections, _non_lazy('Help - Issue a Domain Credential using EST with username and password')
+
 
 class DeviceOnboardingDomainCredentialEstUsernamePasswordHelpView(BaseHelpView):
     """Help view for the case of onboarding using EST username & password for generic device abstractions."""
 
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
     strategy = OnboardingDomainCredentialEstUsernamePasswordStrategy()
+
+
+class EstSimpleReEnrollHelpView(BaseHelpView):
+    """Help view for the case of onboarding using EST username & password for generic device abstractions."""
+
+    page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
+    strategy = EstSimpleReEnrollStrategy()
 
 
 class OpcUaGdsOnboardingDomainCredentialEstUsernamePasswordHelpView(BaseHelpView):
