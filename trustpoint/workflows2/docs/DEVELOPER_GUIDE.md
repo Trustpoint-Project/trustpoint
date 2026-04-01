@@ -6,7 +6,7 @@
 
 1. Author workflow definitions in Django and the browser.
 2. Compile YAML into a deterministic internal IR.
-3. Execute compiled workflows with durable runtime state, approvals, and queue workers.
+3. Execute compiled workflows with durable runtime state, approvals, and dedicated worker processes.
 
 The most important architectural rule is simple:
 
@@ -34,8 +34,8 @@ The editor, graph, and guide are all helpers around that YAML. They must not bec
 ### Execution
 
 1. An external event is emitted into `WorkflowDispatchService`.
-2. Matching definitions create a `Workflow2Run`, one or more `Workflow2Instance` rows, and queue jobs.
-3. A DB worker claims jobs and advances one step at a time.
+2. Matching definitions create a `Workflow2Run`, one or more `Workflow2Instance` rows, and worker jobs.
+3. A database-backed worker claims jobs and advances one step at a time.
 4. `WorkflowRuntimeService` persists step runs and updates instance status.
 5. `WorkflowExecutor` runs deterministic step logic against runtime `event` and `vars`.
 
@@ -50,14 +50,14 @@ The editor, graph, and guide are all helpers around that YAML. They must not bec
 - `Workflow2Instance`: execution of one definition
 - `Workflow2StepRun`: immutable step audit record
 - `Workflow2Approval`: persisted approval request
-- `Workflow2Job`: queue job for DB-backed execution
+- `Workflow2Job`: job row for worker-backed execution
 - `Workflow2WorkerHeartbeat`: worker presence / liveness
 
 Important distinction:
 
 - run status is bundle-level
 - instance status is business execution state
-- job status is worker/queue state
+- job status is worker-job lifecycle state
 
 ### Compiler
 
@@ -91,12 +91,12 @@ Catalog metadata powers the editor UI.
 - `events/context_catalog.py`: event context variable definitions
 - `events/policies.py`: trigger-specific step-type restrictions
 
-### Runtime and queueing
+### Runtime and worker scheduling
 
 - `services/definitions.py`: format + compile + persist definitions
 - `services/dispatch.py`: select matching definitions and enqueue work
 - `services/runtime.py`: checkpointed execution and approval resolution
-- `services/worker.py`: DB worker, lease handling, retries, stale recovery
+- `services/worker.py`: dedicated worker loop, lease handling, retries, stale recovery
 - `services/graph.py`: compiled-IR graph adapter for backend graph consumers
 
 Engine modules:

@@ -62,12 +62,12 @@ class DispatchSignalsTests(TestCase):
         self.assertEqual(inst.definition.name, "TP device created")
         self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
 
-        # Because we now always enqueue jobs, sync also creates a job (it is just drained inline).
+        # Because we now always enqueue jobs, inline mode also creates a job (it is just drained inline).
         self.assertEqual(Workflow2Job.objects.filter(instance=inst).count(), 1)
 
     def test_creating_device_triggers_workflow_db(self) -> None:
         cfg = WorkflowExecutionConfig.load()
-        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
         cfg.save()
 
         self._store_definition()

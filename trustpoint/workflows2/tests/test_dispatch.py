@@ -10,7 +10,13 @@ from django.utils import timezone
 from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.compiler.compiler import compile_workflow_yaml
 from workflows2.engine.executor import WorkflowExecutor
-from workflows2.models import Workflow2Definition, Workflow2Instance, Workflow2Job, Workflow2Run
+from workflows2.models import (
+    Workflow2Definition,
+    Workflow2Instance,
+    Workflow2Job,
+    Workflow2Run,
+    Workflow2WorkerHeartbeat,
+)
 from workflows2.services.dispatch import EventSource, WorkflowDispatchService
 from workflows2.services.runtime import WorkflowRuntimeService
 from workflows2.services.worker import Workflow2DbWorker
@@ -102,7 +108,7 @@ class DispatchTests(TestCase):
 
     def test_dispatch_creates_instance_for_matching_trigger_db(self) -> None:
         cfg = WorkflowExecutionConfig.load()
-        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
         cfg.save()
 
         self._store_definition()
@@ -118,7 +124,7 @@ class DispatchTests(TestCase):
         inst = instances[0]
         inst.refresh_from_db()
 
-        # In QUEUE mode, dispatch enqueues; instance is not executed yet.
+        # In worker mode, dispatch enqueues; instance is not executed yet.
         self.assertEqual(inst.status, Workflow2Instance.STATUS_QUEUED)
         self.assertEqual(Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(), 1)
 
@@ -131,9 +137,117 @@ class DispatchTests(TestCase):
         inst.refresh_from_db()
         self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
 
+    def test_dispatch_auto_mode_falls_back_to_inline_when_no_worker_is_alive(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.AUTO
+        cfg.worker_stale_after_seconds = 30
+        cfg.save()
+
+        self._store_definition()
+
+        svc = WorkflowDispatchService()
+        with self.captureOnCommitCallbacks(execute=True):
+            instances = svc.emit_event(
+                on="device.created",
+                event={"device": {"common_name": "dev1"}},
+                source=EventSource(trustpoint=True),
+            )
+
+        self.assertEqual(len(instances), 1)
+        inst = instances[0]
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(
+            Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(),
+            0,
+        )
+
+    def test_dispatch_auto_mode_keeps_queueing_when_worker_heartbeat_is_fresh(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.AUTO
+        cfg.worker_stale_after_seconds = 30
+        cfg.save()
+
+        self._store_definition()
+        Workflow2WorkerHeartbeat.beat("live-worker")
+
+        svc = WorkflowDispatchService()
+        instances = svc.emit_event(
+            on="device.created",
+            event={"device": {"common_name": "dev1"}},
+            source=EventSource(trustpoint=True),
+        )
+
+        self.assertEqual(len(instances), 1)
+        inst = instances[0]
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_QUEUED)
+        self.assertEqual(Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(), 1)
+
+    def test_drain_pending_jobs_if_inline_processes_existing_backlog_when_auto_has_no_worker(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
+        cfg.save()
+
+        self._store_definition()
+        svc = WorkflowDispatchService()
+        first = svc.emit_event(
+            on="device.created",
+            event={"device": {"common_name": "dev1"}},
+            source=EventSource(trustpoint=True),
+        )[0]
+        second = svc.emit_event(
+            on="device.created",
+            event={"device": {"common_name": "dev2"}},
+            source=EventSource(trustpoint=True),
+        )[0]
+
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.status, Workflow2Instance.STATUS_QUEUED)
+        self.assertEqual(second.status, Workflow2Instance.STATUS_QUEUED)
+
+        cfg.mode = WorkflowExecutionConfig.Mode.AUTO
+        cfg.worker_stale_after_seconds = 30
+        cfg.save()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            drained = svc.drain_pending_jobs_if_inline()
+
+        self.assertTrue(drained)
+        first.refresh_from_db()
+        second.refresh_from_db()
+        self.assertEqual(first.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(second.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(Workflow2Job.objects.filter(status=Workflow2Job.STATUS_QUEUED).count(), 0)
+
+    def test_drain_pending_jobs_if_inline_is_noop_when_worker_is_alive_in_auto_mode(self) -> None:
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
+        cfg.save()
+
+        self._store_definition()
+        svc = WorkflowDispatchService()
+        inst = svc.emit_event(
+            on="device.created",
+            event={"device": {"common_name": "dev1"}},
+            source=EventSource(trustpoint=True),
+        )[0]
+
+        Workflow2WorkerHeartbeat.beat("live-worker")
+        cfg.mode = WorkflowExecutionConfig.Mode.AUTO
+        cfg.worker_stale_after_seconds = 30
+        cfg.save()
+
+        drained = svc.drain_pending_jobs_if_inline()
+
+        self.assertFalse(drained)
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_QUEUED)
+
     def test_dispatch_ignores_non_matching_trigger(self) -> None:
         cfg = WorkflowExecutionConfig.load()
-        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
         cfg.save()
 
         self._store_definition()
@@ -149,7 +263,7 @@ class DispatchTests(TestCase):
 
     def test_dispatch_skips_definition_when_apply_conditions_do_not_match(self) -> None:
         cfg = WorkflowExecutionConfig.load()
-        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
         cfg.save()
 
         ir = compile_workflow_yaml(YAML_APPLY_FILTERED)
@@ -174,7 +288,7 @@ class DispatchTests(TestCase):
 
     def test_dispatch_uses_compiled_enabled_state_as_runtime_source_of_truth(self) -> None:
         cfg = WorkflowExecutionConfig.load()
-        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
         cfg.save()
 
         disabled_yaml = YAML_TRUSTPOINT.replace("enabled: true", "enabled: false", 1)
@@ -200,7 +314,7 @@ class DispatchTests(TestCase):
 
     def test_emit_event_outcome_returns_none_without_persisting_run(self) -> None:
         cfg = WorkflowExecutionConfig.load()
-        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
         cfg.save()
 
         svc = WorkflowDispatchService()
@@ -295,7 +409,7 @@ class DispatchTests(TestCase):
 
     def test_continue_instance_reuses_existing_active_job(self) -> None:
         cfg = WorkflowExecutionConfig.load()
-        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
         cfg.save()
 
         definition = self._store_definition()

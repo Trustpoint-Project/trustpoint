@@ -470,12 +470,8 @@ start_app(){
 
   log "Starting trustpoint..."
   local smtp_env=()
-  local workflows_env=( -e "WORKFLOWS2_RUN_MODE=sync" )
   if $EN_MAILPIT; then
     smtp_env+=( -e "EMAIL_HOST=mailpit" -e "EMAIL_PORT=1025" -e "EMAIL_USE_TLS=0" -e "EMAIL_USE_SSL=0" -e "DEFAULT_FROM_EMAIL=no-reply@trustpoint.local" )
-  fi
-  if $EN_WF2_WORKER; then
-    workflows_env=( -e "WORKFLOWS2_RUN_MODE=db" )
   fi
   docker run -d --name "$name" --network "$NET" \
     -p "${APP_HTTP_HOST}:80" \
@@ -486,7 +482,6 @@ start_app(){
     -e "DATABASE_HOST=$APP_DB_HOST" \
     -e "DATABASE_PORT=$APP_DB_PORT" \
     "${smtp_env[@]}" \
-    "${workflows_env[@]}" \
     "$APP_IMAGE" >/dev/null
 }
 
@@ -724,10 +719,9 @@ show_runtime_status(){
   echo
 
   if exists trustpoint; then
-    local http_port https_port wf_mode db_host db_port db_name db_user db_pass
+    local http_port https_port db_host db_port db_name db_user db_pass
     http_port="$(container_host_port trustpoint 80/tcp)"
     https_port="$(container_host_port trustpoint 443/tcp)"
-    wf_mode="$(container_env trustpoint WORKFLOWS2_RUN_MODE)"
     db_host="$(container_env trustpoint DATABASE_HOST)"
     db_port="$(container_env trustpoint DATABASE_PORT)"
     db_name="$(container_env trustpoint POSTGRES_DB)"
@@ -736,7 +730,7 @@ show_runtime_status(){
 
     [[ -n "$http_port" ]] && printf "%-22s %s\n" "trustpoint HTTP:" "http://localhost:${http_port}"
     [[ -n "$https_port" ]] && printf "%-22s %s\n" "trustpoint HTTPS:" "https://localhost:${https_port}"
-    printf "%-22s %s\n" "workflows2 mode:" "${wf_mode:-unset}"
+    printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings"
     if [[ -n "$db_host" || -n "$db_port" || -n "$db_name" || -n "$db_user" ]]; then
       printf "%-22s %s\n" "DB connect:" "host=${db_host:-?} port=${db_port:-?} db=${db_name:-?} user=${db_user:-?} pass=$(mask "${db_pass:-}")"
     fi
@@ -791,7 +785,7 @@ final_summary(){
   echo
   if $EN_APP; then
     printf "%-22s %s\n" "trustpoint:" "http://localhost:80  |  https://localhost:443"
-    printf "%-22s %s\n" "workflows2 mode:" "$([ "$EN_WF2_WORKER" = true ] && echo 'db (dedicated worker)' || echo 'sync (inline in web)')"
+    printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings (default: auto)"
   fi
   if $DB_INTERNAL; then
     printf "%-22s %s\n" "PostgreSQL:" "tcp://localhost:${DB_PORT}  (container port 5432)"

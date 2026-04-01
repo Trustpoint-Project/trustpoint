@@ -40,6 +40,11 @@ def _json_object(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def _display_execution_mode(mode: str) -> str:
+    """Return the canonical execution-mode label shown in the UI."""
+    return 'worker' if mode == WorkflowExecutionConfig.Mode.WORKER else mode
+
+
 def _safe_str(x: Any) -> str:
     if x is None:
         return ''
@@ -184,7 +189,7 @@ class Workflow2InstanceDetailView(PageContextMixin, LoginRequiredMixin, View):
 
         # Config for UI hint
         cfg = WorkflowExecutionConfig.load()
-        cfg_mode = str(cfg.mode).lower()
+        cfg_mode = _display_execution_mode(str(cfg.mode).lower())
 
         return render(
             request,

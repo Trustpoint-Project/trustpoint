@@ -10,6 +10,7 @@ import { renderExpressionDsl } from './guide_dsl_sections.js';
 import {
   renderGuideButtonRow,
   renderGuideMeta,
+  renderGuideNote,
   renderGuideSection,
 } from './guide_layout.js';
 import { renderTriggerSourcesGuide } from './guide_trigger_sources_renderer.js';

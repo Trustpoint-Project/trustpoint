@@ -164,7 +164,7 @@ class Migration(migrations.Migration):
             name='WorkflowExecutionConfig',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('mode', models.CharField(choices=[('auto', 'Automatic (use worker if available, else inline)'), ('inline', 'Inline (run immediately in web process)'), ('queue', 'Queued (requires worker)')], default='auto', max_length=16)),
+                ('mode', models.CharField(choices=[('auto', 'Automatic (use worker if available, else inline)'), ('inline', 'Inline (run immediately in web process)'), ('worker', 'Worker (requires dedicated worker process)')], default='auto', max_length=16)),
                 ('worker_stale_after_seconds', models.PositiveIntegerField(default=30, help_text='If last worker heartbeat is older than this, treat worker as unavailable.')),
                 ('last_updated', models.DateTimeField(auto_now=True)),
             ],

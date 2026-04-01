@@ -64,6 +64,10 @@ def build_workflow_execution_context(
         'workflow_worker_latest_id': getattr(latest, 'worker_id', None),
         'workflow_worker_latest_seen': getattr(latest, 'last_seen', None),
         'workflow_worker_stale_after_seconds': stale_after,
+        'workflow_inline_takeover_enabled': str(workflow_config.mode).lower() in {
+            WorkflowExecutionConfig.Mode.AUTO,
+            WorkflowExecutionConfig.Mode.INLINE,
+        },
     }
 
 
@@ -146,7 +150,7 @@ class SettingsTabView(TemplateView):
         context.update(build_workflow_execution_context(self.request, workflow_execution_form))
         return context
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Handle inline Workflow 2 execution settings updates from the settings tab page."""
         if request.POST.get('form_name') != 'workflow_execution':
             return redirect(reverse_lazy('management:settings'))

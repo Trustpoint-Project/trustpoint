@@ -49,7 +49,7 @@ class WorkerHeartbeatTests(TransactionTestCase):
 
     def test_heartbeat_renews_lease_while_step_runs(self) -> None:
         cfg = WorkflowExecutionConfig.load()
-        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
         cfg.save()
 
         # Minimal IR: one step with no transitions => implicit success after it runs

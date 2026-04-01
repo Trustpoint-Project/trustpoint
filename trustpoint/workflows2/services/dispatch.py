@@ -1,4 +1,4 @@
-"""Dispatch workflow runs from incoming events using inline or queued execution."""
+"""Dispatch workflow runs from incoming events using inline or worker execution."""
 from __future__ import annotations
 
 import time
@@ -8,7 +8,6 @@ from datetime import timedelta
 from functools import partial
 from typing import Any, Literal
 
-from django.conf import settings
 from django.db import IntegrityError, OperationalError, connection, transaction
 from django.utils import timezone
 
@@ -54,8 +53,8 @@ class WorkflowDispatchService:
     Single scheduling system:
       - ALWAYS create Workflow2Job rows.
       - Execution ALWAYS happens via worker semantics (one step per job).
-      - "sync/inline" means: enqueue jobs and drain them in-process until blocked/finished.
-      - "db/queue" means: enqueue jobs and return (external worker continues).
+      - "inline" means: enqueue jobs and drain them in-process until blocked/finished.
+      - "worker" means: enqueue jobs and return (external worker continues).
 
     SQLite note:
       - If dispatch runs inside a transaction (common during model save),
@@ -76,39 +75,42 @@ class WorkflowDispatchService:
         return Workflow2WorkerHeartbeat.objects.filter(last_seen__gte=cutoff).exists()
 
     def _effective_mode(self) -> str:
-        """Returns "sync" or "db".
+        """Return the canonical execution mode: ``inline`` or ``worker``.
 
-        Priority:
-          1) Django setting WORKFLOWS2_RUN_MODE:
-             - "sync" => drain in-process
-             - "db"   => enqueue only
-          2) WorkflowExecutionConfig.mode:
-             - "inline" => sync
-             - "queue"  => db
-             - "auto"   => db if worker present else sync
+        WorkflowExecutionConfig.mode:
+          - "inline" => drain in-process
+          - "worker" => enqueue only
+          - "auto"   => worker if a worker heartbeat is fresh, else inline
         """
-        run_mode = getattr(settings, 'WORKFLOWS2_RUN_MODE', None)
-        if run_mode:
-            m = str(run_mode).lower()
-            if m in {'sync', 'inline'}:
-                return 'sync'
-            if m in {'db', 'queue'}:
-                return 'db'
-
         cfg = self._load_exec_cfg()
         mode = str(cfg.mode).lower()
 
         if mode == 'inline':
-            return 'sync'
-        if mode == 'queue':
-            return 'db'
+            return 'inline'
+        if mode == 'worker':
+            return 'worker'
 
         stale = int(getattr(cfg, 'worker_stale_after_seconds', 30) or 30)
-        return 'db' if self._worker_available(stale_after_seconds=stale) else 'sync'
+        return 'worker' if self._worker_available(stale_after_seconds=stale) else 'inline'
 
     def runs_inline(self) -> bool:
         """Return whether dispatch currently drains jobs inline."""
-        return self._effective_mode() == 'sync'
+        return self._effective_mode() == 'inline'
+
+    def _has_pending_inline_backlog(self) -> bool:
+        """Return whether there are queued or stale jobs that inline execution can pick up."""
+        now = timezone.now()
+        if Workflow2Job.objects.filter(
+            status=Workflow2Job.STATUS_QUEUED,
+            run_after__lte=now,
+        ).exists():
+            return True
+
+        return Workflow2Job.objects.filter(
+            status=Workflow2Job.STATUS_RUNNING,
+            locked_until__isnull=False,
+            locked_until__lte=now,
+        ).exists()
 
     def _drain_jobs_in_process(self, *, worker_id: str = 'inline-worker', max_ticks: int = 200) -> None:
         """Drain runnable jobs until nothing is claimable (blocked or empty).
@@ -150,6 +152,20 @@ class WorkflowDispatchService:
                 if run_id:
                     run = Workflow2Run.objects.get(id=run_id)
                     self.runtime.recompute_run_status(run)
+
+    def drain_pending_jobs_if_inline(self, *, run_id: str | None = None) -> bool:
+        """Drain pending worker jobs when the current execution mode routes work inline."""
+        if not self.runs_inline():
+            return False
+        if not self._has_pending_inline_backlog():
+            return False
+
+        if connection.in_atomic_block:
+            transaction.on_commit(partial(self._drain_after_commit, run_id))
+        else:
+            self._drain_after_commit(run_id)
+
+        return True
 
     def emit_event(
         self,
@@ -211,14 +227,8 @@ class WorkflowDispatchService:
             self._enqueue_job(instance=inst, kind=Workflow2Job.KIND_RUN)
             out.append(inst)
 
-        if mode == 'sync':
-            # If we are inside an atomic block (e.g. device creation), draining now can lock SQLite.
-            # Drain right after commit instead.
-            if connection.in_atomic_block:
-                transaction.on_commit(partial(self._drain_after_commit, str(run.id)))
-            else:
-                self._drain_jobs_in_process(worker_id='inline-worker')
-                self.runtime.recompute_run_status(run)
+        if mode == 'inline':
+            self.drain_pending_jobs_if_inline(run_id=str(run.id))
         else:
             self.runtime.recompute_run_status(run)
 
@@ -279,14 +289,7 @@ class WorkflowDispatchService:
             run = Workflow2Run.objects.get(id=run_id)
             self.runtime.recompute_run_status(run)
 
-        if self.runs_inline():
-            if connection.in_atomic_block:
-                transaction.on_commit(partial(self._drain_after_commit, str(run_id) if run_id else None))
-            else:
-                self._drain_jobs_in_process(worker_id='inline-worker')
-                if run_id:
-                    run = Workflow2Run.objects.get(id=run_id)
-                    self.runtime.recompute_run_status(run)
+        self.drain_pending_jobs_if_inline(run_id=str(run_id) if run_id else None)
 
         return job
 

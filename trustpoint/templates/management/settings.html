@@ -51,6 +51,12 @@
                 {% else %}
                   <strong>{% trans "Status" %}:</strong> {% trans "No worker detected" %}
                 {% endif %}
+
+                {% if workflow_inline_takeover_enabled %}
+                  <br><br>
+                  <strong>{% trans "Inline takeover" %}:</strong>
+                  {% trans "When mode is auto or inline, the web process will drain queued workflow jobs on incoming requests whenever no live worker is available." %}
+                {% endif %}
               </div>
             </div>
           </form>

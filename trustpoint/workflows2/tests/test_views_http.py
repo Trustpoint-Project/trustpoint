@@ -1,14 +1,23 @@
 from __future__ import annotations
 
+from datetime import timedelta
 import json
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from management.models.workflows2 import WorkflowExecutionConfig
 from workflows2.compiler.compiler import compile_workflow_yaml
-from workflows2.models import Workflow2Approval, Workflow2Definition, Workflow2Instance, Workflow2Job, Workflow2Run
+from workflows2.models import (
+    Workflow2Approval,
+    Workflow2Definition,
+    Workflow2Instance,
+    Workflow2Job,
+    Workflow2Run,
+    Workflow2WorkerHeartbeat,
+)
 from workflows2.services.dispatch import EventSource, WorkflowDispatchService
 
 
@@ -308,6 +317,78 @@ workflow:
             Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(),
             0,
         )
+
+    def test_approval_resolve_auto_mode_continues_inline_when_worker_heartbeat_is_stale(self) -> None:
+        self.client.force_login(self.user)
+
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.AUTO
+        cfg.worker_stale_after_seconds = 30
+        cfg.save()
+
+        stale_time = timezone.now() - timedelta(seconds=31)
+        Workflow2WorkerHeartbeat.objects.create(worker_id="stale-worker", last_seen=stale_time)
+
+        self._store_approval_definition()
+        svc = WorkflowDispatchService()
+        with self.captureOnCommitCallbacks(execute=True):
+            instances = svc.emit_event(
+                on="workflows2.test",
+                event={"device": {"id": "dev-1"}},
+                source=EventSource(trustpoint=True),
+            )
+
+        inst = instances[0]
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_AWAITING)
+
+        approval = Workflow2Approval.objects.get(instance=inst, step_id="approve")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(
+                reverse("workflows2:approvals-resolve", args=[approval.id]),
+                {"decision": "rejected", "comment": "Needs review"},
+            )
+
+        self.assertEqual(response.status_code, 302)
+
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.vars_json.get("result"), "reviewed")
+        self.assertEqual(
+            Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(),
+            0,
+        )
+
+    def test_web_request_drains_queued_backlog_when_auto_detects_no_worker(self) -> None:
+        self.client.force_login(self.user)
+
+        cfg = WorkflowExecutionConfig.load()
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
+        cfg.save()
+
+        self._store_definition()
+        svc = WorkflowDispatchService()
+        inst = svc.emit_event(
+            on="workflows2.test",
+            event={"device": {"id": "dev-1"}},
+            source=EventSource(trustpoint=True),
+        )[0]
+
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_QUEUED)
+
+        cfg.mode = WorkflowExecutionConfig.Mode.AUTO
+        cfg.worker_stale_after_seconds = 30
+        cfg.save()
+
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.get(reverse("workflows2:runs-list"))
+
+        self.assertEqual(response.status_code, 200)
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(Workflow2Job.objects.filter(status=Workflow2Job.STATUS_QUEUED).count(), 0)
 
     def test_detail_pages_render_for_run_instance_and_approval(self) -> None:
         self.client.force_login(self.user)

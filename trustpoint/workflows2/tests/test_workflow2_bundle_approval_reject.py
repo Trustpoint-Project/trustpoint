@@ -140,7 +140,7 @@ class Workflow2BundleApprovalRejectTests(TestCase):
 
     def test_dispatch_creates_run_and_instances_and_awaits(self) -> None:
         cfg = WorkflowExecutionConfig.load()
-        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
         cfg.save()
 
         self._store_def(YAML_APPROVAL_REJECT, name="A")
@@ -174,7 +174,7 @@ class Workflow2BundleApprovalRejectTests(TestCase):
 
     def test_get_or_create_run_idempotency_returns_same_run(self) -> None:
         cfg = WorkflowExecutionConfig.load()
-        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
         cfg.save()
 
         self._store_def(YAML_TWO_WORKFLOWS, name="A")
@@ -197,7 +197,7 @@ class Workflow2BundleApprovalRejectTests(TestCase):
 
     def test_get_or_create_run_idempotency_reuses_finalized_run_until_released(self) -> None:
         cfg = WorkflowExecutionConfig.load()
-        cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
+        cfg.mode = WorkflowExecutionConfig.Mode.WORKER
         cfg.save()
 
         self._store_def(YAML_TWO_WORKFLOWS, name="A")

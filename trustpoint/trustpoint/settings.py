@@ -150,11 +150,6 @@ ADVERTISED_PORT = 443
 DOCKER_CONTAINER = False
 
 
-WORKFLOWS2_RUN_MODE = os.getenv('WORKFLOWS2_RUN_MODE', 'sync').strip().lower()
-if WORKFLOWS2_RUN_MODE not in {'sync', 'db'}:
-    WORKFLOWS2_RUN_MODE = 'sync'
-
-
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
@@ -303,6 +298,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'trustpoint.middleware.Workflow2InlineDrainMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',

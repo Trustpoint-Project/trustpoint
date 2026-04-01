@@ -17,7 +17,7 @@ Use the user guide if you want to answer:
 Use the developer guide if you want to answer:
 
 - Where does YAML get compiled, validated, saved, and executed?
-- Which modules own the editor, guide, graph, runtime, and queue worker?
+- Which modules own the editor, guide, graph, runtime, and dedicated worker?
 - How do I add a step type, expression function, event, or editor behavior?
 - Which invariants are important enough that refactors must preserve them?
 
