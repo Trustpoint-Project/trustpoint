@@ -1,0 +1,85 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load internationalization_tags %}
+
+{% block content %}
+    <form method="POST" autocomplete="off">
+        {% csrf_token %}
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h1>{% trans 'Confirm Cancel Rollover' %}</h1>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="tp-card-centered-content">
+                    <h2>{% trans 'Cancel CA Rollover' %}</h2>
+                    <hr class="hr-m">
+                    <p>
+                        {% trans 'You are about to cancel the CA rollover. This action cannot be undone.' %}
+                    </p>
+                    <div class="tp-kvp-list">
+                        <div>
+                            <div>{% trans 'Current (Old) CA' %}</div>
+                            <div>{{ rollover.old_issuing_ca.unique_name }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'New CA' %}</div>
+                            <div>
+                                {% if rollover.new_issuing_ca %}
+                                    {{ rollover.new_issuing_ca.unique_name }}
+                                {% else %}
+                                    <span class="text-muted">{% trans '(pending)' %}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Strategy' %}</div>
+                            <div>{{ rollover.get_strategy_type_display }}</div>
+                        </div>
+                        <div>
+                            <div>{% trans 'State' %}</div>
+                            <div>
+                                {% if rollover.state == 'planned' %}
+                                    <span class="badge bg-info">{{ rollover.get_state_display }}</span>
+                                {% elif rollover.state == 'awaiting_new_ca' %}
+                                    <span class="badge bg-secondary">{{ rollover.get_state_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">{{ rollover.get_state_display }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div>
+                            <div>{% trans 'Planned At' %}</div>
+                            <div>{{ rollover.planned_at|local_datetime }}</div>
+                        </div>
+                        {% if rollover.started_at %}
+                        <div>
+                            <div>{% trans 'Started At' %}</div>
+                            <div>{{ rollover.started_at|local_datetime }}</div>
+                        </div>
+                        {% endif %}
+                        {% if rollover.initiated_by %}
+                        <div>
+                            <div>{% trans 'Initiated By' %}</div>
+                            <div>{{ rollover.initiated_by.username }}</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'pki:issuing_cas-config' pk=issuing_ca.pk %}" class="btn btn-secondary">
+                        {% trans 'Go Back' %}
+                    </a>
+                    <button type="submit" class="btn btn-danger">
+                        {% trans 'Cancel Rollover' %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock content %}

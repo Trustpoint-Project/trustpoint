@@ -48,11 +48,14 @@ from pki.forms import (
 )
 from pki.forms.issuing_cas import IssuingCaImportMixin
 from pki.models import CaModel, CertificateModel, CredentialModel
+from pki.models.ca_rollover import CaRolloverModel, CaRolloverState
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.issued_credential import RemoteIssuedCredentialModel
 from pki.models.truststore import TruststoreModel
+from pki.rollover.import_ca import ImportCaRolloverForm
 from pki.serializer.issuing_ca import IssuingCaImportSerializer, IssuingCaSerializer
+from pki.services.ca_rollover import CaRolloverService
 from pki.util.cert_profile import ProfileValidationError
 from request.clients import EstClient, EstClientError
 from request.clients.cmp_client import CmpClient, CmpClientError
@@ -676,6 +679,24 @@ class IssuingCaConfigView(LoggerMixin, IssuingCaContextMixin, DetailView[CaModel
                 context['certificate_chain'] = issuing_ca.chain_truststore.truststoreordermodel_set.order_by('order')
         else:
             context['certificate_chain'] = []
+
+        # --- CA Rollover context ---
+        active_rollover = CaRolloverService.get_active_rollover(issuing_ca)
+        context['active_rollover'] = active_rollover
+        context['rollover_history'] = CaRolloverModel.objects.filter(
+            old_issuing_ca=issuing_ca,
+            state__in=[CaRolloverState.COMPLETED, CaRolloverState.CANCELLED],
+        ).order_by('-planned_at')[:10]
+
+        has_completed = CaRolloverService.has_completed_rollover(issuing_ca)
+        context['rollover_completed'] = has_completed
+
+        if active_rollover is None and not has_completed:
+            context['rollover_form'] = ImportCaRolloverForm()
+            context['available_strategies'] = CaRolloverService.get_available_strategies()
+        else:
+            context['rollover_form'] = None
+            context['available_strategies'] = []
 
         return context
 
