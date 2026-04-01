@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 from django.db import transaction
 from django.utils import timezone
 
+from request.cmp_transaction_state import CmpTransactionState
 from workflows2.engine.context import RuntimeContext
 from workflows2.engine.types import StepRun
 from workflows2.models import (
@@ -543,6 +544,7 @@ class WorkflowRuntimeService:
         terminal_statuses = {'succeeded', 'rejected', 'cancelled', 'stopped'}
         run.finalized = run.status in terminal_statuses
         run.save(update_fields=['status', 'finalized', 'updated_at'])
+        CmpTransactionState.sync_from_workflow2_run(run=run)
 
     @staticmethod
     def _derive_run_status(statuses: list[str]) -> str:

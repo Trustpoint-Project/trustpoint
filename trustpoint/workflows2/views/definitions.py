@@ -47,23 +47,18 @@ class Workflow2DefinitionCreateView(LoginRequiredMixin, View):
         enabled: true
 
         trigger:
-          on: device.created
+          on: certificate.issued
           sources:
             trustpoint: true
             ca_ids: []
             domain_ids: []
             device_ids: []
 
-        apply:
+        apply: []
 
         workflow:
-          start: set_result
-          steps:
-            set_result:
-              type: set
-              title: Set result
-              vars:
-                result: ok
+          start:
+          steps: {}
           flow: []
         """
     ).strip()

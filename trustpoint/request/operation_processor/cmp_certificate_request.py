@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, cast
 
 from django.db import IntegrityError, transaction
@@ -29,12 +29,13 @@ class _StoredCmpHttpRequest:
     """Minimal request-like object for replaying a stored CMP DER body."""
 
     body: bytes
+    META: dict[str, str] = field(default_factory=dict)
 
 
 class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
     """Process CMP certificate-request messages through CMP transaction state."""
 
-    DEFAULT_CHECK_AFTER_SECONDS = 35
+    DEFAULT_CHECK_AFTER_SECONDS = 60
 
     def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901
         """Process one CMP certificate request."""
@@ -84,6 +85,7 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
                 raise ValueError(exc_msg)
             context.cmp_transaction = self._mark_transaction_terminal(
                 transaction_record.pk,
+                request_decision=workflow_decision,
                 run_status=str(workflow_outcome.run.status),
             )
             return
@@ -139,7 +141,13 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
     ) -> CmpCertificateRequestContext:
         """Rebuild the original CMP certificate-request context for final issuance."""
         replay_context = CmpCertificateRequestContext(
-            raw_message=cast('Any', _StoredCmpHttpRequest(body=bytes(transaction_record.request_der))),
+            raw_message=cast(
+                'Any',
+                _StoredCmpHttpRequest(
+                    body=bytes(transaction_record.request_der),
+                    META=dict(getattr(poll_context.raw_message, 'META', {}) or {}),
+                ),
+            ),
             domain_str=transaction_record.domain_name or poll_context.domain_str,
             protocol='cmp',
             operation=transaction_record.operation,
@@ -161,6 +169,7 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
 
     @staticmethod
     def _request_body_bytes(context: CmpCertificateRequestContext) -> bytes:
+        """Return the raw CMP request body bytes from the HTTP wrapper object."""
         if not isinstance(context, HttpBaseRequestContext) or context.raw_message is None:
             exc_msg = 'CMP certificate-request context is missing its raw HTTP message.'
             raise ValueError(exc_msg)
@@ -178,6 +187,7 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
 
     @classmethod
     def _require_request_der(cls, context: CmpCertificateRequestContext) -> bytes:
+        """Return the original DER request body and fail if it is missing or empty."""
         request_der = cls._request_body_bytes(context)
         if not request_der:
             exc_msg = 'CMP certificate-request body is empty.'
@@ -186,6 +196,7 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
 
     @staticmethod
     def _require_transaction_id(context: CmpCertificateRequestContext) -> str:
+        """Return the normalized CMP transaction ID required for persistence/polling."""
         transaction_id = str(context.cmp_transaction_id or '').strip().lower()
         if not transaction_id:
             exc_msg = 'CMP certificate request is missing transactionID.'
@@ -212,6 +223,7 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         )
 
     def _get_existing_transaction(self, transaction_id: str) -> CmpTransactionModel | None:
+        """Look up an existing persisted CMP transaction by transaction ID."""
         return CmpTransactionState.get_by_transaction_id(transaction_id)
 
     def _validate_existing_request(
@@ -220,6 +232,7 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         context: CmpCertificateRequestContext,
         request_der: bytes,
     ) -> None:
+        """Ensure a repeated CMP request matches the stored transaction exactly."""
         if not self._request_matches_transaction(transaction_record, context, request_der):
             exc_msg = 'CMP transactionID is already in use for a different certificate request.'
             raise ValueError(exc_msg)
@@ -229,6 +242,7 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         context: CmpCertificateRequestContext,
         transaction_record: CmpTransactionModel,
     ) -> None:
+        """Hydrate the current context from an already persisted CMP transaction."""
         context.cmp_transaction = transaction_record
         context.operation = transaction_record.operation
         context.cert_profile_str = transaction_record.cert_profile or context.cert_profile_str
@@ -245,6 +259,7 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         transaction_id: str,
         request_der: bytes,
     ) -> CmpTransactionModel:
+        """Create the initial CMP transaction row or reuse the one won by a race."""
         defaults = {
             'operation': str(context.operation or ''),
             'request_body_type': str(context.cmp_body_type or ''),
@@ -277,6 +292,7 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         backend_reference: str,
         detail: str,
     ) -> CmpTransactionModel:
+        """Persist that this CMP request is waiting on an asynchronous backend."""
         return CmpTransactionState.mark_waiting(
             transaction_pk,
             backend=backend,
@@ -289,11 +305,18 @@ class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         self,
         transaction_pk: int,
         *,
+        request_decision: Workflow2IssuanceDecision,
         run_status: str,
     ) -> CmpTransactionModel:
-        return CmpTransactionState.mark_terminal_from_run_status(transaction_pk, run_status=run_status)
+        """Persist a rejected/failed CMP transaction from the workflows2 decision."""
+        return CmpTransactionState.mark_terminal_from_request_decision(
+            transaction_pk,
+            request_decision=request_decision,
+            run_status=run_status,
+        )
 
     def _mark_transaction_failed(self, transaction_pk: int, *, detail: str) -> CmpTransactionModel:
+        """Persist a local CMP processing failure before a certificate was issued."""
         return CmpTransactionState.mark_failed(transaction_pk, detail=detail)
 
     def mark_transaction_issued(

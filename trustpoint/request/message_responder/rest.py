@@ -6,8 +6,12 @@ from cryptography.hazmat.primitives.serialization import Encoding
 
 from onboarding.models import OnboardingStatus
 from request.request_context import BaseRequestContext, RestBaseRequestContext, RestCertificateRequestContext
-from request.workflow2_issuance import get_workflow2_dispatch_outcome, get_workflow2_run_detail_path
-from workflows2.models import Workflow2Run
+from request.workflow2_issuance import (
+    Workflow2IssuanceDecision,
+    get_workflow2_dispatch_outcome,
+    get_workflow2_issuance_decision,
+    get_workflow2_run_detail_path,
+)
 
 from .base import AbstractMessageResponder
 
@@ -41,38 +45,34 @@ class RestCertificateMessageResponder(RestMessageResponder):
         if workflow2_outcome is None:
             return True
 
+        decision = get_workflow2_issuance_decision(context)
         run_status = str(workflow2_outcome.run.status)
         response_status: int
         response_payload: dict[str, str]
-        if run_status in {
-            Workflow2Run.STATUS_QUEUED,
-            Workflow2Run.STATUS_RUNNING,
-            Workflow2Run.STATUS_AWAITING,
-            Workflow2Run.STATUS_PAUSED,
-        }:
+        if decision == Workflow2IssuanceDecision.WAIT:
             response_status = 202
             response_payload = {
                 'status': 'pending',
-                'detail': 'Enrollment request pending workflow approval.',
+                'detail': (
+                    'Enrollment request pending workflow approval.'
+                    if run_status == 'awaiting'
+                    else 'Enrollment request pending workflow processing.'
+                ),
             }
-        elif run_status == Workflow2Run.STATUS_REJECTED:
+        elif decision == Workflow2IssuanceDecision.REJECT:
             response_status = 403
             response_payload = {
                 'status': 'rejected',
                 'detail': 'Enrollment request rejected by workflow.',
             }
-        elif run_status in {
-            Workflow2Run.STATUS_FAILED,
-            Workflow2Run.STATUS_CANCELLED,
-            Workflow2Run.STATUS_STOPPED,
-        }:
+        elif decision == Workflow2IssuanceDecision.FAIL:
             detail = 'Enrollment request failed in workflow processing.'
             run_path = get_workflow2_run_detail_path(context)
             if run_path:
                 detail = f'{detail} Check here: -> {run_path}'
             response_status = 500
             response_payload = {'status': 'failed', 'detail': detail}
-        elif run_status == Workflow2Run.STATUS_SUCCEEDED:
+        elif decision == Workflow2IssuanceDecision.CONTINUE:
             return True
         else:
             response_status = 500

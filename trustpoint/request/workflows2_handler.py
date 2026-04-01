@@ -10,13 +10,19 @@ from typing import Any, ClassVar, Literal
 
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509 import CertificateSigningRequest
+from pyasn1.codec.der import encoder as der_encoder  # type: ignore[import-untyped]
 
-from request.request_context import BaseCertificateRequestContext, BaseRequestContext, HttpBaseRequestContext
+from request.request_context import (
+    BaseCertificateRequestContext,
+    BaseRequestContext,
+    CmpBaseRequestContext,
+    HttpBaseRequestContext,
+)
 from trustpoint.logger import LoggerMixin
 from workflows2.events.payloads import build_device_snapshot, serialize_source
 from workflows2.events.triggers import Triggers
-from workflows2.models import Workflow2Run
 from workflows2.services.dispatch import DispatchOutcome, EventSource, WorkflowDispatchService
+from workflows2.services.request_decision import Workflow2RequestDecision, resolve_request_decision
 
 Workflow2HandleMode = Literal['continue', 'stop']
 Workflow2DispatchBuilder = Callable[[Any], 'Workflow2DispatchRequest | None']
@@ -80,6 +86,18 @@ def _cmp_transaction_id(context: BaseRequestContext) -> str | None:
         return None
     normalized = transaction_id.strip().lower()
     return normalized or None
+
+
+def _cmp_body_bytes(context: BaseRequestContext) -> bytes | None:
+    if not isinstance(context, CmpBaseRequestContext) or context.parsed_message is None:
+        return None
+
+    with suppress(Exception):
+        encoded_body = der_encoder.encode(context.parsed_message['body'])
+        if isinstance(encoded_body, bytes):
+            return encoded_body
+
+    return None
 
 
 def _build_certificate_request_dispatch(
@@ -181,8 +199,8 @@ def _build_cmp_request_dispatch(
     if not context.device or not context.domain:
         return None
 
-    request_body = _request_body_bytes(context)
-    if not request_body:
+    fingerprint_source = _cmp_body_bytes(context) or _request_body_bytes(context)
+    if not fingerprint_source:
         return None
 
     issuing_ca = context.domain.get_issuing_ca_or_value_error()
@@ -193,7 +211,7 @@ def _build_cmp_request_dispatch(
         device_id=str(context.device.id),
     )
 
-    fingerprint = hashlib.sha256(request_body).hexdigest()
+    fingerprint = hashlib.sha256(fingerprint_source).hexdigest()
     transaction_id = _cmp_transaction_id(context)
     event = {
         'device': {
@@ -213,7 +231,7 @@ def _build_cmp_request_dispatch(
         on=on,
         event=event,
         source=source,
-        idempotency_key=transaction_id or fingerprint,
+        idempotency_key=fingerprint,
         initial_vars={},
     )
 
@@ -404,14 +422,7 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
         if outcome.status in {'blocked', 'running'}:
             return Workflow2HandleResult.stop_processing(outcome)
 
-        if outcome.run.status == Workflow2Run.STATUS_REJECTED:
-            return Workflow2HandleResult.stop_processing(outcome)
-
-        if outcome.run.status in {
-            Workflow2Run.STATUS_FAILED,
-            Workflow2Run.STATUS_CANCELLED,
-            Workflow2Run.STATUS_STOPPED,
-        }:
+        if resolve_request_decision(outcome.run) != Workflow2RequestDecision.CONTINUE:
             return Workflow2HandleResult.stop_processing(outcome)
 
         return Workflow2HandleResult.continue_processing(outcome)

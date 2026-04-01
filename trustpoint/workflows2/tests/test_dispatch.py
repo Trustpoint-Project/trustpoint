@@ -249,6 +249,31 @@ class DispatchTests(TestCase):
             2,
         )
 
+    def test_release_run_idempotency_releases_finalized_run_key(self) -> None:
+        svc = WorkflowDispatchService()
+        first = Workflow2Run.objects.create(
+            trigger_on="device.created",
+            event_json={"x": 1},
+            source_json={"trustpoint": True},
+            idempotency_key="same-key",
+            status=Workflow2Run.STATUS_SUCCEEDED,
+            finalized=True,
+        )
+
+        svc.release_run_idempotency(run_id=first.id)
+
+        first.refresh_from_db()
+        self.assertEqual(first.idempotency_key, "")
+
+        second = svc.get_or_create_run(
+            on="device.created",
+            event={"x": 2},
+            source=EventSource(trustpoint=True),
+            idempotency_key="same-key",
+        )
+        self.assertNotEqual(first.id, second.id)
+        self.assertEqual(second.idempotency_key, "same-key")
+
     def test_workflow2job_unique_active_constraint_rejects_duplicate_active_job(self) -> None:
         definition = self._store_definition()
         runtime = WorkflowRuntimeService(executor=WorkflowExecutor())

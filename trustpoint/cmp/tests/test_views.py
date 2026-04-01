@@ -17,6 +17,7 @@ from pki.models import RevokedCertificateModel
 from request.authorization.cmp import CmpOperationAuthorization
 from request.operation_processor.general import OperationProcessor
 from request.request_context import CmpRevocationRequestContext
+from workflows2.events.request_events import Events
 
 
 @pytest.fixture
@@ -174,6 +175,48 @@ class TestCmpInitializationRequestView:
 
         response = view.post(request, domain='test_domain')
 
+        mock_workflow2_cls.return_value.handle.assert_called_once_with(mock_request_context)
+        mock_processor_cls.return_value.process_operation.assert_called_once_with(mock_request_context)
+        assert response.status_code == 200
+
+    @patch('cmp.views.CmpMessageResponder')
+    @patch('cmp.views.OperationProcessor')
+    @patch('cmp.views.Workflow2Handler')
+    @patch('cmp.views.CmpAuthorization')
+    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.CmpMessageParser')
+    @patch('cmp.views.CmpHttpRequestValidator')
+    @patch('cmp.views.CmpCertificateRequestContext')
+    def test_post_certification_dispatches_workflows2_for_cr_requests(
+        self,
+        mock_context_cls,
+        mock_validator_cls,
+        mock_parser_cls,
+        mock_auth_cls,
+        mock_authz_cls,
+        mock_workflow2_cls,
+        mock_processor_cls,
+        mock_responder_cls,
+        request_factory,
+        mock_request_context,
+    ):
+        """CR requests should visibly dispatch workflows2 as cmp.certification."""
+        mock_request_context.cmp_body_type = 'cr'
+        mock_request_context.operation = 'certification'
+        mock_context_cls.return_value = mock_request_context
+        mock_parser_cls.return_value.parse.return_value = mock_request_context
+
+        request = request_factory.post('/cmp/p/test_domain/tls_client/certification')
+        view = CmpRequestView()
+
+        response = view.post(
+            request,
+            domain='test_domain',
+            cert_profile='tls_client',
+            operation='certification',
+        )
+
+        assert mock_request_context.event == Events.cmp_certification
         mock_workflow2_cls.return_value.handle.assert_called_once_with(mock_request_context)
         mock_processor_cls.return_value.process_operation.assert_called_once_with(mock_request_context)
         assert response.status_code == 200
