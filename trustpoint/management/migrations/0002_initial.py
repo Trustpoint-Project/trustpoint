@@ -7,9 +7,9 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('devices', '0002_tp_v0_5_0'),
-        ('management', '0001_tp_v0_5_0'),
-        ('pki', '0001_tp_v0_5_0'),
+        ('devices', '0002_initial'),
+        ('management', '0001_initial'),
+        ('pki', '0001_initial'),
     ]
 
     operations = [
@@ -52,5 +52,9 @@ class Migration(migrations.Migration):
             model_name='keystorageconfig',
             name='hsm_config',
             field=models.OneToOneField(blank=True, help_text='Associated HSM token configuration (SoftHSM or Physical HSM)', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='crypto_storage_config', to='management.pkcs11token', verbose_name='HSM Configuration'),
+        ),
+        migrations.AddIndex(
+            model_name='auditlog',
+            index=models.Index(fields=['target_content_type', 'target_object_id'], name='audit_log_target_idx'),
         ),
     ]

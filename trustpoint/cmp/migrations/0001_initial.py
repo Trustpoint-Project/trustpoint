@@ -1,4 +1,3 @@
-import django.db.models.deletion
 import django.utils.timezone
 from django.db import migrations, models
 
@@ -8,8 +7,6 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ('devices', '0002_tp_v0_5_0'),
-        ('pki', '0001_tp_v0_5_0'),
     ]
 
     operations = [
@@ -33,13 +30,6 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(default=django.utils.timezone.now, verbose_name='Created At')),
                 ('updated_at', models.DateTimeField(auto_now=True, verbose_name='Updated At')),
                 ('finalized_at', models.DateTimeField(blank=True, null=True, verbose_name='Finalized At')),
-                ('device', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='cmp_transactions', to='devices.devicemodel', verbose_name='Device')),
-                ('domain', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.PROTECT, related_name='cmp_transactions', to='pki.domainmodel', verbose_name='Domain')),
-                ('final_certificate', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='cmp_transaction_records', to='pki.certificatemodel', verbose_name='Final Certificate')),
-                ('issuer_credential', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='cmp_transaction_issuer_records', to='pki.credentialmodel', verbose_name='Issuer Credential')),
             ],
-            options={
-                'indexes': [models.Index(fields=['status'], name='cmp_cmptran_status_bca250_idx'), models.Index(fields=['backend', 'backend_reference'], name='cmp_cmptran_backend_ba899c_idx'), models.Index(fields=['device', 'status'], name='cmp_cmptran_device__000381_idx'), models.Index(fields=['domain', 'status'], name='cmp_cmptran_domain__3132e9_idx')],
-            },
         ),
     ]
