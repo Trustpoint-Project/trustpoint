@@ -1,6 +1,7 @@
 from unittest.mock import Mock, patch
 
 import pytest
+from pyasn1_modules import rfc4210  # type: ignore[import-untyped]
 
 from request.request_context import (
     BaseRequestContext,
@@ -11,8 +12,39 @@ from request.request_context import (
 from request.workflows2_handler import Workflow2HandleResult, Workflow2Handler
 from workflows2.events.request_events import Events
 from workflows2.events.triggers import Triggers
-from workflows2.models import Workflow2Run
+from workflows2.models import Workflow2Approval, Workflow2Definition, Workflow2Instance, Workflow2Run
 from workflows2.services.dispatch import DispatchOutcome
+
+
+def _create_rejected_request_run(*, trigger_on: str) -> Workflow2Run:
+    run = Workflow2Run.objects.create(
+        trigger_on=trigger_on,
+        event_json={'x': 1},
+        source_json={'trustpoint': True},
+        status=Workflow2Run.STATUS_SUCCEEDED,
+        finalized=True,
+    )
+    definition = Workflow2Definition.objects.create(
+        name=f'{trigger_on}-definition',
+        enabled=True,
+        trigger_on=trigger_on,
+        yaml_text='schema: trustpoint.workflow.v2',
+        ir_json={},
+        ir_hash=f'hash-{trigger_on}',
+    )
+    instance = Workflow2Instance.objects.create(
+        run=run,
+        definition=definition,
+        event_json={'x': 1},
+        vars_json={},
+        status=Workflow2Instance.STATUS_SUCCEEDED,
+    )
+    Workflow2Approval.objects.create(
+        instance=instance,
+        step_id='approve',
+        status=Workflow2Approval.STATUS_REJECTED,
+    )
+    return run
 
 
 @pytest.mark.django_db
@@ -130,6 +162,42 @@ def test_workflows2_handler_marks_est_gate_applied_on_success(test_csr_fixture) 
         result = Workflow2Handler().handle(context)
 
     assert result.mode == 'continue'
+    assert context.workflow2_outcome == outcome
+
+
+@pytest.mark.django_db
+def test_workflows2_handler_stops_when_completed_run_represents_a_rejected_request(test_csr_fixture) -> None:
+    device = Mock()
+    device.id = 'device-1'
+    device.common_name = 'Device 1'
+    device.serial_number = 'SER-1'
+
+    issuing_ca = Mock()
+    issuing_ca.id = 11
+
+    domain = Mock()
+    domain.id = 7
+    domain.get_issuing_ca_or_value_error.return_value = issuing_ca
+
+    context = EstCertificateRequestContext(
+        event=Events.est_simpleenroll,
+        protocol='est',
+        operation='simpleenroll',
+        cert_profile_str='tls_client',
+        device=device,
+        domain=domain,
+        cert_requested=test_csr_fixture.get_cryptography_object(),
+    )
+
+    run = _create_rejected_request_run(trigger_on=Triggers.EST_SIMPLEENROLL)
+    outcome = DispatchOutcome(status='completed', run=run, instances=[])
+
+    with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
+        mock_service.return_value.emit_event_outcome.return_value = outcome
+
+        result = Workflow2Handler().handle(context)
+
+    assert result.should_stop is True
     assert context.workflow2_outcome == outcome
 
 
@@ -256,8 +324,56 @@ def test_workflows2_handler_emits_cmp_initialization_from_request_context() -> N
     assert call['event']['cmp']['operation'] == 'initialization'
     assert call['event']['cmp']['transaction_id'] == 'a1b2c3'
     assert call['event']['cmp']['fingerprint']
-    assert call['idempotency_key'] == 'a1b2c3'
+    assert call['idempotency_key'] == call['event']['cmp']['fingerprint']
     assert 'csr_pem' not in call['event']['cmp']
+
+
+@pytest.mark.django_db
+def test_workflows2_handler_cmp_idempotency_uses_cmp_body_not_transaction_id() -> None:
+    """CMP workflows2 idempotency should stay stable across transactionID changes for the same CMP body."""
+    device = Mock()
+    device.id = 'device-1'
+    device.common_name = 'Device 1'
+    device.serial_number = 'SER-1'
+
+    issuing_ca = Mock()
+    issuing_ca.id = 11
+
+    domain = Mock()
+    domain.id = 7
+    domain.get_issuing_ca_or_value_error.return_value = issuing_ca
+
+    raw_message = Mock()
+    raw_message.body = b'cmp-request-with-different-header'
+
+    body = rfc4210.PKIBody()
+    body.setComponentByName('ir', body.getComponentByName('ir'))
+
+    context = CmpCertificateRequestContext(
+        event=Events.cmp_initialization,
+        raw_message=raw_message,
+        protocol='cmp',
+        operation='initialization',
+        cmp_transaction_id='DIFFERENTTXID',
+        cert_profile_str='domain_credential',
+        device=device,
+        domain=domain,
+        parsed_message={'body': body},
+    )
+
+    run = Mock()
+    run.status = Workflow2Run.STATUS_SUCCEEDED
+    outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
+
+    with patch('request.workflows2_handler.WorkflowDispatchService') as mock_service:
+        mock_service.return_value.emit_event_outcome.return_value = outcome
+
+        Workflow2Handler().handle(context)
+
+    call = mock_service.return_value.emit_event_outcome.call_args.kwargs
+    assert call['event']['cmp']['transaction_id'] == 'differenttxid'
+    assert call['idempotency_key'] == call['event']['cmp']['fingerprint']
+    assert call['idempotency_key'] != 'differenttxid'
     assert context.workflow2_outcome == outcome
 
 
@@ -304,7 +420,7 @@ def test_workflows2_handler_emits_cmp_certification_from_request_context() -> No
     assert call['event']['cmp']['operation'] == 'certification'
     assert call['event']['cmp']['transaction_id'] == 'd4e5f6'
     assert call['event']['cmp']['fingerprint']
-    assert call['idempotency_key'] == 'd4e5f6'
+    assert call['idempotency_key'] == call['event']['cmp']['fingerprint']
     assert context.workflow2_outcome == outcome
 
 

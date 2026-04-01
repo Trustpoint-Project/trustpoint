@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views import View
 
+from request.cmp_transaction_state import CmpTransactionState
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Instance, Workflow2Job, Workflow2Run
 from workflows2.services.runtime import WorkflowRuntimeService
@@ -212,6 +213,7 @@ class Workflow2RunCancelView(LoginRequiredMixin, View):
             run.status = Workflow2Run.STATUS_CANCELLED
             run.finalized = True
             run.save(update_fields=['status', 'finalized', 'updated_at'])
+            CmpTransactionState.sync_from_workflow2_run(run=run)
 
         messages.success(request, _('Run cancelled.'))
         return redirect('workflows2:runs-detail', run_id=run.id)

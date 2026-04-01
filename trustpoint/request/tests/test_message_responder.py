@@ -28,8 +28,39 @@ from request.request_context import (
     RestBaseRequestContext,
     RestCertificateRequestContext,
 )
-from workflows2.models import Workflow2Run
+from workflows2.models import Workflow2Approval, Workflow2Definition, Workflow2Instance, Workflow2Run
 from workflows2.services.dispatch import DispatchOutcome
+
+
+def _create_rejected_request_run(*, trigger_on: str) -> Workflow2Run:
+    run = Workflow2Run.objects.create(
+        trigger_on=trigger_on,
+        event_json={'x': 1},
+        source_json={'trustpoint': True},
+        status=Workflow2Run.STATUS_SUCCEEDED,
+        finalized=True,
+    )
+    definition = Workflow2Definition.objects.create(
+        name=f'{trigger_on}-definition',
+        enabled=True,
+        trigger_on=trigger_on,
+        yaml_text='schema: trustpoint.workflow.v2',
+        ir_json={},
+        ir_hash=f'hash-{trigger_on}',
+    )
+    instance = Workflow2Instance.objects.create(
+        run=run,
+        definition=definition,
+        event_json={'x': 1},
+        vars_json={},
+        status=Workflow2Instance.STATUS_SUCCEEDED,
+    )
+    Workflow2Approval.objects.create(
+        instance=instance,
+        step_id='approve',
+        status=Workflow2Approval.STATUS_REJECTED,
+    )
+    return run
 
 
 @pytest.mark.django_db
@@ -61,6 +92,18 @@ class TestEstMessageResponder:
         run = Mock()
         run.status = Workflow2Run.STATUS_REJECTED
         context.workflow2_outcome = DispatchOutcome(status='completed', run=run, instances=[Mock()])
+
+        EstCertificateMessageResponder.build_response(context)
+
+        assert context.http_response_status == 403
+        assert context.http_response_content_type == 'text/plain'
+        assert context.http_response_content == 'Enrollment request rejected by workflow.'
+
+    def test_build_response_rejected_workflow2_outcome_when_run_succeeded_after_rejection(self) -> None:
+        """A rejected approval must still reject the requester even if the workflow later succeeded."""
+        context = EstCertificateRequestContext(protocol='est', operation='simpleenroll')
+        run = _create_rejected_request_run(trigger_on='est.simpleenroll')
+        context.workflow2_outcome = DispatchOutcome(status='completed', run=run, instances=[])
 
         EstCertificateMessageResponder.build_response(context)
 

@@ -302,12 +302,7 @@ class WorkflowDispatchService:
         """Return an existing idempotent run or create a new one."""
         normalized_idempotency_key = idempotency_key or ''
         if normalized_idempotency_key:
-            existing = (
-                Workflow2Run.objects.select_for_update()
-                .filter(trigger_on=on, idempotency_key=normalized_idempotency_key)
-                .order_by('-created_at')
-                .first()
-            )
+            existing = self._get_idempotent_run(on=on, idempotency_key=normalized_idempotency_key)
             if existing is not None:
                 return existing
 
@@ -324,16 +319,45 @@ class WorkflowDispatchService:
             if not normalized_idempotency_key:
                 raise
 
-        existing = (
-            Workflow2Run.objects.select_for_update()
-            .filter(trigger_on=on, idempotency_key=normalized_idempotency_key)
-            .order_by('-created_at')
-            .first()
-        )
+        existing = self._get_idempotent_run(on=on, idempotency_key=normalized_idempotency_key)
         if existing is None:
             msg = 'Run creation raced but no existing idempotent run was found'
             raise RuntimeError(msg)
         return existing
+
+    @staticmethod
+    def _get_idempotent_run(
+        *,
+        on: str,
+        idempotency_key: str,
+    ) -> Workflow2Run | None:
+        """Return the newest run currently claiming the given idempotency key."""
+        if not idempotency_key:
+            return None
+        return (
+            Workflow2Run.objects.select_for_update()
+            .filter(trigger_on=on, idempotency_key=idempotency_key)
+            .order_by('-created_at')
+            .first()
+        )
+
+    @staticmethod
+    @transaction.atomic
+    def release_run_idempotency(*, run_id: Any) -> None:
+        """Release the idempotency key after the final requester response was delivered."""
+        run = Workflow2Run.objects.select_for_update().filter(id=run_id).first()
+        if run is None or not run.idempotency_key:
+            return
+        if run.status not in {
+            Workflow2Run.STATUS_SUCCEEDED,
+            Workflow2Run.STATUS_REJECTED,
+            Workflow2Run.STATUS_FAILED,
+            Workflow2Run.STATUS_CANCELLED,
+            Workflow2Run.STATUS_STOPPED,
+        }:
+            return
+        run.idempotency_key = ''
+        run.save(update_fields=['idempotency_key', 'updated_at'])
 
     def _select_definitions(
         self,

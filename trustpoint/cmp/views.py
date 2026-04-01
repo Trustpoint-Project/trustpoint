@@ -23,6 +23,7 @@ from request.request_context import (
     HttpBaseRequestContext,
 )
 from request.request_validator.http_req import CmpHttpRequestValidator
+from request.workflow2_issuance import release_delivered_workflow2_request
 from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
 from workflows2.events.request_events import Events
@@ -131,6 +132,7 @@ class CmpRequestView(LoggerMixin, View):
 
         try:
             CmpMessageResponder.build_response(ctx)
+            release_delivered_workflow2_request(ctx)
         except Exception:
             self.logger.exception('Error building CMP response')
             if isinstance(ctx, HttpBaseRequestContext):

@@ -195,7 +195,7 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         self.assertEqual(len(a), len(b))
         self.assertEqual(a[0].run_id, b[0].run_id)
 
-    def test_get_or_create_run_idempotency_reuses_finalized_run(self) -> None:
+    def test_get_or_create_run_idempotency_reuses_finalized_run_until_released(self) -> None:
         cfg = WorkflowExecutionConfig.load()
         cfg.mode = WorkflowExecutionConfig.Mode.QUEUE
         cfg.save()

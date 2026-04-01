@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from enum import Enum
 
+from django.db import transaction
+
 from cmp.models import CmpTransactionModel
 from request.cmp_transaction_state import CmpTransactionState
 from request.request_context import BaseRequestContext, CmpPollRequestContext
-from request.workflow2_issuance import WORKFLOW2_NEGATIVE_RUN_STATUSES, WORKFLOW2_PENDING_RUN_STATUSES
 from trustpoint.logger import LoggerMixin
 from workflows2.models import Workflow2Run
+from workflows2.services.request_decision import Workflow2RequestDecision, resolve_request_decision
 
 from .base import AbstractOperationProcessor
 from .cmp_certificate_request import CmpCertificateRequestProcessor
@@ -28,6 +30,7 @@ class CmpPollDisposition(Enum):
 class CmpPollProcessor(AbstractOperationProcessor, LoggerMixin):
     """Resolve CMP pollReq messages through CMP transaction state transitions."""
 
+    @transaction.atomic
     def process_operation(self, context: BaseRequestContext) -> None:
         """Process one CMP pollReq."""
         if not isinstance(context, CmpPollRequestContext):
@@ -58,6 +61,7 @@ class CmpPollProcessor(AbstractOperationProcessor, LoggerMixin):
         self,
         context: CmpPollRequestContext,
     ) -> CmpTransactionModel:
+        """Reload the authorized CMP transaction with a row lock for poll handling."""
         context_transaction = context.cmp_transaction
         if context_transaction is None:
             exc_msg = 'CMP pollReq is missing its CMP transaction context.'
@@ -66,6 +70,7 @@ class CmpPollProcessor(AbstractOperationProcessor, LoggerMixin):
         return CmpTransactionState.load_locked(context_transaction.pk)
 
     def _finalize_transaction(self, context: CmpPollRequestContext) -> None:
+        """Replay the original CMP request and finish issuance after approval."""
         transaction_record = context.cmp_transaction
         if transaction_record is None:
             exc_msg = 'CMP poll finalization requires a CMP transaction.'
@@ -114,7 +119,8 @@ class CmpPollProcessor(AbstractOperationProcessor, LoggerMixin):
                 )
             else:
                 run_status = str(run.status)
-                if run_status in WORKFLOW2_PENDING_RUN_STATUSES:
+                request_decision = resolve_request_decision(run)
+                if request_decision == Workflow2RequestDecision.WAIT:
                     next_transaction = CmpTransactionState.mark_waiting(
                         transaction_record.pk,
                         backend=transaction_record.backend,
@@ -122,14 +128,18 @@ class CmpPollProcessor(AbstractOperationProcessor, LoggerMixin):
                         detail=CmpCertificateRequestProcessor.detail_for_pending_run(run_status),
                         check_after_seconds=transaction_record.check_after_seconds,
                     )
-                elif run_status == Workflow2Run.STATUS_SUCCEEDED:
+                elif request_decision == Workflow2RequestDecision.CONTINUE:
                     next_transaction = CmpTransactionState.mark_processing(
                         transaction_record.pk,
                         detail='CMP poll finalization in progress.',
                     )
-                elif run_status in WORKFLOW2_NEGATIVE_RUN_STATUSES:
-                    next_transaction = CmpTransactionState.mark_terminal_from_run_status(
+                elif request_decision in {
+                    Workflow2RequestDecision.REJECT,
+                    Workflow2RequestDecision.FAIL,
+                }:
+                    next_transaction = CmpTransactionState.mark_terminal_from_request_decision(
                         transaction_record.pk,
+                        request_decision=request_decision,
                         run_status=run_status,
                     )
 
@@ -147,4 +157,5 @@ class CmpPollProcessor(AbstractOperationProcessor, LoggerMixin):
         return CmpPollDisposition.TERMINAL
 
     def _mark_failed(self, transaction_pk: int, *, detail: str) -> CmpTransactionModel:
+        """Store a terminal CMP poll failure on the persisted transaction."""
         return CmpTransactionState.mark_failed(transaction_pk, detail=detail)

@@ -14,6 +14,7 @@ from request.message_responder import RestErrorMessageResponder, RestMessageResp
 from request.operation_processor.general import OperationProcessor
 from request.request_context import RestCertificateRequestContext
 from request.request_validator import RestHttpRequestValidator
+from request.workflow2_issuance import release_delivered_workflow2_request
 from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
 from workflows2.events.request_events import Events
@@ -78,10 +79,12 @@ class RestEnrollView(LoggerMixin, View):
             authorizer = RestAuthorization(allowed_operations=['enroll'])
             authorizer.authorize(ctx)
 
-            Workflow2Handler().handle(ctx)
-            OperationProcessor().process_operation(ctx)
+            workflow2_result = Workflow2Handler().handle(ctx)
+            if not workflow2_result.should_stop:
+                OperationProcessor().process_operation(ctx)
 
             RestMessageResponder.build_response(ctx)
+            release_delivered_workflow2_request(ctx)
 
         except Exception:
             self.logger.exception('Error processing REST enroll request')
@@ -145,10 +148,12 @@ class RestReEnrollView(LoggerMixin, View):
             authorizer = RestAuthorization(allowed_operations=['reenroll'])
             authorizer.authorize(ctx)
 
-            Workflow2Handler().handle(ctx)
-            OperationProcessor().process_operation(ctx)
+            workflow2_result = Workflow2Handler().handle(ctx)
+            if not workflow2_result.should_stop:
+                OperationProcessor().process_operation(ctx)
 
             RestMessageResponder.build_response(ctx)
+            release_delivered_workflow2_request(ctx)
 
         except Exception:
             self.logger.exception('Error processing REST reenroll request')
