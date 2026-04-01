@@ -1,0 +1,98 @@
+{% load i18n %}
+{% load internationalization_tags %}
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">{% trans "Metrics" %}</h5>
+    </div>
+    <div class="card-body">
+        <h5 class="mb-1 mt-1">{% trans "Application Metrics" %}</h5>
+        <hr class="hr-m">
+        <div class="metrics-grid">
+            <div class="metric-card mb-3">
+                <div class="metric-card-header">{% trans "Uptime" %}</div>
+                <div class="metric-card-body">
+                    <div class="metric-value">{{ uptime }}</div>
+                </div>
+            </div>
+            <div class="metric-card mb-3">
+                <div class="metric-card-header">{% trans "Started" %}</div> 
+                <div class="metric-card-body">
+                    <div class="metric-value">{{ started_time|local_datetime }}</div>
+                </div>
+            </div>
+            <div class="metric-card mb-3">
+                <div class="metric-card-header">{% trans "Online Users" %}</div>
+                <div class="metric-card-body"><p>test</p><p>test</p></div>
+            </div>
+            <div class="metric-card mb-3">
+                <div class="metric-card-header">{% trans "Database Size" %}</div>
+                <div class="metric-card-body">
+                    <div class="metric-value">{{ database_size }}</div>
+                </div>
+            </div>
+        </div>
+
+        <h5 class="mb-1 mt-3">{% trans "Container Metrics" %}</h5>
+        <hr class="hr-m">
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-card-header">{% trans "Memory Usage" %}</div>
+                <div class="metric-card-body"><p>test</p><p>test</p></div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card-header">{% trans "Disk I/O" %}</div>
+                <div class="metric-card-body"><p>test</p><p>test</p></div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card-header">{% trans "Network I/O" %}</div>
+                <div class="metric-card-body"><p>test</p><p>test</p></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .metric-card {
+    border: 1px solid #3a3f4b;
+    border-radius: 10px;
+    padding: 20px;
+    background: #2b3035;
+    color: #fff;
+    min-width: 0;
+  }
+
+  .metric-card-header {
+  font-weight: 600;
+  font-size: 1.2rem;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 2px solid #606063;
+  }
+
+  .metric-value {
+    font-size: 2rem;
+  }
+
+  .metric-subtext {
+    font-size: 1.2rem;
+  }
+
+  @media (max-width: 1400px) {
+    .metrics-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 768px) {
+    .metrics-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

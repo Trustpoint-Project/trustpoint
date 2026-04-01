@@ -14,6 +14,8 @@ from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic import TemplateView
 from django.views.generic.edit import FormView
+from django.utils import timezone
+from django.db import connection
 
 from management.forms import (
     InternationalizationConfigForm,
@@ -31,6 +33,46 @@ from trustpoint.page_context import PageContextMixin
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
+
+APP_STARTED_AT = timezone.now()
+
+def format_uptime(started_at):
+    """Return a human-readable uptime string."""
+    delta = timezone.now() - started_at
+    total_seconds = int(delta.total_seconds())
+
+    days, remainder = divmod(total_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    if days > 0:
+        return f'{days}d {hours}h {minutes}m {seconds}s'
+    if hours > 0:
+        return f'{hours}h {minutes}m {seconds}s'
+    return f'{minutes}m {seconds}s'
+
+def format_bytes(size: int) -> str:
+    """Convert bytes into a human-readable string."""
+    units = ['B', 'KB', 'MB', 'GB', 'TB']
+    value = float(size)
+
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            if unit == 'B':
+                return f'{int(value)} {unit}'
+            return f'{value:.2f} {unit}'
+        value /= 1024
+
+    return f'{size} B'
+
+def get_database_size() -> str:
+    """Return the size of the current PostgreSQL database."""
+    with connection.cursor() as cursor:
+        cursor.execute('SELECT pg_database_size(current_database())')
+        row = cursor.fetchone()
+
+    size_bytes = row[0] if row else 0
+    return format_bytes(size_bytes)
 
 
 class SettingsFormViewMixin[FormType: (
@@ -109,6 +151,15 @@ class SettingsTabView(TemplateView):
         notification_view.setup(self.request)
         context['notification_form'] = notification_view.get_form()
         context['notification_config'] = NotificationConfig.get()
+
+        metrics_view = MetricsSettingsView()
+        metrics_view.request = self.request
+        metrics_view.setup(self.request)
+        metrics_context = metrics_view.get_context_data()
+
+        context['uptime'] = metrics_context['uptime']
+        context['started_time'] = metrics_context['started_time']
+        context['database_size'] = metrics_context['database_size']
 
         return context
 
@@ -405,6 +456,22 @@ class NotificationSettingsView(SettingsFormViewMixin[NotificationConfigForm]):
         context['notification_config'] = notification_config
         return context
 
+
+class MetricsSettingsView(TemplateView):
+    """View for displaying runtime metrics."""
+
+    template_name = 'management/includes/metrics_configuration.html'
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        context = super().get_context_data(**kwargs)
+        context['page_category'] = 'management'
+        context['page_name'] = 'settings'
+        context['setting_type'] = 'metrics'
+
+        context['uptime'] = format_uptime(APP_STARTED_AT)
+        context['started_time'] = APP_STARTED_AT
+        context['database_size'] = get_database_size
+        return context
 
 class ChangeLogLevelView(View):
     """Deprecated view for changing the logging level."""

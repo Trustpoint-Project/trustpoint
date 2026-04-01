@@ -24,6 +24,7 @@ urlpatterns = [
     path('settings/security/', settings.SecuritySettingsView.as_view(), name='settings-security'),
     path('settings/logging/', settings.LoggingSettingsView.as_view(), name='settings-logging'),
     path('settings/notifications/', settings.NotificationSettingsView.as_view(), name='settings-notifications'),
+    path('settings/metrics/', settings.MetricsSettingsView.as_view(), name='settings-metrics'),
     # Backward compatibility for log level change
     path('loglevel/change', settings.ChangeLogLevelView.as_view(), name='change-loglevel'),
     # Logging file views
