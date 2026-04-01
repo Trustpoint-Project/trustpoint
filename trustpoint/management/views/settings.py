@@ -278,10 +278,6 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
         """Handle invalid security form submission."""
         messages.error(self.request, _('Error saving the configuration'))
         extra: dict[str, Any] = {'form': form}
-        if hasattr(form, '_violations'):
-            extra['policy_violations'] = form._violations  # noqa: SLF001
-            extra['policy_violations_mode_label'] = form._violations_mode_label  # noqa: SLF001
-            form.errors.pop('__all__', None)
 
 
         self.template_name = 'management/settings.html'

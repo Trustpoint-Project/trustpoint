@@ -209,12 +209,13 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         if defaults.get('require_physical_hsm') and not cleaned.get('require_physical_hsm'):
             self.add_error('require_physical_hsm', 'This feature cannot be disabled at this security level.')
 
-        for field, default_key in [
-            ('permitted_no_onboarding_pki_protocols', 'permitted_no_onboarding_pki_protocols'),
-            ('permitted_onboarding_protocols', 'permitted_onboarding_protocols'),
-        ]:
+        protocol_fields: list[tuple[str, list[int]]] = [
+            ('permitted_no_onboarding_pki_protocols', defaults['permitted_no_onboarding_pki_protocols']),
+            ('permitted_onboarding_protocols', defaults['permitted_onboarding_protocols']),
+        ]
+        for field, allowed_list in protocol_fields:
             submitted = cleaned.get(field) or []
-            allowed = {int(v) for v in (defaults.get(default_key) or [])}
+            allowed = {int(v) for v in allowed_list}
             disallowed = {int(v) for v in submitted} - allowed
             if disallowed:
                 self.add_error(field, 'One or more selected protocols are not permitted at this security level.')
