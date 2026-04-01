@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from trustpoint.logger import LoggerMixin
@@ -26,6 +27,8 @@ class TemplateVariableResolver(LoggerMixin):
     ) -> dict[str, str]:
         """Build a mapping of template variable names to their resolved string values."""
         variables: dict[str, str] = {}
+
+        variables['time.now'] = datetime.now(UTC).isoformat()
 
         if device is not None:
             variables['device.rfc_4122_uuid'] = str(device.rfc_4122_uuid)

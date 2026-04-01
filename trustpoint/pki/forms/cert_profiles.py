@@ -192,6 +192,8 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
     }
 
     VALIDITY_LABELS: ClassVar[dict[str, str]] = {
+        'not_before': 'Not Before',
+        'not_after': 'Not After',
         'days': 'Days',
         'hours': 'Hours',
         'minutes': 'Minutes',
@@ -414,6 +416,19 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
         """Build validity fields based on sample values."""
         profile_validity = self.profile.get('validity', {})
 
+        for ts_field in ('not_before', 'not_after'):
+            ts_value = validity.get(ts_field)
+            if ts_value is not None:
+                display_label = self.VALIDITY_LABELS.get(ts_field, ts_field.replace('_', ' ').title())
+                formatted = str(ts_value)
+                self.fields[ts_field] = forms.CharField(
+                    required=False,
+                    label=mark_safe(display_label),  # noqa: S308
+                    initial=formatted,
+                    disabled=True,
+                    widget=forms.TextInput(attrs={'class': 'form-control'}),
+                )
+
         for field_name, sample_value in validity.items():
             if field_name in CERT_PROFILE_KEYWORDS or field_name in ('not_before', 'not_after', 'duration'):
                 continue
@@ -576,7 +591,7 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
     def _build_validity_from_form_data(self, cleaned_data: dict[str, Any]) -> dict[str, int]:
         """Build validity period from form data."""
         validity = {}
-        for field_name in ProfileBasedFormFieldBuilder.VALIDITY_LABELS:
+        for field_name in ('days', 'hours', 'minutes', 'seconds'):
             value = cleaned_data.get(field_name)
             if value:
                 validity[field_name] = int(value)
