@@ -117,6 +117,7 @@ class StartupContext:
     # Storage configuration
     storage_type: KeyStorageConfig.StorageType | None
 
+
     # DEK cache state (only applicable for HSM storage methods)
     dek_cache_state: DekCacheState | None
 
