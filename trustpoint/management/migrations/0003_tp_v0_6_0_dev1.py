@@ -32,6 +32,11 @@ class Migration(migrations.Migration):
             name='permitted_onboarding_protocols',
             field=models.JSONField(blank=True, default=list, help_text='JSON list of allowed OnboardingProtocol integer values (MANUAL=0, CMP_IDEVID=1, CMP_SHARED_SECRET=2, EST_IDEVID=3, EST_USERNAME_PASSWORD=4, AOKI=5, BRSKI=6, OPC_GDS_PUSH=7, REST_USERNAME_PASSWORD=8).'),
         ),
+        migrations.AlterField(
+            model_name='securityconfig',
+            name='security_mode',
+            field=models.CharField(choices=[('0', 'Lab / Custom'), ('1', 'Brownfield Compatible'), ('2', 'Industrial Standard'), ('3', 'Hardened Production'), ('4', 'Critical Infrastructure')], default='1', max_length=6),
+        ),
         migrations.CreateModel(
             name='AuditLog',
             fields=[

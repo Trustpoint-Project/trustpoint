@@ -45,8 +45,6 @@ if TYPE_CHECKING:
 
 class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
     """Security configuration model form."""
-    _violations: list[str] | None = None
-    _violations_mode_label: str | None = None
 
     FEATURE_TO_FIELDS: ClassVar[dict[type[SecurityFeature], list[str]]] = {
         AutoGenPkiFeature: ['auto_gen_pki', 'auto_gen_pki_key_algorithm'],
@@ -166,10 +164,8 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         raw = self.cleaned_data.get('rsa_minimum_key_size')
         mode = self.cleaned_data.get('security_mode')
 
-
         if mode == SecurityConfig.SecurityModeChoices.CRITICAL:
             return None
-
 
         if raw in (None, ''):
             return None
@@ -178,6 +174,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             return int(str(raw))
         except (TypeError, ValueError) as err:
             raise ValidationError(_('Invalid RSA key size.')) from err
+
     def clean_auto_gen_pki_key_algorithm(self) -> AutoGenPkiKeyAlgorithm:
         """Keep the current value of `auto_gen_pki_key_algorithm` from the instance if the field was disabled."""
         form_value = self.cleaned_data.get('auto_gen_pki_key_algorithm')
@@ -187,37 +184,51 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             return AutoGenPkiKeyAlgorithm.RSA2048
         return AutoGenPkiKeyAlgorithm(form_value)
 
+    def _validate_mode_constraints(self, cleaned: dict[str, Any], mode: str) -> None:
+        """Validate that submitted values comply with the given security mode defaults."""
+        defaults = SecurityConfig._MODE_DEFAULTS[mode]   # noqa: SLF001
+
+        for field in ['max_cert_validity_days', 'max_crl_validity_days']:
+            val = cleaned.get(field)
+            default_val = defaults.get(field)
+            if default_val is not None and (val is None or val > default_val):
+                self.add_error(field, f'Maximum allowed for this level is {default_val}.')
+
+        rsa_val = cleaned.get('rsa_minimum_key_size')
+        default_rsa = defaults.get('rsa_minimum_key_size')
+        if default_rsa is not None and (rsa_val is None or rsa_val < default_rsa):
+            self.add_error(
+                'rsa_minimum_key_size',
+                f'Minimum key size for this level is {default_rsa}.',
+            )
+
+        for field in ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca']:
+            if not defaults.get(field) and cleaned.get(field):
+                self.add_error(field, 'This feature cannot be enabled at this security level.')
+
+        if defaults.get('require_physical_hsm') and not cleaned.get('require_physical_hsm'):
+            self.add_error('require_physical_hsm', 'This feature cannot be disabled at this security level.')
+
+        for field, default_key in [
+            ('permitted_no_onboarding_pki_protocols', 'permitted_no_onboarding_pki_protocols'),
+            ('permitted_onboarding_protocols', 'permitted_onboarding_protocols'),
+        ]:
+            submitted = cleaned.get(field) or []
+            allowed = {int(v) for v in (defaults.get(default_key) or [])}
+            disallowed = {int(v) for v in submitted} - allowed
+            if disallowed:
+                self.add_error(field, 'One or more selected protocols are not permitted at this security level.')
+
     def clean(self) -> dict[str, Any]:
         """Apply per-mode constraints on security settings."""
         cleaned: dict[str, Any] = super().clean() or {}
-        cleaned_data = cleaned
-        mode = cleaned_data.get('security_mode')
-
+        mode = cleaned.get('security_mode')
 
         if mode != SecurityConfig.SecurityModeChoices.LAB:
-            mode_str = str(mode)
-            defaults = SecurityConfig._MODE_DEFAULTS[mode_str]   # noqa: SLF001
+            self._validate_mode_constraints(cleaned, str(mode))
 
-
-            for field in ['max_cert_validity_days', 'max_crl_validity_days']:
-                val = cleaned_data.get(field)
-                default_val = defaults.get(field)
-                if default_val is not None and (val is None or val > default_val):
-                    self.add_error(field, f'Maximum allowed for this level is {default_val}.')
-
-
-            rsa_val = cleaned_data.get('rsa_minimum_key_size')
-            default_rsa = defaults.get('rsa_minimum_key_size')
-            if default_rsa is not None and (rsa_val is None or rsa_val < default_rsa):
-                self.add_error(
-                    'rsa_minimum_key_size',
-                    f'Minimum key size for this level is {default_rsa}.',
-                )
-
-
-            for field in ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca']:
-                if not defaults.get(field) and cleaned_data.get(field):
-                    self.add_error(field, 'This feature cannot be enabled at this security level.')
+        if cleaned.get('auto_gen_pki') and not cleaned.get('allow_auto_gen_pki'):
+            self.add_error('auto_gen_pki', 'Cannot enable auto-generated PKI when it is not permitted.')
 
         return cleaned
 

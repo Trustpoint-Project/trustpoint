@@ -74,25 +74,6 @@
         return checked ? checked.value : null;
     }
 
-    function updateSettingsTable(securityLevel) {
-        const settings = securityConfigurations[securityLevel] || {};
-        const tableBody = document.querySelector("#security-settings-table tbody");
-        if (!tableBody) return;
-        tableBody.innerHTML = "";
-        for (const [key, value] of Object.entries(settings)) {
-            if (key.startsWith('raw_')) continue;
-            const row = document.createElement("tr");
-            const settingCell = document.createElement("td");
-            settingCell.textContent = key.replace(/_/g, " ").replace(/\b\w/g, char => char.toUpperCase());
-            row.appendChild(settingCell);
-            const valueCell = document.createElement("td");
-            valueCell.textContent = Array.isArray(value) ? value.join(", ") : value;
-            row.appendChild(valueCell);
-            tableBody.appendChild(row);
-        }
-    }
-
-
     function applyStrictnessConstraints(securityLevel) {
         const settings = securityConfigurations[securityLevel] || {};
         const isLab = securityLevel === '0';
@@ -252,10 +233,21 @@ function initSecurityUI() {
 
 
     const autoCheckbox = document.querySelector('input[name="auto_gen_pki"]');
+    const allowAutoCheckbox = document.querySelector('input[name="allow_auto_gen_pki"]');
     const algoField = document.querySelector('select[name="auto_gen_pki_key_algorithm"]');
     const algoGroup = algoField
         ? algoField.closest('.mb-3, .form-group, .tp-form-group')
         : null;
+
+    function updateAutoGenPkiState() {
+        if (!autoCheckbox || !allowAutoCheckbox) return;
+        if (!allowAutoCheckbox.checked) {
+            autoCheckbox.checked = false;
+            autoCheckbox.disabled = true;
+        } else if (!allowAutoCheckbox.disabled) {
+            autoCheckbox.disabled = false;
+        }
+    }
 
     function updateAlgoVisibility() {
         if (!algoGroup) return;
@@ -267,9 +259,17 @@ function initSecurityUI() {
         algoGroup.style.display = autoCheckbox.checked ? '' : 'none';
     }
 
+    if (allowAutoCheckbox) {
+        allowAutoCheckbox.addEventListener('change', function () {
+            updateAutoGenPkiState();
+            updateAlgoVisibility();
+        });
+    }
+
     if (autoCheckbox) {
         autoCheckbox.addEventListener('change', updateAlgoVisibility);
     }
+    updateAutoGenPkiState();
     updateAlgoVisibility();
 
 
@@ -292,11 +292,9 @@ function initSecurityUI() {
                 }
             }
 
-            updateSettingsTable(newMode);
-
             resetToDefaultsAndApplyConstraints(newMode);
 
-
+            updateAutoGenPkiState();
             updateAlgoVisibility();
         });
     });
@@ -304,10 +302,10 @@ function initSecurityUI() {
     const checkedRadio = document.querySelector('input[name="security_mode"]:checked');
     if (checkedRadio) {
         const currentMode = checkedRadio.value;
-        updateSettingsTable(currentMode);
 
         applyStrictnessConstraints(currentMode);
 
+        updateAutoGenPkiState();
         updateAlgoVisibility();
     }
 }
