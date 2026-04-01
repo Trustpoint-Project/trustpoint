@@ -47,7 +47,8 @@ class SecurityConfigFormTest(TestCase):
         form_data = {
             'security_mode': SecurityConfig.SecurityModeChoices.LAB,
             'auto_gen_pki': True,
-            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048
+            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
+            'allow_auto_gen_pki': True,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
