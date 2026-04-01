@@ -80,6 +80,12 @@ export function createIssuesPanelController({
             : '';
 
         const isClickable = item.offset !== null;
+        const badgeClass =
+          item.level === 'error'
+            ? 'text-bg-danger'
+            : item.level === 'warning'
+              ? 'text-bg-warning'
+              : 'text-bg-info';
 
         return `
           <button
@@ -88,7 +94,7 @@ export function createIssuesPanelController({
             data-issue-index="${index}"
             ${isClickable ? 'title="Jump to this location"' : 'disabled'}
           >
-            <div class="fw-semibold text-capitalize">${escapeHtml(item.level)}</div>
+            <div class="mb-2"><span class="badge ${badgeClass} text-capitalize">${escapeHtml(item.level)}</span></div>
             <div>${escapeHtml(item.message)}</div>
             ${
               locationText

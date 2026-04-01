@@ -14,8 +14,9 @@ from django.utils.translation import gettext as _
 from django.views import View
 
 from request.cmp_transaction_state import CmpTransactionState
+from trustpoint.page_context import PageContextMixin
 from workflows2.engine.executor import WorkflowExecutor
-from workflows2.models import Workflow2Instance, Workflow2Job, Workflow2Run
+from workflows2.models import Workflow2Approval, Workflow2Instance, Workflow2Job, Workflow2Run
 from workflows2.services.runtime import WorkflowRuntimeService
 from workflows2.views.presentation import (
     build_step_meta_from_ir,
@@ -31,8 +32,21 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-class Workflow2RunListView(LoginRequiredMixin, View):
+class Workflow2RunListView(PageContextMixin, LoginRequiredMixin, View):
     """List workflow runs with filtering and status summaries."""
+
+    page_category = 'workflows2'
+    page_name = 'runs-list'
+    SORT_OPTIONS = {
+        'created': '-created_at',
+        'created_asc': 'created_at',
+        'updated': '-updated_at',
+        'updated_asc': 'updated_at',
+        'trigger': 'trigger_on',
+        'trigger_desc': '-trigger_on',
+        'status': 'status',
+        'status_desc': '-status',
+    }
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the paginated run list."""
@@ -40,17 +54,23 @@ class Workflow2RunListView(LoginRequiredMixin, View):
         base_qs = (
             Workflow2Run.objects.filter(status__in=supported_statuses)
             .annotate(instance_count=Count('instances'))
-            .order_by('-created_at')
         )
 
         status = request.GET.get('status')
-        trigger_on = (request.GET.get('trigger_on') or '').strip()
+        trigger_values = [value.strip() for value in request.GET.getlist('trigger_on') if value.strip()]
+        sort = request.GET.get('sort') or 'created'
 
         qs = base_qs
         if status:
             qs = qs.filter(status=status)
-        if trigger_on:
-            qs = qs.filter(trigger_on__icontains=trigger_on)
+        if trigger_values:
+            qs = qs.filter(trigger_on__in=trigger_values)
+
+        qs = qs.order_by(self.SORT_OPTIONS.get(sort, '-created_at'))
+
+        trigger_choices = list(
+            base_qs.order_by('trigger_on').values_list('trigger_on', flat=True).distinct()
+        )
 
         paginator = Paginator(qs, 25)
         page_obj = paginator.get_page(request.GET.get('page'))
@@ -82,9 +102,12 @@ class Workflow2RunListView(LoginRequiredMixin, View):
             'workflows2/runs_list.html',
             {
                 'page_obj': page_obj,
+                **self.get_context_data(),
                 'run_rows': run_rows,
                 'status': status or '',
-                'trigger_on': trigger_on,
+                'selected_triggers': trigger_values,
+                'trigger_choices': trigger_choices,
+                'sort': sort,
                 'summary_total': qs.count(),
                 'summary_active': qs.filter(status__in=active_statuses).count(),
                 'summary_awaiting': qs.filter(status=Workflow2Run.STATUS_AWAITING).count(),
@@ -94,8 +117,11 @@ class Workflow2RunListView(LoginRequiredMixin, View):
         )
 
 
-class Workflow2RunDetailView(LoginRequiredMixin, View):
+class Workflow2RunDetailView(PageContextMixin, LoginRequiredMixin, View):
     """Show one workflow run with its instances and event context."""
+
+    page_category = 'workflows2'
+    page_name = 'runs-list'
 
     def get(self, request: HttpRequest, run_id: int) -> HttpResponse:
         """Render the detail page for one workflow run."""
@@ -118,18 +144,36 @@ class Workflow2RunDetailView(LoginRequiredMixin, View):
         ]
         status_counts: dict[str, int] = {}
         for inst in instances:
-            status_counts[inst.get_status_display()] = status_counts.get(inst.get_status_display(), 0) + 1
+            status_counts[inst.status] = status_counts.get(inst.status, 0) + 1
 
-        outcome_summary = [
-            {'label': label, 'value': str(count), 'meta': ''}
-            for label, count in status_counts.items()
-        ]
+        pending_approval_count = Workflow2Approval.objects.filter(
+            instance__run=run,
+            status=Workflow2Approval.STATUS_PENDING,
+        ).count()
+        terminal_instance_statuses = {
+            Workflow2Instance.STATUS_SUCCEEDED,
+            Workflow2Instance.STATUS_REJECTED,
+            Workflow2Instance.STATUS_FAILED,
+            Workflow2Instance.STATUS_STOPPED,
+            Workflow2Instance.STATUS_CANCELLED,
+        }
+        inline_skipped_statuses = terminal_instance_statuses | {
+            Workflow2Instance.STATUS_AWAITING,
+        }
+        can_run_inline = any(inst.status not in inline_skipped_statuses for inst in instances)
+        can_cancel = run.status in {
+            Workflow2Run.STATUS_QUEUED,
+            Workflow2Run.STATUS_RUNNING,
+            Workflow2Run.STATUS_AWAITING,
+            Workflow2Run.STATUS_PAUSED,
+        }
 
         return render(
             request,
             'workflows2/run_detail.html',
             {
                 'run': run,
+                **self.get_context_data(),
                 'instance_rows': instance_rows,
                 'run_badge': status_badge_class(run.status),
                 'source_summary': source_context['summary'],
@@ -137,7 +181,14 @@ class Workflow2RunDetailView(LoginRequiredMixin, View):
                 'source_pretty': pretty_json(run.source_json),
                 'event_pretty': pretty_json(run.event_json),
                 'event_context': event_context,
-                'outcome_summary': outcome_summary,
+                'instance_total': len(instance_rows),
+                'awaiting_instance_count': status_counts.get(Workflow2Instance.STATUS_AWAITING, 0),
+                'failed_instance_count': status_counts.get(Workflow2Instance.STATUS_FAILED, 0),
+                'rejected_instance_count': status_counts.get(Workflow2Instance.STATUS_REJECTED, 0),
+                'succeeded_instance_count': status_counts.get(Workflow2Instance.STATUS_SUCCEEDED, 0),
+                'pending_approval_count': pending_approval_count,
+                'can_run_inline': can_run_inline,
+                'can_cancel': can_cancel,
             },
         )
 

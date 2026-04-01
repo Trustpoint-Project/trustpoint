@@ -10,32 +10,70 @@
           <h1 class="h3 mb-0">{% trans "Approval review" %}</h1>
           <span class="badge {{ approval_badge }}">{{ approval.get_status_display }}</span>
           {% if can_resolve %}
-            <span class="badge text-bg-warning">{% trans "Awaiting decision" %}</span>
+            <span class="badge text-bg-warning">{% trans "Action required" %}</span>
           {% endif %}
         </div>
         <div class="fw-semibold">{{ step_display.title }}</div>
         <div class="text-muted small">
           <div><strong>{% trans "Approval ID" %}:</strong> <code>{{ approval.id }}</code></div>
           <div><strong>{% trans "Step" %}:</strong> <code>{{ approval.step_id }}</code></div>
+          <div><strong>{% trans "Instance" %}:</strong> <a href="{% url 'workflows2:instances-detail' inst.id %}"><code>{{ inst.id }}</code></a></div>
         </div>
       </div>
 
-      <div class="text-muted small">
-        <div><strong>{% trans "Created" %}:</strong> {{ approval.created_at|date:"Y-m-d H:i:s" }}</div>
-        {% if approval.expires_at %}
-          <div><strong>{% trans "Expires" %}:</strong> {{ approval.expires_at|date:"Y-m-d H:i:s" }}</div>
-        {% endif %}
-        {% if approval.decided_at %}
-          <div><strong>{% trans "Decided" %}:</strong> {{ approval.decided_at|date:"Y-m-d H:i:s" }}</div>
-        {% endif %}
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'workflows2:approvals-list' %}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>{% trans "Back to approvals" %}
+        </a>
+        <a href="{% url 'workflows2:instances-detail' inst.id %}" class="btn btn-outline-primary">
+          {% trans "Open instance" %}
+        </a>
       </div>
     </div>
   </div>
 
+  {% if can_resolve %}
+    <div class="alert alert-warning shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Decision required" %}</div>
+      <div class="small mt-1">
+        {% trans "This workflow instance is waiting for an approval decision before it can continue." %}
+      </div>
+    </div>
+  {% elif approval.status == "approved" %}
+    <div class="alert alert-success shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Approved" %}</div>
+      <div class="small mt-1">
+        {% if approval.decided_by %}
+          {% blocktrans with user=approval.decided_by %}Decision recorded by {{ user }}.{% endblocktrans %}
+        {% else %}
+          {% trans "Decision recorded." %}
+        {% endif %}
+      </div>
+    </div>
+  {% elif approval.status == "rejected" %}
+    <div class="alert alert-danger shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Rejected" %}</div>
+      <div class="small mt-1">
+        {% if approval.decided_by %}
+          {% blocktrans with user=approval.decided_by %}Decision recorded by {{ user }}.{% endblocktrans %}
+        {% else %}
+          {% trans "Decision recorded." %}
+        {% endif %}
+      </div>
+    </div>
+  {% elif approval.status == "expired" %}
+    <div class="alert alert-secondary shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Approval expired" %}</div>
+      <div class="small mt-1">{% trans "The approval was not resolved before its timeout." %}</div>
+    </div>
+  {% endif %}
+
   <div class="row g-3 mb-3">
     <div class="col-12 col-xl-5">
       <div class="card h-100 shadow-sm">
-        <div class="card-header bg-body fw-semibold">{% trans "Decision" %}</div>
+        <div class="card-header bg-body fw-semibold">
+          {% if can_resolve %}{% trans "Make decision" %}{% else %}{% trans "Decision result" %}{% endif %}
+        </div>
         <div class="card-body">
           <div class="row g-2 mb-3">
             <div class="col-12 col-md-6">
@@ -53,11 +91,32 @@
             <div class="col-12">
               <div class="border rounded-3 p-3 h-100">
                 <div class="text-muted small text-uppercase">{% trans "Timeout" %}</div>
-                <div class="fw-semibold">
-                  {% if step_meta.timeout_seconds %}
-                    {{ step_meta.timeout_seconds }}s
+                <div class="fw-semibold mb-1">
+                  {% if timeout_context.has_timeout %}
+                    {% if timeout_context.timeout_seconds %}
+                      {{ timeout_context.timeout_seconds }}s
+                    {% else %}
+                      {% trans "Configured" %}
+                    {% endif %}
                   {% else %}
-                    —
+                    {% trans "No timeout" %}
+                  {% endif %}
+                </div>
+                <div class="small text-muted">
+                  {% if timeout_context.expires_at %}
+                    {% if timeout_context.is_expired %}
+                      {% blocktrans with expires_at=timeout_context.expires_at|date:"Y-m-d H:i:s" %}
+                        Expired at {{ expires_at }}.
+                      {% endblocktrans %}
+                    {% else %}
+                      {% blocktrans with expires_at=timeout_context.expires_at|date:"Y-m-d H:i:s" %}
+                        Expires at {{ expires_at }}.
+                      {% endblocktrans %}
+                    {% endif %}
+                  {% elif timeout_context.has_timeout %}
+                    {% trans "The deadline will be calculated when the approval is created." %}
+                  {% else %}
+                    {% trans "This approval waits indefinitely until someone resolves it." %}
                   {% endif %}
                 </div>
               </div>
@@ -81,10 +140,15 @@
               </div>
             </form>
           {% else %}
-            <div class="alert alert-secondary mb-0">
-              <div class="fw-semibold">{% trans "Decision recorded" %}</div>
-              <div class="small mt-2">
-                <div><strong>{% trans "Instance status" %}:</strong> {{ inst.get_status_display }}</div>
+            <div class="border rounded-3 p-3">
+              <div class="text-muted small text-uppercase mb-2">{% trans "Recorded decision" %}</div>
+              <div class="mb-2">
+                <span class="badge {{ approval_badge }}">{{ approval.get_status_display }}</span>
+              </div>
+              <div class="small">
+                {% if approval.decided_at %}
+                  <div><strong>{% trans "Decided" %}:</strong> {{ approval.decided_at|date:"Y-m-d H:i:s" }}</div>
+                {% endif %}
                 {% if approval.decided_by %}
                   <div><strong>{% trans "Decided by" %}:</strong> {{ approval.decided_by }}</div>
                 {% endif %}
@@ -136,31 +200,14 @@
             <div class="col-12 col-lg-6">
               <div class="border rounded-3 p-3 h-100">
                 <div class="text-muted small text-uppercase mb-2">{% trans "Source context" %}</div>
-                {% for row in source_context.rows %}
-                  <div class="mb-2">
-                    <div class="text-muted small">{{ row.label }}</div>
-                    <div class="fw-semibold">{{ row.value }}</div>
-                    {% if row.meta %}
-                      <div class="text-muted small">{{ row.meta }}</div>
-                    {% endif %}
-                  </div>
-                {% empty %}
-                  <div class="text-muted">{% trans "No source context recorded." %}</div>
-                {% endfor %}
+                {% include 'workflows2/_context_rows.html' with rows=source_context.rows empty_label="No source context recorded." %}
               </div>
             </div>
 
             <div class="col-12 col-lg-6">
               <div class="border rounded-3 p-3 h-100">
                 <div class="text-muted small text-uppercase mb-2">{% trans "Event summary" %}</div>
-                {% for row in event_context %}
-                  <div class="mb-2">
-                    <div class="text-muted small">{{ row.label }}</div>
-                    <div class="fw-semibold">{{ row.value }}</div>
-                  </div>
-                {% empty %}
-                  <div class="text-muted">{% trans "No human-friendly event summary was available." %}</div>
-                {% endfor %}
+                {% include 'workflows2/_context_rows.html' with rows=event_context empty_label="No human-friendly event summary was available." %}
               </div>
             </div>
           </div>
@@ -189,7 +236,7 @@
     </div>
   </div>
 
-  <div class="card shadow-sm mb-3">
+  <div class="card shadow-sm">
     <div class="card-header bg-body fw-semibold">{% trans "Technical details" %}</div>
     <div class="card-body">
       <div class="accordion" id="approvalTechnical">
@@ -220,11 +267,6 @@
         </div>
       </div>
     </div>
-  </div>
-
-  <div class="d-flex flex-wrap gap-2">
-    <a href="{% url 'workflows2:approvals-list' %}" class="btn btn-outline-secondary">{% trans "Back to approvals" %}</a>
-    <a href="{% url 'workflows2:instances-detail' inst.id %}" class="btn btn-outline-primary">{% trans "Open instance" %}</a>
   </div>
 </div>
 

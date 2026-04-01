@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
 from django.views.generic import ListView
 
+from trustpoint.page_context import PageContextMixin
 from workflows2.forms import Workflow2DefinitionForm
 from workflows2.models import Workflow2Definition
 from workflows2.services.definitions import WorkflowDefinitionService
@@ -22,9 +23,11 @@ if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
 
 
-class Workflow2DefinitionListView(LoginRequiredMixin, ListView[Workflow2Definition]):
+class Workflow2DefinitionListView(PageContextMixin, LoginRequiredMixin, ListView[Workflow2Definition]):
     """Show saved Workflow 2 definitions."""
 
+    page_category = 'workflows2'
+    page_name = 'definitions_list'
     model = Workflow2Definition
     template_name = 'workflows2/definition_list.html'
     context_object_name = 'definitions'
@@ -35,9 +38,11 @@ class Workflow2DefinitionListView(LoginRequiredMixin, ListView[Workflow2Definiti
         return Workflow2Definition.objects.order_by('-created_at')
 
 
-class Workflow2DefinitionCreateView(LoginRequiredMixin, View):
+class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
     """Create a new Workflow 2 definition from YAML."""
 
+    page_category = 'workflows2'
+    page_name = 'definitions_list'
     template_name = 'workflows2/definition_editor.html'
 
     default_yaml = textwrap.dedent(
@@ -77,6 +82,7 @@ class Workflow2DefinitionCreateView(LoginRequiredMixin, View):
             self.template_name,
             {
                 'mode': 'create',
+                **self.get_context_data(),
                 'form': form,
                 'definition': None,
                 'compile_error': None,
@@ -93,6 +99,7 @@ class Workflow2DefinitionCreateView(LoginRequiredMixin, View):
                 self.template_name,
                 {
                     'mode': 'create',
+                    **self.get_context_data(),
                     'form': form,
                     'definition': None,
                     'compile_error': None,
@@ -113,6 +120,7 @@ class Workflow2DefinitionCreateView(LoginRequiredMixin, View):
                 self.template_name,
                 {
                     'mode': 'create',
+                    **self.get_context_data(),
                     'form': form,
                     'definition': None,
                     'compile_error': res.error,
@@ -126,6 +134,7 @@ class Workflow2DefinitionCreateView(LoginRequiredMixin, View):
                 self.template_name,
                 {
                     'mode': 'create',
+                    **self.get_context_data(),
                     'form': form,
                     'definition': None,
                     'compile_error': 'Workflow save succeeded without returning a definition.',
@@ -136,9 +145,11 @@ class Workflow2DefinitionCreateView(LoginRequiredMixin, View):
         return redirect('workflows2:definitions_edit', pk=obj.id)
 
 
-class Workflow2DefinitionEditView(LoginRequiredMixin, View):
+class Workflow2DefinitionEditView(PageContextMixin, LoginRequiredMixin, View):
     """Edit an existing Workflow 2 definition."""
 
+    page_category = 'workflows2'
+    page_name = 'definitions_list'
     template_name = 'workflows2/definition_editor.html'
 
     def get(self, request: HttpRequest, pk: UUID) -> HttpResponse:
@@ -157,6 +168,7 @@ class Workflow2DefinitionEditView(LoginRequiredMixin, View):
             self.template_name,
             {
                 'mode': 'edit',
+                **self.get_context_data(),
                 'form': form,
                 'definition': obj,
                 'compile_error': None,
@@ -175,6 +187,7 @@ class Workflow2DefinitionEditView(LoginRequiredMixin, View):
                 self.template_name,
                 {
                     'mode': 'edit',
+                    **self.get_context_data(),
                     'form': form,
                     'definition': obj,
                     'compile_error': None,
@@ -196,6 +209,7 @@ class Workflow2DefinitionEditView(LoginRequiredMixin, View):
                 self.template_name,
                 {
                     'mode': 'edit',
+                    **self.get_context_data(),
                     'form': form,
                     'definition': obj,
                     'compile_error': res.error,
@@ -209,6 +223,7 @@ class Workflow2DefinitionEditView(LoginRequiredMixin, View):
                 self.template_name,
                 {
                     'mode': 'edit',
+                    **self.get_context_data(),
                     'form': form,
                     'definition': obj,
                     'compile_error': 'Workflow update succeeded without returning a definition.',

@@ -14,11 +14,7 @@ import {
   renderExpressionDsl,
   renderFieldSpecificOptions,
 } from './guide_dsl_sections.js';
-import {
-  renderGuideButtonRow,
-  renderGuideMeta,
-  renderGuideSection,
-} from './guide_layout.js';
+import { renderGuideButtonRow, renderGuideMeta, renderGuideSection } from './guide_layout.js';
 import { renderLogicStepGuide } from './guide_logic_step_renderer.js';
 import { renderStructuredStepEditor } from '../steps/structured_step_editor_renderer.js';
 import { APPROVAL_OUTCOME_PRESETS } from '../document/approval_outcome_presets.js';
@@ -34,29 +30,6 @@ function readCurrentStepData(yamlText, stepId) {
   } catch {
     return null;
   }
-}
-
-function renderFieldReferenceSection(requiredFields, optionalFields, missingRequiredFields, currentFieldKey) {
-  return renderGuideSection({
-    title: 'Field reference',
-    description: 'Required and optional fields for the current step type.',
-    body: `
-      <div class="mb-3">
-        <div class="fw-semibold mb-1">Missing required fields</div>
-        <div>${renderFieldChips(missingRequiredFields, currentFieldKey)}</div>
-      </div>
-
-      <div class="mb-3">
-        <div class="fw-semibold mb-1">Required fields</div>
-        <div>${renderFieldChips(requiredFields, currentFieldKey)}</div>
-      </div>
-
-      <div>
-        <div class="fw-semibold mb-1">Optional fields</div>
-        <div>${renderFieldChips(optionalFields, currentFieldKey)}</div>
-      </div>
-    `,
-  });
 }
 
 function renderVariableSummaryChips(varNames, { prefix = 'vars.', emptyLabel = 'None' } = {}) {
@@ -254,7 +227,13 @@ export function renderStepGuide(context, catalog, yamlText = '') {
   const { eventButtons, varsButtons } = buildVariableSuggestions(context, catalog);
   const showTypeOptions = context.fieldKey === 'type' || !context.stepType;
 
-  const configurationBody = `
+  const stepBody = `
+    ${renderGuideMeta([
+      { label: 'Step id', value: context.stepId || '-' },
+      { label: 'Type', value: context.stepType || '(unset)' },
+      { label: 'Field', value: context.fieldKey || 'step root' },
+    ])}
+
     ${showTypeOptions ? `
       <div class="mb-3">
         <div class="fw-semibold mb-1">Choose step type</div>
@@ -282,6 +261,14 @@ export function renderStepGuide(context, catalog, yamlText = '') {
         ${renderOptionalFieldActions(missingOptionalFields)}
       </div>
     ` : ''}
+
+    ${context.stepType ? `
+      <div class="mt-3">
+        <div class="fw-semibold mb-1">Fields in this step</div>
+        <div class="mb-2">${renderFieldChips(requiredFields, context.fieldKey)}</div>
+        <div>${renderFieldChips(optionalFields, context.fieldKey)}</div>
+      </div>
+    ` : ''}
   `;
 
   const stepSpecificSections =
@@ -289,56 +276,37 @@ export function renderStepGuide(context, catalog, yamlText = '') {
       ? renderLogicStepGuide(context, catalog, yamlText)
       : renderNonLogicStepSpecificSection(context, catalog, presentFieldKeys, yamlText);
 
-  const variableSections =
+  const variableSection =
     contextSupportsVariableInsertion(context) && context.stepType !== 'logic'
-      ? `
-        ${renderStepSummarySection(context)}
+      ? renderGuideSection({
+          title: 'Insert values',
+          description: 'Insert event values or workflow vars at the current YAML cursor position.',
+          body: `
+            <div class="mb-3">
+              <div class="fw-semibold mb-1">Event values</div>
+              ${renderGuideButtonRow(renderVariableButtons(eventButtons))}
+            </div>
 
-        ${renderGuideSection({
-          title: 'Insert event variable',
-          description: 'Insert at the current YAML cursor position.',
-          body: renderGuideButtonRow(renderVariableButtons(eventButtons)),
-        })}
-
-        ${renderGuideSection({
-          title: 'Insert available workflow var',
-          description: 'Only workflow vars guaranteed before this step are offered here.',
-          body: renderGuideButtonRow(renderVariableButtons(varsButtons)),
-        })}
-      `
+            <div>
+              <div class="fw-semibold mb-1">Workflow vars available here</div>
+              ${renderGuideButtonRow(renderVariableButtons(varsButtons))}
+            </div>
+          `,
+        })
       : '';
 
   return `
     ${renderGuideSection({
-      title: 'Current step',
+      title: 'Step',
       description: stepSpec?.description || 'Choose a step type to unlock step-specific guidance.',
       tone: 'accent',
-      body: `
-        ${renderGuideMeta([
-          { label: 'Step id', value: context.stepId || '-' },
-          { label: 'Type', value: context.stepType || '(unset)' },
-          { label: 'Field', value: context.fieldKey || 'step root' },
-        ])}
-      `,
+      body: stepBody,
     })}
 
-    ${renderGuideSection({
-      title: 'Configuration',
-      description: 'Use these actions to shape the current step without breaking YAML structure.',
-      body: configurationBody,
-    })}
-
-    ${variableSections}
+    ${variableSection}
 
     ${stepSpecificSections}
 
-    ${context.stepType
-      ? renderFieldReferenceSection(
-          requiredFields,
-          optionalFields,
-          missingRequiredFields,
-          context.fieldKey,
-        )
-      : ''}
+    ${context.stepType ? renderStepSummarySection(context) : ''}
   `;
 }

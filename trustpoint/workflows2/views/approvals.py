@@ -14,6 +14,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views import View
 
+from trustpoint.page_context import PageContextMixin
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Approval, Workflow2Instance
 from workflows2.services.dispatch import WorkflowDispatchService
@@ -51,8 +52,37 @@ def _expire_pending_approvals() -> None:
     )
 
 
-class Workflow2ApprovalListView(LoginRequiredMixin, View):
+def _build_timeout_context(
+    approval: Workflow2Approval,
+    *,
+    timeout_seconds: int | None,
+) -> dict[str, object]:
+    """Return render-friendly timeout information for one approval."""
+    expires_at = approval.expires_at
+    has_timeout = bool(timeout_seconds) or expires_at is not None
+    is_expired = approval.status == Workflow2Approval.STATUS_EXPIRED
+
+    return {
+        'has_timeout': has_timeout,
+        'timeout_seconds': timeout_seconds,
+        'expires_at': expires_at,
+        'is_expired': is_expired,
+    }
+
+
+class Workflow2ApprovalListView(PageContextMixin, LoginRequiredMixin, View):
     """List workflow approvals with status and context summaries."""
+
+    page_category = 'workflows2'
+    page_name = 'approvals-list'
+    SORT_OPTIONS = {
+        'created': ('pending_first', '-created_at'),
+        'created_asc': ('pending_first', 'created_at'),
+        'expires': ('pending_first', 'expires_at', '-created_at'),
+        'expires_desc': ('pending_first', '-expires_at', '-created_at'),
+        'status': ('status', '-created_at'),
+        'status_desc': ('-status', '-created_at'),
+    }
 
     def get(self, request: HttpRequest) -> HttpResponse:
         """Render the paginated approval queue."""
@@ -67,12 +97,14 @@ class Workflow2ApprovalListView(LoginRequiredMixin, View):
                 default=Value(1),
                 output_field=IntegerField(),
             )
-        ).order_by('pending_first', '-created_at')
+        )
 
         status = request.GET.get('status')
+        sort = request.GET.get('sort') or 'created'
         qs = base_qs
         if status:
             qs = qs.filter(status=status)
+        qs = qs.order_by(*self.SORT_OPTIONS.get(sort, ('pending_first', '-created_at')))
 
         paginator = Paginator(qs, 25)
         page_obj = paginator.get_page(request.GET.get('page'))
@@ -101,8 +133,10 @@ class Workflow2ApprovalListView(LoginRequiredMixin, View):
             'workflows2/approvals_list.html',
             {
                 'page_obj': page_obj,
+                **self.get_context_data(),
                 'approval_rows': approval_rows,
                 'status': status or '',
+                'sort': sort,
                 'status_choices': Workflow2Approval.STATUS_CHOICES,
                 'summary_total': qs.count(),
                 'summary_pending': qs.filter(status=Workflow2Approval.STATUS_PENDING).count(),
@@ -117,8 +151,11 @@ class Workflow2ApprovalListView(LoginRequiredMixin, View):
         )
 
 
-class Workflow2ApprovalDetailView(LoginRequiredMixin, View):
+class Workflow2ApprovalDetailView(PageContextMixin, LoginRequiredMixin, View):
     """Show a single approval request in context."""
+
+    page_category = 'workflows2'
+    page_name = 'approvals-list'
 
     def get(self, request: HttpRequest, approval_id: UUID) -> HttpResponse:
         """Render the detail page for one approval request."""
@@ -140,12 +177,19 @@ class Workflow2ApprovalDetailView(LoginRequiredMixin, View):
         source_context = resolve_source_context(run.source_json if run is not None else event_source)
         event_context = describe_event_context(inst.event_json)
         vars_summary = summarize_named_values(inst.vars_json)
+        timeout_context = _build_timeout_context(
+            approval,
+            timeout_seconds=step_meta.get('timeout_seconds')
+            if isinstance(step_meta.get('timeout_seconds'), int)
+            else None,
+        )
 
         return render(
             request,
             'workflows2/approval_detail.html',
             {
                 'approval': approval,
+                **self.get_context_data(),
                 'inst': inst,
                 'step_meta': step_meta,
                 'step_display': step_display,
@@ -157,6 +201,7 @@ class Workflow2ApprovalDetailView(LoginRequiredMixin, View):
                 'run_badge': status_badge_class(run.status if run is not None else None),
                 'can_resolve': approval.status == Workflow2Approval.STATUS_PENDING
                 and inst.status == Workflow2Instance.STATUS_AWAITING,
+                'timeout_context': timeout_context,
                 'event_pretty': pretty_json(inst.event_json),
                 'vars_pretty': pretty_json(inst.vars_json),
             },

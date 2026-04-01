@@ -13,6 +13,7 @@ from django.utils.translation import gettext as _
 from django.views import View
 
 from management.models.workflows2 import WorkflowExecutionConfig
+from trustpoint.page_context import PageContextMixin
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Approval, Workflow2Instance, Workflow2Job, Workflow2StepRun
 from workflows2.services.runtime import WorkflowRuntimeService
@@ -126,8 +127,11 @@ def _get_step_meta(inst: Workflow2Instance) -> dict[str, dict[str, Any]]:
     return meta
 
 
-class Workflow2InstanceDetailView(LoginRequiredMixin, View):
+class Workflow2InstanceDetailView(PageContextMixin, LoginRequiredMixin, View):
     """Show one workflow instance with step history, jobs, and approvals."""
+
+    page_category = 'workflows2'
+    page_name = 'runs-list'
 
     def get(self, request: HttpRequest, instance_id: UUID) -> HttpResponse:
         """Render the detail page for one workflow instance."""
@@ -146,6 +150,17 @@ class Workflow2InstanceDetailView(LoginRequiredMixin, View):
         event_context = describe_event_context(inst.event_json)
         vars_summary = summarize_named_values(inst.vars_json)
         latest_step_run = step_runs[-1] if step_runs else None
+        pending_approvals = [
+            approval for approval in approvals if approval.status == Workflow2Approval.STATUS_PENDING
+        ]
+        resolved_approvals = [
+            approval for approval in approvals if approval.status != Workflow2Approval.STATUS_PENDING
+        ]
+        latest_failed_step_run = next(
+            (step_run for step_run in reversed(step_runs) if step_run.status == 'failed' or step_run.error),
+            None,
+        )
+        latest_failed_job = next((job for job in jobs if job.last_error), None)
 
         # Render-ready list of "step run items"
         step_run_items: list[dict[str, Any]] = []
@@ -176,12 +191,17 @@ class Workflow2InstanceDetailView(LoginRequiredMixin, View):
             'workflows2/instance_detail.html',
             {
                 'inst': inst,
+                **self.get_context_data(),
                 'approvals': approvals,
                 'jobs': jobs,
                 'step_run_items': step_run_items,
                 'step_meta': step_meta,
                 'current_step': current_step,
                 'latest_step_run': latest_step_run,
+                'pending_approvals': pending_approvals,
+                'resolved_approvals': resolved_approvals,
+                'latest_failed_step_run': latest_failed_step_run,
+                'latest_failed_job': latest_failed_job,
                 'source_context': source_context,
                 'event_context': event_context,
                 'vars_summary': vars_summary,

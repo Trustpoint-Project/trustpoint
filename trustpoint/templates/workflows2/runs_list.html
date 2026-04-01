@@ -48,7 +48,7 @@
   <div class="card mb-3">
     <div class="card-body">
       <form method="get" class="row g-3 align-items-end">
-        <div class="col-12 col-lg-4">
+        <div class="col-12 col-lg-3">
           <label class="form-label">{% trans "Status" %}</label>
           <select name="status" class="form-select">
             <option value="">{% trans "All" %}</option>
@@ -58,9 +58,34 @@
           </select>
         </div>
 
-        <div class="col-12 col-lg-5">
+        <div class="col-12 col-lg-6">
           <label class="form-label">{% trans "Trigger" %}</label>
-          <input name="trigger_on" class="form-control" value="{{ trigger_on }}" placeholder="est.simpleenroll">
+          <details class="border rounded p-2">
+            <summary class="d-flex align-items-center justify-content-between gap-2" style="cursor: pointer; list-style: none;">
+              <span>
+                {% if selected_triggers %}
+                  {% blocktrans count count=selected_triggers|length %}
+                    {{ count }} trigger selected
+                  {% plural %}
+                    {{ count }} triggers selected
+                  {% endblocktrans %}
+                {% else %}
+                  {% trans "All triggers" %}
+                {% endif %}
+              </span>
+              <span class="text-muted small">{% trans "Show options" %}</span>
+            </summary>
+            <div class="pt-2 d-flex flex-column gap-2">
+              {% for trigger in trigger_choices %}
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" name="trigger_on" value="{{ trigger }}" id="trigger_{{ forloop.counter }}" {% if trigger in selected_triggers %}checked{% endif %}>
+                  <label class="form-check-label" for="trigger_{{ forloop.counter }}">{{ trigger }}</label>
+                </div>
+              {% empty %}
+                <div class="text-muted small">{% trans "No triggers found yet." %}</div>
+              {% endfor %}
+            </div>
+          </details>
         </div>
 
         <div class="col-12 col-lg-3">
@@ -75,11 +100,25 @@
       <table class="table table-hover align-middle mb-0">
         <thead>
           <tr>
-            <th>{% trans "Run" %}</th>
-            <th>{% trans "Trigger" %}</th>
+            <th>{% trans "State" %}</th>
+            <th>{% trans "Run ID" %}</th>
+            <th>
+              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}{% for trigger in selected_triggers %}trigger_on={{ trigger|urlencode }}&{% endfor %}sort={% if sort == 'trigger' %}trigger_desc{% else %}trigger{% endif %}">
+                {% trans "Trigger" %}
+              </a>
+            </th>
             <th>{% trans "Source" %}</th>
             <th>{% trans "Instances" %}</th>
-            <th>{% trans "Updated" %}</th>
+            <th>
+              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}{% for trigger in selected_triggers %}trigger_on={{ trigger|urlencode }}&{% endfor %}sort={% if sort == 'updated' %}updated_asc{% else %}updated{% endif %}">
+                {% trans "Updated" %}
+              </a>
+            </th>
+            <th>
+              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}{% for trigger in selected_triggers %}trigger_on={{ trigger|urlencode }}&{% endfor %}sort={% if sort == 'created' %}created_asc{% else %}created{% endif %}">
+                {% trans "Created" %}
+              </a>
+            </th>
             <th class="text-end">{% trans "Open" %}</th>
           </tr>
         </thead>
@@ -87,13 +126,10 @@
           {% for row in run_rows %}
             <tr>
               <td>
-                <div class="d-flex flex-column gap-1">
-                  <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span class="badge {{ row.badge }}">{{ row.run.get_status_display }}</span>
-                  </div>
-                  <div class="small"><code>{{ row.run.id }}</code></div>
-                  <div class="text-muted small">{{ row.run.created_at|date:"Y-m-d H:i" }}</div>
-                </div>
+                <span class="badge {{ row.badge }}">{{ row.run.get_status_display }}</span>
+              </td>
+              <td>
+                <code>{{ row.run.id }}</code>
               </td>
               <td>
                 <div class="fw-semibold">{{ row.run.trigger_on }}</div>
@@ -108,6 +144,7 @@
                 {% endif %}
               </td>
               <td>{{ row.run.updated_at|date:"Y-m-d H:i" }}</td>
+              <td>{{ row.run.created_at|date:"Y-m-d H:i" }}</td>
               <td class="text-end">
                 <a class="btn btn-sm btn-outline-primary" href="{% url 'workflows2:runs-detail' row.run.id %}">
                   {% trans "Open" %}
@@ -116,7 +153,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="6" class="text-center text-muted py-4">{% trans "No runs found." %}</td>
+              <td colspan="8" class="text-center text-muted py-4">{% trans "No runs found." %}</td>
             </tr>
           {% endfor %}
         </tbody>

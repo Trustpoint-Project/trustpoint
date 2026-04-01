@@ -27,7 +27,62 @@ export function renderGraphNotice(message) {
   `;
 }
 
+function summarizeStepBehavior(node) {
+  const step = node?.step_data || {};
+
+  if (node?.type === 'webhook') {
+    const method = typeof step.method === 'string' ? step.method : '';
+    const url = typeof step.url === 'string' ? step.url : '';
+    const captureCount = step.capture && typeof step.capture === 'object' ? Object.keys(step.capture).length : 0;
+    return `${method || 'HTTP'} ${url || 'request'}${captureCount ? ` · captures ${captureCount} value${captureCount === 1 ? '' : 's'}` : ''}`;
+  }
+
+  if (node?.type === 'email') {
+    const recipients = Array.isArray(step.to) ? step.to.length : 0;
+    return `Sends an email${recipients ? ` to ${recipients} recipient${recipients === 1 ? '' : 's'}` : ''}`;
+  }
+
+  if (node?.type === 'logic') {
+    const cases = Array.isArray(step.cases) ? step.cases.length : 0;
+    return `Evaluates ${cases} case${cases === 1 ? '' : 's'}${step.default ? ` · default ${step.default}` : ''}`;
+  }
+
+  if (node?.type === 'set') {
+    const vars = step.vars && typeof step.vars === 'object' ? Object.keys(step.vars).length : 0;
+    return `Writes ${vars} workflow var${vars === 1 ? '' : 's'}`;
+  }
+
+  if (node?.type === 'compute') {
+    const vars = step.set && typeof step.set === 'object' ? Object.keys(step.set).length : 0;
+    return `Computes ${vars} workflow var${vars === 1 ? '' : 's'}`;
+  }
+
+  if (node?.type === 'approval') {
+    return `Waits for approval · approved => ${step.approved_outcome || '-'} · rejected => ${step.rejected_outcome || '-'}`;
+  }
+
+  return node?.title || node?.type || 'No summary available';
+}
+
+function renderEdgeList(edges) {
+  if (!edges.length) {
+    return '<div class="small text-muted">None</div>';
+  }
+
+  return `
+    <ul class="small mb-0 ps-3">
+      ${edges
+        .map((edge) => `<li><code>${escapeHtml(edge.from)}</code>${edge.on ? ` on <code>${escapeHtml(edge.on)}</code>` : ''} → <code>${escapeHtml(edge.to)}</code></li>`)
+        .join('')}
+    </ul>
+  `;
+}
+
 function renderNodeSummary(node, graph) {
+  const edges = Array.isArray(graph?.edges) ? graph.edges : [];
+  const incoming = edges.filter((edge) => edge.to === node.id);
+  const outgoing = edges.filter((edge) => edge.from === node.id);
+
   return `
     <div class="wf2-graph-panel-title">Selected step</div>
 
@@ -39,14 +94,18 @@ function renderNodeSummary(node, graph) {
     </div>
 
     <div class="mb-3">
-      <div class="fw-semibold mb-1">Outcomes</div>
-      <div class="small text-muted">
-        ${
-          Array.isArray(node.outcomes) && node.outcomes.length
-            ? escapeHtml(node.outcomes.join(', '))
-            : 'None'
-        }
-      </div>
+      <div class="fw-semibold mb-1">What happens here</div>
+      <div class="small text-muted">${escapeHtml(summarizeStepBehavior(node))}</div>
+    </div>
+
+    <div class="mb-3">
+      <div class="fw-semibold mb-1">Comes from</div>
+      ${renderEdgeList(incoming)}
+    </div>
+
+    <div class="mb-3">
+      <div class="fw-semibold mb-1">Goes to</div>
+      ${renderEdgeList(outgoing)}
     </div>
 
     <div class="small text-muted">

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext as _
 
 from devices.models import DeviceModel
@@ -14,6 +15,14 @@ from pki.models.domain import DomainModel
 
 def _json_object(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _safe_reverse(name: str, **kwargs: Any) -> str | None:
+    """Return a reversed URL or ``None`` when the target cannot be resolved."""
+    try:
+        return reverse(name, kwargs=kwargs)
+    except NoReverseMatch:
+        return None
 
 
 def pretty_json(obj: Any) -> str:
@@ -71,7 +80,7 @@ def compact_value(value: Any, *, max_length: int = 96) -> str:
 def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]:
     """Resolve source scope identifiers into human-readable labels."""
     source = _json_object(source_json)
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, str | None]] = []
 
     rows.append(
         {
@@ -93,6 +102,7 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
                 'label': _('Certificate authority'),
                 'value': ca_title,
                 'meta': f'ID {ca_id}',
+                'url': _safe_reverse('pki:issuing_cas-detail', pk=ca_id),
             }
         )
 
@@ -110,6 +120,7 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
                 'label': _('Domain'),
                 'value': domain.unique_name if domain is not None else _('Domain #%(id)s') % {'id': domain_id},
                 'meta': meta,
+                'url': _safe_reverse('pki:domains-detail', pk=domain_id),
             }
         )
 
@@ -129,6 +140,7 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
                 'label': _('Device'),
                 'value': device.common_name if device is not None else _('Device #%(id)s') % {'id': device_id},
                 'meta': ' · '.join(meta_parts),
+                'url': _safe_reverse('devices:devices_certificate_lifecycle_management', pk=device_id),
             }
         )
 
@@ -142,10 +154,10 @@ def resolve_source_context(source_json: dict[str, Any] | None) -> dict[str, Any]
     }
 
 
-def describe_event_context(event_json: dict[str, Any] | None) -> list[dict[str, str]]:
+def describe_event_context(event_json: dict[str, Any] | None) -> list[dict[str, str | None]]:
     """Return friendly event metadata rows for run and instance detail views."""
     event = _json_object(event_json)
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, str | None]] = []
 
     _append_device_rows(rows, device=_json_object(event.get('device')))
     _append_certificate_rows(rows, certificate=_json_object(event.get('certificate')))
@@ -156,16 +168,24 @@ def describe_event_context(event_json: dict[str, Any] | None) -> list[dict[str, 
     return rows
 
 
-def _append_device_rows(rows: list[dict[str, str]], *, device: dict[str, Any]) -> None:
+def _append_device_rows(rows: list[dict[str, str | None]], *, device: dict[str, Any]) -> None:
     """Append human-readable rows for device event payloads."""
     if not device:
         return
 
     device_title = device.get('common_name') or device.get('serial_number') or device.get('id')
+    device_id = device.get('id')
     if device_title:
-        rows.append({'label': _('Event device'), 'value': str(device_title), 'meta': ''})
+        rows.append(
+            {
+                'label': _('Event device'),
+                'value': str(device_title),
+                'meta': '',
+                'url': _safe_reverse('devices:devices_certificate_lifecycle_management', pk=device_id) if device_id else None,
+            }
+        )
     if device.get('serial_number'):
-        rows.append({'label': _('Serial number'), 'value': str(device['serial_number']), 'meta': ''})
+        rows.append({'label': _('Serial number'), 'value': str(device['serial_number']), 'meta': '', 'url': None})
     domain_id = device.get('domain_id')
     if isinstance(domain_id, (str, int)):
         try:
@@ -177,6 +197,7 @@ def _append_device_rows(rows: list[dict[str, str]], *, device: dict[str, Any]) -
                 'label': _('Device domain'),
                 'value': domain.unique_name if domain is not None else _('Domain #%(id)s') % {'id': domain_id},
                 'meta': '',
+                'url': _safe_reverse('pki:domains-detail', pk=domain_id),
             }
         )
     changes = _json_object(device.get('changes'))
@@ -186,11 +207,12 @@ def _append_device_rows(rows: list[dict[str, str]], *, device: dict[str, Any]) -
                 'label': _('Changed fields'),
                 'value': ', '.join(sorted(changes.keys())),
                 'meta': '',
+                'url': None,
             }
         )
 
 
-def _append_certificate_rows(rows: list[dict[str, str]], *, certificate: dict[str, Any]) -> None:
+def _append_certificate_rows(rows: list[dict[str, str | None]], *, certificate: dict[str, Any]) -> None:
     """Append human-readable rows for certificate lifecycle payloads."""
     if not certificate:
         return
@@ -201,20 +223,28 @@ def _append_certificate_rows(rows: list[dict[str, str]], *, certificate: dict[st
         or certificate.get('sha256_fingerprint')
         or certificate.get('id')
     )
+    certificate_id = certificate.get('id')
     if certificate_title:
-        rows.append({'label': _('Certificate'), 'value': str(certificate_title), 'meta': ''})
+        rows.append(
+            {
+                'label': _('Certificate'),
+                'value': str(certificate_title),
+                'meta': '',
+                'url': _safe_reverse('pki:certificate-detail', pk=certificate_id) if certificate_id else None,
+            }
+        )
     if certificate.get('serial_number'):
-        rows.append({'label': _('Certificate serial'), 'value': str(certificate['serial_number']), 'meta': ''})
+        rows.append({'label': _('Certificate serial'), 'value': str(certificate['serial_number']), 'meta': '', 'url': None})
     if certificate.get('cert_profile'):
-        rows.append({'label': _('Certificate profile'), 'value': str(certificate['cert_profile']), 'meta': ''})
+        rows.append({'label': _('Certificate profile'), 'value': str(certificate['cert_profile']), 'meta': '', 'url': None})
     if certificate.get('revocation_reason'):
         rows.append(
-            {'label': _('Revocation reason'), 'value': str(certificate['revocation_reason']), 'meta': ''}
+            {'label': _('Revocation reason'), 'value': str(certificate['revocation_reason']), 'meta': '', 'url': None}
         )
 
 
 def _append_protocol_rows(
-    rows: list[dict[str, str]],
+    rows: list[dict[str, str | None]],
     *,
     payload: dict[str, Any],
     protocol: str,
@@ -228,10 +258,11 @@ def _append_protocol_rows(
                 'label': _('%(protocol)s operation') % {'protocol': protocol},
                 'value': str(payload['operation']),
                 'meta': '',
+                'url': None,
             }
         )
     if payload.get('cert_profile'):
-        rows.append({'label': _('Certificate profile'), 'value': str(payload['cert_profile']), 'meta': ''})
+        rows.append({'label': _('Certificate profile'), 'value': str(payload['cert_profile']), 'meta': '', 'url': None})
 
 
 def summarize_named_values(values: dict[str, Any] | None, *, limit: int = 8) -> list[dict[str, str]]:

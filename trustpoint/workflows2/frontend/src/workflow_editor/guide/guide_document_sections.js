@@ -9,7 +9,6 @@ import {
 import { renderExpressionDsl } from './guide_dsl_sections.js';
 import {
   renderGuideButtonRow,
-  renderGuideNote,
   renderGuideMeta,
   renderGuideSection,
 } from './guide_layout.js';
@@ -18,18 +17,7 @@ import { renderTriggerSourcesGuide } from './guide_trigger_sources_renderer.js';
 export function renderRootGuide(catalog) {
   return `
     ${renderGuideSection({
-      title: 'What you can do here',
-      description: 'Edit YAML directly and use the guide to insert documented workflow snippets without breaking structure.',
-      tone: 'accent',
-      body: renderGuideMeta([
-        { label: 'YAML', value: 'source of truth' },
-        { label: 'Guide', value: 'context-aware' },
-        { label: 'Graph', value: 'draft-friendly' },
-      ]),
-    })}
-
-    ${renderGuideSection({
-      title: 'Expression reference',
+      title: 'Expressions',
       description: 'Runtime namespaces and helper functions available in expressions.',
       body: renderExpressionDsl(catalog),
     })}
@@ -44,7 +32,12 @@ export function renderTriggerGuide(context, catalog) {
   if (context.area === 'trigger' || context.area === 'trigger.on') {
     return `
       ${renderGuideSection({
-        title: getCatalogUiText(catalog, 'guide_trigger_current_title', 'Current trigger'),
+        title: getCatalogUiText(catalog, 'guide_trigger_current_title', 'Trigger'),
+        description: getCatalogUiText(
+          catalog,
+          'guide_trigger_browse_description',
+          'Pick one documented trigger. Search by name, key, group, or description.',
+        ),
         body:
           renderGuideMeta([
             {
@@ -67,17 +60,8 @@ export function renderTriggerGuide(context, catalog) {
               'Choose a documented trigger to unlock event-specific help.',
             ),
             'muted',
-          ),
-      })}
-
-      ${renderGuideSection({
-        title: getCatalogUiText(catalog, 'guide_trigger_browse_title', 'Browse triggers'),
-        description: getCatalogUiText(
-          catalog,
-          'guide_trigger_browse_description',
-          'Search documented triggers by name, key, group, or description.',
-        ),
-        body: renderTriggerCatalog(catalog?.events || [], context.triggerKey || null, catalog),
+          ) +
+          renderTriggerCatalog(catalog?.events || [], context.triggerKey || null, catalog),
       })}
     `;
   }
@@ -96,16 +80,11 @@ export function renderTriggerGuide(context, catalog) {
 export function renderWorkflowStartGuide(context) {
   return `
     ${renderGuideSection({
-      title: 'Current start step',
+      title: 'Workflow start',
+      description: '`workflow.start` must reference an existing step id.',
       body: renderGuideMeta([
         { label: 'Start', value: context.currentStartStep || 'None' },
-      ]),
-    })}
-
-    ${renderGuideSection({
-      title: 'Set workflow start',
-      description: '`workflow.start` must reference an existing step id.',
-      body: renderGuideButtonRow(
+      ]) + renderGuideButtonRow(
         renderStepIdActions(context.stepIds || [], context.currentStartStep || null, 'set-workflow-start'),
       ),
     })}
@@ -115,16 +94,21 @@ export function renderWorkflowStartGuide(context) {
 export function renderStepsAreaGuide(context, catalog) {
   return `
     ${renderGuideSection({
-      title: 'Add new step',
-      description: 'Create a minimal step scaffold from the catalog at the current cursor position.',
-      body: renderGuideButtonRow(renderStepTypeActions(catalog?.steps || [], null, 'add-step-from-type')),
-    })}
+      title: 'Steps',
+      description: 'Create a minimal step scaffold or jump off the current list of known step ids.',
+      body: `
+        <div class="mb-3">
+          <div class="fw-semibold mb-1">Add new step</div>
+          ${renderGuideButtonRow(renderStepTypeActions(catalog?.steps || [], null, 'add-step-from-type'))}
+        </div>
 
-    ${renderGuideSection({
-      title: 'Known step ids',
-      body: renderChips(context.stepIds || [], (stepId) => {
-        return `<span class="wf2-chip"><strong>${escapeHtml(stepId)}</strong></span>`;
-      }),
+        <div>
+          <div class="fw-semibold mb-1">Known step ids</div>
+          ${renderChips(context.stepIds || [], (stepId) => {
+            return `<span class="wf2-chip"><strong>${escapeHtml(stepId)}</strong></span>`;
+          })}
+        </div>
+      `,
     })}
   `;
 }

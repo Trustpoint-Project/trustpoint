@@ -183,8 +183,8 @@ export function renderTriggerSourcesGuide(context, catalog) {
 
   return `
     ${renderGuideSection({
-      title: 'Current trigger scope',
-      description: 'Use trustpoint-wide mode for every source, or turn it off and explicitly target CA, domain, or device ids.',
+      title: 'Source scope',
+      description: 'Use trustpoint-wide mode for every source, or turn it off and target specific CA, domain, or device ids.',
       tone: isTrustpointWide ? 'accent' : 'default',
       body:
         renderGuideMeta([
@@ -209,7 +209,7 @@ export function renderTriggerSourcesGuide(context, catalog) {
         ) +
         renderGuideNote(
           isTrustpointWide
-            ? 'CA, domain, and device lists stay visible below, but they do not affect dispatch while trustpoint-wide is enabled.'
+            ? 'Filters below stay visible, but they do not affect dispatch while trustpoint-wide is enabled.'
             : 'When trustpoint-wide is off, at least one CA, domain, or device id must be present.',
           isTrustpointWide ? 'info' : 'muted',
         ),

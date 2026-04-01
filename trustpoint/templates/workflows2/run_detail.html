@@ -13,85 +13,129 @@
         <div class="text-muted small">
           <div><strong>{% trans "Trigger" %}:</strong> <code>{{ run.trigger_on }}</code></div>
           <div><strong>{% trans "Run ID" %}:</strong> <code>{{ run.id }}</code></div>
+          <div><strong>{% trans "Created" %}:</strong> {{ run.created_at|date:"Y-m-d H:i:s" }}</div>
+          <div><strong>{% trans "Last update" %}:</strong> {{ run.updated_at|date:"Y-m-d H:i:s" }}</div>
         </div>
       </div>
 
-      <div class="text-muted small">
-        <div><strong>{% trans "Created" %}:</strong> {{ run.created_at|date:"Y-m-d H:i:s" }}</div>
-        <div><strong>{% trans "Last update" %}:</strong> {{ run.updated_at|date:"Y-m-d H:i:s" }}</div>
-        <div><strong>{% trans "Instances" %}:</strong> {{ instance_rows|length }}</div>
+      <div class="d-flex gap-2 flex-wrap">
+        {% if can_run_inline %}
+          <form method="post" action="{% url 'workflows2:runs-run-inline' run.id %}">
+            {% csrf_token %}
+            <button class="btn btn-warning" type="submit">
+              <i class="bi bi-play-fill me-1"></i>{% trans "Run inline" %}
+            </button>
+          </form>
+        {% endif %}
+
+        {% if can_cancel %}
+          <form method="post" action="{% url 'workflows2:runs-cancel' run.id %}">
+            {% csrf_token %}
+            <button class="btn btn-danger" type="submit">
+              <i class="bi bi-x-circle me-1"></i>{% trans "Cancel run" %}
+            </button>
+          </form>
+        {% endif %}
+
+        <a href="{% url 'workflows2:runs-list' %}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>{% trans "Back to runs" %}
+        </a>
+      </div>
+    </div>
+  </div>
+
+  {% if pending_approval_count %}
+    <div class="alert alert-warning shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Decision required" %}</div>
+      <div class="small mt-1">
+        {% blocktrans count count=pending_approval_count %}
+          {{ count }} approval is currently blocking this run.
+        {% plural %}
+          {{ count }} approvals are currently blocking this run.
+        {% endblocktrans %}
+      </div>
+    </div>
+  {% elif failed_instance_count %}
+    <div class="alert alert-danger shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Run needs attention" %}</div>
+      <div class="small mt-1">
+        {% blocktrans count count=failed_instance_count %}
+          {{ count }} workflow instance failed in this run.
+        {% plural %}
+          {{ count }} workflow instances failed in this run.
+        {% endblocktrans %}
+      </div>
+    </div>
+  {% elif rejected_instance_count %}
+    <div class="alert alert-danger shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Run finished with rejection" %}</div>
+      <div class="small mt-1">
+        {% blocktrans count count=rejected_instance_count %}
+          {{ count }} workflow instance ended rejected.
+        {% plural %}
+          {{ count }} workflow instances ended rejected.
+        {% endblocktrans %}
+      </div>
+    </div>
+  {% elif succeeded_instance_count and succeeded_instance_count == instance_total %}
+    <div class="alert alert-success shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Run finished successfully" %}</div>
+      <div class="small mt-1">{% trans "All workflow instances in this run reached a successful terminal state." %}</div>
+    </div>
+  {% endif %}
+
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Instances" %}</div>
+          <div class="fs-4 fw-semibold">{{ instance_total }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Awaiting" %}</div>
+          <div class="fs-4 fw-semibold">{{ awaiting_instance_count }}</div>
+          <div class="small text-muted">{% trans "Waiting on workflow progress" %}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Pending approvals" %}</div>
+          <div class="fs-4 fw-semibold">{{ pending_approval_count }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100 shadow-sm">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Failed / rejected" %}</div>
+          <div class="fs-4 fw-semibold">{{ failed_instance_count|add:rejected_instance_count }}</div>
+        </div>
       </div>
     </div>
   </div>
 
   <div class="row g-3 mb-3">
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-xl-6">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-body fw-semibold">{% trans "Source context" %}</div>
         <div class="card-body">
           <div class="fw-semibold mb-3">{{ source_summary }}</div>
-          {% if source_context.rows %}
-            <div class="list-group list-group-flush">
-              {% for row in source_context.rows %}
-                <div class="list-group-item px-0">
-                  <div class="text-muted small text-uppercase">{{ row.label }}</div>
-                  <div class="fw-semibold">{{ row.value }}</div>
-                  {% if row.meta %}
-                    <div class="text-muted small">{{ row.meta }}</div>
-                  {% endif %}
-                </div>
-              {% endfor %}
-            </div>
-          {% else %}
-            <div class="text-muted">{% trans "No source context was recorded for this run." %}</div>
-          {% endif %}
+          {% include 'workflows2/_context_rows.html' with rows=source_context.rows empty_label="No source context was recorded for this run." %}
         </div>
       </div>
     </div>
 
-    <div class="col-12 col-lg-4">
+    <div class="col-12 col-xl-6">
       <div class="card h-100 shadow-sm">
         <div class="card-header bg-body fw-semibold">{% trans "Event summary" %}</div>
         <div class="card-body">
-          {% if event_context %}
-            <div class="list-group list-group-flush">
-              {% for row in event_context %}
-                <div class="list-group-item px-0">
-                  <div class="text-muted small text-uppercase">{{ row.label }}</div>
-                  <div class="fw-semibold">{{ row.value }}</div>
-                  {% if row.meta %}
-                    <div class="text-muted small">{{ row.meta }}</div>
-                  {% endif %}
-                </div>
-              {% endfor %}
-            </div>
-          {% else %}
-            <div class="text-muted">
-              {% trans "This run only contains raw event payload data. Open the technical details below if you need the full JSON." %}
-            </div>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-    <div class="col-12 col-lg-4">
-      <div class="card h-100 shadow-sm">
-        <div class="card-header bg-body fw-semibold">{% trans "Outcome overview" %}</div>
-        <div class="card-body">
-          {% if outcome_summary %}
-            <div class="row g-2">
-              {% for row in outcome_summary %}
-                <div class="col-12">
-                  <div class="border rounded-3 p-3 h-100">
-                    <div class="text-muted small text-uppercase">{{ row.label }}</div>
-                    <div class="display-6 fw-semibold mb-0">{{ row.value }}</div>
-                  </div>
-                </div>
-              {% endfor %}
-            </div>
-          {% else %}
-            <div class="text-muted">{% trans "No instance results were recorded for this run yet." %}</div>
-          {% endif %}
+          {% include 'workflows2/_context_rows.html' with rows=event_context empty_label="This run only contains raw event payload data. Open the technical details below if you need the full JSON." %}
         </div>
       </div>
     </div>
@@ -100,7 +144,7 @@
   <div class="card shadow-sm mb-3">
     <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2 bg-body">
       <div class="fw-semibold">{% trans "Workflow instances" %}</div>
-      <a href="{% url 'workflows2:runs-list' %}" class="btn btn-sm btn-outline-secondary">{% trans "Back to runs" %}</a>
+      <div class="text-muted small">{{ instance_total }} {% trans "instance(s)" %}</div>
     </div>
     <div class="card-body">
       {% if instance_rows %}
@@ -119,7 +163,7 @@
               {% for row in instance_rows %}
                 <tr>
                   <td>
-                    <div class="fw-semibold">{{ row.instance.definition.name }}</div>
+                    <div class="fw-semibold"><a href="{% url 'workflows2:definitions_edit' row.instance.definition.id %}">{{ row.instance.definition.name }}</a></div>
                     <div class="text-muted small"><code>{{ row.instance.id }}</code></div>
                   </td>
                   <td><span class="badge {{ row.badge }}">{{ row.instance.get_status_display }}</span></td>

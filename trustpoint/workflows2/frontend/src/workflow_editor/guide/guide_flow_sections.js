@@ -39,45 +39,51 @@ export function renderFlowGuide(context, catalog) {
 
   return `
     ${renderGuideSection({
-      title: 'Quick actions',
-      body: renderGuideButtonRow(`
-        ${renderActionButton('add-flow-linear-edge', 'Add linear edge')}
-        ${renderActionButton('add-flow-outcome-edge', 'Add outcome edge')}
-      `),
-    })}
+      title: 'Flow',
+      description: 'Add edges or fill the current edge fields without leaving YAML.',
+      body: `
+        <div class="mb-3">
+          <div class="fw-semibold mb-1">Quick actions</div>
+          ${renderGuideButtonRow(`
+            ${renderActionButton('add-flow-linear-edge', 'Add linear edge')}
+            ${renderActionButton('add-flow-outcome-edge', 'Add outcome edge')}
+          `)}
+        </div>
 
-    ${renderGuideSection({
-      title: 'Add linear edge from existing step',
-      body: renderGuideButtonRow(
-        stepIds.length
-          ? stepIds
-              .map((stepId) =>
-                renderActionButton(
-                  'add-flow-linear-edge',
-                  stepId,
-                  ` data-flow-from="${escapeHtml(stepId)}"`,
-                ),
-              )
-              .join('')
-          : '<span class="text-muted">No steps available</span>',
-      ),
-    })}
+        <div class="mb-3">
+          <div class="fw-semibold mb-1">Start from existing step</div>
+          ${renderGuideButtonRow(
+            stepIds.length
+              ? stepIds
+                  .map((stepId) =>
+                    renderActionButton(
+                      'add-flow-linear-edge',
+                      stepId,
+                      ` data-flow-from="${escapeHtml(stepId)}"`,
+                    ),
+                  )
+                  .join('')
+              : '<span class="text-muted">No steps available</span>',
+          )}
+        </div>
 
-    ${renderGuideSection({
-      title: 'Add outcome edge from existing step',
-      body: renderGuideButtonRow(
-        outcomeStepSummaries.length
-          ? outcomeStepSummaries
-              .map((item) =>
-                renderActionButton(
-                  'add-flow-outcome-edge',
-                  `${item.id} (${item.outcomes.join(', ')})`,
-                  ` data-flow-from="${escapeHtml(item.id)}"`,
-                ),
-              )
-              .join('')
-          : '<span class="text-muted">No outcome-producing steps available</span>',
-      ),
+        <div>
+          <div class="fw-semibold mb-1">Outcome edges</div>
+          ${renderGuideButtonRow(
+            outcomeStepSummaries.length
+              ? outcomeStepSummaries
+                  .map((item) =>
+                    renderActionButton(
+                      'add-flow-outcome-edge',
+                      `${item.id} (${item.outcomes.join(', ')})`,
+                      ` data-flow-from="${escapeHtml(item.id)}"`,
+                    ),
+                  )
+                  .join('')
+              : '<span class="text-muted">No outcome-producing steps available</span>',
+          )}
+        </div>
+      `,
     })}
 
     ${
@@ -100,24 +106,29 @@ export function renderFlowGuide(context, catalog) {
     ${fieldOptions}
 
     ${renderGuideSection({
-      title: 'Known step ids',
-      body: renderChips(stepIds, (stepId) => {
-        return `<span class="wf2-chip"><strong>${escapeHtml(stepId)}</strong></span>`;
-      }),
-    })}
+      title: 'Reference',
+      body: `
+        <div class="mb-3">
+          <div class="fw-semibold mb-1">Known step ids</div>
+          ${renderChips(stepIds, (stepId) => {
+            return `<span class="wf2-chip"><strong>${escapeHtml(stepId)}</strong></span>`;
+          })}
+        </div>
 
-    ${renderGuideSection({
-      title: 'Known outcomes',
-      body: renderChips(context.currentFlowOutcomeOptions || [], (outcome) => {
-        return `<span class="wf2-chip"><strong>${escapeHtml(outcome)}</strong></span>`;
-      }),
-    })}
+        <div class="mb-3">
+          <div class="fw-semibold mb-1">Known outcomes</div>
+          ${renderChips(context.currentFlowOutcomeOptions || [], (outcome) => {
+            return `<span class="wf2-chip"><strong>${escapeHtml(outcome)}</strong></span>`;
+          })}
+        </div>
 
-    ${renderGuideSection({
-      title: 'End targets',
-      body: renderChips(catalog?.meta?.end_targets || [], (target) => {
-        return `<span class="wf2-chip"><strong>${escapeHtml(target)}</strong></span>`;
-      }),
+        <div>
+          <div class="fw-semibold mb-1">End targets</div>
+          ${renderChips(catalog?.meta?.end_targets || [], (target) => {
+            return `<span class="wf2-chip"><strong>${escapeHtml(target)}</strong></span>`;
+          })}
+        </div>
+      `,
     })}
   `;
 }

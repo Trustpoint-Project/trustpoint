@@ -48,13 +48,24 @@
   <div class="card mb-3">
     <div class="card-body">
       <form method="get" class="row g-3 align-items-end">
-        <div class="col-12 col-md-8 col-xl-4">
+        <div class="col-12 col-md-6 col-xl-4">
           <label class="form-label">{% trans "Status" %}</label>
           <select name="status" class="form-select">
             <option value="">{% trans "All" %}</option>
             {% for val, label in status_choices %}
               <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+          <label class="form-label">{% trans "Sort" %}</label>
+          <select name="sort" class="form-select">
+            <option value="created" {% if sort == 'created' %}selected{% endif %}>{% trans "Newest first" %}</option>
+            <option value="created_asc" {% if sort == 'created_asc' %}selected{% endif %}>{% trans "Oldest first" %}</option>
+            <option value="expires" {% if sort == 'expires' %}selected{% endif %}>{% trans "Soonest expiry" %}</option>
+            <option value="expires_desc" {% if sort == 'expires_desc' %}selected{% endif %}>{% trans "Latest expiry" %}</option>
+            <option value="status" {% if sort == 'status' %}selected{% endif %}>{% trans "Status A-Z" %}</option>
+            <option value="status_desc" {% if sort == 'status_desc' %}selected{% endif %}>{% trans "Status Z-A" %}</option>
           </select>
         </div>
         <div class="col-12 col-md-4 col-xl-2">
@@ -69,11 +80,20 @@
       <table class="table table-hover align-middle mb-0">
         <thead>
           <tr>
+            <th>{% trans "State" %}</th>
             <th>{% trans "Approval" %}</th>
             <th>{% trans "Workflow" %}</th>
             <th>{% trans "Instance" %}</th>
-            <th>{% trans "Created" %}</th>
-            <th>{% trans "Expires" %}</th>
+            <th>
+              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}sort={% if sort == 'created' %}created_asc{% else %}created{% endif %}">
+                {% trans "Created" %}
+              </a>
+            </th>
+            <th>
+              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}sort={% if sort == 'expires' %}expires_desc{% else %}expires{% endif %}">
+                {% trans "Expires" %}
+              </a>
+            </th>
             <th class="text-end">{% trans "Open" %}</th>
           </tr>
         </thead>
@@ -81,22 +101,17 @@
           {% for row in approval_rows %}
             <tr>
               <td>
-                <div class="d-flex flex-column gap-1">
-                  <div class="d-flex align-items-center gap-2 flex-wrap">
-                    <span class="badge {{ row.badge }}">{{ row.approval.get_status_display }}</span>
-                    {% if row.can_resolve %}
-                      <span class="badge text-bg-warning">{% trans "Action required" %}</span>
-                    {% endif %}
-                  </div>
-                  <div class="fw-semibold">{{ row.step_meta.title }}</div>
-                  <div class="text-muted small"><code>{{ row.approval.step_id }}</code></div>
-                </div>
+                <span class="badge {{ row.badge }}">{{ row.approval.get_status_display }}</span>
               </td>
               <td>
-                <div class="fw-semibold">{{ row.approval.instance.definition.name }}</div>
+                <div class="fw-semibold">{{ row.step_meta.title }}</div>
+                <div class="text-muted small"><code>{{ row.approval.step_id }}</code></div>
+              </td>
+              <td>
+                <div class="fw-semibold"><a href="{% url 'workflows2:definitions_edit' row.approval.instance.definition.id %}">{{ row.approval.instance.definition.name }}</a></div>
                 {% if row.approval.instance.run_id %}
                   <div class="small">
-                    <span class="badge {{ row.run_badge }}">{{ row.approval.instance.run.get_status_display }}</span>
+                    <span class="text-muted">{% trans "Run" %}:</span>
                     <a href="{% url 'workflows2:runs-detail' row.approval.instance.run.id %}" class="ms-1">
                       <code>{{ row.approval.instance.run.id }}</code>
                     </a>
@@ -104,9 +119,7 @@
                 {% endif %}
               </td>
               <td>
-                <div>
-                  <span class="badge {{ row.instance_badge }}">{{ row.approval.instance.get_status_display }}</span>
-                </div>
+                <div class="small text-muted">{{ row.approval.instance.get_status_display }}</div>
                 <div class="small mt-1">
                   <a href="{% url 'workflows2:instances-detail' row.approval.instance.id %}"><code>{{ row.approval.instance.id }}</code></a>
                 </div>
@@ -127,7 +140,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="6" class="text-center text-muted py-4">{% trans "No approvals found." %}</td>
+              <td colspan="7" class="text-center text-muted py-4">{% trans "No approvals found." %}</td>
             </tr>
           {% endfor %}
         </tbody>
