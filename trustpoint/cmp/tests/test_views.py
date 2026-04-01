@@ -29,19 +29,22 @@ def request_factory():
 def mock_request_context():
     """Mock CmpCertificateRequestContext."""
     from django.http import HttpResponse
-    
+
     ctx = Mock()
     ctx.http_response_content = b'test response'
     ctx.http_response_status = 200
     ctx.http_response_content_type = 'application/pkixcmp'
-    
+    ctx.cmp_body_type = None
+    ctx.operation = None
+    ctx.event = None
+
     # Mock to_http_response to return actual HttpResponse
     ctx.to_http_response.return_value = HttpResponse(
         content=ctx.http_response_content,
         status=ctx.http_response_status,
         content_type=ctx.http_response_content_type
     )
-    
+
     return ctx
 
 
@@ -87,6 +90,7 @@ class TestCmpInitializationRequestView:
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')
+    @patch('cmp.views.Workflow2Handler')
     @patch('cmp.views.CmpAuthorization')
     @patch('cmp.views.CmpAuthentication')
     @patch('cmp.views.CmpMessageParser')
@@ -99,6 +103,7 @@ class TestCmpInitializationRequestView:
         mock_parser_cls,
         mock_auth_cls,
         mock_authz_cls,
+        mock_workflow2_cls,
         mock_processor_cls,
         mock_responder_cls,
         request_factory,
@@ -128,6 +133,7 @@ class TestCmpInitializationRequestView:
         mock_parser_cls.return_value.parse.assert_called_once()
         mock_auth_cls.return_value.authenticate.assert_called_once()
         mock_authz_cls.return_value.authorize.assert_called_once()
+        mock_workflow2_cls.return_value.handle.assert_called_once_with(mock_request_context)
         mock_processor_cls.return_value.process_operation.assert_called_once()
         mock_responder_cls.build_response.assert_called_once()
         
@@ -135,6 +141,42 @@ class TestCmpInitializationRequestView:
         assert response.status_code == 200
         assert response.content == b'test response'
         assert response['Content-Type'] == 'application/pkixcmp'
+
+    @patch('cmp.views.CmpMessageResponder')
+    @patch('cmp.views.OperationProcessor')
+    @patch('cmp.views.Workflow2Handler')
+    @patch('cmp.views.CmpAuthorization')
+    @patch('cmp.views.CmpAuthentication')
+    @patch('cmp.views.CmpMessageParser')
+    @patch('cmp.views.CmpHttpRequestValidator')
+    @patch('cmp.views.CmpCertificateRequestContext')
+    def test_post_initialization_dispatches_workflows2_for_ir_requests(
+        self,
+        mock_context_cls,
+        mock_validator_cls,
+        mock_parser_cls,
+        mock_auth_cls,
+        mock_authz_cls,
+        mock_workflow2_cls,
+        mock_processor_cls,
+        mock_responder_cls,
+        request_factory,
+        mock_request_context,
+    ):
+        """IR requests should visibly dispatch workflows2 before operation processing."""
+        mock_request_context.cmp_body_type = 'ir'
+        mock_request_context.operation = 'initialization'
+        mock_context_cls.return_value = mock_request_context
+        mock_parser_cls.return_value.parse.return_value = mock_request_context
+
+        request = request_factory.post('/cmp/initialization/test_domain')
+        view = CmpRequestView()
+
+        response = view.post(request, domain='test_domain')
+
+        mock_workflow2_cls.return_value.handle.assert_called_once_with(mock_request_context)
+        mock_processor_cls.return_value.process_operation.assert_called_once_with(mock_request_context)
+        assert response.status_code == 200
 
     @patch('cmp.views.CmpMessageResponder')
     @patch('cmp.views.OperationProcessor')

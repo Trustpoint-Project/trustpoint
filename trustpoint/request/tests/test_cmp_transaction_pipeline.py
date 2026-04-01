@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 
 from cmp.models import CmpTransactionModel
 from request.authorization.cmp import CmpPollAuthorization
-from request.operation_processor.cmp_enrollment_request import CmpEnrollmentRequestProcessor
+from request.operation_processor.cmp_certificate_request import CmpCertificateRequestProcessor
 from request.request_context import CmpCertificateRequestContext, CmpPollRequestContext
 from workflows2.events.request_events import Events
 from workflows2.models import Workflow2Run
@@ -34,7 +34,6 @@ def test_cmp_poll_authorization_infers_operation_from_transaction() -> None:
 
     context = CmpPollRequestContext(
         protocol='cmp',
-        operation='polling',
         cmp_body_type='pollReq',
         cmp_transaction_id='deadbeef',
         poll_cert_req_id=0,
@@ -49,8 +48,8 @@ def test_cmp_poll_authorization_infers_operation_from_transaction() -> None:
 
 
 @pytest.mark.django_db
-def test_cmp_enrollment_request_processor_persists_waiting_transaction_for_pending_workflow() -> None:
-    """CMP enrollment should persist a waiting CMP transaction when workflows2 delays issuance."""
+def test_cmp_certificate_request_processor_persists_waiting_transaction_for_pending_workflow() -> None:
+    """CMP certificate requests should persist a waiting transaction when workflows2 delays issuance."""
     raw_message = Mock()
     raw_message.body = b'cmp-ir-request'
 
@@ -69,15 +68,9 @@ def test_cmp_enrollment_request_processor_persists_waiting_transaction_for_pendi
     run.id = 'run-1'
     run.status = Workflow2Run.STATUS_AWAITING
     outcome = DispatchOutcome(status='blocked', run=run, instances=[Mock()])
+    context.workflow2_outcome = outcome
 
-    def _handle_workflow(ctx: CmpCertificateRequestContext) -> None:
-        ctx.workflow2_outcome = outcome
-
-    with patch(
-        'request.operation_processor.cmp_enrollment_request.Workflow2Handler.handle',
-        side_effect=_handle_workflow,
-    ):
-        CmpEnrollmentRequestProcessor().process_operation(context)
+    CmpCertificateRequestProcessor().process_operation(context)
 
     transaction_record = CmpTransactionModel.objects.get(transaction_id='feedface')
     assert transaction_record.status == CmpTransactionModel.Status.WAITING

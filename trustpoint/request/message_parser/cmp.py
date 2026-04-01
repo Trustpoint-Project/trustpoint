@@ -710,13 +710,17 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
 
             self._validate_body_type_supported(body_type)
 
-            if not context.operation:
-                inferred_operation = self._operation_from_body_type(body_type)
-                context.operation = inferred_operation
-                self.logger.debug('Inferred operation from body type: %s', inferred_operation)
+            if body_type == 'pollReq':
+                self._validate_pollreq_operation(context.operation)
+                context = context.narrow(CmpPollRequestContext)
+                CmpPollReqBodyValidation().parse_pollreq_body(context, pki_body)
+            else:
+                if not context.operation:
+                    inferred_operation = self._operation_from_body_type(body_type)
+                    context.operation = inferred_operation
+                    self.logger.debug('Inferred operation from body type: %s', inferred_operation)
 
-            # Validate body type matches operation
-            self._validate_operation_body_match(context.operation, body_type)
+                self._validate_operation_body_match(context.operation, body_type)
 
             if body_type in ('ir', 'cr'):
                 context = context.narrow(CmpCertificateRequestContext)
@@ -727,9 +731,6 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             elif body_type == 'certConf':
                 context = context.narrow(CmpCertConfRequestContext)
                 CmpCertConfBodyValidation().parse_certconf_body(context, pki_body)
-            elif body_type == 'pollReq':
-                context = context.narrow(CmpPollRequestContext)
-                CmpPollReqBodyValidation().parse_pollreq_body(context, pki_body)
 
             self.logger.info('CMP body type validation successful: %s body extracted', body_type.upper())
 
@@ -760,8 +761,6 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             return 'revocation'
         if body_type == 'certConf':
             return 'certconf'
-        if body_type == 'pollReq':
-            return 'polling'
         err_msg = f'Unsupported CMP body type: {body_type}'
         self._raise_value_error(err_msg)
         return ''
@@ -773,11 +772,10 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             raise ValueError(err_msg)
 
         expected_body_types = {
-            'initialization': ('ir', 'certConf', 'pollReq'),
-            'certification': ('cr', 'certConf', 'pollReq'),
+            'initialization': ('ir', 'certConf'),
+            'certification': ('cr', 'certConf'),
             'revocation': ('rr',),
             'certconf': ('certConf',),
-            'polling': ('pollReq',),
         }
         expected = expected_body_types.get(operation)
         if expected is None:
@@ -791,6 +789,15 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             f'Expected CMP {expected_detail} body for {operation} operation, '
             f'but got CMP {body_type.upper()} body.'
         )
+        raise ValueError(err_msg)
+
+    def _validate_pollreq_operation(self, operation: str | None) -> None:
+        """Validate one optional operation hint for a pollReq message."""
+        if operation is None:
+            return
+        if operation in {'initialization', 'certification'}:
+            return
+        err_msg = f'Expected CMP initialization or certification operation for pollReq, but got {operation}.'
         raise ValueError(err_msg)
 
     def _raise_value_error(self, message: str) -> Never:

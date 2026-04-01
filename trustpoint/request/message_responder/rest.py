@@ -6,7 +6,7 @@ from cryptography.hazmat.primitives.serialization import Encoding
 
 from onboarding.models import OnboardingStatus
 from request.request_context import BaseRequestContext, RestBaseRequestContext, RestCertificateRequestContext
-from request.workflows2_gate import get_workflow2_outcome, workflow2_run_detail_path
+from request.workflow2_issuance import get_workflow2_dispatch_outcome, get_workflow2_run_detail_path
 from workflows2.models import Workflow2Run
 
 from .base import AbstractMessageResponder
@@ -37,7 +37,7 @@ class RestCertificateMessageResponder(RestMessageResponder):
     @staticmethod
     def _check_workflow_state(context: RestCertificateRequestContext) -> bool:
         """Check if the workflow state allows for certificate issuance."""
-        workflow2_outcome = get_workflow2_outcome(context)
+        workflow2_outcome = get_workflow2_dispatch_outcome(context)
         if workflow2_outcome is None:
             return True
 
@@ -67,7 +67,7 @@ class RestCertificateMessageResponder(RestMessageResponder):
             Workflow2Run.STATUS_STOPPED,
         }:
             detail = 'Enrollment request failed in workflow processing.'
-            run_path = workflow2_run_detail_path(context)
+            run_path = get_workflow2_run_detail_path(context)
             if run_path:
                 detail = f'{detail} Check here: -> {run_path}'
             response_status = 500

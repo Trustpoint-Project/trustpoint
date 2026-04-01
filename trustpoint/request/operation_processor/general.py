@@ -14,7 +14,7 @@ from trustpoint.logger import LoggerMixin
 
 from .base import AbstractOperationProcessor
 from .cert_conf import CertConfProcessor
-from .cmp_enrollment_request import CmpEnrollmentRequestProcessor
+from .cmp_certificate_request import CmpCertificateRequestProcessor
 from .cmp_poll import CmpPollProcessor
 from .issue_cert import CertificateIssueProcessor
 from .revoke_cert import CertificateRevocationProcessor
@@ -31,16 +31,17 @@ class OperationProcessor(AbstractOperationProcessor, LoggerMixin):
         elif isinstance(context, CmpCertConfRequestContext):
             processor_instance = CertConfProcessor()
         elif isinstance(context, CmpCertificateRequestContext):
-            processor_instance = CmpEnrollmentRequestProcessor()
+            processor_instance = CmpCertificateRequestProcessor()
         elif isinstance(context, BaseCertificateRequestContext):
-            # Process certificate issuance operation
             processor_instance = CertificateIssueProcessor()
         elif isinstance(context, BaseRevocationRequestContext):
-            # Process certificate revocation operation
             processor_instance = CertificateRevocationProcessor()
         else:
-            context.error('No suitable operation processor available for the given context.',
-                          http_status=500, cmp_code=PKIFailureInfo.SYSTEM_FAILURE)
+            context.error(
+                'No suitable operation processor available for the given context.',
+                http_status=500,
+                cmp_code=PKIFailureInfo.SYSTEM_FAILURE,
+            )
             exc_msg = f'No suitable operation processor available for the given context {context}.'
             raise TypeError(exc_msg)
 

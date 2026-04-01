@@ -22,7 +22,6 @@ from request.request_context import (
     EstCertificateRequestContext,
     HttpBaseRequestContext,
 )
-from request.workflows2_gate import workflow2_allows_certificate_issuance
 from trustpoint.logger import LoggerMixin
 
 from .base import AbstractOperationProcessor
@@ -46,8 +45,6 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
         if not isinstance(context, BaseCertificateRequestContext):
             exc_msg = 'Certificate issuance requires a subclass of BaseCertificateRequestContext.'
             raise TypeError(exc_msg)
-        if not workflow2_allows_certificate_issuance(context):
-            return None
 
         if context.domain and context.domain.issuing_ca:
             issuing_ca = context.domain.issuing_ca

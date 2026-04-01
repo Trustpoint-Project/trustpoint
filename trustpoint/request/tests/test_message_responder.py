@@ -488,6 +488,6 @@ class TestCmpTransactionResponder:
             handled = CmpTransactionResponder.respond_if_needed(context)
 
         assert handled is True
-        assert build_pollrep.call_args.kwargs['check_after_seconds'] == 35
+        assert build_pollrep.call_args.kwargs['check_after_seconds'] == 5
         assert context.http_response_status == 200
         assert context.http_response_content == b'cmp-pollrep'

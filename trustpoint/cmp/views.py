@@ -23,6 +23,7 @@ from request.request_context import (
     HttpBaseRequestContext,
 )
 from request.request_validator.http_req import CmpHttpRequestValidator
+from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
 from workflows2.events.request_events import Events
 
@@ -123,6 +124,7 @@ class CmpRequestView(LoggerMixin, View):
             )
             authorizer.authorize(ctx)
 
+            Workflow2Handler().handle(ctx)
             OperationProcessor().process_operation(ctx)
         except Exception:
             self.logger.exception('Error processing CMP request')

@@ -8,7 +8,6 @@ from request.request_context import (
     BaseCredentialRequestContext,
     BaseRequestContext,
 )
-from request.workflows2_gate import workflow2_allows_certificate_issuance
 from trustpoint.logger import LoggerMixin
 
 from .base import AbstractOperationProcessor
@@ -22,8 +21,6 @@ class CredentialIssueProcessor(AbstractOperationProcessor, LoggerMixin):
         if not isinstance(context, BaseCredentialRequestContext):
             exc_msg = 'Credential issuance requires a subclass of BaseCredentialRequestContext.'
             raise TypeError(exc_msg)
-        if not workflow2_allows_certificate_issuance(context):
-            return
         if not context.cert_requested or not isinstance(context.cert_requested, CertificateBuilder):
             exc_msg = 'Credential issuance requires a certificate request in context.'
             raise ValueError(exc_msg)

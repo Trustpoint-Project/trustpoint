@@ -74,13 +74,28 @@ have(){ command -v "$1" >/dev/null 2>&1; }
 exists(){ docker ps -a --format '{{.Names}}' | grep -Fxq "$1"; }
 running(){ docker ps --format '{{.Names}}' | grep -Fxq "$1"; }
 ensure_network(){ docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null; }
-ensure_volumes(){ docker volume inspect "$VOL_DB" >/dev/null 2>&1 || docker volume create "$VOL_DB" >/dev/null; }
+ensure_volumes(){ docker volume inspect "$VOL_DB" >/dev/null 2>&1 || docker volume create --label "tp.project=${PROJECT}" "$VOL_DB" >/dev/null; }
 stop_one(){ local n="$1"; exists "$n" || return 0; running "$n" && docker stop "$n" >/dev/null || true; docker rm "$n" >/dev/null || true; }
 container_state(){ local n="$1"; exists "$n" || { echo "absent"; return; }; docker inspect -f '{{.State.Status}}' "$n" 2>/dev/null || echo "unknown"; }
 container_health(){ local n="$1" h=""; exists "$n" || { echo "-"; return; }; h="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$n" 2>/dev/null || true)"; echo "${h:--}"; }
 container_image(){ local n="$1"; exists "$n" || { echo "-"; return; }; docker inspect -f '{{.Config.Image}}' "$n" 2>/dev/null || echo "-"; }
 container_host_port(){ local n="$1" spec="$2" p=""; exists "$n" || return 0; p="$(docker port "$n" "$spec" 2>/dev/null | awk -F: 'NR==1 {print $NF}')" || true; echo "${p}"; }
 container_env(){ local n="$1" key="$2"; exists "$n" || return 0; docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$n" 2>/dev/null | sed -n "s/^${key}=//p" | head -n1; }
+container_volume_names(){
+  local n="$1"
+  exists "$n" || return 0
+  docker inspect -f '{{range .Mounts}}{{if eq .Type "volume"}}{{println .Name}}{{end}}{{end}}' "$n" 2>/dev/null | sed '/^$/d'
+}
+collect_project_volumes(){
+  {
+    echo "$VOL_DB"
+    container_volume_names trustpoint
+    container_volume_names postgres
+    container_volume_names mailpit
+    container_volume_names sftpgo
+    container_volume_names "$WF2_WORKER_NAME"
+  } | sed '/^$/d' | sort -u
+}
 print_container_status_row(){
   local n="$1"
   printf "%-20s %-10s %-10s %s\n" "$n" "$(container_state "$n")" "$(container_health "$n")" "$(container_image "$n")"
@@ -291,6 +306,59 @@ show_plan(){
 # -------------------------- Build/Pull & Start -------------------------------
 build_trustpoint_image(){ [[ -f "$TP_DOCKERFILE" ]] || log "Dockerfile not found: $TP_DOCKERFILE"; log "Building trustpoint image..."; docker build -f "$TP_DOCKERFILE" -t "trustpoint:local" .; }
 pull_trustpoint_image(){ log "Pulling ${APP_IMAGE} ..."; docker pull "${APP_IMAGE}" >/dev/null; }
+configure_app_image_prompt(){
+  if ask_yes_no "Build trustpoint locally from ${TP_DOCKERFILE}? (No = pull from Docker Hub)" "y"; then
+    BUILD_LOCAL=true
+    APP_IMAGE="trustpoint:local"
+  else
+    BUILD_LOCAL=false
+    ask "Docker Hub image tag to pull (repository ${TP_REPO})" "latest"
+    local tag="$REPLY"
+    APP_IMAGE="${TP_REPO}:${tag}"
+  fi
+}
+resolve_app_image(){
+  if ! $EN_APP && ! $EN_WF2_WORKER; then
+    return 0
+  fi
+  if $BUILD_LOCAL; then
+    build_trustpoint_image
+  else
+    pull_trustpoint_image
+  fi
+}
+configure_selected(){
+  if $ONLY_DB; then
+    EN_PG=true
+    DB_INTERNAL=true
+  fi
+  $ONLY_MAIL && EN_MAILPIT=true
+  $ONLY_SFTP && EN_SFTPGO=true
+
+  if $ONLY_APP; then
+    EN_APP=true
+    configure_app_image_prompt
+    EN_WF2_WORKER=$(
+      ask_yes_no "Delegate workflows2 tasks to a dedicated worker container?" "n" && echo true || echo false
+    )
+  elif $ONLY_WF2_WORKER; then
+    EN_WF2_WORKER=true
+    configure_app_image_prompt
+  fi
+
+  if $ONLY_APP || $ONLY_WF2_WORKER; then
+    if $DB_INTERNAL; then
+      APP_DB_HOST="$DEF_DB_HOST_INTERNAL"
+      APP_DB_PORT=5432
+    else
+      APP_DB_HOST="$DB_HOST"
+      APP_DB_PORT="$DB_PORT"
+    fi
+    APP_DB_NAME="$DB_NAME"
+    APP_DB_USER="$DB_USER"
+    APP_DB_PASS="$DB_PASS"
+  fi
+}
 
 start_postgres(){
   $DB_INTERNAL || return 0
@@ -302,7 +370,7 @@ start_postgres(){
   log "Starting PostgreSQL..."
   docker run -d --name "$name" --network "$NET" \
     -p "${DB_PORT}:5432" \
-    -v "${VOL_DB}:/var/lib/postgresql" \
+    -v "${VOL_DB}:/var/lib/postgresql/data" \
     -e "POSTGRES_DB=$DB_NAME" \
     -e "POSTGRES_USER=$DB_USER" \
     -e "POSTGRES_PASSWORD=$DB_PASS" \
@@ -356,7 +424,7 @@ prepare_workflows2_worker_folder(){
   $EN_WF2_WORKER || return 0
   mkdir -p "$WF2_FOLDER"
   chmod 700 "$WF2_FOLDER" 2>/dev/null || true
-  cat > "$WF2_WORKER_README" <<EOF
+  cat > "$WF2_WORKER_README" <<EOF2
 This folder was created by tp_wizard.sh for the optional dedicated workflows2 worker.
 
 Files:
@@ -364,10 +432,10 @@ Files:
 
 Container:
 - ${WF2_WORKER_NAME}
-EOF
+EOF2
   chmod 644 "$WF2_WORKER_README" 2>/dev/null || true
 
-  cat > "$WF2_WORKER_ENV_FILE" <<EOF
+  cat > "$WF2_WORKER_ENV_FILE" <<EOF2
 POSTGRES_DB=${APP_DB_NAME}
 DATABASE_USER=${APP_DB_USER}
 DATABASE_PASSWORD=${APP_DB_PASS}
@@ -379,15 +447,15 @@ WORKFLOWS2_WORKER_LEASE=${WF2_WORKER_LEASE}
 WORKFLOWS2_WORKER_BATCH=${WF2_WORKER_BATCH}
 WORKFLOWS2_WORKER_SLEEP=${WF2_WORKER_SLEEP}
 DEFAULT_FROM_EMAIL=no-reply@trustpoint.local
-EOF
+EOF2
 
   if $EN_MAILPIT; then
-    cat >> "$WF2_WORKER_ENV_FILE" <<EOF
+    cat >> "$WF2_WORKER_ENV_FILE" <<EOF2
 EMAIL_HOST=mailpit
 EMAIL_PORT=1025
 EMAIL_USE_TLS=0
 EMAIL_USE_SSL=0
-EOF
+EOF2
   fi
   chmod 600 "$WF2_WORKER_ENV_FILE" 2>/dev/null || true
 }
@@ -610,7 +678,7 @@ probe_mailpit_from_container(){
   log "Sending Mailpit probe email from ${label} container..."
 
   if ! docker exec -e "PROBE_SUBJECT=${subject}" "$container" bash -lc \
-    'cd /var/www/html/trustpoint && uv run trustpoint/manage.py shell -c '"'"'\'"'"''"'"'import os; from django.conf import settings; from django.core.mail import send_mail; subject=os.environ["PROBE_SUBJECT"]; send_mail(subject, "Trustpoint Mailpit probe.", getattr(settings, "DEFAULT_FROM_EMAIL", None), ["demo@trustpoint.local"], fail_silently=False)'"'"'\'"'"''"'" \
+    'cd /var/www/html/trustpoint && uv run trustpoint/manage.py shell -c '\''import os; from django.conf import settings; from django.core.mail import send_mail; subject=os.environ["PROBE_SUBJECT"]; send_mail(subject, "Trustpoint Mailpit probe.", getattr(settings, "DEFAULT_FROM_EMAIL", None), ["demo@trustpoint.local"], fail_silently=False)'\''' \
     >/dev/null 2>&1; then
     warn "Mailpit probe failed from ${label} container."
     return 1
@@ -773,6 +841,7 @@ wizard(){
   step_workflows2_worker
   show_plan
   ask_yes_no "Proceed with these settings?" "y" || { warn "Aborted by user."; exit 1; }
+  resolve_app_image
   $DB_INTERNAL && ensure_volumes
   start_postgres
   start_mailpit
@@ -789,7 +858,7 @@ wizard(){
 
 # -------------------------- Service selection & CLI --------------------------
 usage(){
-  cat <<'EOF'
+  cat <<'EOF2'
 Commands:
   (no command)       Run interactive wizard
   up [demo|trustpoint|db|mail|sftp|worker] [--nowait]
@@ -800,13 +869,13 @@ Commands:
   help
 
 Also supported (legacy): --only trustpoint|db|mail|sftp|worker|demo
-EOF
+EOF2
 }
 
 map_only_to_flags(){
   case "$1" in
     demo)  ONLY_APP=true; ONLY_DB=true; ONLY_MAIL=true; ONLY_SFTP=true ;;
-    trustpoint|app)  ONLY_APP=true ;;   # accept both names
+    trustpoint|app)  ONLY_APP=true ;;
     db)   ONLY_DB=true ;;
     mail) ONLY_MAIL=true ;;
     sftp) ONLY_SFTP=true ;;
@@ -829,66 +898,9 @@ set_targets_from_args(){
 }
 
 start_selected(){
+  configure_selected
   ensure_network
-  if $ONLY_DB; then DB_INTERNAL=true; fi
-  if $ONLY_APP || $ONLY_WF2_WORKER; then
-    # If internal DB is (or will be) used, set app connection to container:5432
-    if $DB_INTERNAL; then
-      APP_DB_HOST="$DEF_DB_HOST_INTERNAL"; APP_DB_PORT=5432
-    else
-      APP_DB_HOST="$DB_HOST"; APP_DB_PORT="$DB_PORT"
-    fi
-    APP_DB_NAME="$DB_NAME"; APP_DB_USER="$DB_USER"; APP_DB_PASS="$DB_PASS"
-  fi
-  if $ONLY_APP; then
-    EN_APP=true
-    # Prefer local image if present; otherwise pull repo:latest
-    if ask_yes_no "Do you want to buid locally (No = pull from Docker Hub)" "y"; then
-      if build_trustpoint_image; then
-        BUILD_LOCAL=true
-        APP_IMAGE="trustpoint:local"
-      else
-        warn "Local build failed"
-        if ask_yes_no "Do you want to pull from Docker Hub" "y"; then
-          BUILD_LOCAL=false
-          APP_IMAGE="${TP_REPO}:latest"
-          pull_trustpoint_image
-        else
-          nuke_cmd ;
-          exit 1;
-        fi
-      fi
-    else
-      BUILD_LOCAL=false
-      APP_IMAGE="${TP_REPO}:latest"
-      pull_trustpoint_image
-    fi
-    EN_WF2_WORKER=$(
-      ask_yes_no "Delegate workflows2 tasks to a dedicated worker container?" "n" && echo true || echo false
-    )
-  elif $ONLY_WF2_WORKER; then
-    EN_WF2_WORKER=true
-    if ask_yes_no "Do you want to buid locally (No = pull from Docker Hub)" "y"; then
-      if build_trustpoint_image; then
-        BUILD_LOCAL=true
-        APP_IMAGE="trustpoint:local"
-      else
-        warn "Local build failed"
-        if ask_yes_no "Do you want to pull from Docker Hub" "y"; then
-          BUILD_LOCAL=false
-          APP_IMAGE="${TP_REPO}:latest"
-          pull_trustpoint_image
-        else
-          nuke_cmd ;
-          exit 1;
-        fi
-      fi
-    else
-      BUILD_LOCAL=false
-      APP_IMAGE="${TP_REPO}:latest"
-      pull_trustpoint_image
-    fi
-  fi
+  resolve_app_image
   $ONLY_DB   && { EN_PG=true; ensure_volumes; start_postgres; }
   $ONLY_MAIL && { EN_MAILPIT=true; start_mailpit; }
   $ONLY_SFTP && { EN_SFTPGO=true; start_sftpgo; }
@@ -927,9 +939,13 @@ logs_selected(){
 nuke_cmd(){
   read -r -p "Remove ALL project containers, network, DB volume, ./sftpgo-data, and ./workflow2Folder? [y/N] " a; [[ "${a}" == "y" ]] || exit 0
   read -r -p "Are you sure? This is destructive. [y/N] " b; [[ "${b}" == "y" ]] || exit 0
+  mapfile -t project_volumes < <(collect_project_volumes)
   stop_one trustpoint; stop_one postgres; stop_one mailpit; stop_one sftpgo; stop_one "$WF2_WORKER_NAME"
   docker network rm "$NET" >/dev/null 2>&1 || true
-  docker volume rm "$VOL_DB" >/dev/null 2>&1 || true
+  for v in "${project_volumes[@]}"; do
+    [[ -n "$v" ]] || continue
+    docker volume rm "$v" >/dev/null 2>&1 || true
+  done
   if [[ -d "$SFTPGO_ROOT" ]]; then rm -rf "$SFTPGO_ROOT"; fi
   if [[ -d "$WF2_FOLDER" ]]; then rm -rf "$WF2_FOLDER"; fi
   ok "Project resources removed."

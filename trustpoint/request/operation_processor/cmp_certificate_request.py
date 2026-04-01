@@ -1,21 +1,22 @@
-"""CMP enrollment-request processing with CMP-owned transaction persistence."""
+"""CMP certificate-request processing with CMP-owned transaction persistence."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, cast
 
-from cryptography.hazmat.primitives import hashes
 from django.db import IntegrityError, transaction
-from django.utils import timezone
 
 from cmp.models import CmpTransactionModel
-from pki.models import CertificateModel
 from request.authorization import CmpAuthorization
+from request.cmp_transaction_state import CmpTransactionState
 from request.message_parser import CmpMessageParser
-from request.request_context import BaseRequestContext, CmpCertificateRequestContext, HttpBaseRequestContext
-from request.workflows2_gate import NEGATIVE_RUN_STATUSES, PENDING_RUN_STATUSES
-from request.workflows2_handler import Workflow2Handler
+from request.request_context import (
+    BaseRequestContext,
+    CmpCertificateRequestContext,
+    HttpBaseRequestContext,
+)
+from request.workflow2_issuance import Workflow2IssuanceDecision, get_workflow2_issuance_decision
 from trustpoint.logger import LoggerMixin
 from workflows2.models import Workflow2Run
 
@@ -30,15 +31,15 @@ class _StoredCmpHttpRequest:
     body: bytes
 
 
-class CmpEnrollmentRequestProcessor(AbstractOperationProcessor, LoggerMixin):
-    """Process CMP IR/CR enrollment requests through CMP transaction state."""
+class CmpCertificateRequestProcessor(AbstractOperationProcessor, LoggerMixin):
+    """Process CMP certificate-request messages through CMP transaction state."""
 
     DEFAULT_CHECK_AFTER_SECONDS = 35
 
     def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901
-        """Process one CMP enrollment request."""
+        """Process one CMP certificate request."""
         if not isinstance(context, CmpCertificateRequestContext):
-            exc_msg = 'CmpEnrollmentRequestProcessor requires a CmpCertificateRequestContext.'
+            exc_msg = 'CmpCertificateRequestProcessor requires a CmpCertificateRequestContext.'
             raise TypeError(exc_msg)
         if context.protocol != 'cmp':
             CertificateIssueProcessor().process_operation(context)
@@ -59,31 +60,38 @@ class CmpEnrollmentRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         transaction_record = self._create_processing_transaction(context, transaction_id, request_der)
         context.cmp_transaction = transaction_record
 
-        if context.event is not None:
-            Workflow2Handler().handle(context)
-
-        workflow_outcome = context.workflow2_outcome
-        if workflow_outcome is not None:
+        workflow_decision = get_workflow2_issuance_decision(context)
+        if workflow_decision == Workflow2IssuanceDecision.WAIT:
+            workflow_outcome = context.workflow2_outcome
+            if workflow_outcome is None:
+                exc_msg = 'CMP waiting decision requires a Workflow 2 outcome.'
+                raise ValueError(exc_msg)
             run_status = str(workflow_outcome.run.status)
-            if run_status in PENDING_RUN_STATUSES:
-                context.cmp_transaction = self._mark_transaction_waiting(
-                    transaction_record.pk,
-                    backend=CmpTransactionModel.Backend.WORKFLOW2,
-                    backend_reference=str(workflow_outcome.run.id),
-                    detail=self.detail_for_pending_run(run_status),
-                )
-                return
-            if run_status in NEGATIVE_RUN_STATUSES:
-                context.cmp_transaction = self._mark_transaction_terminal(
-                    transaction_record.pk,
-                    run_status=run_status,
-                )
-                return
+            context.cmp_transaction = self._mark_transaction_waiting(
+                transaction_record.pk,
+                backend=CmpTransactionModel.Backend.WORKFLOW2,
+                backend_reference=str(workflow_outcome.run.id),
+                detail=self.detail_for_pending_run(run_status),
+            )
+            return
+        if workflow_decision in {
+            Workflow2IssuanceDecision.REJECT,
+            Workflow2IssuanceDecision.FAIL,
+        }:
+            workflow_outcome = context.workflow2_outcome
+            if workflow_outcome is None:
+                exc_msg = 'CMP terminal workflow decision requires a Workflow 2 outcome.'
+                raise ValueError(exc_msg)
+            context.cmp_transaction = self._mark_transaction_terminal(
+                transaction_record.pk,
+                run_status=str(workflow_outcome.run.status),
+            )
+            return
 
         try:
             CertificateIssueProcessor().process_operation(context)
         except Exception:
-            self._mark_transaction_failed(
+            context.cmp_transaction = self._mark_transaction_failed(
                 transaction_record.pk,
                 detail='CMP enrollment failed while issuing the certificate.',
             )
@@ -129,7 +137,7 @@ class CmpEnrollmentRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         transaction_record: CmpTransactionModel,
         poll_context: Any,
     ) -> CmpCertificateRequestContext:
-        """Rebuild the original CMP enrollment context for final issuance."""
+        """Rebuild the original CMP certificate-request context for final issuance."""
         replay_context = CmpCertificateRequestContext(
             raw_message=cast('Any', _StoredCmpHttpRequest(body=bytes(transaction_record.request_der))),
             domain_str=transaction_record.domain_name or poll_context.domain_str,
@@ -154,7 +162,7 @@ class CmpEnrollmentRequestProcessor(AbstractOperationProcessor, LoggerMixin):
     @staticmethod
     def _request_body_bytes(context: CmpCertificateRequestContext) -> bytes:
         if not isinstance(context, HttpBaseRequestContext) or context.raw_message is None:
-            exc_msg = 'CMP enrollment context is missing its raw HTTP message.'
+            exc_msg = 'CMP certificate-request context is missing its raw HTTP message.'
             raise ValueError(exc_msg)
 
         raw_body = getattr(context.raw_message, 'body', b'') or b''
@@ -165,14 +173,14 @@ class CmpEnrollmentRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         if isinstance(raw_body, str):
             return raw_body.encode('utf-8')
 
-        exc_msg = 'CMP enrollment request body must be bytes-like.'
+        exc_msg = 'CMP certificate-request body must be bytes-like.'
         raise TypeError(exc_msg)
 
     @classmethod
     def _require_request_der(cls, context: CmpCertificateRequestContext) -> bytes:
         request_der = cls._request_body_bytes(context)
         if not request_der:
-            exc_msg = 'CMP enrollment request body is empty.'
+            exc_msg = 'CMP certificate-request body is empty.'
             raise ValueError(exc_msg)
         return request_der
 
@@ -180,7 +188,7 @@ class CmpEnrollmentRequestProcessor(AbstractOperationProcessor, LoggerMixin):
     def _require_transaction_id(context: CmpCertificateRequestContext) -> str:
         transaction_id = str(context.cmp_transaction_id or '').strip().lower()
         if not transaction_id:
-            exc_msg = 'CMP enrollment request is missing transactionID.'
+            exc_msg = 'CMP certificate request is missing transactionID.'
             raise ValueError(exc_msg)
         return transaction_id
 
@@ -204,11 +212,7 @@ class CmpEnrollmentRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         )
 
     def _get_existing_transaction(self, transaction_id: str) -> CmpTransactionModel | None:
-        return (
-            CmpTransactionModel.objects.select_related('final_certificate', 'issuer_credential', 'device', 'domain')
-            .filter(transaction_id=transaction_id)
-            .first()
-        )
+        return CmpTransactionState.get_by_transaction_id(transaction_id)
 
     def _validate_existing_request(
         self,
@@ -217,7 +221,7 @@ class CmpEnrollmentRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         request_der: bytes,
     ) -> None:
         if not self._request_matches_transaction(transaction_record, context, request_der):
-            exc_msg = 'CMP transactionID is already in use for a different enrollment request.'
+            exc_msg = 'CMP transactionID is already in use for a different certificate request.'
             raise ValueError(exc_msg)
 
     def _apply_existing_transaction(
@@ -252,15 +256,9 @@ class CmpEnrollmentRequestProcessor(AbstractOperationProcessor, LoggerMixin):
             'device': context.device,
             'domain': context.domain,
             'status': CmpTransactionModel.Status.PROCESSING,
-            'detail': 'CMP enrollment request is being processed.',
+            'detail': 'CMP certificate request is being processed.',
             'check_after_seconds': self.DEFAULT_CHECK_AFTER_SECONDS,
-            'backend': CmpTransactionModel.Backend.NONE,
-            'backend_reference': '',
-            'final_certificate': None,
-            'issuer_credential': None,
-            'finalized_at': None,
         }
-
         try:
             with transaction.atomic():
                 return CmpTransactionModel.objects.create(transaction_id=transaction_id, **defaults)
@@ -279,90 +277,29 @@ class CmpEnrollmentRequestProcessor(AbstractOperationProcessor, LoggerMixin):
         backend_reference: str,
         detail: str,
     ) -> CmpTransactionModel:
-        with transaction.atomic():
-            transaction_record = CmpTransactionModel.objects.select_for_update().get(pk=transaction_pk)
-            transaction_record.status = CmpTransactionModel.Status.WAITING
-            transaction_record.detail = detail
-            transaction_record.check_after_seconds = self.DEFAULT_CHECK_AFTER_SECONDS
-            transaction_record.backend = backend
-            transaction_record.backend_reference = backend_reference
-            transaction_record.final_certificate = None
-            transaction_record.issuer_credential = None
-            transaction_record.finalized_at = None
-            transaction_record.save(
-                update_fields=[
-                    'status',
-                    'detail',
-                    'check_after_seconds',
-                    'backend',
-                    'backend_reference',
-                    'final_certificate',
-                    'issuer_credential',
-                    'finalized_at',
-                    'updated_at',
-                ]
-            )
-            return transaction_record
+        return CmpTransactionState.mark_waiting(
+            transaction_pk,
+            backend=backend,
+            backend_reference=backend_reference,
+            detail=detail,
+            check_after_seconds=self.DEFAULT_CHECK_AFTER_SECONDS,
+        )
 
-    def _mark_transaction_terminal(self, transaction_pk: int, *, run_status: str) -> CmpTransactionModel:
-        if run_status == Workflow2Run.STATUS_REJECTED:
-            status = CmpTransactionModel.Status.REJECTED
-            detail = 'Enrollment request rejected by workflow.'
-        elif run_status == Workflow2Run.STATUS_CANCELLED:
-            status = CmpTransactionModel.Status.CANCELLED
-            detail = 'Enrollment request cancelled in workflow processing.'
-        else:
-            status = CmpTransactionModel.Status.FAILED
-            detail = 'Enrollment request failed in workflow processing.'
-
-        with transaction.atomic():
-            transaction_record = CmpTransactionModel.objects.select_for_update().get(pk=transaction_pk)
-            transaction_record.status = status
-            transaction_record.detail = detail
-            transaction_record.finalized_at = timezone.now()
-            transaction_record.save(update_fields=['status', 'detail', 'finalized_at', 'updated_at'])
-            return transaction_record
+    def _mark_transaction_terminal(
+        self,
+        transaction_pk: int,
+        *,
+        run_status: str,
+    ) -> CmpTransactionModel:
+        return CmpTransactionState.mark_terminal_from_run_status(transaction_pk, run_status=run_status)
 
     def _mark_transaction_failed(self, transaction_pk: int, *, detail: str) -> CmpTransactionModel:
-        with transaction.atomic():
-            transaction_record = CmpTransactionModel.objects.select_for_update().get(pk=transaction_pk)
-            transaction_record.status = CmpTransactionModel.Status.FAILED
-            transaction_record.detail = detail
-            transaction_record.finalized_at = timezone.now()
-            transaction_record.save(update_fields=['status', 'detail', 'finalized_at', 'updated_at'])
-            return transaction_record
+        return CmpTransactionState.mark_failed(transaction_pk, detail=detail)
 
     def mark_transaction_issued(
         self,
         transaction_pk: int,
         context: CmpCertificateRequestContext,
     ) -> CmpTransactionModel:
-        """Persist the issued certificate result on the CMP transaction."""
-        if context.issued_certificate is None:
-            exc_msg = 'Cannot mark CMP transaction as issued without an issued certificate.'
-            raise ValueError(exc_msg)
-
-        certificate_fingerprint = context.issued_certificate.fingerprint(hashes.SHA256()).hex().upper()
-        final_certificate = CertificateModel.get_cert_by_sha256_fingerprint(certificate_fingerprint)
-        if final_certificate is None:
-            exc_msg = f'Issued CMP certificate {certificate_fingerprint} was not persisted in the database.'
-            raise ValueError(exc_msg)
-
-        with transaction.atomic():
-            transaction_record = CmpTransactionModel.objects.select_for_update().get(pk=transaction_pk)
-            transaction_record.status = CmpTransactionModel.Status.ISSUED
-            transaction_record.detail = ''
-            transaction_record.final_certificate = final_certificate
-            transaction_record.issuer_credential = context.issuer_credential
-            transaction_record.finalized_at = timezone.now()
-            transaction_record.save(
-                update_fields=[
-                    'status',
-                    'detail',
-                    'final_certificate',
-                    'issuer_credential',
-                    'finalized_at',
-                    'updated_at',
-                ]
-            )
-            return transaction_record
+        """Persist the final issued certificate material for one CMP transaction."""
+        return CmpTransactionState.mark_issued(transaction_pk, context)

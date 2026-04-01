@@ -79,7 +79,6 @@ class RestEnrollView(LoggerMixin, View):
             authorizer.authorize(ctx)
 
             Workflow2Handler().handle(ctx)
-
             OperationProcessor().process_operation(ctx)
 
             RestMessageResponder.build_response(ctx)
@@ -147,7 +146,6 @@ class RestReEnrollView(LoggerMixin, View):
             authorizer.authorize(ctx)
 
             Workflow2Handler().handle(ctx)
-
             OperationProcessor().process_operation(ctx)
 
             RestMessageResponder.build_response(ctx)

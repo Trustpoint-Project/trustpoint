@@ -6,6 +6,7 @@ from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 from cmp.models import CmpTransactionModel
 from cmp.util import PKIFailureInfo
 from pki.models import IssuedCredentialModel
+from request.cmp_transaction_state import CmpTransactionState
 from request.request_context import (
     BaseRequestContext,
     CmpBaseRequestContext,
@@ -206,20 +207,31 @@ class CmpPollAuthorization(AuthorizationComponent, LoggerMixin):
         if not transaction_id:
             self._raise_authorization_error('CMP pollReq is missing a transactionID.', context)
 
-        try:
-            transaction = (
-                CmpTransactionModel.objects.select_related('device', 'domain')
-                .get(transaction_id=transaction_id)
-            )
-        except CmpTransactionModel.DoesNotExist:
+        transaction = self._get_poll_transaction(transaction_id=transaction_id, context=context)
+        self._validate_poll_transaction(context=context, transaction=transaction)
+        self._hydrate_context_from_transaction(context=context, transaction=transaction)
+
+    def _get_poll_transaction(
+        self,
+        *,
+        transaction_id: str,
+        context: CmpPollRequestContext,
+    ) -> CmpTransactionModel:
+        transaction = CmpTransactionState.get_by_transaction_id(transaction_id)
+        if transaction is None:
             self._raise_authorization_error(
                 f'No CMP transaction found for transactionID {transaction_id}.',
                 context,
             )
+        return transaction
 
-        if context.operation in (None, 'polling'):
-            context.operation = transaction.operation
-        elif context.operation != transaction.operation:
+    def _validate_poll_transaction(
+        self,
+        *,
+        context: CmpPollRequestContext,
+        transaction: CmpTransactionModel,
+    ) -> None:
+        if context.operation is not None and context.operation != transaction.operation:
             self._raise_authorization_error(
                 f'pollReq operation mismatch: expected {transaction.operation}, got {context.operation}.',
                 context,
@@ -244,6 +256,13 @@ class CmpPollAuthorization(AuthorizationComponent, LoggerMixin):
         ):
             self._raise_authorization_error('pollReq domain does not match the original CMP transaction.', context)
 
+    @staticmethod
+    def _hydrate_context_from_transaction(
+        *,
+        context: CmpPollRequestContext,
+        transaction: CmpTransactionModel,
+    ) -> None:
+        context.operation = transaction.operation
         context.cmp_transaction = transaction
         context.device = context.device or transaction.device
         context.domain = context.domain or transaction.domain

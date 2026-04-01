@@ -39,6 +39,11 @@ class Migration(migrations.Migration):
             field=models.CharField(blank=True, db_index=True, default='', max_length=128),
         ),
         migrations.AlterField(
+            model_name='workflow2run',
+            name='status',
+            field=models.CharField(choices=[('queued', 'Queued'), ('running', 'Running'), ('awaiting', 'Awaiting'), ('paused', 'Paused'), ('succeeded', 'Succeeded'), ('stopped', 'Stopped'), ('rejected', 'Rejected'), ('failed', 'Failed'), ('cancelled', 'Cancelled')], default='queued', max_length=16),
+        ),
+        migrations.AlterField(
             model_name='workflow2steprun',
             name='error',
             field=models.TextField(blank=True, default=''),

@@ -7,7 +7,6 @@ import pytest
 from django.test import RequestFactory
 from pki.models.domain import DomainModel
 from request.request_context import EstCertificateRequestContext
-from request.workflows2_handler import Workflow2HandleResult
 
 from est.views import (
     EstCACertsView,
@@ -179,7 +178,6 @@ def test_process_enrollment_success(
     mock_ctx.http_response_status = 200
     mock_ctx.http_response_content_type = 'application/pkcs7-mime'
     mock_request_context.return_value = mock_ctx
-    mock_workflow2.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
     
     # Configure parser mock to return the context
     mock_parser.return_value.parse.return_value = mock_ctx
@@ -351,7 +349,6 @@ def test_est_simple_reenrollment_view_post_success(
     mock_ctx.http_response_status = 200
     mock_ctx.http_response_content_type = 'application/pkcs7-mime'
     mock_request_context.return_value = mock_ctx
-    mock_workflow2.return_value.handle.return_value = Workflow2HandleResult.continue_processing()
 
     # Configure parser mock to return the context
     mock_parser.return_value.parse.return_value = mock_ctx
