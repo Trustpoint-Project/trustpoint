@@ -89,8 +89,6 @@ class CmpRequestView(LoggerMixin, View):
         """Handles the POST requests to the CMP IR endpoint."""
         del args
         domain_name, cert_profile, operation = self._extract_path_params(kwargs)
-        if not cert_profile:
-            cert_profile = 'domain_credential'
 
         ctx: BaseRequestContext
         try:

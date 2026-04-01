@@ -79,7 +79,7 @@ PUBLIC_PATHS = [
     '/setup-wizard',
     '/.well-known/cmp',
     '/.well-known/est',
-    '/.well-known/rest',
+    '/rest',
     '/aoki',
     '/crl',
 ]

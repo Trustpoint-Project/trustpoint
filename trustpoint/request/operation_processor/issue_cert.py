@@ -83,7 +83,11 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
         profile_display_name = (context.certificate_profile_model.display_name
                                 or context.certificate_profile_model.unique_name)
 
-        if context.certificate_profile_model.unique_name == 'domain_credential':
+        domain_cred_profile_name = 'domain_credential'
+        if context.domain is not None:
+            domain_cred_profile_name = context.domain.get_domain_credential_profile_name()
+
+        if context.certificate_profile_model.unique_name == domain_cred_profile_name:
             return (IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL, profile_display_name)
 
         return (IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, profile_display_name)

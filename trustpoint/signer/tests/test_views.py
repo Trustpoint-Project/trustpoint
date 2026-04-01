@@ -315,6 +315,43 @@ class TestSignerBulkDeleteConfirmView:
         view = SignerBulkDeleteConfirmView()
         assert view.success_url == reverse('signer:signer_list')
 
+    @patch('signer.views.messages.error')
+    def test_get_redirects_with_error_when_no_signers_selected(self, mock_messages_error):
+        """Test get redirects with error message when no signers are selected."""
+        factory = RequestFactory()
+        request = factory.get('/signer/delete/')
+
+        view = SignerBulkDeleteConfirmView()
+        view.request = request
+
+        queryset = Mock()
+        queryset.exists.return_value = False
+        view.get_queryset = Mock(return_value=queryset)
+
+        response = view.get(request)
+
+        assert response.status_code == 302
+        assert response.url == reverse('signer:signer_list')
+        mock_messages_error.assert_called_once()
+
+    def test_get_renders_confirm_page_when_signers_are_selected(self):
+        """Test get renders confirm page when signers are selected."""
+        factory = RequestFactory()
+        request = factory.get('/signer/delete/1/')
+
+        view = SignerBulkDeleteConfirmView()
+        view.request = request
+
+        queryset = Mock()
+        queryset.exists.return_value = True
+        view.get_queryset = Mock(return_value=queryset)
+        view.object_list = queryset
+        view.kwargs = {}
+
+        response = view.get(request)
+
+        assert response.status_code == 200
+
 
 @pytest.mark.django_db
 class TestSignHashView:

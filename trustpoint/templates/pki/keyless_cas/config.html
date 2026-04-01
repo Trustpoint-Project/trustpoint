@@ -104,7 +104,7 @@
                     {% if keyless_ca.last_crl_issued_at %}
                         <div>
                             <div>{% trans 'Last CRL issued' %}</div>
-                            <div>{{ keyless_ca.last_crl_issued_at }} (#{{ keyless_ca.crl_number }})</div>
+                            <div>{{ keyless_ca.last_crl_issued_at|local_datetime }} (#{{ keyless_ca.crl_number }})</div>
                         </div>
                         <div>
                             <div>{% trans 'CRL Management' %}</div>

@@ -155,7 +155,7 @@ class EstSimpleEnrollmentView(EstSimpleEnrollmentMixin, View):
         del args
 
         domain_name = cast('str', kwargs.get('domain'))
-        cert_profile = cast('str', kwargs.get('cert_profile', 'domain_credential'))
+        cert_profile = cast('str | None', kwargs.get('cert_profile'))
 
         return self.process_enrollment(request, domain_name, cert_profile)
 
