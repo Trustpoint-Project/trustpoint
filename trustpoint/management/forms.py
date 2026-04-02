@@ -21,6 +21,7 @@ from trustpoint_core.serializer import (
     CredentialSerializer,
     PrivateKeySerializer,
 )
+
 from management.models import (
     BackupOptions,
     InternationalizationConfig,
@@ -842,15 +843,17 @@ class PKCS11ConfigForm(forms.Form):
             token.save()
         return token
 
-class WorkflowExecutionConfigForm(forms.ModelForm):
+class WorkflowExecutionConfigForm(forms.ModelForm[WorkflowExecutionConfig]):
     """Form for managing Workflow 2 execution settings."""
 
     class Meta:
+        """Metadata for the workflow execution settings form."""
+
         model = WorkflowExecutionConfig
-        fields = ["mode", "worker_stale_after_seconds"]
-        widgets = {
-            "mode": forms.Select(attrs={"class": "form-select"}),
-            "worker_stale_after_seconds": forms.NumberInput(attrs={"class": "form-control", "min": 1}),
+        fields: ClassVar[tuple[str, ...]] = ('mode', 'worker_stale_after_seconds')
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            'mode': forms.Select(attrs={'class': 'form-select'}),
+            'worker_stale_after_seconds': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
         }
 
 
