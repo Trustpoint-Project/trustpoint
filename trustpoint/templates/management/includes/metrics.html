@@ -12,7 +12,7 @@
             <div class="metric-card mb-3">
                 <div class="metric-card-header">{% trans "Uptime" %}</div>
                 <div class="metric-card-body">
-                    <div class="metric-value">{{ uptime }}</div>
+                    <div class="metric-value" id="uptime-value">{{ uptime }}</div>
                 </div>
             </div>
             <div class="metric-card mb-3">
@@ -38,11 +38,27 @@
         <div class="metrics-grid">
             <div class="metric-card">
                 <div class="metric-card-header">{% trans "Memory Usage" %}</div>
-                <div class="metric-card-body"><p>test</p><p>test</p></div>
+                <div class="metric-card-body">
+                    {% if memory_available %}
+                    <div class="metric-value">{{ memory_usage }}</div>
+                    <div class="metric-subtext">{{ memory_subtext }}</div>
+                    {% else %}
+                    <div class="metric-subtext">
+                    {% trans "This metric is only available when running inside a container." %}
+                    </div>
+                    {% endif %}
+                </div>
             </div>
             <div class="metric-card">
                 <div class="metric-card-header">{% trans "Disk I/O" %}</div>
-                <div class="metric-card-body"><p>test</p><p>test</p></div>
+                <div class="metric-card-body">
+                    {% if disk_available %}
+                    <div class="metric-subtext">{% trans "Read" %}: {{ disk_read }}</div>
+                    <div class="metric-subtext">{% trans "Write" %}: {{ disk_write }}</div>
+                    {% else %}
+                    <div class="metric-subtext">{{ disk_message }}</div>
+                    {% endif %}
+                </div>
             </div>
             <div class="metric-card">
                 <div class="metric-card-header">{% trans "Network I/O" %}</div>
@@ -51,6 +67,43 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const uptimeElement = document.getElementById('uptime-value');
+    const startedAtTs = Number("{{ started_time_ts }}");
+
+    if (!uptimeElement || !startedAtTs) {
+        return;
+    }
+
+    function formatDuration(totalSeconds) {
+        const days = Math.floor(totalSeconds / 86400);
+        const remainderAfterDays = totalSeconds % 86400;
+        const hours = Math.floor(remainderAfterDays / 3600);
+        const remainderAfterHours = remainderAfterDays % 3600;
+        const minutes = Math.floor(remainderAfterHours / 60);
+        const seconds = remainderAfterHours % 60;
+
+        if (days > 0) {
+            return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+        }
+        if (hours > 0) {
+            return `${hours}h ${minutes}m ${seconds}s`;
+        }
+        return `${minutes}m ${seconds}s`;
+    }
+
+    function updateUptime() {
+        const nowTs = Math.floor(Date.now() / 1000);
+        const diffSeconds = Math.max(0, nowTs - startedAtTs);
+        uptimeElement.textContent = formatDuration(diffSeconds);
+    }
+
+    updateUptime();
+    setInterval(updateUptime, 1000);
+});
+</script>
 
 <style>
   .metrics-grid {
@@ -78,6 +131,7 @@
 
   .metric-value {
     font-size: 2rem;
+
   }
 
   .metric-subtext {

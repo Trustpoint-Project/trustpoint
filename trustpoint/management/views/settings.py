@@ -16,6 +16,7 @@ from django.views.generic import TemplateView
 from django.views.generic.edit import FormView
 from django.utils import timezone
 from django.db import connection
+from pathlib import Path
 
 from management.forms import (
     InternationalizationConfigForm,
@@ -33,7 +34,7 @@ from trustpoint.page_context import PageContextMixin
 
 if TYPE_CHECKING:
     from django.http import HttpRequest, HttpResponse
-
+#hier
 APP_STARTED_AT = timezone.now()
 
 def format_uptime(started_at):
@@ -73,6 +74,98 @@ def get_database_size() -> str:
 
     size_bytes = row[0] if row else 0
     return format_bytes(size_bytes)
+
+def read_int_file(path: str) -> int:
+    """Read an integer value from a file."""
+    return int(Path(path).read_text(encoding='utf-8').strip())
+
+
+def read_text_file(path: str) -> str:
+    """Read a text value from a file."""
+    return Path(path).read_text(encoding='utf-8').strip()
+
+
+def format_bytes(size: int) -> str:
+    """Convert bytes into a human-readable string."""
+    units = ['B', 'KB', 'MB', 'GB', 'TB']
+    value = float(size)
+
+    for unit in units:
+        if value < 1024 or unit == units[-1]:
+            if unit == 'B':
+                return f'{int(value)} {unit}'
+            return f'{value:.2f} {unit}'
+        value /= 1024
+
+    return f'{size} B'
+
+
+def get_memory_metrics() -> dict[str, str | bool]:
+    """Return memory usage metrics for container environments."""
+    try:
+        current_bytes = read_int_file('/sys/fs/cgroup/memory.current')
+        max_raw = read_text_file('/sys/fs/cgroup/memory.max')
+    except FileNotFoundError:
+        return {
+            'memory_available': False,
+            'memory_message': 'This metric is only available when running inside a container.',
+            'memory_usage': '',
+            'memory_limit': '',
+            'memory_subtext': '',
+        }
+
+    current_display = format_bytes(current_bytes)
+
+    if max_raw == 'max':
+        return {
+            'memory_available': True,
+            'memory_message': '',
+            'memory_usage': current_display,
+            'memory_limit': 'Unlimited',
+            'memory_subtext': 'Limit: Unlimited',
+        }
+
+    limit_bytes = int(max_raw)
+    limit_display = format_bytes(limit_bytes)
+    percent = (current_bytes / limit_bytes) * 100 if limit_bytes else 0
+
+    return {
+        'memory_available': True,
+        'memory_message': '',
+        'memory_usage': f'{current_display} / {limit_display}',
+        'memory_limit': limit_display,
+        'memory_subtext': f'{percent:.1f}% of limit',
+    }
+
+def get_disk_metrics() -> dict[str, str | bool]:
+    """Return disk I/O metrics for container environments."""
+    try:
+        content = read_text_file('/sys/fs/cgroup/io.stat')
+    except FileNotFoundError:
+        return {
+            'disk_available': False,
+            'disk_message': 'This metric is only available when running inside a container.',
+            'disk_read': '',
+            'disk_write': '',
+        }
+
+    first_line = content.splitlines()[0] if content.splitlines() else ''
+
+    values: dict[str, str] = {}
+    for part in first_line.split():
+        if '=' in part:
+            key, value = part.split('=', 1)
+            values[key] = value
+
+    read_bytes = int(values.get('rbytes', 0))
+    write_bytes = int(values.get('wbytes', 0))
+
+    return {
+        'disk_available': True,
+        'disk_message': '',
+        'disk_read': format_bytes(read_bytes),
+        'disk_write': format_bytes(write_bytes),
+    }
 
 
 class SettingsFormViewMixin[FormType: (
@@ -151,7 +244,7 @@ class SettingsTabView(TemplateView):
         notification_view.setup(self.request)
         context['notification_form'] = notification_view.get_form()
         context['notification_config'] = NotificationConfig.get()
-
+#hier
         metrics_view = MetricsSettingsView()
         metrics_view.request = self.request
         metrics_view.setup(self.request)
@@ -160,6 +253,10 @@ class SettingsTabView(TemplateView):
         context['uptime'] = metrics_context['uptime']
         context['started_time'] = metrics_context['started_time']
         context['database_size'] = metrics_context['database_size']
+        context['started_time_ts'] = int(APP_STARTED_AT.timestamp())
+
+        context.update(get_memory_metrics())
+        context.update(get_disk_metrics())
 
         return context
 
@@ -456,7 +553,7 @@ class NotificationSettingsView(SettingsFormViewMixin[NotificationConfigForm]):
         context['notification_config'] = notification_config
         return context
 
-
+#hier
 class MetricsSettingsView(TemplateView):
     """View for displaying runtime metrics."""
 
