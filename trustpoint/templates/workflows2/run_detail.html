@@ -1,5 +1,10 @@
 {% extends 'trustpoint/base.html' %}
-{% load i18n %}
+{% load i18n static %}
+
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
 {% block content %}
 
 <div class="container-fluid py-3">
@@ -207,7 +212,7 @@
           </h2>
           <div id="runSourceBody" class="accordion-collapse collapse" aria-labelledby="runSourceHeading" data-bs-parent="#runTechnicalDetails">
             <div class="accordion-body">
-              <pre class="mb-0" style="white-space: pre-wrap;">{{ source_pretty }}</pre>
+              <pre class="mb-0 wf2-pre-wrap">{{ source_pretty }}</pre>
             </div>
           </div>
         </div>
@@ -220,7 +225,7 @@
           </h2>
           <div id="runEventBody" class="accordion-collapse collapse" aria-labelledby="runEventHeading" data-bs-parent="#runTechnicalDetails">
             <div class="accordion-body">
-              <pre class="mb-0" style="white-space: pre-wrap;">{{ event_pretty }}</pre>
+              <pre class="mb-0 wf2-pre-wrap">{{ event_pretty }}</pre>
             </div>
           </div>
         </div>

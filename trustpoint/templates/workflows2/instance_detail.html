@@ -1,5 +1,10 @@
 {% extends 'trustpoint/base.html' %}
-{% load i18n %}
+{% load i18n static %}
+
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
 
 {% block content %}
 <div class="container-fluid py-3">
@@ -73,9 +78,9 @@
       <div class="fw-semibold">{% trans "Instance failed" %}</div>
       <div class="small mt-1">
         {% if latest_failed_step_run and latest_failed_step_run.error %}
-          <div style="white-space: pre-wrap;">{{ latest_failed_step_run.error }}</div>
+          <div class="wf2-pre-wrap">{{ latest_failed_step_run.error }}</div>
         {% elif latest_failed_job and latest_failed_job.last_error %}
-          <div style="white-space: pre-wrap;">{{ latest_failed_job.last_error }}</div>
+          <div class="wf2-pre-wrap">{{ latest_failed_job.last_error }}</div>
         {% else %}
           {% trans "The last workflow step failed. Review the execution timeline below for details." %}
         {% endif %}
@@ -331,7 +336,7 @@
                               </h2>
                               <div id="stepErrorBody{{ r.id }}" class="accordion-collapse collapse" aria-labelledby="stepErrorHeading{{ r.id }}" data-bs-parent="#stepDetails{{ r.id }}">
                                 <div class="accordion-body">
-                                  <pre class="mb-0" style="white-space: pre-wrap;">{{ r.error }}</pre>
+                                  <pre class="mb-0 wf2-pre-wrap">{{ r.error }}</pre>
                                 </div>
                               </div>
                             </div>
@@ -346,7 +351,7 @@
                               </h2>
                               <div id="stepVarsBody{{ r.id }}" class="accordion-collapse collapse" aria-labelledby="stepVarsHeading{{ r.id }}" data-bs-parent="#stepDetails{{ r.id }}">
                                 <div class="accordion-body">
-                                  <pre class="mb-0" style="white-space: pre-wrap;">{{ item.vars_delta_pretty }}</pre>
+                                  <pre class="mb-0 wf2-pre-wrap">{{ item.vars_delta_pretty }}</pre>
                                 </div>
                               </div>
                             </div>
@@ -361,7 +366,7 @@
                               </h2>
                               <div id="stepOutputBody{{ r.id }}" class="accordion-collapse collapse" aria-labelledby="stepOutputHeading{{ r.id }}" data-bs-parent="#stepDetails{{ r.id }}">
                                 <div class="accordion-body">
-                                  <pre class="mb-0" style="white-space: pre-wrap;">{{ item.output_pretty }}</pre>
+                                  <pre class="mb-0 wf2-pre-wrap">{{ item.output_pretty }}</pre>
                                 </div>
                               </div>
                             </div>
@@ -376,7 +381,7 @@
                               </h2>
                               <div id="stepDefBody{{ r.id }}" class="accordion-collapse collapse" aria-labelledby="stepDefHeading{{ r.id }}" data-bs-parent="#stepDetails{{ r.id }}">
                                 <div class="accordion-body">
-                                  <pre class="mb-0" style="white-space: pre-wrap;">{{ item.params_pretty }}</pre>
+                                  <pre class="mb-0 wf2-pre-wrap">{{ item.params_pretty }}</pre>
                                 </div>
                               </div>
                             </div>
@@ -424,7 +429,7 @@
                     <div>{% trans "Attempts" %}: {{ j.attempts }}/{{ j.max_attempts }}</div>
                   </div>
                   {% if j.last_error %}
-                    <div class="small text-danger mt-2" style="white-space: pre-wrap;">{{ j.last_error }}</div>
+                    <div class="small text-danger mt-2 wf2-pre-wrap">{{ j.last_error }}</div>
                   {% endif %}
                 </div>
               {% endfor %}
@@ -447,7 +452,7 @@
               </h2>
               <div id="instanceVarsBody" class="accordion-collapse collapse" aria-labelledby="instanceVarsHeading" data-bs-parent="#instanceTechnical">
                 <div class="accordion-body">
-                  <pre class="mb-0" style="white-space: pre-wrap;">{{ vars_pretty }}</pre>
+                  <pre class="mb-0 wf2-pre-wrap">{{ vars_pretty }}</pre>
                 </div>
               </div>
             </div>
@@ -460,7 +465,7 @@
               </h2>
               <div id="instanceEventBody" class="accordion-collapse collapse" aria-labelledby="instanceEventHeading" data-bs-parent="#instanceTechnical">
                 <div class="accordion-body">
-                  <pre class="mb-0" style="white-space: pre-wrap;">{{ event_pretty }}</pre>
+                  <pre class="mb-0 wf2-pre-wrap">{{ event_pretty }}</pre>
                 </div>
               </div>
             </div>

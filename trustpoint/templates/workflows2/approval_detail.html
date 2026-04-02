@@ -1,5 +1,10 @@
 {% extends 'trustpoint/base.html' %}
-{% load i18n %}
+{% load i18n static %}
+
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
 {% block content %}
 
 <div class="container-fluid py-3">
@@ -248,7 +253,7 @@
           </h2>
           <div id="approvalVarsBody" class="accordion-collapse collapse" aria-labelledby="approvalVarsHeading" data-bs-parent="#approvalTechnical">
             <div class="accordion-body">
-              <pre class="mb-0" style="white-space: pre-wrap;">{{ vars_pretty }}</pre>
+              <pre class="mb-0 wf2-pre-wrap">{{ vars_pretty }}</pre>
             </div>
           </div>
         </div>
@@ -261,7 +266,7 @@
           </h2>
           <div id="approvalEventBody" class="accordion-collapse collapse" aria-labelledby="approvalEventHeading" data-bs-parent="#approvalTechnical">
             <div class="accordion-body">
-              <pre class="mb-0" style="white-space: pre-wrap;">{{ event_pretty }}</pre>
+              <pre class="mb-0 wf2-pre-wrap">{{ event_pretty }}</pre>
             </div>
           </div>
         </div>

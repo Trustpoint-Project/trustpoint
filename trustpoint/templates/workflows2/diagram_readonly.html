@@ -1,6 +1,11 @@
 {% extends "trustpoint/base.html" %}
 {% load static %}
 
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
+
 {% block content %}
 <div class="container-fluid py-3">
   <div class="d-flex align-items-center justify-content-between mb-3">
@@ -16,7 +21,11 @@
 
   <div class="card">
     <div class="card-body p-0">
-      <div id="wf2-canvas" style="height: 72vh; width: 100%;"></div>
+      <div
+        id="wf2-canvas"
+        data-graph-url="{{ graph_url|escapejs }}"
+        class="wf2-diagram-canvas"
+      ></div>
     </div>
   </div>
 
@@ -25,8 +34,6 @@
   </div>
 </div>
 
-<script>
-  window.WF2_GRAPH_URL = "{{ graph_url|escapejs }}";
-</script>
+<script defer src="{% static 'js/workflows2/diagram_readonly_bootstrap.js' %}"></script>
 <script src="{% static 'js/workflow2/dist/workflows2-diagram.bundle.js' %}"></script>
 {% endblock %}

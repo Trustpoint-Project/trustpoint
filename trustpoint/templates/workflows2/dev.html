@@ -1,8 +1,13 @@
 {% extends "trustpoint/base.html" %}
 {% load static %}
 
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
+
 {% block content %}
-<div class="container py-4" style="max-width: 1200px;">
+<div class="container py-4 wf2-template-max-width">
   <h1 class="mb-3">Workflows v2 — YAML → IR (dev)</h1>
 
   <form method="post" class="mb-4">
@@ -13,9 +18,8 @@
       <textarea
         id="yaml_text"
         name="yaml_text"
-        class="form-control"
+        class="form-control wf2-font-mono"
         rows="20"
-        style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;"
       >{{ yaml_text }}</textarea>
     </div>
 
@@ -25,27 +29,17 @@
   {% if error %}
     <div class="alert alert-danger">
       <strong>Compile error:</strong><br>
-      <pre style="white-space: pre-wrap; margin: 0;">{{ error }}</pre>
+      <pre class="wf2-pre-wrap-no-margin">{{ error }}</pre>
     </div>
   {% endif %}
 
   {% if ir_json %}
     <h2 class="h4 mt-4">IR</h2>
-    <pre class="p-3 bg-light border rounded"
-         style="white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;">
+    <pre class="p-3 bg-light border rounded wf2-pre-wrap wf2-font-mono">
 {{ ir_json|json_script:"ir_data" }}
     </pre>
 
-    <script>
-      // Pretty-print IR JSON from json_script payload
-      (function () {
-        const el = document.getElementById("ir_data");
-        if (!el) return;
-        const obj = JSON.parse(el.textContent);
-        const pre = el.closest("pre");
-        if (pre) pre.textContent = JSON.stringify(obj, null, 2);
-      })();
-    </script>
+    <script defer src="{% static 'js/workflows2/dev.js' %}"></script>
   {% endif %}
 </div>
 {% endblock %}

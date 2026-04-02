@@ -1,5 +1,10 @@
 {% extends 'trustpoint/base.html' %}
-{% load i18n %}
+{% load i18n static %}
+
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
 {% block content %}
 
 <div class="container-fluid py-3">
@@ -61,7 +66,7 @@
         <div class="col-12 col-lg-6">
           <label class="form-label">{% trans "Trigger" %}</label>
           <details class="border rounded p-2">
-            <summary class="d-flex align-items-center justify-content-between gap-2" style="cursor: pointer; list-style: none;">
+            <summary class="d-flex align-items-center justify-content-between gap-2 wf2-details-summary">
               <span>
                 {% if selected_triggers %}
                   {% blocktrans count count=selected_triggers|length %}
