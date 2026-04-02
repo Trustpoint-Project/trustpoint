@@ -27,7 +27,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('pki_protocols', models.PositiveIntegerField(blank=True, default=0, verbose_name='Pki Protocol Bitwise Flag')),
                 ('onboarding_status', models.IntegerField(choices=[(1, 'Pending'), (2, 'Onboarded')], default=1, verbose_name='Onboarding Status')),
-                ('onboarding_protocol', models.PositiveIntegerField(choices=[(0, 'Manual Onboarding'), (1, 'CMP - IDevID'), (2, 'CMP - Shared Secret'), (3, 'EST - IDevID'), (4, 'EST - Username & Password'), (5, 'AOKI'), (6, 'BRSKI'), (7, 'OPC - GDS Push'), (8, 'REST - Username & Password')], verbose_name='Onboarding Protocol')),
+                ('onboarding_protocol', models.PositiveIntegerField(choices=[(0, 'Manual Onboarding'), (1, 'CMP - IDevID'), (2, 'CMP - Shared Secret'), (3, 'EST - IDevID'), (4, 'EST - Username & Password'), (5, 'AOKI'), (6, 'BRSKI'), (7, 'OPC - GDS Push')], verbose_name='Onboarding Protocol')),
                 ('est_password', util.encrypted_fields.EncryptedCharField(blank=True, default='', max_length=128, verbose_name='EST Password')),
                 ('cmp_shared_secret', util.encrypted_fields.EncryptedCharField(blank=True, default='', max_length=128, verbose_name='CMP Shared Secret')),
                 ('opc_user', models.CharField(blank=True, default='', max_length=128, verbose_name='OPC User')),

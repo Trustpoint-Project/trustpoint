@@ -53,8 +53,4 @@ class Migration(migrations.Migration):
             name='hsm_config',
             field=models.OneToOneField(blank=True, help_text='Associated HSM token configuration (SoftHSM or Physical HSM)', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='crypto_storage_config', to='management.pkcs11token', verbose_name='HSM Configuration'),
         ),
-        migrations.AddIndex(
-            model_name='auditlog',
-            index=models.Index(fields=['target_content_type', 'target_object_id'], name='audit_log_target_idx'),
-        ),
     ]
