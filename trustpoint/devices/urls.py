@@ -486,6 +486,11 @@ urlpatterns = [
         name='zero_touch_credentials-truststore-association',
     ),
     path(
+        'zero-touch-credentials/onboarding-setup/<int:pk>/',
+        ztc_views.OwnerCredentialOnboardingSetupView.as_view(),
+        name='zero_touch_credentials-onboarding-setup',
+    ),
+    path(
         'zero-touch-credentials/clm/<int:pk>/',
         ztc_views.OwnerCredentialCLMView.as_view(),
         name='zero_touch_credentials-clm',
