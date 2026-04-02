@@ -82,7 +82,7 @@ Feature: Docker Setup Wizard
     When the user navigates to "/devices/opc-ua-gds/"
     Then the page should load without errors
 
-    When the user navigates to "/workflows/"
+    When the user navigates to "/workflows2/"
     Then the page should load without errors
 
     When the user navigates to "/swagger/"
