@@ -41,7 +41,8 @@ from .forms import (
     FreshInstallModelBaseForm,
     FreshInstallCryptoStorageModelForm,
     FreshInstallDemoDataModelForm,
-    FreshInstallTlsConfigForm
+    FreshInstallSummaryModelForm,
+    FreshInstallTlsConfigForm,
 )
 from .models import SetupWizardCompletedModel, SetupWizardConfigModel
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
@@ -521,12 +522,12 @@ class FreshInstallFormBaseView[FormT: Form](LoggerMixin, FormView[FormT]):
             },
             {
                 'label': 'TLS Config',
-                'url': reverse('setup_wizard:fresh_install_crypto_storage'),
+                'url': reverse('setup_wizard:fresh_install_tls_config'),
                 'state': str(tls_config_state)
             },
             {
                 'label': 'Summary',
-                'url': reverse('setup_wizard:fresh_install_crypto_storage'),
+                'url': reverse('setup_wizard:fresh_install_summary'),
                 'state': str(summary_state)
             },
         ]
@@ -575,9 +576,6 @@ class FreshInstallModelFormBaseView[FormT: FreshInstallModelBaseForm](FreshInsta
         config_model.save()
         return super().form_valid(form)
 
-class FreshInstallNormalFormBaseView[FormT: Form](FreshInstallFormBaseView[FormT]):
-    """Base view for fresh-install steps not backed directly by a ModelForm."""
-
 
 class FreshInstallCryptoStorageView(FreshInstallModelFormBaseView[FreshInstallCryptoStorageModelForm]):
     """Render the fresh-install step for choosing cryptographic storage."""
@@ -595,23 +593,41 @@ class FreshInstallDemoDataView(FreshInstallModelFormBaseView[FreshInstallDemoDat
 
     form_class = FreshInstallDemoDataModelForm
     template_name = 'setup_wizard/fresh_install.html'
-    # success_url = reverse_lazy('setup_wizard:config_demo_data')
     success_url = reverse_lazy('setup_wizard:fresh_install_tls_config')
 
     step_state = SetupWizardConfigModel.FreshInstallCurrentStep.DEMO_DATA
     back_url = reverse_lazy('setup_wizard:fresh_install_crypto_storage')
     body_heading = 'Inject Demo Data?'
 
-class FreshInstallTlsConfigView(FreshInstallNormalFormBaseView[FreshInstallTlsConfigForm]):
+class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigForm]):
     """Render the fresh-install step for choosing tls config injection."""
 
     form_class = FreshInstallTlsConfigForm
     template_name = 'setup_wizard/fresh_install.html'
-    success_url = ''
+    success_url = reverse_lazy('setup_wizard:fresh_install_summary')
 
     step_state = SetupWizardConfigModel.FreshInstallCurrentStep.TLS_CONFIG
     back_url = reverse_lazy('setup_wizard:fresh_install_demo_data')
     body_heading = 'Configure TLS'
+
+    @staticmethod
+    def _format_csv_initial(values: list[str]) -> str:
+        """Format stored SAN values for the comma-separated input fields."""
+        if not values:
+            return ''
+        return f"{', '.join(values)}, "
+
+    def get_initial(self) -> dict[str, Any]:
+        """Populate the form from the persisted TLS wizard configuration."""
+        initial = super().get_initial()
+        config_model = SetupWizardConfigModel.get_singleton()
+        initial.update({
+            'tls_mode': config_model.fresh_install_tls_mode,
+            'ipv4_addresses': self._format_csv_initial(config_model.fresh_install_tls_ipv4_addresses),
+            'ipv6_addresses': self._format_csv_initial(config_model.fresh_install_tls_ipv6_addresses),
+            'domain_names': self._format_csv_initial(config_model.fresh_install_tls_dns_names),
+        })
+        return initial
 
     def form_valid(self, form: FreshInstallTlsConfigForm) -> HttpResponse:
         """Persist the current step and continue the wizard flow.
@@ -623,9 +639,25 @@ class FreshInstallTlsConfigView(FreshInstallNormalFormBaseView[FreshInstallTlsCo
             HttpResponse: The redirect or response returned by the parent
             implementation.
         """
-        pass
-        # return super().form_valid(form)
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.fresh_install_tls_mode = form.cleaned_data['tls_mode']
+        config_model.fresh_install_tls_ipv4_addresses = form.cleaned_data.get('ipv4_addresses', [])
+        config_model.fresh_install_tls_ipv6_addresses = form.cleaned_data.get('ipv6_addresses', [])
+        config_model.fresh_install_tls_dns_names = form.cleaned_data.get('domain_names', [])
+        config_model.mark_step_submitted(self.step_state)
+        config_model.save()
+        return super().form_valid(form)
 
+class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryModelForm]):
+    """Render the fresh-install step for the summary."""
+
+    form_class = FreshInstallSummaryModelForm
+    template_name = 'setup_wizard/fresh_install.html'
+    success_url = reverse_lazy('home:index')
+
+    step_state = SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY
+    back_url = reverse_lazy('setup_wizard:fresh_install_tls_config')
+    body_heading = 'Summary'
 
 class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
     """View for handling crypto storage setup during the setup wizard."""
@@ -666,7 +698,6 @@ class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
                                     messages.ERROR,
                                     'Physical HSM is coming soon.'
                                 )
-                # return redirect('setup_wizard:hsm_setup', hsm_type='physical', permanent=False)  # noqa: ERA001
 
             messages.add_message(
                 self.request,
