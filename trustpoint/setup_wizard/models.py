@@ -8,6 +8,21 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy
 
 
+def default_tls_ipv4_addresses() -> list[str]:
+    """Default IPv4 SAN values for the fresh-install TLS step."""
+    return ['127.0.0.1']
+
+
+def default_tls_ipv6_addresses() -> list[str]:
+    """Default IPv6 SAN values for the fresh-install TLS step."""
+    return ['::1']
+
+
+def default_tls_dns_names() -> list[str]:
+    """Default DNS SAN values for the fresh-install TLS step."""
+    return ['localhost']
+
+
 class SetupWizardCompletedModel(models.Model):
     """Global, write-once configuration state for an on-prem installation.
 
@@ -152,6 +167,36 @@ class SetupWizardConfigModel(models.Model):
         help_text='Whether the summary step was submitted.'
     )
 
+    class FreshInstallTlsConfigType(models.TextChoices):
+        GENERATE = 'generate', gettext_lazy('Generate credential')
+        PKCS12 = 'pkcs12', gettext_lazy('Upload PKCS#12')
+        SEPARATE_FILES = 'separate_files', gettext_lazy('Upload separate files')
+
+    fresh_install_tls_mode = models.CharField(
+        max_length=32,
+        choices=FreshInstallTlsConfigType,
+        default=FreshInstallTlsConfigType.GENERATE,
+        help_text='Selected TLS configuration mode during the fresh-install wizard.',
+    )
+
+    fresh_install_tls_ipv4_addresses = models.JSONField(
+        default=default_tls_ipv4_addresses,
+        blank=True,
+        help_text='Normalized IPv4 SAN entries for generated TLS credentials.',
+    )
+
+    fresh_install_tls_ipv6_addresses = models.JSONField(
+        default=default_tls_ipv6_addresses,
+        blank=True,
+        help_text='Normalized IPv6 SAN entries for generated TLS credentials.',
+    )
+
+    fresh_install_tls_dns_names = models.JSONField(
+        default=default_tls_dns_names,
+        blank=True,
+        help_text='Normalized DNS SAN entries for generated TLS credentials.',
+    )
+
     class CryptoStorageType(models.IntegerChoices):
         SoftwareStorage = 0, gettext_lazy('Software Storage')
         HsmStorage = 1, gettext_lazy('HSM Storage')
@@ -191,18 +236,17 @@ class SetupWizardConfigModel(models.Model):
             self.FreshInstallCurrentStep.CRYPTO_STORAGE: self.fresh_install_crypto_storage_submitted,
             self.FreshInstallCurrentStep.DEMO_DATA: self.fresh_install_demo_data_submitted,
             self.FreshInstallCurrentStep.TLS_CONFIG: self.fresh_install_tls_config_submitted,
-            self.FreshInstallCurrentStep.SUMMARY: False,
+            self.FreshInstallCurrentStep.SUMMARY: self.fresh_install_summary_submitted,
         }
         return submitted_fields[step]
 
     def mark_step_submitted(self, step: FreshInstallCurrentStep) -> None:
         """Mark the given fresh-install step as submitted."""
-        if step == self.FreshInstallCurrentStep.SUMMARY:
-            return
         field_name = {
             self.FreshInstallCurrentStep.CRYPTO_STORAGE: 'fresh_install_crypto_storage_submitted',
             self.FreshInstallCurrentStep.DEMO_DATA: 'fresh_install_demo_data_submitted',
             self.FreshInstallCurrentStep.TLS_CONFIG: 'fresh_install_tls_config_submitted',
+            self.FreshInstallCurrentStep.SUMMARY: 'fresh_install_summary_submitted',
         }[step]
         setattr(self, field_name, True)
 
