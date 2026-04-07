@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import re
 import subprocess
@@ -14,6 +15,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management import call_command
 from django.db import connection
 from django.db.models import ProtectedError
@@ -45,8 +47,9 @@ from .forms import (
     FreshInstallTlsConfigForm,
 )
 from .models import SetupWizardCompletedModel, SetupWizardConfigModel
-from setup_wizard.tls_credential import TlsServerCredentialGenerator
+from setup_wizard.tls_credential import TlsServerCredentialGenerator, extract_staged_tls_sans
 from trustpoint.logger import LoggerMixin
+
 
 if TYPE_CHECKING:
 
@@ -621,11 +624,18 @@ class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigFo
         """Populate the form from the persisted TLS wizard configuration."""
         initial = super().get_initial()
         config_model = SetupWizardConfigModel.get_singleton()
+        initial['tls_mode'] = config_model.fresh_install_tls_mode
+
+        ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans(
+            config_model.fresh_install_tls_credential
+        )
+        if not (ipv4_addresses or ipv6_addresses or dns_names):
+            return initial
+
         initial.update({
-            'tls_mode': config_model.fresh_install_tls_mode,
-            'ipv4_addresses': self._format_csv_initial(config_model.fresh_install_tls_ipv4_addresses),
-            'ipv6_addresses': self._format_csv_initial(config_model.fresh_install_tls_ipv6_addresses),
-            'domain_names': self._format_csv_initial(config_model.fresh_install_tls_dns_names),
+            'ipv4_addresses': self._format_csv_initial(ipv4_addresses),
+            'ipv6_addresses': self._format_csv_initial(ipv6_addresses),
+            'domain_names': self._format_csv_initial(dns_names),
         })
         return initial
 
@@ -639,14 +649,37 @@ class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigFo
             HttpResponse: The redirect or response returned by the parent
             implementation.
         """
-        config_model = SetupWizardConfigModel.get_singleton()
-        config_model.fresh_install_tls_mode = form.cleaned_data['tls_mode']
-        config_model.fresh_install_tls_ipv4_addresses = form.cleaned_data.get('ipv4_addresses', [])
-        config_model.fresh_install_tls_ipv6_addresses = form.cleaned_data.get('ipv6_addresses', [])
-        config_model.fresh_install_tls_dns_names = form.cleaned_data.get('domain_names', [])
-        config_model.mark_step_submitted(self.step_state)
-        config_model.save()
-        return super().form_valid(form)
+        try:
+            config_model = SetupWizardConfigModel.get_singleton()
+            tls_mode = form.cleaned_data['tls_mode']
+            config_model.fresh_install_tls_mode = tls_mode
+
+            if tls_mode == SetupWizardConfigModel.FreshInstallTlsConfigType.GENERATE:
+                generator = TlsServerCredentialGenerator(
+                    ipv4_addresses=[
+                        ipaddress.IPv4Address(address)
+                        for address in form.cleaned_data.get('ipv4_addresses', [])
+                    ],
+                    ipv6_addresses=[
+                        ipaddress.IPv6Address(address)
+                        for address in form.cleaned_data.get('ipv6_addresses', [])
+                    ],
+                    domain_names=form.cleaned_data.get('domain_names', []),
+                )
+                tls_server_credential = generator.generate_tls_server_credential()
+                config_model.fresh_install_tls_credential = CredentialModel.save_credential_serializer(
+                    credential_serializer=tls_server_credential,
+                    credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+                )
+
+            config_model.mark_step_submitted(self.step_state)
+            config_model.save()
+            return super().form_valid(form)
+        except (ValueError, TypeError, DjangoValidationError):
+            err_msg = gettext_lazy('Error generating TLS server credential.')
+            form.add_error(None, err_msg)
+            self.logger.exception(err_msg)
+            return self.form_invalid(form)
 
 class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryModelForm]):
     """Render the fresh-install step for the summary."""
@@ -658,6 +691,54 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
     step_state = SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY
     back_url = reverse_lazy('setup_wizard:fresh_install_tls_config')
     body_heading = 'Summary'
+
+
+class FreshInstallSummaryTruststoreDownloadView(LoggerMixin, View):
+    """Download the staged root CA certificate from the summary page."""
+
+    http_method_names = ('get',)
+
+    @staticmethod
+    def _get_root_ca_certificate_and_content_type(
+        tls_credential: CredentialModel,
+        file_format: str,
+    ) -> tuple[bytes, str]:
+        """Return the staged root CA certificate in the requested format."""
+        root_ca_certificate_serializer = tls_credential.get_root_ca_certificate_serializer()
+        if root_ca_certificate_serializer is None:
+            err_msg = 'No root CA certificate available for download.'
+            raise ValueError(err_msg)
+
+        if file_format == 'pem':
+            return root_ca_certificate_serializer.as_pem(), 'application/x-pem-file'
+        if file_format == 'der':
+            return root_ca_certificate_serializer.as_der(), 'application/pkix-cert'
+
+        err_msg = f'Invalid file format requested: {file_format}.'
+        raise ValueError(err_msg)
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle the summary truststore download."""
+        file_format = kwargs['file_format']
+        if file_format not in {'pem', 'der'}:
+            messages.add_message(request, messages.ERROR, 'Only PEM and DER downloads are supported.')
+            return redirect('setup_wizard:fresh_install_summary', permanent=False)
+
+        tls_credential = SetupWizardConfigModel.get_singleton().fresh_install_tls_credential
+        if tls_credential is None:
+            messages.add_message(request, messages.ERROR, 'No truststore available for download.')
+            return redirect('setup_wizard:fresh_install_summary', permanent=False)
+
+        try:
+            trust_store, content_type = self._get_root_ca_certificate_and_content_type(tls_credential, file_format)
+        except ValueError as exception:
+            messages.add_message(request, messages.ERROR, str(exception))
+            return redirect('setup_wizard:fresh_install_summary', permanent=False)
+
+        response = HttpResponse(content_type=content_type)
+        response['Content-Disposition'] = f'attachment; filename="trust_store_root_ca.{file_format}"'
+        response.write(trust_store)
+        return response
 
 class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
     """View for handling crypto storage setup during the setup wizard."""
