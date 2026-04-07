@@ -3,30 +3,276 @@
 from __future__ import annotations
 
 import ipaddress
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
 
 from django import forms
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.utils.translation import gettext_lazy as _
+from django.utils.functional import Promise
+from django.utils.translation import gettext_lazy
 
+from .models import SetupWizardConfigModel
+
+from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Any
+
+    ChoiceLabel = str | int
+
+CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
+    str(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage): gettext_lazy(
+        'Store cryptographic material on the local system without a dedicated hardware security module.'
+    ),
+    str(SetupWizardConfigModel.CryptoStorageType.HsmStorage): gettext_lazy(
+        'Use a hardware security module for stronger key protection and dedicated cryptographic operations.'
+    ),
+}
+
+DEMO_DATA_OPTION_DESCRIPTIONS = {
+    'True': gettext_lazy('Populate the installation with demo content to make evaluation and testing easier.'),
+    'False': gettext_lazy('Start with an empty system and configure all operational data manually.'),
+}
+
+TLS_CONFIG_OPTION_DESCRIPTIONS = {
+    'generate': gettext_lazy('Generate a new TLS server credential from IP addresses and DNS names.'),
+    'pkcs12': gettext_lazy('Upload an existing TLS server credential as a PKCS#12 bundle.'),
+    'separate_files': gettext_lazy('Upload certificate and private key as separate files.'),
+}
 
 
 class EmptyForm(forms.Form):
     """A form without any fields."""
 
 
+class WizardCardRadioSelect(forms.RadioSelect):
+    """RadioSelect that attaches description text to each option."""
+
+    def __init__(
+        self,
+        *args: object,
+        descriptions: Mapping[str, str | Promise] | None = None,
+        **kwargs: object,
+    ) -> None:
+        """Initialize the widget.
+
+        Args:
+            *args: Positional arguments forwarded to ``RadioSelect``.
+            descriptions: Mapping from choice value to explanation text.
+            **kwargs: Keyword arguments forwarded to ``RadioSelect``.
+        """
+        self.descriptions = descriptions or {}
+        super().__init__(*args, **kwargs)
+
+    def create_option(
+        self,
+        name: str,
+        value: object,
+        label: ChoiceLabel,
+        selected: bool,
+        index: int,
+        subindex: int | None = None,
+        attrs: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        """Build a choice option and attach its description text."""
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        option['description'] = self.descriptions.get(str(value), '')
+        return option
+
+
+class MultipleFileInput(forms.ClearableFileInput):
+    """File input widget that allows selecting multiple files."""
+
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    """File field that returns a list of uploaded files."""
+
+    widget = MultipleFileInput
+
+    def clean(self, data: object, initial: object = None) -> list[object]:
+        """Validate and normalize one or more uploaded files."""
+        single_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            return [single_clean(item, initial) for item in data]
+        if not data:
+            return []
+        return [single_clean(data, initial)]
+
+
+class FreshInstallModelBaseForm(forms.ModelForm[SetupWizardConfigModel]):
+    """Base ModelForm for setup-wizard steps backed by SetupWizardConfigModel."""
+
+    class Meta:
+        """Shared ModelForm configuration for setup-wizard model-backed forms."""
+
+        model = SetupWizardConfigModel
+        fields: tuple[str, ...] = ()
+
+
+class FreshInstallCryptoStorageModelForm(FreshInstallModelBaseForm):
+    """Form for selecting the cryptographic storage backend during setup."""
+
+    class Meta:
+        """ModelForm configuration for the storage step."""
+
+        model = SetupWizardConfigModel
+        fields = ('crypto_storage',)
+        widgets = {
+            'crypto_storage': WizardCardRadioSelect(descriptions=CRYPTO_STORAGE_OPTION_DESCRIPTIONS),
+        }
+
+
+class FreshInstallDemoDataModelForm(FreshInstallModelBaseForm):
+    """Form for selecting whether demo data should be injected during setup."""
+
+    inject_demo_data = forms.TypedChoiceField(
+        label=gettext_lazy('Inject demo data'),
+        choices=(
+            (True, gettext_lazy('Yes')),
+            (False, gettext_lazy('No')),
+        ),
+        coerce=lambda value: value in (True, 'True', 'true', '1', 1),
+        widget=WizardCardRadioSelect(descriptions=DEMO_DATA_OPTION_DESCRIPTIONS),
+        empty_value=None,
+    )
+
+    class Meta:
+        """ModelForm configuration for the demo-data step."""
+
+        model = SetupWizardConfigModel
+        fields = ('inject_demo_data',)
+
+
+class FreshInstallTlsConfigForm(forms.Form):
+    """Form for configuring TLS during the fresh-install wizard."""
+
+    tls_mode = forms.ChoiceField(
+        label=gettext_lazy('TLS configuration method'),
+        choices=(
+            ('generate', gettext_lazy('Generate credential')),
+            ('pkcs12', gettext_lazy('Upload PKCS#12')),
+            ('separate_files', gettext_lazy('Upload separate files')),
+        ),
+        widget=WizardCardRadioSelect(descriptions=TLS_CONFIG_OPTION_DESCRIPTIONS),
+        initial='generate',
+    )
+
+    ipv4_addresses = forms.CharField(
+        label=gettext_lazy('IPv4 addresses'),
+        required=False,
+        help_text=gettext_lazy('Comma-separated list.'),
+    )
+    ipv6_addresses = forms.CharField(
+        label=gettext_lazy('IPv6 addresses'),
+        required=False,
+        help_text=gettext_lazy('Comma-separated list.'),
+    )
+    domain_names = forms.CharField(
+        label=gettext_lazy('DNS names'),
+        required=False,
+        help_text=gettext_lazy('Comma-separated list.'),
+    )
+
+    pkcs12_file = forms.FileField(
+        label=gettext_lazy('PKCS#12 file'),
+        required=False,
+    )
+    pkcs12_password = forms.CharField(
+        label=gettext_lazy('PKCS#12 password'),
+        required=False,
+        help_text=gettext_lazy('Optional, only needed when the PKCS#12 file is encrypted.'),
+        widget=forms.PasswordInput(render_value=True),
+    )
+
+    tls_server_certificates = MultipleFileField(
+        label=gettext_lazy('TLS server certificate files'),
+        required=False,
+        help_text=gettext_lazy('Select one or more certificate files.'),
+    )
+    key_file = forms.FileField(
+        label=gettext_lazy('Key file'),
+        required=False,
+    )
+    key_password = forms.CharField(
+        label=gettext_lazy('Key password'),
+        required=False,
+        help_text=gettext_lazy('Optional, only needed when the key file is encrypted.'),
+        widget=forms.PasswordInput(render_value=True),
+    )
+
+    @staticmethod
+    def _split_csv(value: str) -> list[str]:
+        """Normalize a comma-separated string into a list of trimmed values."""
+        return [item.strip() for item in value.split(',') if item.strip()]
+
+    def clean_ipv4_addresses(self) -> list[ipaddress.IPv4Address]:
+        """Validate and normalize IPv4 SAN entries."""
+        data = self.cleaned_data['ipv4_addresses'].strip()
+        if not data:
+            return []
+
+        try:
+            return [ipaddress.IPv4Address(address) for address in self._split_csv(data)]
+        except ipaddress.AddressValueError as exception:
+            err_msg = gettext_lazy('Contains an invalid IPv4 address.')
+            raise forms.ValidationError(err_msg) from exception
+
+    def clean_ipv6_addresses(self) -> list[ipaddress.IPv6Address]:
+        """Validate and normalize IPv6 SAN entries."""
+        data = self.cleaned_data['ipv6_addresses'].strip()
+        if not data:
+            return []
+
+        try:
+            return [ipaddress.IPv6Address(address) for address in self._split_csv(data)]
+        except ipaddress.AddressValueError as exception:
+            err_msg = gettext_lazy('Contains an invalid IPv6 address.')
+            raise forms.ValidationError(err_msg) from exception
+
+    def clean_domain_names(self) -> list[str]:
+        """Normalize DNS SAN entries."""
+        data = self.cleaned_data['domain_names'].strip()
+        if not data:
+            return []
+        return self._split_csv(data)
+
+    def clean(self) -> dict[str, Any]:
+        """Validate the field set required for the selected TLS mode."""
+        cleaned_data = super().clean()
+        tls_mode = cleaned_data.get('tls_mode')
+
+        if tls_mode == 'generate':
+            ipv4_addresses = cleaned_data.get('ipv4_addresses')
+            ipv6_addresses = cleaned_data.get('ipv6_addresses')
+            domain_names = cleaned_data.get('domain_names')
+            if not (ipv4_addresses or ipv6_addresses or domain_names):
+                err_msg = gettext_lazy('At least one IP address or DNS name is required for generation.')
+                raise forms.ValidationError(err_msg)
+
+        elif tls_mode == 'pkcs12':
+            if not cleaned_data.get('pkcs12_file'):
+                self.add_error('pkcs12_file', gettext_lazy('A PKCS#12 file is required.'))
+
+        elif tls_mode == 'separate_files':
+            if not cleaned_data.get('tls_server_certificates'):
+                self.add_error('tls_server_certificates', gettext_lazy('At least one certificate file is required.'))
+            if not cleaned_data.get('key_file'):
+                self.add_error('key_file', gettext_lazy('A key file is required.'))
+
+        return cleaned_data
+
+
+
 class StartupWizardTlsCertificateForm(forms.Form):
     """The Setup Wizard TLS Certificate Form."""
 
     ipv4_addresses = forms.CharField(
-        label=_('IPv4-Addresses (comma-separated list)'), initial='127.0.0.1, ', required=False
+        label=gettext_lazy('IPv4-Addresses (comma-separated list)'), initial='127.0.0.1, ', required=False
     )
-    ipv6_addresses = forms.CharField(label=_('IPv6-Addresses (comma-separated list)'), initial='::1, ', required=False)
+    ipv6_addresses = forms.CharField(label=gettext_lazy('IPv6-Addresses (comma-separated list)'), initial='::1, ', required=False)
     domain_names = forms.CharField(
-        label=_('Domain-Names (comma-separated list)'), initial='localhost, ', required=False
+        label=gettext_lazy('Domain-Names (comma-separated list)'), initial='localhost, ', required=False
     )
 
     def clean_ipv4_addresses(self) -> list[ipaddress.IPv4Address]:
@@ -112,8 +358,8 @@ class HsmSetupForm(forms.Form):
 
     module_path = forms.CharField(
         max_length=255,
-        label=_('PKCS#11 Module Path'),
-        help_text=_('Path to the PKCS#11 module library.'),
+        label=gettext_lazy('PKCS#11 Module Path'),
+        help_text=gettext_lazy('Path to the PKCS#11 module library.'),
         widget=forms.TextInput(attrs={'class': 'form-control'}),
         required=True
     )
@@ -122,16 +368,16 @@ class HsmSetupForm(forms.Form):
         initial=0,
         min_value=0,
         max_value=255,
-        label=_('Slot Number'),
-        help_text=_('HSM slot number to use.'),
+        label=gettext_lazy('Slot Number'),
+        help_text=gettext_lazy('HSM slot number to use.'),
         widget=forms.NumberInput(attrs={'class': 'form-control'}),
         required=True
     )
 
     label = forms.CharField(
         max_length=32,
-        label=_('Token Label'),
-        help_text=_('Label for the HSM token.'),
+        label=gettext_lazy('Token Label'),
+        help_text=gettext_lazy('Label for the HSM token.'),
         widget=forms.TextInput(attrs={'class': 'form-control'}),
         required=True
     )
@@ -192,9 +438,9 @@ class HsmSetupForm(forms.Form):
             cleaned_data['slot'] = 0
             cleaned_data['module_path'] = '/usr/lib/libpkcs11-proxy.so'
         if hsm_type == 'physical':
-            raise forms.ValidationError(_('Physical HSM is not yet supported.'))
+            raise forms.ValidationError(gettext_lazy('Physical HSM is not yet supported.'))
         if hsm_type != 'softhsm':
-            self.add_error('hsm_type', _('Unsupported HSM type: %(hsm_type)s') % {'hsm_type': hsm_type})
+            self.add_error('hsm_type', gettext_lazy('Unsupported HSM type: %(hsm_type)s') % {'hsm_type': hsm_type})
 
         return cleaned_data
 
@@ -234,21 +480,21 @@ class BackupPasswordForm(forms.Form):
     password = forms.CharField(
         widget=forms.PasswordInput(attrs={
             'class': 'form-control',
-            'placeholder': _('Enter backup password'),
+            'placeholder': gettext_lazy('Enter backup password'),
             'autocomplete': 'new-password',
         }),
-        label=_('Backup Password'),
-        help_text=_('Enter a strong password to secure your backup encryption key.'),
+        label=gettext_lazy('Backup Password'),
+        help_text=gettext_lazy('Enter a strong password to secure your backup encryption key.'),
         required=True
     )
 
     confirm_password = forms.CharField(
         widget=forms.PasswordInput(attrs={
             'class': 'form-control',
-            'placeholder': _('Confirm backup password'),
+            'placeholder': gettext_lazy('Confirm backup password'),
             'autocomplete': 'new-password',
         }),
-        label=_('Confirm Password'),
+        label=gettext_lazy('Confirm Password'),
         required=True
     )
 
@@ -264,7 +510,7 @@ class BackupPasswordForm(forms.Form):
         password = self.cleaned_data.get('password')
 
         if not isinstance(password, str) or not password:
-            raise forms.ValidationError(_('Password is required.'))
+            raise forms.ValidationError(gettext_lazy('Password is required.'))
 
         try:
             validate_password(password)
@@ -293,7 +539,7 @@ class BackupPasswordForm(forms.Form):
         confirm_password = cleaned_data.get('confirm_password')
 
         if password and confirm_password and password != confirm_password:
-            raise forms.ValidationError(_('Passwords do not match.'))
+            raise forms.ValidationError(gettext_lazy('Passwords do not match.'))
 
         return cleaned_data
 
@@ -304,8 +550,8 @@ class BackupRestoreForm(forms.Form):
 
 
     backup_file = forms.FileField(
-        label=_('Backup File'),
-        help_text=_('Select the backup file to restore from.'),
+        label=gettext_lazy('Backup File'),
+        help_text=gettext_lazy('Select the backup file to restore from.'),
         widget=forms.FileInput(attrs={
             'class': 'form-control',
             'accept': '.dump,.gz,.sql,.zip'
@@ -315,11 +561,11 @@ class BackupRestoreForm(forms.Form):
     backup_password = forms.CharField(
         widget=forms.PasswordInput(attrs={
             'class': 'form-control',
-            'placeholder': _('Enter backup password (optional)'),
+            'placeholder': gettext_lazy('Enter backup password (optional)'),
             'autocomplete': 'current-password'
         }),
-        label=_('Backup Password'),
-        help_text=_(
+        label=gettext_lazy('Backup Password'),
+        help_text=gettext_lazy(
             'Enter the backup password if the backup was created with DEK encryption. '
             'Leave empty if no password was set.'
         ),
@@ -331,22 +577,22 @@ class BackupRestoreForm(forms.Form):
         backup_file = self.cleaned_data.get('backup_file')
 
         if not backup_file:
-            raise forms.ValidationError(_('No backup file provided.'))
+            raise forms.ValidationError(gettext_lazy('No backup file provided.'))
 
         if not hasattr(backup_file, 'name') or not isinstance(backup_file.name, str):
-            raise forms.ValidationError(_('Invalid backup file name.'))
+            raise forms.ValidationError(gettext_lazy('Invalid backup file name.'))
 
         # Check file extension
         allowed_extensions = ['.dump', '.gz', '.sql', '.zip']
         if not any(backup_file.name.lower().endswith(ext) for ext in allowed_extensions):
             raise forms.ValidationError(
-                _('Invalid file type. Allowed types: %(extensions)s') %
+                gettext_lazy('Invalid file type. Allowed types: %(extensions)s') %
                 {'extensions': ', '.join(allowed_extensions)}
             )
 
         # Check file size (e.g., max 100MB)
         if backup_file.size > 100 * 1024 * 1024:
-            raise forms.ValidationError(_('File too large. Maximum size is 100MB.'))
+            raise forms.ValidationError(gettext_lazy('File too large. Maximum size is 100MB.'))
 
         return backup_file
 
@@ -367,10 +613,10 @@ class PasswordAutoRestoreForm(forms.Form):
     password = forms.CharField(
         widget=forms.PasswordInput(attrs={
             'class': 'form-control',
-            'placeholder': _('Enter backup password'),
+            'placeholder': gettext_lazy('Enter backup password'),
             'autocomplete': 'new-password',
         }),
-        label=_('Backup Password'),
+        label=gettext_lazy('Backup Password'),
         required=True
     )
 
@@ -386,6 +632,6 @@ class PasswordAutoRestoreForm(forms.Form):
         password = self.cleaned_data.get('password')
 
         if not isinstance(password, str) or not password:
-            raise forms.ValidationError(_('Password is required.'))
+            raise forms.ValidationError(gettext_lazy('Password is required.'))
 
         return password
