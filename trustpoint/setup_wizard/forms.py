@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 from collections.abc import Mapping
+from typing import Any, cast
 
 from django import forms
 from django.contrib.auth.password_validation import validate_password
@@ -12,12 +14,6 @@ from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy
 
 from .models import SetupWizardConfigModel
-
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from typing import Any
-
-    ChoiceLabel = str | int
 
 CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
     str(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage): gettext_lazy(
@@ -38,6 +34,11 @@ TLS_CONFIG_OPTION_DESCRIPTIONS = {
     'pkcs12': gettext_lazy('Upload an existing TLS server credential as a PKCS#12 bundle.'),
     'separate_files': gettext_lazy('Upload certificate and private key as separate files.'),
 }
+
+TLS_CONFIG_TYPE_CHOICES = tuple(
+    (choice.value, choice.label)
+    for choice in SetupWizardConfigModel.FreshInstallTlsConfigType
+)
 
 
 class EmptyForm(forms.Form):
@@ -67,7 +68,7 @@ class WizardCardRadioSelect(forms.RadioSelect):
         self,
         name: str,
         value: object,
-        label: ChoiceLabel,
+        label: str | int,
         selected: bool,
         index: int,
         subindex: int | None = None,
@@ -144,32 +145,70 @@ class FreshInstallDemoDataModelForm(FreshInstallModelBaseForm):
         fields = ('inject_demo_data',)
 
 
+class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
+    """Read-only summary form for the final fresh-install step."""
+
+    storage_selection = forms.CharField(
+        label=gettext_lazy('Storage Selection'),
+        required=False,
+        disabled=True,
+    )
+    inject_demo_data_selection = forms.CharField(
+        label=gettext_lazy('Inject Demo Data'),
+        required=False,
+        disabled=True,
+    )
+    tls_server_configuration = forms.CharField(
+        label=gettext_lazy('TLS Server Configuration'),
+        required=False,
+        disabled=True,
+    )
+
+    class Meta:
+        """ModelForm configuration for the summary step."""
+
+        model = SetupWizardConfigModel
+        fields: tuple[str, ...] = ()
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Populate the read-only summary values from the singleton config."""
+        super().__init__(*args, **kwargs)
+
+        instance = cast(SetupWizardConfigModel, self.instance)
+        self.fields['storage_selection'].initial = instance.get_crypto_storage_display()
+        self.fields['inject_demo_data_selection'].initial = (
+            gettext_lazy('Yes') if instance.inject_demo_data else gettext_lazy('No')
+        )
+        self.fields['tls_server_configuration'].initial = instance.get_fresh_install_tls_mode_display()
+
+
 class FreshInstallTlsConfigForm(forms.Form):
     """Form for configuring TLS during the fresh-install wizard."""
 
+    _dns_label_pattern = re.compile(r'^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$')
+
     tls_mode = forms.ChoiceField(
         label=gettext_lazy('TLS configuration method'),
-        choices=(
-            ('generate', gettext_lazy('Generate credential')),
-            ('pkcs12', gettext_lazy('Upload PKCS#12')),
-            ('separate_files', gettext_lazy('Upload separate files')),
-        ),
+        choices=TLS_CONFIG_TYPE_CHOICES,
         widget=WizardCardRadioSelect(descriptions=TLS_CONFIG_OPTION_DESCRIPTIONS),
-        initial='generate',
+        initial=SetupWizardConfigModel.FreshInstallTlsConfigType.GENERATE,
     )
 
     ipv4_addresses = forms.CharField(
         label=gettext_lazy('IPv4 addresses'),
+        initial='127.0.0.1, ',
         required=False,
         help_text=gettext_lazy('Comma-separated list.'),
     )
     ipv6_addresses = forms.CharField(
         label=gettext_lazy('IPv6 addresses'),
+        initial='::1, ',
         required=False,
         help_text=gettext_lazy('Comma-separated list.'),
     )
     domain_names = forms.CharField(
         label=gettext_lazy('DNS names'),
+        initial='localhost, ',
         required=False,
         help_text=gettext_lazy('Comma-separated list.'),
     )
@@ -202,30 +241,53 @@ class FreshInstallTlsConfigForm(forms.Form):
     )
 
     @staticmethod
-    def _split_csv(value: str) -> list[str]:
+    def _parse_comma_separated_values(value: str) -> list[str]:
         """Normalize a comma-separated string into a list of trimmed values."""
         return [item.strip() for item in value.split(',') if item.strip()]
 
-    def clean_ipv4_addresses(self) -> list[ipaddress.IPv4Address]:
+    @classmethod
+    def _validate_dns_name(cls, value: str) -> str:
+        """Validate and normalize a DNS name.
+
+        Python has no dedicated standard-library DNS validator, so this uses
+        the stdlib IDNA codec plus conservative hostname-label checks.
+        """
+        try:
+            normalized_value = value.rstrip('.').encode('idna').decode('ascii').lower()
+        except UnicodeError as exception:
+            err_msg = gettext_lazy('Contains an invalid DNS name.')
+            raise forms.ValidationError(err_msg) from exception
+
+        if not normalized_value or len(normalized_value) > 253:
+            err_msg = gettext_lazy('Contains an invalid DNS name.')
+            raise forms.ValidationError(err_msg)
+
+        labels = normalized_value.split('.')
+        if any(not label or not cls._dns_label_pattern.fullmatch(label) for label in labels):
+            err_msg = gettext_lazy('Contains an invalid DNS name.')
+            raise forms.ValidationError(err_msg)
+        return normalized_value
+
+    def clean_ipv4_addresses(self) -> list[str]:
         """Validate and normalize IPv4 SAN entries."""
         data = self.cleaned_data['ipv4_addresses'].strip()
         if not data:
             return []
 
         try:
-            return [ipaddress.IPv4Address(address) for address in self._split_csv(data)]
+            return [str(ipaddress.IPv4Address(address)) for address in self._parse_comma_separated_values(data)]
         except ipaddress.AddressValueError as exception:
             err_msg = gettext_lazy('Contains an invalid IPv4 address.')
             raise forms.ValidationError(err_msg) from exception
 
-    def clean_ipv6_addresses(self) -> list[ipaddress.IPv6Address]:
+    def clean_ipv6_addresses(self) -> list[str]:
         """Validate and normalize IPv6 SAN entries."""
         data = self.cleaned_data['ipv6_addresses'].strip()
         if not data:
             return []
 
         try:
-            return [ipaddress.IPv6Address(address) for address in self._split_csv(data)]
+            return [str(ipaddress.IPv6Address(address)) for address in self._parse_comma_separated_values(data)]
         except ipaddress.AddressValueError as exception:
             err_msg = gettext_lazy('Contains an invalid IPv6 address.')
             raise forms.ValidationError(err_msg) from exception
@@ -235,14 +297,15 @@ class FreshInstallTlsConfigForm(forms.Form):
         data = self.cleaned_data['domain_names'].strip()
         if not data:
             return []
-        return self._split_csv(data)
+        return [self._validate_dns_name(name) for name in self._parse_comma_separated_values(data)]
 
     def clean(self) -> dict[str, Any]:
         """Validate the field set required for the selected TLS mode."""
-        cleaned_data = super().clean()
+        cleaned_data = cast(dict[str, Any], super().clean())
+
         tls_mode = cleaned_data.get('tls_mode')
 
-        if tls_mode == 'generate':
+        if tls_mode == SetupWizardConfigModel.FreshInstallTlsConfigType.GENERATE:
             ipv4_addresses = cleaned_data.get('ipv4_addresses')
             ipv6_addresses = cleaned_data.get('ipv6_addresses')
             domain_names = cleaned_data.get('domain_names')
@@ -250,11 +313,11 @@ class FreshInstallTlsConfigForm(forms.Form):
                 err_msg = gettext_lazy('At least one IP address or DNS name is required for generation.')
                 raise forms.ValidationError(err_msg)
 
-        elif tls_mode == 'pkcs12':
+        elif tls_mode == SetupWizardConfigModel.FreshInstallTlsConfigType.PKCS12:
             if not cleaned_data.get('pkcs12_file'):
                 self.add_error('pkcs12_file', gettext_lazy('A PKCS#12 file is required.'))
 
-        elif tls_mode == 'separate_files':
+        elif tls_mode == SetupWizardConfigModel.FreshInstallTlsConfigType.SEPARATE_FILES:
             if not cleaned_data.get('tls_server_certificates'):
                 self.add_error('tls_server_certificates', gettext_lazy('At least one certificate file is required.'))
             if not cleaned_data.get('key_file'):
