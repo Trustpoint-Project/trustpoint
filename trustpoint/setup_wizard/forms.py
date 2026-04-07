@@ -14,6 +14,7 @@ from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy
 
 from .models import SetupWizardConfigModel
+from .tls_credential import extract_staged_tls_sans
 
 CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
     str(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage): gettext_lazy(
@@ -163,6 +164,26 @@ class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
         required=False,
         disabled=True,
     )
+    tls_common_name = forms.CharField(
+        label=gettext_lazy('TLS Common Name'),
+        required=False,
+        disabled=True,
+    )
+    tls_ipv4_addresses = forms.CharField(
+        label=gettext_lazy('TLS IPv4 Addresses'),
+        required=False,
+        disabled=True,
+    )
+    tls_ipv6_addresses = forms.CharField(
+        label=gettext_lazy('TLS IPv6 Addresses'),
+        required=False,
+        disabled=True,
+    )
+    tls_dns_names = forms.CharField(
+        label=gettext_lazy('TLS DNS Names'),
+        required=False,
+        disabled=True,
+    )
 
     class Meta:
         """ModelForm configuration for the summary step."""
@@ -175,11 +196,35 @@ class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
         super().__init__(*args, **kwargs)
 
         instance = cast(SetupWizardConfigModel, self.instance)
+        tls_credential = instance.fresh_install_tls_credential
+        ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans(tls_credential)
         self.fields['storage_selection'].initial = instance.get_crypto_storage_display()
         self.fields['inject_demo_data_selection'].initial = (
             gettext_lazy('Yes') if instance.inject_demo_data else gettext_lazy('No')
         )
         self.fields['tls_server_configuration'].initial = instance.get_fresh_install_tls_mode_display()
+        self.fields['tls_common_name'].initial = (
+            tls_credential.certificate.common_name
+            if tls_credential and tls_credential.certificate
+            else '-'
+        )
+        self.fields['tls_ipv4_addresses'].initial = self._format_tls_summary_values(
+            ipv4_addresses,
+            gettext_lazy('No IPv4 Address Configured'),
+        )
+        self.fields['tls_ipv6_addresses'].initial = self._format_tls_summary_values(
+            ipv6_addresses,
+            gettext_lazy('No IPv6 Address Configured'),
+        )
+        self.fields['tls_dns_names'].initial = self._format_tls_summary_values(
+            dns_names,
+            gettext_lazy('No DNS Names Configured'),
+        )
+
+    @staticmethod
+    def _format_tls_summary_values(values: list[str], empty_text: str | Promise) -> str | Promise:
+        """Format TLS SAN values for display in the summary view."""
+        return '\n'.join(values) if values else empty_text
 
 
 class FreshInstallTlsConfigForm(forms.Form):
