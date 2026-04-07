@@ -27,7 +27,7 @@ class SetupWizardCompletedModel(models.Model):
         editable=False,
         help_text='Singleton primary key. Always 1.',
     )
-    setup_completed_at: models.DateTimeField[timezone.datetime | None, timezone.datetime | None] = models.DateTimeField(
+    setup_completed_at = models.DateTimeField(
         null=True,
         blank=True,
         help_text='Timestamp when initial setup was completed. Write-once once set.',
@@ -81,9 +81,8 @@ class SetupWizardCompletedModel(models.Model):
                 .first()
             )
             if prior is not None and self.setup_completed_at != prior:
-                raise ValidationError(
-                    {'setup_completed_at": "Initial setup is write-once and cannot be modified.'}
-                )
+                err_msg =  {'setup_completed_at': 'Initial setup is write-once and cannot be modified.'}
+                raise ValidationError(err_msg)
 
     @classmethod
     def mark_setup_complete_once(cls) -> bool:
@@ -109,6 +108,8 @@ class SetupWizardCompletedModel(models.Model):
 class SetupWizardConfigModel(models.Model):
     """Model that holds the data that will be applied when the setup wizard is completed."""
 
+    # ClassVar and Final can be nested with python >= 3.13
+    # noinspection PyFinal
     SINGLETON_ID: ClassVar[Final[int]] = 1
 
     singleton_id = models.PositiveSmallIntegerField(
@@ -116,6 +117,39 @@ class SetupWizardConfigModel(models.Model):
         default=SINGLETON_ID,
         editable=False,
         help_text='Singleton primary key. Always 1.',
+    )
+
+    class FreshInstallCurrentStep(models.IntegerChoices):
+        CRYPTO_STORAGE = 0, gettext_lazy('Crypto-Storage')
+        DEMO_DATA = 1, gettext_lazy('Demo-Data')
+        TLS_CONFIG = 2, gettext_lazy('TLS-Config')
+        SUMMARY = 3, gettext_lazy('Summary')
+
+    fresh_install_current_step = models.PositiveSmallIntegerField(
+        choices=FreshInstallCurrentStep,
+        null=False,
+        blank=True,
+        default=FreshInstallCurrentStep.CRYPTO_STORAGE,
+    )
+
+    fresh_install_crypto_storage_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the crypto storage step was submitted.',
+    )
+
+    fresh_install_demo_data_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the demo data step was submitted.',
+    )
+
+    fresh_install_tls_config_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the TLS config step was submitted.',
+    )
+
+    fresh_install_summary_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the summary step was submitted.'
     )
 
     class CryptoStorageType(models.IntegerChoices):
@@ -126,20 +160,51 @@ class SetupWizardConfigModel(models.Model):
         choices=CryptoStorageType,
         null=False,
         blank=False,
-        default=CryptoStorageType.SoftwareStorage,
+        default=CryptoStorageType.SoftwareStorage
     )
 
     inject_demo_data = models.BooleanField(
-        default=True,
         null=False,
         blank=False,
         help_text='Inject demo data.',
+        default=True
     )
 
     @classmethod
     def get_singleton(cls) -> Self:
         obj, _ = cls.objects.get_or_create(pk=cls.SINGLETON_ID)
         return obj
+
+    @classmethod
+    def get_current_step(cls) -> FreshInstallCurrentStep:
+        """Return the current fresh-install step as an enum member.
+
+        Returns:
+            The current step as FreshInstallCurrentStep.
+        """
+        singleton = cls.get_singleton()
+        return singleton.FreshInstallCurrentStep(singleton.fresh_install_current_step)
+
+    def is_step_submitted(self, step: FreshInstallCurrentStep) -> bool:
+        """Return whether the given fresh-install step was submitted."""
+        submitted_fields = {
+            self.FreshInstallCurrentStep.CRYPTO_STORAGE: self.fresh_install_crypto_storage_submitted,
+            self.FreshInstallCurrentStep.DEMO_DATA: self.fresh_install_demo_data_submitted,
+            self.FreshInstallCurrentStep.TLS_CONFIG: self.fresh_install_tls_config_submitted,
+            self.FreshInstallCurrentStep.SUMMARY: False,
+        }
+        return submitted_fields[step]
+
+    def mark_step_submitted(self, step: FreshInstallCurrentStep) -> None:
+        """Mark the given fresh-install step as submitted."""
+        if step == self.FreshInstallCurrentStep.SUMMARY:
+            return
+        field_name = {
+            self.FreshInstallCurrentStep.CRYPTO_STORAGE: 'fresh_install_crypto_storage_submitted',
+            self.FreshInstallCurrentStep.DEMO_DATA: 'fresh_install_demo_data_submitted',
+            self.FreshInstallCurrentStep.TLS_CONFIG: 'fresh_install_tls_config_submitted',
+        }[step]
+        setattr(self, field_name, True)
 
     def clean(self) -> None:
         super().clean()
@@ -156,4 +221,3 @@ class SetupWizardConfigModel(models.Model):
             raise ValidationError(err_msg)
 
         return super().save(*args, **kwargs)
-
