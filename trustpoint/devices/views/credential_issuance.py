@@ -234,7 +234,8 @@ class AbstractSelectCertificateProfileNewApplicationCredentialView(PageContextMi
             raise ValueError(err_msg)
 
         allowed_app_profiles = list(
-            domain.get_allowed_cert_profiles().exclude(certificate_profile__unique_name='domain_credential'))
+            domain.get_allowed_cert_profiles().exclude(
+                certificate_profile__unique_name=domain.get_domain_credential_profile_name()))
         profile_list = DomainAllowedCertificateProfileModel.get_list_of_display_names(allowed_app_profiles)
 
         context['cert_profile_list'] = {}
@@ -764,10 +765,12 @@ class AbstractIssueProfileCredentialView(
         return cast('HttpResponse', super().dispatch(request, *args, **kwargs))
 
     def get_form_kwargs(self) -> dict[str, Any]:
-        """Get form kwargs, including the profile."""
+        """Get form kwargs, including the profile and device/domain for template resolution."""
         kwargs = super().get_form_kwargs()
         raw_profile = json.loads(self.profile.profile_json)
         kwargs['profile'] = raw_profile
+        kwargs['device'] = self.object
+        kwargs['domain'] = self.object.domain
         return kwargs
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
@@ -817,7 +820,6 @@ class AbstractIssueProfileCredentialView(
         if not isinstance(form, CertificateIssuanceForm):
             err_msg = 'Invalid form type. Expected CertificateIssuanceForm.'
             raise TypeError(err_msg)
-        cert_builder = form.get_certificate_builder()
         if not device.domain:
             raise Http404(DeviceWithoutDomainErrorMsg)
 
@@ -825,9 +827,12 @@ class AbstractIssueProfileCredentialView(
             device=device,
             domain=device.domain,
             cert_profile_str=self.profile.unique_name,
-            cert_requested=cert_builder,
             actor=self.request.user if self.request.user.is_authenticated else None,
         )
+
+        cert_builder = form.get_certificate_builder(request_context=ctx)
+        ctx.cert_requested = cert_builder
+
         ManualAuthorization().authorize(ctx)
         CredentialIssueProcessor().process_operation(ctx)
         if not ctx.issued_credential:

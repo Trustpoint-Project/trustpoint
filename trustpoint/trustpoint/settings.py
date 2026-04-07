@@ -78,7 +78,7 @@ BACKUP_FILE_PATH = MEDIA_ROOT / Path('backups')
 PUBLIC_PATHS = [
     '/.well-known/cmp',
     '/.well-known/est',
-    '/.well-known/rest',
+    '/rest',
     '/aoki',
     '/crl',
     '/setup-wizard'
@@ -316,6 +316,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'trustpoint.settings.app_version',
+                'management.context_processors.notification_alerts',
             ],
         },
     },
@@ -417,7 +418,7 @@ class UIConfig:
     """User interface configuration defaults."""
 
     paginate_by: ClassVar[int] = 50
-    notifications_paginate_by: ClassVar[int] = 5
+    notifications_paginate_by: ClassVar[int] = 50
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [

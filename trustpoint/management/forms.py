@@ -161,6 +161,7 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
             'enabled',
             'cert_expiry_warning_days',
             'issuing_ca_expiry_warning_days',
+            'crl_expiry_warning_days',
         ]
         widgets: ClassVar[dict[str, Any]] = {
             'enabled': forms.CheckboxInput(
@@ -170,6 +171,9 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
                 attrs={'class': 'form-control', 'min': '1', 'max': '365'}
             ),
             'issuing_ca_expiry_warning_days': forms.NumberInput(
+                attrs={'class': 'form-control', 'min': '1', 'max': '365'}
+            ),
+            'crl_expiry_warning_days': forms.NumberInput(
                 attrs={'class': 'form-control', 'min': '1', 'max': '365'}
             ),
         }
@@ -189,6 +193,7 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
                 _('Expiry Warning Thresholds'),
                 'cert_expiry_warning_days',
                 'issuing_ca_expiry_warning_days',
+                'crl_expiry_warning_days',
             ),
         )
 
@@ -221,6 +226,21 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
                 }
             )
         return ca_expiry
+
+    def clean_crl_expiry_warning_days(self) -> int | None:
+        """Validate crl_expiry_warning_days field."""
+        crl_expiry = self.cleaned_data.get('crl_expiry_warning_days')
+        if crl_expiry is not None and (
+            crl_expiry < self.MIN_EXPIRY_WARNING_DAYS or
+            crl_expiry > self.MAX_EXPIRY_WARNING_DAYS
+        ):
+            raise ValidationError(
+                _('Value must be between %(min)d and %(max)d days.') % {
+                    'min': self.MIN_EXPIRY_WARNING_DAYS,
+                    'max': self.MAX_EXPIRY_WARNING_DAYS,
+                }
+            )
+        return crl_expiry
 
 class BackupOptionsForm(forms.ModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""

@@ -458,23 +458,28 @@ class AokiEstIDevIDCommandBuilder:
         )
 
     @staticmethod
-    def get_aoki_init_response_example() -> str:
-        """Get an example AOKI initialization response JSON."""
-        return """{
-  "aoki-init": {
-    "version": "1.0",
-    "owner-id-cert": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----",
-    "tls-truststore": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----",
-    "enrollment-info": {
-      "protocols": [
-        {
-          "protocol": "EST",
-          "url": "https://127.0.0.1:443/.well-known/est/domain/domain_credential/simpleenroll"
-        }
-      ]
-    }
-  }
-}"""
+    def get_aoki_init_response_example(domain_credential_profile_name: str = 'domain_credential') -> str:
+        """Get an example AOKI initialization response JSON.
+
+        :param domain_credential_profile_name: The certificate profile name used for domain credentials.
+        """
+        return (
+            '{\n'
+            '  "aoki-init": {\n'
+            '    "version": "1.0",\n'
+            '    "owner-id-cert": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----",\n'
+            '    "tls-truststore": "-----BEGIN CERTIFICATE-----\\n...\\n-----END CERTIFICATE-----",\n'
+            '    "enrollment-info": {\n'
+            '      "protocols": [\n'
+            '        {\n'
+            '          "protocol": "EST",\n'
+            f'          "url": "https://127.0.0.1:443/.well-known/est/domain/{domain_credential_profile_name}/simpleenroll"\n'
+            '        }\n'
+            '      ]\n'
+            '    }\n'
+            '  }\n'
+            '}'
+        )
 
     @staticmethod
     def get_keygen_command() -> str:

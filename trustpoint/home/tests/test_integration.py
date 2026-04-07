@@ -27,7 +27,7 @@ class DashboardIntegrationTests(TestCase):
         response = self.client.get(self.url)
 
         assert response.status_code == 200
-        assert 'management' in response.context
+        assert 'page_category' in response.context
 
 
 class DashboardChartsDataIntegrationTests(TestCase):

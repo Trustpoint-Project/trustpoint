@@ -86,6 +86,8 @@ class DomainCreateView(DomainContextMixin, CreateView[DomainModel, BaseModelForm
         )
         form.fields['issuing_ca'].empty_label = None  # type: ignore[attr-defined]
         del form.fields['is_active']
+        if 'domain_credential_profile' in form.fields:
+            del form.fields['domain_credential_profile']
         return form
 
     def form_valid(self, form: BaseModelForm[DomainModel]) -> HttpResponse:
@@ -153,6 +155,12 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             context['profile_data'][profile_id]['alias'] = allowed_profile.alias
             context['profile_data'][profile_id]['is_allowed'] = True
 
+        all_profiles = list(CertificateProfileModel.objects.all())
+        context['domain_credential_profiles'] = all_profiles
+        context['current_domain_credential_profile_id'] = (
+            domain.domain_credential_profile.id if domain.domain_credential_profile else None
+        )
+
         context['certificates'] = certificates
         context['domain_options'] = {}
         context['domain_help_texts'] = {}
@@ -167,6 +175,17 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
 
         domain: DomainModel = cast('DomainModel', self.get_object())
 
+        domain_cred_profile_id = request.POST.get('domain_credential_profile', '')
+        if domain_cred_profile_id:
+            try:
+                profile = CertificateProfileModel.objects.get(pk=int(domain_cred_profile_id))
+                domain.domain_credential_profile = profile
+            except (CertificateProfileModel.DoesNotExist, ValueError):
+                messages.error(request, _('Invalid domain credential profile selected.'))
+                return HttpResponseRedirect(reverse('pki:domains-config', kwargs={'pk': domain.pk}))
+        else:
+            domain.domain_credential_profile = None
+
         # Handle assignments of  allowed certificate profiles in domain
         # get fields from request POST
         allowed_profile_data = {}
@@ -177,13 +196,13 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
                 allowed_profile_data[profile_id] = alias
 
         rejected_aliases = domain.set_allowed_cert_profiles(allowed_profile_data)
-        for alias_value, profile in rejected_aliases:
+        for alias_value, profile_name in rejected_aliases:
             messages.warning(
                 request,
                 _('Alias "{alias}" not applied for profile {profile} as it is already in use. '
                 'Please use an unique domain alias for each Certificate Profile.').format(
                     alias=alias_value,
-                    profile=profile
+                    profile=profile_name
                 )
             )
 

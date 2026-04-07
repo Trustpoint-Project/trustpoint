@@ -1,0 +1,300 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block content %}
+<div class="card" style="max-height: 100%; display: flex; flex-direction: column;">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h1 class="mb-0">{% trans 'Notifications' %}</h1>
+        <div class="d-flex gap-2">
+            <a href="{% url 'management:refresh_notifications' %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-arrow-clockwise"></i> {% trans 'Refresh' %}
+            </a>
+            <form method="post" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" name="mark_all_read" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-check2-all"></i> {% trans 'Mark All as Read' %}
+                </button>
+            </form>
+            {% if unread_only %}
+                <a href="{% url 'management:notifications' %}" class="btn btn-secondary btn-sm">
+                    <i class="bi bi-eye"></i> {% trans 'Show All' %}
+                </a>
+            {% else %}
+                <a href="{% url 'management:notifications' %}?unread_only=1" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-eye-fill"></i> {% trans 'Show Only Unread' %}
+                </a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="card-body text-start" style="overflow-y: auto; flex-grow: 1; max-height: 90%;">
+
+        <div class="filter-container d-flex align-items-center mb-3">
+            <div class="filter-buttons">
+                <button type="button" class="filter-button filter-button-cri" onclick="toggleFilterType('CRI')">
+                    <svg class="icon" width="12" height="12" fill="currentColor">
+                        <use xlink:href="{% static 'img/icons.svg' %}#icon-plus"></use>
+                    </svg>
+                    {% trans 'Critical' %}
+                </button>
+                <button type="button" class="filter-button filter-button-war" onclick="toggleFilterType('WAR')">
+                    <svg class="icon" width="12" height="12" fill="currentColor">
+                        <use xlink:href="{% static 'img/icons.svg' %}#icon-plus"></use>
+                    </svg>
+                    {% trans 'Warning' %}
+                </button>
+                <button type="button" class="filter-button filter-button-inf" onclick="toggleFilterType('INF')">
+                    <svg class="icon" width="12" height="12" fill="currentColor">
+                        <use xlink:href="{% static 'img/icons.svg' %}#icon-plus"></use>
+                    </svg>
+                    {% trans 'Info' %}
+                </button>
+                <button type="button" class="filter-button filter-button-set" onclick="toggleFilterType('SET')">
+                    <svg class="icon" width="12" height="12" fill="currentColor">
+                        <use xlink:href="{% static 'img/icons.svg' %}#icon-plus"></use>
+                    </svg>
+                    {% trans 'Setup' %}
+                </button>
+            </div>
+
+            <div class="vertical-separator"></div>
+
+            <div class="filter-buttons">
+                <button type="button" class="filter-button filter-button-s" onclick="toggleFilterSource('S')">
+                    <svg class="icon" width="12" height="12" fill="currentColor">
+                        <use xlink:href="{% static 'img/icons.svg' %}#icon-plus"></use>
+                    </svg>
+                    {% trans 'System' %}
+                </button>
+                <button type="button" class="filter-button filter-button-d" onclick="toggleFilterSource('D')">
+                    <svg class="icon" width="12" height="12" fill="currentColor">
+                        <use xlink:href="{% static 'img/icons.svg' %}#icon-plus"></use>
+                    </svg>
+                    {% trans 'Domain' %}
+                </button>
+                <button type="button" class="filter-button filter-button-e" onclick="toggleFilterSource('E')">
+                    <svg class="icon" width="12" height="12" fill="currentColor">
+                        <use xlink:href="{% static 'img/icons.svg' %}#icon-plus"></use>
+                    </svg>
+                    {% trans 'Device' %}
+                </button>
+                <button type="button" class="filter-button filter-button-i" onclick="toggleFilterSource('I')">
+                    <svg class="icon" width="12" height="12" fill="currentColor">
+                        <use xlink:href="{% static 'img/icons.svg' %}#icon-plus"></use>
+                    </svg>
+                    {% trans 'Issuing CA' %}
+                </button>
+                <button type="button" class="filter-button filter-button-c" onclick="toggleFilterSource('C')">
+                    <svg class="icon" width="12" height="12" fill="currentColor">
+                        <use xlink:href="{% static 'img/icons.svg' %}#icon-plus"></use>
+                    </svg>
+                    {% trans 'Certificate' %}
+                </button>
+            </div>
+
+            <div class="vertical-separator"></div>
+
+            <div class="filter-buttons" style="display: inline-block;">
+                <button type="button" class="filter-button filter-button-today" onclick="setDateRange('today')">
+                    {% trans 'Today' %}
+                </button>
+                <button type="button" class="filter-button filter-button-last7days" onclick="setDateRange('last7days')">
+                    {% trans 'Last 7 Days' %}
+                </button>
+                <button type="button" class="filter-button filter-button-last30days" onclick="setDateRange('last30days')">
+                    {% trans 'Last 30 Days' %}
+                </button>
+                <button type="button" class="filter-button filter-button-all"
+                        onclick="setDateRange('all')">{% trans 'All' %}</button>
+            </div>
+        </div>
+
+        <form id="filter-form" method="get">
+            <input type="hidden" name="notification_type" id="notification_type_input">
+            <input type="hidden" name="notification_source" id="notification_source_input">
+            <input type="hidden" name="date_range" id="date_range_input">
+        </form>
+
+        <table class="table table-sm table-hover">
+            <thead>
+                <tr>
+                    <th>
+                        <a href="#" onclick="updateQueryParam(event, 'sort', 'notification_type')">
+                            {% trans 'Type' %}
+                        </a>
+                    </th>
+                    <th>
+                        <a href="#" onclick="updateQueryParam(event, 'sort', 'notification_source')">
+                            {% trans 'Source' %}
+                        </a>
+                    </th>
+                    <th>{% trans 'Description' %}</th>
+                    <th>
+                        <a href="#" onclick="updateQueryParam(event, 'sort', 'created_at')">
+                            {% trans 'Created at' %}
+                        </a>
+                    </th>
+                    <th>{% trans 'Actions' %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for notification in notifications %}
+                <tr>
+                    <td>{{ notification.type_badge }}</td>
+                    <td>{{ notification.get_notification_source_display }}</td>
+                    <td>{{ notification.short_translated }}</td>
+                    <td>{{ notification.created }}</td>
+                    <td>
+                        <a href="{% url 'management:notification_details' notification.id %}"
+                           class="btn btn-link text-body p-0 me-2" title="{% trans 'Details' %}">
+                            <i class="bi bi-info-square fs-5"></i>
+                        </a>
+                        <a href="{% url 'management:notification_delete' notification.id %}"
+                           class="btn btn-link text-body p-0" title="{% trans 'Delete' %}">
+                            <i class="bi bi-trash fs-5"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted">{% trans 'No notifications available.' %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        {% include 'trustpoint/pagination.html' %}
+
+    </div>
+</div>
+
+<script>
+    let selectedNotificationTypes = ['CRI', 'WAR', 'INF', 'SET'];
+    let selectedNotificationSources = ['S', 'D', 'E', 'I', 'C'];
+    let selectedDateRange = 'all';
+
+    function toggleFilterType(type) {
+        const button = document.querySelector(`.filter-button-${type.toLowerCase()}`);
+        const icon = button.querySelector('use');
+
+        if (button) {
+            const index = selectedNotificationTypes.indexOf(type);
+            if (index > -1) {
+                selectedNotificationTypes.splice(index, 1);
+                button.classList.remove('active');
+                icon.setAttribute('xlink:href', "{% static 'img/icons.svg' %}#icon-plus");
+            } else {
+                selectedNotificationTypes.push(type);
+                button.classList.add('active');
+                icon.setAttribute('xlink:href', "{% static 'img/icons.svg' %}#icon-minus");
+            }
+            document.getElementById('notification_type_input').value = selectedNotificationTypes.join(',');
+            submitFilters();
+        }
+    }
+
+    function toggleFilterSource(source) {
+        const button = document.querySelector(`.filter-button-${source.toLowerCase()}`);
+        const icon = button ? button.querySelector('use') : null;
+
+        if (button && icon) {
+            const index = selectedNotificationSources.indexOf(source);
+            if (index > -1) {
+                selectedNotificationSources.splice(index, 1);
+                button.classList.remove('active');
+                icon.setAttribute('xlink:href', "{% static 'img/icons.svg' %}#icon-plus");
+            } else {
+                selectedNotificationSources.push(source);
+                button.classList.add('active');
+                icon.setAttribute('xlink:href', "{% static 'img/icons.svg' %}#icon-minus");
+            }
+            document.getElementById('notification_source_input').value = selectedNotificationSources.join(',');
+            submitFilters();
+        }
+    }
+
+    function setDateRange(range) {
+        if (selectedDateRange) {
+            const previousButton = document.querySelector(`.filter-button-${selectedDateRange}`);
+            if (previousButton) {
+                previousButton.classList.remove('active');
+            }
+        }
+        selectedDateRange = range;
+        const button = document.querySelector(`.filter-button-${range}`);
+        if (button) {
+            button.classList.add('active');
+        }
+        document.getElementById('date_range_input').value = range;
+        submitFilters();
+    }
+
+    function submitFilters() {
+        const urlParams = new URLSearchParams(window.location.search);
+
+        if (selectedNotificationTypes.length > 0) {
+            urlParams.set('notification_type', selectedNotificationTypes.join(','));
+        } else {
+            urlParams.delete('notification_type');
+        }
+
+        if (selectedNotificationSources.length > 0) {
+            urlParams.set('notification_source', selectedNotificationSources.join(','));
+        } else {
+            urlParams.delete('notification_source');
+        }
+
+        if (selectedDateRange) {
+            urlParams.set('date_range', selectedDateRange);
+        } else {
+            urlParams.delete('date_range');
+        }
+
+        urlParams.delete('page');
+
+        const newUrl = `${window.location.pathname}?${urlParams.toString()}`;
+        window.location.href = newUrl;
+    }
+
+    function loadButtonStates() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const notificationTypes = urlParams.get('notification_type');
+        const notificationSources = urlParams.get('notification_source');
+        const dateRange = urlParams.get('date_range');
+
+        if (notificationTypes) {
+            selectedNotificationTypes = notificationTypes.split(',');
+        }
+        selectedNotificationTypes.forEach(type => {
+            const button = document.querySelector(`.filter-button-${type.toLowerCase()}`);
+            const icon = button.querySelector('use');
+            if (button) {
+                button.classList.add('active');
+                icon.setAttribute('xlink:href', "{% static 'img/icons.svg' %}#icon-minus");
+            }
+        });
+
+        if (notificationSources) {
+            selectedNotificationSources = notificationSources.split(',');
+        }
+        selectedNotificationSources.forEach(source => {
+            const button = document.querySelector(`.filter-button-${source.toLowerCase()}`);
+            const icon = button.querySelector('use');
+            if (button) {
+                button.classList.add('active');
+                icon.setAttribute('xlink:href', "{% static 'img/icons.svg' %}#icon-minus");
+            }
+        });
+
+        if (dateRange) {
+            selectedDateRange = dateRange;
+        }
+        const button = document.querySelector(`.filter-button-${selectedDateRange}`);
+        if (button) {
+            button.classList.add('active');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadButtonStates);
+</script>
+{% endblock content %}
