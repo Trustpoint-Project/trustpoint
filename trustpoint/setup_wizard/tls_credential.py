@@ -14,7 +14,36 @@ from trustpoint_core.serializer import CredentialSerializer, PrivateKeySerialize
 if TYPE_CHECKING:
     import ipaddress
 
+    from pki.models import CredentialModel
+
 ONE_DAY = datetime.timedelta(days=1)
+
+
+def extract_staged_tls_sans(tls_credential: CredentialModel | None) -> tuple[list[str], list[str], list[str]]:
+    """Extract SAN values from a staged TLS credential."""
+    if tls_credential is None or tls_credential.certificate is None:
+        return [], [], []
+
+    certificate = tls_credential.certificate
+    san_extension = certificate.subject_alternative_name_extension
+    if san_extension is None:
+        return [], [], []
+
+    general_names = san_extension.subject_alt_name
+    if general_names is None:
+        return [], [], []
+
+    ip_address_model = general_names.ip_addresses.model
+    ipv4_addresses = [
+        entry.value
+        for entry in general_names.ip_addresses.filter(ip_type=ip_address_model.IpType.IPV4_ADDRESS)
+    ]
+    ipv6_addresses = [
+        entry.value
+        for entry in general_names.ip_addresses.filter(ip_type=ip_address_model.IpType.IPV6_ADDRESS)
+    ]
+    dns_names = [entry.value for entry in general_names.dns_names.all()]
+    return ipv4_addresses, ipv6_addresses, dns_names
 
 
 class TlsServerCredentialGenerator:
