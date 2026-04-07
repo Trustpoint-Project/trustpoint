@@ -7,7 +7,9 @@ import re
 import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn, cast
+import enum
 
+from django.forms import Form
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm
@@ -18,8 +20,9 @@ from django.db.models import ProtectedError
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext_lazy
 from django.views.generic import FormView, TemplateView, View
+from django.urls import reverse
 
 from management.forms import KeyStorageConfigForm, TlsAddFileImportPkcs12Form, TlsAddFileImportSeparateFilesForm
 from management.models import KeyStorageConfig, PKCS11Token
@@ -28,15 +31,19 @@ from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard import SetupWizardState
-from setup_wizard.forms import (
+from .forms import (
     BackupPasswordForm,
     BackupRestoreForm,
     EmptyForm,
     HsmSetupForm,
     PasswordAutoRestoreForm,
     StartupWizardTlsCertificateForm,
+    FreshInstallModelBaseForm,
+    FreshInstallCryptoStorageModelForm,
+    FreshInstallDemoDataModelForm,
+    FreshInstallTlsConfigForm
 )
-from setup_wizard.models import SetupWizardCompletedModel
+from .models import SetupWizardCompletedModel, SetupWizardConfigModel
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from trustpoint.logger import LoggerMixin
 
@@ -215,7 +222,7 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
 #             SetupWizardState.WIZARD_SETUP_CRYPTO_STORAGE: 'setup_wizard:crypto_storage_setup',
 #             SetupWizardState.WIZARD_SETUP_HSM: 'setup_wizard:hsm_setup',
 #             SetupWizardState.WIZARD_SETUP_MODE: 'setup_wizard:setup_mode',
-#             SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY: 'setup_wizard:tls_server_credential_apply',
+#             SetupWizardState.WIZARD_TLS_SERVER_CREDENTIAL_APPLY:gettext_lazy 'setup_wizard:tls_server_credential_apply',
 #             SetupWizardState.WIZARD_BACKUP_PASSWORD: 'setup_wizard:backup_password',
 #             SetupWizardState.WIZARD_DEMO_DATA: 'setup_wizard:demo_data',
 #             SetupWizardState.WIZARD_CREATE_SUPER_USER: 'setup_wizard:create_super_user',
@@ -429,8 +436,196 @@ class HsmSetupMixin(LoggerMixin):
         raise NotImplementedError(msg)
 
 
-class SetupWizardConfigCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
-    pass
+class FreshInstallFormBaseView[FormT: Form](LoggerMixin, FormView[FormT]):
+    """Shared base view for fresh-install wizard steps."""
+
+    is_last: bool = False
+    back_url: str | None = None
+    body_heading: str = ''
+    step_state: SetupWizardConfigModel.FreshInstallCurrentStep
+
+    class StepState(enum.StrEnum):
+        ACTIVE = 'active'
+        DONE = 'done'
+        AVAILABLE = 'available'
+        PENDING = 'pending'
+
+    @staticmethod
+    def _get_step_state(
+            step: SetupWizardConfigModel.FreshInstallCurrentStep,
+            viewed_step: SetupWizardConfigModel.FreshInstallCurrentStep,
+            unlocked_step: SetupWizardConfigModel.FreshInstallCurrentStep,
+            is_submitted: bool,
+    ) -> FreshInstallFormBaseView.StepState:
+        """Get the display state for a wizard step."""
+        if step == viewed_step:
+            return FreshInstallFormBaseView.StepState.ACTIVE
+        if is_submitted:
+            return FreshInstallFormBaseView.StepState.DONE
+        if step <= unlocked_step:
+            return FreshInstallFormBaseView.StepState.AVAILABLE
+        return FreshInstallFormBaseView.StepState.PENDING
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Build template context for the current fresh-install step."""
+        context = super().get_context_data(**kwargs)
+        context['is_last'] = self.is_last
+        context['back_url'] = self.back_url
+        context['body_heading'] = self.body_heading
+
+        config_model = SetupWizardConfigModel.get_singleton()
+        current_state = config_model.get_current_step()
+        viewed_step = self.step_state
+        self.logger.critical(f'current_state: {current_state}')
+        self.logger.critical(f'viewed_step: {viewed_step}')
+        crypto_storage_state = self._get_step_state(
+            SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE,
+            viewed_step,
+            current_state,
+            config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE),
+        )
+        demo_data_state = self._get_step_state(
+            SetupWizardConfigModel.FreshInstallCurrentStep.DEMO_DATA,
+            viewed_step,
+            current_state,
+            config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.DEMO_DATA),
+        )
+        tls_config_state = self._get_step_state(
+            SetupWizardConfigModel.FreshInstallCurrentStep.TLS_CONFIG,
+            viewed_step,
+            current_state,
+            config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.TLS_CONFIG),
+        )
+        summary_state = self._get_step_state(
+            SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY,
+            viewed_step,
+            current_state,
+            config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY),
+        )
+
+        self.logger.critical(f'Crypto Storage State: {crypto_storage_state}')
+        self.logger.critical(f'Demo Data State: {demo_data_state}')
+        self.logger.critical(f'TLS Config State: {tls_config_state}')
+        self.logger.critical(f'Summary State: {summary_state}')
+
+        context['steps'] = [
+            {
+                'label': 'Crypto Storage',
+                'url': reverse('setup_wizard:fresh_install_crypto_storage'),
+                'state': str(crypto_storage_state)
+            },
+            {
+                'label': 'Demo Data',
+                'url': reverse('setup_wizard:fresh_install_demo_data'),
+                'state': str(demo_data_state)
+            },
+            {
+                'label': 'TLS Config',
+                'url': reverse('setup_wizard:fresh_install_crypto_storage'),
+                'state': str(tls_config_state)
+            },
+            {
+                'label': 'Summary',
+                'url': reverse('setup_wizard:fresh_install_crypto_storage'),
+                'state': str(summary_state)
+            },
+        ]
+        return context
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs) -> HttpResponse:
+        """Handle GET requests and update the unlocked wizard step."""
+        config_model = SetupWizardConfigModel.get_singleton()
+        if config_model.fresh_install_current_step < self.step_state:
+            config_model.fresh_install_current_step = self.step_state
+            config_model.save()
+        return super().get(request, args, kwargs)
+
+
+class FreshInstallModelFormBaseView[FormT: FreshInstallModelBaseForm](FreshInstallFormBaseView[FormT]):
+    """Base view for fresh-install steps backed by the singleton config row.
+
+    This view binds each step form to the singleton
+    ``SetupWizardConfigModel`` instance and exposes wizard metadata for the
+    template.
+    """
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Build constructor kwargs for the bound model form.
+
+        Returns:
+            dict[str, Any]: Form kwargs containing the singleton model
+            instance.
+        """
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = SetupWizardConfigModel.get_singleton()
+        return kwargs
+
+    def form_valid(self, form: FormT) -> HttpResponse:
+        """Persist the current step and continue the wizard flow.
+
+        Args:
+            form: The validated model-backed form for this wizard step.
+
+        Returns:
+            HttpResponse: The redirect or response returned by the parent
+            implementation.
+        """
+        form.save()
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.mark_step_submitted(self.step_state)
+        config_model.save()
+        return super().form_valid(form)
+
+class FreshInstallNormalFormBaseView[FormT: Form](FreshInstallFormBaseView[FormT]):
+    """Base view for fresh-install steps not backed directly by a ModelForm."""
+
+
+class FreshInstallCryptoStorageView(FreshInstallModelFormBaseView[FreshInstallCryptoStorageModelForm]):
+    """Render the fresh-install step for choosing cryptographic storage."""
+
+    form_class = FreshInstallCryptoStorageModelForm
+    template_name = 'setup_wizard/fresh_install.html'
+    success_url = reverse_lazy('setup_wizard:fresh_install_demo_data')
+
+    step_state = SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE
+    body_heading = 'Select Crypto Storage Type'
+
+
+class FreshInstallDemoDataView(FreshInstallModelFormBaseView[FreshInstallDemoDataModelForm]):
+    """Render the fresh-install step for choosing demo data injection."""
+
+    form_class = FreshInstallDemoDataModelForm
+    template_name = 'setup_wizard/fresh_install.html'
+    # success_url = reverse_lazy('setup_wizard:config_demo_data')
+    success_url = reverse_lazy('setup_wizard:fresh_install_tls_config')
+
+    step_state = SetupWizardConfigModel.FreshInstallCurrentStep.DEMO_DATA
+    back_url = reverse_lazy('setup_wizard:fresh_install_crypto_storage')
+    body_heading = 'Inject Demo Data?'
+
+class FreshInstallTlsConfigView(FreshInstallNormalFormBaseView[FreshInstallTlsConfigForm]):
+    """Render the fresh-install step for choosing tls config injection."""
+
+    form_class = FreshInstallTlsConfigForm
+    template_name = 'setup_wizard/fresh_install.html'
+    success_url = ''
+
+    step_state = SetupWizardConfigModel.FreshInstallCurrentStep.TLS_CONFIG
+    back_url = reverse_lazy('setup_wizard:fresh_install_demo_data')
+    body_heading = 'Configure TLS'
+
+    def form_valid(self, form: FreshInstallTlsConfigForm) -> HttpResponse:
+        """Persist the current step and continue the wizard flow.
+
+        Args:
+            form: The validated TLS configuration form for this wizard step.
+
+        Returns:
+            HttpResponse: The redirect or response returned by the parent
+            implementation.
+        """
+        pass
+        # return super().form_valid(form)
+
 
 class SetupWizardCryptoStorageView(LoggerMixin, FormView[KeyStorageConfigForm]):
     """View for handling crypto storage setup during the setup wizard."""
@@ -700,10 +895,10 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
         """Add password requirements to the context."""
         context = super().get_context_data(**kwargs)
         context['password_requirements'] = [
-            _('Your password can’t be too similar to your other personal information.'),  # noqa: RUF001
-            _('Your password must contain at least 8 characters.'),
-            _('Your password can’t be a commonly used password.'),  # noqa: RUF001
-            _('Your password can’t be entirely numeric.'),  # noqa: RUF001
+            gettext_lazy('Your password can’t be too similar to your other personal information.'),  # noqa: RUF001
+            gettext_lazy('Your password must contain at least 8 characters.'),
+            gettext_lazy('Your password can’t be a commonly used password.'),  # noqa: RUF001
+            gettext_lazy('Your password can’t be entirely numeric.'),  # noqa: RUF001
         ]
         return context
 
@@ -1147,8 +1342,8 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add additional context data."""
         context = super().get_context_data(**kwargs)
-        context['page_title'] = _('Auto Restore - Enter Backup Password')
-        context['page_description'] = _('Enter the backup password to complete the auto restore process.')
+        context['page_title'] = gettext_lazy('Auto Restore - Enter Backup Password')
+        context['page_description'] = gettext_lazy('Enter the backup password to complete the auto restore process.')
         return context
 
     def form_valid(self, form: PasswordAutoRestoreForm) -> HttpResponse:
