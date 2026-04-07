@@ -1,0 +1,583 @@
+{% extends 'users/base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block head %}
+    {{ block.super }}
+    <style>
+        .tp-wizard-stepper {
+            display: flex;
+            flex-wrap: nowrap;
+            gap: 0.625rem;
+            justify-content: center;
+            margin: 0.625rem;
+            overflow-x: auto;
+            padding: 0;
+        }
+
+        .tp-wizard-step {
+            flex: 0 0 15.5rem;
+            max-width: 15.5rem;
+            min-width: 15.5rem;
+            width: 15.5rem;
+        }
+
+        .tp-wizard-step-link,
+        .tp-wizard-step-current,
+        .tp-wizard-step-available,
+        .tp-wizard-step-disabled {
+            --tp-step-background: var(--bs-tertiary-bg);
+            --tp-step-color: var(--bs-secondary-color);
+            align-items: center;
+            background: var(--tp-step-background);
+            box-sizing: border-box;
+            clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 50%, calc(100% - 1rem) 100%, 0 100%, 1rem 50%);
+            color: var(--tp-step-color);
+            display: grid;
+            font-weight: 700;
+            gap: 0.625rem;
+            grid-template-columns: minmax(0, 1fr) 2rem;
+            min-height: 3.5rem;
+            padding: 0.9rem 1.2rem 0.9rem 1.65rem;
+            text-align: center;
+            text-decoration: none;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+            white-space: nowrap;
+            width: 100%;
+        }
+
+        .tp-wizard-step:first-child .tp-wizard-step-link,
+        .tp-wizard-step:first-child .tp-wizard-step-current,
+        .tp-wizard-step:first-child .tp-wizard-step-available,
+        .tp-wizard-step:first-child .tp-wizard-step-disabled {
+            clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 50%, calc(100% - 1rem) 100%, 0 100%);
+            padding-left: 1.25rem;
+        }
+
+        .tp-wizard-step:last-child .tp-wizard-step-link,
+        .tp-wizard-step:last-child .tp-wizard-step-current,
+        .tp-wizard-step:last-child .tp-wizard-step-available,
+        .tp-wizard-step:last-child .tp-wizard-step-disabled {
+            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 1rem 50%);
+        }
+
+        .tp-wizard-step-link:hover {
+            box-shadow: 0 0.35rem 0.9rem color-mix(in srgb, var(--bs-primary) 16%, transparent);
+            text-decoration: none;
+            transform: translateY(-1px);
+        }
+
+        .tp-wizard-step-available:hover {
+            box-shadow: 0 0.35rem 0.9rem color-mix(in srgb, var(--bs-primary) 12%, transparent);
+            text-decoration: none;
+            transform: translateY(-1px);
+        }
+
+        .tp-wizard-step-indicator {
+            align-items: center;
+            display: inline-flex;
+            font-size: 1.05rem;
+            font-weight: 700;
+            justify-content: center;
+            line-height: 1;
+            min-width: 1rem;
+        }
+
+        .tp-wizard-step-label {
+            font-size: 1.125rem;
+            font-weight: 800;
+            grid-column: 1;
+            line-height: 1.2;
+            letter-spacing: 0.01em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .tp-wizard-step-trailing {
+            grid-column: 2;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            min-width: 2rem;
+            width: 2rem;
+        }
+
+        .tp-wizard-step-trailing.is-done {
+            font-size: 2rem;
+            font-weight: 800;
+            opacity: 0.95;
+        }
+
+        .tp-wizard-step-link {
+            --tp-step-background: color-mix(in srgb, var(--bs-primary) 38%, white);
+            --tp-step-color: color-mix(in srgb, var(--bs-primary) 70%, black);
+        }
+
+        .tp-wizard-step-current {
+            --tp-step-background: var(--bs-primary);
+            --tp-step-color: var(--bs-body-bg);
+            box-shadow: 0 0.5rem 1.1rem color-mix(in srgb, var(--bs-primary) 22%, transparent);
+        }
+
+        .tp-wizard-step-available {
+            --tp-step-background: color-mix(in srgb, var(--bs-primary) 38%, white);
+            --tp-step-color: color-mix(in srgb, var(--bs-primary) 70%, black);
+        }
+
+        .tp-wizard-step-disabled {
+            --tp-step-background: color-mix(in srgb, var(--bs-body-bg) 88%, var(--bs-emphasis-color));
+            --tp-step-color: color-mix(in srgb, var(--bs-secondary-color) 90%, var(--bs-emphasis-color));
+        }
+
+        .tp-choice-group {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .tp-form-group .form-control,
+        .tp-form-group .form-select,
+        .tp-form-group input[type="file"] {
+            max-width: none;
+            width: 100% !important;
+        }
+
+        .tp-form-group .mb-3 {
+            max-width: none;
+            width: 100% !important;
+        }
+
+        .tp-form-group .form-group,
+        .tp-form-group .controls,
+        .tp-form-group .input-group,
+        .tp-form-group .crispy-field {
+            max-width: none;
+            width: 100% !important;
+        }
+
+        .tp-form-group {
+            margin: 0;
+        }
+
+        .tp-form-group > .mb-3:last-child,
+        .tp-tls-panel > .mb-3:last-child {
+            margin-bottom: 0 !important;
+        }
+
+        .tp-tls-panel {
+            margin-bottom: 0;
+        }
+
+        .tp-tls-panel > .mb-3:last-child .form-text,
+        .tp-tls-panel > .mb-3:last-child .text-danger,
+        .tp-tls-panel > .mb-3:last-child .invalid-feedback {
+            margin-bottom: 0;
+        }
+
+        .tp-choice-option {
+            cursor: pointer;
+            display: block;
+            margin: 0;
+        }
+
+        .tp-choice-option input {
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+        }
+
+        .tp-choice-card {
+            background-color: var(--bs-body-bg);
+            border: 2px solid var(--bs-border-color);
+            border-radius: var(--bs-border-radius-lg);
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+            padding: 1rem 1.1rem;
+            transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+        }
+
+        .tp-choice-option:hover .tp-choice-card {
+            border-color: color-mix(in srgb, var(--bs-primary) 45%, var(--bs-border-color));
+            transform: translateY(-1px);
+        }
+
+        .tp-choice-option input:focus-visible + .tp-choice-card {
+            box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--bs-primary) 25%, transparent);
+        }
+
+        .tp-choice-option input:checked + .tp-choice-card {
+            background-color: color-mix(in srgb, var(--bs-primary) 12%, var(--bs-body-bg));
+            border-color: var(--bs-primary);
+            box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--bs-primary) 15%, transparent);
+        }
+
+        .tp-choice-title {
+            color: var(--bs-emphasis-color);
+            font-size: 1rem;
+            font-weight: 600;
+            line-height: 1.2;
+        }
+
+        .tp-choice-description {
+            color: var(--bs-secondary-color);
+            font-size: 0.95rem;
+            line-height: 1.45;
+        }
+
+        .tp-wizard-body {
+            padding: 2.25rem;
+        }
+
+        .tp-wizard-heading {
+            color: var(--bs-emphasis-color);
+            font-size: clamp(2.2rem, 1.8rem + 1vw, 2.85rem);
+            font-weight: 900;
+            letter-spacing: -0.03em;
+            line-height: 0.98;
+            margin: 0 0 1.5rem;
+            text-align: left;
+        }
+
+        .tp-wizard-heading::after {
+            border-bottom: 1px solid color-mix(in srgb, var(--bs-border-color) 72%, transparent);
+            content: "";
+            display: block;
+            margin-top: 1.5rem;
+        }
+
+        .tp-form-divider {
+            border: 0;
+            border-top: 1px solid color-mix(in srgb, var(--bs-border-color) 72%, transparent);
+            margin: 1.5rem 0;
+            opacity: 1;
+        }
+
+        .tp-tls-panel[hidden] {
+            display: none !important;
+        }
+
+        .tp-tls-error {
+            align-items: center;
+            background: color-mix(in srgb, var(--bs-danger) 22%, transparent);
+            border: 1px solid color-mix(in srgb, var(--bs-danger) 42%, transparent);
+            border-radius: var(--bs-border-radius);
+            color: var(--bs-danger-text-emphasis, var(--bs-danger));
+            display: flex;
+            font-size: 1.05rem;
+            font-weight: 700;
+            justify-content: flex-start;
+            margin: 0 0 1.5rem;
+            min-height: 3.25rem;
+            padding: 0.9rem 1rem;
+            text-align: left;
+        }
+
+        .tp-tls-error-lines {
+            display: grid;
+            gap: 0.35rem;
+        }
+
+        @media (max-width: 767.98px) {
+            .tp-wizard-stepper {
+                flex-direction: column;
+                overflow-x: visible;
+                margin: 0.625rem 0;
+                padding: 0;
+            }
+
+            .tp-wizard-step {
+                flex-basis: auto;
+            }
+
+            .tp-wizard-step-link,
+            .tp-wizard-step-current,
+            .tp-wizard-step-available,
+            .tp-wizard-step-disabled {
+                clip-path: none;
+                grid-template-columns: minmax(0, 1fr) 2rem;
+                padding: 0.9rem 1rem;
+                text-align: left;
+            }
+
+            .tp-wizard-step:first-child .tp-wizard-step-link,
+            .tp-wizard-step:first-child .tp-wizard-step-current,
+            .tp-wizard-step:first-child .tp-wizard-step-available,
+            .tp-wizard-step:first-child .tp-wizard-step-disabled {
+                clip-path: none;
+                padding-left: 1rem;
+            }
+
+            .tp-wizard-body {
+                padding: 1.25rem;
+            }
+
+            .tp-wizard-heading {
+                font-size: 2rem;
+                margin-bottom: 1.15rem;
+            }
+
+            .tp-wizard-heading::after {
+                margin-top: 1.15rem;
+            }
+        }
+
+        .tp-wizard-step-link .tp-wizard-step-indicator,
+        .tp-wizard-step-current .tp-wizard-step-indicator,
+        .tp-wizard-step-available .tp-wizard-step-indicator,
+        .tp-wizard-step-disabled .tp-wizard-step-indicator {
+            display: none;
+        }
+
+    </style>
+{% endblock head %}
+
+{% block content %}
+    {% if messages %}
+        <div class="messages tp-messages text-center">
+            {% for message in messages %}
+                <div class="tp-message alert
+                                {% if message.tags %}
+                                    {% if message.tags == "error" %}
+                                        alert-danger
+                                    {% else %}
+                                        alert-{{ message.tags }}
+                                    {% endif %}
+                                {% endif %} d-flex" role="alert">
+                    <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img"
+                         aria-label="{{ message.tags }}:">
+                        <use href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use>
+                    </svg>
+                    <div>
+                        {{ message }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <form method="POST" enctype="multipart/form-data" class="text-start">
+        {% csrf_token %}
+        <div class="card tp-card-setup-wizard text-center">
+            <div class="card-header">
+                <div class="px-1 py-2">
+                    <div class="tp-wizard-stepper" role="list" aria-label="{% trans 'Setup progress' %}">
+                    {% for step in steps %}
+                            <div class="tp-wizard-step">
+                                {% if step.state == "done" %}
+                                    <a href="{{ step.url }}" class="tp-wizard-step-link" role="listitem">
+                                        <span class="tp-wizard-step-indicator">&#10003;</span>
+                                        <span class="tp-wizard-step-label">{{ step.label }}</span>
+                                        <span class="tp-wizard-step-trailing is-done" aria-hidden="true">&#10003;</span>
+                                    </a>
+                                {% elif step.state == "active" %}
+                                    <a href="{{ step.url }}" class="tp-wizard-step-current" role="listitem" aria-current="step">
+                                        <span class="tp-wizard-step-indicator">{{ forloop.counter }}</span>
+                                        <span class="tp-wizard-step-label">{{ step.label }}</span>
+                                        <span class="tp-wizard-step-trailing" aria-hidden="true"></span>
+                                    </a>
+                                {% elif step.state == "available" %}
+                                    <a href="{{ step.url }}" class="tp-wizard-step-available" role="listitem">
+                                        <span class="tp-wizard-step-indicator">{{ forloop.counter }}</span>
+                                        <span class="tp-wizard-step-label">{{ step.label }}</span>
+                                        <span class="tp-wizard-step-trailing" aria-hidden="true"></span>
+                                    </a>
+                                {% else %}
+                                    <span class="tp-wizard-step-disabled" role="listitem" aria-disabled="true">
+                                        <span class="tp-wizard-step-indicator">{{ forloop.counter }}</span>
+                                        <span class="tp-wizard-step-label">{{ step.label }}</span>
+                                        <span class="tp-wizard-step-trailing" aria-hidden="true"></span>
+                                    </span>
+                                {% endif %}
+                            </div>
+                    {% endfor %}
+                    </div>
+                </div>
+            </div>
+            <div class="card-body tp-wizard-body">
+                <h2 class="tp-wizard-heading">{{ body_heading }}</h2>
+                <fieldset class="form-group tp-form-group">
+                    {% if form.non_field_errors and not form.tls_mode %}
+                        <div class="alert alert-danger">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    {% if form.tls_mode %}
+                        <div class="mb-3 text-start">
+                            <div class="tp-choice-group">
+                                {% for option in form.tls_mode %}
+                                    <label for="{{ option.id_for_label }}" class="tp-choice-option">
+                                        {{ option.tag }}
+                                        <span class="tp-choice-card">
+                                            <span class="tp-choice-title">{{ option.choice_label }}</span>
+                                            {% if option.data.description %}
+                                                <span class="tp-choice-description">{{ option.data.description }}</span>
+                                            {% endif %}
+                                        </span>
+                                    </label>
+                                {% endfor %}
+                            </div>
+                            {% if form.tls_mode.errors %}
+                                <div class="text-danger mt-2">
+                                    {{ form.tls_mode.errors }}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <hr class="tp-form-divider">
+
+                        {% if form.non_field_errors %}
+                            <div class="tp-tls-error" role="alert">
+                                <div class="tp-tls-error-lines">
+                                    {% for error in form.non_field_errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+
+                        <div class="tp-tls-panel" data-tls-mode="generate">
+                            <div class="mb-3 text-start">
+                                {{ form.ipv4_addresses|as_crispy_field }}
+                                {% if form.ipv4_addresses.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.ipv4_addresses.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3 text-start">
+                                {{ form.ipv6_addresses|as_crispy_field }}
+                                {% if form.ipv6_addresses.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.ipv6_addresses.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3 text-start">
+                                {{ form.domain_names|as_crispy_field }}
+                                {% if form.domain_names.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.domain_names.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="tp-tls-panel" data-tls-mode="pkcs12">
+                            <div class="mb-3 text-start">
+                                {{ form.pkcs12_file|as_crispy_field }}
+                                {% if form.pkcs12_file.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.pkcs12_file.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3 text-start">
+                                {{ form.pkcs12_password|as_crispy_field }}
+                                {% if form.pkcs12_password.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.pkcs12_password.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="tp-tls-panel" data-tls-mode="separate_files">
+                            <div class="mb-3 text-start">
+                                {{ form.tls_server_certificates|as_crispy_field }}
+                                {% if form.tls_server_certificates.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.tls_server_certificates.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3 text-start">
+                                {{ form.key_file|as_crispy_field }}
+                                {% if form.key_file.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.key_file.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3 text-start">
+                                {{ form.key_password|as_crispy_field }}
+                                {% if form.key_password.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.key_password.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% else %}
+                        {% for field in form %}
+                            <div class="mb-3 text-start">
+                                {% if field.field.widget.input_type == 'radio' %}
+                                    <div class="tp-choice-group">
+                                        {% for option in field %}
+                                            <label for="{{ option.id_for_label }}" class="tp-choice-option">
+                                                {{ option.tag }}
+                                                <span class="tp-choice-card">
+                                                    <span class="tp-choice-title">{{ option.choice_label }}</span>
+                                                    {% if option.data.description %}
+                                                        <span class="tp-choice-description">{{ option.data.description }}</span>
+                                                    {% endif %}
+                                                </span>
+                                            </label>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    {{ field }}
+                                {% endif %}
+                                {% if field.help_text %}
+                                    <div class="form-text">{{ field.help_text }}</div>
+                                {% endif %}
+                                {% if field.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ field.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                </fieldset>
+            </div>
+            <div class="card-footer">
+                <div class="d-flex flex-column flex-md-row gap-3">
+                    {% if back_url %}
+                        <a href="{{ back_url }}" class="btn btn-secondary flex-fill">{% trans 'Back' %}</a>
+                    {% else %}
+                        <a href="#"
+                           class="btn btn-secondary disabled flex-fill"
+                           aria-disabled="true"
+                           tabindex="-1">{% trans 'Back' %}</a>
+                    {% endif %}
+                    <button class="btn btn-primary flex-fill" type="submit">
+                        {% trans 'Next' %}
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    {% if form.tls_mode %}
+        <script>
+            (() => {
+                const radios = document.querySelectorAll('input[name="tls_mode"]');
+                const panels = document.querySelectorAll('[data-tls-mode]');
+
+                const updateTlsPanels = () => {
+                    const selected = document.querySelector('input[name="tls_mode"]:checked')?.value;
+                    panels.forEach((panel) => {
+                        panel.hidden = panel.dataset.tlsMode !== selected;
+                    });
+                };
+
+                radios.forEach((radio) => radio.addEventListener('change', updateTlsPanels));
+                updateTlsPanels();
+            })();
+        </script>
+    {% endif %}
+
+{% endblock content %}
