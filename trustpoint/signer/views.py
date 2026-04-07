@@ -196,6 +196,14 @@ class SignerBulkDeleteConfirmView(SignerContextMixin, BulkDeleteView):
     template_name = 'signer/confirm_delete.html'
     context_object_name = 'signers'
 
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle GET requests."""
+        queryset = self.get_queryset()
+        if not queryset.exists():
+            messages.error(request, _('No Signers selected for deletion.'))
+            return HttpResponseRedirect(self.success_url)
+        return super().get(request, *args, **kwargs)
+
     def form_valid(self, form: Any) -> HttpResponse:
         """Delete the selected Signers on valid form."""
         queryset = self.get_queryset()

@@ -84,9 +84,9 @@ echo "[INFO] Publishing address and services -> $AUTO_IP"
 avahi-publish -a -R trustpoint.local "$AUTO_IP" &
 
 avahi-publish -s 'Trustpoint Web Interface' _https._tcp 443 &
+avahi-publish -s 'Trustpoint' _trustpoint._tcp 443 &
 avahi-publish -s 'AOKI Owner Service' _aoki._tcp 443 &
 
 echo "[INFO] mDNS services published. Container is running."
-
 
 wait -n

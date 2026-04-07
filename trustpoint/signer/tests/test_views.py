@@ -382,13 +382,41 @@ class TestSignerBulkDeleteConfirmView:
         request = factory.post('/signer/delete/1/')
         request.user = Mock(is_authenticated=True)
         request._messages = Mock()
+        
+        
+@pytest.mark.django_db
+class TestSignerBulkDeleteConfirmView:
+    """Test cases for SignerBulkDeleteConfirmView."""
+
+    def test_view_uses_correct_template(self):
+        """Test view uses correct template."""
+        view = SignerBulkDeleteConfirmView()
+        assert view.template_name == 'signer/confirm_delete.html'
+
+    def test_view_uses_correct_model(self):
+        """Test view uses SignerModel."""
+        view = SignerBulkDeleteConfirmView()
+        assert view.model == SignerModel
+
+    def test_view_success_url(self):
+        """Test view has correct success URL."""
+        view = SignerBulkDeleteConfirmView()
+        assert view.success_url == reverse('signer:signer_list')
+
+    @patch('signer.views.AuditLog.create_entry')
+    def test_form_valid_creates_audit_log_on_delete(self, mock_create_entry):
+        """Test form_valid creates an audit log entry when deleting a signer."""
+        factory = RequestFactory()
+        request = factory.post('/signer/delete/1/')
+        request.user = Mock(is_authenticated=True)
+        request._messages = Mock()
 
         view = SignerBulkDeleteConfirmView()
         view.request = request
 
         signer = Mock()
         signer.unique_name = 'test-signer'
-        signer.__str__=Mock(return_value='test-signer')
+        signer.__str__ = Mock(return_value='test-signer')
 
         queryset = Mock()
         queryset.__iter__ = Mock(return_value=iter([signer]))
@@ -409,6 +437,43 @@ class TestSignerBulkDeleteConfirmView:
         assert kwargs['target'] == signer
         assert kwargs['target_display'] == 'Signer: test-signer'
         assert kwargs['actor'] == request.user
+
+    @patch('signer.views.messages.error')
+    def test_get_redirects_with_error_when_no_signers_selected(self, mock_messages_error):
+        """Test get redirects with error message when no signers are selected."""
+        factory = RequestFactory()
+        request = factory.get('/signer/delete/')
+
+        view = SignerBulkDeleteConfirmView()
+        view.request = request
+
+        queryset = Mock()
+        queryset.exists.return_value = False
+        view.get_queryset = Mock(return_value=queryset)
+
+        response = view.get(request)
+
+        assert response.status_code == 302
+        assert response.url == reverse('signer:signer_list')
+        mock_messages_error.assert_called_once()
+
+    def test_get_renders_confirm_page_when_signers_are_selected(self):
+        """Test get renders confirm page when signers are selected."""
+        factory = RequestFactory()
+        request = factory.get('/signer/delete/1/')
+
+        view = SignerBulkDeleteConfirmView()
+        view.request = request
+
+        queryset = Mock()
+        queryset.exists.return_value = True
+        view.get_queryset = Mock(return_value=queryset)
+        view.object_list = queryset
+        view.kwargs = {}
+
+        response = view.get(request)
+
+        assert response.status_code == 200
 
 
 @pytest.mark.django_db
