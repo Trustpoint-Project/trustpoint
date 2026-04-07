@@ -178,6 +178,12 @@
             margin-bottom: 0;
         }
 
+        .tp-tls-panel > .mb-3:last-child > .mb-3:last-child,
+        .tp-tls-panel > .mb-3:last-child > .form-group:last-child,
+        .tp-tls-panel > .mb-3:last-child > .crispy-field:last-child {
+            margin-bottom: 0 !important;
+        }
+
         .tp-tls-panel > .mb-3:last-child .form-text,
         .tp-tls-panel > .mb-3:last-child .text-danger,
         .tp-tls-panel > .mb-3:last-child .invalid-feedback {
@@ -300,6 +306,7 @@
             display: grid;
             gap: 0.45rem;
             padding: 1rem 1.15rem;
+            text-align: left;
         }
 
         .tp-summary-label {
@@ -316,6 +323,55 @@
             font-size: 1.05rem;
             font-weight: 700;
             line-height: 1.35;
+            text-align: left;
+        }
+
+        .tp-summary-details {
+            border-top: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
+            display: grid;
+            gap: 0.85rem;
+            margin-top: 0.15rem;
+            padding-top: 0.9rem;
+        }
+
+        .tp-summary-detail {
+            display: grid;
+            gap: 0.2rem;
+        }
+
+        .tp-summary-detail-label {
+            color: var(--bs-secondary-color);
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            line-height: 1.2;
+            text-transform: uppercase;
+        }
+
+        .tp-summary-detail-value {
+            color: var(--bs-emphasis-color);
+            font-size: 0.98rem;
+            font-weight: 600;
+            line-height: 1.35;
+            text-align: left;
+            white-space: pre-line;
+        }
+
+        .tp-summary-downloads {
+            border-top: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
+            display: grid;
+            gap: 0.85rem;
+            margin-top: 0.15rem;
+            padding-top: 0.9rem;
+        }
+
+        .tp-summary-download-actions {
+            display: grid;
+            gap: 0.75rem;
+        }
+
+        .tp-summary-download-actions .btn {
+            width: 50%;
         }
 
         @media (max-width: 767.98px) {
@@ -450,12 +506,49 @@
 
                     {% if form.storage_selection %}
                         <div class="tp-summary-list">
-                            {% for field in form.visible_fields %}
-                                <div class="tp-summary-item">
-                                    <div class="tp-summary-label">{{ field.label }}</div>
-                                    <div class="tp-summary-value">{{ field.value|default:"-" }}</div>
+                            <div class="tp-summary-item">
+                                <div class="tp-summary-label">{{ form.storage_selection.label }}</div>
+                                <div class="tp-summary-value">{{ form.storage_selection.value|default:"-" }}</div>
+                            </div>
+                            <div class="tp-summary-item">
+                                <div class="tp-summary-label">{{ form.inject_demo_data_selection.label }}</div>
+                                <div class="tp-summary-value">{{ form.inject_demo_data_selection.value|default:"-" }}</div>
+                            </div>
+                            <div class="tp-summary-item">
+                                <div class="tp-summary-label">{{ form.tls_server_configuration.label }}</div>
+                                <div class="tp-summary-value">{{ form.tls_server_configuration.value|default:"-" }}</div>
+                                <div class="tp-summary-details">
+                                    <div class="tp-summary-detail">
+                                        <div class="tp-summary-detail-label">{{ form.tls_common_name.label }}</div>
+                                        <div class="tp-summary-detail-value">{{ form.tls_common_name.value|default:"-" }}</div>
+                                    </div>
+                                    <div class="tp-summary-detail">
+                                        <div class="tp-summary-detail-label">{{ form.tls_ipv4_addresses.label }}</div>
+                                        <div class="tp-summary-detail-value">{{ form.tls_ipv4_addresses.value|default:"-" }}</div>
+                                    </div>
+                                    <div class="tp-summary-detail">
+                                        <div class="tp-summary-detail-label">{{ form.tls_ipv6_addresses.label }}</div>
+                                        <div class="tp-summary-detail-value">{{ form.tls_ipv6_addresses.value|default:"-" }}</div>
+                                    </div>
+                                    <div class="tp-summary-detail">
+                                        <div class="tp-summary-detail-label">{{ form.tls_dns_names.label }}</div>
+                                        <div class="tp-summary-detail-value">{{ form.tls_dns_names.value|default:"-" }}</div>
+                                    </div>
                                 </div>
-                            {% endfor %}
+                                <div class="tp-summary-downloads">
+                                    <div class="tp-summary-detail-label">Truststore (import in your browser)</div>
+                                    <div class="tp-summary-download-actions">
+                                        <a class="btn btn-primary min-width-15"
+                                           href="{% url 'setup_wizard:fresh_install_summary_truststore_download' file_format='pem' %}">
+                                            Download as PEM
+                                        </a>
+                                        <a class="btn btn-primary min-width-15"
+                                           href="{% url 'setup_wizard:fresh_install_summary_truststore_download' file_format='der' %}">
+                                            Download as DER
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     {% elif form.tls_mode %}
                         <div class="mb-3 text-start">
