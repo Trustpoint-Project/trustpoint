@@ -63,6 +63,11 @@ urlpatterns = [
         views.FreshInstallTlsConfigView.as_view(),
         name='fresh_install_tls_config',
     ),
+    path(
+        'fresh-install/summary/',
+        views.FreshInstallSummaryView.as_view(),
+        name='fresh_install_summary'
+    ),
     # path(
     #     'fresh-install/select_tls_server_credential/',
     #     SetupWizardSelectTlsServerCredentialView.as_view(),
