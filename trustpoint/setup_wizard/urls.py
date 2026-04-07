@@ -68,6 +68,11 @@ urlpatterns = [
         views.FreshInstallSummaryView.as_view(),
         name='fresh_install_summary'
     ),
+    path(
+        'fresh-install/summary/truststore/<str:file_format>/',
+        views.FreshInstallSummaryTruststoreDownloadView.as_view(),
+        name='fresh_install_summary_truststore_download',
+    ),
     # path(
     #     'fresh-install/select_tls_server_credential/',
     #     SetupWizardSelectTlsServerCredentialView.as_view(),
