@@ -18,6 +18,7 @@
 
         .tp-wizard-step {
             flex: 0 0 15.5rem;
+            height: 4rem;
             max-width: 15.5rem;
             min-width: 15.5rem;
             width: 15.5rem;
@@ -29,17 +30,18 @@
         .tp-wizard-step-disabled {
             --tp-step-background: var(--bs-tertiary-bg);
             --tp-step-color: var(--bs-secondary-color);
-            align-items: center;
             background: var(--tp-step-background);
             box-sizing: border-box;
             clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 50%, calc(100% - 1rem) 100%, 0 100%, 1rem 50%);
             color: var(--tp-step-color);
-            display: grid;
+            display: flex;
             font-weight: 700;
-            gap: 0.625rem;
-            grid-template-columns: minmax(0, 1fr) 2rem;
-            min-height: 3.5rem;
-            padding: 0.9rem 1.2rem 0.9rem 1.65rem;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            min-height: 0;
+            padding: 0 3.4rem 0 1.65rem;
+            position: relative;
             text-align: center;
             text-decoration: none;
             transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease;
@@ -53,6 +55,7 @@
         .tp-wizard-step:first-child .tp-wizard-step-disabled {
             clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 50%, calc(100% - 1rem) 100%, 0 100%);
             padding-left: 1.25rem;
+            padding-right: 3.4rem;
         }
 
         .tp-wizard-step:last-child .tp-wizard-step-link,
@@ -85,22 +88,28 @@
         }
 
         .tp-wizard-step-label {
+            display: block;
             font-size: 1.125rem;
             font-weight: 800;
-            grid-column: 1;
             line-height: 1.2;
             letter-spacing: 0.01em;
             overflow: hidden;
+            text-align: center;
             text-overflow: ellipsis;
+            width: 100%;
         }
 
         .tp-wizard-step-trailing {
-            grid-column: 2;
-            display: inline-flex;
             align-items: center;
+            display: inline-flex;
+            height: 2rem;
             justify-content: center;
             line-height: 1;
             min-width: 2rem;
+            position: absolute;
+            right: 1.1rem;
+            top: 50%;
+            transform: translateY(-50%);
             width: 2rem;
         }
 
@@ -279,6 +288,36 @@
             gap: 0.35rem;
         }
 
+        .tp-summary-list {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .tp-summary-item {
+            background: color-mix(in srgb, var(--bs-tertiary-bg) 78%, var(--bs-body-bg));
+            border: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
+            border-radius: var(--bs-border-radius-lg);
+            display: grid;
+            gap: 0.45rem;
+            padding: 1rem 1.15rem;
+        }
+
+        .tp-summary-label {
+            color: var(--bs-secondary-color);
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            line-height: 1.2;
+            text-transform: uppercase;
+        }
+
+        .tp-summary-value {
+            color: var(--bs-emphasis-color);
+            font-size: 1.05rem;
+            font-weight: 700;
+            line-height: 1.35;
+        }
+
         @media (max-width: 767.98px) {
             .tp-wizard-stepper {
                 flex-direction: column;
@@ -289,6 +328,7 @@
 
             .tp-wizard-step {
                 flex-basis: auto;
+                height: 4rem;
             }
 
             .tp-wizard-step-link,
@@ -296,8 +336,8 @@
             .tp-wizard-step-available,
             .tp-wizard-step-disabled {
                 clip-path: none;
-                grid-template-columns: minmax(0, 1fr) 2rem;
-                padding: 0.9rem 1rem;
+                justify-content: flex-start;
+                padding: 0.9rem 3.4rem 0.9rem 1rem;
                 text-align: left;
             }
 
@@ -307,6 +347,10 @@
             .tp-wizard-step:first-child .tp-wizard-step-disabled {
                 clip-path: none;
                 padding-left: 1rem;
+            }
+
+            .tp-wizard-step-label {
+                text-align: left;
             }
 
             .tp-wizard-body {
@@ -404,7 +448,16 @@
                         </div>
                     {% endif %}
 
-                    {% if form.tls_mode %}
+                    {% if form.storage_selection %}
+                        <div class="tp-summary-list">
+                            {% for field in form.visible_fields %}
+                                <div class="tp-summary-item">
+                                    <div class="tp-summary-label">{{ field.label }}</div>
+                                    <div class="tp-summary-value">{{ field.value|default:"-" }}</div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% elif form.tls_mode %}
                         <div class="mb-3 text-start">
                             <div class="tp-choice-group">
                                 {% for option in form.tls_mode %}
@@ -554,7 +607,7 @@
                            tabindex="-1">{% trans 'Back' %}</a>
                     {% endif %}
                     <button class="btn btn-primary flex-fill" type="submit">
-                        {% trans 'Next' %}
+                        {% trans 'Apply and Continue' %}
                     </button>
                 </div>
             </div>
