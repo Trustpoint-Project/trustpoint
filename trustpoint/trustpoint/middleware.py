@@ -89,7 +89,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
     ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS = (
         '/setup-wizard/fresh-install',
     )
-    ALLOWED_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH = reverse('setup_wizard:select_tls_server_credential')
+    ALLOWED_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH = reverse('setup_wizard:fresh_install_crypto_storage')
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         """Handle an incoming request and apply redirects.
