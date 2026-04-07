@@ -798,14 +798,14 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return None
 
     def get_root_ca_certificate_serializer(self) -> None | CertificateSerializer:
-        """Gets the root CA certificate serializer."""
-        last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
-        if last_certificate_in_chain is None:
-            if self.certificate is None:
-                return None
-            return self.certificate.get_certificate_serializer()
-        if last_certificate_in_chain.certificate.is_root_ca:
-            return last_certificate_in_chain.certificate.get_certificate_serializer()
+        """Get the root CA certificate serializer or a self-signed main certificate."""
+        certificate_chain_order_models = self.certificatechainordermodel_set.order_by('order')
+        for certificate_chain_order_model in certificate_chain_order_models:
+            if certificate_chain_order_model.certificate.is_root_ca:
+                return certificate_chain_order_model.certificate.get_certificate_serializer()
+
+        if self.certificate is not None and self.certificate.is_self_signed:
+            return self.get_certificate_serializer()
         return None
 
     def get_credential_serializer(self) -> CredentialSerializer:
@@ -1330,5 +1330,3 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         self.logger.debug('Deleting remote issued credentials of owner credential %s', self)
         for issued in self.remote_issued_credentials.all():
             issued.credential.delete()
-
-
