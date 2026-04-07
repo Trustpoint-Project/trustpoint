@@ -1,0 +1,12 @@
+{% with id=widget.attrs.id %}
+    <div{% if id %} id="{{ id }}"{% endif %} class="tp-choice-group">
+        {% for group, options, index in widget.optgroups %}
+            {% if group %}
+                <div class="tp-choice-group-label">{{ group }}</div>
+            {% endif %}
+            {% for option in options %}
+                {% include option.template_name with widget=option %}
+            {% endfor %}
+        {% endfor %}
+    </div>
+{% endwith %}
