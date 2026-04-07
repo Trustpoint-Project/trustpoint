@@ -179,22 +179,13 @@ class SetupWizardConfigModel(models.Model):
         help_text='Selected TLS configuration mode during the fresh-install wizard.',
     )
 
-    fresh_install_tls_ipv4_addresses = models.JSONField(
-        default=default_tls_ipv4_addresses,
+    fresh_install_tls_credential = models.ForeignKey(
+        'pki.CredentialModel',
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
-        help_text='Normalized IPv4 SAN entries for generated TLS credentials.',
-    )
-
-    fresh_install_tls_ipv6_addresses = models.JSONField(
-        default=default_tls_ipv6_addresses,
-        blank=True,
-        help_text='Normalized IPv6 SAN entries for generated TLS credentials.',
-    )
-
-    fresh_install_tls_dns_names = models.JSONField(
-        default=default_tls_dns_names,
-        blank=True,
-        help_text='Normalized DNS SAN entries for generated TLS credentials.',
+        related_name='+',
+        help_text='Pending TLS server credential staged during the fresh-install wizard.',
     )
 
     class CryptoStorageType(models.IntegerChoices):
