@@ -287,7 +287,6 @@ const allowedPkiProtocolsWrapper = document.getElementById('id_allowed_pki_proto
 
 onboardingAndPkiConfigurationSelect?.addEventListener('change', function(event) {
    const selectedOptionValue = event.target.options[event.target.selectedIndex].value;
-   console.log(selectedOptionValue);
 
     switch (selectedOptionValue) {
         case 'est_username_password':
