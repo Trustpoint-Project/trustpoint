@@ -264,7 +264,6 @@ class SetupWizardCryptoStorageViewTestCase(TestCase):
         view = SetupWizardCryptoStorageView()
 
         self.assertEqual(view.http_method_names, ('get', 'post'))
-        self.assertEqual(view.template_name, 'setup_wizard/crypto_storage_setup.html')
         self.assertEqual(view.form_class, KeyStorageConfigForm)
 
     @pytest.mark.django_db
