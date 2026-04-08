@@ -196,6 +196,10 @@
             margin: 0;
         }
 
+        .tp-choice-option.is-disabled {
+            cursor: not-allowed;
+        }
+
         .tp-choice-option input {
             opacity: 0;
             pointer-events: none;
@@ -218,6 +222,11 @@
             transform: translateY(-1px);
         }
 
+        .tp-choice-option.is-disabled:hover .tp-choice-card {
+            border-color: color-mix(in srgb, var(--bs-border-color) 88%, transparent);
+            transform: none;
+        }
+
         .tp-choice-option input:focus-visible + .tp-choice-card {
             box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--bs-primary) 25%, transparent);
         }
@@ -226,6 +235,13 @@
             background-color: color-mix(in srgb, var(--bs-primary) 12%, var(--bs-body-bg));
             border-color: var(--bs-primary);
             box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--bs-primary) 15%, transparent);
+        }
+
+        .tp-choice-option.is-disabled .tp-choice-card,
+        .tp-choice-option.is-disabled input:checked + .tp-choice-card {
+            background-color: color-mix(in srgb, var(--bs-tertiary-bg) 90%, var(--bs-body-bg));
+            border-color: color-mix(in srgb, var(--bs-border-color) 88%, transparent);
+            box-shadow: none;
         }
 
         .tp-choice-title {
@@ -239,6 +255,12 @@
             color: var(--bs-secondary-color);
             font-size: 0.95rem;
             line-height: 1.45;
+        }
+
+        .tp-choice-option.is-disabled .tp-choice-title,
+        .tp-choice-option.is-disabled .tp-choice-description {
+            color: var(--bs-secondary-color);
+            opacity: 0.78;
         }
 
         .tp-wizard-body {
@@ -374,6 +396,56 @@
             width: 50%;
         }
 
+        .tp-summary-loading-state {
+            align-items: center;
+            display: flex;
+            justify-content: center;
+            margin: 0 auto;
+            min-height: clamp(20rem, 58vh, 36rem);
+            width: 100%;
+        }
+
+        .tp-summary-loading-card {
+            background: color-mix(in srgb, var(--bs-body-bg) 94%, white);
+            border: 0;
+            box-shadow: none;
+            max-width: 34rem;
+            width: min(100%, 34rem);
+        }
+
+        .tp-summary-loading-card .card-body {
+            align-items: center;
+            display: grid;
+            gap: 1.35rem;
+            justify-items: center;
+            padding: 3rem 2.5rem;
+            text-align: center;
+        }
+
+        .tp-summary-loading-spinner {
+            color: var(--bs-primary);
+            height: 3.5rem;
+            margin-bottom: 0.35rem;
+            width: 3.5rem;
+        }
+
+        .tp-summary-loading-title {
+            color: var(--bs-primary);
+            font-size: clamp(2rem, 1.75rem + 0.75vw, 2.5rem);
+            font-weight: 900;
+            letter-spacing: -0.03em;
+            line-height: 1;
+            margin: 0;
+        }
+
+        .tp-summary-loading-copy {
+            color: var(--bs-primary);
+            font-size: 1.2rem;
+            line-height: 1.5;
+            margin: 0;
+            max-width: 24rem;
+        }
+
         @media (max-width: 767.98px) {
             .tp-wizard-stepper {
                 flex-direction: column;
@@ -421,6 +493,14 @@
             .tp-wizard-heading::after {
                 margin-top: 1.15rem;
             }
+
+            .tp-summary-loading-state {
+                min-height: clamp(16rem, 44vh, 24rem);
+            }
+
+            .tp-summary-loading-card .card-body {
+                padding: 2.4rem 1.75rem;
+            }
         }
 
         .tp-wizard-step-link .tp-wizard-step-indicator,
@@ -457,9 +537,9 @@
         </div>
     {% endif %}
 
-    <form method="POST" enctype="multipart/form-data" class="text-start">
+    <form method="POST" enctype="multipart/form-data" class="text-start"{% if form.storage_selection %} data-summary-submit-form{% endif %}>
         {% csrf_token %}
-        <div class="card tp-card-setup-wizard text-center">
+        <div class="card tp-card-setup-wizard text-center"{% if form.storage_selection %} data-summary-submit-card{% endif %}>
             <div class="card-header">
                 <div class="px-1 py-2">
                     <div class="tp-wizard-stepper" role="list" aria-label="{% trans 'Setup progress' %}">
@@ -554,7 +634,7 @@
                         <div class="mb-3 text-start">
                             <div class="tp-choice-group">
                                 {% for option in form.tls_mode %}
-                                    <label for="{{ option.id_for_label }}" class="tp-choice-option">
+                                    <label for="{{ option.id_for_label }}" class="tp-choice-option{% if option.data.disabled %} is-disabled{% endif %}">
                                         {{ option.tag }}
                                         <span class="tp-choice-card">
                                             <span class="tp-choice-title">{{ option.choice_label }}</span>
@@ -632,10 +712,18 @@
 
                         <div class="tp-tls-panel" data-tls-mode="separate_files">
                             <div class="mb-3 text-start">
-                                {{ form.tls_server_certificates|as_crispy_field }}
-                                {% if form.tls_server_certificates.errors %}
+                                {{ form.tls_server_certificate|as_crispy_field }}
+                                {% if form.tls_server_certificate.errors %}
                                     <div class="text-danger mt-2">
-                                        {{ form.tls_server_certificates.errors }}
+                                        {{ form.tls_server_certificate.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="mb-3 text-start">
+                                {{ form.further_certificates|as_crispy_field }}
+                                {% if form.further_certificates.errors %}
+                                    <div class="text-danger mt-2">
+                                        {{ form.further_certificates.errors }}
                                     </div>
                                 {% endif %}
                             </div>
@@ -662,7 +750,7 @@
                                 {% if field.field.widget.input_type == 'radio' %}
                                     <div class="tp-choice-group">
                                         {% for option in field %}
-                                            <label for="{{ option.id_for_label }}" class="tp-choice-option">
+                                            <label for="{{ option.id_for_label }}" class="tp-choice-option{% if option.data.disabled %} is-disabled{% endif %}">
                                                 {{ option.tag }}
                                                 <span class="tp-choice-card">
                                                     <span class="tp-choice-title">{{ option.choice_label }}</span>
@@ -705,6 +793,17 @@
                 </div>
             </div>
         </div>
+        {% if form.storage_selection %}
+            <div class="tp-summary-loading-state" data-summary-loading-state hidden aria-live="polite" aria-busy="true">
+                <div class="card tp-summary-loading-card">
+                    <div class="card-body">
+                        <div class="spinner-border tp-summary-loading-spinner" role="status" aria-hidden="true"></div>
+                        <h2 class="tp-summary-loading-title">{% trans 'Just a Moment!' %}</h2>
+                        <p class="tp-summary-loading-copy">{% trans 'We are preparing the instance for you!' %}</p>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
     </form>
 
     {% if form.tls_mode %}
@@ -722,6 +821,25 @@
 
                 radios.forEach((radio) => radio.addEventListener('change', updateTlsPanels));
                 updateTlsPanels();
+            })();
+        </script>
+    {% endif %}
+
+    {% if form.storage_selection %}
+        <script>
+            (() => {
+                const form = document.querySelector('[data-summary-submit-form]');
+                const card = document.querySelector('[data-summary-submit-card]');
+                const loadingState = document.querySelector('[data-summary-loading-state]');
+
+                if (!form || !card || !loadingState) {
+                    return;
+                }
+
+                form.addEventListener('submit', () => {
+                    card.hidden = true;
+                    loadingState.hidden = false;
+                });
             })();
         </script>
     {% endif %}
