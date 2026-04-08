@@ -103,10 +103,17 @@
       const currentVal = dataToday[type] || 0;
       const pastVal = dataWeek[type] || 0;
       const delta = currentVal - pastVal;
+      const totalCountEl = document.getElementById(`total_count_${uniqueId}`);
+      const deltaCountEl = document.getElementById(`delta_count_${uniqueId}`);
 
-      document.getElementById(`total_count_${uniqueId}`).textContent = currentVal;
-      document.getElementById(`delta_count_${uniqueId}`).textContent = delta;
-      updateDeltaIcon(`delta_count_${uniqueId}`, delta);
+      if (totalCountEl) {
+        totalCountEl.textContent = currentVal;
+      }
+
+      if (deltaCountEl) {
+        deltaCountEl.textContent = delta;
+        updateDeltaIcon(`delta_count_${uniqueId}`, delta);
+      }
     }
   });
 </script>
