@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.shortcuts import redirect
 from django.urls import reverse
 
-from setup_wizard.models import SetupWizardCompletedModel
+from setup_wizard.models import SetupWizardCompletedModel, SetupWizardConfigModel
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -91,6 +91,54 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
     )
     ALLOWED_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH = reverse('setup_wizard:fresh_install_crypto_storage')
 
+    @classmethod
+    def _get_fresh_install_redirect_path(cls, path: str) -> str | None:
+        """Return the required fresh-install step redirect for a blocked path."""
+        if not path.startswith('/setup-wizard/fresh-install/'):
+            return None
+
+        config_model = SetupWizardConfigModel.get_singleton()
+        step_paths = (
+            (
+                '/setup-wizard/fresh-install/crypto-storage/',
+                reverse('setup_wizard:fresh_install_crypto_storage'),
+                config_model.fresh_install_crypto_storage_submitted,
+            ),
+            (
+                '/setup-wizard/fresh-install/demo-data/',
+                reverse('setup_wizard:fresh_install_demo_data'),
+                config_model.fresh_install_demo_data_submitted,
+            ),
+            (
+                '/setup-wizard/fresh-install/tls-config/',
+                reverse('setup_wizard:fresh_install_tls_config'),
+                config_model.fresh_install_tls_config_submitted,
+            ),
+            (
+                '/setup-wizard/fresh-install/summary/',
+                reverse('setup_wizard:fresh_install_summary'),
+                config_model.fresh_install_summary_submitted,
+            ),
+        )
+
+        requested_step_index = next(
+            (index for index, (path_prefix, _redirect_path, _submitted) in enumerate(step_paths) if path.startswith(path_prefix)),
+            None,
+        )
+        if requested_step_index is None:
+            return None
+
+        highest_submitted_index = max(
+            (index for index, (_path_prefix, _redirect_path, submitted) in enumerate(step_paths) if submitted),
+            default=-1,
+        )
+        highest_reachable_index = min(highest_submitted_index + 1, len(step_paths) - 1)
+
+        if requested_step_index <= highest_reachable_index:
+            return None
+
+        return step_paths[highest_reachable_index][1]
+
     def __call__(self, request: HttpRequest) -> HttpResponse:
         """Handle an incoming request and apply redirects.
 
@@ -148,6 +196,9 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
                 and users_exists \
                 and not request.path_info.startswith(self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS):
             redirect_dest = self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH
+
+        if authenticated and users_exists and redirect_dest is None:
+            redirect_dest = self._get_fresh_install_redirect_path(request.path_info)
 
         if redirect_dest:
             self.logger.critical(f'redirecting dest: {redirect_dest}')
