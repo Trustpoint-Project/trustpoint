@@ -2,6 +2,152 @@
 {% load static %}
 {% load i18n %}
 {% load crispy_forms_filters %}
+
+{% block head %}
+    {{ block.super }}
+    <style>
+        .tp-setup-wizard-shell {
+            --tp-setup-grid-width: 57.6rem;
+            --tp-setup-grid-gap: 3rem;
+            --tp-setup-card-min-height: 21rem;
+            margin: 0 auto;
+            max-width: 68rem;
+            padding: 0 1rem;
+            width: 100%;
+        }
+
+        .tp-setup-wizard-header {
+            margin: 0 auto var(--tp-setup-grid-gap);
+            text-align: center;
+            width: 45rem;
+        }
+
+        .tp-setup-wizard-heading {
+            color: var(--bs-emphasis-color);
+            font-size: clamp(2.2rem, 1.8rem + 1vw, 2.85rem);
+            font-weight: 900;
+            letter-spacing: -0.03em;
+            line-height: 1;
+            margin: 0;
+        }
+
+        .tp-setup-wizard-heading::after {
+            border-bottom: 1px solid color-mix(in srgb, var(--bs-primary) 18%, var(--bs-border-color));
+            content: "";
+            display: block;
+            margin: 1rem auto 0;
+            width: 100%;
+        }
+
+        .tp-setup-wizard-grid {
+            --bs-gutter-x: var(--tp-setup-grid-gap);
+            --bs-gutter-y: 0;
+            margin: 0 auto;
+            max-width: var(--tp-setup-grid-width);
+        }
+
+        .tp-setup-option-card {
+            background:
+                linear-gradient(
+                    180deg,
+                    color-mix(in srgb, var(--bs-primary) 7%, var(--bs-body-bg)) 0%,
+                    var(--bs-body-bg) 100%
+                );
+            border: 1px solid color-mix(in srgb, var(--bs-primary) 20%, var(--bs-border-color));
+            border-radius: var(--bs-border-radius-xl);
+            box-shadow: 0 0.85rem 2rem color-mix(in srgb, var(--bs-primary) 10%, transparent);
+            color: inherit;
+            display: block;
+            height: 100%;
+            overflow: hidden;
+            text-decoration: none;
+            transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .tp-setup-option-card:hover {
+            border-color: color-mix(in srgb, var(--bs-primary) 42%, var(--bs-border-color));
+            box-shadow: 0 1rem 2.3rem color-mix(in srgb, var(--bs-primary) 14%, transparent);
+            color: inherit;
+            text-decoration: none;
+            transform: translateY(-2px);
+        }
+
+        .tp-setup-option-card:focus-visible {
+            border-color: color-mix(in srgb, var(--bs-primary) 55%, var(--bs-border-color));
+            box-shadow:
+                0 0 0 0.22rem color-mix(in srgb, var(--bs-primary) 22%, transparent),
+                0 1rem 2.3rem color-mix(in srgb, var(--bs-primary) 16%, transparent);
+            color: inherit;
+            outline: none;
+            text-decoration: none;
+            transform: translateY(-2px);
+        }
+
+        .tp-setup-option-card:active {
+            border-color: color-mix(in srgb, var(--bs-primary) 50%, var(--bs-border-color));
+            box-shadow: 0 0.55rem 1.45rem color-mix(in srgb, var(--bs-primary) 18%, transparent);
+            transform: translateY(0);
+        }
+
+        .tp-setup-option-body {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+            height: 100%;
+            justify-content: center;
+            min-height: var(--tp-setup-card-min-height);
+            padding: 2rem 2rem;
+        }
+
+        .tp-setup-option-copy {
+            align-content: center;
+            display: grid;
+            flex: 0 0 auto;
+            gap: 1.4rem;
+            justify-items: center;
+            text-align: center;
+        }
+
+        .tp-setup-option-figure {
+            align-items: center;
+            background:
+                radial-gradient(circle at top, color-mix(in srgb, white 18%, transparent), transparent 62%),
+                color-mix(in srgb, var(--bs-primary) 16%, transparent);
+            border: 1px solid color-mix(in srgb, var(--bs-primary) 28%, transparent);
+            border-radius: 1.35rem;
+            color: var(--bs-primary);
+            display: inline-flex;
+            height: 4.75rem;
+            justify-content: center;
+            width: 4.75rem;
+        }
+
+        .tp-setup-option-figure svg {
+            height: 2.2rem;
+            width: 2.2rem;
+        }
+
+        .tp-setup-option-title {
+            color: var(--bs-emphasis-color);
+            font-size: clamp(1.55rem, 1.35rem + 0.4vw, 1.95rem);
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+            margin: 0;
+            max-width: 17rem;
+        }
+
+        .tp-setup-option-text {
+            color: var(--bs-secondary-color);
+            font-size: 1.08rem;
+            line-height: 1.55;
+            margin: 0;
+            max-width: 22rem;
+        }
+
+    </style>
+{% endblock head %}
+
 {% block content %}
 
     {% if messages %}
@@ -17,7 +163,7 @@
                     {% endif %} d-flex" role="alert">
 
                     <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="{{ message.tags }}:">
-                        <use xlink:href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use></svg>
+                        <use href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use></svg>
                     <div>
                         {{ message }}
                     </div>
@@ -26,54 +172,49 @@
         </div>
     {% endif %}
 
-    <div class="card tp-card-setup-wizard text-center">
-        <div class="card-header">
-            <h1>{% trans "Setup Mode" %}</h1>
+    <section class="tp-setup-wizard-shell">
+        <div class="tp-setup-wizard-header">
+            <h1 class="tp-setup-wizard-heading">{% trans "Setup Wizard" %}</h1>
         </div>
-        <div class="card-body pt-3 pb-4">
-            
-            <div class="row g-4 mb-4 justify-content-center">
-                <!-- Setup from Scratch Option -->
-                <div class="col-md-5">
-                    <div class="card h-100">
-                        <div class="card-body text-center">
-                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
-                                <use href="{% static 'img/icons.svg' %}#icon-plus-circle"></use>
-                            </svg>
-                            <h5 class="card-title">{% trans 'Setup Trustpoint from Scratch' %}</h5>
-                            <p class="card-text">
-                                {% trans 'Configure a new Trustpoint instance with fresh settings' %}
+        <div class="row g-4 tp-setup-wizard-grid justify-content-center">
+            <!-- Setup from Scratch Option -->
+            <div class="col-5">
+                <a href="{% url 'setup_wizard:create_super_user' %}" class="card h-100 tp-setup-option-card">
+                    <div class="card-body tp-setup-option-body">
+                        <div class="tp-setup-option-copy">
+                            <div class="tp-setup-option-figure" aria-hidden="true">
+                                <svg class="bi" fill="currentColor" viewBox="0 0 16 16">
+                                    <use href="{% static 'img/icons.svg' %}#icon-settings"></use>
+                                </svg>
+                            </div>
+                            <h5 class="tp-setup-option-title">{% trans 'Setup Trustpoint from Scratch' %}</h5>
+                            <p class="tp-setup-option-text">
+                            {% trans 'Configure a new Trustpoint instance with fresh settings' %}
                             </p>
                         </div>
-                        <div class="card-footer">
-                            <a href="{% url 'setup_wizard:create_super_user' %}" class="btn btn-primary w-100">
-                                {% trans 'Start Fresh Setup' %}
-                            </a>
-                        </div>
                     </div>
-                </div>
+                </a>
+            </div>
 
-                <!-- Restore from Backup Option -->
-                <div class="col-md-5">
-                    <div class="card h-100">
-                        <div class="card-body text-center">
-                            <svg class="bi mb-3" width="48" height="48" fill="currentColor">
-                                <use href="{% static 'img/icons.svg' %}#icon-arrow-clockwise"></use>
-                            </svg>
-                            <h5 class="card-title">{% trans 'Restore from Backup' %}</h5>
-                            <p class="card-text">
-                                {% trans 'Restore Trustpoint configuration from a previous backup' %}
+            <!-- Restore from Backup Option -->
+            <div class="col-5">
+                <a href="{% url 'setup_wizard:restore_backup' %}" class="card h-100 tp-setup-option-card">
+                    <div class="card-body tp-setup-option-body">
+                        <div class="tp-setup-option-copy">
+                            <div class="tp-setup-option-figure" aria-hidden="true">
+                                <svg class="bi" fill="currentColor" viewBox="0 0 16 16">
+                                    <use href="{% static 'img/icons.svg' %}#icon-boxes"></use>
+                                </svg>
+                            </div>
+                            <h5 class="tp-setup-option-title">{% trans 'Restore from Backup' %}</h5>
+                            <p class="tp-setup-option-text">
+                            {% trans 'Restore Trustpoint configuration from a previous backup' %}
                             </p>
                         </div>
-                        <div class="card-footer">
-                            <a href="{% url 'setup_wizard:restore_backup' %}" class="btn btn-primary w-100">
-                                {% trans 'Restore Backup' %}
-                            </a>
-                        </div>
                     </div>
-                </div>
+                </a>
             </div>
         </div>
-    </div>
+    </section>
 
 {% endblock content %}
