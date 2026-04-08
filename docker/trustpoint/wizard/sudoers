@@ -9,4 +9,6 @@ Defaults        use_pty
 # User privilege specification
 root    ALL=(ALL:ALL) ALL
 
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/update_tls.sh
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/update_tls_nginx.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/wizard_restore.sh
