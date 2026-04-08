@@ -105,6 +105,7 @@ def get_memory_metrics() -> dict[str, str | bool]:
     try:
         current_bytes = read_int_file('/sys/fs/cgroup/memory.current')
         max_raw = read_text_file('/sys/fs/cgroup/memory.max')
+        stat_content = read_text_file('/sys/fs/cgroup/memory.stat')
     except FileNotFoundError:
         return {
             'memory_available': False,
@@ -112,9 +113,24 @@ def get_memory_metrics() -> dict[str, str | bool]:
             'memory_usage': '',
             'memory_limit': '',
             'memory_subtext': '',
+            'memory_anon': '',
+            'memory_file': '',
+            'memory_kernel': '',
         }
 
+    stat_values: dict[str, int] = {}
+    for line in stat_content.splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            key = parts[0]
+            value = parts[1]
+            if value.isdigit():
+                stat_values[key] = int(value)
+
     current_display = format_bytes(current_bytes)
+    anon_display = format_bytes(stat_values.get('anon', 0))
+    file_display = format_bytes(stat_values.get('file', 0))
+    kernel_display = format_bytes(stat_values.get('kernel', 0))
 
     if max_raw == 'max':
         return {
@@ -123,6 +139,9 @@ def get_memory_metrics() -> dict[str, str | bool]:
             'memory_usage': current_display,
             'memory_limit': 'Unlimited',
             'memory_subtext': 'Limit: Unlimited',
+            'memory_anon': anon_display,
+            'memory_file': file_display,
+            'memory_kernel': kernel_display,
         }
 
     limit_bytes = int(max_raw)
@@ -135,6 +154,9 @@ def get_memory_metrics() -> dict[str, str | bool]:
         'memory_usage': f'{current_display} / {limit_display}',
         'memory_limit': limit_display,
         'memory_subtext': f'{percent:.1f}% of limit',
+        'memory_anon': anon_display,
+        'memory_file': file_display,
+        'memory_kernel': kernel_display,
     }
 
 def get_disk_metrics() -> dict[str, str | bool]:
@@ -165,6 +187,41 @@ def get_disk_metrics() -> dict[str, str | bool]:
         'disk_message': '',
         'disk_read': format_bytes(read_bytes),
         'disk_write': format_bytes(write_bytes),
+    }
+
+def get_network_metrics() -> dict[str, str | bool]:
+    """Return network I/O metrics for container environments."""
+    try:
+        content = read_text_file('/proc/net/dev')
+    except FileNotFoundError:
+        return {
+            'network_available': False,
+            'network_message': 'This metric is only available when running inside a container.',
+            'network_received': '',
+            'network_transmitted': '',
+        }
+
+    for line in content.splitlines():
+        line = line.strip()
+        if line.startswith('eth0:'):
+            _, data = line.split(':', 1)
+            fields = data.split()
+
+            received_bytes = int(fields[0])
+            transmitted_bytes = int(fields[8])
+
+            return {
+                'network_available': True,
+                'network_message': '',
+                'network_received': format_bytes(received_bytes),
+                'network_transmitted': format_bytes(transmitted_bytes),
+            }
+
+    return {
+        'network_available': False,
+        'network_message': 'No container network interface was found.',
+        'network_received': '',
+        'network_transmitted': '',
     }
 
 
@@ -244,7 +301,7 @@ class SettingsTabView(TemplateView):
         notification_view.setup(self.request)
         context['notification_form'] = notification_view.get_form()
         context['notification_config'] = NotificationConfig.get()
-#hier
+
         metrics_view = MetricsSettingsView()
         metrics_view.request = self.request
         metrics_view.setup(self.request)
@@ -257,11 +314,9 @@ class SettingsTabView(TemplateView):
 
         context.update(get_memory_metrics())
         context.update(get_disk_metrics())
+        context.update(get_network_metrics())
 
         return context
-
-
-
 
 
 class InternationalizationSettingsView(SettingsFormViewMixin[InternationalizationConfigForm]):
@@ -553,7 +608,7 @@ class NotificationSettingsView(SettingsFormViewMixin[NotificationConfigForm]):
         context['notification_config'] = notification_config
         return context
 
-#hier
+
 class MetricsSettingsView(TemplateView):
     """View for displaying runtime metrics."""
 

@@ -22,10 +22,6 @@
                 </div>
             </div>
             <div class="metric-card mb-3">
-                <div class="metric-card-header">{% trans "Online Users" %}</div>
-                <div class="metric-card-body"><p>test</p><p>test</p></div>
-            </div>
-            <div class="metric-card mb-3">
                 <div class="metric-card-header">{% trans "Database Size" %}</div>
                 <div class="metric-card-body">
                     <div class="metric-value">{{ database_size }}</div>
@@ -41,7 +37,10 @@
                 <div class="metric-card-body">
                     {% if memory_available %}
                     <div class="metric-value">{{ memory_usage }}</div>
-                    <div class="metric-subtext">{{ memory_subtext }}</div>
+                    <div class="metric-subtext">{% trans "Limit" %}: {{ memory_limit }}</div>
+                    <div class="metric-subtext">{% trans "Anonymus (heap/stack)" %}: {{ memory_anon }}</div>
+                    <div class="metric-subtext">{% trans "File cache" %}: {{ memory_file }}</div>
+                    <div class="metric-subtext">{% trans "Kernel" %}: {{ memory_kernel }}</div>
                     {% else %}
                     <div class="metric-subtext">
                     {% trans "This metric is only available when running inside a container." %}
@@ -62,10 +61,21 @@
             </div>
             <div class="metric-card">
                 <div class="metric-card-header">{% trans "Network I/O" %}</div>
-                <div class="metric-card-body"><p>test</p><p>test</p></div>
+                <div class="metric-card-body">
+                    {% if network_available %}
+                    <div class="metric-subtext">{% trans "Received" %}: {{ network_received }}</div>
+                    <div class="metric-subtext">{% trans "Transmitted" %}: {{ network_transmitted }}</div>
+                    {% else %}
+                    <div class="metric-message">{{ network_message }}</div>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
+</div>
+<div class="metric-card mt-3">
+    <i class="bi bi-info-circle"></i>
+    <span>{% trans "Container metrics are only updated when the page is refreshed." %}</span>
 </div>
 
 <script>
@@ -106,36 +116,90 @@ document.addEventListener('DOMContentLoaded', function () {
 </script>
 
 <style>
+  .info-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid #6c757d;
+    color: #DEE2E6;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  [data-bs-theme="light"] .metric-card {
+    border: 1px solid #d0d7de;
+    background: #f8f9fa;
+    color: #212529;
+  }
+
+  [data-bs-theme="light"] .metric-card-header {
+    color: #212529;
+    border-bottom: 2px solid #d0d7de;
+  }
+
+  [data-bs-theme="light"] .metric-value {
+    color: #212529;
+  }
+
+  [data-bs-theme="light"] .metric-subtext {
+    color: #495057;
+  }
+
+  [data-bs-theme="dark"] .metric-card {
+    border: 1px solid #3a3f4b;
+    background: #2b3035;
+    color: #fff;
+  }
+
+  [data-bs-theme="dark"] .metric-card-header {
+    color: #fff;
+    border-bottom: 2px solid #606063;
+  }
+
+  [data-bs-theme="dark"] .metric-value {
+    color: #fff;
+  }
+
+  [data-bs-theme="dark"] .metric-subtext {
+    color: #dee2e6;
+  }
+
   .metrics-grid {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 24px;
   }
 
   .metric-card {
-    border: 1px solid #3a3f4b;
     border-radius: 10px;
     padding: 20px;
-    background: #2b3035;
-    color: #fff;
     min-width: 0;
   }
 
   .metric-card-header {
-  font-weight: 600;
-  font-size: 1.2rem;
-  padding-bottom: 12px;
-  margin-bottom: 16px;
-  border-bottom: 2px solid #606063;
+    font-weight: 600;
+    font-size: 1.2rem;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
   }
 
   .metric-value {
     font-size: 2rem;
-
   }
 
   .metric-subtext {
     font-size: 1.2rem;
+  }
+
+  .metric-breakdown {
+  margin-top: 12px;
+  font-size: 1rem;
+  color: #adb5bd;
+  line-height: 1.6;
   }
 
   @media (max-width: 1400px) {
