@@ -111,8 +111,9 @@ def get_memory_metrics() -> dict[str, str | bool]:
             'memory_available': False,
             'memory_message': 'This metric is only available when running inside a container.',
             'memory_usage': '',
+            'memory_usage_number': '',
+            'memory_usage_unit': '',
             'memory_limit': '',
-            'memory_subtext': '',
             'memory_anon': '',
             'memory_file': '',
             'memory_kernel': '',
@@ -128,6 +129,8 @@ def get_memory_metrics() -> dict[str, str | bool]:
                 stat_values[key] = int(value)
 
     current_display = format_bytes(current_bytes)
+    current_number, current_unit = current_display.split(' ', 1)
+
     anon_display = format_bytes(stat_values.get('anon', 0))
     file_display = format_bytes(stat_values.get('file', 0))
     kernel_display = format_bytes(stat_values.get('kernel', 0))
@@ -137,8 +140,9 @@ def get_memory_metrics() -> dict[str, str | bool]:
             'memory_available': True,
             'memory_message': '',
             'memory_usage': current_display,
+            'memory_usage_number': current_number,
+            'memory_usage_unit': current_unit,
             'memory_limit': 'Unlimited',
-            'memory_subtext': 'Limit: Unlimited',
             'memory_anon': anon_display,
             'memory_file': file_display,
             'memory_kernel': kernel_display,
@@ -146,14 +150,14 @@ def get_memory_metrics() -> dict[str, str | bool]:
 
     limit_bytes = int(max_raw)
     limit_display = format_bytes(limit_bytes)
-    percent = (current_bytes / limit_bytes) * 100 if limit_bytes else 0
 
     return {
         'memory_available': True,
         'memory_message': '',
-        'memory_usage': f'{current_display} / {limit_display}',
+        'memory_usage': current_display,
+        'memory_usage_number': current_number,
+        'memory_usage_unit': current_unit,
         'memory_limit': limit_display,
-        'memory_subtext': f'{percent:.1f}% of limit',
         'memory_anon': anon_display,
         'memory_file': file_display,
         'memory_kernel': kernel_display,
@@ -171,22 +175,23 @@ def get_disk_metrics() -> dict[str, str | bool]:
             'disk_write': '',
         }
 
-    first_line = content.splitlines()[0] if content.splitlines() else ''
+    total_read_bytes = 0
+    total_write_bytes = 0
 
-    values: dict[str, str] = {}
-    for part in first_line.split():
-        if '=' in part:
-            key, value = part.split('=', 1)
-            values[key] = value
-
-    read_bytes = int(values.get('rbytes', 0))
-    write_bytes = int(values.get('wbytes', 0))
+    for line in content.splitlines():
+        for part in line.split():
+            if '=' in part:
+                key, value = part.split('=', 1)
+                if key == 'rbytes':
+                    total_read_bytes += int(value)
+                elif key == 'wbytes':
+                    total_write_bytes += int(value)
 
     return {
         'disk_available': True,
         'disk_message': '',
-        'disk_read': format_bytes(read_bytes),
-        'disk_write': format_bytes(write_bytes),
+        'disk_read': format_bytes(total_read_bytes),
+        'disk_write': format_bytes(total_write_bytes),
     }
 
 def get_network_metrics() -> dict[str, str | bool]:
