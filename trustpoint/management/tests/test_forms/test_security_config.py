@@ -1,7 +1,9 @@
 """Test suite for SecurityConfigForm."""
+import pytest
 from django.test import TestCase
 from management.forms import SecurityConfigForm
 from management.models import SecurityConfig
+from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 
@@ -186,3 +188,42 @@ class SecurityConfigFormTest(TestCase):
         form = SecurityConfigForm()
         self.assertIsNotNone(form.helper)
         self.assertIsNotNone(form.helper.layout)
+
+
+@pytest.mark.django_db
+def test_protocol_allowlists_are_saved_as_int_lists() -> None:
+    """Protocol allow-lists from multi-select fields are normalized to integer lists on save."""
+    config = SecurityConfig.objects.create(
+        security_mode=SecurityConfig.SecurityModeChoices.LAB,
+        auto_gen_pki=False,
+        auto_gen_pki_key_algorithm=AutoGenPkiKeyAlgorithm.RSA2048,
+    )
+
+    no_onboarding_values = [
+        str(NoOnboardingPkiProtocol.CMP_SHARED_SECRET.value),
+        str(NoOnboardingPkiProtocol.MANUAL.value),
+    ]
+    onboarding_values = [
+        str(OnboardingProtocol.MANUAL.value),
+        str(OnboardingProtocol.REST_USERNAME_PASSWORD.value),
+    ]
+
+    form = SecurityConfigForm(
+        data={
+            'security_mode': SecurityConfig.SecurityModeChoices.LAB,
+            'auto_gen_pki': False,
+            'auto_gen_pki_key_algorithm': AutoGenPkiKeyAlgorithm.RSA2048,
+            'permitted_no_onboarding_pki_protocols': no_onboarding_values,
+            'permitted_onboarding_protocols': onboarding_values,
+        },
+        instance=config,
+    )
+
+    assert form.is_valid(), form.errors
+    saved = form.save()
+    saved.refresh_from_db()
+
+    assert saved.permitted_no_onboarding_pki_protocols == [1, 16]
+    assert saved.permitted_onboarding_protocols == [0, 8]
+    assert all(isinstance(value, int) for value in saved.permitted_no_onboarding_pki_protocols)
+    assert all(isinstance(value, int) for value in saved.permitted_onboarding_protocols)

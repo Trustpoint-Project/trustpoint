@@ -154,6 +154,35 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             'permitted_onboarding_protocols'
         ]
 
+    @staticmethod
+    def _clean_protocol_list(value: Any, field_label: str) -> list[int]:
+        """Normalize protocol multi-select values to integer lists."""
+        if value in (None, ''):
+            return []
+
+        if not isinstance(value, list):
+            raise ValidationError(_('%(field)s must be a list of protocol values.') % {'field': field_label})
+
+        normalized: list[int] = []
+        for item in value:
+            try:
+                normalized.append(int(item))
+            except (TypeError, ValueError) as err:
+                raise ValidationError(
+                    _('%(field)s contains an invalid protocol value.') % {'field': field_label}
+                ) from err
+        return normalized
+
+    def clean_permitted_no_onboarding_pki_protocols(self) -> list[int]:
+        """Return no-onboarding protocol values as integers."""
+        value = self.cleaned_data.get('permitted_no_onboarding_pki_protocols')
+        return self._clean_protocol_list(value, 'No-onboarding PKI protocols')
+
+    def clean_permitted_onboarding_protocols(self) -> list[int]:
+        """Return onboarding protocol values as integers."""
+        value = self.cleaned_data.get('permitted_onboarding_protocols')
+        return self._clean_protocol_list(value, 'Onboarding protocols')
+
     def clean_rsa_minimum_key_size(self) -> int | None:
         """Normalize RSA minimum key size.
 

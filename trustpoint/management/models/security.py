@@ -392,11 +392,11 @@ class SecurityConfig(models.Model):
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],
                 'require_physical_hsm': defaults['require_physical_hsm'],
                 'permitted_no_onboarding_pki_protocols': [
-                    no_onboarding_labels.get(v, str(v))
+                    no_onboarding_labels.get(v, v)
                     for v in defaults['permitted_no_onboarding_pki_protocols']
                 ],
                 'permitted_onboarding_protocols': [
-                    onboarding_labels.get(v, str(v))
+                    onboarding_labels.get(v, v)
                     for v in defaults['permitted_onboarding_protocols']
                 ],
                 'raw_permitted_no_onboarding_pki_protocols': defaults['permitted_no_onboarding_pki_protocols'],
