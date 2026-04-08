@@ -53,6 +53,7 @@ class WizardCardRadioSelect(forms.RadioSelect):
         self,
         *args: object,
         descriptions: Mapping[str, str | Promise] | None = None,
+        disabled_values: set[str] | None = None,
         **kwargs: object,
     ) -> None:
         """Initialize the widget.
@@ -60,9 +61,11 @@ class WizardCardRadioSelect(forms.RadioSelect):
         Args:
             *args: Positional arguments forwarded to ``RadioSelect``.
             descriptions: Mapping from choice value to explanation text.
+            disabled_values: Choice values that should render disabled.
             **kwargs: Keyword arguments forwarded to ``RadioSelect``.
         """
         self.descriptions = descriptions or {}
+        self.disabled_values = {str(value) for value in disabled_values or set()}
         super().__init__(*args, **kwargs)
 
     def create_option(
@@ -77,7 +80,13 @@ class WizardCardRadioSelect(forms.RadioSelect):
     ) -> dict[str, object]:
         """Build a choice option and attach its description text."""
         option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        option_attrs = cast(dict[str, object], option['attrs'])
+        is_disabled = str(value) in self.disabled_values
+        if is_disabled:
+            option_attrs['disabled'] = True
+            option_attrs['aria-disabled'] = 'true'
         option['description'] = self.descriptions.get(str(value), '')
+        option['disabled'] = is_disabled
         return option
 
 
@@ -121,8 +130,19 @@ class FreshInstallCryptoStorageModelForm(FreshInstallModelBaseForm):
         model = SetupWizardConfigModel
         fields = ('crypto_storage',)
         widgets = {
-            'crypto_storage': WizardCardRadioSelect(descriptions=CRYPTO_STORAGE_OPTION_DESCRIPTIONS),
+            'crypto_storage': WizardCardRadioSelect(
+                descriptions=CRYPTO_STORAGE_OPTION_DESCRIPTIONS,
+                disabled_values={str(SetupWizardConfigModel.CryptoStorageType.HsmStorage)},
+            ),
         }
+
+    def clean_crypto_storage(self) -> SetupWizardConfigModel.CryptoStorageType:
+        """Reject storage backends that are currently unavailable in the wizard."""
+        crypto_storage = self.cleaned_data['crypto_storage']
+        if int(crypto_storage) == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            err_msg = gettext_lazy('HSM storage is currently unavailable.')
+            raise forms.ValidationError(err_msg)
+        return crypto_storage
 
 
 class FreshInstallDemoDataModelForm(FreshInstallModelBaseForm):
@@ -261,6 +281,7 @@ class FreshInstallTlsConfigForm(forms.Form):
     pkcs12_file = forms.FileField(
         label=gettext_lazy('PKCS#12 file'),
         required=False,
+        help_text=gettext_lazy('Supported file types: [.p12, .pfx]'),
     )
     pkcs12_password = forms.CharField(
         label=gettext_lazy('PKCS#12 password'),
@@ -269,14 +290,28 @@ class FreshInstallTlsConfigForm(forms.Form):
         widget=forms.PasswordInput(render_value=True),
     )
 
-    tls_server_certificates = MultipleFileField(
-        label=gettext_lazy('TLS server certificate files'),
+    tls_server_certificate = forms.FileField(
+        label=gettext_lazy('TLS server certificate'),
         required=False,
-        help_text=gettext_lazy('Select one or more certificate files.'),
+        help_text=gettext_lazy(
+            'Upload exactly one end-entity TLS server certificate file. '
+            'This file may also contain part or all of the certificate chain. '
+            'Supported file types: [.pem, .crt, .cer, .der, .p7b, .p7c]'
+        ),
+    )
+    further_certificates = MultipleFileField(
+        label=gettext_lazy('Further certificates'),
+        required=False,
+        help_text=gettext_lazy(
+            'Optional. Add missing CA certificates here if the TLS server certificate file '
+            'does not already contain the full chain up to the root CA. '
+            'Supported file types: [.pem, .crt, .cer, .der, .p7b, .p7c]'
+        ),
     )
     key_file = forms.FileField(
         label=gettext_lazy('Key file'),
         required=False,
+        help_text=gettext_lazy('Supported file types: [.pem, .key, .der, .p12, .pfx]'),
     )
     key_password = forms.CharField(
         label=gettext_lazy('Key password'),
@@ -363,8 +398,8 @@ class FreshInstallTlsConfigForm(forms.Form):
                 self.add_error('pkcs12_file', gettext_lazy('A PKCS#12 file is required.'))
 
         elif tls_mode == SetupWizardConfigModel.FreshInstallTlsConfigType.SEPARATE_FILES:
-            if not cleaned_data.get('tls_server_certificates'):
-                self.add_error('tls_server_certificates', gettext_lazy('At least one certificate file is required.'))
+            if not cleaned_data.get('tls_server_certificate'):
+                self.add_error('tls_server_certificate', gettext_lazy('A TLS server certificate file is required.'))
             if not cleaned_data.get('key_file'):
                 self.add_error('key_file', gettext_lazy('A key file is required.'))
 
