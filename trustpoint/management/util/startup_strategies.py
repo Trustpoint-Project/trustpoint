@@ -22,7 +22,6 @@ from pki.models import PKCS11Key
 from pki.models.credential import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard import SetupWizardState
-from setup_wizard.state_dir_paths import SCRIPT_WIZARD_AUTO_RESTORE_SET
 from setup_wizard.tls_credential import TlsServerCredentialGenerator
 from setup_wizard.views import execute_shell_script
 
@@ -899,34 +898,10 @@ class RestoreSoftHsmWizardCompletedDekNotCachedStrategy(StartupStrategy):
         """Trigger auto restore flow for SoftHSM with DEK not cached."""
         context.output.write(self.get_description())
         context.output.write('>>> SoftHSM with DEK not cached - initiating auto restore flow')
-        self._set_auto_restore_state(context)
 
     def get_description(self) -> str:
         """Get strategy description."""
         return '>>> SOFTHSM Storage | Wizard COMPLETED | DEK NOT CACHED'
-
-    @staticmethod
-    def _set_auto_restore_state(context: StartupContext) -> None:
-        """Transition to WIZARD_AUTO_RESTORE_PASSWORD state."""
-        context.output.write('Transitioning to auto restore password entry')
-        script_path = SCRIPT_WIZARD_AUTO_RESTORE_SET
-
-        try:
-            execute_shell_script(script_path)
-            context.output.write(context.output.success('Transitioned to WIZARD_AUTO_RESTORE_PASSWORD state'))
-
-        except subprocess.CalledProcessError as exc:
-            error_msg = (
-                f'Auto restore password state transition failed: '
-                f'{RestoreSoftHsmWizardCompletedDekNotCachedStrategy._map_exit_code_to_message(exc.returncode)}'
-            )
-            context.output.write(context.output.error(error_msg))
-            raise RuntimeError(error_msg) from exc
-
-        except FileNotFoundError as e:
-            error_msg = f'Auto restore password script not found: {script_path}'
-            context.output.write(context.output.error(error_msg))
-            raise RuntimeError(error_msg) from e
 
     @staticmethod
     def _map_exit_code_to_message(return_code: int) -> str:
@@ -989,8 +964,6 @@ class RestoreSoftHsmNewKekWizardCompletedStrategy(StartupStrategy):
         context.output.write('>>>   2. Decrypt DEK with backup password')
         context.output.write('>>>   3. Re-wrap DEK with new KEK')
         context.output.write('>>>   4. Activate actual TLS certificate from database')
-
-        RestoreSoftHsmWizardCompletedDekNotCachedStrategy._set_auto_restore_state(context)  # noqa: SLF001
 
     def get_description(self) -> str:
         """Get strategy description."""
