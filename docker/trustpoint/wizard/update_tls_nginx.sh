@@ -6,8 +6,6 @@ MAX_RETRIES=3
 DELAY=2  # seconds
 RETRY_COUNT=0
 
-set -eE -o pipefail
-
 # Logging function
 log() {
     local level=$1; shift
