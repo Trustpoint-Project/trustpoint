@@ -1,0 +1,80 @@
+#!/bin/bash
+
+NGINX_TLS_DIR="/etc/trustpoint/tls/"
+LOGFILE=/var/www/html/trustpoint/trustpoint/media/log/trustpoint.log
+MAX_RETRIES=3
+DELAY=2  # seconds
+RETRY_COUNT=0
+
+set -eE -o pipefail
+
+# Logging function
+log() {
+    local level=$1; shift
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - update_tls_nginx.sh - $level - $*" | tee -a "$LOGFILE"
+}
+
+# Check for required parameter
+if [ $# -ne 1 ]; then
+    echo "ERROR: Missing required parameter."
+    echo "Usage: $0 [hsm|no_hsm]"
+    exit 1
+fi
+
+STORAGE_MODE="$1"
+
+# Validate parameter
+if [[ "$STORAGE_MODE" != "hsm" && "$STORAGE_MODE" != "no_hsm" ]]; then
+    echo "ERROR: Invalid parameter '$STORAGE_MODE'. Must be 'hsm' or 'no_hsm'."
+    echo "Usage: $0 [hsm|no_hsm]"
+    exit 2
+fi
+
+log "Processing TLS credential apply with storage mode: $STORAGE_MODE"
+
+log INFO "Starting TLS certificate setup for nginx"
+
+# Create nginx TLS directory
+mkdir -p "$NGINX_TLS_DIR"
+
+# 2) Move new TLS certs
+log INFO "Move TLS Server credentials into $NGINX_TLS_DIR"
+
+# Copies the TLS-Server credentials into the nginx TLS directory.
+if ! mv /var/www/html/trustpoint/docker/trustpoint/nginx/tls/* "$NGINX_TLS_DIR"
+then
+    log ERROR "Failed to copy Trustpoint TLS files to $NGINX_TLS_DIR."
+    exit 3
+fi
+
+# Test nginx configuration with new certificates
+log INFO "Testing nginx configuration with new TLS certificates"
+if nginx -t; then
+    log INFO "Nginx configuration test passed"
+else
+    log ERROR "Nginx configuration test failed"
+    exit 4
+fi
+
+if [ -f /run/nginx.pid ] && [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.pid)" 2>/dev/null; then
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        log INFO "Nginx is running - reloading configuration (graceful)"
+        if nginx -s reload; then
+            log INFO "Nginx successfully reloaded with new TLS certificates"
+            break
+        else
+            log WARN "Failed to gracefully reload nginx configuration, retrying in $DELAY seconds..."
+            sleep $DELAY
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+        fi
+    done
+    if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+        log ERROR "Failed to reload Nginx after $MAX_RETRIES attempts, TLS certificates will be applied on next start"
+    fi
+    sleep $DELAY
+else
+    log INFO "Nginx is not running yet - skipping reload, certificates will be loaded on startup"
+fi
+log INFO "TLS certificate update for nginx completed successfully"
+
+exit 0

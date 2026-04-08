@@ -111,7 +111,9 @@ RUN mkdir -p /etc/trustpoint/secrets && \
 # NGINX configuration
 RUN rm -f /etc/nginx/sites-enabled/*
 COPY ./docker/trustpoint/nginx/trustpoint-nginx-https.conf /etc/nginx/sites-available/trustpoint
+
 RUN chmod +x /etc/trustpoint/wizard/transition/*.sh
+RUN chmod +x /etc/trustpoint/wizard/update_tls_nginx.sh
 
 # Make entrypoint script executable
 RUN chmod +x ./docker/trustpoint/entrypoint.sh
