@@ -64,7 +64,6 @@ SCRIPT_WIZARD_BACKUP_PASSWORD = STATE_FILE_DIR / Path('transition/wizard_backup_
 SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS = STATE_FILE_DIR / Path('transition/wizard_auto_restore_success.sh')
 
 
-
 class TrustpointWizardError(Exception):
     """Custom exception for Trustpoint wizard-related issues."""
 
