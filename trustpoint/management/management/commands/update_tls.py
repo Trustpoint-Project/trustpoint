@@ -16,7 +16,9 @@ from management.nginx_paths import (
     NGINX_KEY_PATH,
 )
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from setup_wizard.state_dir_paths import SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL
+
+SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL = Path('/etc/trustpoint/wizard/update_tls.sh')
+
 
 from trustpoint.logger import LoggerMixin
 
@@ -60,9 +62,7 @@ class Command(LoggerMixin, BaseCommand):
 
         self.logger.debug('Finished with preparation.')
 
-        script = SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL
-
-        script_path = Path(script).resolve()
+        script_path = SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL.resolve()
 
         if not script_path.exists():
             err_msg = f'TLS update script not found: {script_path}'
