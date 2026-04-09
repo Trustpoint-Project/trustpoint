@@ -7,7 +7,7 @@ from setup_wizard import views
 app_name = 'setup_wizard'
 urlpatterns = [
     path('', views.SetupWizardIndexView.as_view(), name='index'),
-    path('create-super-user', views.SetupWizardCreateSuperUserView.as_view(), name='create_super_user'),
+    path('create-super-user/', views.SetupWizardCreateSuperUserView.as_view(), name='create_super_user'),
     path(
         'restore-backup/',
         views.SetupWizardRestoreBackupView.as_view(),
@@ -28,11 +28,7 @@ urlpatterns = [
         views.FreshInstallTlsConfigView.as_view(),
         name='fresh_install_tls_config',
     ),
-    path(
-        'fresh-install/summary/',
-        views.FreshInstallSummaryView.as_view(),
-        name='fresh_install_summary'
-    ),
+    path('fresh-install/summary/', views.FreshInstallSummaryView.as_view(), name='fresh_install_summary'),
     path(
         'fresh-install/summary/truststore/<str:file_format>/',
         views.FreshInstallSummaryTruststoreDownloadView.as_view(),
@@ -44,10 +40,11 @@ urlpatterns = [
         name='fresh_install_cancel',
     ),
     # path(
-    #     'backup-password/',
-    #     SetupWizardBackupPasswordView.as_view(),
-    #     name='backup_password',
+    #     'backup-password/', # noqa: ERA001
+    #     SetupWizardBackupPasswordView.as_view(), # noqa: ERA001
+    #     name='backup_password', # noqa: ERA001
     # ),
-    # path('restore/', BackupRestoreView.as_view(), name='restore'),
-    # path('auto_restore_password/', BackupAutoRestorePasswordView.as_view(), name='auto_restore_password'),
+    # path('restore/', BackupRestoreView.as_view(), name='restore'), # noqa: ERA001
+    # path('auto_restore_password/', BackupAutoRestorePasswordView.as_view(),
+    # name='auto_restore_password'),
 ]
