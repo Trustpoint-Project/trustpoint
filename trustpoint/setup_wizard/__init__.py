@@ -25,7 +25,6 @@ class SetupWizardState(enum.Enum):
     WIZARD_AUTO_RESTORE_HSM = WIZARD_STATE_PATH / Path('WIZARD_AUTO_RESTORE_HSM')
     WIZARD_AUTO_RESTORE_PASSWORD = WIZARD_STATE_PATH / Path('WIZARD_AUTO_RESTORE_PASSWORD')
 
-
     @classmethod
     def get_current_state(cls) -> SetupWizardState:
         """Gets the current setup wizard state of the trustpoint.
