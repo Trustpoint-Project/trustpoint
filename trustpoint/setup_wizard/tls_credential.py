@@ -9,9 +9,6 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from cryptography.x509 import ExtendedKeyUsageOID, NameOID
-from cryptography.x509 import ExtensionNotFound
-from pki.util.x509 import CertificateVerifier
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -19,12 +16,15 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
+from pki.util.x509 import CertificateVerifier
+
 if TYPE_CHECKING:
     import ipaddress
 
     from pki.models import CredentialModel
 
 ONE_DAY = datetime.timedelta(days=1)
+MIN_CERTIFICATE_CHAIN_LENGTH = 2
 
 
 def extract_staged_tls_sans(tls_credential: CredentialModel | None) -> tuple[list[str], list[str], list[str]]:
@@ -43,12 +43,10 @@ def extract_staged_tls_sans(tls_credential: CredentialModel | None) -> tuple[lis
 
     ip_address_model = general_names.ip_addresses.model
     ipv4_addresses = [
-        entry.value
-        for entry in general_names.ip_addresses.filter(ip_type=ip_address_model.IpType.IPV4_ADDRESS)
+        entry.value for entry in general_names.ip_addresses.filter(ip_type=ip_address_model.IpType.IPV4_ADDRESS)
     ]
     ipv6_addresses = [
-        entry.value
-        for entry in general_names.ip_addresses.filter(ip_type=ip_address_model.IpType.IPV6_ADDRESS)
+        entry.value for entry in general_names.ip_addresses.filter(ip_type=ip_address_model.IpType.IPV6_ADDRESS)
     ]
     dns_names = [entry.value for entry in general_names.dns_names.all()]
     return ipv4_addresses, ipv6_addresses, dns_names
@@ -63,12 +61,14 @@ class TlsServerCredentialGenerator:
         ipv6_addresses: list[ipaddress.IPv6Address],
         domain_names: list[str],
     ) -> None:
+        """Store the SAN values to include in the generated TLS server credential."""
         self._ipv4_addresses = ipv4_addresses
         self._ipv6_addresses = ipv6_addresses
         self._domain_names = domain_names
 
     @staticmethod
     def _generate_key_pair() -> PrivateKeySerializer:
+        """Generate a new EC private key for a staged TLS credential."""
         return PrivateKeySerializer(ec.generate_private_key(curve=ec.SECP256R1()))
 
     def generate_tls_server_credential(self) -> CredentialSerializer:
@@ -80,14 +80,14 @@ class TlsServerCredentialGenerator:
         builder = builder.subject_name(
             x509.Name(
                 [
-                    x509.NameAttribute(NameOID.COMMON_NAME, 'Trustpoint Self-Signed TLS Server Credential'),
+                    x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Trustpoint Self-Signed TLS Server Credential'),
                 ]
             )
         )
         builder = builder.issuer_name(
             x509.Name(
                 [
-                    x509.NameAttribute(NameOID.COMMON_NAME, 'Trustpoint Self-Signed TLS Server Credential'),
+                    x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Trustpoint Self-Signed TLS Server Credential'),
                 ]
             )
         )
@@ -141,6 +141,7 @@ class TlsServerCredentialFileParser:
 
     @staticmethod
     def _encode_password(password: str | None, field_name: str) -> bytes | None:
+        """Encode an optional uploaded-file password as UTF-8 bytes."""
         if not password:
             return None
         try:
@@ -151,37 +152,41 @@ class TlsServerCredentialFileParser:
 
     @staticmethod
     def _parse_certificates(raw_bytes: bytes) -> list[x509.Certificate]:
+        """Parse one or more PEM or DER certificates from uploaded bytes."""
         try:
             return list(CertificateCollectionSerializer.from_bytes(raw_bytes).as_crypto())
-        except Exception:
+        except (TypeError, ValueError):
             pass
 
         try:
             return [CertificateSerializer.from_bytes(raw_bytes).as_crypto()]
-        except Exception as exception:
+        except (TypeError, ValueError) as exception:
             err_msg = 'Failed to parse the certificate file.'
             raise ValueError(err_msg) from exception
 
     @staticmethod
     def _is_ca_certificate(certificate: x509.Certificate) -> bool:
+        """Return whether the certificate is marked as a CA certificate."""
         try:
             basic_constraints = certificate.extensions.get_extension_for_class(x509.BasicConstraints).value
-        except ExtensionNotFound:
+        except x509.ExtensionNotFound:
             return False
         return basic_constraints.ca
 
     @classmethod
     def _is_tls_server_certificate(cls, certificate: x509.Certificate) -> bool:
+        """Return whether the certificate is a non-CA TLS server end-entity certificate."""
         if cls._is_ca_certificate(certificate):
             return False
         try:
             eku = certificate.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value
-        except ExtensionNotFound:
+        except x509.ExtensionNotFound:
             return False
-        return ExtendedKeyUsageOID.SERVER_AUTH in eku
+        return x509.ExtendedKeyUsageOID.SERVER_AUTH in eku
 
     @classmethod
     def _get_single_end_entity_certificate(cls, certificates: list[x509.Certificate]) -> x509.Certificate:
+        """Return the single end-entity TLS server certificate from a parsed certificate set."""
         ee_certificates = [certificate for certificate in certificates if not cls._is_ca_certificate(certificate)]
         if len(ee_certificates) != 1:
             err_msg = 'Expected exactly one end-entity TLS server certificate.'
@@ -195,9 +200,14 @@ class TlsServerCredentialFileParser:
 
     @staticmethod
     def _match_private_key(private_key_serializer: PrivateKeySerializer, certificate: x509.Certificate) -> None:
-        private_key_public_bytes = private_key_serializer.as_crypto().public_key().public_bytes(
-            Encoding.DER,
-            PublicFormat.SubjectPublicKeyInfo,
+        """Validate that the uploaded private key matches the end-entity certificate."""
+        private_key_public_bytes = (
+            private_key_serializer.as_crypto()
+            .public_key()
+            .public_bytes(
+                Encoding.DER,
+                PublicFormat.SubjectPublicKeyInfo,
+            )
         )
         certificate_public_bytes = certificate.public_key().public_bytes(
             Encoding.DER,
@@ -213,6 +223,7 @@ class TlsServerCredentialFileParser:
         current_certificate: x509.Certificate,
         candidates: list[x509.Certificate],
     ) -> list[x509.Certificate] | None:
+        """Recursively build a certificate chain from the current certificate to a root CA."""
         if cls._is_ca_certificate(current_certificate) and current_certificate.issuer == current_certificate.subject:
             return [current_certificate]
 
@@ -220,11 +231,11 @@ class TlsServerCredentialFileParser:
             if candidate.subject != current_certificate.issuer:
                 continue
             try:
-                CertificateVerifier._verify_cert_signature(current_certificate, candidate)
-            except Exception:
+                CertificateVerifier._verify_cert_signature(current_certificate, candidate)  # noqa: SLF001
+            except (TypeError, ValueError):
                 continue
 
-            remaining_candidates = [*candidates[:index], *candidates[index + 1:]]
+            remaining_candidates = [*candidates[:index], *candidates[index + 1 :]]
             tail = cls._find_chain(candidate, remaining_candidates)
             if tail is not None:
                 return [current_certificate, *tail]
@@ -236,17 +247,16 @@ class TlsServerCredentialFileParser:
         end_entity_certificate: x509.Certificate,
         additional_certificates: list[x509.Certificate],
     ) -> list[x509.Certificate]:
+        """Validate and assemble the full certificate chain for the uploaded TLS credential."""
         invalid_certificates = [
-            certificate
-            for certificate in additional_certificates
-            if not cls._is_ca_certificate(certificate)
+            certificate for certificate in additional_certificates if not cls._is_ca_certificate(certificate)
         ]
         if invalid_certificates:
             err_msg = 'Only CA certificates may be included in the certificate chain.'
             raise ValueError(err_msg)
 
         chain = cls._find_chain(end_entity_certificate, additional_certificates)
-        if chain is None or len(chain) < 2:
+        if chain is None or len(chain) < MIN_CERTIFICATE_CHAIN_LENGTH:
             err_msg = 'The uploaded certificates do not contain the full chain up to the root CA.'
             raise ValueError(err_msg)
         return chain
@@ -256,6 +266,7 @@ class TlsServerCredentialFileParser:
         private_key_serializer: PrivateKeySerializer,
         chain: list[x509.Certificate],
     ) -> CredentialSerializer:
+        """Convert a validated private key and certificate chain into a credential serializer."""
         certificate_collection_serializer = CertificateCollectionSerializer(chain[1:])
         return CredentialSerializer.from_serializers(
             private_key_serializer=private_key_serializer,
@@ -269,10 +280,11 @@ class TlsServerCredentialFileParser:
         pkcs12_raw: bytes,
         pkcs12_password: str | None = None,
     ) -> CredentialSerializer:
+        """Build a staged TLS credential from an uploaded PKCS#12 bundle."""
         password_bytes = cls._encode_password(pkcs12_password, 'PKCS#12 password')
         try:
             credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, password_bytes)
-        except Exception as exception:
+        except (TypeError, ValueError) as exception:
             err_msg = 'Failed to parse and load the uploaded PKCS#12 file. Either wrong password or corrupted file.'
             raise ValueError(err_msg) from exception
 
@@ -303,10 +315,11 @@ class TlsServerCredentialFileParser:
         key_file_raw: bytes,
         key_password: str | None = None,
     ) -> CredentialSerializer:
+        """Build a staged TLS credential from separate certificate chain and private key files."""
         password_bytes = cls._encode_password(key_password, 'key password')
         try:
             private_key_serializer = PrivateKeySerializer.from_bytes(key_file_raw, password_bytes)
-        except Exception as exception:
+        except (TypeError, ValueError) as exception:
             err_msg = 'Failed to parse the private key file. Either wrong password or corrupted file.'
             raise ValueError(err_msg) from exception
 
@@ -314,9 +327,7 @@ class TlsServerCredentialFileParser:
         end_entity_certificate = cls._get_single_end_entity_certificate(tls_server_certificates)
 
         additional_certificates = [
-            certificate
-            for certificate in tls_server_certificates
-            if certificate != end_entity_certificate
+            certificate for certificate in tls_server_certificates if certificate != end_entity_certificate
         ]
         for further_certificates_file_raw in further_certificates_raw:
             additional_certificates.extend(cls._parse_certificates(further_certificates_file_raw))
