@@ -182,7 +182,7 @@ class TlsServerCredentialFileParser:
             eku = certificate.extensions.get_extension_for_class(x509.ExtendedKeyUsage).value
         except x509.ExtensionNotFound:
             return False
-        return x509.ExtendedKeyUsageOID.SERVER_AUTH in eku
+        return x509.ExtendedKeyUsageOID.SERVER_AUTH in eku  # type: ignore[attr-defined]
 
     @classmethod
     def _get_single_end_entity_certificate(cls, certificates: list[x509.Certificate]) -> x509.Certificate:
