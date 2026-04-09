@@ -21,6 +21,18 @@
                 "default": ["127.0.0.1", "::1"]
             },
             "critical": true
+        },
+        "key_usage": {
+            "digital_signature": true,
+            "key_encipherment": true,
+            "key_agreement": true
+        },
+        "extended_key_usage": {
+            "usages": {
+                "value": [
+                    "server_auth"
+                ]
+            }
         }
     },
     "validity": {

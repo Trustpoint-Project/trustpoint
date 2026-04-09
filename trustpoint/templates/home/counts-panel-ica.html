@@ -9,10 +9,10 @@
 
 <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3">
   <div class="col">
-    {% url 'pki:ica' as ica_url %}
-    {% include 'home/dashboard_card.html' with title="Active CAs" card_type="active" identifier="active_ica" dataset="issuing_ca_counts" link_url="ica_url" %}
+    {% url 'pki:issuing_cas' as ica_url %}
+    {% include 'home/dashboard_card.html' with title="Active CAs" card_type="active" identifier="active_ica" dataset="issuing_ca_counts" link_url=ica_url %}
   </div>
-  <div class="col">
+  <div class="col" style="display: none;">
     {% include 'home/dashboard_card.html' with title="Expiring CAs" card_type="expiring" identifier="expiring_ica" dataset="issuing_ca_counts" %}
   </div>
   <div class="col">

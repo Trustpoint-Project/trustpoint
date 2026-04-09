@@ -15,6 +15,18 @@
         },
         "subject_alternative_name": {
             "allow": "*"
+        },
+        "key_usage": {
+            "digital_signature": true,
+            "key_encipherment": true,
+            "key_agreement": true
+        },
+        "extended_key_usage": {
+            "usages": {
+                "value": [
+                    "client_auth"
+                ]
+            }
         }
     },
     "validity": {

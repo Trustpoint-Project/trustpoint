@@ -27,7 +27,6 @@ function generateDate(period) {
 async function fetchDashboardData(period) {
   try {
     const formattedStartDate = generateDate(period);
-    console.log("date", formattedStartDate);
     const response = await fetch(`/home/dashboard_data?start_date=${formattedStartDate}`);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
@@ -69,9 +68,9 @@ async function loadDashboardData(){
     ]);
 
     // debug
-    console.log("todayData", todayData);
-    console.log("weekData", weekData);
-    console.log("totalData", totalData);
+    //console.log("todayData", todayData);
+    //console.log("weekData", weekData);
+    //console.log("totalData", totalData);
 
     const event = new CustomEvent('dashboardData', {
       detail:{
