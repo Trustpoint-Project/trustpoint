@@ -5,517 +5,31 @@
 
 {% block head %}
     {{ block.super }}
-    <style>
-        .tp-wizard-stepper {
-            display: flex;
-            flex-wrap: nowrap;
-            gap: 0.625rem;
-            justify-content: center;
-            margin: 0.625rem;
-            overflow-x: auto;
-            padding: 0;
-        }
-
-        .tp-wizard-step {
-            flex: 0 0 15.5rem;
-            height: 4rem;
-            max-width: 15.5rem;
-            min-width: 15.5rem;
-            width: 15.5rem;
-        }
-
-        .tp-wizard-step-link,
-        .tp-wizard-step-current,
-        .tp-wizard-step-available,
-        .tp-wizard-step-disabled {
-            --tp-step-background: var(--bs-tertiary-bg);
-            --tp-step-color: var(--bs-secondary-color);
-            background: var(--tp-step-background);
-            box-sizing: border-box;
-            clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 50%, calc(100% - 1rem) 100%, 0 100%, 1rem 50%);
-            color: var(--tp-step-color);
-            display: flex;
-            font-weight: 700;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            min-height: 0;
-            padding: 0 3.4rem 0 1.65rem;
-            position: relative;
-            text-align: center;
-            text-decoration: none;
-            transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease;
-            white-space: nowrap;
-            width: 100%;
-        }
-
-        .tp-wizard-step:first-child .tp-wizard-step-link,
-        .tp-wizard-step:first-child .tp-wizard-step-current,
-        .tp-wizard-step:first-child .tp-wizard-step-available,
-        .tp-wizard-step:first-child .tp-wizard-step-disabled {
-            clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 50%, calc(100% - 1rem) 100%, 0 100%);
-            padding-left: 1.25rem;
-            padding-right: 3.4rem;
-        }
-
-        .tp-wizard-step:last-child .tp-wizard-step-link,
-        .tp-wizard-step:last-child .tp-wizard-step-current,
-        .tp-wizard-step:last-child .tp-wizard-step-available,
-        .tp-wizard-step:last-child .tp-wizard-step-disabled {
-            clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 1rem 50%);
-        }
-
-        .tp-wizard-step-link:hover {
-            box-shadow: 0 0.35rem 0.9rem color-mix(in srgb, var(--bs-primary) 16%, transparent);
-            text-decoration: none;
-            transform: translateY(-1px);
-        }
-
-        .tp-wizard-step-available:hover {
-            box-shadow: 0 0.35rem 0.9rem color-mix(in srgb, var(--bs-primary) 12%, transparent);
-            text-decoration: none;
-            transform: translateY(-1px);
-        }
-
-        .tp-wizard-step-indicator {
-            align-items: center;
-            display: inline-flex;
-            font-size: 1.05rem;
-            font-weight: 700;
-            justify-content: center;
-            line-height: 1;
-            min-width: 1rem;
-        }
-
-        .tp-wizard-step-label {
-            display: block;
-            font-size: 1.125rem;
-            font-weight: 800;
-            line-height: 1.2;
-            letter-spacing: 0.01em;
-            overflow: hidden;
-            text-align: center;
-            text-overflow: ellipsis;
-            width: 100%;
-        }
-
-        .tp-wizard-step-trailing {
-            align-items: center;
-            display: inline-flex;
-            height: 2rem;
-            justify-content: center;
-            line-height: 1;
-            min-width: 2rem;
-            position: absolute;
-            right: 1.1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 2rem;
-        }
-
-        .tp-wizard-step-trailing.is-done {
-            font-size: 2rem;
-            font-weight: 800;
-            opacity: 0.95;
-        }
-
-        .tp-wizard-step-link {
-            --tp-step-background: color-mix(in srgb, var(--bs-primary) 38%, white);
-            --tp-step-color: color-mix(in srgb, var(--bs-primary) 70%, black);
-        }
-
-        .tp-wizard-step-current {
-            --tp-step-background: var(--bs-primary);
-            --tp-step-color: var(--bs-body-bg);
-            box-shadow: 0 0.5rem 1.1rem color-mix(in srgb, var(--bs-primary) 22%, transparent);
-        }
-
-        .tp-wizard-step-available {
-            --tp-step-background: color-mix(in srgb, var(--bs-primary) 38%, white);
-            --tp-step-color: color-mix(in srgb, var(--bs-primary) 70%, black);
-        }
-
-        .tp-wizard-step-disabled {
-            --tp-step-background: color-mix(in srgb, var(--bs-body-bg) 88%, var(--bs-emphasis-color));
-            --tp-step-color: color-mix(in srgb, var(--bs-secondary-color) 90%, var(--bs-emphasis-color));
-        }
-
-        .tp-choice-group {
-            display: grid;
-            gap: 1rem;
-        }
-
-        .tp-form-group .form-control,
-        .tp-form-group .form-select,
-        .tp-form-group input[type="file"] {
-            max-width: none;
-            width: 100% !important;
-        }
-
-        .tp-form-group .mb-3 {
-            max-width: none;
-            width: 100% !important;
-        }
-
-        .tp-form-group .form-group,
-        .tp-form-group .controls,
-        .tp-form-group .input-group,
-        .tp-form-group .crispy-field {
-            max-width: none;
-            width: 100% !important;
-        }
-
-        .tp-form-group {
-            margin: 0;
-        }
-
-        .tp-form-group > .mb-3:last-child,
-        .tp-tls-panel > .mb-3:last-child {
-            margin-bottom: 0 !important;
-        }
-
-        .tp-tls-panel {
-            margin-bottom: 0;
-        }
-
-        .tp-tls-panel > .mb-3:last-child > .mb-3:last-child,
-        .tp-tls-panel > .mb-3:last-child > .form-group:last-child,
-        .tp-tls-panel > .mb-3:last-child > .crispy-field:last-child {
-            margin-bottom: 0 !important;
-        }
-
-        .tp-tls-panel > .mb-3:last-child .form-text,
-        .tp-tls-panel > .mb-3:last-child .text-danger,
-        .tp-tls-panel > .mb-3:last-child .invalid-feedback {
-            margin-bottom: 0;
-        }
-
-        .tp-choice-option {
-            cursor: pointer;
-            display: block;
-            margin: 0;
-        }
-
-        .tp-choice-option.is-disabled {
-            cursor: not-allowed;
-        }
-
-        .tp-choice-option input {
-            opacity: 0;
-            pointer-events: none;
-            position: absolute;
-        }
-
-        .tp-choice-card {
-            background-color: var(--bs-body-bg);
-            border: 2px solid var(--bs-border-color);
-            border-radius: var(--bs-border-radius-lg);
-            display: flex;
-            flex-direction: column;
-            gap: 0.45rem;
-            padding: 1rem 1.1rem;
-            transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-        }
-
-        .tp-choice-option:hover .tp-choice-card {
-            border-color: color-mix(in srgb, var(--bs-primary) 45%, var(--bs-border-color));
-            transform: translateY(-1px);
-        }
-
-        .tp-choice-option.is-disabled:hover .tp-choice-card {
-            border-color: color-mix(in srgb, var(--bs-border-color) 88%, transparent);
-            transform: none;
-        }
-
-        .tp-choice-option input:focus-visible + .tp-choice-card {
-            box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--bs-primary) 25%, transparent);
-        }
-
-        .tp-choice-option input:checked + .tp-choice-card {
-            background-color: color-mix(in srgb, var(--bs-primary) 12%, var(--bs-body-bg));
-            border-color: var(--bs-primary);
-            box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--bs-primary) 15%, transparent);
-        }
-
-        .tp-choice-option.is-disabled .tp-choice-card,
-        .tp-choice-option.is-disabled input:checked + .tp-choice-card {
-            background-color: color-mix(in srgb, var(--bs-tertiary-bg) 90%, var(--bs-body-bg));
-            border-color: color-mix(in srgb, var(--bs-border-color) 88%, transparent);
-            box-shadow: none;
-        }
-
-        .tp-choice-title {
-            color: var(--bs-emphasis-color);
-            font-size: 1rem;
-            font-weight: 600;
-            line-height: 1.2;
-        }
-
-        .tp-choice-description {
-            color: var(--bs-secondary-color);
-            font-size: 0.95rem;
-            line-height: 1.45;
-        }
-
-        .tp-choice-option.is-disabled .tp-choice-title,
-        .tp-choice-option.is-disabled .tp-choice-description {
-            color: var(--bs-secondary-color);
-            opacity: 0.78;
-        }
-
-        .tp-wizard-body {
-            padding: 2.25rem;
-        }
-
-        .tp-wizard-heading {
-            color: var(--bs-emphasis-color);
-            font-size: clamp(2.2rem, 1.8rem + 1vw, 2.85rem);
-            font-weight: 900;
-            letter-spacing: -0.03em;
-            line-height: 0.98;
-            margin: 0 0 1.5rem;
-            text-align: left;
-        }
-
-        .tp-wizard-heading::after {
-            border-bottom: 1px solid color-mix(in srgb, var(--bs-border-color) 72%, transparent);
-            content: "";
-            display: block;
-            margin-top: 1.5rem;
-        }
-
-        .tp-form-divider {
-            border: 0;
-            border-top: 1px solid color-mix(in srgb, var(--bs-border-color) 72%, transparent);
-            margin: 1.5rem 0;
-            opacity: 1;
-        }
-
-        .tp-tls-panel[hidden] {
-            display: none !important;
-        }
-
-        .tp-tls-error {
-            align-items: center;
-            background: color-mix(in srgb, var(--bs-danger) 22%, transparent);
-            border: 1px solid color-mix(in srgb, var(--bs-danger) 42%, transparent);
-            border-radius: var(--bs-border-radius);
-            color: var(--bs-danger-text-emphasis, var(--bs-danger));
-            display: flex;
-            font-size: 1.05rem;
-            font-weight: 700;
-            justify-content: flex-start;
-            margin: 0 0 1.5rem;
-            min-height: 3.25rem;
-            padding: 0.9rem 1rem;
-            text-align: left;
-        }
-
-        .tp-tls-error-lines {
-            display: grid;
-            gap: 0.35rem;
-        }
-
-        .tp-summary-list {
-            display: grid;
-            gap: 1rem;
-        }
-
-        .tp-summary-item {
-            background: color-mix(in srgb, var(--bs-tertiary-bg) 78%, var(--bs-body-bg));
-            border: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
-            border-radius: var(--bs-border-radius-lg);
-            display: grid;
-            gap: 0.45rem;
-            padding: 1rem 1.15rem;
-            text-align: left;
-        }
-
-        .tp-summary-label {
-            color: var(--bs-secondary-color);
-            font-size: 0.95rem;
-            font-weight: 700;
-            letter-spacing: 0.02em;
-            line-height: 1.2;
-            text-transform: uppercase;
-        }
-
-        .tp-summary-value {
-            color: var(--bs-emphasis-color);
-            font-size: 1.05rem;
-            font-weight: 700;
-            line-height: 1.35;
-            text-align: left;
-        }
-
-        .tp-summary-details {
-            border-top: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
-            display: grid;
-            gap: 0.85rem;
-            margin-top: 0.15rem;
-            padding-top: 0.9rem;
-        }
-
-        .tp-summary-detail {
-            display: grid;
-            gap: 0.2rem;
-        }
-
-        .tp-summary-detail-label {
-            color: var(--bs-secondary-color);
-            font-size: 0.85rem;
-            font-weight: 700;
-            letter-spacing: 0.02em;
-            line-height: 1.2;
-            text-transform: uppercase;
-        }
-
-        .tp-summary-detail-value {
-            color: var(--bs-emphasis-color);
-            font-size: 0.98rem;
-            font-weight: 600;
-            line-height: 1.35;
-            text-align: left;
-            white-space: pre-line;
-        }
-
-        .tp-summary-downloads {
-            border-top: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
-            display: grid;
-            gap: 0.85rem;
-            margin-top: 0.15rem;
-            padding-top: 0.9rem;
-        }
-
-        .tp-summary-download-actions {
-            display: grid;
-            gap: 0.75rem;
-        }
-
-        .tp-summary-download-actions .btn {
-            width: 50%;
-        }
-
-        .tp-summary-loading-state {
-            align-items: center;
-            display: flex;
-            justify-content: center;
-            margin: 0 auto;
-            min-height: clamp(20rem, 58vh, 36rem);
-            width: 100%;
-        }
-
-        .tp-summary-loading-card {
-            background: color-mix(in srgb, var(--bs-body-bg) 94%, white);
-            border: 0;
-            box-shadow: none;
-            max-width: 34rem;
-            width: min(100%, 34rem);
-        }
-
-        .tp-summary-loading-card .card-body {
-            align-items: center;
-            display: grid;
-            gap: 1.35rem;
-            justify-items: center;
-            padding: 3rem 2.5rem;
-            text-align: center;
-        }
-
-        .tp-summary-loading-spinner {
-            color: var(--bs-primary);
-            height: 3.5rem;
-            margin-bottom: 0.35rem;
-            width: 3.5rem;
-        }
-
-        .tp-summary-loading-title {
-            color: var(--bs-primary);
-            font-size: clamp(2rem, 1.75rem + 0.75vw, 2.5rem);
-            font-weight: 900;
-            letter-spacing: -0.03em;
-            line-height: 1;
-            margin: 0;
-        }
-
-        .tp-summary-loading-copy {
-            color: var(--bs-primary);
-            font-size: 1.2rem;
-            line-height: 1.5;
-            margin: 0;
-            max-width: 24rem;
-        }
-
-        @media (max-width: 767.98px) {
-            .tp-wizard-stepper {
-                flex-direction: column;
-                overflow-x: visible;
-                margin: 0.625rem 0;
-                padding: 0;
-            }
-
-            .tp-wizard-step {
-                flex-basis: auto;
-                height: 4rem;
-            }
-
-            .tp-wizard-step-link,
-            .tp-wizard-step-current,
-            .tp-wizard-step-available,
-            .tp-wizard-step-disabled {
-                clip-path: none;
-                justify-content: flex-start;
-                padding: 0.9rem 3.4rem 0.9rem 1rem;
-                text-align: left;
-            }
-
-            .tp-wizard-step:first-child .tp-wizard-step-link,
-            .tp-wizard-step:first-child .tp-wizard-step-current,
-            .tp-wizard-step:first-child .tp-wizard-step-available,
-            .tp-wizard-step:first-child .tp-wizard-step-disabled {
-                clip-path: none;
-                padding-left: 1rem;
-            }
-
-            .tp-wizard-step-label {
-                text-align: left;
-            }
-
-            .tp-wizard-body {
-                padding: 1.25rem;
-            }
-
-            .tp-wizard-heading {
-                font-size: 2rem;
-                margin-bottom: 1.15rem;
-            }
-
-            .tp-wizard-heading::after {
-                margin-top: 1.15rem;
-            }
-
-            .tp-summary-loading-state {
-                min-height: clamp(16rem, 44vh, 24rem);
-            }
-
-            .tp-summary-loading-card .card-body {
-                padding: 2.4rem 1.75rem;
-            }
-        }
-
-        .tp-wizard-step-link .tp-wizard-step-indicator,
-        .tp-wizard-step-current .tp-wizard-step-indicator,
-        .tp-wizard-step-available .tp-wizard-step-indicator,
-        .tp-wizard-step-disabled .tp-wizard-step-indicator {
-            display: none;
-        }
-
-    </style>
+    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
 {% endblock head %}
+
+{% block header_actions %}
+    <form method="POST" action="{% url 'users:logout' %}" class="tp-setup-header-logout-form">
+        {% csrf_token %}
+        <button class="tp-menu-head tp-setup-header-logout" type="submit">
+            <svg class="bi" fill="currentColor" role="img" aria-hidden="true">
+                <use href="{% static 'img/icons.svg' %}#icon-door"></use>
+            </svg>
+            {% trans "Logout" %}
+        </button>
+    </form>
+    <div class="theme-toggle theme-toggle-icon">
+        <svg class="bi theme-icon dark-only" width="20" height="20" fill="#ffffff" role="img" aria-label="Change theme">
+            <use href="{% static 'img/icons.svg' %}#icon-sun-fill"></use></svg>
+        <svg class="bi theme-icon light-only" width="20" height="20" fill="#000000" role="img" aria-label="Change theme">
+            <use href="{% static 'img/icons.svg' %}#icon-night"></use></svg>
+    </div>
+{% endblock header_actions %}
 
 {% block content %}
     {% if messages %}
-        <div class="messages tp-messages text-center">
+        <section class="tp-setup-form-shell tp-fresh-install-shell">
+        <div class="messages tp-messages text-center tp-setup-form-messages">
             {% for message in messages %}
                 <div class="tp-message alert
                                 {% if message.tags %}
@@ -535,11 +49,17 @@
                 </div>
             {% endfor %}
         </div>
+        </section>
     {% endif %}
+
+    <section class="tp-setup-form-shell tp-fresh-install-shell">
+        <div class="tp-setup-form-header">
+            <h1 class="tp-setup-form-heading">{% trans 'Setup Wizard' %}</h1>
+        </div>
 
     <form method="POST" enctype="multipart/form-data" class="text-start"{% if form.storage_selection %} data-summary-submit-form{% endif %}>
         {% csrf_token %}
-        <div class="card tp-card-setup-wizard text-center"{% if form.storage_selection %} data-summary-submit-card{% endif %}>
+        <div class="card tp-card-setup-wizard tp-card-setup-steps text-center">
             <div class="card-header">
                 <div class="px-1 py-2">
                     <div class="tp-wizard-stepper" role="list" aria-label="{% trans 'Setup progress' %}">
@@ -555,7 +75,7 @@
                                     <a href="{{ step.url }}" class="tp-wizard-step-current" role="listitem" aria-current="step">
                                         <span class="tp-wizard-step-indicator">{{ forloop.counter }}</span>
                                         <span class="tp-wizard-step-label">{{ step.label }}</span>
-                                        <span class="tp-wizard-step-trailing" aria-hidden="true"></span>
+                                        <span class="tp-wizard-step-trailing{% if step.submitted %} is-done{% endif %}" aria-hidden="true">{% if step.submitted %}&#10003;{% endif %}</span>
                                     </a>
                                 {% elif step.state == "available" %}
                                     <a href="{{ step.url }}" class="tp-wizard-step-available" role="listitem">
@@ -575,6 +95,8 @@
                     </div>
                 </div>
             </div>
+        </div>
+        <div class="card tp-card-setup-wizard tp-card-setup-content text-center"{% if form.storage_selection %} data-summary-submit-card{% endif %}>
             <div class="card-body tp-wizard-body">
                 <h2 class="tp-wizard-heading">{{ body_heading }}</h2>
                 <fieldset class="form-group tp-form-group">
@@ -776,18 +298,14 @@
                         {% endfor %}
                     {% endif %}
                 </fieldset>
-            </div>
-            <div class="card-footer">
-                <div class="d-flex flex-column flex-md-row gap-3">
+                <hr class="tp-form-divider">
+                <div class="tp-setup-form-actions">
                     {% if back_url %}
-                        <a href="{{ back_url }}" class="btn btn-secondary flex-fill">{% trans 'Back' %}</a>
+                        <a href="{{ back_url }}" class="btn tp-setup-form-back">{% trans 'Back' %}</a>
                     {% else %}
-                        <a href="#"
-                           class="btn btn-secondary disabled flex-fill"
-                           aria-disabled="true"
-                           tabindex="-1">{% trans 'Back' %}</a>
+                        <button class="btn tp-setup-form-back tp-setup-form-back-placeholder" type="button" disabled>{% trans 'Back' %}</button>
                     {% endif %}
-                    <button class="btn btn-primary flex-fill" type="submit">
+                    <button class="btn tp-setup-form-submit" type="submit">
                         {% trans 'Apply and Continue' %}
                     </button>
                 </div>
@@ -795,9 +313,11 @@
         </div>
         {% if form.storage_selection %}
             <div class="tp-summary-loading-state" data-summary-loading-state hidden aria-live="polite" aria-busy="true">
-                <div class="card tp-summary-loading-card">
+                <div class="card tp-card-setup-wizard tp-summary-loading-card">
                     <div class="card-body">
-                        <div class="spinner-border tp-summary-loading-spinner" role="status" aria-hidden="true"></div>
+                        <div class="tp-summary-loading-visual" aria-hidden="true">
+                            <div class="spinner-border tp-summary-loading-spinner" aria-hidden="true"></div>
+                        </div>
                         <h2 class="tp-summary-loading-title">{% trans 'Just a Moment!' %}</h2>
                         <p class="tp-summary-loading-copy">{% trans 'We are preparing the instance for you!' %}</p>
                     </div>
@@ -805,6 +325,7 @@
             </div>
         {% endif %}
     </form>
+    </section>
 
     {% if form.tls_mode %}
         <script>
