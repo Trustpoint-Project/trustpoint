@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import enum
 import ipaddress
 import logging
 import subprocess
 from pathlib import Path
 from typing import Any, cast
-import enum
 
-from django.forms import Form
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
@@ -20,28 +19,22 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management import CommandError, call_command
 from django.db import DatabaseError, transaction
 from django.db.models import ProtectedError
+from django.forms import Form
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.shortcuts import redirect
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.views.generic import FormView, TemplateView, View
-from django.urls import reverse
 
 from management.models import KeyStorageConfig, PKCS11Token
+from management.nginx_paths import (
+    NGINX_CERT_CHAIN_PATH,
+    NGINX_CERT_PATH,
+    NGINX_KEY_PATH,
+)
 from pki.models import CaModel, CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard import SetupWizardState
-from .forms import (
-    BackupPasswordForm,
-    BackupRestoreForm,
-    PasswordAutoRestoreForm,
-    FreshInstallModelBaseForm,
-    FreshInstallCryptoStorageModelForm,
-    FreshInstallDemoDataModelForm,
-    FreshInstallSummaryModelForm,
-    FreshInstallTlsConfigForm,
-)
-from .models import SetupWizardCompletedModel, SetupWizardConfigModel
 from setup_wizard.tls_credential import (
     TlsServerCredentialFileParser,
     TlsServerCredentialGenerator,
@@ -49,11 +42,17 @@ from setup_wizard.tls_credential import (
 )
 from trustpoint.logger import LoggerMixin
 
-from management.nginx_paths import (
-    NGINX_CERT_CHAIN_PATH,
-    NGINX_CERT_PATH,
-    NGINX_KEY_PATH,
+from .forms import (
+    BackupPasswordForm,
+    BackupRestoreForm,
+    FreshInstallCryptoStorageModelForm,
+    FreshInstallDemoDataModelForm,
+    FreshInstallModelBaseForm,
+    FreshInstallSummaryModelForm,
+    FreshInstallTlsConfigForm,
+    PasswordAutoRestoreForm,
 )
+from .models import SetupWizardCompletedModel, SetupWizardConfigModel
 
 logger = logging.getLogger(__name__)
 
@@ -142,9 +141,8 @@ class SetupWizardIndexView(LoggerMixin, TemplateView):
             HttpResponse: A redirect response to the appropriate setup wizard page
                           or the login page if the setup is not in a Docker container.
         """
-        self.logger.critical('In View')
-
         return super().get(*args, **kwargs)
+
 
 class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User]]):
     """View for handling the creation of a superuser during the setup wizard.
@@ -187,14 +185,13 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
             self.logger.exception(err_msg)
             return redirect('setup_wizard:create_super_user', permanent=False)
 
-        SetupWizardCompletedModel.objects.get_or_create(
-            singleton_id=SetupWizardCompletedModel.SINGLETON_ID
-        )
+        SetupWizardCompletedModel.objects.get_or_create(singleton_id=SetupWizardCompletedModel.SINGLETON_ID)
 
         return super().form_valid(form)
 
 
 # Config Wizard -------------------------------------------------------------------------------------------------------
+
 
 class FreshInstallFormBaseView[FormT: Form](LoginRequiredMixin, LoggerMixin, FormView[FormT]):
     """Shared base view for fresh-install wizard steps."""
@@ -205,6 +202,8 @@ class FreshInstallFormBaseView[FormT: Form](LoginRequiredMixin, LoggerMixin, For
     step_state: SetupWizardConfigModel.FreshInstallCurrentStep
 
     class StepState(enum.StrEnum):
+        """Display state for a fresh-install wizard step in the progress UI."""
+
         ACTIVE = 'active'
         DONE = 'done'
         AVAILABLE = 'available'
@@ -212,10 +211,11 @@ class FreshInstallFormBaseView[FormT: Form](LoginRequiredMixin, LoggerMixin, For
 
     @staticmethod
     def _get_step_state(
-            step: SetupWizardConfigModel.FreshInstallCurrentStep,
-            viewed_step: SetupWizardConfigModel.FreshInstallCurrentStep,
-            unlocked_step: SetupWizardConfigModel.FreshInstallCurrentStep,
-            is_submitted: bool,
+        step: SetupWizardConfigModel.FreshInstallCurrentStep,
+        viewed_step: SetupWizardConfigModel.FreshInstallCurrentStep,
+        unlocked_step: SetupWizardConfigModel.FreshInstallCurrentStep,
+        *,
+        is_submitted: bool,
     ) -> FreshInstallFormBaseView.StepState:
         """Get the display state for a wizard step."""
         if step == viewed_step:
@@ -236,49 +236,36 @@ class FreshInstallFormBaseView[FormT: Form](LoginRequiredMixin, LoggerMixin, For
         config_model = SetupWizardConfigModel.get_singleton()
         current_state = config_model.get_current_step()
         viewed_step = self.step_state
-        self.logger.critical(f'current_state: {current_state}')
-        self.logger.critical(f'viewed_step: {viewed_step}')
         crypto_storage_submitted = config_model.is_step_submitted(
             SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE
         )
-        demo_data_submitted = config_model.is_step_submitted(
-            SetupWizardConfigModel.FreshInstallCurrentStep.DEMO_DATA
-        )
-        tls_config_submitted = config_model.is_step_submitted(
-            SetupWizardConfigModel.FreshInstallCurrentStep.TLS_CONFIG
-        )
-        summary_submitted = config_model.is_step_submitted(
-            SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY
-        )
+        demo_data_submitted = config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.DEMO_DATA)
+        tls_config_submitted = config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.TLS_CONFIG)
+        summary_submitted = config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY)
         crypto_storage_state = self._get_step_state(
             SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE,
             viewed_step,
             current_state,
-            crypto_storage_submitted,
+            is_submitted=crypto_storage_submitted,
         )
         demo_data_state = self._get_step_state(
             SetupWizardConfigModel.FreshInstallCurrentStep.DEMO_DATA,
             viewed_step,
             current_state,
-            demo_data_submitted,
+            is_submitted=demo_data_submitted,
         )
         tls_config_state = self._get_step_state(
             SetupWizardConfigModel.FreshInstallCurrentStep.TLS_CONFIG,
             viewed_step,
             current_state,
-            tls_config_submitted,
+            is_submitted=tls_config_submitted,
         )
         summary_state = self._get_step_state(
             SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY,
             viewed_step,
             current_state,
-            summary_submitted,
+            is_submitted=summary_submitted,
         )
-
-        self.logger.critical(f'Crypto Storage State: {crypto_storage_state}')
-        self.logger.critical(f'Demo Data State: {demo_data_state}')
-        self.logger.critical(f'TLS Config State: {tls_config_state}')
-        self.logger.critical(f'Summary State: {summary_state}')
 
         context['steps'] = [
             {
@@ -308,7 +295,7 @@ class FreshInstallFormBaseView[FormT: Form](LoginRequiredMixin, LoggerMixin, For
         ]
         return context
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs) -> HttpResponse:
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests and update the unlocked wizard step."""
         config_model = SetupWizardConfigModel.get_singleton()
         if config_model.fresh_install_current_step < self.step_state:
@@ -324,6 +311,7 @@ class FreshInstallModelFormBaseView[FormT: FreshInstallModelBaseForm](FreshInsta
     ``SetupWizardConfigModel`` instance and exposes wizard metadata for the
     template.
     """
+
     def get_form_kwargs(self) -> dict[str, Any]:
         """Build constructor kwargs for the bound model form.
 
@@ -374,6 +362,7 @@ class FreshInstallDemoDataView(FreshInstallModelFormBaseView[FreshInstallDemoDat
     back_url = reverse_lazy('setup_wizard:fresh_install_crypto_storage')
     body_heading = 'Inject Demo Data?'
 
+
 class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigForm]):
     """Render the fresh-install step for choosing tls config injection."""
 
@@ -390,7 +379,7 @@ class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigFo
         """Format stored SAN values for the comma-separated input fields."""
         if not values:
             return ''
-        return f"{', '.join(values)}, "
+        return f'{", ".join(values)}, '
 
     def get_initial(self) -> dict[str, Any]:
         """Populate the form from the persisted TLS wizard configuration."""
@@ -398,17 +387,17 @@ class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigFo
         config_model = SetupWizardConfigModel.get_singleton()
         initial['tls_mode'] = config_model.fresh_install_tls_mode
 
-        ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans(
-            config_model.fresh_install_tls_credential
-        )
+        ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans(config_model.fresh_install_tls_credential)
         if not (ipv4_addresses or ipv6_addresses or dns_names):
             return initial
 
-        initial.update({
-            'ipv4_addresses': self._format_csv_initial(ipv4_addresses),
-            'ipv6_addresses': self._format_csv_initial(ipv6_addresses),
-            'domain_names': self._format_csv_initial(dns_names),
-        })
+        initial.update(
+            {
+                'ipv4_addresses': self._format_csv_initial(ipv4_addresses),
+                'ipv6_addresses': self._format_csv_initial(ipv6_addresses),
+                'domain_names': self._format_csv_initial(dns_names),
+            }
+        )
         return initial
 
     @staticmethod
@@ -459,12 +448,10 @@ class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigFo
             if tls_mode == SetupWizardConfigModel.FreshInstallTlsConfigType.GENERATE:
                 generator = TlsServerCredentialGenerator(
                     ipv4_addresses=[
-                        ipaddress.IPv4Address(address)
-                        for address in form.cleaned_data.get('ipv4_addresses', [])
+                        ipaddress.IPv4Address(address) for address in form.cleaned_data.get('ipv4_addresses', [])
                     ],
                     ipv6_addresses=[
-                        ipaddress.IPv6Address(address)
-                        for address in form.cleaned_data.get('ipv6_addresses', [])
+                        ipaddress.IPv6Address(address) for address in form.cleaned_data.get('ipv6_addresses', [])
                     ],
                     domain_names=form.cleaned_data.get('domain_names', []),
                 )
@@ -507,6 +494,7 @@ class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigFo
             self._add_tls_config_error(form, tls_mode, error_message)
             self.logger.exception('Error configuring TLS server credential.')
             return self.form_invalid(form)
+
 
 class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryModelForm]):
     """Render the fresh-install step for the summary."""
@@ -631,7 +619,7 @@ class FreshInstallSummaryTruststoreDownloadView(LoginRequiredMixin, LoggerMixin,
         err_msg = f'Invalid file format requested: {file_format}.'
         raise ValueError(err_msg)
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def get(self, request: HttpRequest, *_args: Any, **kwargs: Any) -> HttpResponse:
         """Handle the summary truststore download."""
         file_format = kwargs['file_format']
         if file_format not in {'pem', 'der'}:
@@ -681,7 +669,9 @@ class FreshInstallCancelView(LoginRequiredMixin, LoggerMixin, View):
         logout(request)
         return redirect('setup_wizard:index', permanent=False)
 
+
 # Backup Stuff ---------------------------------------------------------------------------------------------------------
+
 
 class SetupWizardRestoreBackupView(TemplateView):
     """View for the restore option during initialization.
@@ -693,6 +683,7 @@ class SetupWizardRestoreBackupView(TemplateView):
 
     http_method_names = ('get',)
     template_name = 'setup_wizard/restore_backup.html'
+
 
 class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
     """View for setting up backup password for PKCS#11 token during the setup wizard.
@@ -740,28 +731,20 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
                 messages.add_message(
                     self.request,
                     messages.ERROR,
-                    'No PKCS#11 token found. This should not happen in the backup password step.'
+                    'No PKCS#11 token found. This should not happen in the backup password step.',
                 )
                 self.logger.error('No PKCS11Token found in backup password step')
                 return redirect('setup_wizard:demo_data', permanent=False)
 
             if not isinstance(password, str):
-                messages.add_message(
-                    self.request,
-                    messages.ERROR,
-                    'Invalid password provided.'
-                )
+                messages.add_message(self.request, messages.ERROR, 'Invalid password provided.')
                 self.logger.error('Invalid password type provided in backup password step')
                 return self.form_invalid(form)
 
             token.set_backup_password(password)
             execute_shell_script(SCRIPT_WIZARD_BACKUP_PASSWORD)
 
-            messages.add_message(
-                self.request,
-                messages.SUCCESS,
-                'Backup password set successfully.'
-            )
+            messages.add_message(self.request, messages.SUCCESS, 'Backup password set successfully.')
             self.logger.info('Backup password set for token: %s', token.label)
             return super().form_valid(form)
 
@@ -771,7 +754,7 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
             self.logger.exception(err_msg)
             return redirect('setup_wizard:backup_password', permanent=False)
         except FileNotFoundError:
-            err_msg = f'Backup password script not found: '
+            err_msg = 'Backup password script not found: '
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
             return redirect('setup_wizard:backup_password', permanent=False)
@@ -799,11 +782,7 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
 
     def form_invalid(self, form: BackupPasswordForm) -> HttpResponse:
         """Handle invalid form submission."""
-        messages.add_message(
-            self.request,
-            messages.ERROR,
-            'Please correct the errors below and try again.'
-        )
+        messages.add_message(self.request, messages.ERROR, 'Please correct the errors below and try again.')
         return super().form_invalid(form)
 
     @staticmethod
@@ -818,8 +797,10 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
         }
         return error_messages.get(return_code, 'An unknown error occurred during backup password setup.')
 
+
 class BackupPasswordRecoveryMixin(LoggerMixin):
     """Mixin that provides backup password recovery functionality."""
+
     request: HttpRequest
 
     def handle_backup_password_recovery(self, backup_password: str) -> bool:
@@ -856,11 +837,7 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
 
         except Exception:
             self.logger.exception('Unexpected error during backup password recovery')
-            messages.add_message(
-                self.request,
-                messages.ERROR,
-                'Unexpected error during backup password recovery'
-            )
+            messages.add_message(self.request, messages.ERROR, 'Unexpected error during backup password recovery')
             return False
         else:
             return True
@@ -893,11 +870,7 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
                 self.logger.info('New KEK generated successfully for token %s', token.label)
             except (subprocess.CalledProcessError, ValueError, RuntimeError) as e:
                 self.logger.exception('Failed to generate new KEK for token %s', token.label)
-                messages.add_message(
-                    self.request,
-                    messages.ERROR,
-                    f'Failed to generate new KEK: {e}'
-                )
+                messages.add_message(self.request, messages.ERROR, f'Failed to generate new KEK: {e}')
                 return None
 
         return has_kek
@@ -910,18 +883,14 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
             self.logger.exception('Invalid backup password provided for token %s', token.label)
             self.logger.exception('The restore process needs to be redone with the correct backup password.')
             messages.add_message(
-                self.request,
-                messages.ERROR,
-                'Invalid backup password provided. DEK recovery failed. '
+                self.request, messages.ERROR, 'Invalid backup password provided. DEK recovery failed. '
             )
             messages.add_message(
-                self.request,
-                messages.ERROR,
-                'The restore process needs to be redone with the correct backup password.'
+                self.request, messages.ERROR, 'The restore process needs to be redone with the correct backup password.'
             )
             return None
 
-    def _wrap_and_save_dek(self, token: PKCS11Token, dek_bytes: bytes, *,had_kek: bool) -> bool:
+    def _wrap_and_save_dek(self, token: PKCS11Token, dek_bytes: bytes, *, had_kek: bool) -> bool:
         """Wrap recovered DEK with KEK and save."""
         try:
             wrapped_dek = token.wrap_dek(dek_bytes)
@@ -929,18 +898,10 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
             token.save(update_fields=['encrypted_dek'])
 
             kek_status = 'newly generated' if not had_kek else 'existing'
-            self.logger.info(
-                'Successfully wrapped recovered DEK with %s KEK for token %s',
-                kek_status,
-                token.label
-            )
+            self.logger.info('Successfully wrapped recovered DEK with %s KEK for token %s', kek_status, token.label)
         except RuntimeError as e:
             self.logger.exception('Failed to wrap recovered DEK for token %s', token.label)
-            messages.add_message(
-                self.request,
-                messages.ERROR,
-                f'Failed to wrap recovered DEK with KEK: {e}'
-            )
+            messages.add_message(self.request, messages.ERROR, f'Failed to wrap recovered DEK with KEK: {e}')
             return False
         else:
             return True
@@ -959,15 +920,11 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
     def _log_success(self, token: PKCS11Token, *, had_kek: bool) -> None:
         """Log successful recovery."""
         recovery_type = 'with new KEK generation' if not had_kek else 'with existing KEK'
-        self.logger.info(
-            'Successfully completed backup password recovery for token %s %s',
-            token.label,
-            recovery_type
-        )
+        self.logger.info('Successfully completed backup password recovery for token %s %s', token.label, recovery_type)
         messages.add_message(
             self.request,
             messages.SUCCESS,
-            'DEK successfully recovered using backup password and re-secured with HSM key.'
+            'DEK successfully recovered using backup password and re-secured with HSM key.',
         )
 
 
@@ -1004,11 +961,7 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
 
     def _handle_invalid_form(self) -> HttpResponse:
         """Handle invalid form submission."""
-        messages.add_message(
-            self.request,
-            messages.ERROR,
-            'Please correct the errors below and try again.'
-        )
+        messages.add_message(self.request, messages.ERROR, 'Please correct the errors below and try again.')
         return redirect('users:login')
 
     def _process_backup_file(self, backup_file: Any, backup_password: str | None) -> HttpResponse:
@@ -1038,21 +991,16 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
             success = self.handle_backup_password_recovery(backup_password)
             if not success:
                 messages.add_message(
-                    self.request,
-                    messages.ERROR,
-                    'Database restored successfully, but backup password recovery failed.'
+                    self.request, messages.ERROR, 'Database restored successfully, but backup password recovery failed.'
                 )
         else:
             self.logger.warning(
-                'No backup password provided, skipping DEK recovery. '
-                'Encrypted fields may not be accessible.'
+                'No backup password provided, skipping DEK recovery. Encrypted fields may not be accessible.'
             )
         call_command('trustpointrestore')
 
         messages.add_message(
-            self.request,
-            messages.SUCCESS,
-            f'Trustpoint restored successfully from {backup_file.name}'
+            self.request, messages.SUCCESS, f'Trustpoint restored successfully from {backup_file.name}'
         )
 
     def _cleanup_temp_file(self, temp_path: Path) -> None:
@@ -1072,6 +1020,7 @@ class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
             4: 'Failed to create the WIZARD_COMPLETED state file.',
         }
         return error_messages.get(return_code, 'An unknown error occurred during the restore process.')
+
 
 class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, FormView[PasswordAutoRestoreForm]):
     """View for handling backup password entry during auto restore process.
@@ -1117,15 +1066,13 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             self._deactivate_all_issuing_cas()
 
             messages.add_message(
-                self.request,
-                messages.SUCCESS,
-                'Auto restore completed successfully. You can now log in.'
+                self.request, messages.SUCCESS, 'Auto restore completed successfully. You can now log in.'
             )
             messages.add_message(
                 self.request,
                 messages.WARNING,
                 'All Certificate Authorities have been deactivated because their private keys are no longer '
-                'available after HSM change.'
+                'available after HSM change.',
             )
             self.logger.info('Auto restore completed successfully with backup password recovery')
             return super().form_valid(form)
@@ -1137,7 +1084,7 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             return self.form_invalid(form)
 
         except FileNotFoundError:
-            err_msg = f'Auto restore script not found: '
+            err_msg = 'Auto restore script not found: '
             messages.add_message(self.request, messages.ERROR, err_msg)
             self.logger.exception(err_msg)
             return self.form_invalid(form)
@@ -1150,11 +1097,7 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
 
     def form_invalid(self, form: PasswordAutoRestoreForm) -> HttpResponse:
         """Handle invalid form submission."""
-        messages.add_message(
-            self.request,
-            messages.ERROR,
-            'Please correct the errors below and try again.'
-        )
+        messages.add_message(self.request, messages.ERROR, 'Please correct the errors below and try again.')
         return super().form_invalid(form)
 
     def _raise_runtime_error(self, message: str) -> None:
@@ -1176,9 +1119,8 @@ class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, Fo
             if count > 0:
                 active_cas.update(is_active=False)
                 self.logger.info(
-                    'Deactivated %d Certificate Authority(ies) due to HSM change - '
-                    'private keys no longer available',
-                    count
+                    'Deactivated %d Certificate Authority(ies) due to HSM change - private keys no longer available',
+                    count,
                 )
             else:
                 self.logger.info('No active Certificate Authorities found to deactivate')
