@@ -1,0 +1,1179 @@
+.tp-setup-wizard-shell {
+    --tp-setup-grid-width: 57.6rem;
+    --tp-setup-grid-gap: 3rem;
+    --tp-setup-card-min-height: 21rem;
+    margin: 0 auto;
+    max-width: 68rem;
+    padding: 0 1rem;
+    width: 100%;
+}
+
+.tp-setup-wizard-header {
+    margin: 0 auto var(--tp-setup-grid-gap);
+    text-align: center;
+    width: 45rem;
+}
+
+.tp-setup-wizard-heading,
+.tp-setup-form-heading {
+    color: var(--bs-emphasis-color);
+    font-size: clamp(2.2rem, 1.8rem + 1vw, 2.85rem);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin: 0;
+}
+
+.tp-setup-wizard-heading::after,
+.tp-setup-form-heading::after {
+    border-bottom: 1px solid color-mix(in srgb, var(--bs-primary) 18%, var(--bs-border-color));
+    content: "";
+    display: block;
+    margin: 1rem auto 0;
+    width: 100%;
+}
+
+.tp-setup-wizard-grid {
+    --bs-gutter-x: var(--tp-setup-grid-gap);
+    --bs-gutter-y: 0;
+    margin: 0 auto;
+    max-width: var(--tp-setup-grid-width);
+}
+
+.tp-setup-option-card {
+    background:
+        linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--bs-primary) 7%, var(--bs-body-bg)) 0%,
+            var(--bs-body-bg) 100%
+        );
+    border: 1px solid color-mix(in srgb, var(--bs-primary) 20%, var(--bs-border-color));
+    border-radius: var(--bs-border-radius-xl);
+    box-shadow: 0 0.85rem 2rem color-mix(in srgb, var(--bs-primary) 10%, transparent);
+    color: inherit;
+    display: block;
+    height: 100%;
+    overflow: hidden;
+    text-decoration: none;
+    transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tp-setup-option-card:hover {
+    border-color: color-mix(in srgb, var(--bs-primary) 42%, var(--bs-border-color));
+    box-shadow: 0 1rem 2.3rem color-mix(in srgb, var(--bs-primary) 14%, transparent);
+    color: inherit;
+    text-decoration: none;
+    transform: translateY(-2px);
+}
+
+.tp-setup-option-card:focus-visible {
+    border-color: color-mix(in srgb, var(--bs-primary) 55%, var(--bs-border-color));
+    box-shadow:
+        0 0 0 0.22rem color-mix(in srgb, var(--bs-primary) 22%, transparent),
+        0 1rem 2.3rem color-mix(in srgb, var(--bs-primary) 16%, transparent);
+    color: inherit;
+    outline: none;
+    text-decoration: none;
+    transform: translateY(-2px);
+}
+
+.tp-setup-option-card:active {
+    border-color: color-mix(in srgb, var(--bs-primary) 50%, var(--bs-border-color));
+    box-shadow: 0 0.55rem 1.45rem color-mix(in srgb, var(--bs-primary) 18%, transparent);
+    transform: translateY(0);
+}
+
+.tp-setup-option-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+    height: 100%;
+    justify-content: center;
+    min-height: var(--tp-setup-card-min-height);
+    padding: 2rem 2rem;
+}
+
+.tp-setup-option-copy {
+    align-content: center;
+    display: grid;
+    flex: 0 0 auto;
+    gap: 1.4rem;
+    justify-items: center;
+    text-align: center;
+}
+
+.tp-setup-option-figure {
+    align-items: center;
+    background:
+        radial-gradient(circle at top, color-mix(in srgb, white 18%, transparent), transparent 62%),
+        color-mix(in srgb, var(--bs-primary) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bs-primary) 28%, transparent);
+    border-radius: 1.35rem;
+    color: var(--bs-primary);
+    display: inline-flex;
+    height: 4.75rem;
+    justify-content: center;
+    width: 4.75rem;
+}
+
+.tp-setup-option-figure svg {
+    height: 2.2rem;
+    width: 2.2rem;
+}
+
+.tp-setup-option-title {
+    color: var(--bs-emphasis-color);
+    font-size: clamp(1.55rem, 1.35rem + 0.4vw, 1.95rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin: 0;
+    max-width: 17rem;
+}
+
+.tp-setup-option-text {
+    color: var(--bs-secondary-color);
+    font-size: 1.08rem;
+    line-height: 1.55;
+    margin: 0;
+    max-width: 22rem;
+}
+
+.tp-setup-form-shell {
+    margin: 0 auto;
+    max-width: 58rem;
+    padding: 0 1rem;
+    width: 100%;
+}
+
+.tp-setup-form-messages,
+.tp-setup-form-header,
+.tp-setup-form-panel {
+    margin-left: auto;
+    margin-right: auto;
+    width: 45rem;
+}
+
+.tp-setup-form-messages {
+    margin-bottom: 1.5rem;
+}
+
+.tp-setup-form-header {
+    margin-bottom: 3rem;
+    text-align: center;
+}
+
+.tp-setup-form-panel {
+    background: var(--bs-body-bg);
+    border: 1px solid color-mix(in srgb, var(--bs-primary) 20%, var(--bs-border-color));
+    border-radius: calc(var(--bs-border-radius-xl) + 0.1rem);
+    box-shadow:
+        0 1.1rem 2.5rem color-mix(in srgb, var(--bs-primary) 10%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+    overflow: hidden;
+    position: relative;
+}
+
+.tp-setup-form {
+    display: grid;
+    gap: 1.5rem;
+    padding: clamp(1.35rem, 1rem + 1.4vw, 2.2rem);
+    position: relative;
+    z-index: 1;
+}
+
+.tp-setup-form-copy {
+    color: var(--bs-secondary-color);
+    font-size: 1rem;
+    line-height: 1.6;
+    margin: 0;
+    text-align: left;
+}
+
+.tp-form-group {
+    margin: 0;
+}
+
+.tp-form-group .mb-3,
+.tp-form-group .form-group,
+.tp-form-group .controls,
+.tp-form-group .input-group,
+.tp-form-group .crispy-field,
+.tp-form-group .form-control,
+.tp-form-group .form-select,
+.tp-form-group input[type="file"] {
+    max-width: none;
+    width: 100% !important;
+}
+
+.tp-form-group label {
+    color: var(--bs-emphasis-color);
+    font-weight: 700;
+    margin-bottom: 0.45rem;
+}
+
+.tp-form-group .form-control,
+.tp-form-group .form-select,
+.tp-form-group input[type="file"] {
+    background: color-mix(in srgb, var(--bs-body-bg) 90%, var(--bs-primary) 4%);
+    border: 1px solid color-mix(in srgb, var(--bs-primary) 18%, var(--bs-border-color));
+    border-radius: 0.95rem;
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 6%, transparent);
+    min-height: 3.25rem;
+    padding: 0.8rem 1rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.tp-form-group .form-control:focus,
+.tp-form-group .form-select:focus,
+.tp-form-group input[type="file"]:focus {
+    background: color-mix(in srgb, var(--bs-body-bg) 94%, var(--bs-primary) 3%);
+    border-color: color-mix(in srgb, var(--bs-primary) 50%, var(--bs-border-color));
+    box-shadow: 0 0 0 0.24rem color-mix(in srgb, var(--bs-primary) 15%, transparent);
+    transform: translateY(-1px);
+}
+
+.tp-form-group input[type="file"] {
+    color: var(--bs-secondary-color);
+    padding: 0.35rem;
+}
+
+.tp-form-group input[type="file"]::file-selector-button {
+    appearance: none;
+    background-color: color-mix(in srgb, var(--bs-primary) 10%, var(--bs-body-bg)) !important;
+    border: 1px solid color-mix(in srgb, var(--bs-primary) 18%, var(--bs-border-color)) !important;
+    border-radius: 0.72rem;
+    color: var(--bs-emphasis-color) !important;
+    cursor: pointer;
+    font-weight: 700;
+    margin: 0.05rem 0.85rem 0.05rem 0.05rem;
+    padding: 0.68rem 1rem;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.tp-form-group input[type="file"]:hover::file-selector-button,
+.tp-form-group input[type="file"]:focus::file-selector-button,
+.tp-form-group input[type="file"]:active::file-selector-button {
+    background-color: color-mix(in srgb, var(--bs-primary) 22%, var(--bs-body-bg)) !important;
+    border-color: color-mix(in srgb, var(--bs-primary) 34%, var(--bs-border-color)) !important;
+}
+
+.tp-form-group input[type="file"]::-webkit-file-upload-button {
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: color-mix(in srgb, var(--bs-primary) 10%, var(--bs-body-bg)) !important;
+    border: 1px solid color-mix(in srgb, var(--bs-primary) 18%, var(--bs-border-color)) !important;
+    border-radius: 0.72rem;
+    color: var(--bs-emphasis-color) !important;
+    cursor: pointer;
+    font-weight: 700;
+    margin: 0.05rem 0.85rem 0.05rem 0.05rem;
+    padding: 0.68rem 1rem;
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.tp-form-group input[type="file"]:hover::-webkit-file-upload-button,
+.tp-form-group input[type="file"]:focus::-webkit-file-upload-button,
+.tp-form-group input[type="file"]:active::-webkit-file-upload-button {
+    background-color: color-mix(in srgb, var(--bs-primary) 22%, var(--bs-body-bg)) !important;
+    border-color: color-mix(in srgb, var(--bs-primary) 34%, var(--bs-border-color)) !important;
+}
+
+.tp-form-group .form-text,
+.tp-form-group .helptext {
+    color: var(--bs-secondary-color);
+    font-size: 0.94rem;
+    line-height: 1.45;
+    margin-top: 0.5rem;
+}
+
+.tp-form-group .invalid-feedback,
+.tp-form-group .text-danger,
+.tp-form-group .errorlist {
+    font-size: 0.94rem;
+    margin-top: 0.45rem;
+}
+
+.tp-form-group .errorlist {
+    color: var(--bs-danger);
+    list-style: none;
+    margin-bottom: 0;
+    padding-left: 0;
+}
+
+.tp-form-group ul:not(.errorlist) {
+    color: var(--bs-secondary-color);
+    display: grid;
+    gap: 0.35rem;
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding-left: 0;
+}
+
+.tp-setup-form-divider {
+    border: 0;
+    border-top: 1px solid color-mix(in srgb, var(--bs-border-color) 72%, transparent);
+    margin: 0;
+    opacity: 1;
+}
+
+.tp-setup-form-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.tp-setup-form-actions > .btn {
+    flex: 1 1 0;
+}
+
+.tp-setup-form-submit {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: #0a4db8;
+    --bs-btn-border-color: #083f97;
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: #0c57d0;
+    --bs-btn-hover-border-color: #0945a4;
+    --bs-btn-active-color: #0a4db8;
+    --bs-btn-active-bg: transparent;
+    --bs-btn-active-border-color: #0a4db8;
+    --bs-btn-focus-shadow-rgb: 10, 77, 184;
+    align-items: center;
+    border-radius: 0.95rem;
+    box-shadow:
+        0 0.9rem 2rem color-mix(in srgb, #0a4db8 26%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
+    display: inline-flex;
+    font-size: 1rem;
+    font-weight: 800;
+    justify-content: center;
+    letter-spacing: 0.01em;
+    min-height: 3.5rem;
+    padding: 0.9rem 1.4rem;
+    text-decoration: none;
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease,
+        background-color 0.18s ease,
+        border-color 0.18s ease;
+    width: 100%;
+}
+
+.tp-setup-form-submit:hover {
+    box-shadow:
+        0 1.1rem 2.3rem color-mix(in srgb, #0a4db8 30%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+    transform: translateY(-1px);
+}
+
+.tp-setup-form-submit:focus-visible {
+    box-shadow:
+        0 0 0 0.24rem color-mix(in srgb, #0a4db8 22%, transparent),
+        0 1.1rem 2.3rem color-mix(in srgb, #0a4db8 30%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+}
+
+.tp-setup-form-actions .tp-setup-form-submit.btn:active,
+.tp-setup-form-actions .tp-setup-form-submit.btn:active:focus-visible {
+    box-shadow:
+        0 0.4rem 1rem color-mix(in srgb, #0a4db8 16%, transparent),
+        inset 0 0 0 1px color-mix(in srgb, #0a4db8 18%, transparent),
+        inset 0 0.12rem 0.45rem color-mix(in srgb, #0a4db8 12%, transparent);
+    transform: translateY(1px);
+}
+
+.tp-setup-form-back {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: #4d545b;
+    --bs-btn-border-color: #41474d;
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: #5a6168;
+    --bs-btn-hover-border-color: #4a5158;
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: #3f454b;
+    --bs-btn-active-border-color: #353a3f;
+    --bs-btn-focus-shadow-rgb: 77, 84, 91;
+    align-items: center;
+    border-radius: 0.95rem;
+    box-shadow:
+        0 0.7rem 1.5rem color-mix(in srgb, #4d545b 18%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
+    display: inline-flex;
+    font-size: 1rem;
+    font-weight: 800;
+    justify-content: center;
+    letter-spacing: 0.01em;
+    min-height: 3.5rem;
+    padding: 0.9rem 1.4rem;
+    text-decoration: none;
+    transition:
+        transform 0.18s ease,
+        box-shadow 0.18s ease,
+        background-color 0.18s ease,
+        border-color 0.18s ease;
+    width: 100%;
+}
+
+.tp-setup-form-back:hover {
+    box-shadow:
+        0 0.85rem 1.75rem color-mix(in srgb, #4d545b 22%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 14%, transparent);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.tp-setup-form-back:focus-visible {
+    box-shadow:
+        0 0 0 0.24rem color-mix(in srgb, #4d545b 22%, transparent),
+        0 0.85rem 1.75rem color-mix(in srgb, #4d545b 22%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 14%, transparent);
+    color: #fff;
+}
+
+/* Fresh install wizard */
+.tp-setup-header-logout-form {
+    margin: 0;
+}
+
+.tp-setup-header-logout.tp-menu-head {
+    align-items: center;
+    display: inline-flex;
+    font-size: 0.98rem;
+    gap: 0.55rem;
+    line-height: 1;
+    padding: 0.55rem 0.8rem;
+    width: auto;
+}
+
+.tp-setup-header-logout.tp-menu-head > .bi {
+    height: 1rem;
+    margin: 0;
+    width: 1rem;
+}
+
+.tp-fresh-install-shell {
+    --tp-fresh-install-width: 68rem;
+    --tp-fresh-install-accent: #0a4db8;
+    --tp-fresh-install-accent-border: #083f97;
+    --tp-fresh-install-accent-hover: #0c57d0;
+    --tp-fresh-install-accent-hover-border: #0945a4;
+    --tp-fresh-install-inner-padding: clamp(1.35rem, 1rem + 1.4vw, 2.2rem);
+    margin: 0 auto;
+    max-width: 72rem;
+    padding: 0 1rem;
+    width: 100%;
+}
+
+.tp-fresh-install-shell .tp-setup-form-messages,
+.tp-fresh-install-shell .tp-setup-form-header {
+    margin-left: auto;
+    margin-right: auto;
+    width: var(--tp-fresh-install-width);
+}
+
+.tp-fresh-install-shell .tp-setup-form-messages {
+    margin-bottom: 1.5rem;
+}
+
+.tp-fresh-install-shell .tp-setup-form-header {
+    margin-bottom: 3rem;
+    text-align: center;
+}
+
+.tp-fresh-install-shell .tp-card-setup-wizard {
+    background: var(--bs-body-bg);
+    border: 1px solid color-mix(in srgb, var(--bs-primary) 20%, var(--bs-border-color));
+    border-radius: calc(var(--bs-border-radius-xl) + 0.1rem);
+    box-shadow:
+        0 1.1rem 2.5rem color-mix(in srgb, var(--bs-primary) 10%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+    margin: 0 auto;
+    min-width: 0;
+    overflow: hidden;
+    width: var(--tp-fresh-install-width);
+}
+
+.tp-fresh-install-shell .tp-card-setup-steps {
+    margin: 0 auto 3rem;
+}
+
+.tp-fresh-install-shell .tp-card-setup-steps .card-header {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    min-height: 8rem;
+    padding: 1.15rem var(--tp-fresh-install-inner-padding);
+    position: relative;
+}
+
+.tp-fresh-install-shell .tp-card-setup-steps .card-header::after {
+    bottom: 0;
+    left: var(--tp-fresh-install-inner-padding);
+    margin-top: 0;
+    position: absolute;
+    right: var(--tp-fresh-install-inner-padding);
+    width: auto;
+}
+
+.tp-fresh-install-shell .tp-card-setup-steps .tp-wizard-stepper {
+    margin: 0;
+    width: 100%;
+}
+
+.tp-fresh-install-shell .tp-card-setup-steps .card-header > .px-1.py-2 {
+    width: 100%;
+}
+
+.tp-fresh-install-shell .card-header {
+    background: transparent;
+    border-bottom: 0;
+    padding: 1.35rem 1.35rem 0;
+}
+
+.tp-fresh-install-shell .card-header::after {
+    border-bottom: 1px solid color-mix(in srgb, var(--bs-primary) 18%, var(--bs-border-color));
+    content: "";
+    display: block;
+    margin-top: 1rem;
+    width: 100%;
+}
+
+.tp-fresh-install-shell .card-header > .px-1.py-2 {
+    padding: 0 !important;
+}
+
+.tp-fresh-install-shell .tp-wizard-stepper {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0;
+    justify-content: flex-start;
+    margin: 0.625rem;
+    overflow-x: auto;
+    padding: 0;
+}
+
+.tp-fresh-install-shell .tp-wizard-step {
+    flex: 1 1 0;
+    height: 4rem;
+    max-width: none;
+    min-width: 0;
+    position: relative;
+    width: auto;
+}
+
+.tp-fresh-install-shell .tp-wizard-step + .tp-wizard-step {
+    margin-left: -0.5rem;
+}
+
+.tp-fresh-install-shell .tp-wizard-step:first-child {
+    border-radius: var(--bs-border-radius-lg) 0 0 var(--bs-border-radius-lg);
+    overflow: hidden;
+}
+
+.tp-fresh-install-shell .tp-wizard-step:last-child {
+    border-radius: 0 var(--bs-border-radius-lg) var(--bs-border-radius-lg) 0;
+    overflow: hidden;
+}
+
+.tp-fresh-install-shell .tp-wizard-step-link,
+.tp-fresh-install-shell .tp-wizard-step-current,
+.tp-fresh-install-shell .tp-wizard-step-available,
+.tp-fresh-install-shell .tp-wizard-step-disabled {
+    --tp-step-background: var(--bs-tertiary-bg);
+    --tp-step-color: var(--bs-secondary-color);
+    background: var(--tp-step-background);
+    box-sizing: border-box;
+    clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 50%, calc(100% - 1rem) 100%, 0 100%, 1rem 50%);
+    color: var(--tp-step-color);
+    display: flex;
+    font-weight: 700;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 0;
+    padding: 0 3.4rem 0 1.65rem;
+    position: relative;
+    text-align: center;
+    text-decoration: none;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+    white-space: nowrap;
+    width: 100%;
+    box-shadow: 0 0.35rem 0.9rem color-mix(in srgb, var(--bs-primary) 8%, transparent);
+}
+
+.tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-link,
+.tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-current,
+.tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-available,
+.tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-disabled {
+    clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 50%, calc(100% - 1rem) 100%, 0 100%);
+    padding-left: 1.25rem;
+    padding-right: 3.4rem;
+}
+
+.tp-fresh-install-shell .tp-wizard-step:last-child .tp-wizard-step-link,
+.tp-fresh-install-shell .tp-wizard-step:last-child .tp-wizard-step-current,
+.tp-fresh-install-shell .tp-wizard-step:last-child .tp-wizard-step-available,
+.tp-fresh-install-shell .tp-wizard-step:last-child .tp-wizard-step-disabled {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 1rem 50%);
+}
+
+.tp-fresh-install-shell .tp-wizard-step-link:hover,
+.tp-fresh-install-shell .tp-wizard-step-available:hover {
+    box-shadow: 0 0.45rem 1rem color-mix(in srgb, var(--tp-fresh-install-accent) 14%, transparent);
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+.tp-fresh-install-shell .tp-wizard-step-indicator {
+    align-items: center;
+    display: inline-flex;
+    font-size: 1.05rem;
+    font-weight: 700;
+    justify-content: center;
+    line-height: 1;
+    min-width: 1rem;
+}
+
+.tp-fresh-install-shell .tp-wizard-step-label {
+    display: block;
+    font-size: 1.125rem;
+    font-weight: 800;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+.tp-fresh-install-shell .tp-wizard-step-trailing {
+    align-items: center;
+    display: inline-flex;
+    height: 2rem;
+    justify-content: center;
+    line-height: 1;
+    min-width: 2rem;
+    position: absolute;
+    right: 1.1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2rem;
+}
+
+.tp-fresh-install-shell .tp-wizard-step-trailing.is-done {
+    font-size: 2rem;
+    font-weight: 800;
+    opacity: 0.95;
+}
+
+.tp-fresh-install-shell .tp-wizard-step-link {
+    --tp-step-background: color-mix(in srgb, var(--tp-fresh-install-accent) 80%, white);
+    --tp-step-color: #fff;
+}
+
+.tp-fresh-install-shell .tp-wizard-step-current {
+    --tp-step-background: var(--tp-fresh-install-accent);
+    --tp-step-color: #fff;
+    box-shadow:
+        0 0.9rem 2rem color-mix(in srgb, var(--tp-fresh-install-accent) 26%, transparent);
+}
+
+.tp-fresh-install-shell .tp-wizard-step-available {
+    --tp-step-background: color-mix(in srgb, var(--tp-fresh-install-accent) 80%, white);
+    --tp-step-color: #fff;
+}
+
+.tp-fresh-install-shell .tp-wizard-step-disabled {
+    --tp-step-background: color-mix(in srgb, var(--bs-body-bg) 92%, var(--bs-emphasis-color));
+    --tp-step-color: color-mix(in srgb, var(--bs-secondary-color) 90%, var(--bs-emphasis-color));
+    box-shadow: 0 0.2rem 0.55rem color-mix(in srgb, var(--bs-emphasis-color) 6%, transparent);
+}
+
+.tp-fresh-install-shell .tp-choice-group {
+    display: grid;
+    gap: 1rem;
+}
+
+.tp-fresh-install-shell .tp-form-group .mb-3 {
+    max-width: none;
+    width: 100% !important;
+}
+
+.tp-fresh-install-shell .tp-form-group .form-group,
+.tp-fresh-install-shell .tp-form-group .controls,
+.tp-fresh-install-shell .tp-form-group .input-group,
+.tp-fresh-install-shell .tp-form-group .crispy-field {
+    max-width: none;
+    width: 100% !important;
+}
+
+.tp-fresh-install-shell .tp-form-group > .mb-3:last-child,
+.tp-fresh-install-shell .tp-tls-panel > .mb-3:last-child {
+    margin-bottom: 0 !important;
+}
+
+.tp-fresh-install-shell .tp-tls-panel {
+    margin-bottom: 0;
+}
+
+.tp-fresh-install-shell .tp-tls-panel > .mb-3:last-child > .mb-3:last-child,
+.tp-fresh-install-shell .tp-tls-panel > .mb-3:last-child > .form-group:last-child,
+.tp-fresh-install-shell .tp-tls-panel > .mb-3:last-child > .crispy-field:last-child {
+    margin-bottom: 0 !important;
+}
+
+.tp-fresh-install-shell .tp-tls-panel > .mb-3:last-child .form-text,
+.tp-fresh-install-shell .tp-tls-panel > .mb-3:last-child .text-danger,
+.tp-fresh-install-shell .tp-tls-panel > .mb-3:last-child .invalid-feedback {
+    margin-bottom: 0;
+}
+
+.tp-fresh-install-shell .tp-choice-option {
+    cursor: pointer;
+    display: block;
+    margin: 0;
+}
+
+.tp-fresh-install-shell .tp-choice-option.is-disabled {
+    cursor: not-allowed;
+}
+
+.tp-fresh-install-shell .tp-choice-option input {
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+}
+
+.tp-fresh-install-shell .tp-choice-card {
+    background-color: var(--bs-body-bg);
+    border: 2px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius-lg);
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 1rem 1.1rem;
+    transition: border-color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.tp-fresh-install-shell .tp-choice-option:hover .tp-choice-card {
+    border-color: color-mix(in srgb, var(--bs-primary) 45%, var(--bs-border-color));
+    transform: translateY(-1px);
+}
+
+.tp-fresh-install-shell .tp-choice-option.is-disabled:hover .tp-choice-card {
+    border-color: color-mix(in srgb, var(--bs-border-color) 88%, transparent);
+    transform: none;
+}
+
+.tp-fresh-install-shell .tp-choice-option input:focus-visible + .tp-choice-card {
+    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--bs-primary) 25%, transparent);
+}
+
+.tp-fresh-install-shell .tp-choice-option input:checked + .tp-choice-card {
+    background-color: color-mix(in srgb, var(--bs-primary) 12%, var(--bs-body-bg));
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 0.15rem color-mix(in srgb, var(--bs-primary) 15%, transparent);
+}
+
+.tp-fresh-install-shell .tp-choice-option.is-disabled .tp-choice-card,
+.tp-fresh-install-shell .tp-choice-option.is-disabled input:checked + .tp-choice-card {
+    background-color: color-mix(in srgb, var(--bs-tertiary-bg) 90%, var(--bs-body-bg));
+    border-color: color-mix(in srgb, var(--bs-border-color) 88%, transparent);
+    box-shadow: none;
+}
+
+.tp-fresh-install-shell .tp-choice-title {
+    color: var(--bs-emphasis-color);
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.tp-fresh-install-shell .tp-choice-description {
+    color: var(--bs-secondary-color);
+    font-size: 0.95rem;
+    line-height: 1.45;
+}
+
+.tp-fresh-install-shell .tp-choice-option.is-disabled .tp-choice-title,
+.tp-fresh-install-shell .tp-choice-option.is-disabled .tp-choice-description {
+    color: var(--bs-secondary-color);
+    opacity: 0.78;
+}
+
+.tp-fresh-install-shell .tp-wizard-body {
+    padding: var(--tp-fresh-install-inner-padding);
+}
+
+.tp-fresh-install-shell .tp-wizard-heading {
+    color: var(--bs-emphasis-color);
+    font-size: clamp(1.55rem, 1.35rem + 0.55vw, 1.95rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0 0 1.35rem;
+    text-align: left;
+}
+
+.tp-fresh-install-shell .tp-wizard-heading::after {
+    border-bottom: 1px solid color-mix(in srgb, var(--bs-border-color) 72%, transparent);
+    content: "";
+    display: block;
+    margin-top: 1.2rem;
+}
+
+.tp-fresh-install-shell .tp-form-divider {
+    border: 0;
+    border-top: 1px solid color-mix(in srgb, var(--bs-border-color) 72%, transparent);
+    margin: 1.5rem 0;
+    opacity: 1;
+}
+
+.tp-fresh-install-shell .tp-tls-panel[hidden] {
+    display: none !important;
+}
+
+.tp-fresh-install-shell .tp-tls-error {
+    align-items: center;
+    background: color-mix(in srgb, var(--bs-danger) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bs-danger) 42%, transparent);
+    border-radius: var(--bs-border-radius);
+    color: var(--bs-danger-text-emphasis, var(--bs-danger));
+    display: flex;
+    font-size: 1.05rem;
+    font-weight: 700;
+    justify-content: flex-start;
+    margin: 0 0 1.5rem;
+    min-height: 3.25rem;
+    padding: 0.9rem 1rem;
+    text-align: left;
+}
+
+.tp-fresh-install-shell .tp-tls-error-lines {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.tp-fresh-install-shell .tp-summary-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.tp-fresh-install-shell .tp-summary-item {
+    background: color-mix(in srgb, var(--bs-tertiary-bg) 78%, var(--bs-body-bg));
+    border: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
+    border-radius: var(--bs-border-radius-lg);
+    display: grid;
+    gap: 0.45rem;
+    padding: 1rem 1.15rem;
+    text-align: left;
+}
+
+.tp-fresh-install-shell .tp-summary-label {
+    color: var(--bs-secondary-color);
+    font-size: 0.95rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.tp-fresh-install-shell .tp-summary-value {
+    color: var(--bs-emphasis-color);
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.35;
+    text-align: left;
+}
+
+.tp-fresh-install-shell .tp-summary-details {
+    border-top: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
+    display: grid;
+    gap: 0.85rem;
+    margin-top: 0.15rem;
+    padding-top: 0.9rem;
+}
+
+.tp-fresh-install-shell .tp-summary-detail {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.tp-fresh-install-shell .tp-summary-detail-label {
+    color: var(--bs-secondary-color);
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.tp-fresh-install-shell .tp-summary-detail-value {
+    color: var(--bs-emphasis-color);
+    font-size: 0.98rem;
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: left;
+    white-space: pre-line;
+}
+
+.tp-fresh-install-shell .tp-summary-downloads {
+    border-top: 1px solid color-mix(in srgb, var(--bs-border-color) 70%, transparent);
+    display: grid;
+    gap: 0.85rem;
+    margin-top: 0.15rem;
+    padding-top: 0.9rem;
+}
+
+.tp-fresh-install-shell .tp-summary-download-actions {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.tp-fresh-install-shell .tp-summary-download-actions .btn {
+    width: 50%;
+}
+
+.tp-fresh-install-shell .tp-setup-form-submit {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: var(--tp-fresh-install-accent);
+    --bs-btn-border-color: var(--tp-fresh-install-accent-border);
+    --bs-btn-hover-color: #fff;
+    --bs-btn-hover-bg: var(--tp-fresh-install-accent-hover);
+    --bs-btn-hover-border-color: var(--tp-fresh-install-accent-hover-border);
+    --bs-btn-active-color: var(--tp-fresh-install-accent);
+    --bs-btn-active-bg: transparent;
+    --bs-btn-active-border-color: var(--tp-fresh-install-accent);
+    --bs-btn-focus-shadow-rgb: 10, 77, 184;
+    box-shadow:
+        0 0.9rem 2rem color-mix(in srgb, var(--tp-fresh-install-accent) 26%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
+}
+
+.tp-fresh-install-shell .tp-setup-form-submit:hover {
+    box-shadow:
+        0 1.1rem 2.3rem color-mix(in srgb, var(--tp-fresh-install-accent) 30%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+}
+
+.tp-fresh-install-shell .tp-setup-form-submit:focus-visible {
+    box-shadow:
+        0 0 0 0.24rem color-mix(in srgb, var(--tp-fresh-install-accent) 22%, transparent),
+        0 1.1rem 2.3rem color-mix(in srgb, var(--tp-fresh-install-accent) 30%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+}
+
+.tp-fresh-install-shell .tp-setup-form-submit.btn:active,
+.tp-fresh-install-shell .tp-setup-form-submit.btn:active:focus-visible {
+    box-shadow:
+        0 0.4rem 1rem color-mix(in srgb, var(--tp-fresh-install-accent) 16%, transparent),
+        inset 0 0 0 1px color-mix(in srgb, var(--tp-fresh-install-accent) 18%, transparent),
+        inset 0 0.12rem 0.45rem color-mix(in srgb, var(--tp-fresh-install-accent) 12%, transparent);
+    transform: translateY(1px);
+}
+
+.tp-fresh-install-shell .tp-setup-form-back.disabled,
+.tp-fresh-install-shell .tp-setup-form-back[aria-disabled="true"] {
+    box-shadow: none;
+    opacity: 0.6;
+    transform: none;
+}
+
+.tp-fresh-install-shell .tp-setup-form-back.tp-setup-form-back-placeholder,
+.tp-fresh-install-shell .tp-setup-form-back:disabled {
+    --bs-btn-color: #fff;
+    --bs-btn-bg: #2f353b;
+    --bs-btn-border-color: transparent;
+    --bs-btn-hover-bg: #2f353b;
+    --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-bg: #2f353b;
+    --bs-btn-active-border-color: transparent;
+    --bs-btn-disabled-color: #fff;
+    --bs-btn-disabled-bg: #2f353b;
+    --bs-btn-disabled-border-color: transparent;
+    box-shadow:
+        0 0.55rem 1.2rem color-mix(in srgb, #2f353b 16%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+    border-color: transparent;
+    color: #fff;
+    cursor: default;
+    opacity: 1;
+    transform: none;
+}
+
+.tp-fresh-install-shell .tp-setup-form-back.tp-setup-form-back-placeholder:hover,
+.tp-fresh-install-shell .tp-setup-form-back.tp-setup-form-back-placeholder:focus-visible,
+.tp-fresh-install-shell .tp-setup-form-back:disabled:hover,
+.tp-fresh-install-shell .tp-setup-form-back:disabled:focus-visible {
+    box-shadow:
+        0 0.55rem 1.2rem color-mix(in srgb, #2f353b 16%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+    color: #fff;
+    transform: none;
+}
+
+.tp-fresh-install-shell .tp-summary-loading-state {
+    margin: 0 auto;
+    width: var(--tp-fresh-install-width);
+}
+
+.tp-fresh-install-shell .tp-summary-loading-card {
+    min-height: clamp(20rem, 52vh, 28rem);
+    position: relative;
+    width: 100%;
+}
+
+.tp-fresh-install-shell .tp-summary-loading-card::before {
+    background:
+        radial-gradient(circle at top, color-mix(in srgb, white 12%, transparent), transparent 60%),
+        linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--tp-fresh-install-accent) 5%, var(--bs-body-bg)) 0%,
+            var(--bs-body-bg) 42%
+        );
+    content: "";
+    inset: 0;
+    pointer-events: none;
+    position: absolute;
+}
+
+html[data-bs-theme="light"] .tp-fresh-install-shell .tp-summary-loading-card::before {
+    background:
+        radial-gradient(circle at top, color-mix(in srgb, white 24%, transparent), transparent 58%),
+        linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--tp-fresh-install-accent) 12%, white) 0%,
+            var(--bs-body-bg) 42%
+        );
+}
+
+.tp-fresh-install-shell .tp-summary-loading-card .card-body {
+    align-items: center;
+    display: grid;
+    gap: 1.1rem;
+    justify-items: center;
+    min-height: clamp(20rem, 52vh, 28rem);
+    padding: 3rem var(--tp-fresh-install-inner-padding);
+    position: relative;
+    text-align: center;
+    z-index: 1;
+}
+
+.tp-fresh-install-shell .tp-summary-loading-visual {
+    align-items: center;
+    background: color-mix(in srgb, var(--tp-fresh-install-accent) 10%, var(--bs-body-bg));
+    border: 1px solid color-mix(in srgb, var(--tp-fresh-install-accent) 18%, var(--bs-border-color));
+    border-radius: 999px;
+    box-shadow:
+        0 1rem 2.1rem color-mix(in srgb, var(--tp-fresh-install-accent) 12%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
+    display: inline-flex;
+    height: 6rem;
+    justify-content: center;
+    position: relative;
+    width: 6rem;
+}
+
+.tp-fresh-install-shell .tp-summary-loading-visual::after {
+    border: 1px solid color-mix(in srgb, var(--tp-fresh-install-accent) 10%, transparent);
+    border-radius: inherit;
+    content: "";
+    inset: -0.55rem;
+    position: absolute;
+}
+
+.tp-fresh-install-shell .tp-summary-loading-spinner {
+    border-width: 0.28rem;
+    color: var(--tp-fresh-install-accent);
+    height: 2.6rem;
+    width: 2.6rem;
+}
+
+.tp-fresh-install-shell .tp-summary-loading-title {
+    color: var(--bs-emphasis-color);
+    font-size: clamp(2rem, 1.75rem + 0.72vw, 2.4rem);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 1.02;
+    margin: 0;
+}
+
+.tp-fresh-install-shell .tp-summary-loading-copy {
+    color: var(--bs-secondary-color);
+    font-size: 1.08rem;
+    line-height: 1.65;
+    margin: 0;
+    max-width: 27rem;
+}
+
+@media (max-width: 767.98px) {
+    .tp-fresh-install-shell .tp-wizard-stepper {
+        flex-direction: column;
+        overflow-x: visible;
+        margin: 0.625rem 0;
+        padding: 0;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-step {
+        flex-basis: auto;
+        height: 4rem;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-step + .tp-wizard-step {
+        margin-left: 0;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-step-link,
+    .tp-fresh-install-shell .tp-wizard-step-current,
+    .tp-fresh-install-shell .tp-wizard-step-available,
+    .tp-fresh-install-shell .tp-wizard-step-disabled {
+        clip-path: none;
+        justify-content: flex-start;
+        padding: 0.9rem 3.4rem 0.9rem 1rem;
+        text-align: left;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-link,
+    .tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-current,
+    .tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-available,
+    .tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-disabled {
+        clip-path: none;
+        padding-left: 1rem;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-step-label {
+        text-align: left;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-body {
+        padding: 1.25rem;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-heading {
+        font-size: 2rem;
+        margin-bottom: 1.15rem;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-heading::after {
+        margin-top: 1.15rem;
+    }
+
+    .tp-fresh-install-shell .tp-summary-loading-state {
+        width: 100%;
+    }
+
+    .tp-fresh-install-shell .tp-summary-loading-card .card-body {
+        padding: 2.4rem 1.75rem;
+    }
+
+    .tp-fresh-install-shell .tp-summary-loading-visual {
+        height: 5.35rem;
+        width: 5.35rem;
+    }
+}
+
+.tp-fresh-install-shell .tp-wizard-step-link .tp-wizard-step-indicator,
+.tp-fresh-install-shell .tp-wizard-step-current .tp-wizard-step-indicator,
+.tp-fresh-install-shell .tp-wizard-step-available .tp-wizard-step-indicator,
+.tp-fresh-install-shell .tp-wizard-step-disabled .tp-wizard-step-indicator {
+    display: none;
+}
