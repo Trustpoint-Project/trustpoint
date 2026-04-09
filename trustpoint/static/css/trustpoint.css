@@ -30,7 +30,10 @@ body {
 }
 
 .body-users {
+    max-width: 100%;
     overflow-y: auto;
+    scrollbar-gutter: stable;
+    width: 100%;
 }
 
 a {

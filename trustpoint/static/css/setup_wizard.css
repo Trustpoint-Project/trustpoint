@@ -1038,10 +1038,15 @@
 
 html[data-bs-theme="light"] .tp-fresh-install-shell .tp-summary-loading-card::before {
     background:
-        radial-gradient(circle at top, color-mix(in srgb, white 24%, transparent), transparent 58%),
+        radial-gradient(
+            circle at top,
+            color-mix(in srgb, var(--tp-fresh-install-accent) 22%, white) 0%,
+            color-mix(in srgb, var(--tp-fresh-install-accent) 14%, transparent) 34%,
+            transparent 60%
+        ),
         linear-gradient(
             180deg,
-            color-mix(in srgb, var(--tp-fresh-install-accent) 12%, white) 0%,
+            color-mix(in srgb, var(--tp-fresh-install-accent) 8%, var(--bs-body-bg)) 0%,
             var(--bs-body-bg) 42%
         );
 }
