@@ -1,6 +1,7 @@
 """SetupWizard Models."""
+
 from datetime import UTC
-from typing import Any, Final, ClassVar, Self
+from typing import Any, ClassVar, Final, Self
 
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
@@ -90,13 +91,12 @@ class SetupWizardCompletedModel(models.Model):
         """
         if self.pk:
             prior = (
-                SetupWizardCompletedModel
-                .objects.filter(pk=self.pk)
+                SetupWizardCompletedModel.objects.filter(pk=self.pk)
                 .values_list('setup_completed_at', flat=True)
                 .first()
             )
             if prior is not None and self.setup_completed_at != prior:
-                err_msg =  {'setup_completed_at': 'Initial setup is write-once and cannot be modified.'}
+                err_msg = {'setup_completed_at': 'Initial setup is write-once and cannot be modified.'}
                 raise ValidationError(err_msg)
 
     @classmethod
@@ -110,9 +110,7 @@ class SetupWizardCompletedModel(models.Model):
             True if setup completion was recorded by this call, otherwise False.
         """
         with transaction.atomic():
-            cfg, _created = cls.objects.select_for_update().get_or_create(
-                singleton_id=cls.SINGLETON_ID
-            )
+            cfg, _created = cls.objects.select_for_update().get_or_create(singleton_id=cls.SINGLETON_ID)
             if cfg.setup_completed_at is not None:
                 return False
             cfg.setup_completed_at = timezone.now().astimezone(UTC)
@@ -135,6 +133,8 @@ class SetupWizardConfigModel(models.Model):
     )
 
     class FreshInstallCurrentStep(models.IntegerChoices):
+        """Enumerate the ordered steps in the fresh-install wizard."""
+
         CRYPTO_STORAGE = 0, gettext_lazy('Crypto-Storage')
         DEMO_DATA = 1, gettext_lazy('Demo-Data')
         TLS_CONFIG = 2, gettext_lazy('TLS-Config')
@@ -163,11 +163,12 @@ class SetupWizardConfigModel(models.Model):
     )
 
     fresh_install_summary_submitted = models.BooleanField(
-        default=False,
-        help_text='Whether the summary step was submitted.'
+        default=False, help_text='Whether the summary step was submitted.'
     )
 
     class FreshInstallTlsConfigType(models.TextChoices):
+        """Enumerate the supported TLS credential input modes for fresh install."""
+
         GENERATE = 'generate', gettext_lazy('Generate credential')
         PKCS12 = 'pkcs12', gettext_lazy('Upload PKCS#12')
         SEPARATE_FILES = 'separate_files', gettext_lazy('Upload separate files')
@@ -189,25 +190,35 @@ class SetupWizardConfigModel(models.Model):
     )
 
     class CryptoStorageType(models.IntegerChoices):
+        """Enumerate the available cryptographic storage backends for setup."""
+
         SoftwareStorage = 0, gettext_lazy('Software Storage')
         HsmStorage = 1, gettext_lazy('HSM Storage')
 
     crypto_storage = models.PositiveSmallIntegerField(
-        choices=CryptoStorageType,
-        null=False,
-        blank=False,
-        default=CryptoStorageType.SoftwareStorage
+        choices=CryptoStorageType, null=False, blank=False, default=CryptoStorageType.SoftwareStorage
     )
 
-    inject_demo_data = models.BooleanField(
-        null=False,
-        blank=False,
-        help_text='Inject demo data.',
-        default=True
-    )
+    inject_demo_data = models.BooleanField(null=False, blank=False, help_text='Inject demo data.', default=True)
+
+    def __str__(self) -> str:
+        """Return a concise description of the current singleton wizard configuration."""
+        current_step = self.FreshInstallCurrentStep(self.fresh_install_current_step).label
+        return f'SetupWizardConfigModel(step={current_step}, demo_data={self.inject_demo_data})'
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Persist the singleton config row while enforcing the fixed primary key."""
+        if self.pk is None:
+            self.pk = self.SINGLETON_ID
+        elif self.pk != self.SINGLETON_ID:
+            err_msg = 'Only the singleton row with pk=1 is allowed.'
+            raise ValidationError(err_msg)
+
+        return super().save(*args, **kwargs)
 
     @classmethod
     def get_singleton(cls) -> Self:
+        """Return the singleton setup wizard configuration row, creating it if needed."""
         obj, _ = cls.objects.get_or_create(pk=cls.SINGLETON_ID)
         return obj
 
@@ -242,17 +253,8 @@ class SetupWizardConfigModel(models.Model):
         setattr(self, field_name, True)
 
     def clean(self) -> None:
+        """Validate that only the fixed singleton primary key is ever used."""
         super().clean()
         if self.pk is not None and self.pk != self.SINGLETON_ID:
             err_msg = {'singleton_id': gettext_lazy('singleton_id must always be 1.')}
             raise ValidationError(err_msg)
-
-    def save(self, *args: Any, **kwargs: Any) -> None:
-
-        if self.pk is None:
-            self.pk = self.SINGLETON_ID
-        elif self.pk != self.SINGLETON_ID:
-            err_msg  = 'Only the singleton row with pk=1 is allowed.'
-            raise ValidationError(err_msg)
-
-        return super().save(*args, **kwargs)
