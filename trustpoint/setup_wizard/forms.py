@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import ipaddress
 import re
-from collections.abc import Mapping
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django import forms
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy
 
 from .models import SetupWizardConfigModel
 from .tls_credential import extract_staged_tls_sans
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from django.utils.functional import Promise
 
 CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
     str(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage): gettext_lazy(
@@ -37,9 +40,10 @@ TLS_CONFIG_OPTION_DESCRIPTIONS = {
 }
 
 TLS_CONFIG_TYPE_CHOICES = tuple(
-    (choice.value, choice.label)
-    for choice in SetupWizardConfigModel.FreshInstallTlsConfigType
+    (choice.value, choice.label) for choice in SetupWizardConfigModel.FreshInstallTlsConfigType
 )
+
+MAX_DNS_NAME_LENGTH = 253
 
 
 class EmptyForm(forms.Form):
@@ -68,19 +72,19 @@ class WizardCardRadioSelect(forms.RadioSelect):
         self.disabled_values = {str(value) for value in disabled_values or set()}
         super().__init__(*args, **kwargs)
 
-    def create_option(
+    def create_option(  # noqa: PLR0913
         self,
         name: str,
         value: object,
         label: str | int,
-        selected: bool,
+        selected: bool,  # noqa: FBT001
         index: int,
         subindex: int | None = None,
         attrs: dict[str, object] | None = None,
     ) -> dict[str, object]:
         """Build a choice option and attach its description text."""
         option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
-        option_attrs = cast(dict[str, object], option['attrs'])
+        option_attrs = cast('dict[str, object]', option['attrs'])
         is_disabled = str(value) in self.disabled_values
         if is_disabled:
             option_attrs['disabled'] = True
@@ -129,7 +133,7 @@ class FreshInstallCryptoStorageModelForm(FreshInstallModelBaseForm):
 
         model = SetupWizardConfigModel
         fields = ('crypto_storage',)
-        widgets = {
+        widgets: ClassVar[dict[str, forms.Widget]] = {
             'crypto_storage': WizardCardRadioSelect(
                 descriptions=CRYPTO_STORAGE_OPTION_DESCRIPTIONS,
                 disabled_values={str(SetupWizardConfigModel.CryptoStorageType.HsmStorage)},
@@ -215,7 +219,7 @@ class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
         """Populate the read-only summary values from the singleton config."""
         super().__init__(*args, **kwargs)
 
-        instance = cast(SetupWizardConfigModel, self.instance)
+        instance = cast('SetupWizardConfigModel', self.instance)
         tls_credential = instance.fresh_install_tls_credential
         ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans(tls_credential)
         self.fields['storage_selection'].initial = instance.get_crypto_storage_display()
@@ -224,9 +228,7 @@ class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
         )
         self.fields['tls_server_configuration'].initial = instance.get_fresh_install_tls_mode_display()
         self.fields['tls_common_name'].initial = (
-            tls_credential.certificate.common_name
-            if tls_credential and tls_credential.certificate
-            else '-'
+            tls_credential.certificate.common_name if tls_credential and tls_credential.certificate else '-'
         )
         self.fields['tls_ipv4_addresses'].initial = self._format_tls_summary_values(
             ipv4_addresses,
@@ -338,7 +340,7 @@ class FreshInstallTlsConfigForm(forms.Form):
             err_msg = gettext_lazy('Contains an invalid DNS name.')
             raise forms.ValidationError(err_msg) from exception
 
-        if not normalized_value or len(normalized_value) > 253:
+        if not normalized_value or len(normalized_value) > MAX_DNS_NAME_LENGTH:
             err_msg = gettext_lazy('Contains an invalid DNS name.')
             raise forms.ValidationError(err_msg)
 
@@ -381,7 +383,7 @@ class FreshInstallTlsConfigForm(forms.Form):
 
     def clean(self) -> dict[str, Any]:
         """Validate the field set required for the selected TLS mode."""
-        cleaned_data = cast(dict[str, Any], super().clean())
+        cleaned_data = cast('dict[str, Any]', super().clean())
 
         tls_mode = cleaned_data.get('tls_mode')
 
@@ -406,14 +408,15 @@ class FreshInstallTlsConfigForm(forms.Form):
         return cleaned_data
 
 
-
 class StartupWizardTlsCertificateForm(forms.Form):
     """The Setup Wizard TLS Certificate Form."""
 
     ipv4_addresses = forms.CharField(
         label=gettext_lazy('IPv4-Addresses (comma-separated list)'), initial='127.0.0.1, ', required=False
     )
-    ipv6_addresses = forms.CharField(label=gettext_lazy('IPv6-Addresses (comma-separated list)'), initial='::1, ', required=False)
+    ipv6_addresses = forms.CharField(
+        label=gettext_lazy('IPv6-Addresses (comma-separated list)'), initial='::1, ', required=False
+    )
     domain_names = forms.CharField(
         label=gettext_lazy('Domain-Names (comma-separated list)'), initial='localhost, ', required=False
     )
@@ -496,6 +499,7 @@ class StartupWizardTlsCertificateForm(forms.Form):
             raise forms.ValidationError(err_msg)
         return cleaned_data
 
+
 class HsmSetupForm(forms.Form):
     """Form for HSM setup configuration."""
 
@@ -504,7 +508,7 @@ class HsmSetupForm(forms.Form):
         label=gettext_lazy('PKCS#11 Module Path'),
         help_text=gettext_lazy('Path to the PKCS#11 module library.'),
         widget=forms.TextInput(attrs={'class': 'form-control'}),
-        required=True
+        required=True,
     )
 
     slot = forms.IntegerField(
@@ -514,7 +518,7 @@ class HsmSetupForm(forms.Form):
         label=gettext_lazy('Slot Number'),
         help_text=gettext_lazy('HSM slot number to use.'),
         widget=forms.NumberInput(attrs={'class': 'form-control'}),
-        required=True
+        required=True,
     )
 
     label = forms.CharField(
@@ -522,7 +526,7 @@ class HsmSetupForm(forms.Form):
         label=gettext_lazy('Token Label'),
         help_text=gettext_lazy('Label for the HSM token.'),
         widget=forms.TextInput(attrs={'class': 'form-control'}),
-        required=True
+        required=True,
     )
 
     # Hidden field to store the HSM type (will be set by the view)
@@ -539,39 +543,23 @@ class HsmSetupForm(forms.Form):
             self.fields['slot'].initial = 0
             self.fields['label'].initial = 'Trustpoint-SoftHSM'
 
-            self.fields['module_path'].widget.attrs.update({
-                'readonly': True,
-                'class': 'form-control'
-            })
-            self.fields['slot'].widget.attrs.update({
-                'readonly': True,
-                'class': 'form-control'
-            })
-            self.fields['label'].widget.attrs.update({
-                'readonly': True,
-                'class': 'form-control'
-            })
+            self.fields['module_path'].widget.attrs.update({'readonly': True, 'class': 'form-control'})
+            self.fields['slot'].widget.attrs.update({'readonly': True, 'class': 'form-control'})
+            self.fields['label'].widget.attrs.update({'readonly': True, 'class': 'form-control'})
 
         elif hsm_type == 'physical':
             self.fields['module_path'].initial = ''
             self.fields['slot'].initial = 0
             self.fields['label'].initial = 'Trustpoint-Physical-HSM'
 
-            self.fields['module_path'].widget.attrs.update({
-                'placeholder': '/usr/lib/vendor/libpkcs11.so'
-            })
-            self.fields['label'].widget.attrs.update({
-                'placeholder': 'Enter token label'
-            })
+            self.fields['module_path'].widget.attrs.update({'placeholder': '/usr/lib/vendor/libpkcs11.so'})
+            self.fields['label'].widget.attrs.update({'placeholder': 'Enter token label'})
 
     def clean(self) -> dict[str, Any]:
         """Custom validation for the form."""
         cleaned_data = super().clean()
         if cleaned_data is None:
-            err_msg = (
-                'Unexpected error occurred. Failed to get the cleaned_data '
-                'of the HsmSetupForm instance.'
-            )
+            err_msg = 'Unexpected error occurred. Failed to get the cleaned_data of the HsmSetupForm instance.'
             raise forms.ValidationError(err_msg)
 
         hsm_type = cleaned_data.get('hsm_type')
@@ -617,28 +605,33 @@ class HsmSetupForm(forms.Form):
             return value
         return ''
 
+
 class BackupPasswordForm(forms.Form):
     """Form for setting up backup password for PKCS#11 token."""
 
     password = forms.CharField(
-        widget=forms.PasswordInput(attrs={
-            'class': 'form-control',
-            'placeholder': gettext_lazy('Enter backup password'),
-            'autocomplete': 'new-password',
-        }),
+        widget=forms.PasswordInput(
+            attrs={
+                'class': 'form-control',
+                'placeholder': gettext_lazy('Enter backup password'),
+                'autocomplete': 'new-password',
+            }
+        ),
         label=gettext_lazy('Backup Password'),
         help_text=gettext_lazy('Enter a strong password to secure your backup encryption key.'),
-        required=True
+        required=True,
     )
 
     confirm_password = forms.CharField(
-        widget=forms.PasswordInput(attrs={
-            'class': 'form-control',
-            'placeholder': gettext_lazy('Confirm backup password'),
-            'autocomplete': 'new-password',
-        }),
+        widget=forms.PasswordInput(
+            attrs={
+                'class': 'form-control',
+                'placeholder': gettext_lazy('Confirm backup password'),
+                'autocomplete': 'new-password',
+            }
+        ),
         label=gettext_lazy('Confirm Password'),
-        required=True
+        required=True,
     )
 
     def clean_password(self) -> str:
@@ -673,10 +666,7 @@ class BackupPasswordForm(forms.Form):
         """
         cleaned_data = super().clean()
         if cleaned_data is None:
-            err_msg = (
-                'Unexpected error occurred. Failed to get the cleaned_data '
-                'of the BackupPasswordForm instance.'
-            )
+            err_msg = 'Unexpected error occurred. Failed to get the cleaned_data of the BackupPasswordForm instance.'
             raise forms.ValidationError(err_msg)
         password = cleaned_data.get('password')
         confirm_password = cleaned_data.get('confirm_password')
@@ -686,33 +676,32 @@ class BackupPasswordForm(forms.Form):
 
         return cleaned_data
 
+
 class BackupRestoreForm(forms.Form):
     """Form for restoring from backup with optional backup password."""
 
     MAX_PASSWORD_LENGTH = 128
 
-
     backup_file = forms.FileField(
         label=gettext_lazy('Backup File'),
         help_text=gettext_lazy('Select the backup file to restore from.'),
-        widget=forms.FileInput(attrs={
-            'class': 'form-control',
-            'accept': '.dump,.gz,.sql,.zip'
-        })
+        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.dump,.gz,.sql,.zip'}),
     )
 
     backup_password = forms.CharField(
-        widget=forms.PasswordInput(attrs={
-            'class': 'form-control',
-            'placeholder': gettext_lazy('Enter backup password (optional)'),
-            'autocomplete': 'current-password'
-        }),
+        widget=forms.PasswordInput(
+            attrs={
+                'class': 'form-control',
+                'placeholder': gettext_lazy('Enter backup password (optional)'),
+                'autocomplete': 'current-password',
+            }
+        ),
         label=gettext_lazy('Backup Password'),
         help_text=gettext_lazy(
             'Enter the backup password if the backup was created with DEK encryption. '
             'Leave empty if no password was set.'
         ),
-        required=False
+        required=False,
     )
 
     def clean_backup_file(self) -> Any:
@@ -729,8 +718,8 @@ class BackupRestoreForm(forms.Form):
         allowed_extensions = ['.dump', '.gz', '.sql', '.zip']
         if not any(backup_file.name.lower().endswith(ext) for ext in allowed_extensions):
             raise forms.ValidationError(
-                gettext_lazy('Invalid file type. Allowed types: %(extensions)s') %
-                {'extensions': ', '.join(allowed_extensions)}
+                gettext_lazy('Invalid file type. Allowed types: %(extensions)s')
+                % {'extensions': ', '.join(allowed_extensions)}
             )
 
         # Check file size (e.g., max 100MB)
@@ -750,17 +739,20 @@ class BackupRestoreForm(forms.Form):
 
         return password or ''
 
+
 class PasswordAutoRestoreForm(forms.Form):
     """Form for filling the password for auto-restore."""
 
     password = forms.CharField(
-        widget=forms.PasswordInput(attrs={
-            'class': 'form-control',
-            'placeholder': gettext_lazy('Enter backup password'),
-            'autocomplete': 'new-password',
-        }),
+        widget=forms.PasswordInput(
+            attrs={
+                'class': 'form-control',
+                'placeholder': gettext_lazy('Enter backup password'),
+                'autocomplete': 'new-password',
+            }
+        ),
         label=gettext_lazy('Backup Password'),
-        required=True
+        required=True,
     )
 
     def clean_password(self) -> str:
