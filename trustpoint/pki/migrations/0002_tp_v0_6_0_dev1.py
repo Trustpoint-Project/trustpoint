@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='certificateprofilemodel',
             name='credential_type',
-            field=models.CharField(choices=[('application', 'Application Credential'), ('ca', 'Certificate Authority'), ('domain', 'Domain Credential')], default='application', max_length=32),
+            field=models.CharField(choices=[('application', 'Application Credential'), ('domain', 'Domain Credential')], default='application', max_length=32),
         ),
         migrations.AddField(
             model_name='domainmodel',

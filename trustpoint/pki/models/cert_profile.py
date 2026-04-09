@@ -14,7 +14,6 @@ class CertificateProfileModel(models.Model):
     class ProfileCredentialType(models.TextChoices):
         """Enum for credential types."""
         APPLICATION = 'application', _('Application Credential')
-        CA = 'ca', _('Certificate Authority')
         DOMAIN = 'domain', _('Domain Credential')
 
     unique_name = models.CharField(max_length=255, unique=True)

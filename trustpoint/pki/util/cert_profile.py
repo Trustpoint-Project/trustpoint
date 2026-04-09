@@ -321,7 +321,7 @@ class CertProfileModel(CertProfileBaseModel):
     """Model for a certificate profile."""
     type: Literal['cert_profile']
     display_name: str | None = None
-    credential_type: Literal['application', 'ca', 'domain'] = 'application'
+    credential_type: Literal['application', 'domain'] = 'application'
     subject: ProfileSubjectModel = Field(validation_alias='subj', default=ProfileSubjectModel())
     extensions: ProfileExtensionsModel = Field(validation_alias='ext', default=ProfileExtensionsModel())
     validity: ProfileValidityModel = Field(default=ProfileValidityModel(days=10))
