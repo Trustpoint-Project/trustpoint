@@ -186,7 +186,7 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
             queryset=IssuedCredentialModel.objects.select_related('credential__certificate'),
         )
         return (
-            self.model._default_manager.all()
+            self.model.objects.all()
             # This field is not used in the table and has been a migration pain
             # point in partially updated local databases, so we avoid selecting
             # it eagerly here.

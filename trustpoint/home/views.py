@@ -20,11 +20,11 @@ from trustpoint_core.oid import NameOid
 from devices.dashboard_filters import (
     filter_active_devices,
     filter_devices_with_active_application_certificates,
+    filter_devices_with_expired_application_certificates,
     filter_devices_with_expired_domain_credential,
+    filter_devices_with_expiring_domain_credential,
     filter_devices_with_expiring_domain_credential_in_1_day,
     filter_devices_with_expiring_domain_credential_in_7_days,
-    filter_devices_with_expiring_domain_credential,
-    filter_devices_with_expired_application_certificates,
     filter_devices_with_valid_domain_credential,
     filter_devices_without_application_certificates,
     filter_devices_without_domain_credential,

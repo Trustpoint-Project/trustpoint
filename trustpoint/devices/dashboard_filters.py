@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from django.db.models import Q, QuerySet
 from django.utils import timezone
 
-from devices.models import DeviceModel
 from onboarding.models import OnboardingStatus
 from pki.models.issued_credential import IssuedCredentialModel
+
+if TYPE_CHECKING:
+    from devices.models import DeviceModel
 
 DOMAIN_CREDENTIAL_Q = Q(
     issued_credentials__issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL,
@@ -56,7 +59,7 @@ def filter_devices_without_domain_credential(queryset: QuerySet[DeviceModel]) ->
 
 def filter_devices_with_valid_domain_credential(
     queryset: QuerySet[DeviceModel],
-    reference_time: timezone.datetime | None = None,
+    reference_time: datetime | None = None,
 ) -> QuerySet[DeviceModel]:
     """Return devices with a domain credential valid beyond the expiring window."""
     now = reference_time or timezone.now()
@@ -69,7 +72,7 @@ def filter_devices_with_valid_domain_credential(
 
 def filter_devices_with_expiring_domain_credential_in_1_day(
     queryset: QuerySet[DeviceModel],
-    reference_time: timezone.datetime | None = None,
+    reference_time: datetime | None = None,
 ) -> QuerySet[DeviceModel]:
     """Return devices whose best domain credential state is expiring within 24 hours."""
     now = reference_time or timezone.now()
@@ -87,7 +90,7 @@ def filter_devices_with_expiring_domain_credential_in_1_day(
 
 def filter_devices_with_expiring_domain_credential_in_7_days(
     queryset: QuerySet[DeviceModel],
-    reference_time: timezone.datetime | None = None,
+    reference_time: datetime | None = None,
 ) -> QuerySet[DeviceModel]:
     """Return devices whose best domain credential state is expiring within 1 to 7 days."""
     now = reference_time or timezone.now()
@@ -109,7 +112,7 @@ def filter_devices_with_expiring_domain_credential_in_7_days(
 
 def filter_devices_with_expiring_domain_credential(
     queryset: QuerySet[DeviceModel],
-    reference_time: timezone.datetime | None = None,
+    reference_time: datetime | None = None,
 ) -> QuerySet[DeviceModel]:
     """Return devices whose best domain credential state is expiring within 7 days."""
     now = reference_time or timezone.now()
@@ -126,7 +129,7 @@ def filter_devices_with_expiring_domain_credential(
 
 def filter_devices_with_expired_domain_credential(
     queryset: QuerySet[DeviceModel],
-    reference_time: timezone.datetime | None = None,
+    reference_time: datetime | None = None,
 ) -> QuerySet[DeviceModel]:
     """Return devices whose domain credentials are all expired.
 
@@ -153,7 +156,7 @@ def filter_devices_without_application_certificates(queryset: QuerySet[DeviceMod
 
 def filter_devices_with_active_application_certificates(
     queryset: QuerySet[DeviceModel],
-    reference_time: timezone.datetime | None = None,
+    reference_time: datetime | None = None,
 ) -> QuerySet[DeviceModel]:
     """Return devices with at least one active application certificate."""
     now = reference_time or timezone.now()
@@ -165,7 +168,7 @@ def filter_devices_with_active_application_certificates(
 
 def filter_devices_with_expired_application_certificates(
     queryset: QuerySet[DeviceModel],
-    reference_time: timezone.datetime | None = None,
+    reference_time: datetime | None = None,
 ) -> QuerySet[DeviceModel]:
     """Return devices whose application certificates are all expired."""
     now = reference_time or timezone.now()
