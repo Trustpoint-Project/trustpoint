@@ -38,6 +38,11 @@ urlpatterns = [
         views.FreshInstallSummaryTruststoreDownloadView.as_view(),
         name='fresh_install_summary_truststore_download',
     ),
+    path(
+        'fresh-install/cancel/',
+        views.FreshInstallCancelView.as_view(),
+        name='fresh_install_cancel',
+    ),
     # path(
     #     'backup-password/',
     #     SetupWizardBackupPasswordView.as_view(),
