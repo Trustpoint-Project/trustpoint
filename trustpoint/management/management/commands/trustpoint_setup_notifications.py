@@ -72,3 +72,15 @@ class Command(BaseCommand):
                 message_type=NotificationModel.NotificationMessageType.WELCOME_MESSAGE,
             )
             notification.statuses.add(new_status)
+
+        if not NotificationModel.objects.filter(event='WELCOME_POPULATE_TEST_DATA').exists():
+            url = '#'
+            notification = NotificationModel.objects.create(
+                event='WELCOME_POPULATE_TEST_DATA',
+                created_at=timezone.now(),
+                notification_source=NotificationModel.NotificationSource.SYSTEM,
+                notification_type=NotificationModel.NotificationTypes.SETUP,
+                message_type=NotificationModel.NotificationMessageType.WELCOME_POPULATE_TEST_DATA,
+                message_data={'url': url},
+            )
+            notification.statuses.add(new_status)

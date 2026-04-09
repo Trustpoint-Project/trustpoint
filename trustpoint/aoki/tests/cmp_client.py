@@ -29,10 +29,10 @@ class AokiClientCertLoadError(Exception):
     """Exception raised when a certificate could not be loaded from the provided path."""
 
 class AokiListener(ServiceListener):
+    """Custom mDNS listener to discover AOKI Owner Services and extract their addresses for onboarding."""
     def __init__(self, cb: AokiCmpClient) -> None:
         super().__init__()
         self.cb = cb
-
 
     def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         info = zc.get_service_info(type_, name)
@@ -42,15 +42,12 @@ class AokiListener(ServiceListener):
             for addr in address_candidates:
                 self.cb.address_candidates.append(f'https://{addr}:{info.port}')
 
-
     def update_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         info = zc.get_service_info(type_, name)
         print(f"Service {name} updated, service info: {info}")
-        pass
 
     def remove_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         print(f"Service {name} removed")
-        pass
 
 
 class AokiCmpClient:
@@ -116,7 +113,7 @@ class AokiCmpClient:
         print('Discovering AOKI Owner Service via mDNS...')
         zeroconf = Zeroconf(interfaces=InterfaceChoice.All)
         listener = AokiListener(cb=self)
-        browser = ServiceBrowser(zeroconf, '_aoki._tcp.local.', listener)
+        _browser = ServiceBrowser(zeroconf, '_aoki._tcp.local.', listener)
         
         while not self.onboarding_completed:
             sleep(0.5)

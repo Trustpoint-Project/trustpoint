@@ -188,9 +188,8 @@ variant is comprised of an ``AokiInitializationRequest`` HTTP request
 from the device to the Owner Service, followed by enrollment via a PKI
 protocol agreed upon by the Device and Owner Service. #### Protocol
 description The initial step is the automatic discovery of the Owner
-Service by the Device upon initial connection to the network. This is
-not defined herein, a suitable candidate for local networks would be
-mDNS with the service type ``_aoki._tcp.``.
+Service by the Device upon initial connection to the network. For link-local networks,
+mDNS with the service type ``_aoki._tcp.`` is defined for this purpose.
 
 The AOKI Initialization Request is an HTTP ``GET`` request from the
 Device to the Ownership Service on the endpoint ``/aoki/init``.
