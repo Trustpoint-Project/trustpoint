@@ -175,7 +175,6 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
             user = User.objects.get(username=username)
             user.set_password(password)
             user.save()
-            messages.add_message(self.request, messages.SUCCESS, 'Successfully created super-user.')
 
         except User.DoesNotExist as e:
             messages.add_message(self.request, messages.ERROR, f'User not found error: {e}')
@@ -237,29 +236,41 @@ class FreshInstallFormBaseView[FormT: Form](LoggerMixin, FormView[FormT]):
         viewed_step = self.step_state
         self.logger.critical(f'current_state: {current_state}')
         self.logger.critical(f'viewed_step: {viewed_step}')
+        crypto_storage_submitted = config_model.is_step_submitted(
+            SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE
+        )
+        demo_data_submitted = config_model.is_step_submitted(
+            SetupWizardConfigModel.FreshInstallCurrentStep.DEMO_DATA
+        )
+        tls_config_submitted = config_model.is_step_submitted(
+            SetupWizardConfigModel.FreshInstallCurrentStep.TLS_CONFIG
+        )
+        summary_submitted = config_model.is_step_submitted(
+            SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY
+        )
         crypto_storage_state = self._get_step_state(
             SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE,
             viewed_step,
             current_state,
-            config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE),
+            crypto_storage_submitted,
         )
         demo_data_state = self._get_step_state(
             SetupWizardConfigModel.FreshInstallCurrentStep.DEMO_DATA,
             viewed_step,
             current_state,
-            config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.DEMO_DATA),
+            demo_data_submitted,
         )
         tls_config_state = self._get_step_state(
             SetupWizardConfigModel.FreshInstallCurrentStep.TLS_CONFIG,
             viewed_step,
             current_state,
-            config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.TLS_CONFIG),
+            tls_config_submitted,
         )
         summary_state = self._get_step_state(
             SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY,
             viewed_step,
             current_state,
-            config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY),
+            summary_submitted,
         )
 
         self.logger.critical(f'Crypto Storage State: {crypto_storage_state}')
@@ -271,22 +282,26 @@ class FreshInstallFormBaseView[FormT: Form](LoggerMixin, FormView[FormT]):
             {
                 'label': 'Crypto Storage',
                 'url': reverse('setup_wizard:fresh_install_crypto_storage'),
-                'state': str(crypto_storage_state)
+                'state': str(crypto_storage_state),
+                'submitted': crypto_storage_submitted,
             },
             {
                 'label': 'Demo Data',
                 'url': reverse('setup_wizard:fresh_install_demo_data'),
-                'state': str(demo_data_state)
+                'state': str(demo_data_state),
+                'submitted': demo_data_submitted,
             },
             {
                 'label': 'TLS Config',
                 'url': reverse('setup_wizard:fresh_install_tls_config'),
-                'state': str(tls_config_state)
+                'state': str(tls_config_state),
+                'submitted': tls_config_submitted,
             },
             {
                 'label': 'Summary',
                 'url': reverse('setup_wizard:fresh_install_summary'),
-                'state': str(summary_state)
+                'state': str(summary_state),
+                'submitted': summary_submitted,
             },
         ]
         return context

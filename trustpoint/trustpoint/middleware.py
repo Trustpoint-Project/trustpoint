@@ -77,6 +77,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         '/setup-wizard/',
         '/setup-wizard/create-super-user',
         '/setup-wizard/create-super-user/',
+        '/setup-wizard/restore-backup',
         '/setup-wizard/restore-backup/',
     )
 
@@ -88,17 +89,13 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
 
     ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS = (
         '/setup-wizard/fresh-install',
+        '/users/logout',
     )
-    ALLOWED_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH = reverse('setup_wizard:fresh_install_crypto_storage')
-
     @classmethod
-    def _get_fresh_install_redirect_path(cls, path: str) -> str | None:
-        """Return the required fresh-install step redirect for a blocked path."""
-        if not path.startswith('/setup-wizard/fresh-install/'):
-            return None
-
+    def _get_fresh_install_step_paths(cls) -> tuple[tuple[str, str, bool], ...]:
+        """Return fresh-install step path metadata in wizard order."""
         config_model = SetupWizardConfigModel.get_singleton()
-        step_paths = (
+        return (
             (
                 '/setup-wizard/fresh-install/crypto-storage/',
                 reverse('setup_wizard:fresh_install_crypto_storage'),
@@ -121,23 +118,41 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
             ),
         )
 
+    @classmethod
+    def _get_first_unsubmitted_redirect_path(cls) -> str:
+        """Return the first fresh-install step that has not yet been submitted."""
+        step_paths = cls._get_fresh_install_step_paths()
+        first_unsubmitted = next(
+            (redirect_path for _path_prefix, redirect_path, submitted in step_paths if not submitted),
+            None,
+        )
+        if first_unsubmitted is not None:
+            return first_unsubmitted
+        return step_paths[-1][1]
+
+    @classmethod
+    def _get_fresh_install_redirect_path(cls, path: str) -> str | None:
+        """Return the required fresh-install step redirect for a blocked path."""
+        if not path.startswith('/setup-wizard/fresh-install'):
+            return None
+
+        step_paths = cls._get_fresh_install_step_paths()
+        first_unsubmitted_index = next(
+            (index for index, (_path_prefix, _redirect_path, submitted) in enumerate(step_paths) if not submitted),
+            len(step_paths) - 1,
+        )
+
         requested_step_index = next(
             (index for index, (path_prefix, _redirect_path, _submitted) in enumerate(step_paths) if path.startswith(path_prefix)),
             None,
         )
         if requested_step_index is None:
+            return step_paths[first_unsubmitted_index][1]
+
+        if requested_step_index <= first_unsubmitted_index:
             return None
 
-        highest_submitted_index = max(
-            (index for index, (_path_prefix, _redirect_path, submitted) in enumerate(step_paths) if submitted),
-            default=-1,
-        )
-        highest_reachable_index = min(highest_submitted_index + 1, len(step_paths) - 1)
-
-        if requested_step_index <= highest_reachable_index:
-            return None
-
-        return step_paths[highest_reachable_index][1]
+        return step_paths[first_unsubmitted_index][1]
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         """Handle an incoming request and apply redirects.
@@ -195,7 +210,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         if authenticated \
                 and users_exists \
                 and not request.path_info.startswith(self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS):
-            redirect_dest = self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH
+            redirect_dest = self._get_first_unsubmitted_redirect_path()
 
         if authenticated and users_exists and redirect_dest is None:
             redirect_dest = self._get_fresh_install_redirect_path(request.path_info)
