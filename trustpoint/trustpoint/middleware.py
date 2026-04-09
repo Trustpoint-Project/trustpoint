@@ -91,6 +91,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         '/setup-wizard/fresh-install',
         '/users/logout',
     )
+
     @classmethod
     def _get_fresh_install_step_paths(cls) -> tuple[tuple[str, str, bool], ...]:
         """Return fresh-install step path metadata in wizard order."""
@@ -146,7 +147,11 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         )
 
         requested_step_index = next(
-            (index for index, (path_prefix, _redirect_path, _submitted) in enumerate(step_paths) if path.startswith(path_prefix)),
+            (
+                index
+                for index, (path_prefix, _redirect_path, _submitted) in enumerate(step_paths)
+                if path.startswith(path_prefix)
+            ),
             None,
         )
         if requested_step_index is None:
@@ -194,8 +199,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         self.logger.critical(msg)
 
         # if no user exists, only allow the views before creating a user
-        if not users_exists \
-                and request.path_info not in self.ALLOWED_NO_USER_CREATED:
+        if not users_exists and request.path_info not in self.ALLOWED_NO_USER_CREATED:
             self.logger.critical('redirecting to wizard index')
             redirect_dest = self.SETUP_WIZARD_INDEX_REVERSE
 
@@ -204,23 +208,23 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         self.logger.critical(msg)
 
         # if a user exists but is not authenticated, redirect to login page
-        if not authenticated \
-                and users_exists \
-                and request.path_info not in self.ALLOWED_NON_AUTH_PATHS:
+        if not authenticated and users_exists and request.path_info not in self.ALLOWED_NON_AUTH_PATHS:
             redirect_dest = self.USERS_LOGIN_REVERSE
 
         # if user is authenticated (wizard not completed), only allow views to finish up the wizard
-        if authenticated \
-                and users_exists \
-                and not request.path_info.startswith(self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS):
+        if (
+            authenticated
+            and users_exists
+            and not request.path_info.startswith(self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS)
+        ):
             redirect_dest = self._get_first_unsubmitted_redirect_path()
 
         if authenticated and users_exists and redirect_dest is None:
             redirect_dest = self._get_fresh_install_redirect_path(request.path_info)
 
         if redirect_dest:
-            self.logger.critical(f'redirecting dest: {redirect_dest}')
+            self.logger.critical('redirecting dest: %s', redirect_dest)
             return redirect(redirect_dest, permanent=False)
 
-        self.logger.critical(f'NOT redirecting')
+        self.logger.critical('NOT redirecting')
         return self.get_response(request)
