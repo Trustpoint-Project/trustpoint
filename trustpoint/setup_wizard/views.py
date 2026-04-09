@@ -12,7 +12,9 @@ import enum
 from django.forms import Form
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import logout
 from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management import CommandError, call_command
@@ -194,7 +196,7 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
 
 # Config Wizard -------------------------------------------------------------------------------------------------------
 
-class FreshInstallFormBaseView[FormT: Form](LoggerMixin, FormView[FormT]):
+class FreshInstallFormBaseView[FormT: Form](LoginRequiredMixin, LoggerMixin, FormView[FormT]):
     """Shared base view for fresh-install wizard steps."""
 
     is_last: bool = False
@@ -605,7 +607,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             return self.form_invalid(form)
 
 
-class FreshInstallSummaryTruststoreDownloadView(LoggerMixin, View):
+class FreshInstallSummaryTruststoreDownloadView(LoginRequiredMixin, LoggerMixin, View):
     """Download the staged root CA certificate from the summary page."""
 
     http_method_names = ('get',)
@@ -651,6 +653,33 @@ class FreshInstallSummaryTruststoreDownloadView(LoggerMixin, View):
         response['Content-Disposition'] = f'attachment; filename="trust_store_root_ca.{file_format}"'
         response.write(trust_store)
         return response
+
+
+class FreshInstallCancelView(LoginRequiredMixin, LoggerMixin, View):
+    """Discard the unfinished fresh-install wizard state and return to the setup index."""
+
+    http_method_names = ('post',)
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Delete staged wizard data, the current user, and log the session out."""
+        del args
+        del kwargs
+
+        if SetupWizardCompletedModel.setup_wizard_completed():
+            self.logger.warning('Ignoring fresh-install cancel request because setup is already completed.')
+            return redirect('setup_wizard:index', permanent=False)
+
+        user_pk = request.user.pk
+
+        with transaction.atomic():
+            for credential in list(CredentialModel.objects.all()):
+                credential.force_delete()
+
+            SetupWizardConfigModel.objects.filter(pk=SetupWizardConfigModel.SINGLETON_ID).delete()
+            User.objects.filter(pk=user_pk).delete()
+
+        logout(request)
+        return redirect('setup_wizard:index', permanent=False)
 
 # Backup Stuff ---------------------------------------------------------------------------------------------------------
 

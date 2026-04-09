@@ -303,7 +303,10 @@
                     {% if back_url %}
                         <a href="{{ back_url }}" class="btn tp-setup-form-back">{% trans 'Back' %}</a>
                     {% else %}
-                        <button class="btn tp-setup-form-back tp-setup-form-back-placeholder" type="button" disabled>{% trans 'Back' %}</button>
+                        <button class="btn tp-setup-form-back"
+                                type="submit"
+                                formaction="{% url 'setup_wizard:fresh_install_cancel' %}"
+                                formnovalidate>{% trans 'Cancel' %}</button>
                     {% endif %}
                     <button class="btn tp-setup-form-submit" type="submit">
                         {% trans 'Apply and Continue' %}

@@ -136,6 +136,9 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         if not path.startswith('/setup-wizard/fresh-install'):
             return None
 
+        if path in {'/setup-wizard/fresh-install/cancel', '/setup-wizard/fresh-install/cancel/'}:
+            return None
+
         step_paths = cls._get_fresh_install_step_paths()
         first_unsubmitted_index = next(
             (index for index, (_path_prefix, _redirect_path, submitted) in enumerate(step_paths) if not submitted),
