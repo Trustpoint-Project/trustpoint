@@ -7,7 +7,7 @@ import ipaddress
 import logging
 import subprocess
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from django.conf import settings
 from django.contrib import messages
@@ -19,7 +19,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management import CommandError, call_command
 from django.db import DatabaseError, transaction
 from django.db.models import ProtectedError
-from django.forms import Form
+from django.forms import BaseForm
 from django.http import HttpRequest, HttpResponse, HttpResponseBase
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
@@ -53,6 +53,9 @@ from .forms import (
     PasswordAutoRestoreForm,
 )
 from .models import SetupWizardCompletedModel, SetupWizardConfigModel
+
+if TYPE_CHECKING:
+    from django.utils.functional import Promise
 
 logger = logging.getLogger(__name__)
 
@@ -193,11 +196,11 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
 # Config Wizard -------------------------------------------------------------------------------------------------------
 
 
-class FreshInstallFormBaseView[FormT: Form](LoginRequiredMixin, LoggerMixin, FormView[FormT]):
+class FreshInstallFormBaseView[FormT: BaseForm](LoginRequiredMixin, LoggerMixin, FormView[FormT]):
     """Shared base view for fresh-install wizard steps."""
 
     is_last: bool = False
-    back_url: str | None = None
+    back_url: str | Promise | None = None
     body_heading: str = ''
     step_state: SetupWizardConfigModel.FreshInstallCurrentStep
 
@@ -658,6 +661,9 @@ class FreshInstallCancelView(LoginRequiredMixin, LoggerMixin, View):
             return redirect('setup_wizard:index', permanent=False)
 
         user_pk = request.user.pk
+        if user_pk is None:
+            err_msg = 'Authenticated user is missing a primary key.'
+            raise ValueError(err_msg)
 
         with transaction.atomic():
             for credential in list(CredentialModel.objects.all()):

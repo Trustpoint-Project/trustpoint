@@ -15,7 +15,7 @@ from .models import SetupWizardConfigModel
 from .tls_credential import extract_staged_tls_sans
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from django.utils.functional import Promise
 
@@ -55,22 +55,23 @@ class WizardCardRadioSelect(forms.RadioSelect):
 
     def __init__(
         self,
-        *args: object,
+        attrs: dict[str, Any] | None = None,
+        choices: Iterable[tuple[Any, Any] | tuple[str, Iterable[tuple[Any, Any]]]] = (),
+        *,
         descriptions: Mapping[str, str | Promise] | None = None,
         disabled_values: set[str] | None = None,
-        **kwargs: object,
     ) -> None:
         """Initialize the widget.
 
         Args:
-            *args: Positional arguments forwarded to ``RadioSelect``.
+            attrs: HTML attributes for the widget.
+            choices: Choice values rendered by the radio widget.
             descriptions: Mapping from choice value to explanation text.
             disabled_values: Choice values that should render disabled.
-            **kwargs: Keyword arguments forwarded to ``RadioSelect``.
         """
         self.descriptions = descriptions or {}
         self.disabled_values = {str(value) for value in disabled_values or set()}
-        super().__init__(*args, **kwargs)
+        super().__init__(attrs=attrs, choices=choices)
 
     def create_option(  # noqa: PLR0913
         self,
@@ -142,7 +143,8 @@ class FreshInstallCryptoStorageModelForm(FreshInstallModelBaseForm):
 
     def clean_crypto_storage(self) -> SetupWizardConfigModel.CryptoStorageType:
         """Reject storage backends that are currently unavailable in the wizard."""
-        crypto_storage = self.cleaned_data['crypto_storage']
+        # noinspection PyUnnecessaryCast
+        crypto_storage = cast('SetupWizardConfigModel.CryptoStorageType', self.cleaned_data['crypto_storage'])
         if int(crypto_storage) == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             err_msg = gettext_lazy('HSM storage is currently unavailable.')
             raise forms.ValidationError(err_msg)
@@ -219,7 +221,7 @@ class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
         """Populate the read-only summary values from the singleton config."""
         super().__init__(*args, **kwargs)
 
-        instance = cast('SetupWizardConfigModel', self.instance)
+        instance = self.instance
         tls_credential = instance.fresh_install_tls_credential
         ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans(tls_credential)
         self.fields['storage_selection'].initial = instance.get_crypto_storage_display()
