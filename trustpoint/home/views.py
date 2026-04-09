@@ -17,6 +17,22 @@ from django.utils import dateparse, timezone
 from django.views.generic.base import RedirectView, TemplateView
 from trustpoint_core.oid import NameOid
 
+from devices.dashboard_filters import (
+    filter_active_devices,
+    filter_devices_with_active_application_certificates,
+    filter_devices_with_expired_domain_credential,
+    filter_devices_with_expiring_domain_credential_in_1_day,
+    filter_devices_with_expiring_domain_credential_in_7_days,
+    filter_devices_with_expiring_domain_credential,
+    filter_devices_with_expired_application_certificates,
+    filter_devices_with_valid_domain_credential,
+    filter_devices_without_application_certificates,
+    filter_devices_without_domain_credential,
+    filter_expired_devices,
+    filter_no_onboarding_devices,
+    filter_onboarded_devices,
+    filter_pending_devices,
+)
 from devices.models import DeviceModel
 from onboarding.models import OnboardingProtocol, OnboardingStatus
 from pki.models import CaModel, CertificateModel, CertificateProfileModel, IssuedCredentialModel
@@ -116,6 +132,10 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             datetime.combine(start_date_object.date(), current_time.time())
         )
 
+        device_dashboard_counts = self.get_device_dashboard_card_counts(start_date_for_filter)
+        if device_dashboard_counts:
+            dashboard_data['device_dashboard_counts'] = device_dashboard_counts
+
         device_counts = self.get_device_count_by_onboarding_status(start_date_for_filter)
 
         expiring_device_counts = self.get_expiring_device_counts(start_date_for_expiry)
@@ -153,9 +173,17 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         Returns:
             It returns nothing. It adds the device related data in dashboard_data object.
         """
-        device_counts_by_os = self.get_device_count_by_onboarding_status(start_date)
-        if device_counts_by_os:
-            dashboard_data['device_counts_by_os'] = device_counts_by_os
+        device_enrollment_counts = self.get_device_enrollment_counts(start_date)
+        if device_enrollment_counts:
+            dashboard_data['device_enrollment_counts'] = device_enrollment_counts
+
+        device_domain_credential_counts = self.get_device_domain_credential_counts(start_date)
+        if device_domain_credential_counts:
+            dashboard_data['device_domain_credential_counts'] = device_domain_credential_counts
+
+        device_application_certificate_counts = self.get_device_application_certificate_counts(start_date)
+        if device_application_certificate_counts:
+            dashboard_data['device_application_certificate_counts'] = device_application_certificate_counts
 
         device_counts_by_op = self.get_device_count_by_onboarding_protocol(start_date)
         if device_counts_by_op:
@@ -209,6 +237,89 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         if issuing_ca_counts_by_type:
             dashboard_data['ca_counts_by_type'] = issuing_ca_counts_by_type
 
+    def get_device_dashboard_card_counts(self, start_date: datetime) -> dict[str, Any]:
+        """Fetch device dashboard card counts based on real table filters."""
+        try:
+            del start_date
+            devices = DeviceModel.objects.all()
+            expiring_in_1_day = filter_devices_with_expiring_domain_credential_in_1_day(devices).count()
+            expiring_in_7_days = filter_devices_with_expiring_domain_credential_in_7_days(devices).count()
+
+            return {
+                'pending': filter_pending_devices(devices).count(),
+                'valid': filter_devices_with_valid_domain_credential(devices).count(),
+                'expiring_in_1_day': expiring_in_1_day,
+                'expiring_in_7_days': expiring_in_7_days,
+                'expired': filter_devices_with_expired_domain_credential(devices).count(),
+                'expiring': expiring_in_1_day + expiring_in_7_days,
+            }
+        except Exception as exception:
+            err_msg = f'Error occurred in device dashboard card count query: {exception}'
+            self.logger.exception(err_msg)
+            return {}
+
+    def get_device_enrollment_counts(self, start_date: datetime) -> dict[str, Any]:
+        """Fetch device counts grouped by enrollment state."""
+        try:
+            del start_date
+            devices = DeviceModel.objects.all()
+            no_onboarding_count = filter_no_onboarding_devices(devices).count()
+            pending_count = filter_pending_devices(devices).count()
+            onboarded_count = filter_onboarded_devices(devices).count()
+
+            return {
+                'no_onboarding': no_onboarding_count,
+                'pending': pending_count,
+                'onboarded': onboarded_count,
+                'total': no_onboarding_count + pending_count + onboarded_count,
+            }
+        except Exception as exception:
+            err_msg = f'Error occurred in device enrollment count query: {exception}'
+            self.logger.exception(err_msg)
+            return {}
+
+    def get_device_domain_credential_counts(self, start_date: datetime) -> dict[str, Any]:
+        """Fetch device counts grouped by domain-credential state."""
+        try:
+            del start_date
+            devices = DeviceModel.objects.all()
+            no_domain_credential_count = filter_devices_without_domain_credential(devices).count()
+            valid_count = filter_devices_with_valid_domain_credential(devices).count()
+            expiring_count = filter_devices_with_expiring_domain_credential(devices).count()
+            expired_count = filter_devices_with_expired_domain_credential(devices).count()
+
+            return {
+                'none': no_domain_credential_count,
+                'valid': valid_count,
+                'expiring': expiring_count,
+                'expired': expired_count,
+                'total': no_domain_credential_count + valid_count + expiring_count + expired_count,
+            }
+        except Exception as exception:
+            err_msg = f'Error occurred in device domain credential count query: {exception}'
+            self.logger.exception(err_msg)
+            return {}
+
+    def get_device_application_certificate_counts(self, start_date: datetime) -> dict[str, Any]:
+        """Fetch device counts grouped by application-certificate state."""
+        try:
+            del start_date
+            devices = DeviceModel.objects.all()
+            none_count = filter_devices_without_application_certificates(devices).count()
+            active_count = filter_devices_with_active_application_certificates(devices).count()
+            expired_count = filter_devices_with_expired_application_certificates(devices).count()
+
+            return {
+                'none': none_count,
+                'active': active_count,
+                'expired': expired_count,
+                'total': none_count + active_count + expired_count,
+            }
+        except Exception as exception:
+            err_msg = f'Error occurred in device application certificate count query: {exception}'
+            self.logger.exception(err_msg)
+            return {}
+
     def get_device_count_by_onboarding_status(self, start_date: datetime) -> dict[str, Any]:
         """Fetch device count by onboarding status from database.
 
@@ -223,18 +334,11 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         """
         try:
             device_counts_expiring = self.get_expiring_device_counts(start_date)
-            device_counts_expired = self.get_expired_device_counts()
-
             devices_after_start = DeviceModel.objects.filter(created_at__gt=start_date)
+            device_counts_expired = self.get_expired_device_counts(devices_after_start)
 
-            active_count = devices_after_start.filter(
-                Q(no_onboarding_config__isnull=False) |
-                Q(onboarding_config__onboarding_status=OnboardingStatus.ONBOARDED)
-            ).count()
-
-            pending_count = devices_after_start.filter(
-                onboarding_config__onboarding_status=OnboardingStatus.PENDING
-            ).count()
+            active_count = filter_active_devices(devices_after_start).count()
+            pending_count = filter_pending_devices(devices_after_start).count()
 
             device_os_counts = {
                 'Onboarded': active_count,
@@ -408,8 +512,9 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         """
         device_op_counts = {str(status): 0 for _, status in OnboardingProtocol.choices}
         try:
+            del start_date
             device_op_qr = (
-                DeviceModel.objects.filter(created_at__gt=start_date, onboarding_config__isnull=False)
+                DeviceModel.objects.filter(onboarding_config__isnull=False)
                 .values('onboarding_config__onboarding_protocol')
                 .annotate(count=Count('onboarding_config__onboarding_protocol'))
             )
@@ -436,10 +541,9 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             It returns onboarded devices count grouped by domain.
         """
         try:
+            del start_date
             device_domain_qr = (
-                DeviceModel.objects.filter(
-                    Q(onboarding_config__onboarding_status=OnboardingStatus.ONBOARDED) & Q(created_at__gte=start_date)
-                )
+                DeviceModel.objects.filter(Q(onboarding_config__onboarding_status=OnboardingStatus.ONBOARDED))
                 .values(domain_name=F('domain__unique_name'))
                 .annotate(onboarded_device_count=Count('id'))
             )
@@ -657,19 +761,20 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         return expiring_issuing_ca_counts
 
-    def get_expired_device_counts(self) -> dict[str, Any]:
+    def get_expired_device_counts(self, queryset: Any = None) -> dict[str, Any]:
         """Fetch expired device counts from database.
+
+        Expired devices are devices that have at least one domain credential and
+        no valid domain credential left.
 
         Returns:
             It returns counts of expired devices.
         """
-        now = timezone.now()
         expired_device_counts = {}
         try:
+            device_queryset = queryset if queryset is not None else DeviceModel.objects.all()
             expired_device_counts = {
-                'expired': DeviceModel.objects.filter(
-                    issued_credentials__credential__certificate__not_valid_after__lt=now
-                ).distinct().count()
+                'expired': filter_expired_devices(device_queryset).count()
             }
         except Exception as exception:
             err_msg = f'Error occurred in expired device count query: {exception}'

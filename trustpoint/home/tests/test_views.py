@@ -187,8 +187,8 @@ class DashboardChartsAndCountsViewTests(TestCase):
 
     def test_get_expired_device_counts(self) -> None:
         """Test get_expired_device_counts method."""
-        with patch.object(DeviceModel.objects, 'filter') as mock_filter:
-            mock_filter.return_value.distinct.return_value.count.return_value = 2
+        with patch('home.views.filter_expired_devices') as mock_filter_expired_devices:
+            mock_filter_expired_devices.return_value.count.return_value = 2
             result = self.view.get_expired_device_counts()
 
         assert 'expired' in result
@@ -275,17 +275,23 @@ class DashboardChartsAndCountsViewTests(TestCase):
 
         assert isinstance(result, dict)
 
-    @patch.object(DashboardChartsAndCountsView, 'get_device_count_by_onboarding_status')
+    @patch.object(DashboardChartsAndCountsView, 'get_device_enrollment_counts')
+    @patch.object(DashboardChartsAndCountsView, 'get_device_domain_credential_counts')
+    @patch.object(DashboardChartsAndCountsView, 'get_device_application_certificate_counts')
     @patch.object(DashboardChartsAndCountsView, 'get_device_count_by_onboarding_protocol')
     @patch.object(DashboardChartsAndCountsView, 'get_device_count_by_domain')
     def test_get_device_charts_data(
         self,
         mock_domain: Mock,
         mock_protocol: Mock,
-        mock_status: Mock,
+        mock_application_certificates: Mock,
+        mock_domain_credentials: Mock,
+        mock_enrollment: Mock,
     ) -> None:
         """Test get_device_charts_data method."""
-        mock_status.return_value = {'total': 10}
+        mock_enrollment.return_value = {'total': 10}
+        mock_domain_credentials.return_value = {'total': 7}
+        mock_application_certificates.return_value = {'total': 4}
         mock_protocol.return_value = {'CMP': 5}
         mock_domain.return_value = [{'domain_name': 'test', 'count': 10}]
 
@@ -294,7 +300,9 @@ class DashboardChartsAndCountsViewTests(TestCase):
 
         self.view.get_device_charts_data(dashboard_data, start_date)
 
-        assert 'device_counts_by_os' in dashboard_data
+        assert 'device_enrollment_counts' in dashboard_data
+        assert 'device_domain_credential_counts' in dashboard_data
+        assert 'device_application_certificate_counts' in dashboard_data
         assert 'device_counts_by_op' in dashboard_data
         assert 'device_counts_by_domain' in dashboard_data
 

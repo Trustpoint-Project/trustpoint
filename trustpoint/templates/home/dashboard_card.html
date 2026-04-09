@@ -10,15 +10,20 @@
     {% endif %}
 ">
   <div class="card-body p-4 d-flex flex-column justify-content-between">
-    <div class="d-flex justify-content-between align-items-start mb-4">
-      <h6 class="fs-5 mb-0">{{ title }}</h6>
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+      <div class="flex-grow-1 pe-1" style="min-width: 0;">
+        <h6 class="fs-5 mb-0">{{ title }}</h6>
+        {% if note_text %}
+        <p class="small mb-0 mt-2 opacity-75">{{ note_text }}</p>
+        {% endif %}
+      </div>
       
       {% if link_url %}
-      <button
-        class="btn btn-outline-light btn-sm rounded-circle d-inline-flex align-items-center justify-content-center p-0 card-count-btn-link"
-        onclick="window.location.href = '{{ link_url }}'">
+      <a
+        class="btn btn-sm rounded-circle d-inline-flex align-items-center justify-content-center p-0 card-count-btn-link"
+        href="{{ link_url }}">
         <i class="bi bi-arrow-up-right"></i>
-      </button>
+      </a>
       {% endif %}
     </div>
 
@@ -64,6 +69,7 @@
 
     const uniqueId = "{{ identifier }}";
     const type = "{{ card_type }}";
+    const dataKey = "{{ data_key|default:'' }}";
     const dataset = "{{ dataset }}";
 
     let dataToday;
@@ -100,8 +106,9 @@
       updateDeltaIcon(`delta_count_7_${uniqueId}`, today_delta_7);
 
     } else {
-      const currentVal = dataToday[type] || 0;
-      const pastVal = dataWeek[type] || 0;
+      const metricKey = dataKey || type;
+      const currentVal = dataToday[metricKey] || 0;
+      const pastVal = dataWeek[metricKey] || 0;
       const delta = currentVal - pastVal;
       const totalCountEl = document.getElementById(`total_count_${uniqueId}`);
       const deltaCountEl = document.getElementById(`delta_count_${uniqueId}`);

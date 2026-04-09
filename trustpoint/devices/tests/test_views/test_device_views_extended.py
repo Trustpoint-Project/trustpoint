@@ -1,14 +1,17 @@
 """Extended tests for device views to increase coverage."""
 
+from datetime import timedelta
 from typing import Any
 
 import pytest
 from django.contrib.messages import get_messages
 from django.test import Client
 from django.urls import reverse
+from django.utils import timezone
 
 from devices.models import DeviceModel
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol, OnboardingProtocol
+from pki.models import CertificateModel, IssuedCredentialModel
 
 
 @pytest.mark.django_db
@@ -54,6 +57,28 @@ class TestDeviceTableViewSorting:
         # Should redirect with only first sort parameter
         assert response.status_code == 302
         assert 'sort=common_name' in response.url
+
+    def test_device_table_view_sorts_by_enrollment_state(
+        self,
+        admin_client: Client,
+        device_instance: dict[str, Any],  # noqa: ARG002
+        est_device_with_onboarding: dict[str, Any],
+        domain_credential_cmp_onboarding: dict[str, Any],
+    ) -> None:
+        """Enrollment sorting should follow no onboarding, pending, onboarded."""
+        del est_device_with_onboarding
+        del domain_credential_cmp_onboarding
+
+        response = admin_client.get(reverse('devices:devices') + '?sort=enrollment_sort')
+
+        assert response.status_code == 200
+
+        ordered_names = [device.common_name for device in response.context['page_obj'].object_list]
+        no_onboarding_index = ordered_names.index('test-device-1')
+        pending_index = ordered_names.index('EST_Onboarding')
+        onboarded_index = ordered_names.index('CMP_Onboarding')
+
+        assert no_onboarding_index < pending_index < onboarded_index
 
 
 @pytest.mark.django_db
@@ -102,6 +127,141 @@ class TestDeviceTableViewPkiProtocols:
         
         assert response.status_code == 200
         assert device in response.context['object_list']
+
+
+@pytest.mark.django_db
+class TestDeviceTableViewStateFilters:
+    """Test the real state filters on the device list page."""
+
+    def test_enrollment_no_onboarding_filter_is_preselected(
+        self,
+        admin_client: Client,
+        device_instance: dict[str, Any],  # noqa: ARG002
+        est_device_with_onboarding: dict[str, Any]
+    ) -> None:
+        """No-onboarding filter should stay selected and only show manual devices."""
+        del est_device_with_onboarding
+        no_onboarding_device = DeviceModel.objects.get(common_name='test-device-1')
+        pending_device = DeviceModel.objects.get(common_name='EST_Onboarding')
+
+        url = reverse('devices:devices') + '?enrollment_state=no_onboarding'
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
+        assert response.context['filter'].form['enrollment_state'].value() == 'no_onboarding'
+        assert no_onboarding_device in response.context['object_list']
+        assert pending_device not in response.context['object_list']
+
+    def test_pending_enrollment_filter_is_preselected(
+        self,
+        admin_client: Client,
+        device_instance: dict[str, Any],  # noqa: ARG002
+        est_device_with_onboarding: dict[str, Any]
+    ) -> None:
+        """Pending enrollment filter should stay selected."""
+        del est_device_with_onboarding
+        no_onboarding_device = DeviceModel.objects.get(common_name='test-device-1')
+        pending_device = DeviceModel.objects.get(common_name='EST_Onboarding')
+
+        url = reverse('devices:devices') + '?enrollment_state=pending'
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
+        assert response.context['filter'].form['enrollment_state'].value() == 'pending'
+        assert pending_device in response.context['object_list']
+        assert no_onboarding_device not in response.context['object_list']
+
+    def test_valid_domain_credential_filter_is_preselected(
+        self,
+        admin_client: Client,
+        device_instance: dict[str, Any],  # noqa: ARG002
+        domain_credential_cmp_onboarding: dict[str, Any]
+    ) -> None:
+        """Valid domain-credential filter should only show matching devices."""
+        del domain_credential_cmp_onboarding
+        no_domain_credential_device = DeviceModel.objects.get(common_name='test-device-1')
+        valid_device = DeviceModel.objects.get(common_name='CMP_Onboarding')
+
+        url = reverse('devices:devices') + '?domain_credential_state=valid'
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
+        assert response.context['filter'].form['domain_credential_state'].value() == 'valid'
+        assert valid_device in response.context['object_list']
+        assert no_domain_credential_device not in response.context['object_list']
+
+    def test_expiring_domain_credential_filter_is_preselected(
+        self,
+        admin_client: Client,
+        domain_credential_est_onboarding: dict[str, Any],
+        domain_credential_cmp_onboarding: dict[str, Any]
+    ) -> None:
+        """Expiring domain-credential filter should stay selected."""
+        del domain_credential_est_onboarding
+        del domain_credential_cmp_onboarding
+        expiring_device = DeviceModel.objects.get(common_name='EST_Onboarding')
+        valid_device = DeviceModel.objects.get(common_name='CMP_Onboarding')
+
+        expiring_certificate = expiring_device.issued_credentials.get(
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
+        ).credential.certificate
+        CertificateModel.objects.filter(pk=expiring_certificate.pk).update(
+            not_valid_after=timezone.now() + timedelta(hours=12)
+        )
+
+        url = reverse('devices:devices') + '?domain_credential_state=expiring'
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
+        assert response.context['filter'].form['domain_credential_state'].value() == 'expiring'
+        assert expiring_device in response.context['object_list']
+        assert valid_device not in response.context['object_list']
+
+    def test_expired_domain_credential_filter_is_preselected(
+        self,
+        admin_client: Client,
+        device_instance: dict[str, Any],  # noqa: ARG002
+        domain_credential_est_onboarding: dict[str, Any],
+        domain_credential_cmp_onboarding: dict[str, Any]
+    ) -> None:
+        """Expired domain-credential filter should only include expired devices."""
+        del domain_credential_est_onboarding
+        del domain_credential_cmp_onboarding
+        no_domain_credential_device = DeviceModel.objects.get(common_name='test-device-1')
+        expired_device = DeviceModel.objects.get(common_name='EST_Onboarding')
+        valid_device = DeviceModel.objects.get(common_name='CMP_Onboarding')
+
+        expired_certificate = expired_device.issued_credentials.get(
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
+        ).credential.certificate
+        CertificateModel.objects.filter(pk=expired_certificate.pk).update(
+            not_valid_after=timezone.now() - timedelta(days=1)
+        )
+
+        url = reverse('devices:devices') + '?domain_credential_state=expired'
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
+        assert response.context['filter'].form['domain_credential_state'].value() == 'expired'
+        assert expired_device in response.context['object_list']
+        assert valid_device not in response.context['object_list']
+        assert no_domain_credential_device not in response.context['object_list']
+
+    def test_active_application_certificate_filter_is_preselected(
+        self,
+        admin_client: Client,
+        tls_client_credential_instance: dict[str, Any]
+    ) -> None:
+        """Active application-certificate filter should show devices with active application credentials."""
+        del tls_client_credential_instance
+        active_application_device = DeviceModel.objects.get(common_name='test-device-1')
+
+        url = reverse('devices:devices') + '?application_certificate_state=active'
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
+        assert response.context['filter'].form['application_certificate_state'].value() == 'active'
+        assert active_application_device in response.context['object_list']
 
 
 @pytest.mark.django_db

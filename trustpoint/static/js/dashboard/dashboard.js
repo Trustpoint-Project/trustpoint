@@ -81,12 +81,113 @@ async function loadDashboardData(){
   }
 }
 
+function normalizeChartValue(value) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : 0;
+}
+
+function getVisibleChartValues(chart) {
+  const dataset = chart?.data?.datasets?.[0];
+  if (!dataset || !Array.isArray(dataset.data)) {
+    return [];
+  }
+
+  return dataset.data
+    .map((value, index) => {
+      if (typeof chart.getDataVisibility === 'function' && !chart.getDataVisibility(index)) {
+        return 0;
+      }
+      return normalizeChartValue(value);
+    });
+}
+
+function getVisibleChartTotal(chart) {
+  return getVisibleChartValues(chart).reduce((sum, value) => sum + value, 0);
+}
+
+function hasVisibleChartData(chart) {
+  return getVisibleChartValues(chart).some(value => value > 0);
+}
+
+function toggleChartItemVisibility(chart, index, hiddenIndices = null) {
+  if (!chart || index == null || typeof chart.toggleDataVisibility !== 'function') {
+    return;
+  }
+
+  chart.toggleDataVisibility(index);
+
+  if (hiddenIndices) {
+    if (chart.getDataVisibility(index)) {
+      hiddenIndices.delete(index);
+    } else {
+      hiddenIndices.add(index);
+    }
+  }
+
+  chart.update();
+}
+
+function applyHiddenIndices(chart, hiddenIndices) {
+  if (!chart || !hiddenIndices?.size || typeof chart.toggleDataVisibility !== 'function') {
+    return;
+  }
+
+  hiddenIndices.forEach((index) => {
+    if (chart.getDataVisibility(index)) {
+      chart.toggleDataVisibility(index);
+    }
+  });
+
+  chart.update();
+}
+
+function renderBarLegend(legendEl, items, hiddenIndices, colorForIndex, onToggle) {
+  if (!legendEl) {
+    return;
+  }
+
+  legendEl.innerHTML = '';
+
+  if (!items.length) {
+    return;
+  }
+
+  const ul = document.createElement('ul');
+  ul.className = 'list-unstyled small mb-0';
+
+  items.forEach((item, index) => {
+    const li = document.createElement('li');
+    li.className = 'mb-1';
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `bar-chart-legend-item${hiddenIndices.has(index) ? ' is-hidden' : ''}`;
+    button.addEventListener('click', () => onToggle(index));
+
+    const dot = document.createElement('span');
+    dot.className = 'rounded-circle d-inline-block flex-shrink-0';
+    dot.style.width = '10px';
+    dot.style.height = '10px';
+    dot.style.background = colorForIndex(index);
+
+    const text = document.createElement('span');
+    text.textContent = `${item.label} (${item.value})`;
+
+    button.append(dot, text);
+    li.appendChild(button);
+    ul.appendChild(li);
+  });
+
+  legendEl.appendChild(ul);
+}
+
 function createHorizontalBarChart(
-  labels,
-  values,
+  items,
   canvasId,
   legendId,
-  chartInstanceName
+  chartInstanceName,
+  hiddenIndices,
+  onToggle
 ) {
   // Farben immer beim Zeichnen neu auslesen
   const style = getComputedStyle(document.documentElement);
@@ -95,13 +196,8 @@ function createHorizontalBarChart(
   const textColor = style.getPropertyValue('--chart-text-color').trim() || '#dee2e6';
 
   // Validation of input parameters
-  if (!Array.isArray(labels) || !Array.isArray(values)) {
-    console.error('Invalid data: labels and values must be arrays');
-    return;
-  }
-
-  if (labels.length !== values.length) {
-    console.error('Invalid data: labels and values must be arrays of equal length');
+  if (!Array.isArray(items)) {
+    console.error('Invalid data: items must be an array');
     return;
   }
 
@@ -118,19 +214,9 @@ function createHorizontalBarChart(
     return;
   }
 
-  const allItems = labels
-    .map((label, index) => ({
-      label,
-      value: Number(values[index]) || 0
-    }))
-    .filter(item => item.value > 0)
-    .sort((a, b) => b.value - a.value);
-
-  // Important: Chart is created even when allItems is empty.
+  const visibleItems = items.filter((item) => !hiddenIndices.has(item.sourceIndex));
   // The plugin then handles the "No Data" display.
-  const chartDisplayItems = allItems.slice(0, 5);
-
-  const hasData = chartDisplayItems.length > 0;
+  const hasData = visibleItems.length > 0;
 
   const palette = [
     '#0B5ED7', '#86B7FE', '#A6C8FF',
@@ -163,38 +249,6 @@ function createHorizontalBarChart(
     }
   };
 
-  // HTML Legend Plugin
-  const htmlLegend = {
-    id: `htmlLegend${chartInstanceName}`,
-    afterUpdate(chart) {
-      const container = legendEl;
-      if (!container) return;
-
-      container.innerHTML = '';
-      const ul = document.createElement('ul');
-      ul.className = 'list-unstyled small mb-0';
-
-      allItems.forEach((item, idx) => {
-        const li = document.createElement('li');
-        li.className = 'd-flex align-items-center mb-1';
-
-        const dot = document.createElement('span');
-        dot.className = 'rounded-circle d-inline-block me-2 flex-shrink-0';
-        dot.style.width = '10px';
-        dot.style.height = '10px';
-        dot.style.background = colorForIndex(idx);
-
-        const text = document.createElement('span');
-        text.textContent = `${item.label} (${item.value})`;
-
-        li.append(dot, text);
-        ul.appendChild(li);
-      });
-
-      container.appendChild(ul);
-    }
-  };
-
   // Destroy old chart if it exists
   const chartInstanceKey = `_${chartInstanceName}Chart`;
   if (window[chartInstanceKey]) {
@@ -205,10 +259,10 @@ function createHorizontalBarChart(
   window[chartInstanceKey] = new Chart(canvasEl, {
     type: 'bar',
     data: {
-      labels: chartDisplayItems.map(i => i.label),
+      labels: visibleItems.map(i => i.label),
       datasets: [{
-        data: chartDisplayItems.map(i => i.value),
-        backgroundColor: chartDisplayItems.map((_, i) => colorForIndex(i)),
+        data: visibleItems.map(i => i.value),
+        backgroundColor: visibleItems.map((item) => colorForIndex(item.sourceIndex)),
         borderColor: 'transparent',
         borderRadius: 12,
         barPercentage: 0.6,
@@ -260,8 +314,10 @@ function createHorizontalBarChart(
         }
       }
     },
-    plugins: [valueLabels, htmlLegend, noDataImagePlugin]
+    plugins: [valueLabels, noDataImagePlugin]
   });
+
+  renderBarLegend(legendEl, items, hiddenIndices, colorForIndex, onToggle);
 
   return window[chartInstanceKey];
 }
@@ -274,13 +330,7 @@ const noDataImagePlugin = {
     const text = opts.text ?? 'No Data';
 
     // Check if there is any meaningful data
-    const hasData =
-      chart.data &&
-      chart.data.datasets &&
-      chart.data.datasets.length > 0 &&
-      chart.data.datasets.some(ds =>
-        Array.isArray(ds.data) && ds.data.some(v => v != null && v !== 0)
-      );
+    const hasData = hasVisibleChartData(chart);
 
     if (hasData) return;
 
@@ -356,47 +406,45 @@ const noDataImagePlugin = {
 
     ctx.restore();
   }
-}
+};
 
-function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
+function createDonutChart(data, canvasId, chartInstanceName, options = {}, hiddenIndices = new Set()) {
   // Dynamically read colors
   const style = getComputedStyle(document.documentElement);
   const textColor = style.getPropertyValue('--chart-text-color').trim() || '#dee2e6';
 
   const colorMap = {
-    active: '#0B5ED7',    // Blue
-    pending: '#CFE2FF',   // Light Blue
-    expiring: '#DC3545',  // Red
-    expired: '#E9ECEF'    // Gray
+    no_onboarding: '#198754',
+    pending: '#CFE2FF',
+    onboarded: '#0B5ED7',
+    none: '#E9ECEF',
+    valid: '#0B5ED7',
+    active: '#198754',
+    expiring: '#DC3545',
+    expired: '#ADB5BD'
   };
 
   const showLegend = true;
   const {
     centerText = 'Certificates',
-    labels = ['Active Certificates', 'Expiring Certificates', 'Expired Certificates']
+    labels = ['Active Certificates', 'Expiring Certificates', 'Expired Certificates'],
+    dataKeys = ['active', 'expiring', 'expired']
   } = options;
 
-  const { active, pending, expiring, expired, total } = data;
-  const hasData = total > 0;
-
-  const hasPending = pending > 0;
-  const chartDataArray = hasPending 
-    ? [active, pending, expiring, expired]
-    : [active, expiring, expired];
-
-  const dataKeys = hasPending 
-    ? ['active', 'pending', 'expiring', 'expired']
-    : ['active', 'expiring', 'expired'];
+  const chartDataArray = dataKeys.map((key) => normalizeChartValue(data[key]));
+  const hasData = chartDataArray.some(value => normalizeChartValue(value) > 0);
 
   // Use light pink gradient for expiring instead of blue
-  const chartColors = dataKeys.map(key => key === 'expiring' ? '#FFE8E8' : colorMap[key]);
+  const chartColors = dataKeys.map(key => key === 'expiring' ? '#FFE8E8' : (colorMap[key] || '#0B5ED7'));
   // Create border colors - light pink for expiring, transparent for others
   const borderColors = dataKeys.map(key => key === 'expiring' ? '#FFB3B3' : 'transparent');
 
   const centerTextPlugin = {
     id: `centerText${chartInstanceName}`,
     afterDraw(chart) {
-      if (!hasData) return;
+      const visibleTotal = getVisibleChartTotal(chart);
+      if (!visibleTotal) return;
+
       const meta = chart.getDatasetMeta(0);
       if (!meta?.data?.length) return;
       const { ctx } = chart;
@@ -411,7 +459,7 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
       const currentTextColor = getComputedStyle(document.documentElement)
         .getPropertyValue('--bs-body-color') || '#000';
       ctx.fillStyle = currentTextColor;
-      ctx.fillText(total, x, y - 8);
+      ctx.fillText(visibleTotal, x, y - 8);
 
       // Subtitle
       ctx.font = '500 12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
@@ -455,6 +503,9 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
           display: showLegend && hasData,
           position: 'bottom',
           align: 'start',
+          onClick: (_event, legendItem, legend) => {
+            toggleChartItemVisibility(legend.chart, legendItem.index, hiddenIndices);
+          },
           onHover: (event) => {
           event.native.target.style.cursor = 'pointer';
           },
@@ -478,7 +529,8 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
           callbacks: {
             label: (context) => {
               const value = context.parsed || 0;
-              const percentage = total ? Math.round((value / total) * 100) : 0;
+              const visibleTotal = getVisibleChartTotal(context.chart);
+              const percentage = visibleTotal ? Math.round((value / visibleTotal) * 100) : 0;
               return `${context.label}: ${value} (${percentage}%)`;
             }
           }
@@ -488,35 +540,86 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}) {
     plugins: [centerTextPlugin, noDataImagePlugin]
   });
 
+  applyHiddenIndices(window[chartInstanceKey], hiddenIndices);
+
   return window[chartInstanceKey];
 }
 
 document.addEventListener("DOMContentLoaded", loadDashboardData)
+
+function getDonutChartConfig(datasetName, chartTitle) {
+  const chartConfigs = {
+    device_enrollment_counts: {
+      centerText: chartTitle,
+      dataKeys: ['no_onboarding', 'pending', 'onboarded'],
+      labels: ['No Onboarding', 'Pending', 'Onboarded'],
+    },
+    device_domain_credential_counts: {
+      centerText: chartTitle,
+      dataKeys: ['none', 'valid', 'expiring', 'expired'],
+      labels: ['No Domain Credentials', 'Valid Domain Credentials', 'Expiring Domain Credentials', 'Expired Domain Credentials'],
+    },
+    device_application_certificate_counts: {
+      centerText: chartTitle,
+      dataKeys: ['none', 'active', 'expired'],
+      labels: ['No Application Certificates', 'Active Application Certificates', 'Expired Application Certificates'],
+    },
+    cert_counts: {
+      centerText: chartTitle,
+      dataKeys: ['active', 'expiring', 'expired'],
+      labels: ['Active Certificates', 'Expiring Certificates', 'Expired Certificates'],
+      mapData: (sourceData) => ({
+        active: sourceData.active || 0,
+        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0),
+        expired: sourceData.expired || 0,
+      }),
+    },
+    issuing_ca_counts: {
+      centerText: chartTitle,
+      dataKeys: ['active', 'expiring', 'expired'],
+      labels: ['Active Issuing CAs', 'Expiring Issuing CAs', 'Expired Issuing CAs'],
+      mapData: (sourceData) => ({
+        active: sourceData.active || 0,
+        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0),
+        expired: sourceData.expired || 0,
+      }),
+    },
+  };
+
+  return chartConfigs[datasetName] || {
+    centerText: chartTitle,
+    dataKeys: ['active', 'expiring', 'expired'],
+    labels: ['Active', 'Expiring', 'Expired'],
+  };
+}
 
 function initializeBarChart(identifier, dataset) {
   const chartCanvasId = `chart_${identifier}`;
   const legendContainerId = `legend_${identifier}`;
 
   let chartInstance = null;
-  let chartLabels = [];
-  let chartValues = [];
+  let chartItems = [];
+  const hiddenIndices = new Set();
 
   function drawChart() {
     if (chartInstance && typeof chartInstance.destroy === 'function') {
       chartInstance.destroy();
     }
 
-    const legendContainer = document.getElementById(legendContainerId);
-    if (legendContainer) {
-        legendContainer.innerHTML = '';
-    }
-
     chartInstance = createHorizontalBarChart(
-      chartLabels,
-      chartValues,
+      chartItems,
       chartCanvasId,
       legendContainerId,
-      identifier
+      identifier,
+      hiddenIndices,
+      (index) => {
+        if (hiddenIndices.has(index)) {
+          hiddenIndices.delete(index);
+        } else {
+          hiddenIndices.add(index);
+        }
+        drawChart();
+      }
     );
   }
 
@@ -546,8 +649,15 @@ function initializeBarChart(identifier, dataset) {
     }
 
     const sortedItems = items.sort((a, b) => b.value - a.value);
-    chartLabels = sortedItems.map(i => i.label);
-    chartValues = sortedItems.map(i => i.value);
+    chartItems = sortedItems
+      .filter((item) => normalizeChartValue(item.value) > 0)
+      .slice(0, 5)
+      .map((item, index) => ({
+        label: item.label,
+        value: normalizeChartValue(item.value),
+        sourceIndex: index
+      }));
+    hiddenIndices.clear();
 
     drawChart();
   });
@@ -564,57 +674,31 @@ function initializeDonutChart(identifier, datasetName, chartTitle) {
   let chartInstance = null;
   let chartData = null;
   let chartOptions = null;
+  const hiddenIndices = new Set();
 
   function drawChart() {
     if (chartInstance && typeof chartInstance.destroy === 'function') {
       chartInstance.destroy();
     }
     if (chartData) {
-      chartInstance = createDonutChart(chartData, chartCanvasId, identifier, chartOptions);
+      chartInstance = createDonutChart(chartData, chartCanvasId, identifier, chartOptions, hiddenIndices);
     }
   }
 
   document.addEventListener("dashboardData", (event) => {
     const today = event.detail.today || {};
     const sourceData = today[datasetName] || {};
+    const config = getDonutChartConfig(datasetName, chartTitle);
 
     if (!Array.isArray(sourceData)) {
-      const isDeviceChart = chartTitle.toLowerCase().includes('device');
-      
-      chartData = {
-        active: sourceData.active || sourceData.Onboarded || 0,
-        pending: sourceData.pending || 0,
-        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0),
-        expired: sourceData.expired || 0,
-        total: sourceData.total || 0
-      };
-      
-      if (!isDeviceChart) {
-        chartData.pending = 0;
-        chartData.total = chartData.active + chartData.expiring + chartData.expired;
-      }
-      
-      const labelMap = isDeviceChart ? {
-        active: 'Active Devices',
-        pending: 'Pending Devices',
-        expiring: 'Expiring Devices',
-        expired: 'Expired Devices'
-      } : {
-        active: 'Active Certificates',
-        pending: 'Pending Certificates',
-        expiring: 'Expiring Certificates',
-        expired: 'Expired Certificates'
-      };
-      
-      const dataKeys = isDeviceChart 
-        ? ['active', 'pending', 'expiring', 'expired']
-        : ['active', 'expiring', 'expired'];
-      
+      chartData = config.mapData ? config.mapData(sourceData) : sourceData;
       chartOptions = {
-        centerText: chartTitle,
-        labels: dataKeys.map(key => labelMap[key])
+        centerText: config.centerText,
+        labels: config.labels,
+        dataKeys: config.dataKeys,
       };
     }
+    hiddenIndices.clear();
     
     drawChart();
   });
