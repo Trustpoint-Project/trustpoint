@@ -37,6 +37,7 @@ class OwnerCredentialSerializer(serializers.ModelSerializer[OwnerCredentialModel
     )
     has_valid_domain_credential = serializers.BooleanField(read_only=True)
     truststore_id = serializers.SerializerMethodField()
+    devownerid_certificate_pem = serializers.SerializerMethodField()
 
     class Meta:
         """Metadata for OwnerCredentialSerializer."""
@@ -55,6 +56,7 @@ class OwnerCredentialSerializer(serializers.ModelSerializer[OwnerCredentialModel
             'key_type',
             'has_valid_domain_credential',
             'truststore_id',
+            'devownerid_certificate_pem',
             'created_at',
         ]
         read_only_fields: ClassVar[list[str]] = fields
@@ -66,6 +68,16 @@ class OwnerCredentialSerializer(serializers.ModelSerializer[OwnerCredentialModel
         if obj.onboarding_config and obj.onboarding_config.trust_store_id:
             return obj.onboarding_config.trust_store_id
         return None
+
+    def get_devownerid_certificate_pem(self, obj: OwnerCredentialModel) -> str | None:
+        """Return the PEM-encoded DevOwnerID certificate, or None if not yet issued."""
+        issued = obj.dev_owner_id_credential
+        if issued is None:
+            return None
+        cert = issued.credential.certificate
+        if cert is None:
+            return None
+        return cert.cert_pem
 
 class OwnerCredentialFileImportSerializer(serializers.Serializer[Any]):
     """Serializer for creating an OwnerCredential via file import (PEM files)."""
