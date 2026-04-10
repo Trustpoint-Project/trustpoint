@@ -60,18 +60,24 @@ class CertProfileParsing(ParsingComponent, LoggerMixin):
             return
         certprofile_str = context.cert_profile_str
 
-        if not certprofile_str and context.domain is not None:
-            certprofile_str = context.domain.get_domain_credential_profile_name()
-            context.cert_profile_str = certprofile_str
-            self.logger.info(
-                "No certificate profile specified, using domain credential profile: '%s'",
-                certprofile_str,
-            )
-
         if not certprofile_str:
-            error_message = 'Certificate profile is missing in the request context.'
-            self.logger.warning('Certificate profile parsing failed: Profile string is missing')
-            raise ValueError(error_message)
+            if context.domain is not None:
+                certprofile_str = context.domain.get_domain_credential_profile_name()
+                context.cert_profile_str = certprofile_str
+                self.logger.info(
+                    "No certificate profile specified, using domain credential profile: '%s'",
+                    certprofile_str,
+                )
+            elif context.domain_str == '.aoki':
+                self.logger.info(
+                    "No certificate profile specified and special domain '.aoki' detected, "
+                    "deferring domain credential profile resolution to authorization step"
+                )
+                return
+            else:
+                error_message = 'Certificate profile is missing in the request context.'
+                self.logger.warning('Certificate profile parsing failed: Profile string is missing')
+                raise ValueError(error_message)
 
         self.logger.info("Certificate profile parsing successful: Profile '%s'", certprofile_str)
 
