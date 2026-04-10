@@ -2,11 +2,6 @@
 {% load static %}
 {% load i18n %}
 
-{% block head %}
-    {{ block.super }}
-    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
-{% endblock head %}
-
 {% block content %}
 
     <section class="tp-setup-form-shell">
@@ -32,16 +27,20 @@
             </div>
         {% endif %}
 
-        <div class="tp-setup-form-header">
-            <h1 class="tp-setup-form-heading">{% trans "Logout" %}</h1>
-        </div>
-
-        <div class="tp-setup-form-panel">
-            <div class="tp-setup-form">
-                <p class="tp-setup-form-copy">{% trans "You have been logged out." %}</p>
-                <hr class="tp-setup-form-divider">
-                <div class="tp-setup-form-actions">
-                    <a href="{% url 'users:login' %}" class="btn tp-setup-form-submit">{% trans "Login again" %}</a>
+        <div class="card tp-setup-form-panel">
+            <div class="card-header d-flex">
+                <div>
+                    <h1>{% trans "Logout" %}</h1>
+                </div>
+            </div>
+            <div class="card-body py-3">
+                <div class="tp-card-centered-content">
+                    <p class="mb-0 text-start">{% trans "You have been logged out." %}</p>
+                </div>
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'users:login' %}" class="btn btn-primary">{% trans "Login again" %}</a>
                 </div>
             </div>
         </div>

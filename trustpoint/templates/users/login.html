@@ -3,11 +3,6 @@
 {% load i18n %}
 {% load crispy_forms_filters %}
 
-{% block head %}
-    {{ block.super }}
-    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
-{% endblock head %}
-
 {% block content %}
 
     <section class="tp-setup-form-shell">
@@ -33,19 +28,25 @@
             </div>
         {% endif %}
 
-        <div class="tp-setup-form-header">
-            <h1 class="tp-setup-form-heading">{% trans "Login" %}</h1>
-        </div>
-
-        <div class="tp-setup-form-panel">
-            <form method="POST" class="tp-setup-form text-start">
+        <div class="card tp-setup-form-panel">
+            <div class="card-header d-flex">
+                <div>
+                    <h1>{% trans "Login" %}</h1>
+                </div>
+            </div>
+            <form method="POST">
                 {% csrf_token %}
-                <fieldset class="form-group tp-form-group">
-                    {{ form|crispy }}
-                </fieldset>
-                <hr class="tp-setup-form-divider">
-                <div class="tp-setup-form-actions">
-                    <button class="btn tp-setup-form-submit" type="submit">{% trans "Login" %}</button>
+                <div class="card-body py-3">
+                    <div class="tp-card-centered-content">
+                        <fieldset class="form-group tp-form-group">
+                            {{ form|crispy }}
+                        </fieldset>
+                    </div>
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <div class="tp-card-btn-footer m-1">
+                        <button class="btn btn-primary" type="submit">{% trans "Login" %}</button>
+                    </div>
                 </div>
             </form>
         </div>

@@ -1109,3 +1109,727 @@ input[readonly].readonly-field {
 .tp-status-badge.tp-status-unconfigured .tp-status-dot {
     background-color: #ffc107;
 }
+
+/* ----- Setup Wizard ----- */
+
+.tp-setup-wizard-shell {
+    --tp-setup-grid-width: 57.6rem;
+    --tp-setup-grid-gap: 1.5rem;
+    --tp-setup-card-min-height: 21rem;
+    margin: 0 auto;
+    max-width: 68rem;
+    padding: 0 1rem;
+    width: 100%;
+}
+
+.tp-setup-wizard-grid {
+    display: grid;
+    gap: var(--tp-setup-grid-gap);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin: 0 auto;
+    max-width: none;
+}
+
+.tp-setup-wizard-grid > * {
+    min-width: 0;
+}
+
+.tp-setup-wizard-panel {
+    margin: 0 auto;
+    max-width: 68rem;
+    overflow: hidden;
+    width: 100%;
+}
+
+.tp-setup-wizard-panel > .card-body {
+    padding: var(--tp-setup-grid-gap);
+}
+
+.tp-setup-option-card {
+    color: inherit;
+    display: block;
+    min-height: var(--tp-setup-card-min-height);
+    text-decoration: none;
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+}
+
+.tp-setup-option-card:hover,
+.tp-setup-option-card:focus-visible {
+    background-color: var(--bs-tertiary-bg);
+    border-color: rgba(var(--bs-primary-rgb), 0.35);
+    color: inherit;
+    outline: 0;
+    text-decoration: none;
+}
+
+.tp-setup-option-card:focus-visible {
+    box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.15);
+}
+
+.tp-setup-option-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.tp-setup-option-copy {
+    display: grid;
+    gap: 1rem;
+    justify-items: center;
+    text-align: center;
+}
+
+.tp-setup-option-figure {
+    align-items: center;
+    color: var(--bs-primary);
+    display: inline-flex;
+    justify-content: center;
+}
+
+.tp-setup-option-figure svg {
+    height: 2.5rem;
+    width: 2.5rem;
+}
+
+.tp-setup-option-title {
+    color: var(--bs-emphasis-color);
+    font-size: 1.35rem;
+    font-weight: var(--tp-font-weight-h);
+    line-height: 1.2;
+    margin: 0;
+}
+
+.tp-setup-option-text {
+    color: var(--bs-secondary-color);
+    margin: 0;
+    max-width: 22rem;
+}
+
+.tp-setup-form-shell {
+    margin: 0 auto;
+    max-width: 58rem;
+    padding: 0 1rem;
+    width: 100%;
+}
+
+.tp-setup-form-messages,
+.tp-setup-form-panel {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 45rem;
+    width: 100%;
+}
+
+.tp-setup-form-messages {
+    margin-bottom: 1.5rem;
+}
+
+.tp-setup-form-panel {
+    overflow: hidden;
+}
+
+.tp-setup-form-panel .tp-card-btn-footer {
+    width: 100%;
+}
+
+.tp-setup-form-panel .tp-card-btn-footer > * {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.tp-setup-form-panel .card-footer a,
+.tp-setup-form-panel .card-footer button {
+    min-width: 0;
+    width: auto;
+}
+
+.tp-fresh-install-shell .tp-card-setup-main .tp-card-btn-footer {
+    width: 100%;
+}
+
+.tp-fresh-install-shell .tp-card-setup-main .tp-card-btn-footer > * {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.tp-fresh-install-shell .tp-card-setup-main .card-footer a,
+.tp-fresh-install-shell .tp-card-setup-main .card-footer button {
+    min-width: 0;
+    width: auto;
+}
+
+.tp-setup-form-shell .tp-form-group {
+    margin: 0;
+}
+
+.tp-setup-form-shell .tp-form-group .mb-3,
+.tp-setup-form-shell .tp-form-group .form-group,
+.tp-setup-form-shell .tp-form-group .controls,
+.tp-setup-form-shell .tp-form-group .input-group,
+.tp-setup-form-shell .tp-form-group .crispy-field,
+.tp-setup-form-shell .tp-form-group .form-control,
+.tp-setup-form-shell .tp-form-group .form-select,
+.tp-setup-form-shell .tp-form-group input[type="file"] {
+    max-width: none;
+    width: 100% !important;
+}
+
+.tp-setup-form-shell .tp-form-group .form-text,
+.tp-setup-form-shell .tp-form-group .helptext,
+.tp-setup-form-shell .tp-form-group .invalid-feedback,
+.tp-setup-form-shell .tp-form-group .text-danger {
+    margin-top: 0.5rem;
+}
+
+.tp-setup-form-shell .tp-form-group .helptext {
+    color: var(--bs-secondary-color);
+    display: block;
+}
+
+.tp-setup-form-shell .tp-form-group .errorlist {
+    color: var(--bs-danger);
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding-left: 0;
+}
+
+.tp-setup-form-shell .tp-form-group ul:not(.errorlist) {
+    color: var(--bs-secondary-color);
+    list-style: none;
+    margin: 0.5rem 0 0;
+    padding-left: 0;
+}
+
+.tp-setup-header-logout-form {
+    margin: 0;
+}
+
+.tp-setup-header-logout.tp-menu-head {
+    align-items: center;
+    display: inline-flex;
+    font-size: 0.98rem;
+    gap: 0.55rem;
+    line-height: 1;
+    padding: 0.55rem 0.8rem;
+    width: auto;
+}
+
+.tp-setup-header-logout.tp-menu-head > .bi {
+    height: 1rem;
+    margin: 0;
+    width: 1rem;
+}
+
+.tp-fresh-install-shell {
+    --tp-fresh-install-width: 68rem;
+    --tp-fresh-install-accent: var(--bs-primary);
+    margin: 0 auto;
+    max-width: 72rem;
+    padding: 0 1rem;
+    width: 100%;
+}
+
+.tp-fresh-install-shell .tp-setup-form-messages,
+.tp-fresh-install-shell .tp-card-setup-wizard,
+.tp-fresh-install-shell .tp-summary-loading-state {
+    margin-left: auto;
+    margin-right: auto;
+    max-width: var(--tp-fresh-install-width);
+    width: 100%;
+}
+
+.tp-fresh-install-shell .tp-card-setup-wizard {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.tp-fresh-install-shell .tp-wizard-progress {
+    text-align: center;
+}
+
+.tp-fresh-install-shell .tp-wizard-stepper {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0;
+    justify-content: flex-start;
+    margin: 0.625rem;
+    overflow-x: auto;
+    padding: 0;
+}
+
+.tp-fresh-install-shell .tp-wizard-step {
+    flex: 1 1 0;
+    height: 4rem;
+    max-width: none;
+    min-width: 0;
+    position: relative;
+    width: auto;
+}
+
+.tp-fresh-install-shell .tp-wizard-step + .tp-wizard-step {
+    margin-left: -0.5rem;
+}
+
+.tp-fresh-install-shell .tp-wizard-step:first-child {
+    border-radius: var(--bs-border-radius-lg) 0 0 var(--bs-border-radius-lg);
+    overflow: hidden;
+}
+
+.tp-fresh-install-shell .tp-wizard-step:last-child {
+    border-radius: 0 var(--bs-border-radius-lg) var(--bs-border-radius-lg) 0;
+    overflow: hidden;
+}
+
+.tp-fresh-install-shell .tp-wizard-step-link,
+.tp-fresh-install-shell .tp-wizard-step-current,
+.tp-fresh-install-shell .tp-wizard-step-available,
+.tp-fresh-install-shell .tp-wizard-step-disabled {
+    --tp-step-background: var(--bs-tertiary-bg);
+    --tp-step-color: var(--bs-secondary-color);
+    align-items: center;
+    background: var(--tp-step-background);
+    box-shadow: 0 0.35rem 0.9rem color-mix(in srgb, var(--bs-primary) 8%, transparent);
+    box-sizing: border-box;
+    clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 50%, calc(100% - 1rem) 100%, 0 100%, 1rem 50%);
+    color: var(--tp-step-color);
+    display: flex;
+    font-weight: 700;
+    height: 100%;
+    justify-content: center;
+    min-height: 0;
+    padding: 0 3.4rem 0 1.65rem;
+    position: relative;
+    text-align: center;
+    text-decoration: none;
+    transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+    white-space: nowrap;
+    width: 100%;
+}
+
+.tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-link,
+.tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-current,
+.tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-available,
+.tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-disabled {
+    clip-path: polygon(0 0, calc(100% - 1rem) 0, 100% 50%, calc(100% - 1rem) 100%, 0 100%);
+    padding-left: 1.25rem;
+    padding-right: 3.4rem;
+}
+
+.tp-fresh-install-shell .tp-wizard-step:last-child .tp-wizard-step-link,
+.tp-fresh-install-shell .tp-wizard-step:last-child .tp-wizard-step-current,
+.tp-fresh-install-shell .tp-wizard-step:last-child .tp-wizard-step-available,
+.tp-fresh-install-shell .tp-wizard-step:last-child .tp-wizard-step-disabled {
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 1rem 50%);
+}
+
+.tp-fresh-install-shell .tp-wizard-step-link:hover,
+.tp-fresh-install-shell .tp-wizard-step-available:hover,
+.tp-fresh-install-shell .tp-wizard-step-link:focus-visible,
+.tp-fresh-install-shell .tp-wizard-step-available:focus-visible {
+    box-shadow: 0 0.45rem 1rem color-mix(in srgb, var(--tp-fresh-install-accent) 14%, transparent);
+    color: var(--tp-step-color);
+    outline: 0;
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+.tp-fresh-install-shell .tp-wizard-step-current {
+    --tp-step-background: var(--tp-fresh-install-accent);
+    --tp-step-color: #fff;
+    box-shadow: 0 0.9rem 2rem color-mix(in srgb, var(--tp-fresh-install-accent) 26%, transparent);
+}
+
+.tp-fresh-install-shell .tp-wizard-step-link,
+.tp-fresh-install-shell .tp-wizard-step-available {
+    --tp-step-background: color-mix(in srgb, var(--tp-fresh-install-accent) 80%, white);
+    --tp-step-color: #fff;
+}
+
+.tp-fresh-install-shell .tp-wizard-step-link {
+    --tp-step-background: color-mix(in srgb, var(--tp-fresh-install-accent) 68%, white);
+}
+
+.tp-fresh-install-shell .tp-wizard-step-disabled {
+    --tp-step-background: color-mix(in srgb, var(--bs-body-bg) 92%, var(--bs-emphasis-color));
+    --tp-step-color: color-mix(in srgb, var(--bs-secondary-color) 90%, var(--bs-emphasis-color));
+    box-shadow: 0 0.2rem 0.55rem color-mix(in srgb, var(--bs-emphasis-color) 6%, transparent);
+}
+
+.tp-fresh-install-shell .tp-wizard-step-indicator {
+    align-items: center;
+    display: inline-flex;
+    font-size: 1.05rem;
+    font-weight: 700;
+    justify-content: center;
+    line-height: 1;
+    min-width: 1rem;
+}
+
+.tp-fresh-install-shell .tp-wizard-step-label {
+    display: block;
+    font-size: 1.125rem;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    line-height: 1.2;
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    width: 100%;
+}
+
+.tp-fresh-install-shell .tp-wizard-step-trailing {
+    align-items: center;
+    display: inline-flex;
+    height: 2rem;
+    justify-content: center;
+    line-height: 1;
+    min-width: 2rem;
+    position: absolute;
+    right: 1.1rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2rem;
+}
+
+.tp-fresh-install-shell .tp-wizard-step-trailing.is-done {
+    font-size: 2rem;
+    font-weight: 800;
+    opacity: 0.95;
+}
+
+.tp-fresh-install-shell .tp-choice-group {
+    display: grid;
+    gap: 1rem;
+}
+
+.tp-fresh-install-shell .tp-choice-group-label {
+    color: var(--bs-secondary-color);
+    font-size: 0.9rem;
+    margin-bottom: -0.25rem;
+}
+
+.tp-fresh-install-shell .tp-form-group .mb-3,
+.tp-fresh-install-shell .tp-form-group .form-group,
+.tp-fresh-install-shell .tp-form-group .controls,
+.tp-fresh-install-shell .tp-form-group .input-group,
+.tp-fresh-install-shell .tp-form-group .crispy-field {
+    max-width: none;
+    width: 100% !important;
+}
+
+.tp-fresh-install-shell .tp-form-group > .mb-3:last-child,
+.tp-fresh-install-shell .tp-tls-panel > .mb-3:last-child,
+.tp-fresh-install-shell .tp-tls-panel > .mb-3:last-child > .mb-3:last-child,
+.tp-fresh-install-shell .tp-tls-panel > .mb-3:last-child > .form-group:last-child,
+.tp-fresh-install-shell .tp-tls-panel > .mb-3:last-child > .crispy-field:last-child {
+    margin-bottom: 0 !important;
+}
+
+.tp-fresh-install-shell .tp-tls-panel[hidden] {
+    display: none !important;
+}
+
+.tp-fresh-install-shell .tp-choice-option {
+    cursor: pointer;
+    display: block;
+    margin: 0;
+}
+
+.tp-fresh-install-shell .tp-choice-option.is-disabled {
+    cursor: not-allowed;
+}
+
+.tp-fresh-install-shell .tp-choice-option input {
+    opacity: 0;
+    pointer-events: none;
+    position: absolute;
+}
+
+.tp-fresh-install-shell .tp-choice-card {
+    --tp-choice-selected-bg: color-mix(in srgb, var(--trustpoint-light-blue) 46%, white);
+    background-color: color-mix(in srgb, var(--bs-body-bg) 96%, var(--trustpoint-light-blue) 4%);
+    border: 1px solid color-mix(in srgb, var(--bs-border-color) 88%, var(--trustpoint-light-blue));
+    border-radius: var(--bs-border-radius);
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    outline: 0 solid transparent;
+    outline-offset: 2px;
+    padding: 1rem 1.1rem;
+    transition:
+        background-color 0.15s ease-in-out,
+        border-color 0.15s ease-in-out,
+        outline-color 0.15s ease-in-out,
+        transform 0.15s ease-in-out;
+}
+
+.tp-fresh-install-shell .tp-choice-option:hover .tp-choice-card {
+    background-color: color-mix(in srgb, var(--bs-body-bg) 88%, var(--trustpoint-light-blue) 12%);
+    border-color: color-mix(in srgb, var(--bs-primary) 34%, var(--trustpoint-light-blue));
+    transform: translateY(-1px);
+}
+
+.tp-fresh-install-shell .tp-choice-option input:focus-visible + .tp-choice-card {
+    border-color: color-mix(in srgb, var(--bs-primary) 38%, var(--trustpoint-light-blue));
+    outline: 0.2rem solid rgba(var(--bs-primary-rgb), 0.18);
+}
+
+.tp-fresh-install-shell .tp-choice-option input:checked + .tp-choice-card {
+    background-color: var(--tp-choice-selected-bg);
+    border-color: color-mix(in srgb, var(--tp-fresh-install-accent) 50%, white);
+}
+
+.tp-fresh-install-shell .tp-choice-option.is-disabled .tp-choice-card,
+.tp-fresh-install-shell .tp-choice-option.is-disabled input:checked + .tp-choice-card {
+    background-color: color-mix(in srgb, var(--bs-tertiary-bg) 90%, var(--bs-body-bg));
+    border-color: color-mix(in srgb, var(--bs-border-color) 86%, transparent);
+    outline: 0;
+    transform: none;
+}
+
+.tp-fresh-install-shell .tp-choice-title {
+    color: var(--bs-emphasis-color);
+    font-size: 1rem;
+    font-weight: var(--tp-font-weight-h);
+    line-height: 1.2;
+}
+
+.tp-fresh-install-shell .tp-choice-description,
+.tp-fresh-install-shell .tp-choice-option.is-disabled .tp-choice-title,
+.tp-fresh-install-shell .tp-choice-option.is-disabled .tp-choice-description {
+    color: var(--bs-secondary-color);
+}
+
+.tp-fresh-install-shell .tp-choice-option.is-disabled .tp-choice-title,
+.tp-fresh-install-shell .tp-choice-option.is-disabled .tp-choice-description {
+    opacity: 0.8;
+}
+
+[data-bs-theme="dark"] .tp-fresh-install-shell .tp-choice-card {
+    background-color: color-mix(in srgb, #0f2842 72%, var(--bs-secondary-bg));
+    border-color: color-mix(in srgb, #4d87cc 42%, var(--bs-border-color));
+}
+
+[data-bs-theme="dark"] .tp-fresh-install-shell .tp-choice-option:hover .tp-choice-card {
+    background-color: color-mix(in srgb, #17385c 76%, var(--tp-fresh-install-accent));
+    border-color: color-mix(in srgb, #72a8ea 58%, var(--tp-fresh-install-accent));
+}
+
+[data-bs-theme="dark"] .tp-fresh-install-shell .tp-choice-option input:focus-visible + .tp-choice-card {
+    border-color: color-mix(in srgb, #8dbcf5 68%, #fff);
+    outline-color: rgba(110, 168, 254, 0.24);
+}
+
+[data-bs-theme="dark"] .tp-fresh-install-shell .tp-choice-option input:checked + .tp-choice-card {
+    background-color: color-mix(in srgb, var(--tp-fresh-install-accent) 58%, #6ea8fe 42%);
+    border-color: color-mix(in srgb, #9ac4ff 74%, #fff);
+}
+
+[data-bs-theme="dark"] .tp-fresh-install-shell .tp-choice-option input:checked + .tp-choice-card .tp-choice-title {
+    color: #fff;
+}
+
+[data-bs-theme="dark"] .tp-fresh-install-shell .tp-choice-option input:checked + .tp-choice-card .tp-choice-description {
+    color: rgba(255, 255, 255, 0.88);
+}
+
+[data-bs-theme="dark"] .tp-fresh-install-shell .tp-choice-option.is-disabled .tp-choice-card,
+[data-bs-theme="dark"] .tp-fresh-install-shell .tp-choice-option.is-disabled input:checked + .tp-choice-card {
+    background-color: color-mix(in srgb, var(--bs-dark-bg-subtle) 82%, #000);
+    border-color: color-mix(in srgb, var(--bs-border-color) 74%, #fff);
+    border-style: dashed;
+}
+
+[data-bs-theme="dark"] .tp-fresh-install-shell .tp-choice-option.is-disabled .tp-choice-title {
+    color: rgba(222, 226, 230, 0.56);
+}
+
+[data-bs-theme="dark"] .tp-fresh-install-shell .tp-choice-option.is-disabled .tp-choice-description {
+    color: rgba(222, 226, 230, 0.4);
+}
+
+.tp-fresh-install-shell .tp-wizard-body {
+    padding: 1.5rem;
+}
+
+.tp-fresh-install-shell .tp-wizard-heading {
+    margin: 0 0 1.5rem;
+    text-align: left;
+}
+
+.tp-fresh-install-shell .tp-form-divider {
+    margin: 1.5rem 0;
+}
+
+.tp-fresh-install-shell .tp-tls-error-lines {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.tp-fresh-install-shell .tp-summary-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.tp-fresh-install-shell .tp-summary-item {
+    background-color: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+    display: grid;
+    gap: 0.45rem;
+    padding: 1rem 1.15rem;
+    text-align: left;
+}
+
+.tp-fresh-install-shell .tp-summary-label,
+.tp-fresh-install-shell .tp-summary-detail-label {
+    color: var(--bs-secondary-color);
+    font-size: 0.85rem;
+    font-weight: var(--tp-font-weight-h);
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.tp-fresh-install-shell .tp-summary-value,
+.tp-fresh-install-shell .tp-summary-detail-value {
+    color: var(--bs-emphasis-color);
+    line-height: 1.35;
+    text-align: left;
+    white-space: pre-line;
+}
+
+.tp-fresh-install-shell .tp-summary-value {
+    font-size: 1rem;
+    font-weight: var(--tp-font-weight-h);
+}
+
+.tp-fresh-install-shell .tp-summary-details,
+.tp-fresh-install-shell .tp-summary-downloads {
+    border-top: 1px solid var(--bs-border-color);
+    display: grid;
+    gap: 0.85rem;
+    margin-top: 0.15rem;
+    padding-top: 0.9rem;
+}
+
+.tp-fresh-install-shell .tp-summary-detail {
+    display: grid;
+    gap: 0.2rem;
+}
+
+.tp-fresh-install-shell .tp-summary-download-actions {
+    align-items: flex-start;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.tp-fresh-install-shell .tp-summary-download-actions .btn {
+    min-width: 0;
+    width: calc((100% - 1rem) / 2);
+}
+
+.tp-fresh-install-shell .tp-summary-loading-card .card-body {
+    align-items: center;
+    display: grid;
+    gap: 1rem;
+    justify-items: center;
+    min-height: clamp(20rem, 52vh, 28rem);
+    padding: 3rem 1.5rem;
+    text-align: center;
+}
+
+.tp-fresh-install-shell .tp-summary-loading-visual {
+    align-items: center;
+    background-color: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 999px;
+    display: inline-flex;
+    height: 5rem;
+    justify-content: center;
+    width: 5rem;
+}
+
+.tp-fresh-install-shell .tp-summary-loading-spinner {
+    border-width: 0.28rem;
+    color: var(--bs-primary);
+    height: 2.5rem;
+    width: 2.5rem;
+}
+
+.tp-fresh-install-shell .tp-summary-loading-title {
+    color: var(--bs-emphasis-color);
+    font-size: 1.8rem;
+    font-weight: var(--tp-font-weight-h);
+    margin: 0;
+}
+
+.tp-fresh-install-shell .tp-summary-loading-copy {
+    color: var(--bs-secondary-color);
+    margin: 0;
+    max-width: 27rem;
+}
+
+@media (max-width: 767.98px) {
+    .tp-setup-wizard-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-stepper {
+        flex-direction: column;
+        margin: 0.625rem 0;
+        overflow-x: visible;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-step {
+        flex-basis: auto;
+        height: 4rem;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-step + .tp-wizard-step {
+        margin-left: 0;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-step-link,
+    .tp-fresh-install-shell .tp-wizard-step-current,
+    .tp-fresh-install-shell .tp-wizard-step-available,
+    .tp-fresh-install-shell .tp-wizard-step-disabled {
+        clip-path: none;
+        justify-content: flex-start;
+        padding: 0.9rem 3.4rem 0.9rem 1rem;
+        text-align: left;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-link,
+    .tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-current,
+    .tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-available,
+    .tp-fresh-install-shell .tp-wizard-step:first-child .tp-wizard-step-disabled {
+        clip-path: none;
+        padding-left: 1rem;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-step-label {
+        text-align: left;
+    }
+
+    .tp-fresh-install-shell .tp-wizard-body {
+        padding: 1.25rem;
+    }
+
+    .tp-fresh-install-shell .tp-summary-loading-card .card-body {
+        padding: 2.4rem 1.5rem;
+    }
+
+    .tp-fresh-install-shell .tp-summary-download-actions .btn {
+        width: 100%;
+    }
+}
+
+.tp-fresh-install-shell .tp-wizard-step-link .tp-wizard-step-indicator,
+.tp-fresh-install-shell .tp-wizard-step-current .tp-wizard-step-indicator,
+.tp-fresh-install-shell .tp-wizard-step-available .tp-wizard-step-indicator,
+.tp-fresh-install-shell .tp-wizard-step-disabled .tp-wizard-step-indicator {
+    display: none;
+}

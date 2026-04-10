@@ -3,11 +3,6 @@
 {% load i18n %}
 {% load crispy_forms_filters %}
 
-{% block head %}
-    {{ block.super }}
-    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
-{% endblock head %}
-
 {% block header_actions %}
     <form method="POST" action="{% url 'users:logout' %}" class="tp-setup-header-logout-form">
         {% csrf_token %}
@@ -53,15 +48,16 @@
     {% endif %}
 
     <section class="tp-setup-form-shell tp-fresh-install-shell">
-        <div class="tp-setup-form-header">
-            <h1 class="tp-setup-form-heading">{% trans 'Setup Wizard' %}</h1>
-        </div>
-
     <form method="POST" enctype="multipart/form-data" class="text-start"{% if form.storage_selection %} data-summary-submit-form{% endif %}>
         {% csrf_token %}
-        <div class="card tp-card-setup-wizard tp-card-setup-steps text-center">
-            <div class="card-header">
-                <div class="px-1 py-2">
+        <div class="card tp-card-setup-wizard tp-card-setup-main"{% if form.storage_selection %} data-summary-submit-card{% endif %}>
+            <div class="card-header d-flex">
+                <div>
+                    <h1>{% trans 'Setup Wizard' %}</h1>
+                </div>
+            </div>
+            <div class="card-body tp-wizard-body">
+                <div class="tp-wizard-progress">
                     <div class="tp-wizard-stepper" role="list" aria-label="{% trans 'Setup progress' %}">
                     {% for step in steps %}
                             <div class="tp-wizard-step">
@@ -94,10 +90,9 @@
                     {% endfor %}
                     </div>
                 </div>
-            </div>
-        </div>
-        <div class="card tp-card-setup-wizard tp-card-setup-content text-center"{% if form.storage_selection %} data-summary-submit-card{% endif %}>
-            <div class="card-body tp-wizard-body">
+
+                <hr class="tp-form-divider">
+
                 <h2 class="tp-wizard-heading">{{ body_heading }}</h2>
                 <fieldset class="form-group tp-form-group">
                     {% if form.non_field_errors and not form.tls_mode %}
@@ -177,7 +172,7 @@
                         <hr class="tp-form-divider">
 
                         {% if form.non_field_errors %}
-                            <div class="tp-tls-error" role="alert">
+                            <div class="alert alert-danger text-start mb-4" role="alert">
                                 <div class="tp-tls-error-lines">
                                     {% for error in form.non_field_errors %}
                                         <div>{{ error }}</div>
@@ -298,17 +293,18 @@
                         {% endfor %}
                     {% endif %}
                 </fieldset>
-                <hr class="tp-form-divider">
-                <div class="tp-setup-form-actions">
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <div class="tp-card-btn-footer m-1">
                     {% if back_url %}
-                        <a href="{{ back_url }}" class="btn tp-setup-form-back">{% trans 'Back' %}</a>
+                        <a href="{{ back_url }}" class="btn btn-secondary">{% trans 'Back' %}</a>
                     {% else %}
-                        <button class="btn tp-setup-form-back"
+                        <button class="btn btn-secondary"
                                 type="submit"
                                 formaction="{% url 'setup_wizard:fresh_install_cancel' %}"
                                 formnovalidate>{% trans 'Cancel' %}</button>
                     {% endif %}
-                    <button class="btn tp-setup-form-submit" type="submit">
+                    <button class="btn btn-primary" type="submit">
                         {% trans 'Apply and Continue' %}
                     </button>
                 </div>

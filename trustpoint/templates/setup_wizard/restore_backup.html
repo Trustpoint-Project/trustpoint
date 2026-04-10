@@ -2,11 +2,6 @@
 {% load static %}
 {% load i18n %}
 
-{% block head %}
-    {{ block.super }}
-    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
-{% endblock head %}
-
 {% block content %}
 
     <section class="tp-setup-form-shell">
@@ -32,39 +27,44 @@
             </div>
         {% endif %}
 
-        <div class="tp-setup-form-header">
-            <h1 class="tp-setup-form-heading">{% trans "Restore from Backup" %}</h1>
-        </div>
-
-        <div class="tp-setup-form-panel">
-            <form method="post" action="" enctype="multipart/form-data" class="tp-setup-form text-start">
+        <div class="card tp-setup-form-panel">
+            <div class="card-header d-flex">
+                <div>
+                    <h1>{% trans "Restore from Backup" %}</h1>
+                </div>
+            </div>
+            <form method="post" action="" enctype="multipart/form-data">
                 {% csrf_token %}
 
-                <fieldset class="tp-form-group">
-                    <div class="mb-3">
-                        <label for="backup_file" class="form-label">{% trans "Backup File" %}</label>
-                        <input type="file" name="backup_file" id="backup_file" accept=".dump,.gz,.sql,.zip"
-                            required class="form-control">
-                        <div class="form-text">{% trans "Select the backup file to restore from." %}</div>
+                <div class="card-body py-3">
+                    <div class="tp-card-centered-content">
+                        <fieldset class="tp-form-group">
+                            <div class="mb-3">
+                                <label for="backup_file" class="form-label">{% trans "Backup File" %}</label>
+                                <input type="file" name="backup_file" id="backup_file" accept=".dump,.gz,.sql,.zip"
+                                    required class="form-control">
+                                <div class="form-text">{% trans "Select the backup file to restore from." %}</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="backup_password" class="form-label">
+                                    {% trans "Backup Password" %}
+                                    <small class="text-muted">({% trans "optional" %})</small>
+                                </label>
+                                <input type="password" name="backup_password" id="backup_password"
+                                    placeholder="{% trans 'Enter backup password if required' %}"
+                                    autocomplete="current-password" class="form-control">
+                                <div class="form-text">{% trans "Enter the backup password if the backup was created with DEK encryption. Leave empty if no password was set." %}</div>
+                            </div>
+                        </fieldset>
                     </div>
+                </div>
 
-                    <div class="mb-3">
-                        <label for="backup_password" class="form-label">
-                            {% trans "Backup Password" %}
-                            <small class="text-muted">({% trans "optional" %})</small>
-                        </label>
-                        <input type="password" name="backup_password" id="backup_password"
-                            placeholder="{% trans 'Enter backup password if required' %}"
-                            autocomplete="current-password" class="form-control">
-                        <div class="form-text">{% trans "Enter the backup password if the backup was created with DEK encryption. Leave empty if no password was set." %}</div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <div class="tp-card-btn-footer m-1">
+                        <a href="{% url 'setup_wizard:index' %}" class="btn btn-secondary">{% trans "Back" %}</a>
+                        <button type="submit" class="btn btn-primary">{% trans "Restore from Backup" %}</button>
                     </div>
-                </fieldset>
-
-                <hr class="tp-setup-form-divider">
-
-                <div class="tp-setup-form-actions">
-                    <a href="{% url 'setup_wizard:index' %}" class="btn tp-setup-form-back">{% trans "Back" %}</a>
-                    <button type="submit" class="btn tp-setup-form-submit">{% trans "Restore from Backup" %}</button>
                 </div>
             </form>
         </div>

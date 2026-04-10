@@ -7,6 +7,7 @@
         <title>Trustpoint</title>
         <script src="{% static 'js/theme.js' %}"></script>
         <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+        <link rel="stylesheet" href="{% static 'css/bootstrap-icons.min.css' %}">
         <link rel="stylesheet" href="{% static 'css/trustpoint.css' %}">
         <link rel="icon" href="{% static 'img/favicon-32.png' %}">
         {% block head %}{% endblock head %}
@@ -33,7 +34,7 @@
         </header>
 
         <main class="tp-main tp-main-users">
-            <div>
+            <div class="w-100">
                 {% block content %}
                 {% endblock content %}
             </div>
