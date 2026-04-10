@@ -127,24 +127,14 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         return queryset
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
-        """Get dashboard data for panels, tables and charts.
-
-        Args:
-            request: The HTTP request object.
-            *args: Additional positional arguments.
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The JSON response containing dashboard data.
-        """
-        start_date: str | None = request.GET.get('start_date')
-        end_date: str | None = request.GET.get('end_date')
-        reference_date: str | None = request.GET.get('reference_date')
-
-        del args
-        del kwargs
-
+    def _get_dashboard_dates(
+        self,
+        request: HttpRequest,
+    ) -> tuple[datetime | None, datetime | None, datetime] | JsonResponse:
+        """Parse and validate the dashboard date query parameters."""
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        reference_date = request.GET.get('reference_date')
         current_time = timezone.now()
         start_date_object: datetime | None = None
         end_date_object: datetime | None = None
@@ -176,8 +166,27 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             reference_date_object = timezone.make_aware(
                 datetime.combine(start_date_object.date(), current_time.time())
             )
-        else:
-            reference_date_object = timezone.make_aware(datetime.combine(current_time.date(), current_time.time()))
+
+        return start_date_object, end_date_object, reference_date_object
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> JsonResponse:
+        """Get dashboard data for panels, tables and charts.
+
+        Args:
+            request: The HTTP request object.
+            *args: Additional positional arguments.
+            **kwargs: Keyword arguments passed to super().get_context_data.
+
+        Returns:
+            The JSON response containing dashboard data.
+        """
+        del args
+        del kwargs
+
+        parsed_dates = self._get_dashboard_dates(request)
+        if isinstance(parsed_dates, JsonResponse):
+            return parsed_dates
+        start_date_object, end_date_object, reference_date_object = parsed_dates
         dashboard_data: dict[str, Any] = {}
 
         device_dashboard_counts = self.get_device_dashboard_card_counts(reference_date_object)
@@ -263,6 +272,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         Args:
             dashboard_data: The dashboard data object.
             start_date: The start date for fetching certificate data.
+            end_date: The optional inclusive end date for period-based certificate charts.
             reference_date: The reference date for expiry-based certificate data.
 
         Returns:
@@ -287,6 +297,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         Args:
             dashboard_data: The dashboard data object.
             start_date: The start date for fetching issuing ca data.
+            end_date: The optional inclusive end date for period-based issuing CA charts.
 
         Returns:
             It returns nothing. It adds the issuing ca related data in dashboard_data object.
@@ -335,7 +346,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             self.logger.exception(err_msg)
             return {}
 
-    def get_device_enrollment_counts(self, start_date: datetime) -> dict[str, Any]:
+    def get_device_enrollment_counts(self, start_date: datetime | None) -> dict[str, Any]:
         """Fetch device counts grouped by enrollment state."""
         try:
             del start_date
@@ -356,9 +367,9 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             return {}
 
     def get_device_domain_credential_counts(self, reference_date: datetime | None = None) -> dict[str, Any]:
-        """Fetch device counts grouped by domain-credential state."""
+        """Fetch domain-credential states for devices that use onboarding."""
         try:
-            devices = DeviceModel.objects.all()
+            devices = DeviceModel.objects.filter(onboarding_config__isnull=False)
             reference_time = reference_date or timezone.now()
             no_domain_credential_count = filter_devices_without_domain_credential(devices).count()
             valid_count = filter_devices_with_valid_domain_credential(devices, reference_time).count()
@@ -380,9 +391,9 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             return {}
 
     def get_device_application_certificate_counts(self, reference_date: datetime | None = None) -> dict[str, Any]:
-        """Fetch device counts grouped by application-certificate state."""
+        """Fetch application-certificate states for devices without onboarding."""
         try:
-            devices = DeviceModel.objects.all()
+            devices = filter_no_onboarding_devices(DeviceModel.objects.all())
             reference_time = reference_date or timezone.now()
             none_count = filter_devices_without_application_certificates(devices).count()
             active_count = filter_devices_with_active_application_certificates(devices, reference_time).count()
@@ -409,6 +420,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         Args:
             start_date: The start date for fetching data.
+            end_date: The optional inclusive end date for the created-at range.
 
         Returns:
             It returns device counts grouped by device onboarding status.
@@ -462,20 +474,61 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         next_30_days = now + timedelta(days=30)
         next_7_days = now + timedelta(days=7)
         next_1_day = now + timedelta(days=1)
+        next_2_days = now + timedelta(days=2)
         try:
             cert_counts = CertificateModel.objects.aggregate(
                 total=Count('id'),
-                active=Count('id', filter=Q(not_valid_after__gt=next_30_days)),
+                active=Count(
+                    'id',
+                    filter=Q(
+                        revoked_certificate__isnull=True,
+                        not_valid_before__lte=now,
+                        not_valid_after__gt=next_30_days,
+                    ),
+                ),
                 expiring_in_1_day=Count(
-                    'id', filter=Q(not_valid_after__gt=now, not_valid_after__lte=next_1_day)
+                    'id',
+                    filter=Q(
+                        revoked_certificate__isnull=True,
+                        not_valid_before__lte=now,
+                        not_valid_after__gt=now,
+                        not_valid_after__lte=next_1_day,
+                    ),
+                ),
+                expiring_tomorrow=Count(
+                    'id',
+                    filter=Q(
+                        revoked_certificate__isnull=True,
+                        not_valid_before__lte=now,
+                        not_valid_after__gt=next_1_day,
+                        not_valid_after__lte=next_2_days,
+                    ),
                 ),
                 expiring_in_7_days=Count(
-                    'id', filter=Q(not_valid_after__gt=next_1_day, not_valid_after__lte=next_7_days)
+                    'id',
+                    filter=Q(
+                        revoked_certificate__isnull=True,
+                        not_valid_before__lte=now,
+                        not_valid_after__gt=next_1_day,
+                        not_valid_after__lte=next_7_days,
+                    ),
                 ),
                 expiring_in_30_days=Count(
-                    'id', filter=Q(not_valid_after__gt=next_7_days, not_valid_after__lte=next_30_days)
+                    'id',
+                    filter=Q(
+                        revoked_certificate__isnull=True,
+                        not_valid_before__lte=now,
+                        not_valid_after__gt=next_7_days,
+                        not_valid_after__lte=next_30_days,
+                    ),
                 ),
-                expired=Count('id', filter=Q(not_valid_after__lte=now)),
+                expired=Count(
+                    'id',
+                    filter=Q(
+                        revoked_certificate__isnull=True,
+                        not_valid_after__lte=now,
+                    ),
+                ),
             )
         except Exception as exception:
             err_msg = f'Error occurred in certificate count query: {exception}'
@@ -488,6 +541,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         cert_counts = self.get_cert_counts(reference_date)
         return {
             'expiring_in_1_day': cert_counts.get('expiring_in_1_day', 0),
+            'expiring_tomorrow': cert_counts.get('expiring_tomorrow', 0),
             'expiring_in_7_days': cert_counts.get('expiring_in_7_days', 0),
             'expiring_in_30_days': cert_counts.get('expiring_in_30_days', 0),
         }
@@ -532,6 +586,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         Args:
             start_date: The start date for fetching data.
+            end_date: The optional inclusive end date for the created-at range.
             end_date: The inclusive end date for fetching data.
             reference_date: The point in time to evaluate certificate status at.
 
@@ -539,18 +594,36 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             It returns device counts grouped by device onboarding status.
         """
         status_mapping = {key: str(value) for key, value in CertificateModel.CertificateStatus.choices}
-        cert_status_counts = {label: 0 for label in status_mapping.values()}
+        cert_status_counts = dict.fromkeys(status_mapping.values(), 0)
         try:
             as_of_date = reference_date or end_date or timezone.now()
-            cert_status_qr = self._apply_created_at_date_range(CertificateModel.objects.all(), start_date, end_date).annotate(
-                status_as_of=Case(
-                    When(revoked_certificate__revoked_at__lte=as_of_date, then=Value(CertificateModel.CertificateStatus.REVOKED)),
-                    When(not_valid_before__gt=as_of_date, then=Value(CertificateModel.CertificateStatus.NOT_YET_VALID)),
-                    When(not_valid_after__lte=as_of_date, then=Value(CertificateModel.CertificateStatus.EXPIRED)),
-                    default=Value(CertificateModel.CertificateStatus.OK),
-                    output_field=CharField(),
+            cert_queryset = self._apply_created_at_date_range(
+                CertificateModel.objects.all(),
+                start_date,
+                end_date,
+            )
+            cert_status_qr = (
+                cert_queryset.annotate(
+                    status_as_of=Case(
+                        When(
+                            revoked_certificate__revoked_at__lte=as_of_date,
+                            then=Value(CertificateModel.CertificateStatus.REVOKED),
+                        ),
+                        When(
+                            not_valid_before__gt=as_of_date,
+                            then=Value(CertificateModel.CertificateStatus.NOT_YET_VALID),
+                        ),
+                        When(
+                            not_valid_after__lte=as_of_date,
+                            then=Value(CertificateModel.CertificateStatus.EXPIRED),
+                        ),
+                        default=Value(CertificateModel.CertificateStatus.OK),
+                        output_field=CharField(),
+                    )
                 )
-            ).values('status_as_of').annotate(cert_count=Count('id'))
+                .values('status_as_of')
+                .annotate(cert_count=Count('id'))
+            )
             cert_status_counts.update({
                 status_mapping[item['status_as_of']]: item['cert_count'] for item in cert_status_qr
             })
@@ -622,6 +695,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         Args:
             start_date: The start date for fetching data.
+            end_date: The optional inclusive end date for the created-at range.
 
         Returns:
             It returns device count by onboarding protocol.
@@ -654,6 +728,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         Args:
             start_date: The start date for fetching data.
+            end_date: The optional inclusive end date for the created-at range.
 
         Returns:
             It returns onboarded devices count grouped by domain.
@@ -684,6 +759,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         Args:
             start_date: The start date for fetching data.
+            end_date: The optional inclusive end date for the created-at range.
 
         Returns:
             It returns certificate count grouped by issuing ca (CN only).
@@ -717,6 +793,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         Args:
             start_date: The start date for fetching data.
+            end_date: The optional inclusive end date for the created-at range.
 
         Returns:
             It returns certificate count grouped by issuing ca (CN only) and date.
@@ -752,6 +829,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         Args:
             start_date: The start date for fetching data.
+            end_date: The optional inclusive end date for the created-at range.
 
         Returns:
             It returns certificate count grouped by domain.
@@ -784,6 +862,7 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
 
         Args:
             start_date: The start date for fetching data.
+            end_date: The optional inclusive end date for the created-at range.
 
         Returns:
             Dict of certificate count for each certificate profile, plus CA certificates.
@@ -936,12 +1015,14 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         Returns:
             It returns counts of issuing CAs with expiring certificates.
             expiring_in_1_day: 0-24 hours
+            expiring_tomorrow: 24-48 hours
             expiring_in_7_days: 2-7 days
             expiring_in_30_days: 8-30 days
             expiring_in_365_days: 31-365 days
         """
         now = reference_date or timezone.now()
         next_24_hours = now + timedelta(hours=24)
+        next_48_hours = now + timedelta(hours=48)
         next_7_days = now + timedelta(days=7)
         next_30_days = now + timedelta(days=30)
         next_365_days = now + timedelta(days=365)
@@ -949,18 +1030,32 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
         try:
             expiring_issuing_ca_counts = {
                 'expiring_in_1_day': CaModel.objects.filter(
+                    credential__certificate__revoked_certificate__isnull=True,
+                    credential__certificate__not_valid_before__lte=now,
                     credential__certificate__not_valid_after__gt=now,
                     credential__certificate__not_valid_after__lte=next_24_hours
                 ).distinct().count(),
+                'expiring_tomorrow': CaModel.objects.filter(
+                    credential__certificate__revoked_certificate__isnull=True,
+                    credential__certificate__not_valid_before__lte=now,
+                    credential__certificate__not_valid_after__gt=next_24_hours,
+                    credential__certificate__not_valid_after__lte=next_48_hours,
+                ).distinct().count(),
                 'expiring_in_7_days': CaModel.objects.filter(
+                    credential__certificate__revoked_certificate__isnull=True,
+                    credential__certificate__not_valid_before__lte=now,
                     credential__certificate__not_valid_after__gt=next_24_hours,
                     credential__certificate__not_valid_after__lte=next_7_days
                 ).distinct().count(),
                 'expiring_in_30_days': CaModel.objects.filter(
+                    credential__certificate__revoked_certificate__isnull=True,
+                    credential__certificate__not_valid_before__lte=now,
                     credential__certificate__not_valid_after__gt=next_7_days,
                     credential__certificate__not_valid_after__lte=next_30_days,
                 ).distinct().count(),
                 'expiring_in_365_days': CaModel.objects.filter(
+                    credential__certificate__revoked_certificate__isnull=True,
+                    credential__certificate__not_valid_before__lte=now,
                     credential__certificate__not_valid_after__gt=next_30_days,
                     credential__certificate__not_valid_after__lte=next_365_days,
                 ).distinct().count(),

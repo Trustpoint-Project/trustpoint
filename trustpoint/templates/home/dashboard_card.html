@@ -52,9 +52,9 @@
 
       {% elif card_type == 'expiring_summary' %}
       <div class="d-grid align-content-center position-relative card-count-expiring-delta">
-        <span class="small text-end">Today</span>
+        <span class="small text-end">Tomorrow</span>
         <span class="d-inline-flex align-items-center border rounded-3 px-2 py-1 lh-1">
-          <span id="delta_count_today_{{ identifier }}" class="small lh-1"></span>
+          <span id="delta_count_tomorrow_{{ identifier }}" class="small lh-1"></span>
           <i class="bi bi-caret-up-fill ms-1"></i>
         </span>
         <span class="small text-end">
@@ -141,6 +141,7 @@
       updateDeltaIcon(`delta_count_7_${uniqueId}`, today_delta_7);
     } else if (type === 'expiring_summary') {
       const todayCount = dataToday.expiring_in_1_day || 0;
+      const tomorrowCount = dataToday.expiring_tomorrow || 0;
       const weekCount = summaryVariant === 'annual'
         ? todayCount + (dataToday.expiring_in_7_days || 0) + (dataToday.expiring_in_30_days || 0)
         : todayCount + (dataToday.expiring_in_7_days || 0);
@@ -149,16 +150,16 @@
         : weekCount + (dataToday.expiring_in_30_days || 0);
 
       const totalCountEl = document.getElementById(`total_count_${uniqueId}`);
-      const todayEl = document.getElementById(`delta_count_today_${uniqueId}`);
+      const tomorrowEl = document.getElementById(`delta_count_tomorrow_${uniqueId}`);
       const weekEl = document.getElementById(`delta_count_week_${uniqueId}`);
       const monthEl = document.getElementById(`delta_count_month_${uniqueId}`);
 
       if (totalCountEl) {
-        totalCountEl.textContent = monthCount;
+        totalCountEl.textContent = todayCount;
       }
 
-      if (todayEl) {
-        todayEl.textContent = todayCount;
+      if (tomorrowEl) {
+        tomorrowEl.textContent = tomorrowCount;
       }
 
       if (weekEl) {
@@ -169,7 +170,7 @@
         monthEl.textContent = monthCount;
       }
 
-      updateDeltaIcon(`delta_count_today_${uniqueId}`, todayCount);
+      updateDeltaIcon(`delta_count_tomorrow_${uniqueId}`, tomorrowCount);
       updateDeltaIcon(`delta_count_week_${uniqueId}`, weekCount);
       updateDeltaIcon(`delta_count_month_${uniqueId}`, monthCount);
 

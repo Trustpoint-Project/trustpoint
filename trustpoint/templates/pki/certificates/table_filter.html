@@ -1,0 +1,75 @@
+{% load i18n %}
+
+{% block table_filter %}
+
+  <div class="card-body pb-0 d-flex gap-2 align-items-center">
+    <div class="dropdown mb-1">
+      <button class="btn btn-sm {% if filters_active %}btn-primary{% else %}btn-outline-secondary{% endif %} dropdown-toggle"
+              type="button"
+              id="tp-filter-dropdown-btn"
+              data-bs-toggle="dropdown"
+              data-bs-auto-close="outside"
+              aria-expanded="{% if filters_active %}true{% else %}false{% endif %}">
+        {% trans 'Filters' %}{% if filters_active %} <span class="badge bg-white text-primary ms-1">{% trans 'active' %}</span>{% endif %}
+      </button>
+      <div class="dropdown-menu p-3" id="tp-filter-dropdown-menu" style="min-width: 22rem;">
+        <form method="get" class="d-flex flex-column gap-2">
+
+          <div>
+            <label for="{{ filter.form.common_name.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.common_name.label }}
+            </label>
+            {{ filter.form.common_name }}
+          </div>
+
+          <div>
+            <label for="{{ filter.form.status.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.status.label }}
+            </label>
+            {{ filter.form.status }}
+          </div>
+
+          <div>
+            <label for="{{ filter.form.expiry_window.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.expiry_window.label }}
+            </label>
+            {{ filter.form.expiry_window }}
+          </div>
+
+          <div>
+            <label for="{{ filter.form.is_self_signed.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.is_self_signed.label }}
+            </label>
+            {{ filter.form.is_self_signed }}
+          </div>
+
+          <div class="d-flex gap-2">
+            <div class="flex-fill">
+              <label for="{{ filter.form.created_at_from.id_for_label }}" class="form-label mb-1 fw-semibold">
+                {{ filter.form.created_at_from.label }}
+              </label>
+              {{ filter.form.created_at_from }}
+            </div>
+            <div class="flex-fill">
+              <label for="{{ filter.form.created_at_to.id_for_label }}" class="form-label mb-1 fw-semibold">
+                {{ filter.form.created_at_to.label }}
+              </label>
+              {{ filter.form.created_at_to }}
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 mt-1">
+            <button type="submit" class="btn btn-primary btn-sm flex-fill">
+              {% trans 'Apply' %}
+            </button>
+            <a href="{% url table_url %}" class="btn btn-outline-secondary btn-sm flex-fill">
+              {% trans 'Reset' %}
+            </a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+
+{% endblock table_filter %}

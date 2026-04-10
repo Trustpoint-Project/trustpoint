@@ -169,6 +169,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
                 'expired': 2,
                 'expiring_in_7_days': 1,
                 'expiring_in_1_day': 0,
+                'expiring_tomorrow': 2,
                 'expiring_in_30_days': 3,
             }
             result = self.view.get_cert_counts()
@@ -176,6 +177,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
         assert result['total'] == 10
         assert result['active'] == 8
         assert result['expired'] == 2
+        assert result['expiring_tomorrow'] == 2
         assert result['expiring_in_30_days'] == 3
 
     def test_get_issuing_ca_counts(self) -> None:
@@ -213,6 +215,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
             result = self.view.get_expiring_issuing_ca_counts()
 
         assert 'expiring_in_1_day' in result
+        assert 'expiring_tomorrow' in result
         assert 'expiring_in_7_days' in result
         assert 'expiring_in_30_days' in result
         assert 'expiring_in_365_days' in result
@@ -236,6 +239,61 @@ class DashboardChartsAndCountsViewTests(TestCase):
             result = self.view.get_device_count_by_domain(start_date)
 
         assert isinstance(result, list)
+
+    @patch('home.views.filter_devices_with_expired_or_revoked_domain_credential')
+    @patch('home.views.filter_devices_with_expiring_domain_credential')
+    @patch('home.views.filter_devices_with_valid_domain_credential')
+    @patch('home.views.filter_devices_without_domain_credential')
+    @patch.object(DeviceModel.objects, 'filter')
+    def test_get_device_domain_credential_counts_uses_only_onboarding_devices(
+        self,
+        mock_devices_filter: Mock,
+        mock_without_domain_credential: Mock,
+        mock_valid_domain_credential: Mock,
+        mock_expiring_domain_credential: Mock,
+        mock_expired_domain_credential: Mock,
+    ) -> None:
+        """Domain-credential chart should scope itself to devices with onboarding."""
+        onboarding_devices = Mock()
+        mock_devices_filter.return_value = onboarding_devices
+        mock_without_domain_credential.return_value.count.return_value = 1
+        mock_valid_domain_credential.return_value.count.return_value = 2
+        mock_expiring_domain_credential.return_value.count.return_value = 3
+        mock_expired_domain_credential.return_value.count.return_value = 4
+
+        result = self.view.get_device_domain_credential_counts()
+
+        mock_devices_filter.assert_called_once_with(onboarding_config__isnull=False)
+        mock_without_domain_credential.assert_called_once_with(onboarding_devices)
+        assert result['total'] == 10
+
+    @patch('home.views.filter_devices_with_expired_or_revoked_application_certificates')
+    @patch('home.views.filter_devices_with_active_application_certificates')
+    @patch('home.views.filter_devices_without_application_certificates')
+    @patch('home.views.filter_no_onboarding_devices')
+    @patch.object(DeviceModel.objects, 'all')
+    def test_get_device_application_certificate_counts_uses_only_no_onboarding_devices(
+        self,
+        mock_all_devices: Mock,
+        mock_no_onboarding_devices: Mock,
+        mock_without_application_certificates: Mock,
+        mock_active_application_certificates: Mock,
+        mock_expired_application_certificates: Mock,
+    ) -> None:
+        """Application-certificate chart should scope itself to manual devices."""
+        all_devices = Mock()
+        no_onboarding_devices = Mock()
+        mock_all_devices.return_value = all_devices
+        mock_no_onboarding_devices.return_value = no_onboarding_devices
+        mock_without_application_certificates.return_value.count.return_value = 1
+        mock_active_application_certificates.return_value.count.return_value = 2
+        mock_expired_application_certificates.return_value.count.return_value = 3
+
+        result = self.view.get_device_application_certificate_counts()
+
+        mock_no_onboarding_devices.assert_called_once_with(all_devices)
+        mock_without_application_certificates.assert_called_once_with(no_onboarding_devices)
+        assert result['total'] == 6
 
     def test_get_cert_counts_by_status(self) -> None:
         """Test get_cert_counts_by_status method."""

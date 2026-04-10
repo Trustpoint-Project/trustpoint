@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from django.http import Http404, HttpRequest, HttpResponse
+from django.db.models import Case, IntegerField, QuerySet, Value, When
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
 from django.urls import reverse_lazy
+from django.utils import timezone
 from django.views.generic.base import RedirectView
 from django.views.generic.detail import DetailView
 from django.views.generic.list import ListView
@@ -18,6 +20,7 @@ from trustpoint_core.archiver import ArchiveFormat, Archiver
 from trustpoint_core.oid import NameOid
 from trustpoint_core.serializer import CertificateFormat
 
+from pki.filters import CertificateFilter
 from pki.models import CertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.serializer.certificate import CertificateSerializer
@@ -56,6 +59,73 @@ class CertificateTableView(
     context_object_name = 'certificates'
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
+    filterset_class = CertificateFilter
+
+    def apply_filters(self, qs: QuerySet[CertificateModel]) -> QuerySet[CertificateModel]:
+        """Apply the certificate filterset to the base queryset."""
+        self.filterset = CertificateFilter(self.request.GET, queryset=qs)
+        return cast('QuerySet[CertificateModel]', self.filterset.qs)
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Normalize sorting to a single parameter and continue with the list view."""
+        sort_params = request.GET.getlist('sort', [self.default_sort_param])
+
+        if len(sort_params) > 1:
+            first_sort_parameter = sort_params[0]
+
+            query_dict = request.GET.copy()
+            query_dict.setlist('sort', [first_sort_parameter])
+
+            new_url = f'{request.path}?{query_dict.urlencode()}'
+            return HttpResponseRedirect(new_url)
+
+        self.ordering = sort_params[0]
+
+        return super().get(request, *args, **kwargs)
+
+    def get_base_queryset(self) -> QuerySet[CertificateModel]:
+        """Return the annotated base queryset used by the certificates table."""
+        now = timezone.now()
+        return CertificateModel.objects.annotate(
+            certificate_status_sort=Case(
+                When(revoked_certificate__isnull=False, then=Value(3)),
+                When(not_valid_before__gt=now, then=Value(4)),
+                When(not_valid_after__lte=now, then=Value(2)),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
+        )
+
+    def get_queryset(self) -> QuerySet[CertificateModel]:
+        """Filter and sort the certificates queryset used by the list page."""
+        base_qs = self.get_base_queryset()
+        filtered_qs = self.apply_filters(base_qs)
+        sort_param = getattr(self, 'ordering', None) or self.default_sort_param
+        return filtered_qs.order_by(sort_param)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add filter state metadata required by the certificates table UI."""
+        context = super().get_context_data(**kwargs)
+        context['filter'] = getattr(self, 'filterset', None)
+        context['filters_active'] = any(
+            self.request.GET.get(key)
+            for key in ('common_name', 'status', 'expiry_window', 'is_self_signed', 'created_at_from', 'created_at_to')
+        )
+        for certificate in context['certificates']:
+            certificate.table_status = self._get_table_status(certificate)
+        return context
+
+    @staticmethod
+    def _get_table_status(certificate: CertificateModel) -> str:
+        """Return the status label displayed in the certificates table."""
+        now = timezone.now()
+        if hasattr(certificate, 'revoked_certificate'):
+            return 'Revoked'
+        if certificate.not_valid_before > now:
+            return 'Not Yet Valid'
+        if certificate.not_valid_after <= now:
+            return 'Expired'
+        return 'OK'
 
 
 OID_MAP = {oid.dotted_string: oid.verbose_name for oid in NameOid}

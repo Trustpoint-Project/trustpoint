@@ -13,11 +13,11 @@
 
   <!-- number of certificates-->
   <div class="col-12 col-sm-6 col-lg-3">
-    {% include "home/dashboard_card.html" with title="Active Certificates" card_type="active" identifier="active_certs" dataset="cert_counts" link_url=certs_url %}
+    {% include "home/dashboard_card.html" with title="Active Certificates" card_type="active" identifier="active_certs" dataset="cert_counts" link_url=certs_url|add:'?status=ok&expiry_window=after_30_days' %}
   </div>
 
   <!-- Expiring certificates summary -->
   <div class="col-12 col-sm-6 col-lg-3">
-    {% include "home/dashboard_card.html" with title="Expiring Certificates" card_type="expiring_summary" identifier="expiring_certs" dataset="cert_counts" link_url=certs_url|add:'?expiry_state=expiring' %}
+    {% include "home/dashboard_card.html" with title="Expiring Certificates" card_type="expiring_summary" identifier="expiring_certs" dataset="cert_counts" link_url=certs_url|add:'?status=ok&expiry_window=30_days' %}
   </div>
 </div>
