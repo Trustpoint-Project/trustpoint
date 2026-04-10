@@ -9,12 +9,13 @@ from django.utils.translation import gettext_lazy as _
 
 from devices.dashboard_filters import (
     filter_devices_with_active_application_certificates,
-    filter_devices_with_expired_application_certificates,
-    filter_devices_with_expired_domain_credential,
+    filter_devices_with_expired_or_revoked_application_certificates,
+    filter_devices_with_expired_or_revoked_domain_credential,
     filter_devices_with_expiring_domain_credential,
     filter_devices_with_valid_domain_credential,
     filter_devices_without_application_certificates,
     filter_devices_without_domain_credential,
+    filter_expired_or_revoked_devices,
     filter_no_onboarding_devices,
     filter_onboarded_devices,
     filter_pending_devices,
@@ -95,6 +96,10 @@ class DeviceFilter(django_filters.FilterSet):
         method='filter_application_certificate_state',
         widget=forms.Select(attrs={'class': 'form-select form-select-sm'})
     )
+    expired_device = django_filters.CharFilter(
+        method='filter_expired_device',
+        widget=forms.HiddenInput(),
+    )
 
     def filter_enrollment_state(self, queryset: QuerySet[DeviceModel], name: str, value: str) -> QuerySet[DeviceModel]:
         """Filter devices by enrollment state."""
@@ -124,7 +129,7 @@ class DeviceFilter(django_filters.FilterSet):
         if value == 'expiring':
             return filter_devices_with_expiring_domain_credential(queryset)
         if value == 'expired':
-            return filter_devices_with_expired_domain_credential(queryset)
+            return filter_devices_with_expired_or_revoked_domain_credential(queryset)
         return queryset
 
     def filter_application_certificate_state(
@@ -141,7 +146,20 @@ class DeviceFilter(django_filters.FilterSet):
         if value == 'active':
             return filter_devices_with_active_application_certificates(queryset)
         if value == 'expired':
-            return filter_devices_with_expired_application_certificates(queryset)
+            return filter_devices_with_expired_or_revoked_application_certificates(queryset)
+        return queryset
+
+    def filter_expired_device(
+        self,
+        queryset: QuerySet[DeviceModel],
+        name: str,
+        value: str,
+    ) -> QuerySet[DeviceModel]:
+        """Filter devices using the dashboard's composite expired-or-revoked semantics."""
+        del name
+
+        if value:
+            return filter_expired_or_revoked_devices(queryset)
         return queryset
 
     class Meta:

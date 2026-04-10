@@ -116,7 +116,16 @@ class DashboardChartsAndCountsViewTests(TestCase):
         response = self.view.get(request)
 
         assert response.status_code == 400
-        assert b'Invalid date format' in response.content
+        assert b'Invalid start_date format' in response.content
+
+    def test_get_with_start_date_after_end_date(self) -> None:
+        """Test GET with an invalid date range."""
+        request = self.factory.get('/dashboard_data/', {'start_date': '2026-04-15', 'end_date': '2026-04-01'})
+
+        response = self.view.get(request)
+
+        assert response.status_code == 400
+        assert b'start_date must be on or before end_date' in response.content
 
     @patch.object(DashboardChartsAndCountsView, 'get_device_count_by_onboarding_status')
     @patch.object(DashboardChartsAndCountsView, 'get_cert_counts')
@@ -160,12 +169,14 @@ class DashboardChartsAndCountsViewTests(TestCase):
                 'expired': 2,
                 'expiring_in_7_days': 1,
                 'expiring_in_1_day': 0,
+                'expiring_in_30_days': 3,
             }
             result = self.view.get_cert_counts()
 
         assert result['total'] == 10
         assert result['active'] == 8
         assert result['expired'] == 2
+        assert result['expiring_in_30_days'] == 3
 
     def test_get_issuing_ca_counts(self) -> None:
         """Test get_issuing_ca_counts method."""
@@ -184,12 +195,13 @@ class DashboardChartsAndCountsViewTests(TestCase):
 
         assert 'expiring_in_1_day' in result
         assert 'expiring_in_7_days' in result
+        assert 'expiring_in_30_days' in result
 
-    def test_get_expired_device_counts(self) -> None:
-        """Test get_expired_device_counts method."""
-        with patch('home.views.filter_expired_devices') as mock_filter_expired_devices:
+    def test_get_expired_or_revoked_device_counts(self) -> None:
+        """Test get_expired_or_revoked_device_counts method."""
+        with patch('home.views.filter_expired_or_revoked_devices') as mock_filter_expired_devices:
             mock_filter_expired_devices.return_value.count.return_value = 2
-            result = self.view.get_expired_device_counts()
+            result = self.view.get_expired_or_revoked_device_counts()
 
         assert 'expired' in result
         assert result['expired'] == 2
@@ -202,6 +214,8 @@ class DashboardChartsAndCountsViewTests(TestCase):
 
         assert 'expiring_in_1_day' in result
         assert 'expiring_in_7_days' in result
+        assert 'expiring_in_30_days' in result
+        assert 'expiring_in_365_days' in result
 
     def test_get_device_count_by_onboarding_protocol(self) -> None:
         """Test get_device_count_by_onboarding_protocol method."""
@@ -278,12 +292,14 @@ class DashboardChartsAndCountsViewTests(TestCase):
     @patch.object(DashboardChartsAndCountsView, 'get_device_enrollment_counts')
     @patch.object(DashboardChartsAndCountsView, 'get_device_domain_credential_counts')
     @patch.object(DashboardChartsAndCountsView, 'get_device_application_certificate_counts')
+    @patch.object(DashboardChartsAndCountsView, 'get_expiring_application_certificate_counts')
     @patch.object(DashboardChartsAndCountsView, 'get_device_count_by_onboarding_protocol')
     @patch.object(DashboardChartsAndCountsView, 'get_device_count_by_domain')
     def test_get_device_charts_data(
         self,
         mock_domain: Mock,
         mock_protocol: Mock,
+        mock_expiring_application_certificates: Mock,
         mock_application_certificates: Mock,
         mock_domain_credentials: Mock,
         mock_enrollment: Mock,
@@ -292,62 +308,56 @@ class DashboardChartsAndCountsViewTests(TestCase):
         mock_enrollment.return_value = {'total': 10}
         mock_domain_credentials.return_value = {'total': 7}
         mock_application_certificates.return_value = {'total': 4}
+        mock_expiring_application_certificates.return_value = {'expiring_in_1_day': 1, 'expiring_in_7_days': 2}
         mock_protocol.return_value = {'CMP': 5}
         mock_domain.return_value = [{'domain_name': 'test', 'count': 10}]
 
         dashboard_data: dict = {}
         start_date = timezone.now()
+        reference_date = timezone.now()
 
-        self.view.get_device_charts_data(dashboard_data, start_date)
+        self.view.get_device_charts_data(dashboard_data, start_date, reference_date)
 
         assert 'device_enrollment_counts' in dashboard_data
         assert 'device_domain_credential_counts' in dashboard_data
         assert 'device_application_certificate_counts' in dashboard_data
+        assert 'expiring_application_certificate_counts' in dashboard_data
         assert 'device_counts_by_op' in dashboard_data
         assert 'device_counts_by_domain' in dashboard_data
 
     @patch.object(DashboardChartsAndCountsView, 'get_cert_counts_by_status')
-    @patch.object(DashboardChartsAndCountsView, 'get_cert_counts_by_domain')
     @patch.object(DashboardChartsAndCountsView, 'get_cert_counts_by_profile')
     def test_get_cert_charts_data(
         self,
         mock_profile: Mock,
-        mock_domain: Mock,
         mock_status: Mock,
     ) -> None:
         """Test get_cert_charts_data method."""
         mock_status.return_value = {'Valid': 10}
-        mock_domain.return_value = [{'domain_name': 'test', 'count': 10}]
         mock_profile.return_value = {'Default': 10}
 
         dashboard_data: dict = {}
         start_date = timezone.now()
+        end_date = timezone.now()
+        reference_date = timezone.now()
 
-        self.view.get_cert_charts_data(dashboard_data, start_date)
+        self.view.get_cert_charts_data(dashboard_data, start_date, end_date, reference_date)
 
         assert 'cert_counts_by_status' in dashboard_data
-        assert 'cert_counts_by_domain' in dashboard_data
         assert 'cert_counts_by_profile' in dashboard_data
 
     @patch.object(DashboardChartsAndCountsView, 'get_cert_counts_by_issuing_ca')
-    @patch.object(DashboardChartsAndCountsView, 'get_cert_counts_by_issuing_ca_and_date')
-    @patch.object(DashboardChartsAndCountsView, 'get_issuing_ca_counts_by_type')
     def test_get_ca_charts_data(
         self,
-        mock_type: Mock,
-        mock_ca_date: Mock,
         mock_ca: Mock,
     ) -> None:
         """Test get_ca_charts_data method."""
         mock_ca.return_value = [{'ca_name': 'test', 'count': 10}]
-        mock_ca_date.return_value = [{'ca_name': 'test', 'date': '2025-01-01', 'count': 10}]
-        mock_type.return_value = {'Root': 1}
 
         dashboard_data: dict = {}
         start_date = timezone.now()
+        end_date = timezone.now()
 
-        self.view.get_ca_charts_data(dashboard_data, start_date)
+        self.view.get_ca_charts_data(dashboard_data, start_date, end_date)
 
         assert 'cert_counts_by_issuing_ca' in dashboard_data
-        assert 'cert_counts_by_issuing_ca_and_date' in dashboard_data
-        assert 'ca_counts_by_type' in dashboard_data

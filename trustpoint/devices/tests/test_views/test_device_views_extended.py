@@ -263,6 +263,41 @@ class TestDeviceTableViewStateFilters:
         assert response.context['filter'].form['application_certificate_state'].value() == 'active'
         assert active_application_device in response.context['object_list']
 
+    def test_expired_device_filter_is_preselected(
+        self,
+        admin_client: Client,
+        tls_client_credential_instance: dict[str, Any],  # noqa: ARG002
+        domain_credential_est_onboarding: dict[str, Any],
+        domain_credential_cmp_onboarding: dict[str, Any],
+    ) -> None:
+        """Expired-device preset should include both expired manual and expired onboarded devices."""
+        del domain_credential_est_onboarding
+        del domain_credential_cmp_onboarding
+
+        manual_expired_device = DeviceModel.objects.get(common_name='test-device-1')
+        domain_expired_device = DeviceModel.objects.get(common_name='EST_Onboarding')
+        valid_device = DeviceModel.objects.get(common_name='CMP_Onboarding')
+
+        manual_application_certificate = manual_expired_device.issued_credentials.get(
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL
+        ).credential.certificate
+        domain_certificate = domain_expired_device.issued_credentials.get(
+            issued_credential_type=IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL
+        ).credential.certificate
+
+        CertificateModel.objects.filter(
+            pk__in=[manual_application_certificate.pk, domain_certificate.pk]
+        ).update(not_valid_after=timezone.now() - timedelta(days=1))
+
+        url = reverse('devices:devices') + '?expired_device=1'
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
+        assert response.context['filter'].form['expired_device'].value() == '1'
+        assert manual_expired_device in response.context['object_list']
+        assert domain_expired_device in response.context['object_list']
+        assert valid_device not in response.context['object_list']
+
 
 @pytest.mark.django_db
 class TestNoOnboardingIssueApplicationCredentialView:

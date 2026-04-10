@@ -5,7 +5,7 @@
         card-count-active-container
     {% elif card_type == 'expiring' %}
         card-count-expiring-container
-    {% elif card_type == 'expired' %}
+    {% elif card_type == 'expired' or card_type == 'expiring_summary' %}
         card-count-expired-container
     {% endif %}
 ">
@@ -43,13 +43,35 @@
           <span id="delta_count_24_{{ identifier }}" class="small lh-1"></span>
           <i class="bi bi-caret-up-fill ms-1"></i>
         </span>
-        <span class="small text-end">7 Days</span>
+        <span class="small text-end">7 Days</span>
         <span class="d-inline-flex align-items-center border border-white rounded-3 px-2 py-1 lh-1">
           <span id="delta_count_7_{{ identifier }}" class="small lh-1"></span>
           <i class="bi bi-caret-up-fill ms-1"></i>
         </span>
       </div>
 
+      {% elif card_type == 'expiring_summary' %}
+      <div class="d-grid align-content-center position-relative card-count-expiring-delta">
+        <span class="small text-end">Today</span>
+        <span class="d-inline-flex align-items-center border rounded-3 px-2 py-1 lh-1">
+          <span id="delta_count_today_{{ identifier }}" class="small lh-1"></span>
+          <i class="bi bi-caret-up-fill ms-1"></i>
+        </span>
+        <span class="small text-end">
+          {% if summary_variant == 'annual' %}30 Days{% else %}7 Days{% endif %}
+        </span>
+        <span class="d-inline-flex align-items-center border rounded-3 px-2 py-1 lh-1">
+          <span id="delta_count_week_{{ identifier }}" class="small lh-1"></span>
+          <i class="bi bi-caret-up-fill ms-1"></i>
+        </span>
+        <span class="small text-end">
+          {% if summary_variant == 'annual' %}365 Days{% else %}30 Days{% endif %}
+        </span>
+        <span class="d-inline-flex align-items-center border rounded-3 px-2 py-1 lh-1">
+          <span id="delta_count_month_{{ identifier }}" class="small lh-1"></span>
+          <i class="bi bi-caret-up-fill ms-1"></i>
+        </span>
+      </div>
 
       {% elif card_type == 'expired' %}
       <span class="d-inline-flex align-items-center border rounded-3 px-2 py-1 lh-1 position-relative card-count-delta">
@@ -71,6 +93,7 @@
     const type = "{{ card_type }}";
     const dataKey = "{{ data_key|default:'' }}";
     const dataset = "{{ dataset }}";
+    const summaryVariant = "{{ summary_variant|default:'default' }}";
 
     let dataToday;
     let dataWeek;
@@ -97,13 +120,58 @@
       }
 
       // Display current window counts, not change since last week
-      document.getElementById(`total_count_${uniqueId}`).textContent = today_total;
-      document.getElementById(`delta_count_24_${uniqueId}`).textContent = today_delta_24;
-      document.getElementById(`delta_count_7_${uniqueId}`).textContent = today_delta_7;
+      const totalCountEl = document.getElementById(`total_count_${uniqueId}`);
+      const delta24El = document.getElementById(`delta_count_24_${uniqueId}`);
+      const delta7El = document.getElementById(`delta_count_7_${uniqueId}`);
+
+      if (totalCountEl) {
+        totalCountEl.textContent = today_total;
+      }
+
+      if (delta24El) {
+        delta24El.textContent = today_delta_24;
+      }
+
+      if (delta7El) {
+        delta7El.textContent = today_delta_7;
+      }
 
       // Show positive counts (no delta icon needed for expiring cards)
       updateDeltaIcon(`delta_count_24_${uniqueId}`, today_delta_24);
       updateDeltaIcon(`delta_count_7_${uniqueId}`, today_delta_7);
+    } else if (type === 'expiring_summary') {
+      const todayCount = dataToday.expiring_in_1_day || 0;
+      const weekCount = summaryVariant === 'annual'
+        ? todayCount + (dataToday.expiring_in_7_days || 0) + (dataToday.expiring_in_30_days || 0)
+        : todayCount + (dataToday.expiring_in_7_days || 0);
+      const monthCount = summaryVariant === 'annual'
+        ? weekCount + (dataToday.expiring_in_365_days || 0)
+        : weekCount + (dataToday.expiring_in_30_days || 0);
+
+      const totalCountEl = document.getElementById(`total_count_${uniqueId}`);
+      const todayEl = document.getElementById(`delta_count_today_${uniqueId}`);
+      const weekEl = document.getElementById(`delta_count_week_${uniqueId}`);
+      const monthEl = document.getElementById(`delta_count_month_${uniqueId}`);
+
+      if (totalCountEl) {
+        totalCountEl.textContent = monthCount;
+      }
+
+      if (todayEl) {
+        todayEl.textContent = todayCount;
+      }
+
+      if (weekEl) {
+        weekEl.textContent = weekCount;
+      }
+
+      if (monthEl) {
+        monthEl.textContent = monthCount;
+      }
+
+      updateDeltaIcon(`delta_count_today_${uniqueId}`, todayCount);
+      updateDeltaIcon(`delta_count_week_${uniqueId}`, weekCount);
+      updateDeltaIcon(`delta_count_month_${uniqueId}`, monthCount);
 
     } else {
       const metricKey = dataKey || type;

@@ -1,6 +1,45 @@
 <div class="card rounded-5 position-relative bar-chart-card-container">
   <div class="card-body">
-    <h6 class="mb-3 fs-5">{{ title }}</h6>
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-3 dashboard-chart-header">
+      <h6 class="mb-0 fs-5">{{ title }}</h6>
+
+      {% if filter_type %}
+      <div class="dashboard-chart-filter-control{% if filter_type == 'date_range' %} dashboard-chart-filter-control-range{% endif %}">
+        <span class="small text-body-secondary">{{ filter_label|default:'Filter' }}</span>
+        {% if filter_type == 'date_range' %}
+        <div class="dashboard-chart-date-range">
+          <input
+            id="chart_filter_start_{{ identifier }}"
+            type="date"
+            class="form-control form-control-sm dashboard-chart-filter"
+            aria-label="{{ title }} start date">
+          <input
+            id="chart_filter_end_{{ identifier }}"
+            type="date"
+            class="form-control form-control-sm dashboard-chart-filter"
+            aria-label="{{ title }} end date">
+        </div>
+        <div class="dashboard-chart-filter-actions">
+          <button id="chart_filter_apply_{{ identifier }}" type="button" class="btn btn-sm btn-primary">Apply</button>
+          <button id="chart_filter_reset_{{ identifier }}" type="button" class="btn btn-sm btn-outline-secondary">Total</button>
+        </div>
+        {% else %}
+        <select id="chart_filter_{{ identifier }}" class="form-select form-select-sm dashboard-chart-filter">
+          {% if filter_type == 'period' %}
+          <option value="today" {% if default_preset == 'today' %}selected{% endif %}>Today</option>
+          <option value="last_week" {% if default_preset == 'last_week' %}selected{% endif %}>Last 7 Days</option>
+          <option value="last_month" {% if default_preset == 'last_month' %}selected{% endif %}>Last 30 Days</option>
+          <option value="total" {% if default_preset == 'total' %}selected{% endif %}>Total</option>
+          {% elif filter_type == 'as_of' %}
+          <option value="today" {% if default_preset == 'today' %}selected{% endif %}>Today</option>
+          <option value="in_7_days" {% if default_preset == 'in_7_days' %}selected{% endif %}>In 7 Days</option>
+          <option value="in_30_days" {% if default_preset == 'in_30_days' %}selected{% endif %}>In 30 Days</option>
+          {% endif %}
+        </select>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
 
     <div class="position-relative bar-chart-container">
       <canvas id="chart_{{ identifier }}" class="bar-chart-canvas"></canvas>
@@ -12,6 +51,12 @@
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    initializeBarChart('{{ identifier }}', '{{ dataset }}');
+    initializeBarChart(
+      '{{ identifier }}',
+      '{{ dataset }}',
+      '{{ filter_type|default:"" }}',
+      '{{ default_preset|default:"" }}',
+      '{{ data_variant|default:"default" }}'
+    );
   });
 </script>

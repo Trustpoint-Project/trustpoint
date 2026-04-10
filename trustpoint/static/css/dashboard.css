@@ -49,9 +49,47 @@
     row-gap: .25rem;
     column-gap: .5rem;
     top: -5px;
+    margin-left: auto;
+    justify-items: end;
   }
 
 /* bar chart css */
+.dashboard-chart-header {
+  min-height: 42px;
+}
+
+.dashboard-chart-filter-control {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  min-width: 132px;
+  flex-shrink: 0;
+}
+
+.dashboard-chart-filter {
+  min-width: 132px;
+}
+
+.dashboard-chart-filter-control-range {
+  align-items: stretch;
+  min-width: 300px;
+}
+
+.dashboard-chart-date-range {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.dashboard-chart-filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  width: 100%;
+}
+
 .bar-chart-card-container {
   height: 450px;
   display: flex;

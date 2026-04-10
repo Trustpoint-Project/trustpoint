@@ -1,33 +1,78 @@
-// Helper function to format a date as YYYY-MM-DD
 function formatDate(date) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0"); // Months are 0-based
+  const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
-function generateDate(period) {
-  // Get today's date
+function generatePeriodDate(period) {
   const today = new Date();
-  var periodStartDate = today;
+  const periodStartDate = new Date(today);
   if (period === "today") {
-    periodStartDate = today;
+    return formatDate(periodStartDate);
   } else if (period === "last_week") {
-    periodStartDate.setDate(today.getDate() - 7);
+    periodStartDate.setDate(periodStartDate.getDate() - 7);
   } else if (period === "last_month") {
-    periodStartDate.setMonth(today.getMonth() - 1);
+    periodStartDate.setMonth(periodStartDate.getMonth() - 1);
   } else {
-    periodStartDate = new Date("2023-01-01");
+    return "2023-01-01";
   }
 
   return formatDate(periodStartDate);
 }
 
-// Fetch dashboard data for a given period from the server backend API
-async function fetchDashboardData(period) {
+function generateReferenceDate(preset) {
+  const today = new Date();
+  const referenceDate = new Date(today);
+
+  if (preset === "in_7_days") {
+    referenceDate.setDate(referenceDate.getDate() + 7);
+  } else if (preset === "in_30_days") {
+    referenceDate.setDate(referenceDate.getDate() + 30);
+  }
+
+  return formatDate(referenceDate);
+}
+
+function getDashboardRequestParams(filterType, preset = "", options = {}) {
+  if (filterType === "date_range") {
+    const params = {};
+
+    if (options.startDate) {
+      params.start_date = options.startDate;
+    }
+
+    if (options.endDate) {
+      params.end_date = options.endDate;
+    }
+
+    return params;
+  }
+
+  if (filterType === "period") {
+    return { start_date: generatePeriodDate(preset) };
+  }
+
+  if (filterType === "as_of") {
+    return { reference_date: generateReferenceDate(preset) };
+  }
+
+  return {};
+}
+
+async function fetchDashboardData(requestParams = {}) {
   try {
-    const formattedStartDate = generateDate(period);
-    const response = await fetch(`/home/dashboard_data?start_date=${formattedStartDate}`);
+    const queryParams = new URLSearchParams();
+
+    Object.entries(requestParams).forEach(([key, value]) => {
+      if (value) {
+        queryParams.set(key, value);
+      }
+    });
+
+    const queryString = queryParams.toString();
+    const url = queryString ? `/home/dashboard_data?${queryString}` : "/home/dashboard_data";
+    const response = await fetch(url);
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -62,9 +107,9 @@ function updateDeltaIcon(id, value) {
 async function loadDashboardData(){
   try{
     const [todayData, weekData, totalData] = await Promise.all([
-      fetchDashboardData('today'),
-      fetchDashboardData('last_week'),
-      fetchDashboardData('total')
+      fetchDashboardData({ start_date: generatePeriodDate('today') }),
+      fetchDashboardData({ start_date: generatePeriodDate('last_week') }),
+      fetchDashboardData({ start_date: generatePeriodDate('total') })
     ]);
 
     const event = new CustomEvent('dashboardData', {
@@ -570,7 +615,7 @@ function getDonutChartConfig(datasetName, chartTitle) {
       labels: ['Active Certificates', 'Expiring Certificates', 'Expired Certificates'],
       mapData: (sourceData) => ({
         active: sourceData.active || 0,
-        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0),
+        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0) + (sourceData.expiring_in_30_days || 0),
         expired: sourceData.expired || 0,
       }),
     },
@@ -580,7 +625,7 @@ function getDonutChartConfig(datasetName, chartTitle) {
       labels: ['Active Issuing CAs', 'Expiring Issuing CAs', 'Expired Issuing CAs'],
       mapData: (sourceData) => ({
         active: sourceData.active || 0,
-        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0),
+        expiring: (sourceData.expiring_in_1_day || 0) + (sourceData.expiring_in_7_days || 0) + (sourceData.expiring_in_30_days || 0),
         expired: sourceData.expired || 0,
       }),
     },
@@ -593,9 +638,74 @@ function getDonutChartConfig(datasetName, chartTitle) {
   };
 }
 
-function initializeBarChart(identifier, dataset) {
+function getBarChartConfig(datasetName, dataVariant = "default") {
+  const expiringWindowItems = (sourceData) => ([
+    { label: "24 Hours", value: sourceData.expiring_in_1_day || 0 },
+    { label: "2-7 Days", value: sourceData.expiring_in_7_days || 0 },
+    { label: "8-30 Days", value: sourceData.expiring_in_30_days || 0 },
+  ]);
+
+  const mapArrayItems = (sourceData) => sourceData.map(item => {
+    const labelKey = Object.keys(item).find(key => key.includes('name'));
+    const valueKey = Object.keys(item).find(key => key.includes('count'));
+    return {
+      label: labelKey ? item[labelKey] : 'Unknown',
+      value: valueKey ? item[valueKey] : 0
+    };
+  });
+
+  const mapObjectItems = (sourceData) => Object.entries(sourceData).map(([key, value]) => ({
+    label: key || 'Unknown',
+    value: value || 0
+  }));
+
+  const chartConfigs = {
+    "cert_counts_by_issuing_ca:default": { mapData: mapArrayItems },
+    "cert_counts_by_status:default": { mapData: mapObjectItems },
+    "cert_counts_by_profile:default": { mapData: mapObjectItems },
+    "device_counts_by_op:default": { mapData: mapObjectItems },
+    "device_counts_by_domain:default": { mapData: mapArrayItems },
+    "cert_counts:expiring_window": { mapData: expiringWindowItems, limit: 3, sortItems: false },
+    "device_dashboard_counts:expiring_window": { mapData: expiringWindowItems, limit: 3, sortItems: false },
+    "expiring_application_certificate_counts:expiring_window": { mapData: expiringWindowItems, limit: 3, sortItems: false },
+    "issuing_ca_counts:expiring_window": { mapData: expiringWindowItems, limit: 3, sortItems: false },
+  };
+
+  return chartConfigs[`${datasetName}:${dataVariant}`] || {
+    mapData: (sourceData) => Array.isArray(sourceData) ? mapArrayItems(sourceData) : mapObjectItems(sourceData || {}),
+    limit: 5,
+  };
+}
+
+function buildBarChartItems(dataSource, datasetName, dataVariant = "default") {
+  const config = getBarChartConfig(datasetName, dataVariant);
+  const items = config.mapData(Array.isArray(dataSource) ? dataSource : (dataSource || {}))
+    .map((item) => ({
+      label: item.label || 'Unknown',
+      value: normalizeChartValue(item.value),
+    }))
+    .filter((item) => item.value > 0);
+
+  const orderedItems = config.sortItems === false
+    ? items
+    : items.sort((a, b) => b.value - a.value);
+
+  return orderedItems
+    .slice(0, config.limit || 5)
+    .map((item, index) => ({
+      ...item,
+      sourceIndex: index,
+    }));
+}
+
+function initializeBarChart(identifier, dataset, filterType = "", defaultPreset = "", dataVariant = "default") {
   const chartCanvasId = `chart_${identifier}`;
   const legendContainerId = `legend_${identifier}`;
+  const filterSelect = document.getElementById(`chart_filter_${identifier}`);
+  const startDateInput = document.getElementById(`chart_filter_start_${identifier}`);
+  const endDateInput = document.getElementById(`chart_filter_end_${identifier}`);
+  const applyButton = document.getElementById(`chart_filter_apply_${identifier}`);
+  const resetButton = document.getElementById(`chart_filter_reset_${identifier}`);
 
   let chartInstance = null;
   let chartItems = [];
@@ -623,44 +733,61 @@ function initializeBarChart(identifier, dataset) {
     );
   }
 
-  document.addEventListener('dashboardData', (event) => {
-    const total = event.detail.total || {};
-    let dataSource = total[dataset];
-    let items;
-
-    if (!dataSource) {
-      dataSource = [];
-    }
-
-    if (Array.isArray(dataSource)) {
-      items = dataSource.map(item => {
-        const labelKey = Object.keys(item).find(key => key.includes('name'));
-        const valueKey = Object.keys(item).find(key => key.includes('count'));
-        return {
-          label: labelKey ? item[labelKey] : 'Unknown',
-          value: valueKey ? item[valueKey] : 0
-        };
-      });
-    } else {
-      items = Object.entries(dataSource).map(([key, value]) => ({
-        label: key || 'unknown',
-        value: value || 0
-      }));
-    }
-
-    const sortedItems = items.sort((a, b) => b.value - a.value);
-    chartItems = sortedItems
-      .filter((item) => normalizeChartValue(item.value) > 0)
-      .slice(0, 5)
-      .map((item, index) => ({
-        label: item.label,
-        value: normalizeChartValue(item.value),
-        sourceIndex: index
-      }));
+  function updateChartItems(responseData) {
+    const sourceData = responseData?.[dataset] || [];
+    chartItems = buildBarChartItems(sourceData, dataset, dataVariant);
     hiddenIndices.clear();
-
     drawChart();
-  });
+  }
+
+  if (filterType === 'date_range' && startDateInput && endDateInput) {
+    const loadDateRangeChart = async () => {
+      const responseData = await fetchDashboardData(
+        getDashboardRequestParams(filterType, '', {
+          startDate: startDateInput.value,
+          endDate: endDateInput.value,
+        })
+      );
+      updateChartItems(responseData || {});
+    };
+
+    const applyDateRange = () => {
+      loadDateRangeChart();
+    };
+
+    applyButton?.addEventListener('click', applyDateRange);
+    resetButton?.addEventListener('click', () => {
+      startDateInput.value = '';
+      endDateInput.value = '';
+      loadDateRangeChart();
+    });
+
+    [startDateInput, endDateInput].forEach((input) => {
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          applyDateRange();
+        }
+      });
+    });
+
+    loadDateRangeChart();
+  } else if (filterType && filterSelect) {
+    const loadFilteredChart = async () => {
+      const responseData = await fetchDashboardData(
+        getDashboardRequestParams(filterType, filterSelect.value || defaultPreset)
+      );
+      updateChartItems(responseData || {});
+    };
+
+    filterSelect.addEventListener('change', loadFilteredChart);
+    loadFilteredChart();
+  } else {
+    document.addEventListener('dashboardData', (event) => {
+      const total = event.detail.total || {};
+      updateChartItems(total);
+    });
+  }
 
 const observer = new MutationObserver(() => {
   drawChart(); 
@@ -668,8 +795,9 @@ const observer = new MutationObserver(() => {
 observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
 }
 
-function initializeDonutChart(identifier, datasetName, chartTitle) {
+function initializeDonutChart(identifier, datasetName, chartTitle, filterType = "", defaultPreset = "") {
   const chartCanvasId = `chart_dount_${identifier}`;
+  const filterSelect = document.getElementById(`chart_filter_${identifier}`);
   
   let chartInstance = null;
   let chartData = null;
@@ -685,9 +813,8 @@ function initializeDonutChart(identifier, datasetName, chartTitle) {
     }
   }
 
-  document.addEventListener("dashboardData", (event) => {
-    const today = event.detail.today || {};
-    const sourceData = today[datasetName] || {};
+  function updateChartData(responseData) {
+    const sourceData = responseData?.[datasetName] || {};
     const config = getDonutChartConfig(datasetName, chartTitle);
 
     if (!Array.isArray(sourceData)) {
@@ -701,7 +828,24 @@ function initializeDonutChart(identifier, datasetName, chartTitle) {
     hiddenIndices.clear();
     
     drawChart();
-  });
+  }
+
+  if (filterType && filterSelect) {
+    const loadFilteredChart = async () => {
+      const responseData = await fetchDashboardData(
+        getDashboardRequestParams(filterType, filterSelect.value || defaultPreset)
+      );
+      updateChartData(responseData || {});
+    };
+
+    filterSelect.addEventListener('change', loadFilteredChart);
+    loadFilteredChart();
+  } else {
+    document.addEventListener("dashboardData", (event) => {
+      const today = event.detail.today || {};
+      updateChartData(today);
+    });
+  }
 
 const observer = new MutationObserver(() => {
   drawChart(); 

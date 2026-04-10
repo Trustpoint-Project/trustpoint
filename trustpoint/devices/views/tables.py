@@ -138,6 +138,7 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
             'enrollment_state',
             'domain_credential_state',
             'application_certificate_state',
+            'expired_device',
         }
         context['filters_active'] = any(
             self.request.GET.get(k) for k in filter_keys
@@ -183,7 +184,7 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
         )
         issued_credentials_prefetch = Prefetch(
             'issued_credentials',
-            queryset=IssuedCredentialModel.objects.select_related('credential__certificate'),
+            queryset=IssuedCredentialModel.objects.select_related('credential__certificate__revoked_certificate'),
         )
         return (
             self.model.objects.all()
@@ -205,17 +206,24 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
                 # Boolean existence checks reused by the later sort annotations.
                 has_domain_credential=Exists(domain_credentials),
                 has_valid_domain_credential=Exists(
-                    domain_credentials.filter(credential__certificate__not_valid_after__gt=next_7_days)
+                    domain_credentials.filter(
+                        credential__certificate__revoked_certificate__isnull=True,
+                        credential__certificate__not_valid_after__gt=next_7_days,
+                    )
                 ),
                 has_expiring_domain_credential=Exists(
                     domain_credentials.filter(
+                        credential__certificate__revoked_certificate__isnull=True,
                         credential__certificate__not_valid_after__gt=now,
                         credential__certificate__not_valid_after__lte=next_7_days,
                     )
                 ),
                 has_application_certificate=Exists(application_credentials),
                 has_active_application_certificate=Exists(
-                    application_credentials.filter(credential__certificate__not_valid_after__gt=now)
+                    application_credentials.filter(
+                        credential__certificate__revoked_certificate__isnull=True,
+                        credential__certificate__not_valid_after__gt=now,
+                    )
                 ),
                 domain_credential_sort=Case(
                     When(has_domain_credential=False, then=Value(0)),
@@ -361,8 +369,11 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
                 'tooltip': str(gettext_lazy('No domain credential issued.')),
             }
 
-        if any(cert.not_valid_after > next_7_days for cert in certificates):
-            next_expiry = min(cert.not_valid_after for cert in certificates if cert.not_valid_after > now)
+        active_certificates = [cert for cert in certificates if not hasattr(cert, 'revoked_certificate')]
+        valid_certificates = [cert for cert in active_certificates if cert.not_valid_after > next_7_days]
+
+        if valid_certificates:
+            next_expiry = min(cert.not_valid_after for cert in active_certificates if cert.not_valid_after > now)
             return {
                 'status_key': 'valid',
                 'status_label': str(gettext_lazy('Valid')),
@@ -373,7 +384,7 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
                 ),
             }
 
-        expiring_certs = [cert for cert in certificates if cert.not_valid_after > now]
+        expiring_certs = [cert for cert in active_certificates if cert.not_valid_after > now]
         if expiring_certs:
             next_expiry = min(cert.not_valid_after for cert in expiring_certs)
             return {
@@ -411,7 +422,10 @@ class AbstractDeviceTableView(PageContextMixin, ListView[DeviceModel], abc.ABC):
                 'tooltip': str(gettext_lazy('No application certificates issued.')),
             }
 
-        active_certificates = [cert for cert in certificates if cert.not_valid_after > now]
+        active_certificates = [
+            cert for cert in certificates
+            if not hasattr(cert, 'revoked_certificate') and cert.not_valid_after > now
+        ]
         if active_certificates:
             next_expiry = min(cert.not_valid_after for cert in active_certificates)
             return {

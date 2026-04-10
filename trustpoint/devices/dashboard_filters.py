@@ -66,6 +66,7 @@ def filter_devices_with_valid_domain_credential(
     next_7_days = now + timedelta(days=7)
     return queryset.filter(
         DOMAIN_CREDENTIAL_Q,
+        issued_credentials__credential__certificate__revoked_certificate__isnull=True,
         issued_credentials__credential__certificate__not_valid_after__gt=next_7_days,
     ).distinct()
 
@@ -80,10 +81,12 @@ def filter_devices_with_expiring_domain_credential_in_1_day(
     next_7_days = now + timedelta(days=7)
     return queryset.filter(
         DOMAIN_CREDENTIAL_Q,
+        issued_credentials__credential__certificate__revoked_certificate__isnull=True,
         issued_credentials__credential__certificate__not_valid_after__gt=now,
         issued_credentials__credential__certificate__not_valid_after__lte=next_1_day,
     ).exclude(
         DOMAIN_CREDENTIAL_Q,
+        issued_credentials__credential__certificate__revoked_certificate__isnull=True,
         issued_credentials__credential__certificate__not_valid_after__gt=next_7_days,
     ).distinct()
 
@@ -98,13 +101,16 @@ def filter_devices_with_expiring_domain_credential_in_7_days(
     next_7_days = now + timedelta(days=7)
     return queryset.filter(
         DOMAIN_CREDENTIAL_Q,
+        issued_credentials__credential__certificate__revoked_certificate__isnull=True,
         issued_credentials__credential__certificate__not_valid_after__gt=next_1_day,
         issued_credentials__credential__certificate__not_valid_after__lte=next_7_days,
     ).exclude(
         DOMAIN_CREDENTIAL_Q,
+        issued_credentials__credential__certificate__revoked_certificate__isnull=True,
         issued_credentials__credential__certificate__not_valid_after__gt=next_7_days,
     ).exclude(
         DOMAIN_CREDENTIAL_Q,
+        issued_credentials__credential__certificate__revoked_certificate__isnull=True,
         issued_credentials__credential__certificate__not_valid_after__gt=now,
         issued_credentials__credential__certificate__not_valid_after__lte=next_1_day,
     ).distinct()
@@ -119,19 +125,21 @@ def filter_devices_with_expiring_domain_credential(
     next_7_days = now + timedelta(days=7)
     return queryset.filter(
         DOMAIN_CREDENTIAL_Q,
+        issued_credentials__credential__certificate__revoked_certificate__isnull=True,
         issued_credentials__credential__certificate__not_valid_after__gt=now,
         issued_credentials__credential__certificate__not_valid_after__lte=next_7_days,
     ).exclude(
         DOMAIN_CREDENTIAL_Q,
+        issued_credentials__credential__certificate__revoked_certificate__isnull=True,
         issued_credentials__credential__certificate__not_valid_after__gt=next_7_days,
     ).distinct()
 
 
-def filter_devices_with_expired_domain_credential(
+def filter_devices_with_expired_or_revoked_domain_credential(
     queryset: QuerySet[DeviceModel],
     reference_time: datetime | None = None,
 ) -> QuerySet[DeviceModel]:
-    """Return devices whose domain credentials are all expired.
+    """Return devices whose domain credentials are all expired or revoked.
 
     Devices without any domain credential are excluded from this queryset.
     """
@@ -140,13 +148,36 @@ def filter_devices_with_expired_domain_credential(
         DOMAIN_CREDENTIAL_Q,
     ).exclude(
         DOMAIN_CREDENTIAL_Q,
+        issued_credentials__credential__certificate__revoked_certificate__isnull=True,
         issued_credentials__credential__certificate__not_valid_after__gt=now,
     ).distinct()
 
 
-def filter_expired_devices(queryset: QuerySet[DeviceModel]) -> QuerySet[DeviceModel]:
-    """Backward-compatible alias for expired domain-credential devices."""
-    return filter_devices_with_expired_domain_credential(queryset)
+def filter_expired_or_revoked_devices(
+    queryset: QuerySet[DeviceModel],
+    reference_time: datetime | None = None,
+) -> QuerySet[DeviceModel]:
+    """Return devices that no longer have a usable device identity.
+
+    A device is expired if:
+    - it had a domain credential once and no active non-revoked domain credential remains
+    - or it has no domain credential at all, but only expired or revoked application certificates
+    """
+    now = reference_time or timezone.now()
+    expired_or_revoked_domain_devices = filter_devices_with_expired_or_revoked_domain_credential(queryset, now)
+    expired_application_only_devices = (
+        filter_devices_without_domain_credential(queryset)
+        .filter(APPLICATION_CREDENTIAL_Q)
+        .exclude(
+            APPLICATION_CREDENTIAL_Q,
+            issued_credentials__credential__certificate__revoked_certificate__isnull=True,
+            issued_credentials__credential__certificate__not_valid_after__gt=now,
+        )
+    )
+    return queryset.filter(
+        Q(pk__in=expired_or_revoked_domain_devices.values('pk')) |
+        Q(pk__in=expired_application_only_devices.values('pk'))
+    ).distinct()
 
 
 def filter_devices_without_application_certificates(queryset: QuerySet[DeviceModel]) -> QuerySet[DeviceModel]:
@@ -162,19 +193,21 @@ def filter_devices_with_active_application_certificates(
     now = reference_time or timezone.now()
     return queryset.filter(
         APPLICATION_CREDENTIAL_Q,
+        issued_credentials__credential__certificate__revoked_certificate__isnull=True,
         issued_credentials__credential__certificate__not_valid_after__gt=now,
     ).distinct()
 
 
-def filter_devices_with_expired_application_certificates(
+def filter_devices_with_expired_or_revoked_application_certificates(
     queryset: QuerySet[DeviceModel],
     reference_time: datetime | None = None,
 ) -> QuerySet[DeviceModel]:
-    """Return devices whose application certificates are all expired."""
+    """Return devices whose application certificates are all expired or revoked."""
     now = reference_time or timezone.now()
     return queryset.filter(
         APPLICATION_CREDENTIAL_Q,
     ).exclude(
         APPLICATION_CREDENTIAL_Q,
+        issued_credentials__credential__certificate__revoked_certificate__isnull=True,
         issued_credentials__credential__certificate__not_valid_after__gt=now,
     ).distinct()
