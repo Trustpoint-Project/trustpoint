@@ -14,7 +14,6 @@ from django.http import HttpRequest, HttpResponseRedirect, JsonResponse
 from django.shortcuts import redirect
 from django.utils import dateparse, timezone
 from django.views.generic.base import RedirectView, TemplateView
-from trustpoint_core.oid import NameOid
 
 from devices.dashboard_filters import (
     filter_active_devices,
@@ -762,22 +761,28 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             end_date: The optional inclusive end date for the created-at range.
 
         Returns:
-            It returns certificate count grouped by issuing ca (CN only).
+            It returns certificate count grouped by the issuing CA model.
         """
         cert_counts_by_issuing_ca = []
         try:
-            cn_oid = NameOid.COMMON_NAME.dotted_string
-            cert_issuing_ca_qr = (
-                self._apply_created_at_date_range(
-                    CertificateModel.objects.filter(issuer__isnull=False, issuer__oid=cn_oid),
-                    start_date,
-                    end_date,
-                )
-                .values(ca_name=F('issuer__value'))
-                .annotate(cert_count=Count('id'))
-            )
+            issuing_cas = CaModel.objects.filter(credential__isnull=False).exclude(
+                ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
+            ).order_by('unique_name')
 
-            cert_counts_by_issuing_ca = list(cert_issuing_ca_qr)
+            cert_counts_by_issuing_ca = [
+                {
+                    'ca_name': issuing_ca.unique_name,
+                    'cert_count': self._apply_created_at_date_range(
+                        issuing_ca.get_issued_certificates().filter(
+                            Q(basic_constraints_extension__ca=False) | Q(basic_constraints_extension__isnull=True),
+                            credential_set__issued_credential__isnull=False,
+                        ),
+                        start_date,
+                        end_date,
+                    ).distinct().count(),
+                }
+                for issuing_ca in issuing_cas
+            ]
         except Exception as exception:
             err_msg = f'Error occurred in certificate count by issuing ca query: {exception}'
             self.logger.exception(err_msg)
@@ -796,24 +801,38 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             end_date: The optional inclusive end date for the created-at range.
 
         Returns:
-            It returns certificate count grouped by issuing ca (CN only) and date.
+            It returns certificate count grouped by the issuing CA model and date.
         """
         cert_counts_by_issuing_ca_and_date = []
         try:
-            cn_oid = NameOid.COMMON_NAME.dotted_string
-            cert_issuing_ca_and_date_qr = (
-                self._apply_created_at_date_range(
-                    CertificateModel.objects.filter(issuer__isnull=False, issuer__oid=cn_oid),
-                    start_date,
-                    end_date,
-                )
-                .annotate(issue_date=TruncDate('created_at'))
-                .values('issue_date', name=F('issuer__value'))
-                .annotate(cert_count=Count('id'))
-                .order_by('issue_date', 'name')
-            )
+            issuing_cas = CaModel.objects.filter(credential__isnull=False).exclude(
+                ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
+            ).order_by('unique_name')
 
-            cert_counts_by_issuing_ca_and_date = list(cert_issuing_ca_and_date_qr)
+            for issuing_ca in issuing_cas:
+                date_counts = (
+                    self._apply_created_at_date_range(
+                        issuing_ca.get_issued_certificates().filter(
+                            Q(basic_constraints_extension__ca=False) | Q(basic_constraints_extension__isnull=True),
+                            credential_set__issued_credential__isnull=False,
+                        ),
+                        start_date,
+                        end_date,
+                    )
+                    .annotate(issue_date=TruncDate('created_at'))
+                    .values('issue_date')
+                    .annotate(cert_count=Count('id', distinct=True))
+                    .order_by('issue_date')
+                )
+
+                cert_counts_by_issuing_ca_and_date.extend([
+                    {
+                        'issue_date': item['issue_date'],
+                        'name': issuing_ca.unique_name,
+                        'cert_count': item['cert_count'],
+                    }
+                    for item in date_counts
+                ])
         except Exception as exception:
             err_msg = f'Error occurred in certificate count by issuing ca query: {exception}'
             self.logger.exception(err_msg)

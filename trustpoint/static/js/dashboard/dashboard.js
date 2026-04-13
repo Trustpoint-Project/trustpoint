@@ -131,6 +131,13 @@ function normalizeChartValue(value) {
   return Number.isFinite(numericValue) ? numericValue : 0;
 }
 
+function truncateChartLabel(label, maxLength = 34) {
+  const safeLabel = String(label || 'Unknown');
+  return safeLabel.length > maxLength
+    ? `${safeLabel.slice(0, maxLength - 1)}…`
+    : safeLabel;
+}
+
 function getVisibleChartValues(chart) {
   const dataset = chart?.data?.datasets?.[0];
   if (!dataset || !Array.isArray(dataset.data)) {
@@ -198,32 +205,54 @@ function renderBarLegend(legendEl, items, hiddenIndices, colorForIndex, onToggle
   }
 
   const ul = document.createElement('ul');
-  ul.className = 'list-unstyled small mb-0';
+  ul.className = 'bar-chart-legend-list';
 
   items.forEach((item, index) => {
     const li = document.createElement('li');
-    li.className = 'mb-1';
 
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `bar-chart-legend-item${hiddenIndices.has(index) ? ' is-hidden' : ''}`;
+    button.title = `${item.fullLabel || item.label} (${item.value})`;
     button.addEventListener('click', () => onToggle(index));
 
     const dot = document.createElement('span');
-    dot.className = 'rounded-circle d-inline-block flex-shrink-0';
-    dot.style.width = '10px';
-    dot.style.height = '10px';
+    dot.className = 'bar-chart-legend-dot';
     dot.style.background = colorForIndex(index);
 
-    const text = document.createElement('span');
-    text.textContent = `${item.label} (${item.value})`;
+    const label = document.createElement('span');
+    label.className = 'bar-chart-legend-label';
+    label.textContent = item.fullLabel || item.label;
 
-    button.append(dot, text);
+    const value = document.createElement('span');
+    value.className = 'bar-chart-legend-value';
+    value.textContent = item.value;
+
+    button.append(dot, label, value);
     li.appendChild(button);
     ul.appendChild(li);
   });
 
   legendEl.appendChild(ul);
+}
+
+function setBarChartContainerHeight(canvasEl, itemCount) {
+  const containerEl = canvasEl?.closest('.bar-chart-container');
+  const scrollContentEl = canvasEl?.closest('.bar-chart-scroll-content');
+  if (!containerEl || !scrollContentEl) {
+    return;
+  }
+
+  const minimumViewportHeight = 220;
+  const viewportHeight = Math.max(containerEl.clientHeight || 0, minimumViewportHeight);
+  const minimumContentHeight = viewportHeight;
+  const basePadding = 24;
+  const rowHeight = 44;
+  const calculatedHeight = itemCount > 0
+    ? basePadding + (itemCount * rowHeight)
+    : minimumContentHeight;
+
+  scrollContentEl.style.height = `${Math.max(minimumContentHeight, calculatedHeight)}px`;
 }
 
 function createHorizontalBarChart(
@@ -232,7 +261,8 @@ function createHorizontalBarChart(
   legendId,
   chartInstanceName,
   hiddenIndices,
-  onToggle
+  onToggle,
+  options = {}
 ) {
   // Farben immer beim Zeichnen neu auslesen
   const style = getComputedStyle(document.documentElement);
@@ -259,9 +289,11 @@ function createHorizontalBarChart(
     return;
   }
 
-  const visibleItems = items.filter((item) => !hiddenIndices.has(item.sourceIndex));
   // The plugin then handles the "No Data" display.
+  const visibleItems = items.filter((item) => !hiddenIndices.has(item.sourceIndex));
   const hasData = visibleItems.length > 0;
+
+  setBarChartContainerHeight(canvasEl, visibleItems.length);
 
   const palette = [
     '#0B5ED7', '#86B7FE', '#A6C8FF',
@@ -285,7 +317,8 @@ function createHorizontalBarChart(
         ctx.font = '600 12px system-ui,-apple-system,Segoe UI,Roboto,Arial';
         ctx.fillStyle =
           getComputedStyle(document.documentElement)
-            .getPropertyValue('--bs-body-color') || '#000';
+            .getPropertyValue('--bs-body-color')
+            .trim() || '#000';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText(String(val), bar.x + 6, bar.y);
@@ -304,7 +337,7 @@ function createHorizontalBarChart(
   window[chartInstanceKey] = new Chart(canvasEl, {
     type: 'bar',
     data: {
-      labels: visibleItems.map(i => i.label),
+      labels: visibleItems.map(i => i.fullLabel || i.label),
       datasets: [{
         data: visibleItems.map(i => i.value),
         backgroundColor: visibleItems.map((item) => colorForIndex(item.sourceIndex)),
@@ -346,16 +379,26 @@ function createHorizontalBarChart(
             display: true,
             color: borderColor 
           },
-          ticks: { 
-            color: textColor 
+          ticks: {
+            color: textColor,
+            callback: function(value) {
+              const label = this.getLabelForValue(value);
+              return truncateChartLabel(label, 34);
+            }
           }
         }
       },
       plugins: {
         legend: { display: false },
-        // 👇 Here you configure the No-Data plugin
         noDataImagePlugin: {
-          text: 'No Data'
+          text: 'No Data',
+          zeroValuesAreData: options.zeroValuesAreData === true,
+        },
+        tooltip: {
+          callbacks: {
+            title: (context) => context?.[0]?.label || '',
+            label: (context) => `Count: ${context.parsed.x ?? context.raw ?? 0}`
+          }
         }
       }
     },
@@ -375,7 +418,9 @@ const noDataImagePlugin = {
     const text = opts.text ?? 'No Data';
 
     // Check if there is any meaningful data
-    const hasData = hasVisibleChartData(chart);
+    const hasData = opts.zeroValuesAreData
+      ? (chart?.data?.labels?.length ?? 0) > 0
+      : hasVisibleChartData(chart);
 
     if (hasData) return;
 
@@ -415,7 +460,8 @@ const noDataImagePlugin = {
 
       img.onload = () => {
         opts._imgLoaded = true;
-        chart.draw(); // Reload → Redraw canvas
+        // Reload → Redraw canvas
+        chart.draw();
       };
       img.onerror = () => {
         opts._imgLoaded = false;
@@ -479,9 +525,7 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}, hidde
   const chartDataArray = dataKeys.map((key) => normalizeChartValue(data[key]));
   const hasData = chartDataArray.some(value => normalizeChartValue(value) > 0);
 
-  // Use light pink gradient for expiring instead of blue
   const chartColors = dataKeys.map(key => key === 'expiring' ? '#FFE8E8' : (colorMap[key] || '#0B5ED7'));
-  // Create border colors - light pink for expiring, transparent for others
   const borderColors = dataKeys.map(key => key === 'expiring' ? '#FFB3B3' : 'transparent');
 
   const centerTextPlugin = {
@@ -499,14 +543,14 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}, hidde
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
 
-      // Subtitle
-      ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
       const currentTextColor = getComputedStyle(document.documentElement)
-        .getPropertyValue('--bs-body-color') || '#000';
+        .getPropertyValue('--bs-body-color')
+        .trim() || '#000';
+
+      ctx.font = '600 36px system-ui, -apple-system, Segoe UI, Roboto, Arial';
       ctx.fillStyle = currentTextColor;
       ctx.fillText(visibleTotal, x, y - 8);
 
-      // Subtitle
       ctx.font = '500 12px system-ui, -apple-system, Segoe UI, Roboto, Arial';
       ctx.globalAlpha = 0.85;
       ctx.fillText(centerText, x, y + 16);
@@ -514,7 +558,6 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}, hidde
     }
   };
 
-  // Destroy old chart
   const chartInstanceKey = `_${chartInstanceName}Chart`;
   if (window[chartInstanceKey]) {
     window[chartInstanceKey].destroy();
@@ -552,10 +595,10 @@ function createDonutChart(data, canvasId, chartInstanceName, options = {}, hidde
             toggleChartItemVisibility(legend.chart, legendItem.index, hiddenIndices);
           },
           onHover: (event) => {
-          event.native.target.style.cursor = 'pointer';
+            event.native.target.style.cursor = 'pointer';
           },
           onLeave: (event) => {
-          event.native.target.style.cursor = 'default';
+            event.native.target.style.cursor = 'default';
           },
           labels: {
             usePointStyle: true,
@@ -660,7 +703,7 @@ function getBarChartConfig(datasetName, dataVariant = "default") {
   }));
 
   const chartConfigs = {
-    "cert_counts_by_issuing_ca:default": { mapData: mapArrayItems },
+    "cert_counts_by_issuing_ca:default": { mapData: mapArrayItems, keepZeroValues: true, zeroValuesAreData: true },
     "cert_counts_by_status:default": { mapData: mapObjectItems },
     "cert_counts_by_profile:default": { mapData: mapObjectItems },
     "device_counts_by_op:default": { mapData: mapObjectItems },
@@ -680,11 +723,15 @@ function getBarChartConfig(datasetName, dataVariant = "default") {
 function buildBarChartItems(dataSource, datasetName, dataVariant = "default") {
   const config = getBarChartConfig(datasetName, dataVariant);
   const items = config.mapData(Array.isArray(dataSource) ? dataSource : (dataSource || {}))
-    .map((item) => ({
-      label: item.label || 'Unknown',
-      value: normalizeChartValue(item.value),
-    }))
-    .filter((item) => item.value > 0);
+    .map((item) => {
+      const fullLabel = item.label || 'Unknown';
+      return {
+        label: fullLabel,
+        fullLabel,
+        value: normalizeChartValue(item.value),
+      };
+    })
+    .filter((item) => config.keepZeroValues || item.value > 0);
 
   const orderedItems = config.sortItems === false
     ? items
@@ -729,7 +776,8 @@ function initializeBarChart(identifier, dataset, filterType = "", defaultPreset 
           hiddenIndices.add(index);
         }
         drawChart();
-      }
+      },
+      getBarChartConfig(dataset, dataVariant),
     );
   }
 
@@ -789,10 +837,10 @@ function initializeBarChart(identifier, dataset, filterType = "", defaultPreset 
     });
   }
 
-const observer = new MutationObserver(() => {
-  drawChart(); 
-});
-observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+  const observer = new MutationObserver(() => {
+    drawChart(); 
+  });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
 }
 
 function initializeDonutChart(identifier, datasetName, chartTitle, filterType = "", defaultPreset = "") {
@@ -847,8 +895,8 @@ function initializeDonutChart(identifier, datasetName, chartTitle, filterType = 
     });
   }
 
-const observer = new MutationObserver(() => {
-  drawChart(); 
-});
-observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+  const observer = new MutationObserver(() => {
+    drawChart(); 
+  });
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
 }
