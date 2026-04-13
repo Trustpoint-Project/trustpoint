@@ -244,7 +244,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
     @patch('home.views.filter_devices_with_expiring_domain_credential')
     @patch('home.views.filter_devices_with_valid_domain_credential')
     @patch('home.views.filter_devices_without_domain_credential')
-    @patch.object(DeviceModel.objects, 'filter')
+    @patch.object(type(DeviceModel.objects), 'filter')
     def test_get_device_domain_credential_counts_uses_only_onboarding_devices(
         self,
         mock_devices_filter: Mock,
@@ -271,7 +271,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
     @patch('home.views.filter_devices_with_active_application_certificates')
     @patch('home.views.filter_devices_without_application_certificates')
     @patch('home.views.filter_no_onboarding_devices')
-    @patch.object(DeviceModel.objects, 'all')
+    @patch.object(type(DeviceModel.objects), 'all')
     def test_get_device_application_certificate_counts_uses_only_no_onboarding_devices(
         self,
         mock_all_devices: Mock,
@@ -291,6 +291,7 @@ class DashboardChartsAndCountsViewTests(TestCase):
 
         result = self.view.get_device_application_certificate_counts()
 
+        mock_all_devices.assert_called_once_with()
         mock_no_onboarding_devices.assert_called_once_with(all_devices)
         mock_without_application_certificates.assert_called_once_with(no_onboarding_devices)
         assert result['total'] == 6
