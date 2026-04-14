@@ -2,7 +2,18 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, help_support, key_storage, logging, notifications, settings, tls
+from .views import (
+    IndexView,
+    backup,
+    help_support,
+    key_storage,
+    logging,
+    notifications,
+    role_management,
+    settings,
+    tls,
+    user_management,
+)
 
 app_name = 'management'
 urlpatterns = [
@@ -65,4 +76,12 @@ urlpatterns = [
     path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
     path('notifications/refresh/', notifications.RefreshNotificationsView.as_view(), name='refresh_notifications'),
     path('notifications/<int:pk>/delete/', notifications.NotificationDeleteView.as_view(), name='notification_delete'),
+    path('user_management/', user_management.UserTableView.as_view(), name='user_management'),
+    path('user_management/add_user/', user_management.UserCreateView.as_view(), name='add_user'),
+    path('user_management/<int:pk>/delete/', user_management.UserDeleteView.as_view(), name='delete_user'),
+    path('user_management/<int:pk>/change_role/', user_management.UserChangeRoleView.as_view(), name='change_role'),
+    path('role_management/', role_management.RoleTableView.as_view(), name='role_management'),
+    path('role_management/add/', role_management.RoleCreateView.as_view(), name='add_role'),
+    path('role_management/<int:pk>/edit/', role_management.RoleEditView.as_view(), name='edit_role'),
+    path('role_management/<int:pk>/delete/', role_management.RoleDeleteView.as_view(), name='delete_role'),
 ]

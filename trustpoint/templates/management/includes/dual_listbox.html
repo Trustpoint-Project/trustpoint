@@ -1,0 +1,176 @@
+{% load i18n %}
+
+{# --- Dual-listbox permission picker --- #}
+{# Requires the template context to contain a ``form`` with a ``permissions`` field. #}
+
+{% if form.permissions.errors %}
+    <div class="invalid-feedback d-block mb-2">
+        {% for error in form.permissions.errors %}
+            {{ error }}
+        {% endfor %}
+    </div>
+{% endif %}
+
+<div class="row g-2" id="dual-listbox">
+    {# --- Available permissions (left) --- #}
+    <div class="col-md-5">
+        <label class="form-label fw-bold">{% trans "Available Permissions" %}</label>
+        <input type="text" class="form-control form-control-sm mb-1" id="filter-available"
+               placeholder="{% trans 'Filter…' %}">
+        <select multiple class="form-select" id="available-perms" size="15">
+            {# Populated by JavaScript on page load #}
+        </select>
+    </div>
+
+    {# --- Arrow buttons (centre) --- #}
+    <div class="col-md-2 d-flex flex-column align-items-center justify-content-center gap-1">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add" title="{% trans 'Add selected' %}">
+            <i class="bi bi-chevron-right"></i>
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-add-all" title="{% trans 'Add all' %}">
+            <i class="bi bi-chevron-double-right"></i>
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-remove" title="{% trans 'Remove selected' %}">
+            <i class="bi bi-chevron-left"></i>
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-remove-all" title="{% trans 'Remove all' %}">
+            <i class="bi bi-chevron-double-left"></i>
+        </button>
+    </div>
+
+    {# --- Assigned permissions (right) --- #}
+    <div class="col-md-5">
+        <label class="form-label fw-bold">{% trans "Assigned Permissions" %}</label>
+        <input type="text" class="form-control form-control-sm mb-1" id="filter-assigned"
+               placeholder="{% trans 'Filter…' %}">
+        <select multiple class="form-select" id="assigned-perms" size="15">
+            {# Populated by JavaScript on page load #}
+        </select>
+    </div>
+</div>
+
+{# Django-rendered widget (hidden) — the JS reads its options to populate the listboxes #}
+<div class="d-none">
+    {{ form.permissions }}
+</div>
+
+{# Hidden select that actually gets submitted with the form #}
+<select multiple name="permissions" id="hidden-perms" class="d-none">
+</select>
+
+<script>
+(function () {
+    "use strict";
+
+    // ---- References ----
+    const availableSelect = document.getElementById("available-perms");
+    const assignedSelect  = document.getElementById("assigned-perms");
+    const hiddenSelect    = document.getElementById("hidden-perms");
+    const filterAvailable = document.getElementById("filter-available");
+    const filterAssigned  = document.getElementById("filter-assigned");
+
+    // ---- Build option lists from the Django-rendered widget ----
+    // The original <select> rendered by Django is hidden; we read its
+    // options and split them into "available" vs "assigned" buckets.
+    const original = document.getElementById("{{ form.permissions.id_for_label }}");
+    if (original) {
+        const assignedIds = new Set(
+            Array.from(original.selectedOptions).map(o => o.value)
+        );
+        Array.from(original.options).forEach(function (opt) {
+            const clone = opt.cloneNode(true);
+            if (assignedIds.has(opt.value)) {
+                assignedSelect.appendChild(clone);
+            } else {
+                availableSelect.appendChild(clone);
+            }
+        });
+        // Hide the original widget so only the dual-listbox is visible.
+        original.closest(".mb-3, div")?.classList.add("d-none");
+    }
+
+    // ---- Move helpers ----
+    function moveSelected(from, to) {
+        Array.from(from.selectedOptions).forEach(function (opt) {
+            to.appendChild(opt);
+            opt.selected = false;
+        });
+        sortSelect(to);
+        syncHidden();
+    }
+
+    function moveAll(from, to) {
+        Array.from(from.options).forEach(function (opt) {
+            // Only move visible (non-filtered) options.
+            if (opt.style.display !== "none") {
+                to.appendChild(opt);
+                opt.selected = false;
+            }
+        });
+        sortSelect(to);
+        syncHidden();
+    }
+
+    function sortSelect(sel) {
+        const opts = Array.from(sel.options);
+        opts.sort(function (a, b) { return a.text.localeCompare(b.text); });
+        opts.forEach(function (o) { sel.appendChild(o); });
+    }
+
+    // ---- Sync hidden select so Django receives the right values ----
+    function syncHidden() {
+        hiddenSelect.innerHTML = "";
+        Array.from(assignedSelect.options).forEach(function (opt) {
+            const o = document.createElement("option");
+            o.value = opt.value;
+            o.selected = true;
+            hiddenSelect.appendChild(o);
+        });
+    }
+
+    // ---- Filter ----
+    function applyFilter(input, sel) {
+        const term = input.value.toLowerCase();
+        Array.from(sel.options).forEach(function (opt) {
+            opt.style.display = opt.text.toLowerCase().includes(term) ? "" : "none";
+        });
+    }
+
+    // ---- Event listeners ----
+    document.getElementById("btn-add").addEventListener("click", function () {
+        moveSelected(availableSelect, assignedSelect);
+    });
+    document.getElementById("btn-add-all").addEventListener("click", function () {
+        moveAll(availableSelect, assignedSelect);
+    });
+    document.getElementById("btn-remove").addEventListener("click", function () {
+        moveSelected(assignedSelect, availableSelect);
+    });
+    document.getElementById("btn-remove-all").addEventListener("click", function () {
+        moveAll(assignedSelect, availableSelect);
+    });
+
+    // Double-click to move a single option.
+    availableSelect.addEventListener("dblclick", function () {
+        moveSelected(availableSelect, assignedSelect);
+    });
+    assignedSelect.addEventListener("dblclick", function () {
+        moveSelected(assignedSelect, availableSelect);
+    });
+
+    filterAvailable.addEventListener("input", function () {
+        applyFilter(filterAvailable, availableSelect);
+    });
+    filterAssigned.addEventListener("input", function () {
+        applyFilter(filterAssigned, assignedSelect);
+    });
+
+    // Ensure hidden values are synced before form submit.
+    document.getElementById("role-form").addEventListener("submit", function () {
+        syncHidden();
+    });
+
+    // Initial sync in case the form is pre-populated (edit view).
+    syncHidden();
+})();
+</script>

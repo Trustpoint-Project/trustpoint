@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import psycopg
 from django.conf import settings
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.core.management import BaseCommand, call_command
 
 from management.models import AppVersion, KeyStorageConfig
@@ -93,7 +93,7 @@ class Command(BaseCommand):
         if not options.get('no_user'):
             self.stdout.write('Creating superuser...')
             call_command('createsuperuser', interactive=False, username='admin', email='')
-            user = User.objects.get(username='admin')
+            user = get_user_model().objects.get(username='admin')
             user.set_password('testing321')
             user.save()
             self.stdout.write('Superuser created:')
