@@ -17,10 +17,12 @@ from onboarding.models import (
     OnboardingPkiProtocol,
     OnboardingProtocol,
 )
+from pki.models import IssuedCredentialModel
 from pki.util.idevid import IDevIDAuthenticator
 from request.request_context import (
     BaseRequestContext,
     CmpBaseRequestContext,
+    CmpCertConfRequestContext,
     CmpCertificateRequestContext,
     CmpRevocationRequestContext,
 )
@@ -400,7 +402,7 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
             idevid_cert=cmp_signer_cert,
             intermediate_cas=intermediate_certs,
             domain=None if is_aoki else context.domain,
-            onboarding_protocol=OnboardingProtocol.CMP_IDEVID,
+            onboarding_protocol=OnboardingProtocol.AOKI if is_aoki else OnboardingProtocol.CMP_IDEVID,
             pki_protocol=OnboardingPkiProtocol.CMP,
         )
 
@@ -417,7 +419,9 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
         if not device.onboarding_config:
             self._raise_value_error('The corresponding device is not configured to use the onboarding mechanism.')
 
-        if device.onboarding_config.onboarding_protocol != OnboardingProtocol.CMP_IDEVID:
+        if device.onboarding_config.onboarding_protocol not in (
+            OnboardingProtocol.CMP_IDEVID, OnboardingProtocol.AOKI
+        ):
             self._raise_value_error('Wrong onboarding protocol.')
 
         if not device.onboarding_config.has_pki_protocol(OnboardingPkiProtocol.CMP):
@@ -664,6 +668,41 @@ class CmpSignatureBasedRevocationAuthentication(CmpAuthenticationBase):
         return context.device
 
 
+class CmpCertConfAuthentication(CmpAuthenticationBase):
+    """Resolves domain and device for CMP certConf messages."""
+
+    def authenticate(self, context: BaseRequestContext) -> None:
+        """Resolve domain and device from the cert_hash in the certConf body."""
+        if not isinstance(context, CmpCertConfRequestContext):
+            exc_msg = 'CmpCertConfAuthentication requires a CmpCertConfRequestContext.'
+            raise TypeError(exc_msg)
+
+        if not context.cert_hash:
+            self._raise_value_error('certConf message is missing certHash — cannot resolve domain.')
+
+        cert_hash_hex: str = context.cert_hash.hex().upper()
+        issued_cred = (
+            IssuedCredentialModel.objects.filter(
+                credential__certificate__sha256_fingerprint=cert_hash_hex
+            )
+            .select_related('domain', 'device')
+            .first()
+        )
+
+        if issued_cred is None:
+            self._raise_value_error(
+                f'certConf: no issued credential found for certHash {cert_hash_hex}.'
+            )
+
+        context.domain = issued_cred.domain
+        context.device = issued_cred.device
+        self.logger.info(
+            'certConf domain resolved from certHash %s → domain "%s"',
+            cert_hash_hex,
+            issued_cred.domain.unique_name if issued_cred.domain else 'unknown',
+        )
+
+
 class CmpAuthentication(CompositeAuthentication):
     """Composite authenticator specifically for CMP requests, combining various authentication methods."""
 
@@ -674,3 +713,4 @@ class CmpAuthentication(CompositeAuthentication):
         self.add(CmpSignatureBasedInitializationAuthentication())
         self.add(CmpSignatureBasedCertificationAuthentication())
         self.add(CmpSignatureBasedRevocationAuthentication())
+        self.add(CmpCertConfAuthentication())

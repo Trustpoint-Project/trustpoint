@@ -1,0 +1,53 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h1>{% trans 'Request Zero-Touch Credential via EST' %}</h1>
+            <p class="text-muted mb-0">
+                {% trans 'Select the authentication method for requesting a Zero-Touch Credential from a remote Certification Authority using EST.' %}
+            </p>
+        </div>
+
+        <div class="card-body py-3">
+            <div class="d-flex gap-3 mt-3 flex-wrap">
+
+                <div class="card d-flex flex-column" style="max-width: 400px; width: 100%;">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title"><strong>{% trans 'Basic authentication' %}</strong></h5>
+                        <hr class="hr-m">
+                        <p class="card-text flex-grow-1">
+                            {% trans 'Authenticate directly to the remote EST server using a username and password (HTTP Basic Auth) to retrieve the Zero-Touch Credential certificate.' %}
+                        </p>
+                        <a href="{% url 'devices:zero_touch_credentials-add-est-no-onboarding' %}"
+                           class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
+                            {% trans 'Basic authentication' %}
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card d-flex flex-column" style="max-width: 400px; width: 100%;">
+                    <div class="card-body d-flex flex-column">
+                        <h5 class="card-title"><strong>{% trans 'Mutual TLS authentication' %}</strong></h5>
+                        <hr class="hr-m">
+                        <p class="card-text flex-grow-1">
+                            {% trans 'Two-step enrollment: first request a client certificate from the remote EST server using username/password, then use that client certificate to request the Zero-Touch Credential.' %}
+                        </p>
+                        <a href="{% url 'devices:zero_touch_credentials-add-est-onboarding' %}"
+                           class="btn btn-primary mt-auto w-100" style="max-width: 250px; margin-left: auto; margin-right: auto;">
+                            {% trans 'Mutual TLS authentication' %}
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <div class="card-footer d-flex">
+            <div class="tp-card-btn-footer m-1">
+                <a href="{% url 'devices:zero_touch_credentials-add' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
+            </div>
+        </div>
+    </div>
+{% endblock content %}

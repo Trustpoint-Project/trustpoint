@@ -9,9 +9,9 @@ from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
 
 from devices.issuer import CredentialSaver
-from devices.models import DeviceModel, IssuedCredentialModel
 from management.models import TlsSettings
-from pki.models import CaModel
+from management.models.audit_log import AuditLog
+from pki.models import CaModel, IssuedCredentialModel
 from pki.models.credential import CredentialModel
 from pki.util.keys import is_supported_public_key
 from request.clients.est_client import EstClient
@@ -29,6 +29,7 @@ from .base import AbstractOperationProcessor
 if TYPE_CHECKING:
     from django.http import HttpRequest
 
+    from devices.models import DeviceModel
     from pki.models.domain import DomainModel
 
 
@@ -84,7 +85,11 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
         profile_display_name = (context.certificate_profile_model.display_name
                                 or context.certificate_profile_model.unique_name)
 
-        if context.certificate_profile_model.unique_name == 'domain_credential':
+        domain_cred_profile_name = 'domain_credential'
+        if context.domain is not None:
+            domain_cred_profile_name = context.domain.get_domain_credential_profile_name()
+
+        if context.certificate_profile_model.unique_name == domain_cred_profile_name:
             return (IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL, profile_display_name)
 
         return (IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, profile_display_name)
@@ -147,6 +152,20 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
                 cert_profile_disp_name,
             )
         context.issued_certificate = signed_cert
+        context.issued_certificate_chain = [
+            issuing_credential.get_certificate(),
+            *issuing_credential.get_certificate_chain(),
+        ]
+
+        domain_name = context.domain.unique_name if context.domain else 'unknown'
+        device_name = context.device.common_name if context.device else 'unknown'
+        protocol = context.protocol if hasattr(context, 'protocol') else 'unknown'
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CREDENTIAL_ISSUED,
+            target=context.device,
+            target_display=f'Device: {device_name} | Domain: {domain_name} | Protocol: {protocol}',
+            actor=context.actor,
+        )
 
     def process_operation(self, context: BaseRequestContext) -> None:  # noqa: C901, PLR0915 - Core pipeline orchestration requires multiple validation and conditional paths
         """Process the certificate issuance operation."""
@@ -349,6 +368,12 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         if issuing_ca.no_onboarding_config:
             est_password = issuing_ca.no_onboarding_config.est_password
 
+        tls_truststore = (
+            issuing_ca.no_onboarding_config.trust_store
+            if issuing_ca.no_onboarding_config and issuing_ca.no_onboarding_config.trust_store
+            else issuing_ca.chain_truststore
+        )
+
         return EstCertificateRequestContext(
             operation='simpleenroll',
             protocol='est',
@@ -362,7 +387,7 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
             est_server_path=issuing_ca.remote_path,
             est_username=issuing_ca.est_username,
             est_password=est_password,
-            est_server_truststore=issuing_ca.chain_truststore,
+            est_server_truststore=tls_truststore,
         )
 
     def _process_est_enrollment(self, context: BaseCertificateRequestContext) -> None:
@@ -416,22 +441,32 @@ class RemoteCaCertificateIssueProcessor(CertificateIssueProcessor, LoggerMixin):
         cn = common_names[0].value if common_names else '(no CN set)'
         common_name = cn.decode() if isinstance(cn, bytes) else cn
 
-        credential_type, cert_profile_disp_name = self._get_credential_type_for_template(context)
+        _, cert_profile_disp_name = self._get_credential_type_for_template(context)
         if context.device is None:
             exc_msg = 'Device is required for saving credentials.'
             raise ValueError(exc_msg)
 
         saver = CredentialSaver(device=context.device, domain=context.domain)
-        saver.save_keyless_credential(
+        saver.save_remote_keyless_credential(
             issued_cert,
             ca_chain,
             common_name,
-            credential_type,
             cert_profile_disp_name,
         )
 
         context.issued_certificate = issued_cert
+        context.issued_certificate_chain = ca_chain
         self.logger.info(
             'Successfully issued certificate via remote EST CA: %s',
             issuing_ca.unique_name
+        )
+
+        domain_name = context.domain.unique_name if context.domain else 'unknown'
+        device_name = context.device.common_name if context.device else 'unknown'
+        protocol = context.protocol if hasattr(context, 'protocol') else 'est'
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CREDENTIAL_ISSUED,
+            target=context.device,
+            target_display=f'Device: {device_name} | Domain: {domain_name} | Protocol: {protocol}',
+            actor=context.actor,
         )

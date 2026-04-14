@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, NoReturn, cast
+import logging
+from typing import TYPE_CHECKING, Any, ClassVar, NoReturn, cast
+from zoneinfo import available_timezones
 
 from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Fieldset, Layout
 from cryptography.x509 import Certificate
 from django import forms
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.utils.translation import gettext_lazy as _
@@ -19,7 +22,15 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from management.models import BackupOptions, KeyStorageConfig, NotificationConfig, PKCS11Token, SecurityConfig
+from management.models import (
+    BackupOptions,
+    InternationalizationConfig,
+    KeyStorageConfig,
+    LoggingConfig,
+    NotificationConfig,
+    PKCS11Token,
+    SecurityConfig,
+)
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from pki.models import CredentialModel
@@ -150,6 +161,7 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
             'enabled',
             'cert_expiry_warning_days',
             'issuing_ca_expiry_warning_days',
+            'crl_expiry_warning_days',
         ]
         widgets: ClassVar[dict[str, Any]] = {
             'enabled': forms.CheckboxInput(
@@ -159,6 +171,9 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
                 attrs={'class': 'form-control', 'min': '1', 'max': '365'}
             ),
             'issuing_ca_expiry_warning_days': forms.NumberInput(
+                attrs={'class': 'form-control', 'min': '1', 'max': '365'}
+            ),
+            'crl_expiry_warning_days': forms.NumberInput(
                 attrs={'class': 'form-control', 'min': '1', 'max': '365'}
             ),
         }
@@ -178,6 +193,7 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
                 _('Expiry Warning Thresholds'),
                 'cert_expiry_warning_days',
                 'issuing_ca_expiry_warning_days',
+                'crl_expiry_warning_days',
             ),
         )
 
@@ -210,6 +226,21 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
                 }
             )
         return ca_expiry
+
+    def clean_crl_expiry_warning_days(self) -> int | None:
+        """Validate crl_expiry_warning_days field."""
+        crl_expiry = self.cleaned_data.get('crl_expiry_warning_days')
+        if crl_expiry is not None and (
+            crl_expiry < self.MIN_EXPIRY_WARNING_DAYS or
+            crl_expiry > self.MAX_EXPIRY_WARNING_DAYS
+        ):
+            raise ValidationError(
+                _('Value must be between %(min)d and %(max)d days.') % {
+                    'min': self.MIN_EXPIRY_WARNING_DAYS,
+                    'max': self.MAX_EXPIRY_WARNING_DAYS,
+                }
+            )
+        return crl_expiry
 
 class BackupOptionsForm(forms.ModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""
@@ -763,7 +794,7 @@ class PKCS11ConfigForm(forms.Form):
         max_length=255,
         widget=forms.TextInput(attrs={'class': 'form-control'}),
         help_text=_('Path to the PKCS#11 module library file'),
-        initial='/usr/local/lib/libpkcs11-proxy.so',
+        initial='/usr/lib/libpkcs11-proxy.so',
         required=False
     )
 
@@ -788,7 +819,7 @@ class PKCS11ConfigForm(forms.Form):
         if hsm_type == 'softhsm':
             cleaned_data['label'] = 'Trustpoint-SoftHSM'
             cleaned_data['slot'] = 0
-            cleaned_data['module_path'] = '/usr/local/lib/libpkcs11-proxy.so'
+            cleaned_data['module_path'] = '/usr/lib/libpkcs11-proxy.so'
         elif hsm_type == 'physical':
             raise forms.ValidationError(_('Physical HSM is not yet supported.'))
 
@@ -830,3 +861,84 @@ class PKCS11ConfigForm(forms.Form):
                     setattr(token, field, value)
             token.save()
         return token
+
+class LoggingConfigForm(forms.Form):
+    """Form for managing logging configuration."""
+
+    LOG_LEVELS: ClassVar[list[tuple[str, str]]] = [
+        ('DEBUG', 'DEBUG'),
+        ('INFO', 'INFO'),
+        ('WARNING', 'WARNING'),
+        ('ERROR', 'ERROR'),
+        ('CRITICAL', 'CRITICAL'),
+    ]
+
+    loglevel = forms.ChoiceField(
+        label=_('Log Level'),
+        choices=LOG_LEVELS,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    def save(self) -> None:
+        """Save the logging configuration."""
+        level = self.cleaned_data['loglevel']
+        logger = logging.getLogger()
+        logger.setLevel(getattr(logging, level))
+        LoggingConfig.objects.update_or_create(
+            id=1,
+            defaults={'log_level': level}
+        )
+
+class InternationalizationConfigForm(forms.Form):
+    """Form for managing internationalization configuration."""
+
+    DATE_FORMATS: ClassVar[list[tuple[str, str]]] = [
+        ('0', 'dd/MM/yyyy HH:mm'),
+        ('1', 'MM/dd/yyyy HH:mm'),
+        ('2', 'dd MMM yyyy HH:mm'),
+        ('3', 'dd MMM yyyy hh:mm a'),
+        ('4', 'dd MMMM yyyy HH:mm:ss'),
+        ('5', 'dd MMMM yyyy hh:mm:ss a'),
+        ('6', 'yyyy-MM-dd HH:mm:ss'),
+        ('7', "yyyy-MM-dd'T'HH:mm:ss"),
+    ]
+
+    TIMEZONES: ClassVar[list[tuple[str, str]]] = sorted(
+        (tz, tz) for tz in available_timezones()
+    )
+
+    date_format = forms.ChoiceField(
+        label=_('Date Format'),
+        choices=DATE_FORMATS,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    language = forms.ChoiceField(
+        label=_('System Language'),
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    timezone = forms.ChoiceField(
+        label=_('Timezone'),
+        choices=TIMEZONES,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the form."""
+        super().__init__(*args, **kwargs)
+
+        language_field = self.fields['language']
+        if isinstance(language_field, forms.ChoiceField):
+            language_field.choices = settings.LANGUAGES
+
+    def save(self) -> None:
+        """Save the internationalization configuration."""
+        InternationalizationConfig.objects.update_or_create(
+            id=1,
+            defaults={
+                'date_format': self.cleaned_data['date_format'],
+                'language': self.cleaned_data['language'],
+                'timezone': self.cleaned_data['timezone'],
+            }
+        )

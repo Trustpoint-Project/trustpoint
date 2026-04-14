@@ -1,6 +1,7 @@
 """Test suite for TLS views."""
 from unittest.mock import Mock, patch
 
+from django.contrib.auth.models import AnonymousUser
 from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
 from django.test import RequestFactory, TestCase
@@ -417,7 +418,8 @@ class TlsAddFileImportPkcs12ViewTest(TestCase):
         self.factory = RequestFactory()
         self.view = TlsAddFileImportPkcs12View()
         self.view.request = self.factory.get('/tls/import/pkcs12/')
-        
+        self.view.request.user = AnonymousUser()
+
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
         setattr(self.view.request, 'session', 'session')
@@ -439,10 +441,11 @@ class TlsAddFileImportPkcs12ViewTest(TestCase):
     def test_form_valid_shows_success_message(self):
         """Test form_valid displays success message."""
         form = Mock(spec=TlsAddFileImportPkcs12Form)
-        
-        with patch.object(self.view, 'get_success_url', return_value='/tls/'):
+
+        with patch('management.views.tls.AuditLog.create_entry'), \
+             patch.object(self.view, 'get_success_url', return_value='/tls/'):
             self.view.form_valid(form)
-        
+
         messages_list = list(get_messages(self.view.request))
         self.assertTrue(any('success' in str(msg).lower() for msg in messages_list))
 
@@ -455,7 +458,8 @@ class TlsAddFileImportSeparateFilesViewTest(TestCase):
         self.factory = RequestFactory()
         self.view = TlsAddFileImportSeparateFilesView()
         self.view.request = self.factory.get('/tls/import/separate/')
-        
+        self.view.request.user = AnonymousUser()
+
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
         setattr(self.view.request, 'session', 'session')
@@ -477,10 +481,11 @@ class TlsAddFileImportSeparateFilesViewTest(TestCase):
     def test_form_valid_shows_success_message(self):
         """Test form_valid displays success message."""
         form = Mock(spec=TlsAddFileImportSeparateFilesForm)
-        
-        with patch.object(self.view, 'get_success_url', return_value='/tls/'):
+
+        with patch('management.views.tls.AuditLog.create_entry'), \
+             patch.object(self.view, 'get_success_url', return_value='/tls/'):
             self.view.form_valid(form)
-        
+
         messages_list = list(get_messages(self.view.request))
         self.assertTrue(any('success' in str(msg).lower() for msg in messages_list))
 

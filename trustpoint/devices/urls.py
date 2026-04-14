@@ -2,6 +2,7 @@
 
 from django.urls import path, re_path
 
+from devices.views import owner_credentials as ztc_views
 from help_pages import devices_help_views
 from trustpoint.page_context import (
     DEVICES_PAGE_DEVICES_SUBCATEGORY,
@@ -121,6 +122,19 @@ urlpatterns = [
         name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_no_onboarding_est_username_password_help',
     ),
     path(
+        'certificate-lifecycle-management/<int:pk>/no-onboarding/issue-application-credential/rest-username-password/',
+        devices_help_views.DeviceNoOnboardingRestUsernamePasswordHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_no_onboarding_rest_username_password_help',
+    ),
+    path(
+        (
+            'opc-ua-gds/certificate-lifecycle-management/<int:pk>'
+            '/no-onboarding/issue-application-credential/rest-username-password/'
+        ),
+        devices_help_views.OpcUaGdsNoOnboardingRestUsernamePasswordHelpView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_no_onboarding_rest_username_password_help',
+    ),
+    path(
         (
             'certificate-lifecycle-management/<int:pk>'
             '/no-onboarding/issue-application-credential/manual/select-certificate-profile'
@@ -182,6 +196,22 @@ urlpatterns = [
         name=(
             f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'
             '_certificate_lifecycle_management_issue_domain_credential_est_username_password'
+        ),
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/rest-username-password/',
+        devices_help_views.DeviceOnboardingDomainCredentialRestUsernamePasswordHelpView.as_view(),
+        name=(
+            f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}'
+            '_certificate_lifecycle_management_issue_domain_credential_rest_username_password'
+        ),
+    ),
+    path(
+        'opc-ua-gds/certificate-lifecycle-management/<int:pk>/onboarding/issue-domain-credential/rest-username-password/',
+        devices_help_views.OpcUaGdsOnboardingDomainCredentialRestUsernamePasswordHelpView.as_view(),
+        name=(
+            f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}'
+            '_certificate_lifecycle_management_issue_domain_credential_rest_username_password'
         ),
     ),
     path(
@@ -265,6 +295,19 @@ urlpatterns = [
         ),
         devices_help_views.OpcUaGdsApplicationCertificateWithEstDomainCredentialHelpView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_onboarding_clm_issue_application_credential_est_domain_credential',
+    ),
+    path(
+        'certificate-lifecycle-management/<int:pk>/onboarding/issue-application-credential/rest-domain-credential/',
+        devices_help_views.DeviceApplicationCertificateWithRestDomainCredentialHelpView.as_view(),
+        name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_onboarding_clm_issue_application_credential_rest_domain_credential',
+    ),
+    path(
+        (
+            'opc-ua-gds/certificate-lifecycle-management/<int:pk>/'
+            'onboarding/issue-application-credential/rest-domain-credential/'
+        ),
+        devices_help_views.OpcUaGdsApplicationCertificateWithRestDomainCredentialHelpView.as_view(),
+        name=f'{DEVICES_PAGE_OPC_UA_SUBCATEGORY}_onboarding_clm_issue_application_credential_rest_domain_credential',
     ),
     # Certificate Lifecycle Management - Downloads
     path(
@@ -400,5 +443,101 @@ urlpatterns = [
         r'^opc-ua-gds-push/delete-device(?:/(?P<pks>[0-9]+(?:/[0-9]+)*))?/?$',
         views.DeviceBulkDeleteView.as_view(),
         name=f'{DEVICES_PAGE_DEVICES_SUBCATEGORY}_device_delete',
+    ),
+
+    path(
+        'zero-touch-credentials/',
+        ztc_views.OwnerCredentialTableView.as_view(),
+        name='zero_touch_credentials',
+    ),
+    path(
+        'zero-touch-credentials/details/<int:pk>/',
+        ztc_views.OwnerCredentialDetailView.as_view(),
+        name='zero_touch_credentials-details',
+    ),
+    path(
+        'zero-touch-credentials/add/',
+        ztc_views.OwnerCredentialAddMethodSelectView.as_view(),
+        name='zero_touch_credentials-add',
+    ),
+    path(
+        'zero-touch-credentials/add/file-import/',
+        ztc_views.OwnerCredentialFileImportView.as_view(),
+        name='zero_touch_credentials-add-file_import',
+    ),
+    path(
+        'zero-touch-credentials/add/est/',
+        ztc_views.OwnerCredentialAddRequestEstMethodSelectView.as_view(),
+        name='zero_touch_credentials-add-est',
+    ),
+    path(
+        'zero-touch-credentials/add/est/no-onboarding/',
+        ztc_views.OwnerCredentialAddRequestEstNoOnboardingView.as_view(),
+        name='zero_touch_credentials-add-est-no-onboarding',
+    ),
+    path(
+        'zero-touch-credentials/add/est/onboarding/',
+        ztc_views.OwnerCredentialAddRequestEstOnboardingView.as_view(),
+        name='zero_touch_credentials-add-est-onboarding',
+    ),
+    path(
+        'zero-touch-credentials/truststore-association/<int:pk>/',
+        ztc_views.OwnerCredentialTruststoreAssociationView.as_view(),
+        name='zero_touch_credentials-truststore-association',
+    ),
+    path(
+        'zero-touch-credentials/clm/<int:pk>/',
+        ztc_views.OwnerCredentialCLMView.as_view(),
+        name='zero_touch_credentials-clm',
+    ),
+    path(
+        'zero-touch-credentials/define-cert-content-est/<int:pk>/',
+        ztc_views.OwnerCredentialDefineCertContentEstView.as_view(),
+        name='zero_touch_credentials-define-cert-content-est',
+    ),
+    path(
+        'zero-touch-credentials/request-cert-est/<int:pk>/',
+        ztc_views.OwnerCredentialRequestCertEstView.as_view(),
+        name='zero_touch_credentials-request-cert-est',
+    ),
+    path(
+        'zero-touch-credentials/define-cert-content-domain-credential-est/<int:pk>/',
+        ztc_views.OwnerCredentialDefineCertContentDomainCredentialEstView.as_view(),
+        name='zero_touch_credentials-define-cert-content-domain-credential-est',
+    ),
+    path(
+        'zero-touch-credentials/request-domain-credential-est/<int:pk>/',
+        ztc_views.OwnerCredentialRequestDomainCredentialEstView.as_view(),
+        name='zero_touch_credentials-request-domain-credential-est',
+    ),
+    path(
+        'zero-touch-credentials/<int:owner_pk>/issued-credential/<int:pk>/delete/',
+        ztc_views.IssuedCredentialDeleteView.as_view(),
+        name='zero_touch_credentials-issued-credential-delete',
+    ),
+    re_path(
+        r'^zero-touch-credentials/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
+        ztc_views.OwnerCredentialBulkDeleteConfirmView.as_view(),
+        name='zero_touch_credentials-delete_confirm',
+    ),
+    path(
+        'zero-touch-credentials/aoki-cmp-help/',
+        devices_help_views.AokiCmpHelpView.as_view(),
+        name='zero_touch_credentials-aoki_cmp_help',
+    ),
+    path(
+        'zero-touch-credentials/aoki-est-help/',
+        devices_help_views.AokiEstHelpView.as_view(),
+        name='zero_touch_credentials-aoki_est_help',
+    ),
+    path(
+        'zero-touch-credentials/aoki-setup-demo-env/',
+        devices_help_views.AokiSetupDemoEnvView.as_view(),
+        name='zero_touch_credentials-aoki_setup_demo_env',
+    ),
+    path(
+        'zero-touch-credentials/aoki-demo-download/<str:filename>',
+        devices_help_views.AokiDemoDownloadView.as_view(),
+        name='zero_touch_credentials-aoki_demo_download',
     ),
 ]

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from django.contrib import messages
 from django.core.management import call_command
@@ -14,25 +14,13 @@ from django.db.models.functions import TruncDate
 from django.http import HttpRequest, HttpResponseRedirect, JsonResponse
 from django.shortcuts import redirect
 from django.utils import dateparse, timezone
-from django.utils.html import format_html
-from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView, TemplateView
-from django.views.generic.detail import DetailView
-from django.views.generic.list import ListView
 from trustpoint_core.oid import NameOid
 
-from devices.models import DeviceModel, IssuedCredentialModel
-from management.models import NotificationModel, NotificationStatus
+from devices.models import DeviceModel
 from onboarding.models import OnboardingProtocol, OnboardingStatus
-from pki.models import CaModel, CertificateModel, CertificateProfileModel
+from pki.models import CaModel, CertificateModel, CertificateProfileModel, IssuedCredentialModel
 from trustpoint.logger import LoggerMixin
-from trustpoint.settings import UIConfig
-from trustpoint.views.base import SortableTableMixin
-
-from .filters import NotificationFilter
-
-if TYPE_CHECKING:
-    from django.utils.safestring import SafeString
 
 SUCCESS = 25
 ERROR = 40
@@ -45,52 +33,10 @@ class IndexView(RedirectView):
     pattern_name = 'home:dashboard'
 
 
-class DashboardView(SortableTableMixin[NotificationModel], ListView[NotificationModel]):
+class DashboardView(TemplateView):
     """Renders the dashboard page for authenticated users. Uses the 'home/dashboard.html' template."""
 
     template_name = 'home/dashboard.html'
-    model = NotificationModel
-    context_object_name = 'management'
-    default_sort_param = '-created_at'
-    paginate_by = UIConfig.notifications_paginate_by
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initializes the parent class with the given arguments and keyword arguments.
-
-        It initializes the last_week_dates objects with list of string of last week dates.
-
-        Args:
-            *args: Positional arguments passed to super().__init__.
-            **kwargs: Keyword arguments passed to super().__init__.
-
-        Returns:
-            It returns nothing.
-        """
-        super().__init__(*args, **kwargs)
-        self.last_week_dates = self.generate_last_week_dates()
-
-    @staticmethod
-    def generate_last_week_dates() -> list[str]:
-        """Generates date strings for last one week.
-
-        Returns:
-            A list of date strings from last one week.
-        """
-        end_date = timezone.now()
-        start_date = end_date - timedelta(days=6)
-        return [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
-
-    def get_queryset(self) -> Any:
-        """Returns a queryset of NotificationModel instances.
-
-        Returns:
-            A `QuerySet` containing filtered notifications.
-        """
-        all_notifications = NotificationModel.objects.all()
-
-        notification_filter = NotificationFilter(self.request.GET, queryset=all_notifications)
-        self.queryset = notification_filter.qs
-        return super().get_queryset()
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Fetch context data.
@@ -102,115 +48,8 @@ class DashboardView(SortableTableMixin[NotificationModel], ListView[Notification
             The context to render the page.
         """
         context = super().get_context_data(**kwargs)
-
-        for notification in context['management']:
-            notification.type_badge = self._render_notification_type(notification)
-            notification.created = self._render_created_at(notification)
-
-
         context['page_category'] = 'home'
         context['page_name'] = 'dashboard'
-        return context
-
-    @staticmethod
-    def _render_created_at(record: NotificationModel) -> SafeString:
-        """Render the created_at field with a badge if the status is 'New'.
-
-        Args:
-            record: The corresponding NotificationModel.
-
-        Returns:
-            The HTML of the created at display span.
-        """
-        created_at_display = record.created_at.strftime('%Y-%m-%d %H:%M:%S')
-
-        if record.statuses.filter(status=NotificationStatus.StatusChoices.NEW).exists():
-            # noinspection PyDeprecation
-            return format_html('{} <span class="badge bg-secondary">{}</span>', created_at_display, _('New'))
-
-        # noinspection PyDeprecation
-        return format_html('{}', created_at_display)
-
-    @staticmethod
-    def _render_notification_type(record: NotificationModel) -> SafeString:
-        """Render the notification type with a badge according to the type.
-
-        Args:
-            record: The corresponding NotificationModel.
-
-        Returns:
-            The HTML of the span with class badge to display notification type.
-        """
-        type_display = record.get_notification_type_display()
-
-        if record.notification_type == NotificationModel.NotificationTypes.CRITICAL:
-            badge_class = 'bg-danger'
-        elif record.notification_type == NotificationModel.NotificationTypes.WARNING:
-            badge_class = 'bg-warning'
-        elif record.notification_type == NotificationModel.NotificationTypes.INFO:
-            badge_class = 'bg-info'
-        else:
-            badge_class = 'bg-secondary'
-
-        # noinspection PyDeprecation
-        return format_html('<span class="badge {}">{}</span>', badge_class, type_display)
-
-
-class NotificationDetailsView(DetailView[NotificationModel]):
-    """Renders the notification details page for authenticated users."""
-
-    template_name = 'home/notification_details.html'
-    model = NotificationModel
-    context_object_name = 'notification'
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds information about the statuses of the Notification.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to render the page.
-        """
-        context = super().get_context_data(**kwargs)
-
-        # TODO(AlexHx8472): This should be generated automatically by utilizing a migration # noqa: FIX002
-        new_status, _created = NotificationStatus.objects.get_or_create(status='NEW')
-        solved_status, _created = NotificationStatus.objects.get_or_create(status='SOLVED')
-
-        if new_status and new_status in self.object.statuses.all():
-            self.object.statuses.remove(new_status)
-
-        context['is_solved'] = solved_status in self.object.statuses.all()
-        context['notification_statuses'] = self.object.statuses.values_list('status', flat=True)
-        return context
-
-
-class NotificationMarkSolvedView(DetailView[NotificationModel]):
-    """Mark notification as solved when viewed in the notification details page."""
-
-    template_name = 'home/notification_details.html'
-    model = NotificationModel
-    context_object_name = 'notification'
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Adds information about the solved status of the notification.
-
-        Args:
-            **kwargs: Keyword arguments passed to super().get_context_data.
-
-        Returns:
-            The context to render the page.
-        """
-        context = super().get_context_data(**kwargs)
-
-        # TODO(AlexHx8472): This should be generated automatically by utilizing a migration # noqa: FIX002
-        solved_status, _ = NotificationStatus.objects.get_or_create(status='SOLVED')
-
-        if solved_status:
-            self.object.statuses.add(solved_status)
-
-        context['is_solved'] = solved_status in self.object.statuses.all()
         return context
 
 

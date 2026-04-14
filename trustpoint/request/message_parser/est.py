@@ -83,29 +83,42 @@ class EstPkiMessageParsing(ParsingComponent, LoggerMixin):
 
         try:
             body_size = len(context.raw_message.body)
+            body = context.raw_message.body
+
+            content_transfer_encoding = context.raw_message.headers.get(
+                'Content-Transfer-Encoding', ''
+            ).strip().lower()
+            if content_transfer_encoding == 'base64':
+                body = base64.b64decode(body)
+                self.logger.debug(
+                    'EST PKI message parsing: Content-Transfer-Encoding: base64 decoded body '
+                    'from %(body_size)s to %(decoded_size)s bytes',
+                    extra={'body_size': body_size, 'decoded_size': len(body)},
+                )
 
             # Our response format is based on the incoming CSR format for maximum compatibility
             # For DER-encoded CSRs (optional Base64), we respond with PKCS#7 DER (CMS, RFC 7030-compliant)
             # For PEM-encoded CSRs, we respond with the PEM-encoded certificate
-            if b'CERTIFICATE REQUEST-----' in context.raw_message.body:
+            if b'CERTIFICATE REQUEST-----' in body:
                 est_encoding = 'pem'
-                csr = x509.load_pem_x509_csr(context.raw_message.body)
+                csr = x509.load_pem_x509_csr(body)
                 self.logger.debug('EST PKI message parsing: Detected PEM format, body size: %(body_size)s bytes',
                                    extra={'body_size': body_size})
-            elif re.match(rb'^[A-Za-z0-9+/=\n]+$', context.raw_message.body):
-                est_encoding = 'pkcs7' #'base64_der'
-                der_data = base64.b64decode(context.raw_message.body)
+            elif body.startswith(b'\x30'):  # ASN.1 DER starts with 0x30
+                est_encoding = 'pkcs7'
+                csr = x509.load_der_x509_csr(body)
+                self.logger.debug('EST PKI message parsing: Detected DER format, body size: %(body_size)s bytes',
+                                   extra={'body_size': body_size})
+            elif re.match(rb'^[A-Za-z0-9+/=\n\r]+$', body):
+                # Body is still base64 (no Content-Transfer-Encoding header was set)
+                est_encoding = 'pkcs7'
+                der_data = base64.b64decode(body)
                 csr = x509.load_der_x509_csr(der_data)
                 self.logger.debug(
                     'EST PKI message parsing: Detected Base64 DER format, '
                     'body size: %(body_size)s bytes, decoded: %(decoded_size)s bytes',
                     extra={'body_size': body_size, 'decoded_size': len(der_data)}
                 )
-            elif context.raw_message.body.startswith(b'\x30'):  # ASN.1 DER starts with 0x30
-                est_encoding = 'pkcs7' #'der'
-                csr = x509.load_der_x509_csr(context.raw_message.body)
-                self.logger.debug('EST PKI message parsing: Detected DER format, body size: %(body_size)s bytes',
-                                   extra={'body_size': body_size})
             else:
                 self.logger.warning(
                     'EST PKI message parsing failed: Unsupported CSR format, '

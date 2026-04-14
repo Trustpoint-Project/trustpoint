@@ -74,7 +74,7 @@ class Command(BaseCommand):
             if options.get('initial_migrations'):
                 migration_name = 'initial'
             self.stdout.write('Running makemigrations...')
-            call_command('makemigrations', name=migration_name)
+            call_command('makemigrations', '--no-header', name=migration_name)
         self.stdout.write('Running migrate...')
         call_command('migrate')
 
@@ -114,7 +114,7 @@ class Command(BaseCommand):
                 for file in files:
                     if (file.endswith('.py') and file != '__init__.py') or file.endswith('.pyc'):
                         if (keep_established and
-                            (('_tp_v' in file and current_version_py_id not in file) or '0001_initial' in file)
+                            (('_tp_v' in file and current_version_py_id not in file) or 'initial' in file)
                         ):
                             continue
                         try:

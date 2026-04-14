@@ -245,6 +245,7 @@ class TestEstCertificateMessageResponder:
         context.issued_certificate = cert
         context.est_encoding = 'pkcs7'
         context.device = device
+        context.issued_certificate_chain = None
 
         EstCertificateMessageResponder.build_response(context)
 

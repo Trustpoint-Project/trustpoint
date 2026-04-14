@@ -17,8 +17,8 @@ if TYPE_CHECKING:
     from trustpoint_core.serializer import PrivateKeySerializer
 
     from cmp.util import PKIFailureInfo
-    from devices.models import DeviceModel, IssuedCredentialModel
-    from pki.models import CertificateProfileModel, CredentialModel, DomainModel, TruststoreModel
+    from devices.models import DeviceModel
+    from pki.models import CertificateProfileModel, CredentialModel, DomainModel, IssuedCredentialModel, TruststoreModel
     from workflows.events import Event
     from workflows.models import EnrollmentRequest
 
@@ -44,6 +44,10 @@ class BaseRequestContext(LoggerMixin):
     client_certificate: x509.Certificate | None = None
     client_intermediate_certificate: list[x509.Certificate] | None = None
 
+    # The authenticated user who triggered this request, if applicable (e.g. manual web UI issuance).
+    # None for machine-to-machine protocol flows (CMP, EST).
+    actor: Any | None = None
+
     # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
     event: Event | None = None
 
@@ -67,9 +71,13 @@ class BaseRequestContext(LoggerMixin):
         if not isinstance(self, HttpBaseRequestContext):
             exc_msg = 'to_http_response can only be called on HttpBaseRequestContext instances.'
             raise TypeError(exc_msg)
-        return HttpResponse(content=self.http_response_content or b'',
-                            status=self.http_response_status or 500,
-                            content_type=self.http_response_content_type or 'text/plain')
+        response = HttpResponse(content=self.http_response_content or b'',
+                                status=self.http_response_status or 500,
+                                content_type=self.http_response_content_type or 'text/plain')
+        if self.http_response_headers:
+            for header_name, header_value in self.http_response_headers.items():
+                response[header_name] = header_value
+        return response
 
     def narrow(self, child_cls: type[RCT], **extra: Any) -> RCT:
         """Create a new request context of a more specific subclass, copying existing attributes."""
@@ -99,6 +107,7 @@ class BaseCertificateRequestContext(BaseRequestContext):
     cert_profile_str: str | None = None
     cert_requested_profile_validated: CertificateBuilder | None = None
     issued_certificate: x509.Certificate | None = None
+    issued_certificate_chain: list[x509.Certificate] | None = None
 
     certificate_profile_model: CertificateProfileModel | None = None
 
@@ -134,7 +143,7 @@ class HttpBaseRequestContext(BaseRequestContext):
     raw_message: HttpRequest | None = None
 
     http_response_status: int | None = None
-    # consider adding http_response_headers: dict[str, str] | None = None
+    http_response_headers: dict[str, str] | None = None
     http_response_content: bytes | str | None = None
     http_response_content_type: str | None = None
 
@@ -158,6 +167,10 @@ class EstBaseRequestContext(HttpBaseRequestContext):
     est_server_path: str | None = None
     est_server_truststore: TruststoreModel | None = None
 
+    # Client certificate (mTLS) authentication — used instead of username/password
+    est_client_cert_pem: str | None = None
+    est_client_key_pem: str | None = None
+
 @dataclass(kw_only=True)
 class CmpBaseRequestContext(HttpBaseRequestContext):
     """Shared context for all CMP requests.
@@ -170,6 +183,7 @@ class CmpBaseRequestContext(HttpBaseRequestContext):
     cmp_shared_secret: str | None = None
     error_code: PKIFailureInfo | None = None
     error_details: str | None = None
+    implicit_confirm: bool = False
 
     # Client-side fields
     cmp_server_host: str | None = None
@@ -181,6 +195,14 @@ class CmpBaseRequestContext(HttpBaseRequestContext):
 @dataclass(kw_only=True)
 class RestBaseRequestContext(HttpBaseRequestContext):
     """Shared context for all REST API requests."""
+
+    rest_username: str | None = None
+    rest_password: str | None = None
+
+
+@dataclass(kw_only=True)
+class RestCertificateRequestContext(RestBaseRequestContext, BaseCertificateRequestContext):
+    """REST context for certificate enrollment requests."""
 
 
 @dataclass(kw_only=True)
@@ -204,6 +226,33 @@ class CmpCertificateRequestContext(CmpBaseRequestContext, BaseCertificateRequest
 @dataclass(kw_only=True)
 class CmpRevocationRequestContext(CmpBaseRequestContext, BaseRevocationRequestContext):
     """CMP context for certificate revocation requests (RR)."""
+
+@dataclass(kw_only=True)
+class CmpCertConfRequestContext(CmpBaseRequestContext, BaseRevocationRequestContext):
+    """CMP context for certificate confirmation requests (certConf).
+
+    Holds the parsed certHash, certReqId, and optional statusInfo from the
+    certConf body as defined in RFC 4210 Section 5.3.18 and profiled by
+    RFC 9483 Section 4.1.1.
+
+    Also inherits :class:`BaseRevocationRequestContext` so that the
+    ``credential_to_revoke`` field can be populated by the authorization
+    component when the EE signals rejection (cert_conf_status == 2), enabling
+    the operation processor to revoke the certificate via the standard
+    revocation pipeline.
+    """
+
+    cert_hash: bytes | None = None
+    """DER-encoded hash over the confirmed certificate (certHash field)."""
+
+    cert_req_id: int | None = None
+    """certReqId from the CertStatus structure (MUST be 0 per RFC 9483)."""
+
+    cert_conf_status: int | None = None
+    """PKIStatus from statusInfo, if present. 0=accepted, 2=rejection."""
+
+    cert_conf_status_string: str | None = None
+    """Human-readable statusString from statusInfo, if present."""
 
 
 @dataclass(kw_only=True)

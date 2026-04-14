@@ -35,7 +35,7 @@ plantuml = f'java -jar {PLANTUML_PATH}'
 project = 'Trustpoint'
 copyright = '2026, Trustpoint Project'  # noqa: A001
 author = 'Trustpoint Project'
-release = '0.5.0.dev1'  # Project version
+release = '0.6.0.dev1'  # Project version
 
 # -- General configuration --------------------------------------------------
 extensions = [
@@ -68,6 +68,8 @@ if BUILD_AUTODOCS:
         '*/__pycache__/*',
         '*/tests/*',
         '*/features/*',
+        '*/.venv/*',
+        '*/venv/*',
     ]  # Exclude features, tests, and related folders from AutoAPI
 
     # AutoAPI performance optimizations
@@ -84,6 +86,9 @@ templates_path = ['_templates']  # Custom templates directory
 exclude_patterns = [
     '_build',
     '_templates',
+    '.venv',
+    '../.venv',
+    '../../trustpoint/.venv'
 ]
 
 # -- HTML output options ----------------------------------------------------

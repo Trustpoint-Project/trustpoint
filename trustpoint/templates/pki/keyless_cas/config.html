@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load crispy_forms_filters %}
+{% load internationalization_tags %}
 {% block content %}
     <div class="card tp-card-centered">
         <div class="card-header">
@@ -18,11 +19,11 @@
                     </div>
                     <div>
                         <div>{% trans 'Updated' %}</div>
-                        <div>{{ keyless_ca.updated_at }}</div>
+                        <div>{{ keyless_ca.updated_at|local_datetime }}</div>
                     </div>
                     <div>
                         <div>{% trans 'Created' %}</div>
-                        <div>{{ keyless_ca.created_at }}</div>
+                        <div>{{ keyless_ca.created_at|local_datetime }}</div>
                     </div>
                     <div>
                         <div>{% trans 'Unique Name' %}</div>
@@ -62,11 +63,11 @@
                         </div>
                         <div>
                             <div>{% trans 'Not valid before' %}</div>
-                            <div>{{ keyless_ca_certificate.not_valid_before }}</div>
+                            <div>{{ keyless_ca_certificate.not_valid_before|local_datetime }}</div>
                         </div>
                         <div>
                             <div>{% trans 'Not valid after' %}</div>
-                            <div>{{ keyless_ca_certificate.not_valid_after }}</div>
+                            <div>{{ keyless_ca_certificate.not_valid_after|local_datetime }}</div>
                         </div>
                         <div>
                             <div>{% trans 'Public Key Algorithm OID' %}</div>
@@ -103,7 +104,7 @@
                     {% if keyless_ca.last_crl_issued_at %}
                         <div>
                             <div>{% trans 'Last CRL issued' %}</div>
-                            <div>{{ keyless_ca.last_crl_issued_at }} (#{{ keyless_ca.crl_number }})</div>
+                            <div>{{ keyless_ca.last_crl_issued_at|local_datetime }} (#{{ keyless_ca.crl_number }})</div>
                         </div>
                         <div>
                             <div>{% trans 'CRL Management' %}</div>

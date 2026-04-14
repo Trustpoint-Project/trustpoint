@@ -11,9 +11,9 @@
 }
 
 .card-count-expiring-container{
-    background-color: #DC3545;
-    color: #ffffff;
-    border: 0;
+    background: linear-gradient(135deg, #FFF5F5 0%, #FFE8E8 100%);
+    color: #1a1a1a;
+    border: 1px solid #FFB3B3;
     font-weight: 450;
 }
 
@@ -64,6 +64,18 @@
 .bar-chart-canvas {
   max-width: 100%;
   height: 100% !important;
+}
+
+[data-bs-theme="light"] {
+  --chart-grid-color: rgba(20, 20, 20, 0.3);
+  --chart-border-color: #2d2d2d;
+  --chart-text-color: #2d2d2d;
+}
+
+[data-bs-theme="dark"] {
+  --chart-grid-color: rgba(222, 226, 230, 0.2);
+  --chart-border-color: #dee2e6;
+  --chart-text-color: #dee2e6;
 }
 
 .bar-chart-legend {

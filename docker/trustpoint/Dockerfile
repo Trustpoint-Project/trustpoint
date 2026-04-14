@@ -1,5 +1,5 @@
-FROM python:3.14-slim-bookworm
-COPY --from=ghcr.io/astral-sh/uv:0.10.7 /uv /uvx /bin/
+FROM python:3.14-slim-trixie
+COPY --from=ghcr.io/astral-sh/uv:0.11.6 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -28,25 +28,17 @@ RUN apt-get update && \
         cmake \
         libssl-dev \
         libseccomp-dev \
+        libpkcs11-proxy0 \
         curl \
         ca-certificates \
         gnupg
 
 # Install postgres v18 client
 RUN curl -fSsL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg && \
-    echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] http://apt.postgresql.org/pub/repos/apt/ bookworm-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
+    echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] http://apt.postgresql.org/pub/repos/apt/ trixie-pgdg main" > /etc/apt/sources.list.d/pgdg.list && \
     apt-get update && \
     apt-get install -y postgresql-client-18 && \
     rm -rf /var/lib/apt/lists/*
-
-# Clone and build pkcs11-proxy
-RUN git clone https://github.com/SUNET/pkcs11-proxy.git /tmp/pkcs11-proxy && \
-    cd /tmp/pkcs11-proxy && \
-    mkdir build && cd build && \
-    cmake .. && \
-    make && \
-    make install && \
-    rm -rf /tmp/pkcs11-proxy
 
 # Set locale Settings
 RUN sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen && \
@@ -75,16 +67,18 @@ RUN if [ "${BRANCH}" != "" ]; then \
     chown www-data:www-data /var/www/html/trustpoint/
 
 USER www-data
-RUN uv sync --python-preference only-system
+RUN uv sync --group docs --python-preference only-system
 RUN uv pip install gunicorn[gevent]
 USER root
 
 
-
 RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
-             /var/www/html/trustpoint/trustpoint/collected_static && \
+             /var/www/html/trustpoint/trustpoint/collected_static \
+             /var/www/html/trustpoint/docker/trustpoint/nginx/tls && \
     chown -R www-data:www-data /var/www/html/trustpoint/trustpoint/ && \
-    chmod -R 755 /var/www/html/trustpoint/trustpoint/
+    chown -R www-data:www-data /var/www/html/trustpoint/docker/trustpoint/nginx/tls && \
+    chmod -R 755 /var/www/html/trustpoint/trustpoint/ && \
+    chmod -R 755 /var/www/html/trustpoint/docker/trustpoint/nginx/tls
 
 # Sets DEBUG = False and DOCKER_CONTAINER = True in the Django settings
 RUN sed -i '/DEBUG = True/s/True/False/' trustpoint/trustpoint/settings.py && \

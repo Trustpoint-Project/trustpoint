@@ -52,7 +52,7 @@ class PKCS11Token(models.Model, LoggerMixin):
     )
     module_path = models.CharField(
         max_length=255,
-        default='/usr/local/lib/libpkcs11-proxy.so',
+        default='/usr/lib/libpkcs11-proxy.so',
         help_text=_('Path to PKCS#11 module library'),
         verbose_name=_('Module Path')
     )
@@ -291,14 +291,10 @@ class PKCS11Token(models.Model, LoggerMixin):
             try:
                 session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
             except pkcs11.UserAlreadyLoggedIn:
-                # If user is already logged in, logout and try again
-                self.logger.debug('User already logged in to token %s, logging out and retrying', self.label)
-                try:
-                    pkcs11_token.logout()
-                except Exception as logout_error:  # noqa: BLE001
-                    self.logger.warning('Failed to logout before reopening session: %s', logout_error)
-                # Retry opening the session
-                session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
+                # If user is already logged in, reuse the existing session without logging out
+                # This avoids unnecessary session disruption
+                self.logger.debug('User already logged in to token %s, reusing existing session', self.label)
+                session = pkcs11_token.open(rw=True)
 
             wrap_key = session.get_key(
                 key_type=pkcs11.KeyType.AES,
@@ -549,7 +545,12 @@ class PKCS11Token(models.Model, LoggerMixin):
         """Open a PKCS#11 session and retrieve the AES wrapping key for this token."""
         pkcs11_lib = pkcs11.lib(self.module_path)
         pkcs11_token = pkcs11_lib.get_token(token_label=self.label)
-        session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
+
+        try:
+            session = pkcs11_token.open(user_pin=self.get_pin(), rw=True)
+        except pkcs11.UserAlreadyLoggedIn:
+            session = pkcs11_token.open(rw=True)
+
         wrap_key = session.get_key(
             key_type=pkcs11.KeyType.AES,
             label=self.KEK_ENCRYPTION_KEY_LABEL

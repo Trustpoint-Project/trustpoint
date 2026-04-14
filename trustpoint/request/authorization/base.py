@@ -10,8 +10,8 @@ from cryptography.x509.base import CertificateBuilder
 from trustpoint_core.oid import HashAlgorithm, NamedCurve
 
 from aoki.views import AokiServiceMixin
-from devices.models import IssuedCredentialModel
 from management.models import SecurityConfig
+from pki.models import IssuedCredentialModel
 from request.profile_validator import ProfileValidator
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin
@@ -66,14 +66,19 @@ class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
 
         requested_profile = context.cert_profile_str
 
-        if not requested_profile:
-            error_message = 'Certificate profile is missing in the context. Authorization denied.'
-            self.logger.warning('Certificate profile authorization failed: Profile information is missing')
-            raise ValueError(error_message)
-
         if not context.domain:
             error_message = 'Domain information is missing in the context. Authorization denied.'
             self.logger.warning('Certificate profile authorization failed: Domain information is missing')
+            raise ValueError(error_message)
+
+        if not requested_profile and context.domain_str == '.aoki':
+            # For AOKI requests, if no profile is specified, default to the domain credential profile
+            requested_profile = context.domain.get_domain_credential_profile_name()
+            context.cert_profile_str = requested_profile
+
+        if not requested_profile:
+            error_message = 'Certificate profile is missing in the context. Authorization denied.'
+            self.logger.warning('Certificate profile authorization failed: Profile information is missing')
             raise ValueError(error_message)
 
         try:
@@ -136,7 +141,7 @@ class DomainScopeValidation(AuthorizationComponent, LoggerMixin):
 class OnboardingDomainCredentialAuthorization(AuthorizationComponent, LoggerMixin):
     """Ensures that a device requiring onboarding has a valid domain credential first."""
 
-    _DOMAIN_CREDENTIAL_PROFILES: frozenset[str] = frozenset({
+    _DEFAULT_DOMAIN_CREDENTIAL_PROFILES: frozenset[str] = frozenset({
         'domain_credential',
     })
 
@@ -153,7 +158,11 @@ class OnboardingDomainCredentialAuthorization(AuthorizationComponent, LoggerMixi
         if profile_model is None:
             return
 
-        if profile_model.unique_name in self._DOMAIN_CREDENTIAL_PROFILES:
+        domain_cred_profile_names = set(self._DEFAULT_DOMAIN_CREDENTIAL_PROFILES)
+        if context.domain is not None:
+            domain_cred_profile_names.add(context.domain.get_domain_credential_profile_name())
+
+        if profile_model.unique_name in domain_cred_profile_names:
             return
 
         domain_creds = IssuedCredentialModel.objects.filter(
@@ -262,7 +271,14 @@ class SecurityConfigAuthorization(AuthorizationComponent, LoggerMixin):
 
         self._check_key_constraints(csr, cfg)
         self._check_signature_algorithm(csr, cfg)
-        self._check_ca_issuance(csr, cfg)
+
+        profile_validated = context.cert_requested_profile_validated
+        ca_check_target: _CertRequest | None = (
+            profile_validated
+            if isinstance(profile_validated, (x509.CertificateSigningRequest, CertificateBuilder))
+            else csr
+        )
+        self._check_ca_issuance(ca_check_target, cfg)
 
     @staticmethod
     def _get_public_key(

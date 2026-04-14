@@ -1,6 +1,7 @@
 """Tests for device views."""
-
+from http import HTTPStatus
 from typing import Any
+from unittest.mock import patch, Mock
 
 import pytest
 from django.test import Client
@@ -8,6 +9,7 @@ from django.urls import reverse
 
 from devices.models import DeviceModel
 from onboarding.models import OnboardingProtocol
+from pki.models import CertificateModel
 
 
 @pytest.mark.django_db
@@ -537,3 +539,41 @@ class TestOpcUaGdsPushCertificateLifecycleManagementSummaryView:
         assert response.status_code == 200
         assert 'devices/credentials/certificate_lifecycle_management.html' in [t.name for t in response.templates]
         assert response.context['object'] == device
+
+
+@pytest.mark.django_db
+class TestIssuedCredentialRevocationView:
+    """Test the revocation error messages if tried to revoke revoked cert."""
+
+    def test_revoke_already_revoked_certificate_coverage(
+            self,
+            admin_client: Client,
+            device_instance: dict[str, Any]
+    ) -> None:
+        """Mocks the certificate status to REVOKED to hit the error message."""
+        device = device_instance['device']
+
+        url = reverse('devices:devices_credential_revoke', kwargs={'pk': 1})
+
+
+        with patch('devices.views.revoke.AbstractIssuedCredentialRevocationView.get_object') as mock_get:
+            mock_issued_cred = Mock()
+            mock_cert = Mock()
+
+
+            mock_cert.certificate_status = CertificateModel.CertificateStatus.REVOKED
+            mock_issued_cred.credential.certificate_or_error = mock_cert
+            mock_issued_cred.device = device
+            mock_issued_cred.id = 1
+
+            mock_get.return_value = mock_issued_cred
+
+            response = admin_client.post(url, data={'revocation_reason': 'unspecified'}, follow=True)
+
+
+
+        assert response.status_code == HTTPStatus.OK
+        messages_list = [str(m) for m in list(response.context['messages'])]
+
+
+        assert any('already revoked' in m for m in messages_list)

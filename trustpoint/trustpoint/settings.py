@@ -78,6 +78,7 @@ PUBLIC_PATHS = [
     '/setup-wizard',
     '/.well-known/cmp',
     '/.well-known/est',
+    '/rest',
     '/aoki',
     '/crl',
 ]
@@ -262,6 +263,7 @@ INSTALLED_APPS = [
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
+    'rest_pki.apps.RestPkiConfig',
     'signer.apps.SignerConfig',
     'aoki.apps.AokiConfig',
     'management.apps.ManagementConfig',
@@ -312,6 +314,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'trustpoint.settings.app_version',
+                'management.context_processors.notification_alerts',
             ],
         },
     },
@@ -415,7 +418,7 @@ class UIConfig:
     """User interface configuration defaults."""
 
     paginate_by: ClassVar[int] = 50
-    notifications_paginate_by: ClassVar[int] = 5
+    notifications_paginate_by: ClassVar[int] = 50
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [

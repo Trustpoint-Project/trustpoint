@@ -102,7 +102,7 @@ class TestAokiServiceMixin:
         with patch.object(AokiServiceMixin, 'get_idevid_owner_san_uri', return_value='dev-owner:test.123.abc'):
             with patch.object(IDevIDReferenceModel.objects, 'filter') as mock_filter:
                 mock_ref = Mock()
-                mock_ref.dev_owner_id.credential = mock_owner_credential
+                mock_ref.dev_owner_id.dev_owner_id_credential.credential = mock_owner_credential
                 mock_filter.return_value.first.return_value = mock_ref
                 
                 result = AokiServiceMixin.get_owner_credential(mock_idevid_cert)

@@ -172,7 +172,7 @@ class SignerAddFileImportPkcs12Form(LoggerMixin, forms.Form):
             self._raise_validation_error('Unique name is already taken. Choose another one.')
 
         try:
-            SignerModel.create_new_signer(
+            self.created_signer = SignerModel.create_new_signer(
                 unique_name=unique_name,
                 credential_serializer=credential_serializer,
             )
@@ -363,7 +363,7 @@ class SignerAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         if SignerModel.objects.filter(unique_name=unique_name).exists():
             self._raise_validation_error('Unique name is already taken. Choose another one.')
 
-        SignerModel.create_new_signer(
+        self.created_signer = SignerModel.create_new_signer(
             unique_name=unique_name,
             credential_serializer=credential_serializer,
         )

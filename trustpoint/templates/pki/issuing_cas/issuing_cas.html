@@ -1,5 +1,6 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
+{% load internationalization_tags %}
 
 {% block content %}
 
@@ -50,12 +51,12 @@
                         <td>{{ ca.common_name }}</td>
                         <td>
                             {% if ca.is_issuing_ca %}
-                                {{ ca.credential.certificate.not_valid_after }}
+                                {{ ca.credential.certificate.not_valid_after|local_datetime }}
                             {% else %}
-                                {{ ca.certificate.not_valid_after }}
+                                {{ ca.certificate.not_valid_after|local_datetime }}
                             {% endif %}
                         </td>                        <td>{{ ca.signature_suite }}</td>
-                        <td>{{ ca.created_at }}</td>
+                        <td>{{ ca.created_at|local_datetime }}</td>
                         <td><a href="config/{{ ca.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Configure' %}</a></td>
                     </tr>
                 {% empty %}
