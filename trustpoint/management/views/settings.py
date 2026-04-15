@@ -3,20 +3,19 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
 from django.core.management import call_command
+from django.db import connection
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
-from django.utils import translation
+from django.utils import timezone, translation
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic import TemplateView
 from django.views.generic.edit import FormView
-from django.utils import timezone
-from django.db import connection
-from pathlib import Path
 
 from management.forms import (
     InternationalizationConfigForm,
@@ -33,11 +32,16 @@ from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
 
 if TYPE_CHECKING:
-    from django.http import HttpRequest, HttpResponse
-#hier
-APP_STARTED_AT = timezone.now()
+    from datetime import datetime
 
-def format_uptime(started_at):
+    from django.http import HttpRequest, HttpResponse
+
+APP_STARTED_AT = timezone.now()
+BYTE_UNIT = 1024
+MIN_PARTS_COUNT = 2
+
+
+def format_uptime(started_at: datetime) -> str:
     """Return a human-readable uptime string."""
     delta = timezone.now() - started_at
     total_seconds = int(delta.total_seconds())
@@ -52,19 +56,21 @@ def format_uptime(started_at):
         return f'{hours}h {minutes}m {seconds}s'
     return f'{minutes}m {seconds}s'
 
+
 def format_bytes(size: int) -> str:
     """Convert bytes into a human-readable string."""
     units = ['B', 'KB', 'MB', 'GB', 'TB']
     value = float(size)
 
     for unit in units:
-        if value < 1024 or unit == units[-1]:
+        if value < BYTE_UNIT or unit == units[-1]:
             if unit == 'B':
                 return f'{int(value)} {unit}'
             return f'{value:.2f} {unit}'
-        value /= 1024
+        value /= BYTE_UNIT
 
     return f'{size} B'
+
 
 def get_database_size() -> str:
     """Return the size of the current PostgreSQL database."""
@@ -75,6 +81,7 @@ def get_database_size() -> str:
     size_bytes = row[0] if row else 0
     return format_bytes(size_bytes)
 
+
 def read_int_file(path: str) -> int:
     """Read an integer value from a file."""
     return int(Path(path).read_text(encoding='utf-8').strip())
@@ -83,21 +90,6 @@ def read_int_file(path: str) -> int:
 def read_text_file(path: str) -> str:
     """Read a text value from a file."""
     return Path(path).read_text(encoding='utf-8').strip()
-
-
-def format_bytes(size: int) -> str:
-    """Convert bytes into a human-readable string."""
-    units = ['B', 'KB', 'MB', 'GB', 'TB']
-    value = float(size)
-
-    for unit in units:
-        if value < 1024 or unit == units[-1]:
-            if unit == 'B':
-                return f'{int(value)} {unit}'
-            return f'{value:.2f} {unit}'
-        value /= 1024
-
-    return f'{size} B'
 
 
 def get_memory_metrics() -> dict[str, str | bool]:
@@ -122,7 +114,7 @@ def get_memory_metrics() -> dict[str, str | bool]:
     stat_values: dict[str, int] = {}
     for line in stat_content.splitlines():
         parts = line.split()
-        if len(parts) >= 2:
+        if len(parts) >= MIN_PARTS_COUNT:
             key = parts[0]
             value = parts[1]
             if value.isdigit():
@@ -163,6 +155,7 @@ def get_memory_metrics() -> dict[str, str | bool]:
         'memory_kernel': kernel_display,
     }
 
+
 def get_disk_metrics() -> dict[str, str | bool]:
     """Return disk I/O metrics for container environments."""
     try:
@@ -194,6 +187,7 @@ def get_disk_metrics() -> dict[str, str | bool]:
         'disk_write': format_bytes(total_write_bytes),
     }
 
+
 def get_network_metrics() -> dict[str, str | bool]:
     """Return network I/O metrics for container environments."""
     try:
@@ -206,10 +200,10 @@ def get_network_metrics() -> dict[str, str | bool]:
             'network_transmitted': '',
         }
 
-    for line in content.splitlines():
-        line = line.strip()
-        if line.startswith('eth0:'):
-            _, data = line.split(':', 1)
+    for raw_line in content.splitlines():
+        stripped_line = raw_line.strip()
+        if stripped_line.startswith('eth0:'):
+            _, data = stripped_line.split(':', 1)
             fields = data.split()
 
             received_bytes = int(fields[0])
@@ -620,6 +614,7 @@ class MetricsSettingsView(TemplateView):
     template_name = 'management/includes/metrics_configuration.html'
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Build the context dictionary for the metrics settings page."""
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'management'
         context['page_name'] = 'settings'
@@ -627,7 +622,7 @@ class MetricsSettingsView(TemplateView):
 
         context['uptime'] = format_uptime(APP_STARTED_AT)
         context['started_time'] = APP_STARTED_AT
-        context['database_size'] = get_database_size
+        context['database_size'] = get_database_size()
         return context
 
 class ChangeLogLevelView(View):
