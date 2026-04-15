@@ -8,7 +8,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from management.forms import SecurityConfigForm
 from management.models import LoggingConfig, SecurityConfig
-from management.views.settings import ChangeLogLevelView, SecuritySettingsView, SettingsTabView
+from management.views.settings import ChangeLogLevelView, SecuritySettingsView, SettingsTabView, MetricsSettingsView
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 
 LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
@@ -401,6 +401,27 @@ class ChangeLogLevelViewTest(TestCase):
         """Test ChangeLogLevelView inherits from View."""
         from django.views import View
         self.assertTrue(issubclass(ChangeLogLevelView, View))
+
+
+class MetricsSettingsViewTest(TestCase):
+    """Test suite for MetricsSettingsView."""
+
+    def test_get_context_data_contains_metrics_values(self):
+        """Test get_context_data includes the expected metrics context values."""
+        factory = RequestFactory()
+        request = factory.get('/management/settings/?tab=metrics')
+
+        view = MetricsSettingsView()
+        view.request = request
+
+        context = view.get_context_data()
+
+        self.assertIn('uptime', context)
+        self.assertIn('started_time', context)
+        self.assertIn('database_size', context)
+        self.assertEqual(context['page_category'], 'management')
+        self.assertEqual(context['page_name'], 'settings')
+        self.assertEqual(context['setting_type'], 'metrics')
 
 
 class LogLevelsConstantTest(TestCase):
