@@ -182,7 +182,6 @@
 
     function resetToDefaultsAndApplyConstraints(securityLevel) {
         const settings = securityConfigurations[securityLevel] || {};
-        const isLab = securityLevel === '0';
 
         try {
             ['max_cert_validity_days', 'max_crl_validity_days'].forEach(field => {
