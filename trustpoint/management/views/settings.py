@@ -73,7 +73,10 @@ def format_bytes(size: int) -> str:
 
 
 def get_database_size() -> str:
-    """Return the size of the current PostgreSQL database."""
+    """Return the size of the current database."""
+    if connection.vendor != 'postgresql':
+        return 'Unavailable'
+
     with connection.cursor() as cursor:
         cursor.execute('SELECT pg_database_size(current_database())')
         row = cursor.fetchone()
