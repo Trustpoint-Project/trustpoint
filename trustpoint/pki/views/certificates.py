@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
+from urllib.parse import urlencode
 
 from django.db.models import Case, IntegerField, QuerySet, Value, When
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
@@ -72,11 +73,8 @@ class CertificateTableView(
 
         if len(sort_params) > 1:
             first_sort_parameter = sort_params[0]
-
-            query_dict = request.GET.copy()
-            query_dict.setlist('sort', [first_sort_parameter])
-
-            new_url = f'{request.path}?{query_dict.urlencode()}'
+            safe_base_url = str(reverse_lazy('pki:certificates'))
+            new_url = f'{safe_base_url}?{urlencode({"sort": first_sort_parameter})}'
             return HttpResponseRedirect(new_url)
 
         self.ordering = sort_params[0]
