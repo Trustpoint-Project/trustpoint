@@ -1,25 +1,40 @@
 import { escapeHtml } from '../shared/dom.js';
 
+function renderFallback(message) {
+  return `<div class="text-muted">${escapeHtml(message)}</div>`;
+}
+
 export function renderGuidePage({
   title,
   description = '',
-  pathLabel = '(root)',
-  body = '',
+  current = '',
+  actions = '',
+  reference = '',
 }) {
   return `
     <div class="wf2-guide-page">
       <div class="wf2-guide-page-header">
-        <div class="wf2-guide-page-kicker">Context-aware editor guide</div>
         <div class="wf2-guide-page-title">${escapeHtml(title || 'Workflow document')}</div>
         <div class="wf2-guide-page-summary">${escapeHtml(description || '')}</div>
-        <div class="wf2-guide-path-pill">
-          <span>Path</span>
-          <code>${escapeHtml(pathLabel || '(root)')}</code>
-        </div>
       </div>
 
       <div class="wf2-guide-page-sections">
-        ${body}
+        ${renderGuideSection({
+          title: 'Current',
+          description: 'Only the information tied to the current cursor position.',
+          tone: 'accent',
+          body: current || renderFallback('Nothing selected yet.'),
+        })}
+        ${renderGuideSection({
+          title: 'Actions',
+          description: 'Small targeted helpers for the current section.',
+          body: actions || renderFallback('No quick action for this section.'),
+        })}
+        ${renderGuideSection({
+          title: 'Reference',
+          description: 'Minimal supporting reference while YAML stays authoritative.',
+          body: reference || renderFallback('No extra reference for this section.'),
+        })}
       </div>
     </div>
   `;

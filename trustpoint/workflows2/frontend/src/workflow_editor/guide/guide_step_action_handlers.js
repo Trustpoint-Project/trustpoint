@@ -38,6 +38,14 @@ export async function executeGuideStepAction(action, bag) {
         return true;
       }
 
+      if (context.stepType) {
+        fail(
+          `Step "${context.stepId}" already has type "${context.stepType}". Change it directly in YAML if you need to convert it.`,
+          'warning',
+        );
+        return true;
+      }
+
       const result = setCurrentStepType({
         yamlText,
         catalog,

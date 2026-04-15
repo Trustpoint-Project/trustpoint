@@ -3,6 +3,7 @@ import { EditorState } from '@codemirror/state';
 import {
   defaultHighlightStyle,
   HighlightStyle,
+  indentUnit,
   syntaxHighlighting,
 } from '@codemirror/language';
 import { yaml as yamlLanguage } from '@codemirror/lang-yaml';
@@ -142,6 +143,8 @@ export function createWorkflowEditor({
       doc: initialDoc,
       extensions: [
         basicSetup,
+        EditorState.tabSize.of(2),
+        indentUnit.of('  '),
         yamlLanguage(),
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         syntaxHighlighting(buildEditorHighlightStyle()),

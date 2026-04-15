@@ -18,6 +18,12 @@ export function setCurrentStepType({ yamlText, catalog, stepId, stepType }) {
     };
   }
 
+  if (typeof stepObj.type === 'string' && stepObj.type.trim()) {
+    throw new Error(
+      `Step "${stepId}" already has type "${stepObj.type}". Change it directly in YAML if you need to convert it.`,
+    );
+  }
+
   stepObj.type = stepType;
 
   return {

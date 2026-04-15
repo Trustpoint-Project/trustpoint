@@ -19,6 +19,10 @@ import { createGuideDrawerController } from '../ui/guide_drawer_controller.js';
 import { createIssuesPanelController } from '../ui/issues_panel_controller.js';
 
 function updateParseStatus(parseStatusEl, yamlText) {
+  if (!parseStatusEl) {
+    return;
+  }
+
   const status = parseYamlStatus(yamlText);
   text(parseStatusEl, status.message);
   parseStatusEl.classList.toggle('text-danger', !status.ok);

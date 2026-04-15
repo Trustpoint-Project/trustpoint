@@ -19,6 +19,7 @@ import {
 import {
   addTriggerSourceValue,
   removeTriggerSourceValue,
+  setTriggerOn,
   setTriggerTrustpoint,
 } from '../document/operations/trigger_sources.js';
 import { addOutcomeFlowEdge } from '../document/operations/graph.js';
@@ -318,7 +319,7 @@ export async function executeGuideDocumentAction(action, bag) {
 
       applyYamlMutation(
         nextYaml,
-        `Applied approval routing preset to "${context.stepId}" (${approvedOutcome} → ${approvedTarget}, ${rejectedOutcome} → ${rejectedTarget}).`,
+        `Applied approval routing preset to "${context.stepId}" (${approvedOutcome} -> ${approvedTarget}, ${rejectedOutcome} -> ${rejectedTarget}).`,
       );
       return true;
     }
@@ -338,6 +339,18 @@ export async function executeGuideDocumentAction(action, bag) {
       return true;
     }
 
+    if (action === 'set-trigger-on') {
+      const triggerKey = readValue(scope, '[data-wf2-trigger-select="true"]');
+      const result = setTriggerOn({ yamlText, triggerKey });
+      if (!result.changed) {
+        setStatus(`Trigger is already "${triggerKey}".`);
+        return true;
+      }
+
+      applyYamlMutation(result.yamlText, `Trigger set to "${triggerKey}".`);
+      return true;
+    }
+
     if (action === 'add-trigger-source-value') {
       const sourceKind = button.getAttribute('data-trigger-source-kind');
       const rawValue = button.getAttribute('data-trigger-source-value');
@@ -346,6 +359,24 @@ export async function executeGuideDocumentAction(action, bag) {
         return true;
       }
 
+      const result = addTriggerSourceValue({ yamlText, sourceKind, rawValue });
+      if (!result.changed) {
+        setStatus('That source filter is already present.');
+        return true;
+      }
+
+      applyYamlMutation(result.yamlText, 'Added trigger source filter.');
+      return true;
+    }
+
+    if (action === 'add-trigger-source-selected') {
+      const sourceKind = button.getAttribute('data-trigger-source-kind');
+      if (!sourceKind) {
+        fail('No trigger source group selected.', 'warning');
+        return true;
+      }
+
+      const rawValue = readValue(scope, `[data-wf2-trigger-source-select="${sourceKind}"]`);
       const result = addTriggerSourceValue({ yamlText, sourceKind, rawValue });
       if (!result.changed) {
         setStatus('That source filter is already present.');

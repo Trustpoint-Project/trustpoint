@@ -163,9 +163,8 @@
 <aside id="wf2-guide-drawer" class="wf2-guide-drawer" aria-hidden="true">
   <div class="wf2-guide-drawer-header">
     <div>
-      <div class="wf2-guide-drawer-eyebrow">{% trans "Workflow 2" %}</div>
-      <div class="fw-semibold">{% trans "Editor guide" %}</div>
-      <div class="text-muted small">{% trans "Context-aware DSL editing" %}</div>
+      <div class="fw-semibold">{% trans "Workflow guide" %}</div>
+      <div class="text-muted small">{% trans "Minimal YAML help for the section you are editing." %}</div>
     </div>
     <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-close-guide">
       {% trans "Close" %}
@@ -175,32 +174,6 @@
   <div class="wf2-guide-drawer-body">
     <div id="wf2-guide-content" class="wf2-guide-content">
       {% trans "Loading guide…" %}
-    </div>
-
-    <div class="wf2-guide-diagnostics small">
-      <div class="fw-semibold text-body mb-2">{% trans "Diagnostics" %}</div>
-
-      <div class="wf2-guide-diagnostics-grid">
-        <div class="wf2-guide-diagnostics-item">
-          <div class="wf2-guide-diagnostics-label">{% trans "Catalog" %}</div>
-          <div id="wf2-catalog-version">{% trans "Loading…" %}</div>
-        </div>
-
-        <div class="wf2-guide-diagnostics-item">
-          <div class="wf2-guide-diagnostics-label">{% trans "YAML" %}</div>
-          <div id="wf2-parse-status" class="text-muted">{% trans "Checking…" %}</div>
-        </div>
-
-        <div class="wf2-guide-diagnostics-item">
-          <div class="wf2-guide-diagnostics-label">{% trans "Cursor" %}</div>
-          <div id="wf2-cursor-info">{% trans "Line 1, column 1" %}</div>
-        </div>
-
-        <div class="wf2-guide-diagnostics-item">
-          <div class="wf2-guide-diagnostics-label">{% trans "Path" %}</div>
-          <code id="wf2-current-path">(root)</code>
-        </div>
-      </div>
     </div>
   </div>
 </aside>

@@ -1,4 +1,4 @@
-import { getTriggerSources, parseRoot, stringifyRoot } from '../yaml_document.js';
+import { getTrigger, getTriggerSources, parseRoot, stringifyRoot } from '../yaml_document.js';
 
 const SOURCE_LIST_KEYS = new Set(['ca_ids', 'domain_ids', 'device_ids']);
 
@@ -56,6 +56,24 @@ export function setTriggerTrustpoint({ yamlText, enabled }) {
   const nextValue = Boolean(enabled);
   const changed = sources.trustpoint !== nextValue;
   sources.trustpoint = nextValue;
+
+  return {
+    changed,
+    yamlText: changed ? stringifyRoot(rootObj) : yamlText,
+  };
+}
+
+export function setTriggerOn({ yamlText, triggerKey }) {
+  const rootObj = parseRoot(yamlText);
+  const trigger = getTrigger(rootObj);
+  const nextValue = String(triggerKey || '').trim();
+
+  if (!nextValue) {
+    throw new Error('No trigger selected.');
+  }
+
+  const changed = String(trigger.on || '') !== nextValue;
+  trigger.on = nextValue;
 
   return {
     changed,
