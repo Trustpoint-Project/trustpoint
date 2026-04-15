@@ -1453,7 +1453,7 @@
   .wf2-guide-drawer .form-control,
   .wf2-guide-drawer .form-select,
   .wf2-guide-drawer textarea {
-    background: var(--wf2-surface);
+    background-color: var(--wf2-surface);
     border-color: var(--wf2-border);
     color: var(--wf2-text);
   }
@@ -1471,7 +1471,7 @@
   .wf2-guide-drawer .form-control:focus,
   .wf2-guide-drawer .form-select:focus,
   .wf2-guide-drawer textarea:focus {
-    background: var(--wf2-surface);
+    background-color: var(--wf2-surface);
     border-color: var(--wf2-accent);
     color: var(--wf2-text);
     box-shadow: 0 0 0 0.2rem var(--wf2-accent-ring);

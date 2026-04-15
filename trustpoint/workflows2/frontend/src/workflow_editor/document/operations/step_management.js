@@ -1,7 +1,6 @@
-import { findStepSpec, makeUniqueKey } from '../catalog_metadata.js';
-import { indentBlock, insertBlockAtCursorLine } from '../text_insertions.js';
-import { deepClone, getStep, getSteps, getWorkflow, parseRoot, stringifyRoot } from '../yaml_document.js';
-import { stringify } from 'yaml';
+import { findStepSpec } from '../catalog_metadata.js';
+import { addStepToWorkflow } from './graph.js';
+import { getStep, parseRoot, stringifyRoot } from '../yaml_document.js';
 
 export function setCurrentStepType({ yamlText, catalog, stepId, stepType }) {
   const rootObj = parseRoot(yamlText);
@@ -28,27 +27,6 @@ export function setCurrentStepType({ yamlText, catalog, stepId, stepType }) {
 }
 
 export function addStepFromType({ yamlText, catalog, stepType, cursorOffset }) {
-  const rootObj = parseRoot(yamlText);
-  const steps = getSteps(getWorkflow(rootObj));
-  const stepSpec = findStepSpec(catalog, stepType);
-
-  if (!stepSpec) {
-    throw new Error(`unknown step type "${stepType}"`);
-  }
-
-  const stepId = makeUniqueKey(Object.keys(steps), `${stepType}_step`);
-  const stepObj = deepClone(stepSpec.scaffold || { type: stepType });
-
-  const rawSnippet = stringify(
-    { [stepId]: stepObj },
-    {
-      indent: 2,
-      lineWidth: 0,
-    },
-  ).trimEnd();
-
-  return {
-    yamlText: insertBlockAtCursorLine(yamlText, cursorOffset, indentBlock(rawSnippet, 4)),
-    stepId,
-  };
+  void cursorOffset;
+  return addStepToWorkflow({ yamlText, catalog, stepType });
 }

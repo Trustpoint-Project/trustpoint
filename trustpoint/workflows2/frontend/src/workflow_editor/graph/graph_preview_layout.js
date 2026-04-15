@@ -71,7 +71,13 @@ export function buildGraphLayout(graph, manualPositions = {}) {
 
   const sortedLevels = Array.from(groups.keys()).sort((a, b) => a - b);
   for (const level of sortedLevels) {
-    const group = groups.get(level) || [];
+    const group = (groups.get(level) || []).slice().sort((left, right) => {
+      const virtualDelta = Number(Boolean(left?.is_virtual)) - Number(Boolean(right?.is_virtual));
+      if (virtualDelta !== 0) {
+        return virtualDelta;
+      }
+      return String(left?.id || '').localeCompare(String(right?.id || ''));
+    });
     group.forEach((node, index) => {
       positions.set(node.id, {
         x: xStart + level * xGap,
