@@ -28,9 +28,31 @@
                 {% trans 'Created at' %} {{ request|sort_icon:'created_at' }}
             </a>
         </th>
-        <th class="text-nowrap" data-col="onboarding">{% trans 'Onboarding' %}</th>
-        <th class="text-nowrap" data-col="onboarding_protocol">{% trans 'Onboarding Protocol' %}</th>
-        <th class="text-nowrap" data-col="pki_protocols">{% trans 'PKI Protocols' %}</th>
+        <th class="text-nowrap" data-col="enrollment">
+            <a href="{% url_sort 'enrollment_sort' %}">
+                {% trans 'Enrollment' %} {{ request|sort_icon:'enrollment_sort' }}
+            </a>
+        </th>
+        <th class="text-nowrap" data-col="domain_credential">
+            <a href="{% url_sort 'domain_credential_sort' %}">
+                {% trans 'Domain Credential' %} {{ request|sort_icon:'domain_credential_sort' }}
+            </a>
+        </th>
+        <th class="text-nowrap" data-col="application_certificates">
+            <a href="{% url_sort 'application_certificate_sort' %}">
+                {% trans 'Application Certificates' %} {{ request|sort_icon:'application_certificate_sort' }}
+            </a>
+        </th>
+        <th class="text-nowrap" data-col="onboarding_protocol">
+            <a href="{% url_sort 'onboarding_protocol_sort' %}">
+                {% trans 'Onboarding Protocol' %} {{ request|sort_icon:'onboarding_protocol_sort' }}
+            </a>
+        </th>
+        <th class="text-nowrap" data-col="pki_protocols">
+            <a href="{% url_sort 'pki_protocols_sort' %}">
+                {% trans 'PKI Protocols' %} {{ request|sort_icon:'pki_protocols_sort' }}
+            </a>
+        </th>
         <th class="text-nowrap" data-col="clm">{% trans 'Certificate Management' %}</th>
     </tr>
     </thead>
@@ -52,8 +74,32 @@
         <td data-col="serial_number">{{ device.serial_number }}</td>
         {% endif %}
         <td data-col="created_at">{{ device.created_at|local_datetime }}</td>
-        <td data-col="onboarding">
+        <td data-col="enrollment">
             {% with p=device.onboarding_progress %}
+            <span class="tp-status-badge tp-status-{{ p.status_key }}"
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
+                  data-bs-html="true"
+                  title="{{ p.tooltip }}">
+                <span class="tp-status-dot"></span>
+                {{ p.status_label }}
+            </span>
+            {% endwith %}
+        </td>
+        <td data-col="domain_credential">
+            {% with p=device.domain_credential_status %}
+            <span class="tp-status-badge tp-status-{{ p.status_key }}"
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
+                  data-bs-html="true"
+                  title="{{ p.tooltip }}">
+                <span class="tp-status-dot"></span>
+                {{ p.status_label }}
+            </span>
+            {% endwith %}
+        </td>
+        <td data-col="application_certificates">
+            {% with p=device.application_certificate_status %}
             <span class="tp-status-badge tp-status-{{ p.status_key }}"
                   data-bs-toggle="tooltip"
                   data-bs-placement="top"
