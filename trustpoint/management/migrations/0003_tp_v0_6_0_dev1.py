@@ -31,6 +31,16 @@ class Migration(migrations.Migration):
                 ('last_updated', models.DateTimeField(auto_now=True)),
             ],
         ),
+        migrations.AddField(
+            model_name='notificationconfig',
+            name='crl_expiry_warning_days',
+            field=models.PositiveIntegerField(default=7, help_text="Number of days before a CRL's expiration to trigger a 'CRL Expiring' warning."),
+        ),
+        migrations.AlterField(
+            model_name='notificationmodel',
+            name='message_type',
+            field=models.CharField(choices=[('C', 'custom'), ('TEST_CA', 'Issuing Ca Test'), ('TEST_DOMAIN', 'Domain Test'), ('TEST_CERT', 'Cert Test'), ('TEST_DEVICE', 'Device Test'), ('POP_TEST_DATA', 'Welcome Populate Test Data'), ('TP_DOCS', 'Trustpoint Documentation'), ('TP_INFO', 'Trustpoint Project Info'), ('WELCOME', 'Welcome Message'), ('SYS_NOT_HEALTHY', 'System Not Healthy'), ('VULNERABILITY', 'Vulnerability'), ('CERT_EXPIRING', 'Cert Expiring'), ('CERT_EXPIRED', 'Cert Expired'), ('CA_EXPIRING', 'Issuing Ca Expiring'), ('CA_EXPIRED', 'Issuing Ca Expired'), ('DOMAIN_NO_CA', 'Domain No Issuing Ca'), ('DEV_NOT_ONBRD', 'Device Not Onboarded'), ('DEV_ONBRD_FAIL', 'Device Onboarding Failed'), ('DEV_CERT_REV', 'Device Cert Revoked'), ('WEAK_SIG_ALGO', 'Weak Signature Algorithm'), ('INSUFF_KEY_LEN', 'Insufficient Key Length'), ('WEAK_ECC_CURVE', 'Weak Ecc Curve'), ('CRL_EXPIRING', 'Crl Expiring'), ('CRL_EXPIRED', 'Crl Expired'), ('GDS_PUSH_FAIL', 'Gds Push Failed'), ('SIGN_KEY_EXP', 'Signer Key Expiring'), ('SIGN_KEY_EXPRD', 'Signer Key Expired'), ('TLS_CERT_EXP', 'Tls Cert Expiring'), ('TLS_CERT_EXPRD', 'Tls Cert Expired')], default='C', max_length=32),
+        ),
         migrations.AlterField(
             model_name='securityconfig',
             name='permitted_no_onboarding_pki_protocols',
@@ -40,6 +50,11 @@ class Migration(migrations.Migration):
             model_name='securityconfig',
             name='permitted_onboarding_protocols',
             field=models.JSONField(blank=True, default=list, help_text='JSON list of allowed OnboardingProtocol integer values (MANUAL=0, CMP_IDEVID=1, CMP_SHARED_SECRET=2, EST_IDEVID=3, EST_USERNAME_PASSWORD=4, AOKI=5, BRSKI=6, OPC_GDS_PUSH=7, REST_USERNAME_PASSWORD=8).'),
+        ),
+        migrations.AlterField(
+            model_name='securityconfig',
+            name='security_mode',
+            field=models.CharField(choices=[('0', 'Lab / Custom'), ('1', 'Brownfield Compatible'), ('2', 'Industrial Standard'), ('3', 'Hardened Production'), ('4', 'Critical Infrastructure')], default='1', max_length=6),
         ),
         migrations.CreateModel(
             name='AuditLog',

@@ -7,8 +7,6 @@ from ..views import (
     DashboardChartsAndCountsView,
     DashboardView,
     IndexView,
-    NotificationDetailsView,
-    NotificationMarkSolvedView,
 )
 
 
@@ -25,16 +23,6 @@ class HomeUrlsTests(SimpleTestCase):
         url = reverse('home:dashboard')
         assert resolve(url).func.view_class == DashboardView
 
-    def test_notification_details_url_resolves(self) -> None:
-        """Test that the notification details URL resolves to NotificationDetailsView."""
-        url = reverse('home:notification_details', kwargs={'pk': 1})
-        assert resolve(url).func.view_class == NotificationDetailsView
-
-    def test_notification_mark_as_solved_url_resolves(self) -> None:
-        """Test that the mark as solved URL resolves to NotificationMarkSolvedView."""
-        url = reverse('home:mark_as_solved', kwargs={'pk': 1})
-        assert resolve(url).func.view_class == NotificationMarkSolvedView
-
     def test_dashboard_data_url_resolves(self) -> None:
         """Test that the dashboard data URL resolves to DashboardChartsAndCountsView."""
         url = reverse('home:dashboard_data')
@@ -44,8 +32,6 @@ class HomeUrlsTests(SimpleTestCase):
         """Test that URL names are correctly set."""
         assert reverse('home:index') == '/home/'
         assert reverse('home:dashboard') == '/home/dashboard/'
-        assert reverse('home:notification_details', kwargs={'pk': 1}) == '/home/notification/1/'
-        assert reverse('home:mark_as_solved', kwargs={'pk': 1}) == '/home/notification/1/mark-as-solved/'
         assert reverse('home:dashboard_data') == '/home/dashboard_data/'
 
     def test_app_name(self) -> None:
