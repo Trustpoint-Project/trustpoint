@@ -406,7 +406,8 @@ class ChangeLogLevelViewTest(TestCase):
 class MetricsSettingsViewTest(TestCase):
     """Test suite for MetricsSettingsView."""
 
-    def test_get_context_data_contains_metrics_values(self):
+    @patch('management.views.settings.get_database_size', return_value='16.97 MB')
+    def test_get_context_data_contains_metrics_values(self, mock_get_database_size):
         """Test get_context_data includes the expected metrics context values."""
         factory = RequestFactory()
         request = factory.get('/management/settings/?tab=metrics')
@@ -419,9 +420,11 @@ class MetricsSettingsViewTest(TestCase):
         self.assertIn('uptime', context)
         self.assertIn('started_time', context)
         self.assertIn('database_size', context)
+        self.assertEqual(context['database_size'], '16.97 MB')
         self.assertEqual(context['page_category'], 'management')
         self.assertEqual(context['page_name'], 'settings')
         self.assertEqual(context['setting_type'], 'metrics')
+        mock_get_database_size.assert_called_once()
 
 
 class LogLevelsConstantTest(TestCase):
