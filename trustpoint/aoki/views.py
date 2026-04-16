@@ -48,7 +48,7 @@ class AokiServiceMixin:
             return None
         san_uris = san_ext.value.get_values_for_type(x509.UniformResourceIdentifier)
         owner_san_uris = [('dev-owner:uri:' + uri) for uri in san_uris]
-        return owner_san_uris if owner_san_uris else None
+        return owner_san_uris or None
 
     @staticmethod
     def get_owner_credential(idevid_cert: x509.Certificate) -> CredentialModel | None:

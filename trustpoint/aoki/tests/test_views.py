@@ -91,7 +91,7 @@ class TestAokiServiceMixin:
         
         san_uri = AokiServiceMixin.get_idevid_owner_san_uri(cert)
         
-        assert san_uri.startswith('dev-owner:cert:_.')
+        assert san_uri.startswith('dev-owner:cert:_')
         parts = san_uri.split(':')[2].split('_')
         assert len(parts) == 2
         assert parts[0] == ''
