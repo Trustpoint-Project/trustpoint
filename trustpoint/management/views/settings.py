@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
 from datetime import timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
@@ -13,7 +13,6 @@ from django.db import connection
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils import timezone, translation
-from django.utils import translation
 from django.utils.timezone import now
 from django.utils.translation import gettext as _
 from django.views import View
