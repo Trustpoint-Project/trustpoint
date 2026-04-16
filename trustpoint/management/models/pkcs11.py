@@ -966,6 +966,3 @@ class PKCS11Token(models.Model, LoggerMixin):
         except Exception as e:
             msg = f'Failed to decrypt DEK with BEK: {e}'
             raise ValueError(msg) from e
-
-
-

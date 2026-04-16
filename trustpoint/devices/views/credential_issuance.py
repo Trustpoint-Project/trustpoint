@@ -850,4 +850,3 @@ class OpcUaGdsIssueProfileCredentialView(AbstractIssueProfileCredentialView):
     """Issue a new certificate profile credential within the devices section."""
 
     page_name = DEVICES_PAGE_OPC_UA_SUBCATEGORY
-

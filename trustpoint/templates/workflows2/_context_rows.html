@@ -1,0 +1,16 @@
+{% load i18n %}
+{% for row in rows %}
+  <div class="mb-2">
+    <div class="text-muted small">{{ row.label }}</div>
+    {% if row.url %}
+      <div class="fw-semibold"><a href="{{ row.url }}">{{ row.value }}</a></div>
+    {% else %}
+      <div class="fw-semibold">{{ row.value }}</div>
+    {% endif %}
+    {% if row.meta %}
+      <div class="text-muted small">{{ row.meta }}</div>
+    {% endif %}
+  </div>
+{% empty %}
+  <div class="text-muted">{{ empty_label }}</div>
+{% endfor %}

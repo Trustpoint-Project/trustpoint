@@ -67,11 +67,6 @@ class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
 
         requested_profile = context.cert_profile_str
 
-        if not requested_profile:
-            error_message = 'Certificate profile is missing in the context. Authorization denied.'
-            self.logger.warning('Certificate profile authorization failed: Profile information is missing')
-            raise ValueError(error_message)
-
         if not context.domain:
             error_message = 'Domain information is missing in the context. Authorization denied.'
             self.logger.warning('Certificate profile authorization failed: Domain information is missing')
@@ -80,6 +75,15 @@ class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
         if not context.device:
             error_message = 'Device information is missing in the context. Authorization denied.'
             self.logger.warning('Certificate profile authorization failed: Device information is missing')
+
+        if not requested_profile and context.domain_str == '.aoki':
+            # For AOKI requests, if no profile is specified, default to the domain credential profile
+            requested_profile = context.domain.get_domain_credential_profile_name()
+            context.cert_profile_str = requested_profile
+
+        if not requested_profile:
+            error_message = 'Certificate profile is missing in the context. Authorization denied.'
+            self.logger.warning('Certificate profile authorization failed: Profile information is missing')
             raise ValueError(error_message)
 
         try:

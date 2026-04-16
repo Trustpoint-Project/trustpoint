@@ -43,7 +43,7 @@ class AutoGenPki(LoggerMixin):
             except CaModel.DoesNotExist:
                 return None
             else:
-                return ca if ca else None
+                return ca or None
 
     @classmethod
     def enable_auto_gen_pki(cls, key_alg: AutoGenPkiKeyAlgorithm) -> None:

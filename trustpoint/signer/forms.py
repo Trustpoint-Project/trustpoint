@@ -205,9 +205,7 @@ class SignerAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
     def clean_private_key_file(self) -> PrivateKeySerializer:
         """Validates and parses the uploaded private key file."""
         private_key_file = self.cleaned_data.get('private_key_file')
-        private_key_file_password = (
-            self.data.get('private_key_file_password') if self.data.get('private_key_file_password') else None
-        )
+        private_key_file_password = self.data.get('private_key_file_password') or None
 
         if not private_key_file:
             err_msg = 'No private key file was uploaded.'
