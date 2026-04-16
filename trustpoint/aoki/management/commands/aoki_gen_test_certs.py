@@ -106,9 +106,9 @@ class AokiTestCertGenerator:
 
         idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
-        # Build URI string "dev-owner:<idevid_subj_sn>.<idevid_x509_sn>.<idevid_sha256_fingerprint>"
-        # If the IDevID Subject Serial Number is not present, '_' shall be used as a placeholder
-        idevid_san_uri = f'dev-owner:{TEST_SERIAL_NUMBER}.{idevid_x509_sn}.{idevid_sha256_fingerprint}'
+        # Build URI string "dev-owner:cert:<idevid_subj_sn>_<idevid_sha256_fingerprint>"
+        # If the IDevID Subject Serial Number is not present, '' shall be used as a placeholder
+        idevid_san_uri = f'dev-owner:cert:{TEST_SERIAL_NUMBER}_{idevid_sha256_fingerprint}'
         print(f'DeviceOwnerID SAN URI: {idevid_san_uri}')
         ownerid_cert, ownerid_key = CertificateGenerator.create_ee(
             issuer_private_key=owner_ca_key,
