@@ -14,6 +14,7 @@
 **/behave-report.html
 **/md-report.md
 docs/build/
+workflow2Folder/
 # Exclude sensitive files
 **/hsm_so_pin.txt
 **/hsm_pin.txt

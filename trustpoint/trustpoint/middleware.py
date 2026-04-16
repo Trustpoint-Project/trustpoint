@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
 from django.contrib.auth.middleware import LoginRequiredMiddleware
+from django.utils.deprecation import MiddlewareMixin
+
+from workflows2.services.dispatch import WorkflowDispatchService
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from django.http import HttpRequest, HttpResponseBase
+
+
+logger = logging.getLogger(__name__)
 
 
 # TODO(AlexHx8472): Stubs not yet available in django-stubs.  # noqa: FIX002
@@ -30,3 +37,15 @@ class TrustpointLoginRequiredMiddleware(LoginRequiredMiddleware):
             return None
 
         return super().process_view(request, view_func, view_args, view_kwargs)
+
+
+class Workflow2InlineDrainMiddleware(MiddlewareMixin):
+    """Let the web process drain queued workflow jobs when inline execution is active."""
+
+    def process_request(self, request: HttpRequest) -> None:
+        """Drain backlog opportunistically before handling the current request."""
+        del request
+        try:
+            WorkflowDispatchService().drain_pending_jobs_if_inline()
+        except Exception:
+            logger.exception('Failed to drain queued Workflow jobs inline.')

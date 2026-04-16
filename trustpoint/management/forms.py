@@ -31,6 +31,7 @@ from management.models import (
     PKCS11Token,
     SecurityConfig,
 )
+from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
@@ -797,9 +798,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             private_key_bytes = cleaned_data.get('private_key_file')
             private_key_password = cleaned_data.get('private_key_file_password')
             tls_certificate_serializer = cleaned_data.get('tls_certificate')
-            tls_certificate_chain_serializer = (
-                cleaned_data.get('tls_certificate_chain') if cleaned_data.get('tls_certificate_chain') else None
-            )
+            tls_certificate_chain_serializer = cleaned_data.get('tls_certificate_chain') or None
             domain_name = cleaned_data.get('domain_name')
 
             try:
@@ -976,6 +975,20 @@ class PKCS11ConfigForm(forms.Form):
                     setattr(token, field, value)
             token.save()
         return token
+
+class WorkflowExecutionConfigForm(forms.ModelForm[WorkflowExecutionConfig]):
+    """Form for managing Workflow 2 execution settings."""
+
+    class Meta:
+        """Metadata for the workflow execution settings form."""
+
+        model = WorkflowExecutionConfig
+        fields: ClassVar[tuple[str, ...]] = ('mode', 'worker_stale_after_seconds')
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            'mode': forms.Select(attrs={'class': 'form-select'}),
+            'worker_stale_after_seconds': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+        }
+
 
 class LoggingConfigForm(forms.Form):
     """Form for managing logging configuration."""
