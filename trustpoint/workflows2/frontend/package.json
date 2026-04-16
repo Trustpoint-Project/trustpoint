@@ -1,0 +1,20 @@
+{
+  "name": "trustpoint-workflows2-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.8.1",
+    "@codemirror/lang-yaml": "^6.1.2",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.38.6",
+    "codemirror": "^6.0.2",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}

@@ -38,6 +38,27 @@
             {{ filter.form.domain }}
           </div>
 
+          <div>
+            <label for="{{ filter.form.enrollment_state.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.enrollment_state.label }}
+            </label>
+            {{ filter.form.enrollment_state }}
+          </div>
+
+          <div>
+            <label for="{{ filter.form.domain_credential_state.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.domain_credential_state.label }}
+            </label>
+            {{ filter.form.domain_credential_state }}
+          </div>
+
+          <div>
+            <label for="{{ filter.form.application_certificate_state.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.application_certificate_state.label }}
+            </label>
+            {{ filter.form.application_certificate_state }}
+          </div>
+
           <div class="d-flex gap-2">
             <div class="flex-fill">
               <label for="{{ filter.form.created_at_from.id_for_label }}" class="form-label mb-1 fw-semibold">
@@ -96,7 +117,17 @@
         </li>
         <li>
           <label class="dropdown-item d-flex align-items-center gap-2">
-            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="onboarding" checked> {% trans 'Onboarding' %}
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="enrollment" checked> {% trans 'Enrollment' %}
+          </label>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="domain_credential" checked> {% trans 'Domain Credential' %}
+          </label>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="application_certificates" checked> {% trans 'Application Certificates' %}
           </label>
         </li>
         <li>

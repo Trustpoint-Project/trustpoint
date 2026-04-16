@@ -3,19 +3,17 @@
 
 <div class="row px-0 pt-5 pb-3 ps-1">
   <div class="col">
-    <h1>Issuing CA</h1>
+    <h1>Issuing CAs</h1>
   </div>
 </div>
 
-<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3">
-  <div class="col">
-    {% url 'pki:ica' as ica_url %}
-    {% include 'home/dashboard_card.html' with title="Active CAs" card_type="active" identifier="active_ica" dataset="issuing_ca_counts" link_url="ica_url" %}
+{% url 'pki:cas' as cas_url %}
+
+<div class="row g-3">
+  <div class="col-12 col-sm-6 col-lg-3">
+    {% include 'home/dashboard_card.html' with title="Active CAs" card_type="active" identifier="active_ica" dataset="issuing_ca_counts" link_url=cas_url %}
   </div>
-  <div class="col">
-    {% include 'home/dashboard_card.html' with title="Expiring CAs" card_type="expiring" identifier="expiring_ica" dataset="issuing_ca_counts" %}
-  </div>
-  <div class="col">
-    {% include 'home/dashboard_card.html' with title="Expired CAs" card_type="expired" identifier="expired_ica" dataset="issuing_ca_counts" %}
+  <div class="col-12 col-sm-6 col-lg-3">
+    {% include 'home/dashboard_card.html' with title="Expiring CAs" card_type="expiring_summary" identifier="expiring_ica" dataset="expiring_issuing_ca_counts" summary_variant="annual" link_url=cas_url|add:'?expiry_state=expiring' %}
   </div>
 </div>

@@ -33,14 +33,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 statusElement.classList.add('alert-danger');
             } else {
                 if (data.onboarded) {
-                    console.log('Device is onboarded.');
                     statusElement.textContent = 'Device is onboarded.';
                     statusElement.classList.remove('alert-info');
                     statusElement.classList.add('alert-success');
                     clearInterval(intervalId);
                     window.location.href = redirectURL;
                 } else {
-                    console.log('Device is not onboarded.');
                     statusElement.textContent = 'Device is not onboarded yet.';
                     statusElement.classList.remove('alert-success', 'alert-danger');
                     statusElement.classList.add('alert-info');
