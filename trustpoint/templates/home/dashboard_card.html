@@ -110,11 +110,11 @@
       const today_delta_7 = dataToday.expiring_in_7_days || 0;
       const today_total = today_delta_24 + today_delta_7;
 
-      // Show the card if there are expiring items
-      if (today_total > 0) {
+      // Hide the card if there are no expiring items
+      if (today_total === 0) {
         const cardElement = document.querySelector(`[id^="total_count_${uniqueId}"]`)?.closest('.card');
         if (cardElement && cardElement.parentElement) {
-          cardElement.parentElement.style.display = 'block';
+          cardElement.parentElement.style.display = 'none';
         }
         return;
       }
