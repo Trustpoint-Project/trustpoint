@@ -798,9 +798,7 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
             private_key_bytes = cleaned_data.get('private_key_file')
             private_key_password = cleaned_data.get('private_key_file_password')
             tls_certificate_serializer = cleaned_data.get('tls_certificate')
-            tls_certificate_chain_serializer = (
-                cleaned_data.get('tls_certificate_chain') if cleaned_data.get('tls_certificate_chain') else None
-            )
+            tls_certificate_chain_serializer = cleaned_data.get('tls_certificate_chain') or None
             domain_name = cleaned_data.get('domain_name')
 
             try:
