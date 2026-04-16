@@ -128,6 +128,10 @@ pythonpath = ["trustpoint"]
 python_files = 'test_*.py'
 md_report = true
 md_report_output = 'md-report.md'
+markers = [
+    "integration: integration tests",
+    "hsm: tests that require a configured reachable PKCS#11 provider",
+]
 
 [tool.coverage.run]
 omit = [

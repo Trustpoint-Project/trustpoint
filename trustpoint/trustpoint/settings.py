@@ -55,6 +55,7 @@ django_stubs_ext.monkeypatch()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+REPO_ROOT = BASE_DIR.parent
 
 LOCALE_PATHS = [BASE_DIR / Path('trustpoint/locale')]
 
@@ -268,6 +269,7 @@ INSTALLED_APPS = [
     'rest_pki.apps.RestPkiConfig',
     'signer.apps.SignerConfig',
     'aoki.apps.AokiConfig',
+    'crypto.apps.CryptoConfig',
     'management.apps.ManagementConfig',
     'trustpoint_core',
     'django.contrib.admin',
@@ -461,3 +463,36 @@ Q_CLUSTER = {
     'bulk': 10,
     'orm': 'default',
 }
+
+
+
+# HSM storage root:
+# - local/dev defaults to <repo-root>/var/hsm
+# - deployment can override with TRUSTPOINT_HSM_ROOT=/var/lib/trustpoint/hsm
+HSM_ROOT = Path(os.getenv('TRUSTPOINT_HSM_ROOT', REPO_ROOT / 'var' / 'hsm')).resolve()
+
+HSM_CONFIG_DIR = HSM_ROOT / 'config'
+HSM_LIB_DIR = HSM_ROOT / 'lib'
+HSM_TOKEN_DIR = HSM_ROOT / 'tokens'
+
+HSM_DEFAULT_SOFTHSM_CONFIG_PATH = HSM_CONFIG_DIR / 'softhsm2.conf'
+HSM_DEFAULT_USER_PIN_FILE = HSM_CONFIG_DIR / 'user-pin.txt'
+HSM_DEFAULT_SO_PIN_FILE = HSM_CONFIG_DIR / 'so-pin.txt'
+
+_default_pkcs11_module_candidates = (
+    Path('/usr/lib/softhsm/libsofthsm2.so'),
+    Path('/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so'),
+    Path('/usr/local/lib/softhsm/libsofthsm2.so'),
+)
+_configured_pkcs11_module_path = os.getenv('TRUSTPOINT_PKCS11_MODULE_PATH')
+if _configured_pkcs11_module_path:
+    HSM_DEFAULT_PKCS11_MODULE_PATH = Path(_configured_pkcs11_module_path)
+else:
+    HSM_DEFAULT_PKCS11_MODULE_PATH = next(
+        (candidate for candidate in _default_pkcs11_module_candidates if candidate.exists()),
+        HSM_LIB_DIR / 'libpkcs11.so',
+    )
+
+if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
+    for directory in (HSM_CONFIG_DIR, HSM_LIB_DIR, HSM_TOKEN_DIR):
+        directory.mkdir(parents=True, exist_ok=True)

@@ -93,6 +93,7 @@ def test_installed_apps():
         'pki',
         'cmp',
         'est',
+        'crypto',
         'management',
     ]
 
@@ -141,6 +142,14 @@ def test_public_paths():
     ]
     assert isinstance(public_paths, list), 'PUBLIC_PATHS should be a list.'
     assert public_paths == expected_paths, 'PUBLIC_PATHS should match the defined values.'
+
+
+def test_hsm_paths():
+    """Verify HSM path defaults are anchored correctly."""
+    assert settings.HSM_ROOT == settings.REPO_ROOT / 'var' / 'hsm'
+    assert settings.HSM_CONFIG_DIR == settings.HSM_ROOT / 'config'
+    assert settings.HSM_LIB_DIR == settings.HSM_ROOT / 'lib'
+    assert settings.HSM_TOKEN_DIR == settings.HSM_ROOT / 'tokens'
 
 
 def test_language_settings():
