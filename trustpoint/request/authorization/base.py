@@ -75,6 +75,7 @@ class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
         if not context.device:
             error_message = 'Device information is missing in the context. Authorization denied.'
             self.logger.warning('Certificate profile authorization failed: Device information is missing')
+            raise ValueError(error_message)
 
         if not requested_profile and context.domain_str == '.aoki':
             # For AOKI requests, if no profile is specified, default to the domain credential profile
