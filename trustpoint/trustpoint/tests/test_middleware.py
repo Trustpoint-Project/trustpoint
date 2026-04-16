@@ -1,13 +1,13 @@
 """Tests for the middleware module."""
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 from django.contrib.auth.models import AnonymousUser, User
 from django.http import HttpRequest
 from django.urls import reverse
 
-from trustpoint.middleware import TrustpointLoginRequiredMiddleware
+from trustpoint.middleware import TrustpointLoginRequiredMiddleware, Workflow2InlineDrainMiddleware
 
 
 @pytest.fixture
@@ -15,6 +15,13 @@ def middleware():
     """Fixture to instantiate TrustpointLoginRequiredMiddleware with a mock get_response."""
     get_response = Mock()  # A mock callable to serve as the get_response argument
     return TrustpointLoginRequiredMiddleware(get_response=get_response)
+
+
+@pytest.fixture
+def workflow2_middleware():
+    """Fixture to instantiate Workflow2InlineDrainMiddleware with a mock get_response."""
+    get_response = Mock(return_value=Mock(status_code=200))
+    return Workflow2InlineDrainMiddleware(get_response=get_response)
 
 
 @pytest.fixture
@@ -64,3 +71,15 @@ class TestTrustpointLoginRequiredMiddleware:
         response = middleware.process_view(http_request, None, None, None)
         assert response.status_code == 302, 'If no public paths are defined, unauthenticated users should be redirected.'
         assert response['Location'] == reverse('users:login') + '?next=/public/resource/'
+
+
+@pytest.mark.django_db
+class TestWorkflow2InlineDrainMiddleware:
+    """Test cases for the Workflow2InlineDrainMiddleware."""
+
+    def test_process_request_drains_backlog_opportunistically(self, workflow2_middleware, http_request):
+        """Ensure the middleware invokes the inline drain helper on each request."""
+        with patch('trustpoint.middleware.WorkflowDispatchService') as mock_service:
+            workflow2_middleware.process_request(http_request)
+
+        mock_service.return_value.drain_pending_jobs_if_inline.assert_called_once_with()

@@ -31,6 +31,7 @@ from management.models import (
     PKCS11Token,
     SecurityConfig,
 )
+from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
@@ -976,6 +977,20 @@ class PKCS11ConfigForm(forms.Form):
                     setattr(token, field, value)
             token.save()
         return token
+
+class WorkflowExecutionConfigForm(forms.ModelForm[WorkflowExecutionConfig]):
+    """Form for managing Workflow 2 execution settings."""
+
+    class Meta:
+        """Metadata for the workflow execution settings form."""
+
+        model = WorkflowExecutionConfig
+        fields: ClassVar[tuple[str, ...]] = ('mode', 'worker_stale_after_seconds')
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            'mode': forms.Select(attrs={'class': 'form-select'}),
+            'worker_stale_after_seconds': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+        }
+
 
 class LoggingConfigForm(forms.Form):
     """Form for managing logging configuration."""

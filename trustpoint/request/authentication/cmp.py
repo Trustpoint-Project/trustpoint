@@ -18,12 +18,13 @@ from onboarding.models import (
     OnboardingProtocol,
 )
 from pki.models import IssuedCredentialModel
-from pki.util.idevid import IDevIDAuthenticator
+from pki.util.idevid import IDevIDAuthenticationError, IDevIDAuthenticator
 from request.request_context import (
     BaseRequestContext,
     CmpBaseRequestContext,
     CmpCertConfRequestContext,
     CmpCertificateRequestContext,
+    CmpPollRequestContext,
     CmpRevocationRequestContext,
 )
 from trustpoint.logger import LoggerMixin
@@ -668,6 +669,83 @@ class CmpSignatureBasedRevocationAuthentication(CmpAuthenticationBase):
         return context.device
 
 
+class CmpSignatureBasedPollAuthentication(CmpAuthenticationBase):
+    """Authenticate CMP pollReq messages using the same CMP protection schemes as enrollment."""
+
+    def authenticate(self, context: BaseRequestContext) -> None:
+        """Authenticate one CMP pollReq using either a domain credential or IDevID."""
+        if not isinstance(context, CmpPollRequestContext):
+            exc_msg = 'CmpSignatureBasedPollAuthentication requires a CmpPollRequestContext.'
+            raise TypeError(exc_msg)
+
+        if not self._should_authenticate(context):
+            return
+
+        try:
+            cmp_signer_cert, intermediate_certs = self._extract_extra_certs(context)
+            context.client_certificate = cmp_signer_cert
+
+            device = self._authenticate_with_domain_credential(context)
+            if device is None:
+                device = self._authenticate_with_idevid(context, cmp_signer_cert, intermediate_certs)
+
+            if device is None:
+                self._raise_value_error('Device authentication failed using CMP pollReq signer certificate.')
+
+            self._verify_protection_and_finalize(context, cmp_signer_cert, device)
+        except Exception as exception:
+            error_message = f'CMP signature-based pollReq authentication failed: {exception}'
+            self.logger.warning(error_message)
+            raise ValueError(error_message) from exception
+
+    def _should_authenticate(self, context: CmpPollRequestContext) -> bool:
+        """Check if this authentication method should handle the current pollReq."""
+        if context.protocol != 'cmp':
+            return False
+        if context.cmp_body_type != 'pollReq':
+            return False
+        if not context.parsed_message:
+            self._raise_value_error('CMP signature-based pollReq authentication requires a parsed message.')
+        if not isinstance(context.parsed_message, rfc4210.PKIMessage):
+            self._raise_value_error('CMP signature-based pollReq authentication requires a PKIMessage.')
+
+        protection_algorithm = AlgorithmIdentifier.from_dotted_string(
+            context.parsed_message['header']['protectionAlg']['algorithm'].prettyPrint()
+        )
+        return protection_algorithm != AlgorithmIdentifier.PASSWORD_BASED_MAC
+
+    def _authenticate_with_domain_credential(self, context: CmpPollRequestContext) -> DeviceModel | None:
+        """Try to authenticate the signer as a known issued domain credential."""
+        context.device = None
+        try:
+            ClientCertificateAuthentication().authenticate(context)
+        except ValueError:
+            return None
+        return context.device
+
+    def _authenticate_with_idevid(
+        self,
+        context: CmpPollRequestContext,
+        cmp_signer_cert: x509.Certificate,
+        intermediate_certs: list[x509.Certificate],
+    ) -> DeviceModel | None:
+        """Try to authenticate the signer as an onboarding IDevID."""
+        try:
+            device = IDevIDAuthenticator.authenticate_idevid_from_x509(
+                idevid_cert=cmp_signer_cert,
+                intermediate_cas=intermediate_certs,
+                domain=context.domain,
+                onboarding_protocol=OnboardingProtocol.CMP_IDEVID,
+                pki_protocol=OnboardingPkiProtocol.CMP,
+            )
+        except (IDevIDAuthenticationError, TypeError, ValueError):
+            return None
+
+        if not device.domain:
+            self._raise_value_error('Device domain is not set.')
+        return device
+
+
 class CmpCertConfAuthentication(CmpAuthenticationBase):
     """Resolves domain and device for CMP certConf messages."""
 
@@ -712,5 +790,6 @@ class CmpAuthentication(CompositeAuthentication):
         self.add(CmpSharedSecretAuthentication())
         self.add(CmpSignatureBasedInitializationAuthentication())
         self.add(CmpSignatureBasedCertificationAuthentication())
+        self.add(CmpSignatureBasedPollAuthentication())
         self.add(CmpSignatureBasedRevocationAuthentication())
         self.add(CmpCertConfAuthentication())
