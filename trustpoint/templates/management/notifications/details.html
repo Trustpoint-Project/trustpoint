@@ -1,0 +1,154 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load static %}
+{% load crispy_forms_filters %}
+{% load internationalization_tags %}
+
+{% block content %}
+    <div class="card">
+        <div class="card-header">
+            <h1>{% trans "Notification Details" %}</h1>
+        </div>
+
+        <div class="card-body">
+            <div class="tp-card-centered-content">
+
+                <div class="mb-3">
+                    <strong>{% trans "Notification Type:" %}</strong>
+                    <div>
+                        {% for key, label in notification.NotificationTypes.choices %}
+                            <span class="badge
+                                {% if key == notification.notification_type %}
+                                    {% if key == 'SET' %} bg-primary
+                                    {% elif key == 'INF' %} bg-info
+                                    {% elif key == 'WAR' %} bg-warning
+                                    {% elif key == 'CRI' %} bg-danger
+                                    {% endif %}
+                                {% else %}
+                                    bg-secondary
+                                {% endif %}">
+                                {{ label }}
+                            </span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+
+                <div class="mb-3">
+                    <strong>{% trans "Notification Source:" %}</strong>
+                    <div>
+                        {% for key, label in notification.NotificationSource.choices %}
+                            <span class="badge {% if key == notification.notification_source %}bg-primary{% else %}bg-secondary{% endif %}">
+                                {{ label }}
+                            </span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {% if notification.domain %}
+                    <div class="mb-3">
+                        <strong>{% trans "Domain:" %}</strong>
+                        <a href="{% url 'pki:domains-detail' notification.domain.id %}" class="btn-link">
+                            {{ notification.domain }}
+                            <svg class="bi" width="16" height="16" fill="currentColor">
+                                <use xlink:href="{% static 'img/icons.svg' %}#icon-arrow-up-right-square"/>
+                            </svg>
+                        </a>
+                    </div>
+                {% endif %}
+
+                {% if notification.certificate %}
+                    <div class="mb-3">
+                        <strong>{% trans "Certificate:" %}</strong>
+                        <a href="{% url 'pki:certificate-detail' notification.certificate.id %}" class="btn-link">
+                            {{ notification.certificate }}
+                            <svg class="bi" width="16" height="16" fill="currentColor">
+                                <use xlink:href="{% static 'img/icons.svg' %}#icon-arrow-up-right-square"/>
+                            </svg>
+                        </a>
+                    </div>
+                {% endif %}
+
+                {% if notification.device %}
+                    <div class="mb-3">
+                        <strong>{% trans "Device:" %}</strong>
+                        <a href="{% url 'devices:devices_certificate_lifecycle_management' notification.device.id %}" class="btn-link">
+                            {{ notification.device }}
+                            <svg class="bi" width="16" height="16" fill="currentColor">
+                                <use xlink:href="{% static 'img/icons.svg' %}#icon-arrow-up-right-square"/>
+                            </svg>
+                        </a>
+                    </div>
+                {% elif associated_device %}
+                    <div class="mb-3">
+                        <strong>{% trans "Device:" %}</strong>
+                        <a href="{% url 'devices:devices_certificate_lifecycle_management' associated_device.id %}" class="btn-link">
+                            {{ associated_device }}
+                            <svg class="bi" width="16" height="16" fill="currentColor">
+                                <use xlink:href="{% static 'img/icons.svg' %}#icon-arrow-up-right-square"/>
+                            </svg>
+                        </a>
+                    </div>
+                {% endif %}
+
+                {% if notification.issuing_ca %}
+                    <div class="mb-3">
+                        <strong>{% trans "Issuing CA:" %}</strong>
+                        <a href="{% url 'pki:issuing_cas-detail' notification.issuing_ca.id %}" class="btn-link">
+                            {{ notification.issuing_ca }}
+                            <svg class="bi" width="16" height="16" fill="currentColor">
+                                <use xlink:href="{% static 'img/icons.svg' %}#icon-arrow-up-right-square"/>
+                            </svg>
+                        </a>
+                    </div>
+                {% endif %}
+
+
+                <div class="mb-3">
+                    <strong>{% trans "Message:" %}</strong>
+                    <span>{{ notification.short_translated }}</span>
+                    {% if notification.long_translated %}
+                        <p>{{ notification.long_translated|safe }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="mb-3">
+                    <strong>{% trans "Created At:" %}</strong>
+                    <span>{{ notification.created_at|local_datetime }}</span>
+                </div>
+
+                <div class="mb-3">
+                    <strong>{% trans "Read Status:" %}</strong>
+                    {% if is_read %}
+                        <span class="badge bg-success">{% trans "Read" %}</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{% trans "Unread" %}</span>
+                    {% endif %}
+                </div>
+
+            </div>
+        </div>
+
+        <div class="card-footer">
+            <div class="tp-card-btn-footer">
+                <a href="{% url 'management:notifications' %}" class="btn btn-secondary">{% trans "Back" %}</a>
+                {% if is_read %}
+                    <a href="{% url 'management:notification_toggle_read' notification.pk %}" class="btn btn-outline-secondary">
+                        {% trans 'Mark as Unread' %}
+                    </a>
+                {% else %}
+                    <a href="{% url 'management:notification_toggle_read' notification.pk %}" class="btn btn-outline-primary">
+                        {% trans 'Mark as Read' %}
+                    </a>
+                {% endif %}
+                {% if notification.notification_type == 'WAR' or notification.notification_type == 'CRI' %}
+                    {% if not is_solved %}
+                        <a href="{% url 'management:mark_as_solved' notification.pk %}" class="btn btn-success">
+                            {% trans 'Mark as Solved' %}
+                        </a>
+                    {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+{% endblock content %}

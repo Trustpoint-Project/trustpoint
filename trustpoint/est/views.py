@@ -20,9 +20,10 @@ from request.message_parser import EstMessageParser
 from request.message_responder import EstErrorMessageResponder, EstMessageResponder
 from request.request_context import EstCertificateRequestContext
 from request.request_validator.http_req import EstHttpRequestValidator
-from request.workflow_handler import WorkflowHandler
+from request.workflow2_issuance import release_delivered_workflow2_request
+from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
-from workflows.events import Events
+from workflows2.events.request_events import Events
 
 
 class UsernamePasswordAuthenticationError(Exception):
@@ -131,11 +132,12 @@ class EstSimpleEnrollmentMixin(LoggerMixin):
             )
             est_authorizer.authorize(ctx)
 
-            WorkflowHandler().handle(ctx)
-
-            OperationProcessor().process_operation(ctx)
+            workflow2_result = Workflow2Handler().handle(ctx)
+            if not workflow2_result.should_stop:
+                OperationProcessor().process_operation(ctx)
 
             EstMessageResponder.build_response(ctx)
+            release_delivered_workflow2_request(ctx)
 
         except Exception:
             self.logger.exception('Error processing EST simpleenroll request')
@@ -153,7 +155,7 @@ class EstSimpleEnrollmentView(EstSimpleEnrollmentMixin, View):
         del args
 
         domain_name = cast('str', kwargs.get('domain'))
-        cert_profile = cast('str', kwargs.get('cert_profile', 'domain_credential'))
+        cert_profile = cast('str | None', kwargs.get('cert_profile'))
 
         return self.process_enrollment(request, domain_name, cert_profile)
 
@@ -209,11 +211,12 @@ class EstSimpleReEnrollmentView(LoggerMixin, View):
             )
             est_authorizer.authorize(ctx)
 
-            WorkflowHandler().handle(ctx)
-
-            OperationProcessor().process_operation(ctx)
+            workflow2_result = Workflow2Handler().handle(ctx)
+            if not workflow2_result.should_stop:
+                OperationProcessor().process_operation(ctx)
 
             EstMessageResponder.build_response(ctx)
+            release_delivered_workflow2_request(ctx)
 
         except Exception:
             self.logger.exception('Error processing EST simplereenroll request')

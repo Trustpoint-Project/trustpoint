@@ -89,6 +89,12 @@ urlpatterns = [
     path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
     path('notifications/refresh/', notifications.RefreshNotificationsView.as_view(), name='refresh_notifications'),
     path('notifications/<int:pk>/delete/', notifications.NotificationDeleteView.as_view(), name='notification_delete'),
+    path('notifications/', notifications.NotificationsListView.as_view(), name='notifications'),
+    path('notifications/<int:pk>/', notifications.NotificationDetailsView.as_view(), name='notification_details'),
+    path('notifications/<int:pk>/mark-as-solved/',
+        notifications.NotificationMarkSolvedView.as_view(), name='mark_as_solved'),
+    path('notifications/<int:pk>/toggle-read/',
+        notifications.NotificationToggleReadView.as_view(), name='notification_toggle_read'),
     # Audit log
     path('audit-log/', audit_log.AuditLogListView.as_view(), name='audit-log'),
 ]

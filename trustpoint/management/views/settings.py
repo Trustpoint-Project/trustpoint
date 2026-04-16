@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
@@ -12,6 +13,8 @@ from django.db import connection
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.utils import timezone, translation
+from django.utils import translation
+from django.utils.timezone import now
 from django.utils.translation import gettext as _
 from django.views import View
 from django.views.generic import TemplateView
@@ -22,14 +25,17 @@ from management.forms import (
     LoggingConfigForm,
     NotificationConfigForm,
     SecurityConfigForm,
+    WorkflowExecutionConfigForm,
 )
 from management.models import InternationalizationConfig, LoggingConfig, NotificationConfig, SecurityConfig
 from management.models.audit_log import AuditLog
+from management.models.workflows2 import WorkflowExecutionConfig
 from management.security.features import AutoGenPkiFeature
 from management.security.mixins import SecurityLevelMixin
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from trustpoint.logger import LoggerMixin
 from trustpoint.page_context import PageContextMixin
+from workflows2.models import Workflow2WorkerHeartbeat
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -227,6 +233,39 @@ def get_network_metrics() -> dict[str, str | bool]:
     }
 
 
+def get_workflow_execution_form(request: HttpRequest) -> WorkflowExecutionConfigForm:
+    """Return the singleton Workflow 2 execution settings form."""
+    workflow_config = WorkflowExecutionConfig.load()
+    if request.method == 'POST' and request.POST.get('form_name') == 'workflow_execution':
+        return WorkflowExecutionConfigForm(request.POST, instance=workflow_config)
+    return WorkflowExecutionConfigForm(instance=workflow_config)
+
+
+def build_workflow_execution_context(
+    request: HttpRequest,
+    workflow_execution_form: WorkflowExecutionConfigForm | None = None,
+) -> dict[str, Any]:
+    """Build the workflow execution settings context for the tabbed settings page."""
+    workflow_execution_form = workflow_execution_form or get_workflow_execution_form(request)
+    workflow_config = workflow_execution_form.instance
+    stale_after = int(getattr(workflow_config, 'worker_stale_after_seconds', 30) or 30)
+    cutoff = now() - timedelta(seconds=stale_after)
+    latest = Workflow2WorkerHeartbeat.objects.order_by('-last_seen').first()
+    any_alive = Workflow2WorkerHeartbeat.objects.filter(last_seen__gte=cutoff).exists()
+
+    return {
+        'workflow_execution_form': workflow_execution_form,
+        'workflow_worker_any_alive': any_alive,
+        'workflow_worker_latest_id': getattr(latest, 'worker_id', None),
+        'workflow_worker_latest_seen': getattr(latest, 'last_seen', None),
+        'workflow_worker_stale_after_seconds': stale_after,
+        'workflow_inline_takeover_enabled': str(workflow_config.mode).lower() in {
+            WorkflowExecutionConfig.Mode.AUTO,
+            WorkflowExecutionConfig.Mode.INLINE,
+        },
+    }
+
+
 class SettingsFormViewMixin[FormType: (
     InternationalizationConfigForm | LoggingConfigForm | NotificationConfigForm | SecurityConfigForm
 )](
@@ -239,7 +278,6 @@ class SettingsFormViewMixin[FormType: (
 
     page_category = 'management'
     page_name = 'settings'
-
     setting_type: str = 'general'
 
     def get_success_url(self) -> str:
@@ -276,8 +314,7 @@ class SettingsTabView(TemplateView):
         context = super().get_context_data(**kwargs)
         context['page_category'] = 'management'
         context['page_name'] = 'settings'
-
-        context['active_tab'] = self.request.GET.get('tab', 'language')
+        context['active_tab'] = kwargs.get('active_tab', self.request.GET.get('tab', 'internationalization'))
 
         internationalization_view = InternationalizationSettingsView()
         internationalization_view.request = self.request
@@ -319,6 +356,27 @@ class SettingsTabView(TemplateView):
         context.update(get_network_metrics())
 
         return context
+        workflow_execution_form = kwargs.get('workflow_execution_form')
+        context.update(build_workflow_execution_context(self.request, workflow_execution_form))
+        return context
+
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
+        """Handle inline Workflow 2 execution settings updates from the settings tab page."""
+        if request.POST.get('form_name') != 'workflow_execution':
+            return redirect(reverse_lazy('management:settings'))
+
+        workflow_execution_form = get_workflow_execution_form(request)
+        if workflow_execution_form.is_valid():
+            workflow_execution_form.save()
+            messages.success(request, _('Workflow execution settings saved.'))
+            return redirect(f"{reverse_lazy('management:settings')}?tab=workflow")
+
+        messages.error(request, _('Please correct the workflow execution settings errors.'))
+        context = self.get_context_data(
+            workflow_execution_form=workflow_execution_form,
+            active_tab='workflow',
+        )
+        return self.render_to_response(context)
 
 
 class InternationalizationSettingsView(SettingsFormViewMixin[InternationalizationConfigForm]):
@@ -379,7 +437,7 @@ class InternationalizationSettingsView(SettingsFormViewMixin[Internationalizatio
             samesite='Lax',
         )
 
-        messages.success(self.request,_('Internationalization configuration saved successfully.'))
+        messages.success(self.request, _('Internationalization configuration saved successfully.'))
         return response
 
 
@@ -392,11 +450,7 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
     success_url = reverse_lazy('management:settings-security')
 
     def get_form_kwargs(self) -> dict[str, Any]:
-        """Get the keyword arguments for instantiating the form.
-
-        Returns:
-            The keyword arguments for the form, including the instance.
-        """
+        """Get the keyword arguments for instantiating the form."""
         kwargs = super().get_form_kwargs()
         try:
             security_config = SecurityConfig.objects.get(id=1)
@@ -406,21 +460,10 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
         return kwargs
 
     def form_valid(self, form: SecurityConfigForm) -> HttpResponse:
-        """Handle valid security form submission.
-
-        This method processes the form data, applies security settings,
-        and displays success messages to the user.
-
-        Parameters:
-            form: The form instance containing the submitted data.
-
-        Returns:
-            A redirect response to the success URL.
-        """
+        """Handle valid security form submission."""
         old_conf = SecurityConfig.objects.get(pk=form.instance.pk) if form.instance.pk else None
         form.save()
 
-        # --- Audit log ---
         security_mode_display = form.instance.get_security_mode_display()
         actor = self.request.user if self.request.user.is_authenticated else None
         AuditLog.create_entry(
@@ -429,7 +472,6 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
             target_display=f'SecurityConfig: {security_mode_display}',
             actor=actor,
         )
-        # -----------------
 
         if 'security_mode' in form.changed_data:
             old_value = getattr(old_conf, 'security_mode', None) if old_conf else None
@@ -439,26 +481,20 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
                 messages.error(self.request, 'Security mode value is missing.')
                 return redirect(self.success_url)
 
-            # Safely convert to int for comparison (default to 0 if None)
             old_int = int(old_value) if old_value is not None else 0
             new_int = int(new_value)
 
             if new_int > old_int:
                 self.sec.reset_settings(new_value)
 
-        form.instance.apply_security_settings()
+
 
         if 'auto_gen_pki' in form.changed_data:
             old_auto = getattr(old_conf, 'auto_gen_pki', None) if old_conf else None
             new_auto = form.cleaned_data.get('auto_gen_pki', None)
-            self.logger.info(
-                'auto_gen_pki changed: old=%s, new=%s',
-                old_auto,
-                new_auto
-            )
+            self.logger.info('auto_gen_pki changed: old=%s, new=%s', old_auto, new_auto)
 
             if old_auto != new_auto and new_auto:
-                # autogen PKI got enabled
                 key_alg_value = form.cleaned_data.get('auto_gen_pki_key_algorithm')
                 if key_alg_value is None:
                     messages.error(self.request, 'Auto-generated PKI key algorithm is missing.')
@@ -466,13 +502,9 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
                 key_alg = AutoGenPkiKeyAlgorithm(key_alg_value)
                 self.logger.info('Calling enable_feature for AutoGenPkiFeature with key_alg: %s', key_alg)
                 self.sec.enable_feature(AutoGenPkiFeature, {'key_algorithm': key_alg})
-                self.logger.info(
-                    'Auto-generated PKI enabled with key algorithm: %s',
-                    key_alg.name
-                )
+                self.logger.info('Auto-generated PKI enabled with key algorithm: %s', key_alg.name)
 
             elif old_auto != new_auto and not new_auto:
-                # autogen PKI got disabled
                 AutoGenPkiFeature.disable()
                 self.logger.info('Auto-generated PKI disabled')
 
@@ -483,11 +515,33 @@ class SecuritySettingsView(SettingsFormViewMixin[SecurityConfigForm]):
         """Handle invalid security form submission."""
         messages.error(self.request, _('Error saving the configuration'))
         extra: dict[str, Any] = {'form': form}
-        if hasattr(form, '_violations'):
-            extra['policy_violations'] = form._violations  # noqa: SLF001
-            extra['policy_violations_mode_label'] = form._violations_mode_label  # noqa: SLF001
-            form.errors.pop('__all__', None)
-        return self.render_to_response(self.get_context_data(**extra))
+
+
+        self.template_name = 'management/settings.html'
+        context = self.get_context_data(**extra)
+        context['active_tab'] = 'security'
+        context['security_form'] = form
+
+
+        internationalization_view = InternationalizationSettingsView()
+        internationalization_view.request = self.request
+        internationalization_view.setup(self.request)
+        context['internationalization_form'] = internationalization_view.get_form()
+
+        logging_view = LoggingSettingsView()
+        logging_view.request = self.request
+        logging_view.setup(self.request)
+        context['logging_form'] = logging_view.get_form()
+        context['loglevels'] = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+        context['current_loglevel'] = logging.getLevelName(logging.getLogger().getEffectiveLevel())
+
+        notification_view = NotificationSettingsView()
+        notification_view.request = self.request
+        notification_view.setup(self.request)
+        context['notification_form'] = notification_view.get_form()
+        context['notification_config'] = NotificationConfig.get()
+
+        return self.render_to_response(context)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Build the context dictionary for the security settings page."""
@@ -520,7 +574,7 @@ class LoggingSettingsView(SettingsFormViewMixin[LoggingConfigForm]):
 
         LoggingConfig.objects.update_or_create(
             id=1,
-            defaults={'log_level': level}
+            defaults={'log_level': level},
         )
 
         self.logger.info('Log level successfully changed to: %s', level)
@@ -572,18 +626,18 @@ class NotificationSettingsView(SettingsFormViewMixin[NotificationConfigForm]):
                     if not was_enabled:
                         messages.success(
                             self.request,
-                            _('Notifications enabled and notification cycle initialized.')
+                            _('Notifications enabled and notification cycle initialized.'),
                         )
                     else:
                         messages.success(
                             self.request,
-                            _('Notification configuration saved and cycle reinitialized.')
+                            _('Notification configuration saved and cycle reinitialized.'),
                         )
                 except Exception:
                     self.logger.exception('Error initializing notifications')
                     messages.error(
                         self.request,
-                        _('Notifications saved but error initializing notification cycle.')
+                        _('Notifications saved but error initializing notification cycle.'),
                     )
             else:
                 messages.success(self.request, _('Notification configuration saved successfully.'))
@@ -634,6 +688,11 @@ class ChangeLogLevelView(View):
     def post(self, request: HttpRequest) -> HttpResponse:
         """Handle POST requests to change the logging level."""
         form = LoggingConfigForm(request.POST)
+        if not form.is_valid():
+            normalized_data = request.POST.copy()
+            normalized_data['loglevel'] = (normalized_data.get('loglevel') or '').upper()
+            form = LoggingConfigForm(normalized_data)
+
         if form.is_valid():
             form.save()
             messages.success(request, _('Log level updated successfully.'))

@@ -1,4 +1,5 @@
 {% load i18n %}
+{% load sort_tags %}
 {% load internationalization_tags %}
 
 {% block certificates_table %}
@@ -8,44 +9,43 @@
         <tr>
             <th id="checkbox-column"><input type="checkbox"/></th>
             <th>
-                <a href="?sort={% if current_sort == 'common_name' %}-{% endif %}common_name">
-                    {% trans 'Common Name' %}
+                <a href="{% url_sort 'common_name' %}">
+                    {% trans 'Common Name' %} {{ request|sort_icon:'common_name' }}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'not_valid_after' %}-{% endif %}not_valid_after">
-                    {% trans 'Not valid after (UTC)' %}
+                <a href="{% url_sort 'not_valid_after' %}">
+                    {% trans 'Not valid after (UTC)' %} {{ request|sort_icon:'not_valid_after' }}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'spki_algorithm' %}-{% endif %}spki_algorithm">
-                    {% trans 'Public Key Algorithm' %}
+                <a href="{% url_sort 'spki_algorithm' %}">
+                    {% trans 'Public Key Algorithm' %} {{ request|sort_icon:'spki_algorithm' }}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'spki_key_size' %}-{% endif %}spki_key_size">
-                    {% trans 'Public Key Size' %}
+                <a href="{% url_sort 'spki_key_size' %}">
+                    {% trans 'Public Key Size' %} {{ request|sort_icon:'spki_key_size' }}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'spki_ec_curve' %}-{% endif %}spki_ec_curve">
-                    {% trans 'Public Key Curve (ECC)' %}
+                <a href="{% url_sort 'spki_ec_curve' %}">
+                    {% trans 'Public Key Curve (ECC)' %} {{ request|sort_icon:'spki_ec_curve' }}
                 </a>
             </th>
             <th>
-                <a
-                    href="?sort={% if current_sort == 'certificate_status' %}-{% endif %}certificate_status">
-                    {% trans 'Status' %}
+                <a href="{% url_sort 'certificate_status_sort' %}">
+                    {% trans 'Status' %} {{ request|sort_icon:'certificate_status_sort' }}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'created_at' %}-{% endif %}created_at">
-                    {% trans 'Created at' %}
+                <a href="{% url_sort 'created_at' %}">
+                    {% trans 'Created at' %} {{ request|sort_icon:'created_at' }}
                 </a>
             </th>
             <th>
-                <a href="?sort={% if current_sort == 'is_self_signed' %}-{% endif %}is_self_signed">
-                    {% trans 'Self-Signed' %}
+                <a href="{% url_sort 'is_self_signed' %}">
+                    {% trans 'Self-Signed' %} {{ request|sort_icon:'is_self_signed' }}
                 </a>
             </th>
             <th>{% trans 'Details' %}</th>
@@ -63,7 +63,7 @@
             <td>{{ certificate.spki_algorithm }}</td>
             <td>{{ certificate.spki_key_size }}</td>
             <td>{% if certificate.spki_ec_curve%} {{ certificate.spki_ec_curve }} {% else %}—{% endif %}</td>
-            <td>{{ certificate.certificate_status }}</td>
+            <td>{{ certificate.table_status }}</td>
             <td>{{ certificate.created_at|local_datetime }}</td>
             <td>{% if certificate.is_self_signed == 1 %} ✔ {% else %} ✘ {% endif %}</td>
             <td><a href="{% url 'pki:certificate-detail' pk=certificate.id %}" class="btn btn-primary tp-table-btn w-100">{% trans 'Details' %}</a></td>

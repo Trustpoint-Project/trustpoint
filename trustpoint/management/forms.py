@@ -31,8 +31,10 @@ from management.models import (
     PKCS11Token,
     SecurityConfig,
 )
+from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
+from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
 from pki.models import CredentialModel
 from pki.util.keys import AutoGenPkiKeyAlgorithm
 from pki.util.x509 import CertificateVerifier
@@ -71,7 +73,6 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 if field_name in self.fields:
                     self.fields[field_name].widget.attrs['disabled'] = 'disabled'
 
-        # Disable option to change algorithm if AutoGenPKI is already enabled
         if self.instance and self.instance.auto_gen_pki:
             self.fields['auto_gen_pki_key_algorithm'].widget.attrs['disabled'] = 'disabled'
 
@@ -85,6 +86,15 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 _('Advanced security settings'),
                 Field('auto_gen_pki', wrapper_class='form-check form-switch'),
                 'auto_gen_pki_key_algorithm',
+                'rsa_minimum_key_size',
+                'max_cert_validity_days',
+                'max_crl_validity_days',
+                Field('allow_ca_issuance', wrapper_class='form-check form-switch'),
+                Field('allow_auto_gen_pki', wrapper_class='form-check form-switch'),
+                Field('allow_self_signed_ca', wrapper_class='form-check form-switch'),
+                Field('require_physical_hsm', wrapper_class='form-check form-switch'),
+                'permitted_no_onboarding_pki_protocols',
+                'permitted_onboarding_protocols'
             ),
         )
 
@@ -113,10 +123,87 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         widget=forms.Select(attrs={'data-hide-at-sl': '[false, false, true, true, true]'}),
     )
 
+    RSA_KEY_CHOICES: ClassVar[list[tuple[object, object]]] = [
+        ('', _('None / Not Permitted')),
+        (1024, '1024'),
+        (2048, '2048'),
+        (3072, '3072'),
+        (4096, '4096'),
+        (8192, '8192'),
+    ]
+    rsa_minimum_key_size = forms.ChoiceField(
+        choices=RSA_KEY_CHOICES, required=False, widget=forms.Select()
+    )
+
+    permitted_no_onboarding_pki_protocols = forms.MultipleChoiceField(
+        choices=[(c.value, c.label) for c in NoOnboardingPkiProtocol],
+        widget=forms.CheckboxSelectMultiple, required=False
+    )
+    permitted_onboarding_protocols = forms.MultipleChoiceField(
+        choices=[(c.value, c.label) for c in OnboardingProtocol],
+        widget=forms.CheckboxSelectMultiple, required=False
+    )
+
     class Meta:
         """Meta configuration for SecurityConfigForm."""
         model = SecurityConfig
-        fields: ClassVar[list[str]] = ['security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm']
+        fields: ClassVar[list[str]] = [
+            'security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm',
+            'rsa_minimum_key_size', 'max_cert_validity_days', 'max_crl_validity_days',
+            'allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca',
+            'require_physical_hsm', 'permitted_no_onboarding_pki_protocols',
+            'permitted_onboarding_protocols'
+        ]
+
+    @staticmethod
+    def _clean_protocol_list(value: Any, field_label: str) -> list[int]:
+        """Normalize protocol multi-select values to integer lists."""
+        if value in (None, ''):
+            return []
+
+        if not isinstance(value, list):
+            raise ValidationError(_('%(field)s must be a list of protocol values.') % {'field': field_label})
+
+        normalized: list[int] = []
+        for item in value:
+            try:
+                normalized.append(int(item))
+            except (TypeError, ValueError) as err:
+                raise ValidationError(
+                    _('%(field)s contains an invalid protocol value.') % {'field': field_label}
+                ) from err
+        return normalized
+
+    def clean_permitted_no_onboarding_pki_protocols(self) -> list[int]:
+        """Return no-onboarding protocol values as integers."""
+        value = self.cleaned_data.get('permitted_no_onboarding_pki_protocols')
+        return self._clean_protocol_list(value, 'No-onboarding PKI protocols')
+
+    def clean_permitted_onboarding_protocols(self) -> list[int]:
+        """Return onboarding protocol values as integers."""
+        value = self.cleaned_data.get('permitted_onboarding_protocols')
+        return self._clean_protocol_list(value, 'Onboarding protocols')
+
+    def clean_rsa_minimum_key_size(self) -> int | None:
+        """Normalize RSA minimum key size.
+
+        - '' -> None
+        - for CRITICAL: always None (RSA banned)
+        - otherwise: convert to int
+        """
+        raw = self.cleaned_data.get('rsa_minimum_key_size')
+        mode = self.cleaned_data.get('security_mode')
+
+        if mode == SecurityConfig.SecurityModeChoices.CRITICAL:
+            return None
+
+        if raw in (None, ''):
+            return None
+
+        try:
+            return int(str(raw))
+        except (TypeError, ValueError) as err:
+            raise ValidationError(_('Invalid RSA key size.')) from err
 
     def clean_auto_gen_pki_key_algorithm(self) -> AutoGenPkiKeyAlgorithm:
         """Keep the current value of `auto_gen_pki_key_algorithm` from the instance if the field was disabled."""
@@ -127,25 +214,54 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             return AutoGenPkiKeyAlgorithm.RSA2048
         return AutoGenPkiKeyAlgorithm(form_value)
 
+    def _validate_mode_constraints(self, cleaned: dict[str, Any], mode: str) -> None:
+        """Validate that submitted values comply with the given security mode defaults."""
+        defaults = SecurityConfig._MODE_DEFAULTS[mode]   # noqa: SLF001
+
+        for field in ['max_cert_validity_days', 'max_crl_validity_days']:
+            val = cleaned.get(field)
+            default_val = defaults.get(field)
+            if default_val is not None and (val is None or val > default_val):
+                self.add_error(field, f'Maximum allowed for this level is {default_val}.')
+
+        rsa_val = cleaned.get('rsa_minimum_key_size')
+        default_rsa = defaults.get('rsa_minimum_key_size')
+        if default_rsa is not None and (rsa_val is None or rsa_val < default_rsa):
+            self.add_error(
+                'rsa_minimum_key_size',
+                f'Minimum key size for this level is {default_rsa}.',
+            )
+
+        for field in ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca']:
+            if not defaults.get(field) and cleaned.get(field):
+                self.add_error(field, 'This feature cannot be enabled at this security level.')
+
+        if defaults.get('require_physical_hsm') and not cleaned.get('require_physical_hsm'):
+            self.add_error('require_physical_hsm', 'This feature cannot be disabled at this security level.')
+
+        protocol_fields: list[tuple[str, list[int]]] = [
+            ('permitted_no_onboarding_pki_protocols', defaults['permitted_no_onboarding_pki_protocols']),
+            ('permitted_onboarding_protocols', defaults['permitted_onboarding_protocols']),
+        ]
+        for field, allowed_list in protocol_fields:
+            submitted = cleaned.get(field) or []
+            allowed = {int(v) for v in allowed_list}
+            disallowed = {int(v) for v in submitted} - allowed
+            if disallowed:
+                self.add_error(field, 'One or more selected protocols are not permitted at this security level.')
+
     def clean(self) -> dict[str, Any]:
-        """Validate that existing data complies with the target security mode."""
-        cleaned_data = cast('dict[str, Any]', super().clean())
-        new_mode = cleaned_data.get('security_mode')
-        if not new_mode or not self.instance or not self.instance.pk:
-            return cleaned_data
+        """Apply per-mode constraints on security settings."""
+        cleaned: dict[str, Any] = super().clean() or {}
+        mode = cleaned.get('security_mode')
 
-        old_mode = self.instance.security_mode
-        # Only validate when moving to a strictly higher (stricter) level.
-        if int(new_mode) <= int(old_mode):
-            return cleaned_data
+        if mode != SecurityConfig.SecurityModeChoices.LAB:
+            self._validate_mode_constraints(cleaned, str(mode))
 
-        violations = self.instance.check_mode_transition(new_mode)
-        if violations:
-            self._violations = violations
-            self._violations_mode_label = SecurityConfig.SecurityModeChoices(new_mode).label
-            msg = ''
-            raise ValidationError(msg, code='policy_violation')
-        return cleaned_data
+        if cleaned.get('auto_gen_pki') and not cleaned.get('allow_auto_gen_pki'):
+            self.add_error('auto_gen_pki', 'Cannot enable auto-generated PKI when it is not permitted.')
+
+        return cleaned
 
 
 class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
@@ -161,6 +277,7 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
             'enabled',
             'cert_expiry_warning_days',
             'issuing_ca_expiry_warning_days',
+            'crl_expiry_warning_days',
         ]
         widgets: ClassVar[dict[str, Any]] = {
             'enabled': forms.CheckboxInput(
@@ -170,6 +287,9 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
                 attrs={'class': 'form-control', 'min': '1', 'max': '365'}
             ),
             'issuing_ca_expiry_warning_days': forms.NumberInput(
+                attrs={'class': 'form-control', 'min': '1', 'max': '365'}
+            ),
+            'crl_expiry_warning_days': forms.NumberInput(
                 attrs={'class': 'form-control', 'min': '1', 'max': '365'}
             ),
         }
@@ -189,6 +309,7 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
                 _('Expiry Warning Thresholds'),
                 'cert_expiry_warning_days',
                 'issuing_ca_expiry_warning_days',
+                'crl_expiry_warning_days',
             ),
         )
 
@@ -221,6 +342,21 @@ class NotificationConfigForm(forms.ModelForm[NotificationConfig]):
                 }
             )
         return ca_expiry
+
+    def clean_crl_expiry_warning_days(self) -> int | None:
+        """Validate crl_expiry_warning_days field."""
+        crl_expiry = self.cleaned_data.get('crl_expiry_warning_days')
+        if crl_expiry is not None and (
+            crl_expiry < self.MIN_EXPIRY_WARNING_DAYS or
+            crl_expiry > self.MAX_EXPIRY_WARNING_DAYS
+        ):
+            raise ValidationError(
+                _('Value must be between %(min)d and %(max)d days.') % {
+                    'min': self.MIN_EXPIRY_WARNING_DAYS,
+                    'max': self.MAX_EXPIRY_WARNING_DAYS,
+                }
+            )
+        return crl_expiry
 
 class BackupOptionsForm(forms.ModelForm[BackupOptions]):
     """Form for editing BackupOptions settings."""
@@ -841,6 +977,20 @@ class PKCS11ConfigForm(forms.Form):
                     setattr(token, field, value)
             token.save()
         return token
+
+class WorkflowExecutionConfigForm(forms.ModelForm[WorkflowExecutionConfig]):
+    """Form for managing Workflow 2 execution settings."""
+
+    class Meta:
+        """Metadata for the workflow execution settings form."""
+
+        model = WorkflowExecutionConfig
+        fields: ClassVar[tuple[str, ...]] = ('mode', 'worker_stale_after_seconds')
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            'mode': forms.Select(attrs={'class': 'form-select'}),
+            'worker_stale_after_seconds': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
+        }
+
 
 class LoggingConfigForm(forms.Form):
     """Form for managing logging configuration."""

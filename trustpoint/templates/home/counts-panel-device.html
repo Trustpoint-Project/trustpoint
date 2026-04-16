@@ -7,18 +7,18 @@
   </div>
 </div>
 
-<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3">
-  <div class="col">
-    {% url 'devices:devices' as device_url %}
-    {% include 'home/dashboard_card.html' with title="Active Devices" card_type="active" identifier="active_devices" dataset="device_counts" link_url="device_url" %}
+<div class="row g-3">
+  {% url 'devices:devices' as devices_url %}
+  <div class="col-12 col-sm-6 col-lg">
+    {% include 'home/dashboard_card.html' with title="Pending Enrollments" card_type="pending" identifier="pending_enrollments" dataset="device_dashboard_counts" data_key="pending" link_url=devices_url|add:'?enrollment_state=pending' %}
   </div>
-  <div class="col">
-    {% include 'home/dashboard_card.html' with title="Expiring Devices" card_type="expiring" identifier="expiring_devices" dataset="device_counts" %}
+  <div class="col-12 col-sm-6 col-lg">
+    {% include 'home/dashboard_card.html' with title="Expired Devices" card_type="expired" identifier="expired_devices" dataset="device_dashboard_counts" data_key="expired" link_url=devices_url|add:'?expired_device=1' %}
   </div>
-  <div class="col">
-    {% include 'home/dashboard_card.html' with title="Expired Devices" card_type="expired" identifier="expired_devices" dataset="device_counts" %}
+  <div class="col-12 col-sm-6 col-lg">
+    {% include 'home/dashboard_card.html' with title="Valid Domain Credentials" card_type="active" identifier="valid_domain_credential_devices" dataset="device_dashboard_counts" data_key="valid" link_url=devices_url|add:'?domain_credential_state=valid' %}
   </div>
-  <div class="col">
-    {% include 'home/dashboard_card.html' with title="Pending Devices" card_type="pending" identifier="pending_devices" dataset="device_counts" %}
+  <div class="col-12 col-sm-6 col-lg">
+    {% include 'home/dashboard_card.html' with title="Valid Application Certificates" card_type="active" identifier="valid_application_certificates" dataset="device_application_certificate_counts" data_key="active" link_url=devices_url|add:'?application_certificate_state=active' %}
   </div>
 </div>

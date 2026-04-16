@@ -45,8 +45,6 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
         if not isinstance(context, BaseCertificateRequestContext):
             exc_msg = 'Certificate issuance requires a subclass of BaseCertificateRequestContext.'
             raise TypeError(exc_msg)
-        if context.enrollment_request and not context.enrollment_request.is_valid():
-            return None
 
         if context.domain and context.domain.issuing_ca:
             issuing_ca = context.domain.issuing_ca
@@ -85,7 +83,11 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
         profile_display_name = (context.certificate_profile_model.display_name
                                 or context.certificate_profile_model.unique_name)
 
-        if context.certificate_profile_model.unique_name == 'domain_credential':
+        domain_cred_profile_name = 'domain_credential'
+        if context.domain is not None:
+            domain_cred_profile_name = context.domain.get_domain_credential_profile_name()
+
+        if context.certificate_profile_model.unique_name == domain_cred_profile_name:
             return (IssuedCredentialModel.IssuedCredentialType.DOMAIN_CREDENTIAL, profile_display_name)
 
         return (IssuedCredentialModel.IssuedCredentialType.APPLICATION_CREDENTIAL, profile_display_name)
@@ -102,7 +104,10 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
         request: HttpRequest | None = None
         if isinstance(context, HttpBaseRequestContext):
             request = context.raw_message
-        port = request.META.get('SERVER_PORT', '') if request else ''
+        request_meta = getattr(request, 'META', {}) if request else {}
+        if not isinstance(request_meta, dict):
+            request_meta = {}
+        port = request_meta.get('SERVER_PORT', '')
         if port == '443': # CRL always served via HTTP
             port = ''
         port_str = f':{port}' if port else ''

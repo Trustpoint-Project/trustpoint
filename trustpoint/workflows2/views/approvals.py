@@ -1,0 +1,300 @@
+"""Approval queue and resolution views for Workflow 2."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, ClassVar
+
+from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import Case, IntegerField, Value, When
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.utils.translation import gettext as _
+from django.views import View
+
+from trustpoint.page_context import PageContextMixin
+from workflows2.engine.executor import WorkflowExecutor
+from workflows2.models import Workflow2Approval, Workflow2Instance
+from workflows2.services.dispatch import WorkflowDispatchService
+from workflows2.services.runtime import WorkflowRuntimeService
+from workflows2.views.presentation import (
+    describe_event_context,
+    describe_step,
+    pretty_json,
+    resolve_source_context,
+    status_badge_class,
+    summarize_named_values,
+)
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from django.http import HttpRequest, HttpResponse
+
+
+def _json_object(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _expire_pending_approvals() -> None:
+    now = timezone.now()
+    Workflow2Approval.objects.filter(
+        status=Workflow2Approval.STATUS_PENDING,
+        expires_at__isnull=False,
+        expires_at__lte=now,
+    ).update(
+        status=Workflow2Approval.STATUS_EXPIRED,
+        decided_at=now,
+        decided_by='',
+        comment='',
+    )
+
+
+def _build_timeout_context(
+    approval: Workflow2Approval,
+    *,
+    timeout_seconds: int | None,
+) -> dict[str, object]:
+    """Return render-friendly timeout information for one approval."""
+    expires_at = approval.expires_at
+    has_timeout = bool(timeout_seconds) or expires_at is not None
+    is_expired = approval.status == Workflow2Approval.STATUS_EXPIRED
+
+    return {
+        'has_timeout': has_timeout,
+        'timeout_seconds': timeout_seconds,
+        'expires_at': expires_at,
+        'is_expired': is_expired,
+    }
+
+
+class Workflow2ApprovalListView(PageContextMixin, LoginRequiredMixin, View):
+    """List workflow approvals with status and context summaries."""
+
+    page_category = 'workflows2'
+    page_name = 'approvals-list'
+    SORT_OPTIONS: ClassVar[dict[str, tuple[str, ...]]] = {
+        'created': ('pending_first', '-created_at'),
+        'created_asc': ('pending_first', 'created_at'),
+        'expires': ('pending_first', 'expires_at', '-created_at'),
+        'expires_desc': ('pending_first', '-expires_at', '-created_at'),
+        'status': ('status', '-created_at'),
+        'status_desc': ('-status', '-created_at'),
+    }
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Render the paginated approval queue."""
+        _expire_pending_approvals()
+        base_qs = Workflow2Approval.objects.select_related(
+            'instance',
+            'instance__definition',
+            'instance__run',
+        ).annotate(
+            pending_first=Case(
+                When(status=Workflow2Approval.STATUS_PENDING, then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            )
+        )
+
+        status = request.GET.get('status')
+        sort = request.GET.get('sort') or 'created'
+        qs = base_qs
+        if status:
+            qs = qs.filter(status=status)
+        qs = qs.order_by(*self.SORT_OPTIONS.get(sort, ('pending_first', '-created_at')))
+
+        paginator = Paginator(qs, 25)
+        page_obj = paginator.get_page(request.GET.get('page'))
+        approval_rows = []
+        for approval in page_obj.object_list:
+            step_meta = _get_approval_step_meta(approval)
+            approval_rows.append(
+                {
+                    'approval': approval,
+                    'badge': status_badge_class(approval.status),
+                    'step_meta': step_meta,
+                    'instance_badge': status_badge_class(approval.instance.status if approval.instance else None),
+                    'run_badge': status_badge_class(
+                        approval.instance.run.status
+                        if approval.instance and approval.instance.run_id
+                        else None
+                    ),
+                    'can_resolve': approval.status == Workflow2Approval.STATUS_PENDING
+                    and approval.instance
+                    and approval.instance.status == Workflow2Instance.STATUS_AWAITING,
+                }
+            )
+
+        return render(
+            request,
+            'workflows2/approvals_list.html',
+            {
+                'page_obj': page_obj,
+                **self.get_context_data(),
+                'approval_rows': approval_rows,
+                'status': status or '',
+                'sort': sort,
+                'status_choices': Workflow2Approval.STATUS_CHOICES,
+                'summary_total': qs.count(),
+                'summary_pending': qs.filter(status=Workflow2Approval.STATUS_PENDING).count(),
+                'summary_resolved': qs.filter(
+                    status__in=[
+                        Workflow2Approval.STATUS_APPROVED,
+                        Workflow2Approval.STATUS_REJECTED,
+                    ]
+                ).count(),
+                'summary_expired': qs.filter(status=Workflow2Approval.STATUS_EXPIRED).count(),
+            },
+        )
+
+
+class Workflow2ApprovalDetailView(PageContextMixin, LoginRequiredMixin, View):
+    """Show a single approval request in context."""
+
+    page_category = 'workflows2'
+    page_name = 'approvals-list'
+
+    def get(self, request: HttpRequest, approval_id: UUID) -> HttpResponse:
+        """Render the detail page for one approval request."""
+        _expire_pending_approvals()
+        approval = get_object_or_404(
+            Workflow2Approval.objects.select_related('instance', 'instance__definition', 'instance__run'),
+            id=approval_id,
+        )
+        inst = approval.instance
+        step_meta = _get_approval_step_meta(approval)
+        step_display = describe_step(approval.step_id, {approval.step_id: {
+            'id': approval.step_id,
+            'title': str(step_meta.get('title') or approval.step_id),
+            'type': 'approval',
+            'description': '',
+        }})
+        event_source = _json_object(inst.event_json).get('source')
+        run = inst.run if inst.run_id else None
+        source_context = resolve_source_context(run.source_json if run is not None else event_source)
+        event_context = describe_event_context(inst.event_json)
+        vars_summary = summarize_named_values(inst.vars_json)
+        timeout_seconds_raw = step_meta.get('timeout_seconds')
+        timeout_seconds = timeout_seconds_raw if isinstance(timeout_seconds_raw, int) else None
+        timeout_context = _build_timeout_context(
+            approval,
+            timeout_seconds=timeout_seconds,
+        )
+
+        return render(
+            request,
+            'workflows2/approval_detail.html',
+            {
+                'approval': approval,
+                **self.get_context_data(),
+                'inst': inst,
+                'step_meta': step_meta,
+                'step_display': step_display,
+                'source_context': source_context,
+                'event_context': event_context,
+                'vars_summary': vars_summary,
+                'approval_badge': status_badge_class(approval.status),
+                'instance_badge': status_badge_class(inst.status),
+                'run_badge': status_badge_class(run.status if run is not None else None),
+                'can_resolve': approval.status == Workflow2Approval.STATUS_PENDING
+                and inst.status == Workflow2Instance.STATUS_AWAITING,
+                'timeout_context': timeout_context,
+                'event_pretty': pretty_json(inst.event_json),
+                'vars_pretty': pretty_json(inst.vars_json),
+            },
+        )
+
+
+class Workflow2ApprovalResolveView(LoginRequiredMixin, View):
+    """Approve/Reject and continue with the normal dispatch execution policy."""
+
+    def post(self, request: HttpRequest, approval_id: UUID) -> HttpResponse:
+        """Resolve an approval and continue execution if the workflow can proceed."""
+        decision = (request.POST.get('decision') or '').strip().lower()
+        comment = (request.POST.get('comment') or '').strip()
+        if decision not in {'approved', 'rejected'}:
+            messages.error(request, _("Invalid decision. Must be 'approved' or 'rejected'."))
+            return redirect('workflows2:approvals-detail', approval_id=approval_id)
+
+        executor = WorkflowExecutor()
+        runtime = WorkflowRuntimeService(executor=executor)
+        dispatch = WorkflowDispatchService(executor=executor)
+        continue_inline = dispatch.runs_inline()
+
+        try:
+            with transaction.atomic():
+                approval = Workflow2Approval.objects.select_for_update().select_related('instance').get(id=approval_id)
+
+                # Resolve approval updates instance.current_step -> next step and sets instance RUNNING/current_step
+                runtime.resolve_approval(
+                    approval=approval,
+                    decision=decision,
+                    decided_by=request.user.get_username() or None,
+                    comment=comment or None,
+                )
+
+                inst = Workflow2Instance.objects.select_for_update().get(id=approval.instance_id)
+
+                if inst.status == Workflow2Instance.STATUS_RUNNING and inst.current_step:
+                    dispatch.continue_instance(instance=inst)
+                    if continue_inline:
+                        success_message = _(
+                            'Approval resolved: %(decision)s. Workflow continued inline.'
+                        ) % {'decision': decision}
+                    else:
+                        success_message = _(
+                            'Approval resolved: %(decision)s. Next workflow step queued.'
+                        ) % {'decision': decision}
+                elif inst.status == Workflow2Instance.STATUS_SUCCEEDED:
+                    success_message = _(
+                        'Approval resolved: %(decision)s. Workflow ended successfully.'
+                    ) % {'decision': decision}
+                elif inst.status == Workflow2Instance.STATUS_REJECTED:
+                    success_message = _(
+                        'Approval resolved: %(decision)s. Workflow ended rejected.'
+                    ) % {'decision': decision}
+                else:
+                    success_message = _('Approval resolved: %(decision)s.') % {'decision': decision}
+
+            messages.success(request, success_message)
+        except Exception as e:  # noqa: BLE001
+            messages.error(
+                request,
+                _('Resolve failed: %(type)s: %(error)s')
+                % {'type': type(e).__name__, 'error': e},
+            )
+
+        return redirect('workflows2:approvals-detail', approval_id=approval_id)
+
+
+def _get_approval_step_meta(approval: Workflow2Approval) -> dict[str, str | int | None]:
+    instance = approval.instance
+    definition = instance.definition if instance else None
+    ir = _json_object(definition.ir_json if definition else None)
+    workflow = _json_object(ir.get('workflow'))
+    steps = _json_object(workflow.get('steps'))
+    step = _json_object(steps.get(approval.step_id))
+    params = _json_object(step.get('params'))
+
+    return {
+        'title': (
+            (step.get('title') if isinstance(step, dict) else None)
+            or params.get('title')
+            or approval.step_id
+        ),
+        'approved_outcome': (
+            params.get('approved_outcome')
+            or (step.get('approved_outcome') if isinstance(step, dict) else None)
+        ),
+        'rejected_outcome': (
+            params.get('rejected_outcome')
+            or (step.get('rejected_outcome') if isinstance(step, dict) else None)
+        ),
+        'timeout_seconds': (
+            params.get('timeout_seconds')
+            or (step.get('timeout_seconds') if isinstance(step, dict) else None)
+        ),
+    }

@@ -21,7 +21,6 @@ function getOnboardingState(urlExt, iconUrl) {
   fetch('/api/onboarding/state/'+ urlExt)
     .then(response => response.json())
     .then(data => {
-      console.log(data)
       let val = parseInt(data);
       if (Number.isInteger(val)) setOnboardingStateUI(val, iconUrl);
     }

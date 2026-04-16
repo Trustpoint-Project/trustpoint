@@ -1,23 +1,57 @@
 """Tests for PKI certificate views."""
 
 
+from datetime import timedelta
+
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.x509.oid import NameOID
 from django.http import Http404
-from django.urls import reverse
 from django.test import RequestFactory
+from django.urls import reverse
+from django.utils import timezone
 from trustpoint_core.archiver import ArchiveFormat
 from trustpoint_core.serializer import CertificateFormat
 
+from pki.models import CertificateModel
+from pki.models.certificate import RevokedCertificateModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.views.certificates import (
     CertificatesRedirectView,
-    CertificateTableView,
-    CertificateDetailView,
     IssuingCaCertificateDownloadView,
+    CertificateDetailView,
     CertificateDownloadView,
     CertificateMultipleDownloadView,
+    CertificateTableView,
     TlsServerCertificateDownloadView,
 )
+
+
+def _create_certificate(
+    rsa_private_key: rsa.RSAPrivateKey,
+    common_name: str,
+    not_valid_before,
+    not_valid_after,
+) -> CertificateModel:
+    """Create and persist a certificate model for certificate table tests."""
+    subject = x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, common_name),
+        x509.NameAttribute(NameOID.COUNTRY_NAME, 'DE'),
+    ])
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(subject)
+        .public_key(rsa_private_key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_valid_before)
+        .not_valid_after(not_valid_after)
+        .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+        .sign(private_key=rsa_private_key, algorithm=hashes.SHA256())
+    )
+    return CertificateModel.save_certificate(certificate)
 
 
 @pytest.mark.django_db
@@ -34,6 +68,49 @@ class TestCertificatesRedirectView:
 @pytest.mark.django_db
 class TestCertificateTableView:
     """Test suite for CertificateTableView."""
+
+    @pytest.fixture
+    def certificate_instances(self, rsa_private_key: rsa.RSAPrivateKey):
+        """Create certificates that cover the visible certificate-state filters."""
+        now = timezone.now()
+        active = _create_certificate(
+            rsa_private_key,
+            'active-cert',
+            now - timedelta(days=5),
+            now + timedelta(days=60),
+        )
+        expiring = _create_certificate(
+            rsa_private_key,
+            'expiring-cert',
+            now - timedelta(days=5),
+            now + timedelta(days=10),
+        )
+        expired = _create_certificate(
+            rsa_private_key,
+            'expired-cert',
+            now - timedelta(days=60),
+            now - timedelta(days=1),
+        )
+        not_yet_valid = _create_certificate(
+            rsa_private_key,
+            'future-cert',
+            now + timedelta(days=2),
+            now + timedelta(days=60),
+        )
+        revoked = _create_certificate(
+            rsa_private_key,
+            'revoked-cert',
+            now - timedelta(days=5),
+            now + timedelta(days=60),
+        )
+        RevokedCertificateModel.objects.create(certificate=revoked)
+        return {
+            'active': active,
+            'expiring': expiring,
+            'expired': expired,
+            'not_yet_valid': not_yet_valid,
+            'revoked': revoked,
+        }
 
     def test_table_view_renders(self, rf: RequestFactory, admin_user):
         """Test that the certificate table view renders successfully."""
@@ -72,6 +149,52 @@ class TestCertificateTableView:
         
         assert view.paginate_by is not None
         assert view.default_sort_param == 'common_name'
+
+    def test_table_view_with_multiple_sort_parameters_redirects(
+        self,
+        admin_client,
+    ) -> None:
+        """Multiple sort parameters should collapse to the first one."""
+        url = reverse('pki:certificates') + '?sort=common_name&sort=created_at'
+        response = admin_client.get(url)
+
+        assert response.status_code == 302
+        assert 'sort=common_name' in response.url
+
+    def test_status_and_expiry_window_filters_are_preselected(
+        self,
+        admin_client,
+        certificate_instances,
+    ) -> None:
+        """Status and expiry filters should stay selected and narrow the table."""
+        url = reverse('pki:certificates') + '?status=ok&expiry_window=30_days'
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
+        assert response.context['filter'].form['status'].value() == 'ok'
+        assert response.context['filter'].form['expiry_window'].value() == '30_days'
+        assert response.context['filters_active'] is True
+        assert certificate_instances['expiring'] in response.context['object_list']
+        assert certificate_instances['active'] not in response.context['object_list']
+        assert certificate_instances['revoked'] not in response.context['object_list']
+        expiring_certificate = next(
+            certificate
+            for certificate in response.context['object_list']
+            if certificate.pk == certificate_instances['expiring'].pk
+        )
+        assert expiring_certificate.table_status == 'OK'
+
+    def test_sorting_by_certificate_status_uses_annotation(
+        self,
+        admin_client,
+        certificate_instances,
+    ) -> None:
+        """Status sorting should use the annotated database field instead of the Python property."""
+        del certificate_instances
+        url = reverse('pki:certificates') + '?sort=certificate_status_sort'
+        response = admin_client.get(url)
+
+        assert response.status_code == 200
 
 
 @pytest.mark.django_db

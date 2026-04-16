@@ -14,9 +14,10 @@ from request.message_responder import RestErrorMessageResponder, RestMessageResp
 from request.operation_processor.general import OperationProcessor
 from request.request_context import RestCertificateRequestContext
 from request.request_validator import RestHttpRequestValidator
-from request.workflow_handler import WorkflowHandler
+from request.workflow2_issuance import release_delivered_workflow2_request
+from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
-from workflows.events import Events
+from workflows2.events.request_events import Events
 
 
 @method_decorator(csrf_exempt, name='dispatch')
@@ -49,7 +50,7 @@ class RestEnrollView(LoggerMixin, View):
         self.logger.info('REST enroll request received: method=%s path=%s', request.method, request.path)
 
         domain_name = cast('str', kwargs.get('domain'))
-        cert_profile = cast('str', kwargs.get('cert_profile', 'domain_credential'))
+        cert_profile = cast('str | None', kwargs.get('cert_profile'))
 
         try:
             ctx = RestCertificateRequestContext(
@@ -78,11 +79,12 @@ class RestEnrollView(LoggerMixin, View):
             authorizer = RestAuthorization(allowed_operations=['enroll'])
             authorizer.authorize(ctx)
 
-            WorkflowHandler().handle(ctx)
-
-            OperationProcessor().process_operation(ctx)
+            workflow2_result = Workflow2Handler().handle(ctx)
+            if not workflow2_result.should_stop:
+                OperationProcessor().process_operation(ctx)
 
             RestMessageResponder.build_response(ctx)
+            release_delivered_workflow2_request(ctx)
 
         except Exception:
             self.logger.exception('Error processing REST enroll request')
@@ -146,11 +148,12 @@ class RestReEnrollView(LoggerMixin, View):
             authorizer = RestAuthorization(allowed_operations=['reenroll'])
             authorizer.authorize(ctx)
 
-            WorkflowHandler().handle(ctx)
-
-            OperationProcessor().process_operation(ctx)
+            workflow2_result = Workflow2Handler().handle(ctx)
+            if not workflow2_result.should_stop:
+                OperationProcessor().process_operation(ctx)
 
             RestMessageResponder.build_response(ctx)
+            release_delivered_workflow2_request(ctx)
 
         except Exception:
             self.logger.exception('Error processing REST reenroll request')
