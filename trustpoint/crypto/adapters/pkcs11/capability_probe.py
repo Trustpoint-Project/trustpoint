@@ -7,8 +7,9 @@ import json
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
+from crypto.adapters.pkcs11.mechanisms import ecdsa_hash_mechanisms, rsa_pkcs1v15_hash_mechanisms
 from crypto.domain.errors import ProviderUnavailableError
-from pkcs11 import Mechanism
+from pkcs11 import Mechanism, PKCS11Error
 
 if TYPE_CHECKING:
     from pkcs11 import Slot, Token
@@ -34,12 +35,8 @@ def _enum_name(value: Any) -> str:
 
 
 def _mechanism_storage_name(value: Any) -> str:
-    """Return a normalized persisted name for a PKCS#11 mechanism.
-
-    We persist standard-style names with a CKM_ prefix to reduce coupling
-    to a particular Python enum presentation.
-    """
-    name = _enum_name(value)
+    """Return a normalized persisted name for a PKCS#11 mechanism."""
+    name = _enum_name(value).lstrip('_')
     if name.startswith('CKM_'):
         return name
     return f'CKM_{name}'
@@ -218,7 +215,7 @@ class Pkcs11CapabilityProbe:
                 mechanisms=mechanisms,
                 derived_features=self._derive_features(mechanisms=mechanisms, token_flags=token_flags),
             )
-        except Exception as exc:
+        except (PKCS11Error, OSError, TypeError, ValueError) as exc:
             msg = 'Failed to probe PKCS#11 provider capabilities.'
             raise ProviderUnavailableError(msg) from exc
 
@@ -241,14 +238,18 @@ class Pkcs11CapabilityProbe:
             if callable(candidate):
                 try:
                     info = candidate()
-                except Exception:
+                except (PKCS11Error, OSError, TypeError, ValueError):
                     info = None
                 if info is not None:
                     break
 
         return LibraryIdentity(
-            description=_normalize_pkcs11_text(getattr(info, 'library_description', None) or getattr(info, 'description', None)),
-            manufacturer=_normalize_pkcs11_text(getattr(info, 'manufacturer_id', None) or getattr(info, 'manufacturer', None)),
+            description=_normalize_pkcs11_text(
+                getattr(info, 'library_description', None) or getattr(info, 'description', None)
+            ),
+            manufacturer=_normalize_pkcs11_text(
+                getattr(info, 'manufacturer_id', None) or getattr(info, 'manufacturer', None)
+            ),
             version=self._format_version(
                 getattr(info, 'library_version', None) or getattr(info, 'version', None),
             ),
@@ -308,20 +309,40 @@ class Pkcs11CapabilityProbe:
         mechanism_names = set(mechanisms)
         token_flag_set = set(token_flags)
 
-        def has(name: str) -> bool:
-            return name in mechanism_names
+        def has(mechanism_name: str) -> bool:
+            return mechanism_name in mechanism_names
 
-        return {
+        rsa_exact_support = {
+            f'supports_sign_rsa_pkcs1v15_{hash_algorithm.value}': has(_mechanism_storage_name(mechanism))
+            for hash_algorithm, mechanism in rsa_pkcs1v15_hash_mechanisms().items()
+        }
+        ecdsa_exact_support = {
+            f'supports_sign_ecdsa_{hash_algorithm.value}': has(_mechanism_storage_name(mechanism))
+            for hash_algorithm, mechanism in ecdsa_hash_mechanisms().items()
+        }
+
+        derived = {
             'login_required': 'LOGIN_REQUIRED' in token_flag_set or 'CKF_LOGIN_REQUIRED' in token_flag_set,
             'user_pin_initialized': 'USER_PIN_INITIALIZED' in token_flag_set or 'CKF_USER_PIN_INITIALIZED' in token_flag_set,
             'can_generate_rsa': has('CKM_RSA_PKCS_KEY_PAIR_GEN'),
             'can_generate_ec': has('CKM_EC_KEY_PAIR_GEN'),
-            'can_sign_rsa_pkcs1v15': has('CKM_RSA_PKCS'),
-            'can_sign_rsa_pss': has('CKM_RSA_PKCS_PSS'),
-            'can_sign_ecdsa': has('CKM_ECDSA'),
+            'supports_raw_rsa_pkcs1v15': has('CKM_RSA_PKCS'),
+            'supports_raw_rsa_pss': has('CKM_RSA_PKCS_PSS'),
+            'supports_raw_ecdsa': has('CKM_ECDSA'),
             'can_wrap_keys': has('CKM_AES_KEY_WRAP'),
             'can_unwrap_keys': has('CKM_AES_KEY_WRAP'),
         }
+        derived.update(rsa_exact_support)
+        derived.update(ecdsa_exact_support)
+
+        derived['can_sign_rsa_pkcs1v15'] = (
+            derived['supports_raw_rsa_pkcs1v15'] or any(rsa_exact_support.values())
+        )
+        derived['can_sign_ecdsa'] = (
+            derived['supports_raw_ecdsa'] or any(ecdsa_exact_support.values())
+        )
+        derived['can_sign_rsa_pss'] = derived['supports_raw_rsa_pss']
+        return derived
 
     def _format_version(self, value: Any) -> str | None:
         """Convert a PKCS#11 version object into a stable string."""

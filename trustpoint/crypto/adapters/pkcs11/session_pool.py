@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from crypto.domain.errors import SessionUnavailableError
 from pkcs11 import PKCS11Error
+from pkcs11.exceptions import UserAlreadyLoggedIn
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -21,7 +22,9 @@ class Pkcs11SessionPool(LoggerMixin):
     """Thread-safe pool for reusable PKCS#11 sessions.
 
     This pool is intentionally generic and does not encode vendor-specific
-    session behavior. It only centralizes open/borrow/release/close.
+    behavior. It does, however, tolerate the common PKCS#11 behavior where
+    login state is token-global and opening a second session with a PIN raises
+    UserAlreadyLoggedIn.
     """
 
     def __init__(
@@ -77,8 +80,10 @@ class Pkcs11SessionPool(LoggerMixin):
                 session = self._available_sessions.get_nowait()
             except Empty:
                 break
-            session.close()
-            closed_count += 1
+            try:
+                session.close()
+            finally:
+                closed_count += 1
 
         with self._lock:
             self._created_sessions = max(0, self._created_sessions - closed_count)
@@ -94,7 +99,7 @@ class Pkcs11SessionPool(LoggerMixin):
             if self._created_sessions < self._max_size:
                 self._created_sessions += 1
                 try:
-                    return self._token.open(user_pin=self._user_pin, rw=self._rw)
+                    return self._open_session()
                 except Exception:
                     self._created_sessions = max(0, self._created_sessions - 1)
                     raise
@@ -105,17 +110,34 @@ class Pkcs11SessionPool(LoggerMixin):
             msg = 'Timed out while waiting for a PKCS#11 session.'
             raise SessionUnavailableError(msg) from exc
 
+    def _open_session(self) -> Session:
+        """Open a new PKCS#11 session.
+
+        Some providers treat login as token-global state. In those cases, a
+        second `open(..., user_pin=...)` may raise UserAlreadyLoggedIn even
+        though opening an unauthenticated session would inherit usable login
+        state from the token. Retry without the PIN in that case.
+        """
+        try:
+            return self._token.open(user_pin=self._user_pin, rw=self._rw)
+        except UserAlreadyLoggedIn:
+            return self._token.open(rw=self._rw)
+
     def _release(self, session: Session, *, discard: bool) -> None:
         """Return a session to the pool or discard it if it failed."""
         if discard:
-            session.close()
-            with self._lock:
-                self._created_sessions = max(0, self._created_sessions - 1)
+            try:
+                session.close()
+            finally:
+                with self._lock:
+                    self._created_sessions = max(0, self._created_sessions - 1)
             return
 
         try:
             self._available_sessions.put_nowait(session)
         except Exception:
-            session.close()
-            with self._lock:
-                self._created_sessions = max(0, self._created_sessions - 1)
+            try:
+                session.close()
+            finally:
+                with self._lock:
+                    self._created_sessions = max(0, self._created_sessions - 1)

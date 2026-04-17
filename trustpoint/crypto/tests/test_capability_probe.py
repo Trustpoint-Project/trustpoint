@@ -62,6 +62,7 @@ def test_probe_produces_serializable_snapshot() -> None:
 
     assert rebuilt.token.serial == '12345678'
     assert 'CKM_RSA_PKCS' in rebuilt.mechanisms
+    assert 'CKM_ECDSA' in rebuilt.mechanisms
     assert rebuilt.derived_features['can_generate_rsa'] is True
     assert rebuilt.derived_features['can_sign_ecdsa'] is True
 

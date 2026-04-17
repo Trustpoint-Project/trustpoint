@@ -12,21 +12,11 @@ import pkcs11
 from crypto.adapters.pkcs11.capability_probe import Pkcs11CapabilityProbe
 from crypto.adapters.pkcs11.error_map import map_pkcs11_error
 from crypto.adapters.pkcs11.locator import Pkcs11ObjectLocator
-from crypto.adapters.pkcs11.mechanisms import (
-    ec_parameters_for_curve,
-    private_key_template,
-    public_key_template,
-    signing_operation_for_request,
-)
+from crypto.adapters.pkcs11.mechanism_policy import resolve_signing_operation
+from crypto.adapters.pkcs11.mechanisms import ec_parameters_for_curve, private_key_template, public_key_template
 from crypto.adapters.pkcs11.session_pool import Pkcs11SessionPool
 from crypto.domain.algorithms import KeyAlgorithm
-from crypto.domain.errors import (
-    CryptoError,
-    KeyAlreadyExistsError,
-    MechanismUnsupportedError,
-    ProviderConfigurationError,
-    ProviderUnavailableError,
-)
+from crypto.domain.errors import CryptoError, KeyAlreadyExistsError, ProviderConfigurationError, ProviderUnavailableError
 from crypto.domain.refs import ManagedKeyRef
 from crypto.domain.specs import EcKeySpec, KeySpec, algorithm_for_key_spec
 from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, PKCS11Error
@@ -86,6 +76,11 @@ class Pkcs11Backend(LoggerMixin):
     def current_capabilities(self) -> Pkcs11Capabilities | None:
         """Return the currently cached capability snapshot, if any."""
         return self._capabilities
+
+    def close(self) -> None:
+        """Close any pooled PKCS#11 sessions held by this backend."""
+        if self._session_pool is not None:
+            self._session_pool.close()
 
     def probe_capabilities(self) -> Pkcs11Capabilities:
         """Probe the configured token and cache the result."""
@@ -154,16 +149,18 @@ class Pkcs11Backend(LoggerMixin):
         return serialization.load_der_public_key(der)
 
     def sign(self, *, key: ManagedKeyRef, data: bytes, request: SignRequest) -> bytes:
-        """Sign bytes using a managed PKCS#11 key."""
-        operation = signing_operation_for_request(
+        """Sign bytes using a managed PKCS#11 key.
+
+        Trustpoint requires the HSM to perform the complete signing operation.
+        No software hashing or padding fallback is applied here.
+        """
+        capabilities = self.probe_capabilities()
+        operation = resolve_signing_operation(
             key_algorithm=key.algorithm,
             data=data,
             request=request,
+            capabilities=capabilities,
         )
-        capabilities = self.probe_capabilities()
-        if not capabilities.supports(operation.mechanism):
-            msg = f'Token does not support required PKCS#11 mechanism {operation.mechanism.name}.'
-            raise MechanismUnsupportedError(msg)
 
         try:
             with self._session_pool_for_token().session() as session:

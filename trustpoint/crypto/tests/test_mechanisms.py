@@ -1,8 +1,7 @@
-"""Unit tests for PKCS#11 mechanism selection."""
+"""Unit tests for exact HSM-only PKCS#11 mechanism selection."""
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 
 import pytest
@@ -13,7 +12,7 @@ from crypto.adapters.pkcs11.capability_probe import (
     Pkcs11Capabilities,
     TokenIdentity,
 )
-from crypto.adapters.pkcs11.mechanisms import signing_operation_for_request
+from crypto.adapters.pkcs11.mechanism_policy import resolve_signing_operation
 from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm, SignatureAlgorithm
 from crypto.domain.errors import MechanismUnsupportedError
 from pkcs11 import Mechanism
@@ -52,28 +51,7 @@ def _capabilities(*mechanisms: Mechanism) -> Pkcs11Capabilities:
     )
 
 
-def test_rsa_prefers_raw_pkcs_when_available() -> None:
-    request = FakeSignRequest(
-        signature_algorithm=SignatureAlgorithm.RSA_PKCS1V15,
-        hash_algorithm=HashAlgorithmName.SHA256,
-        prehashed=False,
-    )
-    payload = b'hello world'
-    capabilities = _capabilities(Mechanism.RSA_PKCS, Mechanism.SHA256_RSA_PKCS)
-
-    operation = signing_operation_for_request(
-        key_algorithm=KeyAlgorithm.RSA,
-        data=payload,
-        request=request,
-        capabilities=capabilities,
-    )
-
-    assert operation.mechanism is Mechanism.RSA_PKCS
-    assert operation.payload.startswith(bytes.fromhex('3031300d060960864801650304020105000420'))
-    assert operation.payload.endswith(hashlib.sha256(payload).digest())
-
-
-def test_rsa_falls_back_to_combined_mechanism_when_raw_pkcs_is_missing() -> None:
+def test_resolves_exact_rsa_pkcs1v15_sha256_mechanism() -> None:
     request = FakeSignRequest(
         signature_algorithm=SignatureAlgorithm.RSA_PKCS1V15,
         hash_algorithm=HashAlgorithmName.SHA256,
@@ -82,7 +60,7 @@ def test_rsa_falls_back_to_combined_mechanism_when_raw_pkcs_is_missing() -> None
     payload = b'hello world'
     capabilities = _capabilities(Mechanism.SHA256_RSA_PKCS)
 
-    operation = signing_operation_for_request(
+    operation = resolve_signing_operation(
         key_algorithm=KeyAlgorithm.RSA,
         data=payload,
         request=request,
@@ -93,38 +71,72 @@ def test_rsa_falls_back_to_combined_mechanism_when_raw_pkcs_is_missing() -> None
     assert operation.payload == payload
 
 
-def test_ecdsa_prefers_raw_ecdsa_when_available() -> None:
+def test_rejects_rsa_raw_pkcs_only_when_exact_hash_sign_mechanism_is_missing() -> None:
+    request = FakeSignRequest(
+        signature_algorithm=SignatureAlgorithm.RSA_PKCS1V15,
+        hash_algorithm=HashAlgorithmName.SHA256,
+        prehashed=False,
+    )
+    capabilities = _capabilities(Mechanism.RSA_PKCS)
+
+    with pytest.raises(MechanismUnsupportedError):
+        resolve_signing_operation(
+            key_algorithm=KeyAlgorithm.RSA,
+            data=b'hello world',
+            request=request,
+            capabilities=capabilities,
+        )
+
+
+def test_resolves_exact_ecdsa_sha256_mechanism() -> None:
     request = FakeSignRequest(
         signature_algorithm=SignatureAlgorithm.ECDSA,
         hash_algorithm=HashAlgorithmName.SHA256,
         prehashed=False,
     )
     payload = b'hello world'
-    capabilities = _capabilities(Mechanism.ECDSA, Mechanism.ECDSA_SHA256)
+    capabilities = _capabilities(Mechanism.ECDSA_SHA256)
 
-    operation = signing_operation_for_request(
+    operation = resolve_signing_operation(
         key_algorithm=KeyAlgorithm.EC,
         data=payload,
         request=request,
         capabilities=capabilities,
     )
 
-    assert operation.mechanism is Mechanism.ECDSA
-    assert operation.payload == hashlib.sha256(payload).digest()
+    assert operation.mechanism is Mechanism.ECDSA_SHA256
+    assert operation.payload == payload
 
 
-def test_raises_when_no_supported_rsa_mechanism_exists() -> None:
+def test_rejects_raw_ecdsa_only_when_exact_hash_sign_mechanism_is_missing() -> None:
     request = FakeSignRequest(
-        signature_algorithm=SignatureAlgorithm.RSA_PKCS1V15,
+        signature_algorithm=SignatureAlgorithm.ECDSA,
         hash_algorithm=HashAlgorithmName.SHA256,
         prehashed=False,
     )
-    capabilities = _capabilities()
+    capabilities = _capabilities(Mechanism.ECDSA)
 
     with pytest.raises(MechanismUnsupportedError):
-        signing_operation_for_request(
-            key_algorithm=KeyAlgorithm.RSA,
+        resolve_signing_operation(
+            key_algorithm=KeyAlgorithm.EC,
             data=b'hello world',
+            request=request,
+            capabilities=capabilities,
+        )
+
+
+def test_rejects_prehashed_managed_signing_requests() -> None:
+    request = FakeSignRequest(
+        signature_algorithm=SignatureAlgorithm.RSA_PKCS1V15,
+        hash_algorithm=HashAlgorithmName.SHA256,
+        prehashed=True,
+    )
+    capabilities = _capabilities(Mechanism.SHA256_RSA_PKCS)
+
+    with pytest.raises(MechanismUnsupportedError):
+        resolve_signing_operation(
+            key_algorithm=KeyAlgorithm.RSA,
+            data=b'already-digested',
             request=request,
             capabilities=capabilities,
         )

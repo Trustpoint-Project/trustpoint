@@ -479,18 +479,46 @@ HSM_DEFAULT_SOFTHSM_CONFIG_PATH = HSM_CONFIG_DIR / 'softhsm2.conf'
 HSM_DEFAULT_USER_PIN_FILE = HSM_CONFIG_DIR / 'user-pin.txt'
 HSM_DEFAULT_SO_PIN_FILE = HSM_CONFIG_DIR / 'so-pin.txt'
 
-_default_pkcs11_module_candidates = (
-    Path('/usr/lib/softhsm/libsofthsm2.so'),
-    Path('/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so'),
-    Path('/usr/local/lib/softhsm/libsofthsm2.so'),
-)
+HSM_DEFAULT_TOKEN_SERIAL_FILE = HSM_CONFIG_DIR / 'token-serial.txt'
+HSM_DEFAULT_TOKEN_LABEL = os.getenv('TRUSTPOINT_PKCS11_TOKEN_LABEL', 'Trustpoint-SoftHSM')
+HSM_DEFAULT_PKCS11_MODULE_PATH_FILE = HSM_CONFIG_DIR / 'pkcs11-module-path.txt'
+
+
+def _read_optional_text_file(path: Path) -> str | None:
+    """Read a small text file and return stripped content or None."""
+    try:
+        value = path.read_text(encoding='utf-8').strip()
+    except OSError:
+        return None
+    return value or None
+
+
+def _first_existing_path(*paths: Path) -> Path | None:
+    """Return the first existing path from the provided candidates."""
+    for path in paths:
+        if path.exists():
+            return path
+    return None
+
+
 _configured_pkcs11_module_path = os.getenv('TRUSTPOINT_PKCS11_MODULE_PATH')
+_file_pkcs11_module_path = _read_optional_text_file(HSM_DEFAULT_PKCS11_MODULE_PATH_FILE)
+
 if _configured_pkcs11_module_path:
     HSM_DEFAULT_PKCS11_MODULE_PATH = Path(_configured_pkcs11_module_path)
+elif _file_pkcs11_module_path:
+    HSM_DEFAULT_PKCS11_MODULE_PATH = Path(_file_pkcs11_module_path)
 else:
-    HSM_DEFAULT_PKCS11_MODULE_PATH = next(
-        (candidate for candidate in _default_pkcs11_module_candidates if candidate.exists()),
-        HSM_LIB_DIR / 'libpkcs11.so',
+    HSM_DEFAULT_PKCS11_MODULE_PATH = (
+        _first_existing_path(
+            # current local/dev default in the Trustpoint container
+            Path('/usr/lib/libpkcs11-proxy.so.0'),
+            # direct local SoftHSM fallback
+            Path('/usr/lib/x86_64-linux-gnu/softhsm/libsofthsm2.so'),
+            # final fallback if a library is mounted into the HSM root
+            HSM_LIB_DIR / 'libpkcs11.so',
+        )
+        or (HSM_LIB_DIR / 'libpkcs11.so')
     )
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:

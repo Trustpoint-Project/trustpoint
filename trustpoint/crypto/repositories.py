@@ -1,16 +1,24 @@
-"""Repositories for provider profiles and capability snapshots."""
+"""Repositories for provider profiles, managed keys, and capability snapshots."""
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
+from uuid import UUID
 
+from cryptography.hazmat.primitives import serialization
 from django.db import transaction
 from django.utils import timezone
 
 from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
+from crypto.domain.algorithms import SupportedPublicKey
+from crypto.domain.policies import KeyPolicy
+from crypto.domain.refs import ManagedKeyRef
 from crypto.models import (
+    CryptoManagedKeyModel,
     CryptoProviderCapabilitySnapshotModel,
     CryptoProviderProfileModel,
+    ManagedKeyStatus,
     ProbeStatus,
 )
 
@@ -131,3 +139,127 @@ class CryptoProviderProfileRepository:
             return None
 
         return Pkcs11Capabilities.from_json_dict(snapshot.snapshot)
+
+
+class CryptoManagedKeyRepository:
+    """Persistence helpers for managed PKCS#11-backed key references."""
+
+    def get_by_id(self, *, managed_key_id: UUID) -> CryptoManagedKeyModel:
+        """Return a managed-key record by UUID."""
+        return CryptoManagedKeyModel.objects.select_related('provider_profile').get(pk=managed_key_id)
+
+    def get_by_alias(self, *, alias: str) -> CryptoManagedKeyModel:
+        """Return a managed-key record by stable application alias."""
+        return CryptoManagedKeyModel.objects.select_related('provider_profile').get(alias=alias)
+
+    def list_for_profile(self, *, profile: CryptoProviderProfileModel) -> list[CryptoManagedKeyModel]:
+        """List managed keys bound to a provider profile."""
+        return list(
+            CryptoManagedKeyModel.objects.select_related('provider_profile')
+            .filter(provider_profile=profile)
+            .order_by('alias')
+        )
+
+    @transaction.atomic
+    def create_managed_key(
+        self,
+        *,
+        profile: CryptoProviderProfileModel,
+        key_ref: ManagedKeyRef,
+        public_key: SupportedPublicKey,
+        policy: KeyPolicy,
+    ) -> CryptoManagedKeyModel:
+        """Persist a newly created managed-key binding."""
+        return CryptoManagedKeyModel.objects.create(
+            alias=key_ref.alias,
+            provider_profile=profile,
+            key_id_hex=key_ref.key_id_hex,
+            label=key_ref.label,
+            algorithm=key_ref.algorithm.value,
+            public_key_fingerprint_sha256=self.public_key_fingerprint_sha256(public_key),
+            policy_snapshot=self.policy_snapshot(policy),
+            status=ManagedKeyStatus.ACTIVE,
+            last_verified_at=timezone.now(),
+            last_verification_error=None,
+        )
+
+    @transaction.atomic
+    def mark_verification_success(
+        self,
+        *,
+        managed_key: CryptoManagedKeyModel,
+        label: str | None = None,
+    ) -> CryptoManagedKeyModel:
+        """Mark a managed key as successfully verified against the provider."""
+        managed_key.status = ManagedKeyStatus.ACTIVE
+        managed_key.last_verified_at = timezone.now()
+        managed_key.last_verification_error = None
+        if label is not None:
+            managed_key.label = label
+        managed_key.save(update_fields=['status', 'last_verified_at', 'last_verification_error', 'label', 'updated_at'])
+        return managed_key
+
+    @transaction.atomic
+    def mark_missing(
+        self,
+        *,
+        managed_key: CryptoManagedKeyModel,
+        error_summary: str,
+    ) -> CryptoManagedKeyModel:
+        """Mark a managed key as missing from the provider."""
+        managed_key.status = ManagedKeyStatus.MISSING
+        managed_key.last_verified_at = timezone.now()
+        managed_key.last_verification_error = error_summary
+        managed_key.save(update_fields=['status', 'last_verified_at', 'last_verification_error', 'updated_at'])
+        return managed_key
+
+    @transaction.atomic
+    def mark_mismatch(
+        self,
+        *,
+        managed_key: CryptoManagedKeyModel,
+        error_summary: str,
+    ) -> CryptoManagedKeyModel:
+        """Mark a managed key as present but bound to the wrong public key."""
+        managed_key.status = ManagedKeyStatus.MISMATCH
+        managed_key.last_verified_at = timezone.now()
+        managed_key.last_verification_error = error_summary
+        managed_key.save(update_fields=['status', 'last_verified_at', 'last_verification_error', 'updated_at'])
+        return managed_key
+
+    @transaction.atomic
+    def mark_error(
+        self,
+        *,
+        managed_key: CryptoManagedKeyModel,
+        error_summary: str,
+    ) -> CryptoManagedKeyModel:
+        """Mark a managed key as having failed verification for a non-classified reason."""
+        managed_key.status = ManagedKeyStatus.ERROR
+        managed_key.last_verified_at = timezone.now()
+        managed_key.last_verification_error = error_summary
+        managed_key.save(update_fields=['status', 'last_verified_at', 'last_verification_error', 'updated_at'])
+        return managed_key
+
+    @staticmethod
+    def build_managed_key_ref(managed_key: CryptoManagedKeyModel) -> ManagedKeyRef:
+        """Convert a persisted managed-key record back into a domain ref."""
+        return managed_key.to_managed_key_ref()
+
+    @staticmethod
+    def policy_snapshot(policy: KeyPolicy) -> dict[str, object]:
+        """Serialize the durable policy summary stored with a managed key."""
+        return {
+            'extractable': policy.extractable,
+            'ephemeral': policy.ephemeral,
+            'usages': sorted(usage.value for usage in policy.usages),
+        }
+
+    @staticmethod
+    def public_key_fingerprint_sha256(public_key: SupportedPublicKey) -> str:
+        """Return the SHA-256 fingerprint of SubjectPublicKeyInfo DER."""
+        spki_der = public_key.public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        return hashlib.sha256(spki_der).hexdigest()

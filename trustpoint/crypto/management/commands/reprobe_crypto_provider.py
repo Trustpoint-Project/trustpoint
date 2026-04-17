@@ -1,0 +1,54 @@
+"""Manually reprobe a crypto provider and persist the capability snapshot."""
+
+from __future__ import annotations
+
+from django.core.management.base import BaseCommand, CommandError
+
+from crypto.adapters.pkcs11.backend import Pkcs11Backend
+from crypto.domain.errors import CryptoError
+from crypto.models import CryptoProviderProfileModel
+from crypto.repositories import CryptoProviderProfileRepository
+
+
+class Command(BaseCommand):
+    """Reprobe a configured PKCS#11 provider profile and persist the result."""
+
+    help = "Reprobe a crypto provider profile and persist the capability snapshot."
+
+    def add_arguments(self, parser) -> None:
+        parser.add_argument(
+            "--profile",
+            type=str,
+            help="Provider profile name. If omitted, the active profile is used.",
+        )
+
+    def handle(self, *args, **options):
+        profile_name = options.get("profile")
+        repository = CryptoProviderProfileRepository()
+
+        if profile_name:
+            try:
+                profile = CryptoProviderProfileModel.objects.get(name=profile_name)
+            except CryptoProviderProfileModel.DoesNotExist as exc:
+                raise CommandError(f"Provider profile {profile_name!r} does not exist.") from exc
+        else:
+            try:
+                profile = repository.get_active_profile()
+            except CryptoProviderProfileModel.DoesNotExist as exc:
+                raise CommandError("No active provider profile is configured.") from exc
+
+        backend = Pkcs11Backend(profile=profile.build_provider_profile())
+
+        try:
+            capabilities = backend.refresh_capabilities()
+            result = repository.record_probe_success(profile=profile, capabilities=capabilities)
+        except CryptoError as exc:
+            repository.record_probe_failure(profile=profile, error_summary=str(exc))
+            raise CommandError(f"Provider reprobe failed: {exc}") from exc
+        finally:
+            backend.close()
+
+        self.stdout.write(self.style.SUCCESS(
+            f"Reprobe succeeded for profile {profile.name!r}. "
+            f"snapshot_id={result.snapshot_id} changed={result.changed} hash={result.probe_hash}"
+        ))
