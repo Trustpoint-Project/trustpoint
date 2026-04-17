@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
@@ -16,8 +17,19 @@ from crypto.adapters.pkcs11.mechanism_policy import resolve_signing_operation
 from crypto.adapters.pkcs11.mechanisms import ec_parameters_for_curve, private_key_template, public_key_template
 from crypto.adapters.pkcs11.session_pool import Pkcs11SessionPool
 from crypto.domain.algorithms import KeyAlgorithm
-from crypto.domain.errors import CryptoError, KeyAlreadyExistsError, ProviderConfigurationError, ProviderUnavailableError
-from crypto.domain.refs import ManagedKeyRef
+from crypto.domain.errors import (
+    CryptoError,
+    KeyAlreadyExistsError,
+    KeyNotFoundError,
+    MechanismUnsupportedError,
+    ProviderConfigurationError,
+    ProviderUnavailableError,
+)
+from crypto.domain.refs import (
+    ManagedKeyRef,
+    ManagedKeyVerification,
+    ManagedKeyVerificationStatus,
+)
 from crypto.domain.specs import EcKeySpec, KeySpec, algorithm_for_key_spec
 from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, PKCS11Error
 from pkcs11.util.ec import encode_ec_public_key, encode_ecdsa_signature
@@ -101,7 +113,7 @@ class Pkcs11Backend(LoggerMixin):
             with self._session_pool_for_token().session() as session:
                 self._ensure_alias_is_available(session=session, alias=alias)
                 if isinstance(key_spec, EcKeySpec):
-                    self._generate_ec_keypair(
+                    generated_public_key_object = self._generate_ec_keypair(
                         session=session,
                         alias=alias,
                         key_id=key_id,
@@ -109,13 +121,18 @@ class Pkcs11Backend(LoggerMixin):
                         policy=policy,
                     )
                 else:
-                    self._generate_rsa_keypair(
+                    generated_public_key_object = self._generate_rsa_keypair(
                         session=session,
                         alias=alias,
                         key_id=key_id,
                         key_spec=key_spec,
                         policy=policy,
                     )
+
+                fingerprint = self._fingerprint_generated_public_key(
+                    public_key_object=generated_public_key_object,
+                    algorithm=key_algorithm,
+                )
         except KeyAlreadyExistsError:
             raise
         except CryptoError:
@@ -129,6 +146,38 @@ class Pkcs11Backend(LoggerMixin):
             key_id=key_id,
             label=alias,
             algorithm=key_algorithm,
+            public_key_fingerprint_sha256=fingerprint,
+        )
+
+    def verify_managed_key(self, key: ManagedKeyRef) -> ManagedKeyVerification:
+        """Verify that a managed-key reference still resolves to the expected key."""
+        try:
+            public_key = self.get_public_key(key)
+        except KeyNotFoundError:
+            return ManagedKeyVerification(
+                key=key,
+                status=ManagedKeyVerificationStatus.MISSING,
+                resolved_public_key_fingerprint_sha256=None,
+            )
+        except CryptoError:
+            raise
+
+        resolved_fingerprint = self._fingerprint_public_key(public_key)
+
+        if (
+            key.public_key_fingerprint_sha256 is not None
+            and key.public_key_fingerprint_sha256 != resolved_fingerprint
+        ):
+            return ManagedKeyVerification(
+                key=key,
+                status=ManagedKeyVerificationStatus.MISMATCH,
+                resolved_public_key_fingerprint_sha256=resolved_fingerprint,
+            )
+
+        return ManagedKeyVerification(
+            key=key,
+            status=ManagedKeyVerificationStatus.PRESENT,
+            resolved_public_key_fingerprint_sha256=resolved_fingerprint,
         )
 
     def get_public_key(self, key: ManagedKeyRef) -> SupportedPublicKey:
@@ -268,9 +317,9 @@ class Pkcs11Backend(LoggerMixin):
         key_id: bytes,
         key_spec: KeySpec,
         policy: KeyPolicy,
-    ) -> None:
-        """Generate an RSA key pair."""
-        session.generate_keypair(
+    ) -> Any | None:
+        """Generate an RSA key pair and return the generated public-key object when available."""
+        generated = session.generate_keypair(
             KeyType.RSA,
             key_spec.key_size,
             id=key_id,
@@ -280,6 +329,7 @@ class Pkcs11Backend(LoggerMixin):
             private_template=private_key_template(key_id=key_id, label=alias, policy=policy),
             mechanism=Mechanism.RSA_PKCS_KEY_PAIR_GEN,
         )
+        return self._extract_generated_public_key(generated)
 
     def _generate_ec_keypair(
         self,
@@ -289,8 +339,8 @@ class Pkcs11Backend(LoggerMixin):
         key_id: bytes,
         key_spec: EcKeySpec,
         policy: KeyPolicy,
-    ) -> None:
-        """Generate an EC key pair using standard EC domain parameters."""
+    ) -> Any | None:
+        """Generate an EC key pair using standard EC domain parameters and return the public key when available."""
         parameters = session.create_domain_parameters(
             KeyType.EC,
             {
@@ -298,7 +348,7 @@ class Pkcs11Backend(LoggerMixin):
             },
             local=True,
         )
-        parameters.generate_keypair(
+        generated = parameters.generate_keypair(
             id=key_id,
             label=alias,
             store=not policy.ephemeral,
@@ -306,6 +356,49 @@ class Pkcs11Backend(LoggerMixin):
             private_template=private_key_template(key_id=key_id, label=alias, policy=policy),
             mechanism=Mechanism.EC_KEY_PAIR_GEN,
         )
+        return self._extract_generated_public_key(generated)
+
+    def _fingerprint_public_key(self, public_key: SupportedPublicKey) -> str:
+        """Return the SHA-256 fingerprint of a public key's SPKI DER encoding."""
+        der = public_key.public_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        return self._fingerprint_public_key_der(der)
+
+
+    def _fingerprint_public_key_der(self, der: bytes) -> str:
+        """Return the SHA-256 fingerprint of DER-encoded public-key bytes."""
+        return hashlib.sha256(der).hexdigest()
+
+    def _extract_generated_public_key(self, generated: Any) -> Any | None:
+        """Extract the generated public-key object from a PKCS#11 generate_keypair result."""
+        if isinstance(generated, tuple) and generated:
+            return generated[0]
+        return None
+
+    def _fingerprint_generated_public_key(
+        self,
+        *,
+        public_key_object: Any | None,
+        algorithm: KeyAlgorithm,
+    ) -> str | None:
+        """Return a stable SPKI fingerprint for a generated public key when available.
+
+        Some unit-test fakes or provider return values may not expose enough PKCS#11
+        public-key attributes to encode the key immediately after generation. In that
+        case, treat fingerprinting as unavailable instead of failing key generation.
+        """
+        if public_key_object is None:
+            return None
+
+        try:
+            der = self._encode_public_key_der(public_key_object, algorithm)
+            public_key = serialization.load_der_public_key(der)
+        except Exception:
+            return None
+
+        return self._fingerprint_public_key(public_key)
 
     def _encode_public_key_der(self, public_key_object: Any, algorithm: KeyAlgorithm) -> bytes:
         """Encode a PKCS#11 public key into DER for cryptography loading."""

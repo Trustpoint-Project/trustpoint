@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -18,8 +19,31 @@ class ManagedKeyRef:
     key_id: bytes
     label: str
     algorithm: KeyAlgorithm
+    public_key_fingerprint_sha256: str | None = None
 
     @property
     def key_id_hex(self) -> str:
         """Return the PKCS#11 object id as a hex string."""
         return self.key_id.hex()
+
+
+class ManagedKeyVerificationStatus(str, Enum):
+    """Verification outcome for a managed-key reference."""
+
+    PRESENT = 'present'
+    MISSING = 'missing'
+    MISMATCH = 'mismatch'
+
+
+@dataclass(frozen=True, slots=True)
+class ManagedKeyVerification:
+    """Result of verifying that a managed-key reference still resolves correctly."""
+
+    key: ManagedKeyRef
+    status: ManagedKeyVerificationStatus
+    resolved_public_key_fingerprint_sha256: str | None = None
+
+    @property
+    def is_present(self) -> bool:
+        """Whether the managed key resolves and matches expectations."""
+        return self.status is ManagedKeyVerificationStatus.PRESENT

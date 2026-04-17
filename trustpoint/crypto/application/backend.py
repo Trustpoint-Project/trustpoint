@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Protocol
 if TYPE_CHECKING:
     from crypto.domain.algorithms import SupportedPublicKey
     from crypto.domain.policies import KeyPolicy
-    from crypto.domain.refs import ManagedKeyRef
+    from crypto.domain.refs import ManagedKeyRef, ManagedKeyVerification
     from crypto.domain.specs import KeySpec, SignRequest
 
 
@@ -21,6 +21,9 @@ class CryptoBackend(Protocol):
 
     def generate_managed_key(self, *, alias: str, key_spec: KeySpec, policy: KeyPolicy) -> ManagedKeyRef:
         """Generate and persist a new backend-managed key."""
+
+    def verify_managed_key(self, key: ManagedKeyRef) -> ManagedKeyVerification:
+        """Verify that a managed-key reference still resolves to the expected key."""
 
     def get_public_key(self, key: ManagedKeyRef) -> SupportedPublicKey:
         """Load the public key for a managed key reference."""
