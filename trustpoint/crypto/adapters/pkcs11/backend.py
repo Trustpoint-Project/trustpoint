@@ -147,6 +147,7 @@ class Pkcs11Backend(LoggerMixin):
             label=alias,
             algorithm=key_algorithm,
             public_key_fingerprint_sha256=fingerprint,
+            signing_execution_mode=policy.signing_execution_mode,
         )
 
     def verify_managed_key(self, key: ManagedKeyRef) -> ManagedKeyVerification:
@@ -200,8 +201,10 @@ class Pkcs11Backend(LoggerMixin):
     def sign(self, *, key: ManagedKeyRef, data: bytes, request: SignRequest) -> bytes:
         """Sign bytes using a managed PKCS#11 key.
 
-        Trustpoint requires the HSM to perform the complete signing operation.
-        No software hashing or padding fallback is applied here.
+        The effective PKCS#11 signing path is determined by:
+        - the requested signature operation
+        - current provider capabilities
+        - the managed key's signing_execution_mode
         """
         capabilities = self.probe_capabilities()
         operation = resolve_signing_operation(
@@ -209,6 +212,7 @@ class Pkcs11Backend(LoggerMixin):
             data=data,
             request=request,
             capabilities=capabilities,
+            signing_execution_mode=key.signing_execution_mode,
         )
 
         try:

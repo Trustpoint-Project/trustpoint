@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from crypto.domain.policies import SigningExecutionMode
+
 if TYPE_CHECKING:
     from crypto.domain.algorithms import KeyAlgorithm
 
@@ -20,6 +22,7 @@ class ManagedKeyRef:
     label: str
     algorithm: KeyAlgorithm
     public_key_fingerprint_sha256: str | None = None
+    signing_execution_mode: SigningExecutionMode = SigningExecutionMode.COMPLETE_HSM
 
     @property
     def key_id_hex(self) -> str:

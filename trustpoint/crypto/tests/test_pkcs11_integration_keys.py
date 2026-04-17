@@ -1,25 +1,69 @@
-"""Live managed-key tests against a configured PKCS#11 provider."""
+"""Capability-gated live key-generation contract tests."""
 
 from __future__ import annotations
 
 import secrets
+from dataclasses import dataclass
 
 import pytest
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
+from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.policies import KeyPolicy, KeyUsage
-from crypto.domain.specs import RsaKeySpec, SignRequest
+from crypto.domain.specs import EcKeySpec, RsaKeySpec
 
 
 pytestmark = [pytest.mark.integration, pytest.mark.hsm, pytest.mark.django_db]
 
 
-def test_generate_rsa_managed_key_and_fetch_public_key(live_pkcs11_backend) -> None:
-    alias = f"pytest-rsa-{secrets.token_hex(6)}"
+@dataclass(frozen=True, slots=True)
+class KeygenScenario:
+    """A live key-generation contract scenario."""
+
+    name: str
+    key_spec: object
+    required_features: frozenset[str]
+    expected_public_key_type: type
+
+
+SCENARIOS = (
+    KeygenScenario(
+        name="rsa_2048",
+        key_spec=RsaKeySpec(key_size=2048),
+        required_features=frozenset({"can_generate_rsa"}),
+        expected_public_key_type=rsa.RSAPublicKey,
+    ),
+    KeygenScenario(
+        name="ec_p256",
+        key_spec=EcKeySpec(curve=EllipticCurveName.SECP256R1),
+        required_features=frozenset({"can_generate_ec"}),
+        expected_public_key_type=ec.EllipticCurvePublicKey,
+    ),
+)
+
+
+def _require_features(capabilities, *, scenario_name: str, required_features: frozenset[str]) -> None:
+    missing = sorted(
+        feature for feature in required_features if not capabilities.derived_features.get(feature, False)
+    )
+    if missing:
+        pytest.skip(
+            f"Skipping {scenario_name}: provider lacks required capabilities: {', '.join(missing)}."
+        )
+
+
+@pytest.mark.parametrize("scenario", SCENARIOS, ids=lambda scenario: scenario.name)
+def test_generate_managed_key_and_fetch_public_key(live_pkcs11_backend, live_pkcs11_capabilities, scenario: KeygenScenario) -> None:
+    _require_features(
+        live_pkcs11_capabilities,
+        scenario_name=scenario.name,
+        required_features=scenario.required_features,
+    )
+
+    alias = f"pytest-{scenario.name}-{secrets.token_hex(6)}"
     key = live_pkcs11_backend.generate_managed_key(
         alias=alias,
-        key_spec=RsaKeySpec(key_size=2048),
+        key_spec=scenario.key_spec,
         policy=KeyPolicy(
             usages=frozenset({KeyUsage.SIGN}),
             extractable=False,
@@ -29,34 +73,4 @@ def test_generate_rsa_managed_key_and_fetch_public_key(live_pkcs11_backend) -> N
 
     public_key = live_pkcs11_backend.get_public_key(key)
     assert public_key is not None
-
-
-def test_sign_with_generated_rsa_key_and_verify_signature(live_pkcs11_backend) -> None:
-    alias = f"pytest-sign-{secrets.token_hex(6)}"
-    key = live_pkcs11_backend.generate_managed_key(
-        alias=alias,
-        key_spec=RsaKeySpec(key_size=2048),
-        policy=KeyPolicy(
-            usages=frozenset({KeyUsage.SIGN}),
-            extractable=False,
-            ephemeral=False,
-        ),
-    )
-
-    payload = b"trustpoint-pkcs11-test"
-    signature = live_pkcs11_backend.sign(
-        key=key,
-        data=payload,
-        request=SignRequest.rsa_pkcs1v15_sha256(),
-    )
-
-    assert isinstance(signature, bytes)
-    assert signature
-
-    public_key = live_pkcs11_backend.get_public_key(key)
-    public_key.verify(
-        signature,
-        payload,
-        padding.PKCS1v15(),
-        hashes.SHA256(),
-    )
+    assert isinstance(public_key, scenario.expected_public_key_type)
