@@ -1067,6 +1067,8 @@ class IDevIDReferenceModel(models.Model):
 
         Third dot-separated segment after stripping the ``dev-owner:`` prefix.
         """
+        if not self.idevid_ref.startswith('dev-owner:cert:'):
+            return ''
         try:
             return self.idevid_ref.removeprefix('dev-owner:cert:').split('_')[1]
         except IndexError:

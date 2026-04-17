@@ -173,7 +173,7 @@ class IDevIDAuthenticator(LoggerMixin):
     @classmethod
     def authenticate_idevid_from_x509_no_device(
         cls, idevid_cert: x509.Certificate, intermediate_cas: list[x509.Certificate], domain: DomainModel | None = None
-    ) -> tuple[DomainModel, str]:
+    ) -> tuple[DomainModel, str | None]:
         """Authenticate client using an IDevID certificate."""
         idevid_subj_sn = cls.get_subject_serial_number(idevid_cert)
         idevid_san_uris = cls.get_idevid_san_uris(idevid_cert)
@@ -221,26 +221,27 @@ class IDevIDAuthenticator(LoggerMixin):
             idevid_cert=idevid_cert, intermediate_cas=intermediate_cas, domain=domain
         )
         # Check if we have a device with the same serial number
-        existing_device = None
-        try:
-            existing_device = DeviceModel.objects.get(
-                domain=domain,
-                serial_number=idevid_subj_sn,
+        if idevid_subj_sn:
+            existing_device = None
+            try:
+                existing_device = DeviceModel.objects.get(
+                    domain=domain,
+                    serial_number=idevid_subj_sn,
 
-            )
-        except DeviceModel.DoesNotExist:
-            pass
-        except DeviceModel.MultipleObjectsReturned:
-            error_message = (f'Multiple devices with the same serial number {idevid_subj_sn} '
-                            f'found in domain {domain.unique_name}.')
-            cls.logger.warning(error_message)
-            cls.logger.warning('Auto-creating new device.')
+                )
+            except DeviceModel.DoesNotExist:
+                pass
+            except DeviceModel.MultipleObjectsReturned:
+                error_message = (f'Multiple devices with the same serial number {idevid_subj_sn} '
+                                f'found in domain {domain.unique_name}.')
+                cls.logger.warning(error_message)
+                cls.logger.warning('Auto-creating new device.')
 
-        if existing_device:
-            return existing_device
+            if existing_device:
+                return existing_device
         return cls._auto_create_device_from_idevid(
             idevid_cert=idevid_cert,
-            idevid_subj_sn=idevid_subj_sn,
+            idevid_subj_sn=idevid_subj_sn or '',
             domain=domain,
             onboarding_protocol=onboarding_protocol,
             pki_protocol=pki_protocol

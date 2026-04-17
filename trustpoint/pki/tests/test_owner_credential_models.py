@@ -44,15 +44,15 @@ class TestIDevIDReferenceModelProperties:
 
     def test_missing_segments_return_empty(self, owner_credential: OwnerCredentialModel) -> None:
         """Properties that reference a missing segment return an empty string."""
-        ref = self._make_ref(owner_credential, 'dev-owner:ONLY')
+        ref = self._make_ref(owner_credential, 'dev-owner:cert:ONLY')
         assert ref.idevid_subject_serial_number == 'ONLY'
         assert ref.idevid_sha256_fingerprint == ''
 
     def test_without_prefix(self, owner_credential: OwnerCredentialModel) -> None:
-        """If the ref does not start with 'dev-owner:' parsing still works (no prefix to strip)."""
+        """If the ref does not start with 'dev-owner:cert:' the values are empty."""
         ref = self._make_ref(owner_credential, 'A_B')
-        assert ref.idevid_subject_serial_number == 'A'
-        assert ref.idevid_sha256_fingerprint == 'B'
+        assert ref.idevid_subject_serial_number == ''
+        assert ref.idevid_sha256_fingerprint == ''
 
     def test_str(self, owner_credential: OwnerCredentialModel) -> None:
         """__str__ includes the owner name and the raw idevid_ref value."""
