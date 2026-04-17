@@ -416,18 +416,18 @@ class OwnerCredentialOnboardingSetupView(
         idevid_refs = list(
             owner_credential.idevid_ref_set.all()
         )
-        idevid_serial_numbers = [
-            ref.idevid_subject_serial_number
+        idevid_reference_strs = [
+            ref.idevid_subj_sn_or_san_uri
             for ref in idevid_refs
-            if ref.idevid_subject_serial_number
+            if ref.idevid_subj_sn_or_san_uri
         ]
-        context['idevid_serial_numbers'] = idevid_serial_numbers
+        context['idevid_reference_strs'] = idevid_reference_strs
         context['idevid_refs'] = idevid_refs
 
         # Build a suggested regex from the serial numbers
-        if idevid_serial_numbers:
+        if idevid_reference_strs:
             import re  # noqa: PLC0415
-            escaped = [re.escape(sn) for sn in idevid_serial_numbers]
+            escaped = [re.escape(sn) for sn in idevid_reference_strs]
             if len(escaped) == 1:
                 context['suggested_pattern'] = f'^{escaped[0]}$'
             else:

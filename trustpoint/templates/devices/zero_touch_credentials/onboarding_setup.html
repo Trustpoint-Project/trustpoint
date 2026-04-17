@@ -42,12 +42,12 @@
                     <!-- Step 3: Registration Pattern -->
                     <h2>{% trans '3. Registration Pattern' %}</h2>
 
-                    {% if idevid_serial_numbers %}
-                        <div class="alert alert-secondary" role="alert">
+                    {% if idevid_reference_strs %}
+                        <div class="alert alert-secondary mt-2" role="alert">
                             <strong>{% trans 'IDevID References found in DevOwnerID:' %}</strong>
                             <ul class="mb-0 mt-1">
-                                {% for sn in idevid_serial_numbers %}
-                                    <li><code>{{ sn }}</code></li>
+                                {% for ref in idevid_reference_strs %}
+                                    <li><code>{{ ref }}</code></li>
                                 {% endfor %}
                             </ul>
                         </div>
@@ -63,12 +63,12 @@
                                     <label class="form-label">{% trans 'Suggested pattern (from DevOwnerID references):' %}</label>
                                     <div class="input-group">
                                         <input type="text" class="form-control" value="{{ suggested_pattern }}" readonly id="suggested-pattern">
-                                        <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('id_serial_number_pattern').value = document.getElementById('suggested-pattern').value; document.getElementById('id_serial_number_pattern').removeAttribute('readonly');">
+                                        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('id_serial_number_pattern').value = document.getElementById('suggested-pattern').value; document.getElementById('id_serial_number_pattern').removeAttribute('readonly');">
                                             {% trans 'Use this pattern' %}
                                         </button>
                                     </div>
                                     <small class="form-text text-muted">
-                                        {% trans 'This exact-match pattern was generated from the IDevID subject serial numbers in the DevOwnerID certificate.' %}
+                                        {% trans 'This exact-match pattern was generated from the IDevID subject serial numbers or SAN URIs in the DevOwnerID certificate.' %}
                                     </small>
                                 </div>
                             {% endif %}
@@ -76,7 +76,7 @@
                             <!-- Freeform regex helper (reuses existing regex_gen.js) -->
                             <div id="example-serial-field" class="mb-3">
                                 <label for="example-serial" class="form-label">
-                                    {% trans 'Or enter an example Serial Number to generate regex variations:' %}
+                                    {% trans 'Or enter an example Serial Number / SAN URI to generate regex variations:' %}
                                 </label>
                                 <input type="text" id="example-serial" class="form-control" placeholder="{% trans 'e.g.' %} ABC-1234-XYZ">
                                 <small class="form-text text-muted">

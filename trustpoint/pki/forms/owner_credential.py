@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, NoReturn, cast
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 from cryptography.hazmat.primitives import hashes
 from django import forms
@@ -25,8 +25,12 @@ from onboarding.models import (
 )
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
 from pki.models.certificate import CertificateModel
+from pki.models.domain import DomainModel
 from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
+
+if TYPE_CHECKING:
+    from django.db.models.query import QuerySet
 
 
 class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
@@ -269,8 +273,9 @@ class OwnerCredentialOnboardingSetupForm(forms.Form):
         ),
     )
 
+    domain_queryset: QuerySet[DomainModel] = DomainModel.objects.filter(is_active=True)
     domain = forms.ModelChoiceField(
-        queryset=None,
+        queryset=domain_queryset,
         label=_('Domain'),
         required=True,
         help_text=_('Select the domain to associate with this onboarding registration.'),
@@ -291,11 +296,8 @@ class OwnerCredentialOnboardingSetupForm(forms.Form):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialise the form, accepting the owner_credential instance."""
-        from pki.models.domain import DomainModel  # noqa: PLC0415
-
         self.owner_credential: OwnerCredentialModel = kwargs.pop('owner_credential')
         super().__init__(*args, **kwargs)
-        self.fields['domain'].queryset = DomainModel.objects.all()
 
     def clean(self) -> dict[str, Any] | None:
         """Validate and create the truststore + DevIdRegistration."""

@@ -95,7 +95,8 @@ class IDevIDAuthenticator(LoggerMixin):
     """Authenticates IDevID certificates as used e.g. by EST with mutual TLS auth."""
 
     @staticmethod
-    def _get_matching_registrations(idevid_subj_sn: str, domain: DomainModel | None) -> list[DevIdRegistration]:
+    def _get_matching_registrations(candidate_reg_strings: list[str], domain: DomainModel | None
+                                    ) -> list[DevIdRegistration]:
         """Get DevIdRegistration patters matching the given domain and serial number."""
         domain_name = domain.unique_name if domain else 'Any'
         if domain:
@@ -108,10 +109,10 @@ class IDevIDAuthenticator(LoggerMixin):
 
         matching_registrations = [
             r for r in domain_registrations
-            if re.fullmatch(r.serial_number_pattern, idevid_subj_sn)
+            if any(re.fullmatch(r.serial_number_pattern, candidate) for candidate in candidate_reg_strings)
         ]
         if not matching_registrations:
-            error_message = (f'No DevID registration pattern matching SN {idevid_subj_sn} '
+            error_message = (f'No DevID registration pattern matching refs {candidate_reg_strings} '
                              f'for requested domain {domain_name}.')
             raise IDevIDAuthenticationError(error_message)
         return matching_registrations
@@ -151,18 +152,23 @@ class IDevIDAuthenticator(LoggerMixin):
         return device
 
     @staticmethod
-    def get_subject_serial_number(idevid_cert: x509.Certificate) -> str:
+    def get_subject_serial_number(idevid_cert: x509.Certificate) -> str | None:
         """Get the serial number from the subject of the IDevID certificate."""
         try:
             sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
-        except (ValueError, IndexError) as e:
-            # TODO(Air): Check if we want to add field to associate IDevID with device by fingerprint  # noqa: FIX002
-            # This would however be incompatible with the current approach to Registration patterns
-            # One option is to modify the registration pattern to allow matching certain Issuer DN fields instead of SN
-            error_message = 'IDevID certificates without a serial number in the subject DN are not supported.'
-            raise IDevIDAuthenticationError(error_message) from e
+        except (ValueError, IndexError):
+            return None
 
         return sn_b.decode() if isinstance(sn_b, bytes) else sn_b
+
+    @staticmethod
+    def get_idevid_san_uris(idevid_cert: x509.Certificate) -> list[str] | None:
+        """Get the Owner ID SAN URI(s) from the IDevID certificate SAN, or None if there is no URI in the IDevID SAN."""
+        try:
+            san_ext = idevid_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        except x509.ExtensionNotFound:
+            return None
+        return san_ext.value.get_values_for_type(x509.UniformResourceIdentifier)
 
     @classmethod
     def authenticate_idevid_from_x509_no_device(
@@ -170,8 +176,18 @@ class IDevIDAuthenticator(LoggerMixin):
     ) -> tuple[DomainModel, str]:
         """Authenticate client using an IDevID certificate."""
         idevid_subj_sn = cls.get_subject_serial_number(idevid_cert)
+        idevid_san_uris = cls.get_idevid_san_uris(idevid_cert)
+        if not idevid_subj_sn and not idevid_san_uris:
+            error_message = ('IDevID certificates without a Subject DN Serial Number '
+                             'or a unique SAN URI for registration are not supported.')
+            cls.logger.warning(error_message)
+            raise IDevIDAuthenticationError(error_message)
 
-        matching_registrations = cls._get_matching_registrations(idevid_subj_sn, domain)
+        candidate_reg_strings = [idevid_subj_sn] if idevid_subj_sn else []
+        if idevid_san_uris:
+            candidate_reg_strings.extend(idevid_san_uris)
+
+        matching_registrations = cls._get_matching_registrations(candidate_reg_strings, domain)
 
         # verify IDevID against Truststore
         for registration in matching_registrations:
