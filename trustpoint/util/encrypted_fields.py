@@ -172,7 +172,7 @@ class EncryptedTextField(models.TextField[str, str]):
             return data.decode('utf-8')
 
         except Exception as e:
-            error_msg = str(e) if str(e) else type(e).__name__
+            error_msg = str(e) or type(e).__name__
             raise ValidationError(_('Failed to decrypt field value: %s') % error_msg) from e
 
     def from_db_value(self, value: Any, expression: Any, connection: Any) -> str | None:  # noqa: ARG002
@@ -381,7 +381,7 @@ class EncryptedCharField(models.CharField[str, str]):
             return data.decode('utf-8')
 
         except Exception as e:
-            error_msg = str(e) if str(e) else type(e).__name__
+            error_msg = str(e) or type(e).__name__
             raise ValidationError(_('Failed to decrypt field value: %s') % error_msg) from e
 
     def from_db_value(self, value: Any, expression: Any, connection: Any) -> str | None:  # noqa: ARG002

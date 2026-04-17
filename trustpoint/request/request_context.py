@@ -16,11 +16,12 @@ if TYPE_CHECKING:
     from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
     from trustpoint_core.serializer import PrivateKeySerializer
 
+    from cmp.models import CmpTransactionModel
     from cmp.util import PKIFailureInfo
     from devices.models import DeviceModel
     from pki.models import CertificateProfileModel, CredentialModel, DomainModel, IssuedCredentialModel, TruststoreModel
-    from workflows.events import Event
-    from workflows.models import EnrollmentRequest
+    from workflows2.events.request_events import Event
+    from workflows2.services.dispatch import DispatchOutcome
 
 # Request context classes follow the naming convention of <Protocol><Operation>RequestContext
 
@@ -50,6 +51,8 @@ class BaseRequestContext(LoggerMixin):
 
     # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
     event: Event | None = None
+    event_payload: dict[str, Any] | None = None
+    workflow2_outcome: DispatchOutcome | None = None
 
     def error(self, ext_msg: str | bytes |None,
               http_status: int | None = None,
@@ -118,8 +121,6 @@ class BaseCertificateRequestContext(BaseRequestContext):
     request_data: dict[str, Any] | None = None
     validated_request_data: dict[str, Any] | None = None
 
-    # TODO: This should be refactored into the overall Request Context  # noqa: FIX002, TD002
-    enrollment_request: EnrollmentRequest | None = None
     event: Event | None = None
 
 @dataclass(kw_only=True)
@@ -184,6 +185,9 @@ class CmpBaseRequestContext(HttpBaseRequestContext):
     error_code: PKIFailureInfo | None = None
     error_details: str | None = None
     implicit_confirm: bool = False
+    cmp_body_type: str | None = None
+    cmp_transaction_id: str | None = None
+    cmp_transaction: CmpTransactionModel | None = None
 
     # Client-side fields
     cmp_server_host: str | None = None
@@ -253,6 +257,16 @@ class CmpCertConfRequestContext(CmpBaseRequestContext, BaseRevocationRequestCont
 
     cert_conf_status_string: str | None = None
     """Human-readable statusString from statusInfo, if present."""
+
+
+@dataclass(kw_only=True)
+class CmpPollRequestContext(CmpBaseRequestContext):
+    """CMP context for pollReq delayed-delivery handling."""
+
+    poll_cert_req_id: int | None = None
+    cert_profile_str: str | None = None
+    issued_certificate: x509.Certificate | None = None
+    issued_certificate_chain: list[x509.Certificate] | None = None
 
 
 @dataclass(kw_only=True)

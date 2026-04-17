@@ -37,6 +37,9 @@ class AuditLog(models.Model):
         TLS_CERTIFICATE_CHANGED = 'TLS_CERTIFICATE_CHANGED', _('TLS Certificate Changed')
         TLS_CERTIFICATE_DELETED = 'TLS_CERTIFICATE_DELETED', _('TLS Certificate Deleted')
         USER_CREATED = 'USER_CREATED', _('User Created')
+        SIGNER_DELETED = 'SIGNER_DELETED', _('Signer Deleted')
+        SIGNER_ADDED = 'SIGNER_ADDED', _('Signer Added')
+        HASH_SIGNED = 'HASH_SIGNED', _('Hash Signed')
 
     timestamp = models.DateTimeField(
         verbose_name=_('Timestamp'),

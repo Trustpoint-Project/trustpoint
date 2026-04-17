@@ -131,6 +131,7 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
             error_message = f'This JSON is not a valid certificate profile: {e!s}'
             raise forms.ValidationError(error_message) from e
         self.instance.display_name = json_dict.get('display_name', '')
+        self.instance.credential_type = json_dict.get('credential_type', 'application')
 
         self._check_validity_against_security_config(validated)
 
@@ -192,6 +193,8 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
     }
 
     VALIDITY_LABELS: ClassVar[dict[str, str]] = {
+        'not_before': 'Not Before',
+        'not_after': 'Not After',
         'days': 'Days',
         'hours': 'Hours',
         'minutes': 'Minutes',
@@ -266,7 +269,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
 
-            initial_value = field_value if field_value else ''
+            initial_value = field_value or ''
 
             if field_name in ('c', 'country_name'):
                 self.fields[field_name] = forms.CharField(
@@ -307,7 +310,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
 
-            initial_value = field_value if field_value else ''
+            initial_value = field_value or ''
 
             self.fields[field_name] = forms.CharField(
                 required=is_required,
@@ -344,7 +347,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
 
-            initial_value = field_value if field_value else ''
+            initial_value = field_value or ''
 
             if field_name in ('c', 'country_name'):
                 self.fields[field_name] = forms.CharField(
@@ -393,14 +396,14 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                 elif isinstance(sample_value, list):
                     field_value = ', '.join(str(v) for v in sample_value)
                 else:
-                    field_value = sample_value if sample_value else ''
+                    field_value = sample_value or ''
 
             display_label = self.SAN_LABELS.get(field_name, field_name.replace('_', ' ').title())
 
             if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
 
-            initial_value = field_value if field_value else ''
+            initial_value = field_value or ''
 
             self.fields[field_name] = forms.CharField(
                 required=is_required,
@@ -413,6 +416,19 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
     def _build_validity_fields_from_sample(self, validity: dict[str, Any]) -> None:
         """Build validity fields based on sample values."""
         profile_validity = self.profile.get('validity', {})
+
+        for ts_field in ('not_before', 'not_after'):
+            ts_value = validity.get(ts_field)
+            if ts_value is not None:
+                display_label = self.VALIDITY_LABELS.get(ts_field, ts_field.replace('_', ' ').title())
+                formatted = str(ts_value)
+                self.fields[ts_field] = forms.CharField(
+                    required=False,
+                    label=mark_safe(display_label),  # noqa: S308
+                    initial=formatted,
+                    disabled=True,
+                    widget=forms.TextInput(attrs={'class': 'form-control'}),
+                )
 
         for field_name, sample_value in validity.items():
             if field_name in CERT_PROFILE_KEYWORDS or field_name in ('not_before', 'not_after', 'duration'):
@@ -576,7 +592,7 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
     def _build_validity_from_form_data(self, cleaned_data: dict[str, Any]) -> dict[str, int]:
         """Build validity period from form data."""
         validity = {}
-        for field_name in ProfileBasedFormFieldBuilder.VALIDITY_LABELS:
+        for field_name in ('days', 'hours', 'minutes', 'seconds'):
             value = cleaned_data.get(field_name)
             if value:
                 validity[field_name] = int(value)

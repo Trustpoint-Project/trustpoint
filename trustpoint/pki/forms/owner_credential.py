@@ -78,9 +78,7 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             corrupted, or if the password is invalid or incompatible.
         """
         private_key_file = self.cleaned_data.get('private_key_file')
-        private_key_file_password = (
-            self.data.get('private_key_file_password') if self.data.get('private_key_file_password') else None
-        )
+        private_key_file_password = self.data.get('private_key_file_password') or None
 
         if not private_key_file:
             err_msg = 'No private key file was uploaded.'
@@ -205,9 +203,7 @@ class OwnerCredentialFileImportForm(LoggerMixin, forms.Form):
             unique_name = cleaned_data.get('unique_name')
             private_key_serializer = cleaned_data.get('private_key_file')
             certificate_serializer = cleaned_data.get('certificate')
-            certificate_chain_serializer = (
-                cleaned_data.get('certificate_chain') if cleaned_data.get('certificate_chain') else None
-            )
+            certificate_chain_serializer = cleaned_data.get('certificate_chain') or None
 
             if not private_key_serializer or not certificate_serializer:
                 return

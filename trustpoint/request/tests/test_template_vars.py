@@ -67,7 +67,10 @@ class TestBuildVariableMap:
     def test_empty_context(self):
         ctx = _make_context(with_device=False, with_domain=False)
         variables = _build_variable_map(ctx)
-        assert variables == {}
+        # time.now is always present even without device/domain
+        assert 'time.now' in variables
+        assert 'device.rfc_4122_uuid' not in variables
+        assert 'domain.unique_name' not in variables
 
 
 class TestResolveString:
