@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from aoki.views import AokiServiceMixin
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from django.core.management.base import BaseCommand
@@ -85,7 +86,12 @@ class AokiTestCertGenerator:
             ),
             private_key=None,
             extensions=[
-                (x509.SubjectAlternativeName([x509.UniformResourceIdentifier('test_idevid.alt')]), False),
+                (x509.SubjectAlternativeName(
+                    [
+                        x509.DNSName('test_idevid.alt'),
+                        # Example manufacturer-defined UUID
+                        x509.UniformResourceIdentifier('urn:uuid:9f568186-7559-44d3-a7b2-e2ea124bf0b3')
+                    ]), False),
             ],
             validity_days=99999,
         )
@@ -104,12 +110,15 @@ class AokiTestCertGenerator:
         write_cert_pem(owner_ca_cert, CERTS_DIR / 'ownerid_ca.pem')
         write_private_key(owner_ca_key, CERTS_DIR / 'ownerid_ca_pk.pem')
 
-        idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
         # Build URI string "dev-owner:cert:<idevid_subj_sn>_<idevid_sha256_fingerprint>"
         # If the IDevID Subject Serial Number is not present, '' shall be used as a placeholder
         idevid_san_uri = f'dev-owner:cert:{TEST_SERIAL_NUMBER}_{idevid_sha256_fingerprint}'
         print(f'DeviceOwnerID SAN URI: {idevid_san_uri}')
+        idevid_san_uuid_uris = AokiServiceMixin.get_idevid_owner_san_uris_from_san(idevid_cert=idevid_cert)
+        san_ext_list = [x509.UniformResourceIdentifier(idevid_san_uri)]
+        san_ext_list.extend([x509.UniformResourceIdentifier(uri) for uri in idevid_san_uuid_uris])
+
         ownerid_cert, ownerid_key = CertificateGenerator.create_ee(
             issuer_private_key=owner_ca_key,
             issuer_name=owner_ca_cert.subject,
@@ -121,9 +130,7 @@ class AokiTestCertGenerator:
             ),
             private_key=None,
             extensions=[
-                (x509.SubjectAlternativeName([
-                    x509.UniformResourceIdentifier(idevid_san_uri)
-                ]), False),
+                (x509.SubjectAlternativeName(san_ext_list), False),
                 # SAN should be critical for an OwnerID cert,
                 # but then the subject name should be empty according to RFC 5280
             ],

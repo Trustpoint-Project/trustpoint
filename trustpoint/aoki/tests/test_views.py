@@ -17,6 +17,7 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError
 from pki.util.x509 import CertificateGenerator, ClientCertificateAuthenticationError
 
+from aoki.management.commands.aoki_gen_test_certs import AokiTestCertGenerator
 from aoki.views import AokiInitializationRequestView, AokiServiceMixin
 
 if TYPE_CHECKING:
@@ -47,8 +48,7 @@ def mock_tls_cert():
 @pytest.fixture
 def mock_idevid_cert():
     """Create a mock IDevID certificate."""
-    certs, keys = CertificateGenerator.create_test_pki(1)
-    return certs[1]
+    return AokiTestCertGenerator.generate_idevid_pki()
 
 
 @pytest.fixture
@@ -95,6 +95,18 @@ class TestAokiServiceMixin:
         parts = san_uri.split(':')[2].split('_')
         assert len(parts) == 2
         assert parts[0] == ''
+
+    def test_get_idevid_owner_san_uri_uuid(self, mock_idevid_cert: x509.Certificate):
+        """Test generating owner SAN URI from IDevID certificate with serial number."""
+        san_uris = AokiServiceMixin.get_idevid_owner_san_uris_from_san(mock_idevid_cert)
+        assert len(san_uris) == 1
+
+        san_uri = san_uris[0]
+        
+        assert san_uri.startswith('dev-owner:uri:urn:uuid:')
+        parts = san_uri.split(':')
+        assert len(parts) == 5
+        assert len(parts[4]) == 36  # v4 UUID
 
     def test_get_owner_credential_exists(self, mock_idevid_cert: x509.Certificate, mock_owner_credential):
         """Test retrieving owner credential that exists in database."""

@@ -40,7 +40,7 @@ class AokiServiceMixin:
         return f'dev-owner:cert:{idevid_subj_sn}_{idevid_sha256_fingerprint}'
 
     @staticmethod
-    def get_idevid_owner_san_uri_from_san(idevid_cert: x509.Certificate) -> list[str] | None:
+    def get_idevid_owner_san_uris_from_san(idevid_cert: x509.Certificate) -> list[str] | None:
         """Get the Owner ID SAN URI(s) from the IDevID certificate SAN, or None if there is no URI in the IDevID SAN."""
         try:
             san_ext = idevid_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
@@ -61,7 +61,7 @@ class AokiServiceMixin:
         owner_cred_ref = IDevIDReferenceModel.objects.filter(idevid_ref=idevid_san_uri).first()
         if not owner_cred_ref:
             # Method B: Look for DevOwnerID reference to the IDevID certificate SAN URI, if present
-            uri_refs = AokiServiceMixin.get_idevid_owner_san_uri_from_san(idevid_cert)
+            uri_refs = AokiServiceMixin.get_idevid_owner_san_uris_from_san(idevid_cert)
             if not uri_refs:
                 return None
             owner_cred_ref = IDevIDReferenceModel.objects.filter(idevid_ref__in=uri_refs).first()
