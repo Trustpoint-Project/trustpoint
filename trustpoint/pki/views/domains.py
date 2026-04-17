@@ -155,8 +155,9 @@ class DomainConfigView(DomainContextMixin, DomainDevIdRegistrationTableMixin, Li
             context['profile_data'][profile_id]['alias'] = allowed_profile.alias
             context['profile_data'][profile_id]['is_allowed'] = True
 
-        all_profiles = list(CertificateProfileModel.objects.all())
-        context['domain_credential_profiles'] = all_profiles
+        domain_credential_profiles = list(CertificateProfileModel.objects.filter(
+            credential_type=CertificateProfileModel.ProfileCredentialType.DOMAIN))
+        context['domain_credential_profiles'] = domain_credential_profiles
         context['current_domain_credential_profile_id'] = (
             domain.domain_credential_profile.id if domain.domain_credential_profile else None
         )
