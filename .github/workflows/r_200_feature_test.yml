@@ -78,7 +78,7 @@ jobs:
       
       # Install Python and dependencies for running behave tests
       - name: Install and setup uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v8
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
