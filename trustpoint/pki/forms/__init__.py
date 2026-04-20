@@ -18,6 +18,7 @@ from .owner_credential import (
     OwnerCredentialAddRequestEstNoOnboardingForm,
     OwnerCredentialAddRequestEstOnboardingForm,
     OwnerCredentialFileImportForm,
+    OwnerCredentialOnboardingSetupForm,
     OwnerCredentialTruststoreAssociationForm,
 )
 from .truststores import TruststoreAddForm, TruststoreDownloadForm
@@ -39,6 +40,7 @@ __all__ = [
     'OwnerCredentialAddRequestEstNoOnboardingForm',
     'OwnerCredentialAddRequestEstOnboardingForm',
     'OwnerCredentialFileImportForm',
+    'OwnerCredentialOnboardingSetupForm',
     'OwnerCredentialTruststoreAssociationForm',
     'ProfileBasedFormFieldBuilder',
     'TruststoreAddForm',

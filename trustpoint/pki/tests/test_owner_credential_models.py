@@ -34,37 +34,30 @@ class TestIDevIDReferenceModelProperties:
 
     def test_subject_serial_number(self, owner_credential: OwnerCredentialModel) -> None:
         """idevid_subject_serial_number returns the first dot-segment after stripping the prefix."""
-        ref = self._make_ref(owner_credential, 'dev-owner:SUBJ_SN.X509_SN.SHA256FP')
-        assert ref.idevid_subject_serial_number == 'SUBJ_SN'
-
-    def test_x509_serial_number(self, owner_credential: OwnerCredentialModel) -> None:
-        """idevid_x509_serial_number returns the second dot-segment after stripping the prefix."""
-        ref = self._make_ref(owner_credential, 'dev-owner:SUBJ_SN.X509_SN.SHA256FP')
-        assert ref.idevid_x509_serial_number == 'X509_SN'
+        ref = self._make_ref(owner_credential, 'dev-owner:cert:SUBJ-SN_SHA256FP')
+        assert ref.idevid_subject_serial_number == 'SUBJ-SN'
 
     def test_sha256_fingerprint(self, owner_credential: OwnerCredentialModel) -> None:
         """idevid_sha256_fingerprint returns the third dot-segment after stripping the prefix."""
-        ref = self._make_ref(owner_credential, 'dev-owner:SUBJ_SN.X509_SN.SHA256FP')
+        ref = self._make_ref(owner_credential, 'dev-owner:cert:SUBJ-SN_SHA256FP')
         assert ref.idevid_sha256_fingerprint == 'SHA256FP'
 
     def test_missing_segments_return_empty(self, owner_credential: OwnerCredentialModel) -> None:
         """Properties that reference a missing segment return an empty string."""
-        ref = self._make_ref(owner_credential, 'dev-owner:ONLY')
+        ref = self._make_ref(owner_credential, 'dev-owner:cert:ONLY')
         assert ref.idevid_subject_serial_number == 'ONLY'
-        assert ref.idevid_x509_serial_number == ''
         assert ref.idevid_sha256_fingerprint == ''
 
     def test_without_prefix(self, owner_credential: OwnerCredentialModel) -> None:
-        """If the ref does not start with 'dev-owner:' parsing still works (no prefix to strip)."""
-        ref = self._make_ref(owner_credential, 'A.B.C')
-        assert ref.idevid_subject_serial_number == 'A'
-        assert ref.idevid_x509_serial_number == 'B'
-        assert ref.idevid_sha256_fingerprint == 'C'
+        """If the ref does not start with 'dev-owner:cert:' the values are empty."""
+        ref = self._make_ref(owner_credential, 'A_B')
+        assert ref.idevid_subject_serial_number == ''
+        assert ref.idevid_sha256_fingerprint == ''
 
     def test_str(self, owner_credential: OwnerCredentialModel) -> None:
         """__str__ includes the owner name and the raw idevid_ref value."""
-        ref = self._make_ref(owner_credential, 'dev-owner:A.B.C')
-        assert str(ref) == 'test-oc - dev-owner:A.B.C'
+        ref = self._make_ref(owner_credential, 'dev-owner:A_B')
+        assert str(ref) == 'test-oc - dev-owner:A_B'
 
 
 # ---------------------------------------------------------------------------

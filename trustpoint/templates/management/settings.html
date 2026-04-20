@@ -14,6 +14,7 @@
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=workflow" data-settings-tab="panel-workflow">{% trans "Workflow Execution" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=log" data-settings-tab="panel-log">{% trans "Logging" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=notifications" data-settings-tab="panel-notifications">{% trans "Notifications" %}</a>
+    <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=metrics" data-settings-tab="panel-metrics">{% trans "Metrics" %}</a>
   </div>
 
   <div class="tp-settings-content">
@@ -78,6 +79,10 @@
 
     <div id="panel-notifications" class="tp-settings-panel">
       {% include 'management/includes/notification_configuration.html' with form=notification_form %}
+    </div>
+
+    <div id="panel-metrics" class="tp-settings-panel">
+      {% include 'management/includes/metrics.html' %}
     </div>
 
   </div>
