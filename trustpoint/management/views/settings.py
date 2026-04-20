@@ -107,17 +107,23 @@ def get_memory_metrics() -> dict[str, str | bool]:
         max_raw = read_text_file('/sys/fs/cgroup/memory.max')
         stat_content = read_text_file('/sys/fs/cgroup/memory.stat')
     except FileNotFoundError:
-        return {
-            'memory_available': False,
-            'memory_message': 'This metric is only available when running inside a container.',
-            'memory_usage': '',
-            'memory_usage_number': '',
-            'memory_usage_unit': '',
-            'memory_limit': '',
-            'memory_anon': '',
-            'memory_file': '',
-            'memory_kernel': '',
-        }
+        # try the older cgroup v1 paths for compatibility
+        try:
+            current_bytes = read_int_file('/sys/fs/cgroup/memory/memory.usage_in_bytes')
+            max_raw = read_text_file('/sys/fs/cgroup/memory/memory.limit_in_bytes')
+            stat_content = read_text_file('/sys/fs/cgroup/memory/memory.stat')
+        except FileNotFoundError:
+            return {
+                'memory_available': False,
+                'memory_message': 'This metric is only available when running inside a container.',
+                'memory_usage': '',
+                'memory_usage_number': '',
+                'memory_usage_unit': '',
+                'memory_limit': '',
+                'memory_anon': '',
+                'memory_file': '',
+                'memory_kernel': '',
+            }
 
     stat_values: dict[str, int] = {}
     for line in stat_content.splitlines():
@@ -135,21 +141,11 @@ def get_memory_metrics() -> dict[str, str | bool]:
     file_display = format_bytes(stat_values.get('file', 0))
     kernel_display = format_bytes(stat_values.get('kernel', 0))
 
-    if max_raw == 'max':
-        return {
-            'memory_available': True,
-            'memory_message': '',
-            'memory_usage': current_display,
-            'memory_usage_number': current_number,
-            'memory_usage_unit': current_unit,
-            'memory_limit': 'Unlimited',
-            'memory_anon': anon_display,
-            'memory_file': file_display,
-            'memory_kernel': kernel_display,
-        }
-
-    limit_bytes = int(max_raw)
-    limit_display = format_bytes(limit_bytes)
+    if max_raw == 'max' or int(max_raw) >= 1 << 60:  # treat very large limits as unlimited
+        limit_display = 'Unlimited'
+    else:
+        limit_bytes = int(max_raw)
+        limit_display = format_bytes(limit_bytes)
 
     return {
         'memory_available': True,
@@ -171,7 +167,7 @@ def get_disk_metrics() -> dict[str, str | bool]:
     except FileNotFoundError:
         return {
             'disk_available': False,
-            'disk_message': 'This metric is only available when running inside a container.',
+            'disk_message': 'This metric is only available when running inside a container (using cgroup v2).',
             'disk_read': '',
             'disk_write': '',
         }
