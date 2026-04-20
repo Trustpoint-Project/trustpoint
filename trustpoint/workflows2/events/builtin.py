@@ -95,6 +95,16 @@ def register_builtin_events() -> None:
                 context_vars=merge(DEVICE_CONTEXT, CMP_CONTEXT, SOURCE_CONTEXT),
             ),
             EventSpec(
+                key=Triggers.CMP_CERTCONF,
+                title=_('CMP certConf'),
+                description=_('CMP certification confirmation received.'),
+                group='cmp_requests',
+                group_title='CMP',
+                keywords=('cmp', 'certificateconfirmation', 'certconf', 'enrollment', 'request'),
+                allowed_step_types=STEPSET_GATED_ENROLLMENT,
+                context_vars=merge(DEVICE_CONTEXT, CMP_CONTEXT, SOURCE_CONTEXT),
+            ),
+            EventSpec(
                 key=Triggers.EST_SIMPLEENROLL,
                 title=_('EST simpleenroll'),
                 description=_('EST simpleenroll request received.'),

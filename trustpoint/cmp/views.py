@@ -110,10 +110,6 @@ class CmpRequestView(LoggerMixin, View):
 
             parser = CmpMessageParser()
             ctx = cast('CmpBaseRequestContext', parser.parse(ctx))
-            if ctx.cmp_body_type == 'ir' and ctx.operation == 'initialization':
-                ctx.event = Events.cmp_initialization
-            elif ctx.cmp_body_type == 'cr' and ctx.operation == 'certification':
-                ctx.event = Events.cmp_certification
 
             authenticator = CmpAuthentication()
             authenticator.authenticate(ctx)

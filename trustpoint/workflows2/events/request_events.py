@@ -60,6 +60,13 @@ class Events:
         handler='certificate_request',
     )
 
+    cmp_certconf = Event(
+        key='cmp_certconf',
+        protocol='cmp',
+        operation='certconf',
+        handler='certificate_request',
+    )
+
     device_created = Event(
         key='device_created',
         protocol='device',

@@ -6,6 +6,7 @@ import hashlib
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
+import logging
 from typing import Any, ClassVar, Literal
 
 from cryptography.hazmat.primitives.serialization import Encoding
@@ -16,6 +17,7 @@ from request.request_context import (
     BaseCertificateRequestContext,
     BaseRequestContext,
     CmpBaseRequestContext,
+    CmpCertConfRequestContext,
     HttpBaseRequestContext,
 )
 from trustpoint.logger import LoggerMixin
@@ -222,10 +224,12 @@ def _build_cmp_request_dispatch(
             'operation': operation,
             'transaction_id': transaction_id or '',
             'fingerprint': fingerprint,
-            'cert_profile': context.cert_profile_str or '',
+            #'cert_profile': context.cert_profile_str or '',
         },
         'source': serialize_source(source),
     }
+    log = logging.getLogger('trustpoint')
+    log.info('Event dict: %s', event)
 
     return Workflow2DispatchRequest(
         on=on,
@@ -253,6 +257,16 @@ def _build_cmp_certification_dispatch(
         context,
         on=Triggers.CMP_CERTIFICATION,
         operation='certification',
+    )
+
+
+def _build_cmp_certconf_dispatch(
+    context: BaseCertificateRequestContext,
+) -> Workflow2DispatchRequest | None:
+    return _build_cmp_request_dispatch(
+        context,
+        on=Triggers.CMP_CERTCONF,
+        operation='certconf',
     )
 
 
@@ -378,6 +392,7 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
     _DISPATCH_BUILDERS: ClassVar[dict[tuple[str, str], Workflow2DispatchBuilder]] = {
         ('cmp', 'initialization'): _build_cmp_initialization_dispatch,
         ('cmp', 'certification'): _build_cmp_certification_dispatch,
+        ('cmp', 'certconf'): _build_cmp_certconf_dispatch,
         ('est', 'simpleenroll'): _build_est_simpleenroll_dispatch,
         ('est', 'simplereenroll'): _build_est_simplereenroll_dispatch,
         ('rest', 'enroll'): _build_rest_enroll_dispatch,
@@ -386,7 +401,7 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
 
     def handle(self, context: BaseRequestContext) -> Workflow2HandleResult:
         """Dispatch one certificate-request event into Workflow 2."""
-        if not isinstance(context, BaseCertificateRequestContext):
+        if not isinstance(context, (BaseCertificateRequestContext, CmpCertConfRequestContext)):
             msg = 'Workflow2CertificateRequestHandler requires a BaseCertificateRequestContext.'
             raise TypeError(msg)
 
