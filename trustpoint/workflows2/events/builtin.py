@@ -6,6 +6,8 @@ from django.utils.translation import gettext_lazy as _
 
 from workflows2.events.context_catalog import (
     CERTIFICATE_CONTEXT,
+    CMP_CERTCONF_CONTEXT,
+    CMP_CERTREQ_CONTEXT,
     CMP_CONTEXT,
     DEVICE_CONTEXT,
     DEVICE_UPDATE_CONTEXT,
@@ -82,7 +84,7 @@ def register_builtin_events() -> None:
                 group_title='CMP',
                 keywords=('cmp', 'initialization', 'ir', 'enrollment', 'request'),
                 allowed_step_types=STEPSET_GATED_ENROLLMENT,
-                context_vars=merge(DEVICE_CONTEXT, CMP_CONTEXT, SOURCE_CONTEXT),
+                context_vars=merge(DEVICE_CONTEXT, CMP_CONTEXT, CMP_CERTREQ_CONTEXT, SOURCE_CONTEXT),
             ),
             EventSpec(
                 key=Triggers.CMP_CERTIFICATION,
@@ -92,7 +94,7 @@ def register_builtin_events() -> None:
                 group_title='CMP',
                 keywords=('cmp', 'certification', 'cr', 'enrollment', 'request'),
                 allowed_step_types=STEPSET_GATED_ENROLLMENT,
-                context_vars=merge(DEVICE_CONTEXT, CMP_CONTEXT, SOURCE_CONTEXT),
+                context_vars=merge(DEVICE_CONTEXT, CMP_CONTEXT, CMP_CERTREQ_CONTEXT, SOURCE_CONTEXT),
             ),
             EventSpec(
                 key=Triggers.CMP_CERTCONF,
@@ -102,7 +104,7 @@ def register_builtin_events() -> None:
                 group_title='CMP',
                 keywords=('cmp', 'certificateconfirmation', 'certconf', 'enrollment', 'request'),
                 allowed_step_types=STEPSET_GATED_ENROLLMENT,
-                context_vars=merge(DEVICE_CONTEXT, CMP_CONTEXT, SOURCE_CONTEXT),
+                context_vars=merge(DEVICE_CONTEXT, CMP_CONTEXT, CMP_CERTCONF_CONTEXT, SOURCE_CONTEXT),
             ),
             EventSpec(
                 key=Triggers.EST_SIMPLEENROLL,

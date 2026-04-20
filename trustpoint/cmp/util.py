@@ -103,6 +103,10 @@ class PKIFailureInfo(enum.IntEnum):
     DUPLICATE_CERT_REQ = 26
 
 
+# PKIStatus value 2 = "rejection" per RFC 4210 Section 5.2.3. (certConf)
+PKI_STATUS_REJECTION = 2
+
+
 class NameParser:
     """Provides class methods to transform pyasn1 (General)Names into x509.(General)Names."""
 

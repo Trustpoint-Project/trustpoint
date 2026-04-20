@@ -6,13 +6,13 @@ import hashlib
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
-import logging
 from typing import Any, ClassVar, Literal
 
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509 import CertificateSigningRequest
 from pyasn1.codec.der import encoder as der_encoder  # type: ignore[import-untyped]
 
+from cmp.util import PKI_STATUS_REJECTION
 from request.request_context import (
     BaseCertificateRequestContext,
     BaseRequestContext,
@@ -193,7 +193,7 @@ def _build_rest_reenroll_dispatch(
 
 
 def _build_cmp_request_dispatch(
-    context: BaseCertificateRequestContext,
+    context: BaseCertificateRequestContext | CmpCertConfRequestContext,
     *,
     on: str,
     operation: str,
@@ -212,6 +212,11 @@ def _build_cmp_request_dispatch(
         domain_id=context.domain.id,
         device_id=str(context.device.id),
     )
+    certconf_status = getattr(context, 'cert_conf_status', None)
+    certconf_status_str = ''
+    if certconf_status is not None:
+        certconf_status_str = 'rejected' if certconf_status == PKI_STATUS_REJECTION else 'accepted'
+
 
     fingerprint = hashlib.sha256(fingerprint_source).hexdigest()
     transaction_id = _cmp_transaction_id(context)
@@ -224,12 +229,11 @@ def _build_cmp_request_dispatch(
             'operation': operation,
             'transaction_id': transaction_id or '',
             'fingerprint': fingerprint,
-            #'cert_profile': context.cert_profile_str or '',
+            'cert_profile': context.cert_profile_str if hasattr(context, 'cert_profile_str') else '',
+            'certconf_status': certconf_status_str,
         },
         'source': serialize_source(source),
     }
-    log = logging.getLogger('trustpoint')
-    log.info('Event dict: %s', event)
 
     return Workflow2DispatchRequest(
         on=on,
@@ -261,7 +265,7 @@ def _build_cmp_certification_dispatch(
 
 
 def _build_cmp_certconf_dispatch(
-    context: BaseCertificateRequestContext,
+    context: CmpCertConfRequestContext,
 ) -> Workflow2DispatchRequest | None:
     return _build_cmp_request_dispatch(
         context,
@@ -392,7 +396,6 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
     _DISPATCH_BUILDERS: ClassVar[dict[tuple[str, str], Workflow2DispatchBuilder]] = {
         ('cmp', 'initialization'): _build_cmp_initialization_dispatch,
         ('cmp', 'certification'): _build_cmp_certification_dispatch,
-        ('cmp', 'certconf'): _build_cmp_certconf_dispatch,
         ('est', 'simpleenroll'): _build_est_simpleenroll_dispatch,
         ('est', 'simplereenroll'): _build_est_simplereenroll_dispatch,
         ('rest', 'enroll'): _build_rest_enroll_dispatch,
@@ -401,11 +404,14 @@ class Workflow2CertificateRequestHandler(LoggerMixin):
 
     def handle(self, context: BaseRequestContext) -> Workflow2HandleResult:
         """Dispatch one certificate-request event into Workflow 2."""
-        if not isinstance(context, (BaseCertificateRequestContext, CmpCertConfRequestContext)):
-            msg = 'Workflow2CertificateRequestHandler requires a BaseCertificateRequestContext.'
+        if isinstance(context, CmpCertConfRequestContext):
+            dispatch_request = _build_cmp_certconf_dispatch(context)
+        elif isinstance(context, BaseCertificateRequestContext):
+            dispatch_request = self._build_dispatch_request(context)
+        else:
+            msg = ('Workflow2CertificateRequestHandler requires a '
+                   'BaseCertificateRequestContext or CmpCertConfRequestContext.')
             raise TypeError(msg)
-
-        dispatch_request = self._build_dispatch_request(context)
         if dispatch_request is None:
             return Workflow2HandleResult.continue_processing()
 
