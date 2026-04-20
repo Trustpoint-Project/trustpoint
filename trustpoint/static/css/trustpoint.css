@@ -1087,7 +1087,57 @@ input[readonly].readonly-field {
     background-color: var(--trustpoint-ci);
 }
 
-/* active (no-onboarding) — green */
+/* no onboarding — green */
+.tp-status-badge.tp-status-no-onboarding {
+    color: #198754;
+    border-color: #198754;
+    background-color: #e8f5ee;
+}
+.tp-status-badge.tp-status-no-onboarding .tp-status-dot {
+    background-color: #198754;
+}
+
+/* none — neutral */
+.tp-status-badge.tp-status-none {
+    color: #848484;
+    border-color: #d0d5dd;
+    background-color: #f5f6f7;
+}
+.tp-status-badge.tp-status-none .tp-status-dot {
+    background-color: #d0d5dd;
+}
+
+/* valid — blue filled */
+.tp-status-badge.tp-status-valid {
+    color: var(--trustpoint-ci);
+    border-color: var(--trustpoint-ci);
+    background-color: #e8effa;
+}
+.tp-status-badge.tp-status-valid .tp-status-dot {
+    background-color: var(--trustpoint-ci);
+}
+
+/* expiring — red/pink */
+.tp-status-badge.tp-status-expiring {
+    color: #b42318;
+    border-color: #ffb3b3;
+    background-color: #fff1f1;
+}
+.tp-status-badge.tp-status-expiring .tp-status-dot {
+    background-color: #dc3545;
+}
+
+/* expired — grey */
+.tp-status-badge.tp-status-expired {
+    color: #6c757d;
+    border-color: #adb5bd;
+    background-color: #f1f3f5;
+}
+.tp-status-badge.tp-status-expired .tp-status-dot {
+    background-color: #adb5bd;
+}
+
+/* active application certificates — green */
 .tp-status-badge.tp-status-active {
     color: #198754;
     border-color: #198754;
@@ -1095,14 +1145,4 @@ input[readonly].readonly-field {
 }
 .tp-status-badge.tp-status-active .tp-status-dot {
     background-color: #198754;
-}
-
-/* unconfigured — warning amber */
-.tp-status-badge.tp-status-unconfigured {
-    color: #856404;
-    border-color: #ffc107;
-    background-color: #fff8e1;
-}
-.tp-status-badge.tp-status-unconfigured .tp-status-dot {
-    background-color: #ffc107;
 }

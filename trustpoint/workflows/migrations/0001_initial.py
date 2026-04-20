@@ -124,3 +124,4 @@ class Migration(migrations.Migration):
             unique_together={('workflow', 'ca_id', 'domain_id', 'device_id')},
         ),
     ]
+    

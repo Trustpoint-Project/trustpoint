@@ -315,7 +315,38 @@ class CertificateProfileBuilder {
       const inputType = field.valueType === 'number' ? 'number' : 'text';
       let suggestions = '';
 
-      if (field.fullPath.includes('reject_mods') || field.valueType === 'boolean') {
+      if (field.valueType === 'enum' && field.options) {
+          const selectedVal = (existingData !== undefined && existingData !== null) ? existingData : '';
+          let enumControl;
+          if (field.options.length <= 3) {
+            const radiosHtml = field.options.map(o => `
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:4px 0;">
+                <input type="radio" name="pb-enum-radio" value="${this.escapeHtml(o)}"
+                       data-path="${this.escapeHtml(targetPath)}" data-type="enum"
+                       ${o === selectedVal ? 'checked' : ''}>
+                <span>${this.escapeHtml(o)}</span>
+              </label>`).join('');
+            const noneHtml = `
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; padding:4px 0; color:#888;">
+                <input type="radio" name="pb-enum-radio" value=""
+                       data-path="${this.escapeHtml(targetPath)}" data-type="enum"
+                       ${selectedVal === '' ? 'checked' : ''}>
+                <span><em>none</em></span>
+              </label>`;
+            enumControl = `<div id="pb-single-input" data-path="${this.escapeHtml(targetPath)}" data-type="enum" style="display:flex; flex-direction:column; gap:2px;">${noneHtml}${radiosHtml}</div>`;
+          } else {
+            const optionsHtml = ['', ...field.options].map(o =>
+              `<option value="${this.escapeHtml(o)}" ${o === selectedVal ? 'selected' : ''}>${o === '' ? '-- select --' : this.escapeHtml(o)}</option>`
+            ).join('');
+            enumControl = `<select id="pb-single-input" data-path="${this.escapeHtml(targetPath)}" data-type="enum" class="pb-input-child">${optionsHtml}</select>`;
+          }
+          formContent = `
+            ${descriptionHtml}
+            <div class="pb-input-wrapper">
+              <label>Value</label>
+              ${enumControl}
+            </div>`;
+      } else if (field.fullPath.includes('reject_mods') || field.valueType === 'boolean') {
           const isChecked = existingData === true ? 'checked' : '';
           formContent = `
             ${descriptionHtml}
@@ -467,6 +498,16 @@ class CertificateProfileBuilder {
         if (type === 'boolean') {
             if (input.checked) updates[path] = true;
             else updates[path] = undefined;
+        } else if (type === 'enum') {
+            // input may be a <select> or a <div> wrapping radio buttons
+            let raw;
+            if (input.tagName === 'SELECT') {
+                raw = input.value;
+            } else {
+                const checked = modal.querySelector('input[name="pb-enum-radio"]:checked');
+                raw = checked ? checked.value : '';
+            }
+            updates[path] = raw === '' ? undefined : raw;
         } else {
             const raw = input.value;
             if (raw === '') {
