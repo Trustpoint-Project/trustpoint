@@ -17,11 +17,11 @@ class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
     ``Group`` instance.
     """
 
-    class Meta(UserCreationForm.Meta):  # type: ignore[misc, name-defined]
+    class Meta(UserCreationForm.Meta):
         """Metaclass extending the standard UserCreationForm with the role field."""
 
         model = TrustpointUser
-        fields = (*UserCreationForm.Meta.fields, 'role')  # type: ignore[attr-defined]
+        fields = (*UserCreationForm.Meta.fields, 'role')
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Apply Bootstrap form-control class to every field widget."""
