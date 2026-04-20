@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
-from urllib.parse import urlencode
 
 from django.db.models import Case, IntegerField, QuerySet, Value, When
 from django.http import Http404, HttpRequest, HttpResponse, HttpResponseRedirect
