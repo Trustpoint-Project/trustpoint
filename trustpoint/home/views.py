@@ -9,7 +9,6 @@ from django.contrib import messages
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db.models import Case, CharField, Count, F, IntegerField, Q, QuerySet, Value, When
-from django.db.models.functions import TruncDate
 from django.http import HttpRequest, HttpResponseRedirect, JsonResponse
 from django.shortcuts import redirect
 from django.utils import dateparse, timezone
