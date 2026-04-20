@@ -413,6 +413,8 @@ LOGGING = {
     },
 }
 
+# Custome user model
+AUTH_USER_MODEL = 'users.TrustpointUser'
 
 # User interface config defaults
 class UIConfig:

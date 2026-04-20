@@ -1,3 +1,4 @@
+
 import onboarding.models
 import util.encrypted_fields
 from django.db import migrations, models

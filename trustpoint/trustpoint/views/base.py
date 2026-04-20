@@ -9,10 +9,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Protocol
 
 from django import forms as dj_forms
+from django.conf import settings
+from django.contrib import messages
 from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.http import Http404, HttpResponse, HttpResponseRedirect
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, redirect
+from django.utils.translation import gettext_lazy as _
 from django.views.generic.base import RedirectView
 from django.views.generic.edit import FormMixin
 from django.views.generic.list import BaseListView, ListView, MultipleObjectTemplateResponseMixin
@@ -24,6 +27,33 @@ if TYPE_CHECKING:
 
     from django.http import HttpRequest
     from django_stubs_ext import StrPromise
+
+
+class SuperuserRequiredMixin:
+    """Mixin that restricts access to superusers only.
+
+    Unauthenticated requests are redirected to the login page.
+    Authenticated non-superusers receive an error message and are
+    redirected to the management index.
+    """
+
+    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Check superuser status before dispatching the request.
+
+        Args:
+            request: The HTTP request object.
+            *args: Additional positional arguments.
+            **kwargs: Additional keyword arguments.
+
+        Returns:
+            The normal view response, or a redirect if access is denied.
+        """
+        if not request.user.is_authenticated:
+            return redirect(f'{settings.LOGIN_URL}?next={request.path}')
+        if not request.user.is_superuser:
+            messages.error(request, _('You do not have permission to access this page.'))
+            return redirect('management:index')
+        return super().dispatch(request, *args, **kwargs)  # type: ignore[misc, no-any-return]
 
 
 class IndexView(RedirectView):
