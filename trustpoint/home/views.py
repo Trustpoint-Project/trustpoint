@@ -545,36 +545,6 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             'expiring_in_30_days': cert_counts.get('expiring_in_30_days', 0),
         }
 
-    def get_cert_counts_by_status_and_date(self) -> list[dict[str, Any]]:
-        """Fetch certificate counts grouped by issue date and certificate status from database.
-
-        Returns:
-            It returns certificate counts grouped by issue date and certificate status.
-        """
-        cert_counts_by_status = []
-        try:
-            cert_status_qr = (
-                CertificateModel.objects.annotate(issue_date=TruncDate('not_valid_before'))
-                .values('issue_date', 'certificate_status')
-                .annotate(cert_count=Count('id'))
-                .order_by('issue_date', 'certificate_status')
-            )
-
-            status_mapping = dict(CertificateModel.CertificateStatus.choices)
-
-            cert_counts_by_status = [
-                {
-                    'issue_date': item['issue_date'].strftime('%Y-%m-%d'),
-                    'certificate_status': status_mapping.get(item['certificate_status'], item['certificate_status']),
-                    'cert_count': item['cert_count'],
-                }
-                for item in cert_status_qr
-            ]
-        except Exception as exception:
-            err_msg = f'Error occurred in certificate count by status query: {exception}'
-            self.logger.exception(err_msg)
-        return cert_counts_by_status
-
     def get_cert_counts_by_status(
         self,
         start_date: datetime | None,
@@ -667,27 +637,6 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             self.logger.exception(err_msg)
 
         return issuing_ca_counts
-
-    def get_device_counts_by_date_and_status(self) -> list[dict[str, Any]]:
-        """Fetch device count by date and onboarding status from database.
-
-        Returns:
-            It returns device count grouped by date and onboarding status.
-        """
-        device_counts_by_date_and_os = []
-        try:
-            device_date_os_qr = (
-                DeviceModel.objects.annotate(issue_date=TruncDate('created_at'))
-                .values('issue_date', onboarding_status=F('onboarding_status'))
-                .annotate(device_count=Count('id'))
-                .order_by('issue_date', 'onboarding_status')
-            )
-
-            device_counts_by_date_and_os = list(device_date_os_qr)
-        except Exception as exception:
-            err_msg = f'Error occurred in device count by date and onboarding status: {exception}'
-            self.logger.exception(err_msg)
-        return device_counts_by_date_and_os
 
     def get_device_count_by_onboarding_protocol(self, start_date: datetime | None) -> dict[str, Any]:
         """Fetch device count by onboarding protocol from database.
@@ -788,56 +737,6 @@ class DashboardChartsAndCountsView(LoggerMixin, TemplateView):
             self.logger.exception(err_msg)
 
         return cert_counts_by_issuing_ca
-
-    def get_cert_counts_by_issuing_ca_and_date(
-        self,
-        start_date: datetime | None,
-        end_date: datetime | None = None,
-    ) -> list[dict[str, Any]]:
-        """Fetch certificate count grouped by issuing ca and date from database.
-
-        Args:
-            start_date: The start date for fetching data.
-            end_date: The optional inclusive end date for the created-at range.
-
-        Returns:
-            It returns certificate count grouped by the issuing CA model and date.
-        """
-        cert_counts_by_issuing_ca_and_date = []
-        try:
-            issuing_cas = CaModel.objects.filter(credential__isnull=False).exclude(
-                ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
-            ).order_by('unique_name')
-
-            for issuing_ca in issuing_cas:
-                date_counts = (
-                    self._apply_created_at_date_range(
-                        issuing_ca.get_issued_certificates().filter(
-                            Q(basic_constraints_extension__ca=False) | Q(basic_constraints_extension__isnull=True),
-                            credential_set__issued_credential__isnull=False,
-                        ),
-                        start_date,
-                        end_date,
-                    )
-                    .annotate(issue_date=TruncDate('created_at'))
-                    .values('issue_date')
-                    .annotate(cert_count=Count('id', distinct=True))
-                    .order_by('issue_date')
-                )
-
-                cert_counts_by_issuing_ca_and_date.extend([
-                    {
-                        'issue_date': item['issue_date'],
-                        'name': issuing_ca.unique_name,
-                        'cert_count': item['cert_count'],
-                    }
-                    for item in date_counts
-                ])
-        except Exception as exception:
-            err_msg = f'Error occurred in certificate count by issuing ca query: {exception}'
-            self.logger.exception(err_msg)
-
-        return cert_counts_by_issuing_ca_and_date
 
     def get_cert_counts_by_domain(
         self,
