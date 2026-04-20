@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import re
-from typing import Any
+from typing import Any, Protocol, cast
 
 import yaml
 
@@ -17,6 +17,11 @@ class TrustpointYamlLoader(yaml.SafeLoader):
     PyYAML defaults to YAML 1.1 bool parsing (on/off/yes/no).
     We want only true/false to be booleans, so "on" stays a string.
     """
+
+
+class _DisposableLoader(Protocol):
+    def get_single_data(self) -> Any: ...
+    def dispose(self) -> None: ...
 
 
 # IMPORTANT:
@@ -44,11 +49,14 @@ _add_bool_resolver(TrustpointYamlLoader)
 
 def load_yaml_any(yaml_text: str) -> Any:
     """Parse YAML text into native Python values."""
+    loader = cast('_DisposableLoader', TrustpointYamlLoader(yaml_text))
     try:
-        return yaml.load(yaml_text, Loader=TrustpointYamlLoader)  # noqa: S506
+        return loader.get_single_data()
     except yaml.YAMLError as e:
         msg = 'Invalid YAML'
         raise CompileError(msg, details=str(e)) from e
+    finally:
+        loader.dispose()
 
 
 def load_yaml_text(yaml_text: str) -> dict[str, Any]:

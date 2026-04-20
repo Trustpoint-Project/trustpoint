@@ -1,13 +1,10 @@
 """Compile `${...}` templates into template IR fragments."""
 from __future__ import annotations
 
-import re
 from typing import Any
 
 from .errors import CompileError
 from .expr import CallExpr, RefExpr, parse_expr
-
-EXPR_PATTERN = re.compile(r'\$\{([^}]+)\}')
 
 
 def compile_template(value: Any, *, path: str) -> Any:
@@ -20,24 +17,41 @@ def compile_template(value: Any, *, path: str) -> Any:
     if not isinstance(value, str):
         return value
 
-    matches = list(EXPR_PATTERN.finditer(value))
-    if not matches:
-        return value
-
     parts: list[dict[str, Any]] = []
+    found_expr = False
     last = 0
+    cursor = 0
+    value_len = len(value)
 
-    for m in matches:
-        if m.start() > last:
-            parts.append({'kind': 'text', 'value': value[last:m.start()]})
+    while cursor < value_len:
+        start = value.find('${', cursor)
+        if start == -1:
+            break
 
-        inner = m.group(1)
+        end = value.find('}', start + 2)
+        if end == -1:
+            break
+
+        # Preserve previous behavior: `${}` is not considered a valid expression match.
+        if end == start + 2:
+            cursor = end + 1
+            continue
+
+        if start > last:
+            parts.append({'kind': 'text', 'value': value[last:start]})
+
+        inner = value[start + 2:end]
         expr_ast = parse_expr(inner, path=path)
         parts.append({'kind': 'expr', 'expr': _expr_to_ir(expr_ast)})
 
-        last = m.end()
+        found_expr = True
+        last = end + 1
+        cursor = end + 1
 
-    if last < len(value):
+    if not found_expr:
+        return value
+
+    if last < value_len:
         parts.append({'kind': 'text', 'value': value[last:]})
 
     return {'kind': 'template', 'parts': parts}
