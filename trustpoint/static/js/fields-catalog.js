@@ -7,6 +7,7 @@ function initializeFieldCatalog() {
       fields: [
 
         { name: 'Display Name', fullPath: 'display_name', valueType: 'string', description: 'Friendly name for the profile' },
+        { name: 'Credential Type', fullPath: 'credential_type', valueType: 'enum', options: ['application', 'domain'], description: 'Type of credential this profile represents' },
         { name: 'Global Reject Mods', fullPath: 'reject_mods', valueType: 'boolean', description: 'Reject unknown top-level fields' }
       ]
     },

@@ -1,0 +1,478 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n static %}
+
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body d-flex flex-wrap align-items-start justify-content-between gap-3">
+      <div>
+        <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+          <h1 class="h3 mb-0">{% trans "Workflow instance" %}</h1>
+          <span class="badge {{ inst_badge }}">{{ inst.get_status_display }}</span>
+        </div>
+        <div class="fw-semibold mb-1"><a href="{% url 'workflows2:definitions_edit' inst.definition.id %}">{{ inst.definition.name }}</a></div>
+        <div class="text-muted small">
+          <div><strong>{% trans "Instance ID" %}:</strong> <code>{{ inst.id }}</code></div>
+          {% if inst.run_id %}
+            <div><strong>{% trans "Run" %}:</strong> <a href="{% url 'workflows2:runs-detail' inst.run_id %}"><code>{{ inst.run_id }}</code></a></div>
+          {% endif %}
+          <div><strong>{% trans "Execution mode" %}:</strong> <code>{{ cfg_mode }}</code></div>
+        </div>
+      </div>
+
+      <div class="d-flex gap-2 flex-wrap">
+        <form method="post" action="{% url 'workflows2:instances-run-inline' inst.id %}">
+          {% csrf_token %}
+          <button class="btn btn-warning" type="submit">
+            <i class="bi bi-play-fill me-1"></i>{% trans "Run inline" %}
+          </button>
+        </form>
+
+        {% if inst.status == "failed" or inst.status == "paused" %}
+          <form method="post" action="{% url 'workflows2:instances-resume' inst.id %}">
+            {% csrf_token %}
+            <button class="btn btn-primary" type="submit">
+              <i class="bi bi-arrow-repeat me-1"></i>{% trans "Retry" %}
+            </button>
+          </form>
+        {% endif %}
+
+        <form method="post" action="{% url 'workflows2:instances-cancel' inst.id %}">
+          {% csrf_token %}
+          <button class="btn btn-danger" type="submit">
+            <i class="bi bi-x-circle me-1"></i>{% trans "Cancel instance" %}
+          </button>
+        </form>
+
+        {% if inst.run_id %}
+          <a href="{% url 'workflows2:runs-detail' inst.run_id %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>{% trans "Back to run" %}
+          </a>
+        {% else %}
+          <a href="{% url 'workflows2:runs-list' %}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>{% trans "Back to runs" %}
+          </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {% if pending_approvals and inst.status == "awaiting" %}
+    <div class="alert alert-warning shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Approval required" %}</div>
+      <div class="small mt-1">
+        {% blocktrans count count=pending_approvals|length %}
+          {{ count }} approval is blocking this workflow instance.
+        {% plural %}
+          {{ count }} approvals are blocking this workflow instance.
+        {% endblocktrans %}
+      </div>
+    </div>
+  {% elif inst.status == "failed" %}
+    <div class="alert alert-danger shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Instance failed" %}</div>
+      <div class="small mt-1">
+        {% if latest_failed_step_run and latest_failed_step_run.error %}
+          <div class="wf2-pre-wrap">{{ latest_failed_step_run.error }}</div>
+        {% elif latest_failed_job and latest_failed_job.last_error %}
+          <div class="wf2-pre-wrap">{{ latest_failed_job.last_error }}</div>
+        {% else %}
+          {% trans "The last workflow step failed. Review the execution timeline below for details." %}
+        {% endif %}
+      </div>
+    </div>
+  {% elif inst.status == "rejected" %}
+    <div class="alert alert-danger shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Instance rejected" %}</div>
+      <div class="small mt-1">{% trans "This workflow instance reached a rejected terminal state." %}</div>
+    </div>
+  {% elif inst.status == "paused" %}
+    <div class="alert alert-warning shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Instance paused" %}</div>
+      <div class="small mt-1">{% trans "Execution stopped before completion and can be resumed." %}</div>
+    </div>
+  {% elif inst.status == "succeeded" %}
+    <div class="alert alert-success shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Instance completed successfully" %}</div>
+    </div>
+  {% endif %}
+
+  {% if pending_approvals %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-body fw-semibold">{% trans "Action required" %}</div>
+      <div class="card-body">
+        <div class="row g-3">
+          {% for a in pending_approvals %}
+            <div class="col-12 col-lg-6">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                  <div class="fw-semibold"><code>{{ a.step_id }}</code></div>
+                  <span class="badge text-bg-warning">{{ a.get_status_display }}</span>
+                </div>
+                <div class="text-muted small">
+                  <div>{% trans "Created" %}: {{ a.created_at|date:"Y-m-d H:i:s" }}</div>
+                  {% if a.expires_at %}
+                    <div>{% trans "Expires" %}: {{ a.expires_at|date:"Y-m-d H:i:s" }}</div>
+                  {% endif %}
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap mt-3">
+                  {% if inst.status == "awaiting" %}
+                    <form method="post" action="{% url 'workflows2:approvals-resolve' a.id %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="decision" value="approved">
+                      <button class="btn btn-sm btn-success" type="submit">{% trans "Approve" %}</button>
+                    </form>
+
+                    <form method="post" action="{% url 'workflows2:approvals-resolve' a.id %}">
+                      {% csrf_token %}
+                      <input type="hidden" name="decision" value="rejected">
+                      <button class="btn btn-sm btn-danger" type="submit">{% trans "Reject" %}</button>
+                    </form>
+                  {% endif %}
+
+                  <a class="btn btn-sm btn-outline-secondary" href="{% url 'workflows2:approvals-detail' a.id %}">
+                    {% trans "Open review" %}
+                  </a>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="row g-3 mb-3">
+    <div class="col-12 col-xl-3">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-body fw-semibold">{% trans "Current position" %}</div>
+        <div class="card-body">
+          {% if current_step %}
+            <div class="fw-semibold">{{ current_step.title }}</div>
+            <div class="text-muted small"><code>{{ current_step.id }}</code>{% if current_step.type %} · {{ current_step.type }}{% endif %}</div>
+            {% if current_step.description %}
+              <div class="text-muted small mt-2">{{ current_step.description }}</div>
+            {% endif %}
+          {% else %}
+            <div class="text-muted">{% trans "This instance is not waiting on another workflow step." %}</div>
+          {% endif %}
+
+          <hr>
+          <div class="text-muted small text-uppercase">{% trans "Latest step result" %}</div>
+          {% if latest_step_run %}
+            <div class="fw-semibold">{{ latest_step_run.step_id }}</div>
+            <div class="small">
+              <span class="badge {% if latest_step_run.status == 'failed' %}text-bg-danger{% elif latest_step_run.status == 'awaiting' %}text-bg-warning{% elif latest_step_run.status == 'rejected' %}text-bg-danger{% else %}text-bg-success{% endif %}">
+                {{ latest_step_run.status }}
+              </span>
+            </div>
+          {% else %}
+            <div class="text-muted small">{% trans "No step has run yet." %}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-4">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-body fw-semibold">{% trans "Source and event" %}</div>
+        <div class="card-body">
+          <div class="mb-3">
+            <div class="text-muted small text-uppercase mb-2">{% trans "Source context" %}</div>
+            {% include 'workflows2/_context_rows.html' with rows=source_context.rows empty_label="No source context recorded." %}
+          </div>
+
+          <div>
+            <div class="text-muted small text-uppercase mb-2">{% trans "Event summary" %}</div>
+            {% include 'workflows2/_context_rows.html' with rows=event_context empty_label="No human-friendly event summary was available." %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-5">
+      <div class="card h-100 shadow-sm">
+        <div class="card-header bg-body fw-semibold">{% trans "Current workflow vars" %}</div>
+        <div class="card-body">
+          {% if vars_summary %}
+            <div class="row g-2">
+              {% for row in vars_summary %}
+                <div class="col-12 col-md-6">
+                  <div class="border rounded-3 p-3 h-100">
+                    <div class="text-muted small text-uppercase">{{ row.label }}</div>
+                    <div class="fw-semibold">{{ row.value }}</div>
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-muted">{% trans "No workflow vars are currently stored." %}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if resolved_approvals %}
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-body fw-semibold">{% trans "Approval history" %}</div>
+      <div class="card-body">
+        <div class="row g-3">
+          {% for a in resolved_approvals %}
+            <div class="col-12 col-lg-6">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                  <div class="fw-semibold"><code>{{ a.step_id }}</code></div>
+                  <span class="badge {% if a.status == 'approved' %}text-bg-success{% elif a.status == 'rejected' %}text-bg-danger{% else %}text-bg-secondary{% endif %}">
+                    {{ a.get_status_display }}
+                  </span>
+                </div>
+                <div class="text-muted small">
+                  <div>{% trans "Created" %}: {{ a.created_at|date:"Y-m-d H:i:s" }}</div>
+                  {% if a.decided_at %}
+                    <div>{% trans "Decided" %}: {{ a.decided_at|date:"Y-m-d H:i:s" }}</div>
+                  {% endif %}
+                </div>
+                <div class="d-flex gap-2 flex-wrap mt-3">
+                  <a class="btn btn-sm btn-outline-secondary" href="{% url 'workflows2:approvals-detail' a.id %}">
+                    {% trans "Open review" %}
+                  </a>
+                </div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-12 col-xl-8">
+      <div class="card shadow-sm">
+        <div class="card-header d-flex align-items-center justify-content-between gap-2 bg-body">
+          <div class="fw-semibold">{% trans "Execution timeline" %}</div>
+          <div class="text-muted small">{{ step_run_items|length }} {% trans "step run(s)" %}</div>
+        </div>
+        <div class="card-body">
+          {% if step_run_items %}
+            <div class="accordion" id="stepTimeline">
+              {% for item in step_run_items %}
+                {% with r=item.r meta=item.meta %}
+                <div class="accordion-item">
+                  <h2 class="accordion-header" id="h{{ r.id }}">
+                    <button class="accordion-button {% if not forloop.last %}collapsed{% endif %}" type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#c{{ r.id }}"
+                            aria-expanded="{% if forloop.last %}true{% else %}false{% endif %}"
+                            aria-controls="c{{ r.id }}">
+                      <div class="w-100">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                          <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="text-muted">#{{ r.run_index }}</span>
+                            <span class="fw-semibold">{{ meta.title|default:r.step_id }}</span>
+                            <span class="badge text-bg-secondary">{{ r.step_type }}</span>
+                            <span class="badge {{ item.badge }}">{{ r.status }}</span>
+                          </div>
+                          <div class="text-muted small">{{ r.created_at|date:"Y-m-d H:i:s" }}</div>
+                        </div>
+
+                        <div class="text-muted small mt-1">
+                          {% if r.outcome %}{% trans "Outcome" %}: <code>{{ r.outcome }}</code>{% endif %}
+                          {% if r.outcome and r.next_step %} · {% endif %}
+                          {% if r.next_step %}{% trans "Next" %}: <code>{{ r.next_step }}</code>{% endif %}
+                          {% if not r.outcome and not r.next_step and meta.summary %}{{ meta.summary }}{% endif %}
+                        </div>
+                      </div>
+                    </button>
+                  </h2>
+
+                  <div id="c{{ r.id }}" class="accordion-collapse collapse {% if forloop.last %}show{% endif %}" aria-labelledby="h{{ r.id }}" data-bs-parent="#stepTimeline">
+                    <div class="accordion-body">
+                      {% if meta.description %}
+                        <div class="text-muted small mb-3">{{ meta.description }}</div>
+                      {% endif %}
+
+                      <div class="row g-3">
+                        <div class="col-12 col-lg-6">
+                          <div class="border rounded-3 p-3 h-100">
+                            <div class="text-muted small text-uppercase mb-2">{% trans "What happened" %}</div>
+                            <div><strong>{% trans "Step" %}:</strong> <code>{{ r.step_id }}</code></div>
+                            <div><strong>{% trans "Type" %}:</strong> {{ r.step_type }}</div>
+                            <div><strong>{% trans "Status" %}:</strong> {{ r.status }}</div>
+                            <div><strong>{% trans "Outcome" %}:</strong> <code>{{ r.outcome|default:"—" }}</code></div>
+                            <div><strong>{% trans "Next" %}:</strong> <code>{{ r.next_step|default:"—" }}</code></div>
+                          </div>
+                        </div>
+
+                        <div class="col-12 col-lg-6">
+                          <div class="border rounded-3 p-3 h-100">
+                            <div class="text-muted small text-uppercase mb-2">{% trans "Immediate result" %}</div>
+                            <div class="mb-2">
+                              <div class="text-muted small">{% trans "Vars written" %}</div>
+                              <div class="fw-semibold">{{ item.vars_delta_summary }}</div>
+                            </div>
+                            <div>
+                              <div class="text-muted small">{% trans "Output" %}</div>
+                              <div class="fw-semibold">{{ item.output_summary }}</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {% if r.error or item.vars_delta_pretty or item.output_pretty or item.params_pretty %}
+                        <div class="accordion mt-3" id="stepDetails{{ r.id }}">
+                          {% if r.error %}
+                            <div class="accordion-item">
+                              <h2 class="accordion-header" id="stepErrorHeading{{ r.id }}">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#stepErrorBody{{ r.id }}" aria-expanded="false" aria-controls="stepErrorBody{{ r.id }}">
+                                  {% trans "Error details" %}
+                                </button>
+                              </h2>
+                              <div id="stepErrorBody{{ r.id }}" class="accordion-collapse collapse" aria-labelledby="stepErrorHeading{{ r.id }}" data-bs-parent="#stepDetails{{ r.id }}">
+                                <div class="accordion-body">
+                                  <pre class="mb-0 wf2-pre-wrap">{{ r.error }}</pre>
+                                </div>
+                              </div>
+                            </div>
+                          {% endif %}
+
+                          {% if item.vars_delta_pretty %}
+                            <div class="accordion-item">
+                              <h2 class="accordion-header" id="stepVarsHeading{{ r.id }}">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#stepVarsBody{{ r.id }}" aria-expanded="false" aria-controls="stepVarsBody{{ r.id }}">
+                                  {% trans "Written vars" %}
+                                </button>
+                              </h2>
+                              <div id="stepVarsBody{{ r.id }}" class="accordion-collapse collapse" aria-labelledby="stepVarsHeading{{ r.id }}" data-bs-parent="#stepDetails{{ r.id }}">
+                                <div class="accordion-body">
+                                  <pre class="mb-0 wf2-pre-wrap">{{ item.vars_delta_pretty }}</pre>
+                                </div>
+                              </div>
+                            </div>
+                          {% endif %}
+
+                          {% if item.output_pretty %}
+                            <div class="accordion-item">
+                              <h2 class="accordion-header" id="stepOutputHeading{{ r.id }}">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#stepOutputBody{{ r.id }}" aria-expanded="false" aria-controls="stepOutputBody{{ r.id }}">
+                                  {% trans "Step output" %}
+                                </button>
+                              </h2>
+                              <div id="stepOutputBody{{ r.id }}" class="accordion-collapse collapse" aria-labelledby="stepOutputHeading{{ r.id }}" data-bs-parent="#stepDetails{{ r.id }}">
+                                <div class="accordion-body">
+                                  <pre class="mb-0 wf2-pre-wrap">{{ item.output_pretty }}</pre>
+                                </div>
+                              </div>
+                            </div>
+                          {% endif %}
+
+                          {% if item.params_pretty %}
+                            <div class="accordion-item">
+                              <h2 class="accordion-header" id="stepDefHeading{{ r.id }}">
+                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#stepDefBody{{ r.id }}" aria-expanded="false" aria-controls="stepDefBody{{ r.id }}">
+                                  {% trans "Step definition" %}
+                                </button>
+                              </h2>
+                              <div id="stepDefBody{{ r.id }}" class="accordion-collapse collapse" aria-labelledby="stepDefHeading{{ r.id }}" data-bs-parent="#stepDetails{{ r.id }}">
+                                <div class="accordion-body">
+                                  <pre class="mb-0 wf2-pre-wrap">{{ item.params_pretty }}</pre>
+                                </div>
+                              </div>
+                            </div>
+                          {% endif %}
+                        </div>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+                {% endwith %}
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="alert alert-secondary mb-0">
+              <div class="fw-semibold">{% trans "No step history yet." %}</div>
+              <div class="small mt-2">
+                {% trans "If this instance is queued, the next runnable job has not executed yet." %}
+              </div>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-4">
+      <div class="card shadow-sm mb-3">
+        <div class="card-header d-flex align-items-center justify-content-between gap-2 bg-body">
+          <div class="fw-semibold">{% trans "Jobs" %}</div>
+          <div class="text-muted small">{{ jobs|length }}</div>
+        </div>
+        <div class="card-body">
+          {% if jobs %}
+            <div class="list-group list-group-flush">
+              {% for j in jobs %}
+                <div class="list-group-item px-0">
+                  <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-1">
+                    <div class="fw-semibold">{{ j.kind }}</div>
+                    <span class="badge {% if j.status == 'failed' %}text-bg-danger{% elif j.status == 'done' %}text-bg-success{% elif j.status == 'running' %}text-bg-primary{% else %}text-bg-secondary{% endif %}">
+                      {{ j.status }}
+                    </span>
+                  </div>
+                  <div class="text-muted small">
+                    <div>{% trans "Created" %}: {{ j.created_at|date:"Y-m-d H:i:s" }}</div>
+                    <div>{% trans "Run after" %}: {{ j.run_after|date:"Y-m-d H:i:s" }}</div>
+                    <div>{% trans "Attempts" %}: {{ j.attempts }}/{{ j.max_attempts }}</div>
+                  </div>
+                  {% if j.last_error %}
+                    <div class="small text-danger mt-2 wf2-pre-wrap">{{ j.last_error }}</div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-muted">{% trans "No jobs found for this instance." %}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-header bg-body fw-semibold">{% trans "Technical details" %}</div>
+        <div class="card-body">
+          <div class="accordion" id="instanceTechnical">
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="instanceVarsHeading">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#instanceVarsBody" aria-expanded="false" aria-controls="instanceVarsBody">
+                  {% trans "Raw workflow vars" %}
+                </button>
+              </h2>
+              <div id="instanceVarsBody" class="accordion-collapse collapse" aria-labelledby="instanceVarsHeading" data-bs-parent="#instanceTechnical">
+                <div class="accordion-body">
+                  <pre class="mb-0 wf2-pre-wrap">{{ vars_pretty }}</pre>
+                </div>
+              </div>
+            </div>
+
+            <div class="accordion-item">
+              <h2 class="accordion-header" id="instanceEventHeading">
+                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#instanceEventBody" aria-expanded="false" aria-controls="instanceEventBody">
+                  {% trans "Raw event payload" %}
+                </button>
+              </h2>
+              <div id="instanceEventBody" class="accordion-collapse collapse" aria-labelledby="instanceEventHeading" data-bs-parent="#instanceTechnical">
+                <div class="accordion-body">
+                  <pre class="mb-0 wf2-pre-wrap">{{ event_pretty }}</pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

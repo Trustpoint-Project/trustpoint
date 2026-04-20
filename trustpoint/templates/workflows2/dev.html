@@ -1,0 +1,45 @@
+{% extends "trustpoint/base.html" %}
+{% load static %}
+
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
+
+{% block content %}
+<div class="container py-4 wf2-template-max-width">
+  <h1 class="mb-3">Workflows v2 — YAML → IR (dev)</h1>
+
+  <form method="post" class="mb-4">
+    {% csrf_token %}
+
+    <div class="mb-3">
+      <label for="yaml_text" class="form-label">YAML</label>
+      <textarea
+        id="yaml_text"
+        name="yaml_text"
+        class="form-control wf2-font-mono"
+        rows="20"
+      >{{ yaml_text }}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Compile</button>
+  </form>
+
+  {% if error %}
+    <div class="alert alert-danger">
+      <strong>Compile error:</strong><br>
+      <pre class="wf2-pre-wrap-no-margin">{{ error }}</pre>
+    </div>
+  {% endif %}
+
+  {% if ir_json %}
+    <h2 class="h4 mt-4">IR</h2>
+    <pre class="p-3 bg-light border rounded wf2-pre-wrap wf2-font-mono">
+{{ ir_json|json_script:"ir_data" }}
+    </pre>
+
+    <script defer src="{% static 'js/workflows2/dev.js' %}"></script>
+  {% endif %}
+</div>
+{% endblock %}

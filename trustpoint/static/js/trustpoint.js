@@ -287,7 +287,6 @@ const allowedPkiProtocolsWrapper = document.getElementById('id_allowed_pki_proto
 
 onboardingAndPkiConfigurationSelect?.addEventListener('change', function(event) {
    const selectedOptionValue = event.target.options[event.target.selectedIndex].value;
-   console.log(selectedOptionValue);
 
     switch (selectedOptionValue) {
         case 'est_username_password':
@@ -385,7 +384,7 @@ certProfileSelect?.addEventListener("change", function() {
 // ---------------------------------------- Device Table — Column Visibility Toggle ----------------------------------------
 
 (function () {
-    const STORAGE_KEY = 'tp-devices-hidden-cols';
+    const STORAGE_KEY = 'tp-devices-hidden-cols-v2';
     const DEFAULT_HIDDEN = ['serial_number', 'created_at', 'onboarding_protocol', 'pki_protocols'];
     const menu = document.getElementById('tp-column-toggle-menu');
     const table = document.getElementById('devices-table');

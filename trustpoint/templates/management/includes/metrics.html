@@ -1,0 +1,278 @@
+{% load i18n %}
+{% load internationalization_tags %}
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">{% trans "Metrics" %}</h5>
+    </div>
+    <div class="card-body">
+        <h5 class="mb-1 mt-1">{% trans "Application Metrics" %}</h5>
+        <hr class="hr-m">
+        <div class="metrics-grid">
+            <div class="metric-card mb-3">
+                <div class="metric-card-header">{% trans "Uptime" %}</div>
+                <div class="metric-card-body">
+                    <div class="metric-value" id="uptime-value">{{ uptime }}</div>
+                </div>
+            </div>
+            <div class="metric-card mb-3">
+                <div class="metric-card-header">{% trans "Started" %}</div> 
+                <div class="metric-card-body">
+                    <div class="metric-value">{{ started_time|local_datetime }}</div>
+                </div>
+            </div>
+            <div class="metric-card mb-3">
+                <div class="metric-card-header">{% trans "Database Size" %}</div>
+                <div class="metric-card-body">
+                    <div class="metric-value">{{ database_size }}</div>
+                </div>
+            </div>
+        </div>
+
+        <h5 class="mb-1 mt-3">{% trans "Container Metrics" %}</h5>
+        <hr class="hr-m">
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-card-header">{% trans "Memory Usage" %}</div>
+            <div class="metric-card-body">
+              {% if memory_available %}
+              <div class="memory-card-layout">
+                <div class="memory-card-left">
+                  <div class="memory-card-value">
+                    <span class="memory-card-number">{{ memory_usage_number }}</span>
+                    <span class="memory-card-unit">{{ memory_usage_unit }}</span>
+                  </div>
+                </div>
+
+                <div class="memory-card-right">
+                  <div class="memory-card-line">
+                    <span class="metric-subtext">{% trans "Limit" %}:</span>
+                    <span class="metric-subtext">{{ memory_limit }}</span>
+                  </div>
+                <div class="memory-card-line">
+                    <span class="metric-subtext">{% trans "Anonymous" %}:</span>
+                    <span class="metric-subtext">{{ memory_anon }}</span>
+                </div>
+                <div class="memory-card-line">
+                    <span class="metric-subtext">{% trans "File cache" %}:</span>
+                    <span class="metric-subtext">{{ memory_file }}</span>
+                </div>
+                <div class="memory-card-line">
+                    <span class="metric-subtext">{% trans "Kernel" %}:</span>
+                    <span class="metric-subtext">{{ memory_kernel }}</span>
+                </div>
+                </div>
+              </div>
+              {% else %}
+              <div class="metric-subtext">
+              {% trans "This metric is only available when running inside a container." %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+            <div class="metric-card">
+                <div class="metric-card-header">{% trans "Disk I/O" %}</div>
+                <div class="metric-card-body">
+                    {% if disk_available %}
+                    <div class="metric-subtext">{% trans "Read" %}: {{ disk_read }}</div>
+                    <div class="metric-subtext">{% trans "Write" %}: {{ disk_write }}</div>
+                    {% else %}
+                    <div class="metric-subtext">{{ disk_message }}</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-card-header">{% trans "Network I/O" %}</div>
+                <div class="metric-card-body">
+                    {% if network_available %}
+                    <div class="metric-subtext">{% trans "Received" %}: {{ network_received }}</div>
+                    <div class="metric-subtext">{% trans "Transmitted" %}: {{ network_transmitted }}</div>
+                    {% else %}
+                    <div class="metric-message">{{ network_message }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="metric-card mt-3">
+    <i class="bi bi-info-circle"></i>
+    <span>{% trans "Container metrics are only updated when the page is refreshed." %}</span>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const uptimeElement = document.getElementById('uptime-value');
+    const startedAtTs = Number("{{ started_time_ts }}");
+
+    if (!uptimeElement || !startedAtTs) {
+        return;
+    }
+
+    function formatDuration(totalSeconds) {
+        const days = Math.floor(totalSeconds / 86400);
+        const remainderAfterDays = totalSeconds % 86400;
+        const hours = Math.floor(remainderAfterDays / 3600);
+        const remainderAfterHours = remainderAfterDays % 3600;
+        const minutes = Math.floor(remainderAfterHours / 60);
+        const seconds = remainderAfterHours % 60;
+
+        if (days > 0) {
+            return `${days}d ${hours}h ${minutes}m ${seconds}s`;
+        }
+        if (hours > 0) {
+            return `${hours}h ${minutes}m ${seconds}s`;
+        }
+        return `${minutes}m ${seconds}s`;
+    }
+
+    function updateUptime() {
+        const nowTs = Math.floor(Date.now() / 1000);
+        const diffSeconds = Math.max(0, nowTs - startedAtTs);
+        uptimeElement.textContent = formatDuration(diffSeconds);
+    }
+
+    updateUptime();
+    setInterval(updateUptime, 1000);
+});
+</script>
+
+<style>
+  [data-bs-theme="light"] .metric-card {
+    border: 1px solid #d0d7de;
+    background: #f8f9fa;
+    color: #212529;
+  }
+
+  [data-bs-theme="light"] .metric-card-header {
+    color: #212529;
+    border-bottom: 2px solid #d0d7de;
+  }
+
+  [data-bs-theme="light"] .metric-value {
+    color: #212529;
+  }
+
+  [data-bs-theme="light"] .metric-subtext {
+    color: #495057;
+  }
+
+  [data-bs-theme="dark"] .metric-card {
+    border: 1px solid #3a3f4b;
+    background: #2b3035;
+    color: #fff;
+  }
+
+  [data-bs-theme="dark"] .metric-card-header {
+    color: #fff;
+    border-bottom: 2px solid #606063;
+  }
+
+  [data-bs-theme="dark"] .metric-value {
+    color: #fff;
+  }
+
+  [data-bs-theme="dark"] .metric-subtext {
+    color: #dee2e6;
+  }
+
+  .metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 24px;
+  }
+
+  .metric-card {
+    border-radius: 10px;
+    padding: 20px;
+    min-width: 0;
+  }
+
+  .metric-card-header {
+    font-weight: 600;
+    font-size: 1.2rem;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+  }
+
+  .metric-value {
+    font-size: 2rem;
+  }
+
+  .metric-subtext {
+    font-size: 1.2rem;
+  }
+
+  .metric-breakdown {
+  margin-top: 12px;
+  font-size: 1rem;
+  color: #adb5bd;
+  line-height: 1.6;
+  }
+
+  @media (max-width: 1400px) {
+    .metrics-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 768px) {
+    .metrics-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .memory-card-layout {
+  display: grid;
+  grid-template-columns: 1fr 1.25fr;
+  gap: 28px;
+  align-items: start;
+}
+
+.memory-card-left {
+  padding-right: 24px;
+  border-right: 1px solid #4b5258;
+  min-height: 120px;
+}
+
+.memory-card-value {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  line-height: 1;
+  margin-top: 6px;
+}
+
+.memory-card-number {
+  font-size: 3.4rem;
+}
+
+.memory-card-unit {
+  font-size: 2.2rem;
+  font-weight: 600;
+  opacity: 0.95;
+}
+
+.memory-card-right {
+  display: flex;
+  flex-direction: column;
+}
+
+.memory-card-line {
+  font-size: 1.35rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 992px) {
+  .memory-card-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .memory-card-left {
+    border-right: none;
+    padding-right: 0;
+    min-height: auto;
+    margin-bottom: 12px;
+  }
+}
+</style>

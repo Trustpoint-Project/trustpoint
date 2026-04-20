@@ -17,6 +17,7 @@ from pki.models.credential import CredentialModel
 from pki.models.issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
 from pki.util.keys import KeyGenerator
 from trustpoint.logger import LoggerMixin
+from workflows2.integrations.certificates import emit_certificate_issued_for_record
 
 if TYPE_CHECKING:
     import ipaddress
@@ -137,6 +138,7 @@ class SaveCredentialToDbMixin(LoggerMixin):
 
                 existing_issued_credential.issued_using_cert_profile = issued_using_cert_profile
                 existing_issued_credential.save()
+                emit_certificate_issued_for_record(existing_issued_credential)
 
                 return existing_issued_credential
 
@@ -263,6 +265,7 @@ class CredentialSaver(SaveCredentialToDbMixin):
                 cred_model.save()
                 existing.issued_using_cert_profile = issued_using_cert_profile
                 existing.save()
+                emit_certificate_issued_for_record(existing)
                 return existing
 
             credential_model = CredentialModel.save_keyless_credential(

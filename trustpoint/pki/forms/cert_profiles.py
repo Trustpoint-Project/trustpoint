@@ -131,6 +131,7 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
             error_message = f'This JSON is not a valid certificate profile: {e!s}'
             raise forms.ValidationError(error_message) from e
         self.instance.display_name = json_dict.get('display_name', '')
+        self.instance.credential_type = json_dict.get('credential_type', 'application')
 
         self._check_validity_against_security_config(validated)
 
@@ -268,7 +269,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
 
-            initial_value = field_value if field_value else ''
+            initial_value = field_value or ''
 
             if field_name in ('c', 'country_name'):
                 self.fields[field_name] = forms.CharField(
@@ -309,7 +310,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
 
-            initial_value = field_value if field_value else ''
+            initial_value = field_value or ''
 
             self.fields[field_name] = forms.CharField(
                 required=is_required,
@@ -346,7 +347,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
 
-            initial_value = field_value if field_value else ''
+            initial_value = field_value or ''
 
             if field_name in ('c', 'country_name'):
                 self.fields[field_name] = forms.CharField(
@@ -395,14 +396,14 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                 elif isinstance(sample_value, list):
                     field_value = ', '.join(str(v) for v in sample_value)
                 else:
-                    field_value = sample_value if sample_value else ''
+                    field_value = sample_value or ''
 
             display_label = self.SAN_LABELS.get(field_name, field_name.replace('_', ' ').title())
 
             if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
 
-            initial_value = field_value if field_value else ''
+            initial_value = field_value or ''
 
             self.fields[field_name] = forms.CharField(
                 required=is_required,

@@ -84,25 +84,38 @@ class AokiCmpClient:
     def _get_idevid_owner_san_uri(self, idevid_cert: x509.Certificate) -> str:
         """Get the Owner ID SAN URI corresponding to a IDevID certificate.
 
-        Formatted as "dev-owner:<idevid_subj_sn>.<idevid_x509_sn>.<idevid_sha256_fingerprint>"
+        Formatted as "dev-owner:cert:<idevid_subj_sn>_<idevid_sha256_fingerprint>"
         """
         try:
             sn_b = idevid_cert.subject.get_attributes_for_oid(x509.NameOID.SERIAL_NUMBER)[0].value
             idevid_subj_sn = sn_b.decode() if isinstance(sn_b, bytes) else sn_b
         except (ValueError, IndexError):
-            idevid_subj_sn = '_'
+            idevid_subj_sn = ''
         self.idevid_subj_sn = idevid_subj_sn
-        idevid_x509_sn = hex(idevid_cert.serial_number)[2:].zfill(16)
         idevid_sha256_fingerprint = idevid_cert.fingerprint(hashes.SHA256()).hex()
-        return f'dev-owner:{idevid_subj_sn}.{idevid_x509_sn}.{idevid_sha256_fingerprint}'
+        return f'dev-owner:cert:{idevid_subj_sn}_{idevid_sha256_fingerprint}'
+    
+    def get_idevid_owner_san_uris_from_san(self, idevid_cert: x509.Certificate) -> list[str] | None:
+        """Get the Owner ID SAN URI(s) from the IDevID certificate SAN, or None if there is no URI in the IDevID SAN."""
+        try:
+            san_ext = idevid_cert.extensions.get_extension_for_class(x509.SubjectAlternativeName)
+        except x509.ExtensionNotFound:
+            return None
+        san_uris = san_ext.value.get_values_for_type(x509.UniformResourceIdentifier)
+        owner_san_uris = [('dev-owner:uri:' + uri) for uri in san_uris]
+        return owner_san_uris or None
+
 
     def _verify_matches_idevid_cert(self, owner_id_cert: x509.Certificate, idevid_cert: x509.Certificate) -> None:
         """Verify the Owner ID certificate is valid for the device IDevID."""
         print('Verifying Owner ID certificate matches IDevID certificate')
-        idevid_san_uri = self._get_idevid_owner_san_uri(idevid_cert)
-        print('IDevID SAN URI: %s', idevid_san_uri)
+        idevid_san_uris = [self._get_idevid_owner_san_uri(idevid_cert)]
+        uris_from_san = self.get_idevid_owner_san_uris_from_san(idevid_cert)
+        if uris_from_san:
+            idevid_san_uris.extend(uris_from_san)
+        print('IDevID SAN URIs: ', idevid_san_uris)
         for san in owner_id_cert.extensions.get_extension_for_oid(x509.ExtensionOID.SUBJECT_ALTERNATIVE_NAME).value:
-            if isinstance(san, x509.UniformResourceIdentifier) and san.value == idevid_san_uri:
+            if isinstance(san, x509.UniformResourceIdentifier) and san.value in idevid_san_uris:
                 print('Owner ID certificate SAN URI matches IDevID certificate!')
                 return
         exc_msg = 'Owner ID certificate does not match IDevID certificate.'
@@ -176,7 +189,7 @@ class AokiCmpClient:
             '-chainout', f'{CERTS_DIR}/chain_without_root.pem',
             '-extracertsout', f'{CERTS_DIR}/full_chain.pem',
             '-trusted', f'{CERTS_DIR}/{self.owner_truststore_file}',
-            '-tls_used'
+            #'-tls_used'
         )
         try:
             print(subprocess.check_output(cmd).decode())  # noqa: S603
@@ -196,7 +209,7 @@ class AokiCmpClient:
 
 if __name__ == '__main__':
     client = AokiCmpClient(
-        server_url=None,
+        server_url='http://localhost:8000',#None,
         cert_file='idevid.pem',
         key_file='idevid_pk.pem',
         idevid_truststore_file='idevid_ca.pem',

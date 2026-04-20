@@ -2,20 +2,26 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.shortcuts import redirect
 from django.urls import reverse
+from django.utils.deprecation import MiddlewareMixin
 
 from setup_wizard.models import SetupWizardCompletedModel, SetupWizardConfigModel
 from trustpoint.logger import LoggerMixin
+from workflows2.services.dispatch import WorkflowDispatchService
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from django.http import HttpRequest, HttpResponse, HttpResponseBase
+
+
+logger = logging.getLogger(__name__)
 
 
 class TrustpointLoginRequiredMiddleware(LoggerMixin):
@@ -57,14 +63,6 @@ class TrustpointLoginRequiredMiddleware(LoggerMixin):
 class SetupWizardRedirectMiddleware(LoggerMixin):
     """Redirect requests based on whether the global setup wizard has completed."""
 
-    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
-        """Initialize the middleware.
-
-        Args:
-            get_response: The next middleware/view callable in the Django chain.
-        """
-        self.get_response = get_response
-
     USERS_LOGIN_REVERSE = reverse('users:login')
 
     SETUP_WIZARD_PATH = '/setup-wizard'
@@ -91,6 +89,14 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         '/setup-wizard/fresh-install',
         '/users/logout',
     )
+
+    def __init__(self, get_response: Callable[[HttpRequest], HttpResponse]) -> None:
+        """Initialize the middleware.
+
+        Args:
+            get_response: The next middleware/view callable in the Django chain.
+        """
+        self.get_response = get_response
 
     @classmethod
     def _get_fresh_install_step_paths(cls) -> tuple[tuple[str, str, bool], ...]:
@@ -178,6 +184,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
 
         msg = f'\n\npath_info: {request.path_info}'
         self.logger.critical(msg)
+
         # handle dev environment
         if not settings.DOCKER_CONTAINER:
             if request.path_info.startswith(self.SETUP_WIZARD_PATH):
@@ -228,3 +235,15 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
 
         self.logger.critical('NOT redirecting')
         return self.get_response(request)
+
+
+class Workflow2InlineDrainMiddleware(MiddlewareMixin):
+    """Let the web process drain queued workflow jobs when inline execution is active."""
+
+    def process_request(self, request: HttpRequest) -> None:
+        """Drain backlog opportunistically before handling the current request."""
+        del request
+        try:
+            WorkflowDispatchService().drain_pending_jobs_if_inline()
+        except Exception:
+            logger.exception('Failed to drain queued Workflow jobs inline.')
