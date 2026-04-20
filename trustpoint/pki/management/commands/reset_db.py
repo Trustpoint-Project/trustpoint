@@ -77,6 +77,7 @@ class Command(BaseCommand):
             call_command('makemigrations', '--no-header', name=migration_name, interactive=False)
         self.stdout.write('Running migrate...')
         call_command('migrate')
+        call_command('create_admin_group')
 
         # Add default models for development server
         if engine == ENGINE_SQLITE:

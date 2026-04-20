@@ -21,7 +21,7 @@ from trustpoint.views.base import ContextDataMixin, SuperuserRequiredMixin
 from users.form import GroupPermissionForm
 from users.models import Role
 
-# Only Admin is protected — Basic User and Advanced User can be edited/deleted.
+# Only Admin is protected — all other roles can be edited/deleted.
 _PROTECTED_GROUP_NAMES: frozenset[str] = frozenset({Role.ADMIN.value})
 
 

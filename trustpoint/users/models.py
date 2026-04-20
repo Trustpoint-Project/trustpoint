@@ -13,15 +13,12 @@ from django.utils.translation import gettext_lazy as _
 
 
 class Role(models.TextChoices):
-    """Predefined roles that map to Django groups and permission sets.
+    """Predefined roles that map to Django groups.
 
-    The *value* of each member is the canonical Group name stored in the
-    database.  These three groups are considered *protected* and cannot
-    be deleted via the Role Management UI.
+    The *value* is the canonical Group name stored in the database.
+    Admin is the only protected group and cannot be deleted via the UI.
     """
 
-    BASIC_USER = 'Basic User', _('Basic User')
-    ADVANCED_USER = 'Advanced User', _('Advanced User')
     ADMIN = 'Admin', _('Admin')
 
 
