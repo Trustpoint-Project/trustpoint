@@ -52,15 +52,36 @@ class CertificatesContextMixin(PageContextMixin):
 
 
 class CertificateTableView(
-    CertificatesContextMixin, SortableTableMixin[CertificateModel], ListView[CertificateModel]):
+    CertificatesContextMixin, SortableTableMixin[CertificateModel], ListView[CertificateModel]
+):
     """Certificate Table View."""
 
     model = CertificateModel
-    template_name = 'pki/certificates/certificates.html'  # Template file
+    template_name = 'pki/certificates/certificates.html'
     context_object_name = 'certificates'
     paginate_by = UIConfig.paginate_by
     default_sort_param = 'common_name'
     filterset_class = CertificateFilter
+
+    ALLOWED_SORT_PARAMS = frozenset({
+        'common_name',
+        '-common_name',
+        'created_at',
+        '-created_at',
+        'not_valid_before',
+        '-not_valid_before',
+        'not_valid_after',
+        '-not_valid_after',
+        'certificate_status_sort',
+        '-certificate_status_sort',
+    })
+
+    def _normalize_sort_param(self, raw_value: str | None) -> str:
+        """Return a validated sort parameter or the default."""
+        candidate = (raw_value or '').strip()
+        if candidate in self.ALLOWED_SORT_PARAMS:
+            return candidate
+        return self.default_sort_param
 
     def apply_filters(self, qs: QuerySet[CertificateModel]) -> QuerySet[CertificateModel]:
         """Apply the certificate filterset to the base queryset."""
@@ -68,17 +89,27 @@ class CertificateTableView(
         return cast('QuerySet[CertificateModel]', self.filterset.qs)
 
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Normalize sorting to a single parameter and continue with the list view."""
-        sort_params = request.GET.getlist('sort', [self.default_sort_param])
+        """Normalize sorting to one validated parameter and continue with the list view."""
+        sort_params = request.GET.getlist('sort')
+        first_sort_parameter = sort_params[0] if sort_params else self.default_sort_param
+        normalized_sort = self._normalize_sort_param(first_sort_parameter)
 
-        if len(sort_params) > 1:
-            first_sort_parameter = sort_params[0]
+        redirect_needed = (
+            len(sort_params) > 1
+            or not sort_params
+            or first_sort_parameter != normalized_sort
+        )
+
+        if redirect_needed:
+            params = request.GET.copy()
+            params.setlist('sort', [normalized_sort])
+
             safe_base_url = str(reverse_lazy('pki:certificates'))
-            new_url = f'{safe_base_url}?{urlencode({"sort": first_sort_parameter})}'
+            query_string = params.urlencode()
+            new_url = f'{safe_base_url}?{query_string}' if query_string else safe_base_url
             return HttpResponseRedirect(new_url)
 
-        self.ordering = sort_params[0]
-
+        self.ordering = normalized_sort
         return super().get(request, *args, **kwargs)
 
     def get_base_queryset(self) -> QuerySet[CertificateModel]:
