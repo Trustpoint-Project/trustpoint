@@ -21,7 +21,8 @@ class TrustpointYamlLoader(yaml.SafeLoader):
 
 class _DisposableLoader(Protocol):
     def get_single_data(self) -> Any: ...
-    def dispose(self) -> None: ...
+    def dispose(self) -> None:
+        pass
 
 
 # IMPORTANT:
