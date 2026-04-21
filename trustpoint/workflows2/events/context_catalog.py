@@ -302,13 +302,27 @@ CMP_CONTEXT = ctx(
         group='event.cmp',
         example='0f2d7d8a...',
     ),
-    ContextVar(
+)
+
+CMP_CERTREQ_CONTEXT = ctx(
+        ContextVar(
         'event.cmp.cert_profile',
         'string',
         _('Requested certificate profile.'),
         title=_('Certificate profile'),
         group='event.cmp',
         example='tls-client',
+    ),
+)
+
+CMP_CERTCONF_CONTEXT = ctx(
+        ContextVar(
+        'event.cmp.certconf_status',
+        'string',
+        _('CMP certConf status.'),
+        title=_('certConf status'),
+        group='event.cmp',
+        example='accepted',
     ),
 )
 

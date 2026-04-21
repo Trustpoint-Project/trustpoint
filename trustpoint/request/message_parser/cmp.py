@@ -22,6 +22,7 @@ from request.request_context import (
     CmpRevocationRequestContext,
 )
 from trustpoint.logger import LoggerMixin
+from workflows2.events.request_events import Events
 
 from .base import CertProfileParsing, CompositeParsing, DomainParsing, ParsingComponent
 
@@ -545,6 +546,11 @@ class CmpCertificateBodyValidation(LoggerMixin):
 
         context.cert_requested = request_builder
 
+        if body_type == 'ir' and context.operation == 'initialization':
+            context.event = Events.cmp_initialization
+        elif body_type == 'cr' and context.operation == 'certification':
+            context.event = Events.cmp_certification
+
 
 class CmpRevocationBodyValidation(LoggerMixin):
     """Sub-component for validating CMP revocation body for RR message type."""
@@ -731,6 +737,7 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             elif body_type == 'certConf':
                 context = context.narrow(CmpCertConfRequestContext)
                 CmpCertConfBodyValidation().parse_certconf_body(context, pki_body)
+                context.event = Events.cmp_certconf
 
             self.logger.info('CMP body type validation successful: %s body extracted', body_type.upper())
 

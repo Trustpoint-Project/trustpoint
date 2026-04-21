@@ -1,14 +1,11 @@
 """CMP certConf operation processor classes."""
 
-from cmp.util import PKIFailureInfo
+from cmp.util import PKI_STATUS_REJECTION, PKIFailureInfo
 from request.request_context import BaseRequestContext, CmpCertConfRequestContext
 from trustpoint.logger import LoggerMixin
 
 from .base import AbstractOperationProcessor
 from .revoke_cert import CertificateRevocationProcessor
-
-# PKIStatus value 2 = "rejection" per RFC 4210 Section 5.2.3.
-_PKI_STATUS_REJECTION = 2
 
 
 class CertConfProcessor(AbstractOperationProcessor, LoggerMixin):
@@ -31,7 +28,7 @@ class CertConfProcessor(AbstractOperationProcessor, LoggerMixin):
             exc_msg = 'CertConfProcessor requires a CmpCertConfRequestContext.'
             raise TypeError(exc_msg)
 
-        if context.cert_conf_status != _PKI_STATUS_REJECTION:
+        if context.cert_conf_status != PKI_STATUS_REJECTION:
             self.logger.info(
                 'certConf received for certReqId=%s — status accepted. No CA operation required.',
                 context.cert_req_id,
