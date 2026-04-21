@@ -546,6 +546,11 @@ class CmpCertificateBodyValidation(LoggerMixin):
 
         context.cert_requested = request_builder
 
+        if body_type == 'ir' and context.operation == 'initialization':
+            context.event = Events.cmp_initialization
+        elif body_type == 'cr' and context.operation == 'certification':
+            context.event = Events.cmp_certification
+
 
 class CmpRevocationBodyValidation(LoggerMixin):
     """Sub-component for validating CMP revocation body for RR message type."""
@@ -726,10 +731,6 @@ class CmpBodyValidation(ParsingComponent, LoggerMixin):
             if body_type in ('ir', 'cr'):
                 context = context.narrow(CmpCertificateRequestContext)
                 CmpCertificateBodyValidation().parse_ircr_body(context, pki_body, body_type)
-                if body_type == 'ir' and context.operation == 'initialization':
-                    context.event = Events.cmp_initialization
-                elif body_type == 'cr' and context.operation == 'certification':
-                    context.event = Events.cmp_certification
             elif body_type == 'rr':
                 context = context.narrow(CmpRevocationRequestContext)
                 CmpRevocationBodyValidation().parse_rr_body(context, pki_body)
