@@ -462,7 +462,7 @@ class UpdateTlsCommandTest(TestCase):
     """Test suite for update_tls command."""
 
     @patch('management.management.commands.update_tls.subprocess.run')
-    @patch('management.management.commands.update_tls.Path')
+    @patch('management.management.commands.update_tls.SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL')
     @patch('management.management.commands.update_tls.NGINX_KEY_PATH')
     @patch('management.management.commands.update_tls.NGINX_CERT_PATH')
     @patch('management.management.commands.update_tls.NGINX_CERT_CHAIN_PATH')
@@ -473,7 +473,7 @@ class UpdateTlsCommandTest(TestCase):
         mock_chain_path: MagicMock,
         mock_cert_path: MagicMock,
         mock_key_path: MagicMock,
-        mock_path_class: MagicMock,
+        mock_script_constant: MagicMock,
         mock_subprocess: MagicMock
     ) -> None:
         """Test update_tls command successful execution."""
@@ -492,7 +492,7 @@ class UpdateTlsCommandTest(TestCase):
         mock_script_path = Mock()
         mock_script_path.exists.return_value = True
         mock_script_path.is_file.return_value = True
-        mock_path_class.return_value.resolve.return_value = mock_script_path
+        mock_script_constant.resolve.return_value = mock_script_path
         
         # Mock subprocess
         mock_result = Mock()
@@ -518,7 +518,7 @@ class UpdateTlsCommandTest(TestCase):
         self.assertIn('not found', str(cm.exception).lower())
 
     @patch('management.management.commands.update_tls.subprocess.run')
-    @patch('management.management.commands.update_tls.Path')
+    @patch('management.management.commands.update_tls.SCRIPT_UPDATE_TLS_SERVER_CREDENTIAL')
     @patch('management.management.commands.update_tls.NGINX_KEY_PATH')
     @patch('management.management.commands.update_tls.NGINX_CERT_PATH')
     @patch('management.management.commands.update_tls.NGINX_CERT_CHAIN_PATH')
@@ -529,7 +529,7 @@ class UpdateTlsCommandTest(TestCase):
         mock_chain_path: MagicMock,
         mock_cert_path: MagicMock,
         mock_key_path: MagicMock,
-        mock_path_class: MagicMock,
+        mock_script_constant: MagicMock,
         mock_subprocess: MagicMock
     ) -> None:
         """Test update_tls command when subprocess script fails."""
@@ -548,7 +548,7 @@ class UpdateTlsCommandTest(TestCase):
         mock_script_path = Mock()
         mock_script_path.exists.return_value = True
         mock_script_path.is_file.return_value = True
-        mock_path_class.return_value.resolve.return_value = mock_script_path
+        mock_script_constant.resolve.return_value = mock_script_path
         
         # Mock subprocess failure
         mock_result = Mock()
