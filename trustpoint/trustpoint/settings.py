@@ -80,6 +80,7 @@ PUBLIC_PATHS = [
     '/.well-known/cmp',
     '/.well-known/est',
     '/rest',
+    '/api',
     '/aoki',
     '/crl',
     '/setup-wizard'
