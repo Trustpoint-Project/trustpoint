@@ -6,11 +6,14 @@ from .base import (
     CompositeAuthorization,
     DevOwnerIDAuthorization,
     DomainScopeValidation,
+    OnboardingDomainCredentialAuthorization,
     ProtocolAuthorization,
+    SecurityConfigAuthorization,
 )
 from .cmp import CmpAuthorization
 from .est import EstAuthorization
 from .manual import ManualAuthorization
+from .rest import RestAuthorization
 
 __all__ = [
     'AuthorizationComponent',
@@ -21,5 +24,8 @@ __all__ = [
     'DomainScopeValidation',
     'EstAuthorization',
     'ManualAuthorization',
+    'OnboardingDomainCredentialAuthorization',
     'ProtocolAuthorization',
+    'RestAuthorization',
+    'SecurityConfigAuthorization',
 ]

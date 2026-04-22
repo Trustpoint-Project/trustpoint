@@ -1,0 +1,107 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+{% load static %}
+
+{% block content %}
+    <script src="{% static 'js/regex_gen.js' %}"></script>
+
+    <form method="POST" autocomplete="off" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h1>{% trans 'AOKI Onboarding Setup' %}</h1>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="tp-card-centered-content">
+
+
+                    <hr>
+
+                    <!-- Step 1: Truststore Import -->
+                    <h2>{% trans '1. IDevID Truststore' %}</h2>
+                    <div class="mb-3">
+                        {{ form.unique_name|as_crispy_field }}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.trust_store_file|as_crispy_field }}
+                    </div>
+
+                    <hr>
+
+                    <!-- Step 2: Domain Association -->
+                    <h2>{% trans '2. Domain' %}</h2>
+                    <div class="mb-3">
+                        {{ form.domain|as_crispy_field }}
+                    </div>
+
+                    <hr>
+
+                    <!-- Step 3: Registration Pattern -->
+                    <h2>{% trans '3. Registration Pattern' %}</h2>
+
+                    {% if idevid_reference_strs %}
+                        <div class="alert alert-secondary mt-2" role="alert">
+                            <strong>{% trans 'IDevID References found in DevOwnerID:' %}</strong>
+                            <ul class="mb-0 mt-1">
+                                {% for ref in idevid_reference_strs %}
+                                    <li><code>{{ ref }}</code></li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    <div class="card mt-3 mb-3">
+                        <div class="card-header">
+                            <h5 class="mb-0">{% trans 'Regex Helper' %}</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if suggested_pattern %}
+                                <div class="mb-3">
+                                    <label class="form-label">{% trans 'Suggested pattern (from DevOwnerID references):' %}</label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" value="{{ suggested_pattern }}" readonly id="suggested-pattern">
+                                        <button type="button" class="btn btn-outline-primary" onclick="document.getElementById('id_serial_number_pattern').value = document.getElementById('suggested-pattern').value; document.getElementById('id_serial_number_pattern').removeAttribute('readonly');">
+                                            {% trans 'Use this pattern' %}
+                                        </button>
+                                    </div>
+                                    <small class="form-text text-muted">
+                                        {% trans 'This exact-match pattern was generated from the IDevID subject serial numbers or SAN URIs in the DevOwnerID certificate.' %}
+                                    </small>
+                                </div>
+                            {% endif %}
+
+                            <!-- Freeform regex helper (reuses existing regex_gen.js) -->
+                            <div id="example-serial-field" class="mb-3">
+                                <label for="example-serial" class="form-label">
+                                    {% trans 'Or enter an example Serial Number / SAN URI to generate regex variations:' %}
+                                </label>
+                                <input type="text" id="example-serial" class="form-control" placeholder="{% trans 'e.g.' %} ABC-1234-XYZ">
+                                <small class="form-text text-muted">
+                                    {% blocktranslate %}Multiple regex variations will be generated based on the structure. Supported delimiters are [- _ . :]{% endblocktranslate %}
+                                </small>
+                            </div>
+
+                            <div id="regex-options" class="mb-3" style="display: none;">
+                                <label class="form-label">{% trans 'Generated Regex Variations:' %}</label>
+                                <ul class="list-group cursor" id="regex-list"></ul>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.serial_number_pattern|as_crispy_field }}
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'devices:zero_touch_credentials' %}" class="btn btn-secondary">{% trans 'Skip' %}</a>
+                    <button type="submit" class="btn btn-primary">{% trans 'Complete Onboarding Setup' %}</button>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock content %}

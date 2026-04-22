@@ -7,7 +7,9 @@ from .base import (
     CertificateProfileAuthorization,
     CompositeAuthorization,
     DomainScopeValidation,
+    OnboardingDomainCredentialAuthorization,
     ProtocolAuthorization,
+    SecurityConfigAuthorization,
 )
 
 
@@ -61,5 +63,7 @@ class EstAuthorization(CompositeAuthorization):
 
         self.add(DomainScopeValidation())
         self.add(CertificateProfileAuthorization())
+        self.add(OnboardingDomainCredentialAuthorization())
         self.add(ProtocolAuthorization(['est']))
         self.add(EstOperationAuthorization(allowed_operations))
+        self.add(SecurityConfigAuthorization())

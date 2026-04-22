@@ -1,0 +1,1571 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-26 08:42+0000\n"
+"PO-Revision-Date: 2026-03-09 12:51+0100\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Poedit 3.8\n"
+
+#: trustpoint/pki/filters.py:21
+msgid "Search…"
+msgstr "Suchen…"
+
+#: trustpoint/pki/forms/cert_profiles.py:66
+#, python-format
+msgid ""
+"The requested certificate validity of %(req_days).1f days exceeds the maximum of "
+"%(max_days)d days permitted by the active security policy."
+msgstr ""
+"Die angeforderte Gültigkeitsdauer des Zertifikats von %(req_days).1f Tagen "
+"überschreitet die in der aktiven Sicherheitsrichtlinie festgelegte maximale "
+"Gültigkeitsdauer von %(max_days)d Tagen."
+
+#: trustpoint/pki/forms/certificates.py:35
+msgid "Select Certificate Container Type"
+msgstr "Typ des Zertifikat-Containers wählen"
+
+#: trustpoint/pki/forms/certificates.py:37 trustpoint/pki/forms/truststores.py:369
+msgid "Single File"
+msgstr "Einzelne Datei"
+
+#: trustpoint/pki/forms/certificates.py:38 trustpoint/pki/forms/truststores.py:370
+msgid "Separate Certificate Files (as .zip file)"
+msgstr "Separate Zertifikatsdateien (als .zip-Datei)"
+
+#: trustpoint/pki/forms/certificates.py:39 trustpoint/pki/forms/truststores.py:371
+msgid "Separate Certificate Files (as .tar.gz file)"
+msgstr "Separate Zertifikatsdateien (als .tar.gz-Datei)"
+
+#: trustpoint/pki/forms/certificates.py:46 trustpoint/pki/forms/truststores.py:378
+msgid "Select Included Certificates"
+msgstr "Enthaltene Zertifikate auswählen"
+
+#: trustpoint/pki/forms/certificates.py:47 trustpoint/pki/forms/truststores.py:379
+msgid "Selected certificates only"
+msgstr "Nur ausgewählte Zertifikate"
+
+#: trustpoint/pki/forms/certificates.py:47 trustpoint/pki/forms/truststores.py:379
+msgid "Include certificate chains"
+msgstr "Zertifikatsketten einbeziehen"
+
+#: trustpoint/pki/forms/certificates.py:53
+msgid "Select Certificate File Format"
+msgstr "Zertifikatsdateiformat auswählen"
+
+#: trustpoint/pki/forms/certificates.py:55 trustpoint/pki/forms/truststores.py:387
+msgid "PEM (.pem, .crt, .ca-bundle)"
+msgstr "PEM (.pem, .crt, .ca-bundle)"
+
+#: trustpoint/pki/forms/certificates.py:56 trustpoint/pki/forms/truststores.py:388
+msgid "DER (.der, .cer)"
+msgstr "DER (.der, .cer)"
+
+#: trustpoint/pki/forms/certificates.py:57 trustpoint/pki/forms/truststores.py:389
+msgid "PKCS#7 (PEM) (.p7b, .p7c, .keystore)"
+msgstr "PKCS#7 (PEM) (.p7b, .p7c, .keystore)"
+
+#: trustpoint/pki/forms/certificates.py:58 trustpoint/pki/forms/truststores.py:390
+msgid "PKCS#7 (DER) (.p7b, .p7c, .keystore)"
+msgstr "PKCS#7 (DER) (.p7b, .p7c, .keystore)"
+
+#: trustpoint/pki/forms/devids.py:25 trustpoint/pki/forms/issuing_cas.py:201
+msgid "Select Method"
+msgstr "Methode auswählen"
+
+#: trustpoint/pki/forms/devids.py:27
+msgid "Import a new truststore prior to configuring a new pattern"
+msgstr ""
+"Importieren Sie einen neuen Truststore, bevor Sie ein neues Muster konfigurieren"
+
+#: trustpoint/pki/forms/devids.py:28
+msgid "Use an existing truststore to define a new pattern"
+msgstr ""
+"Nutzen Sie einen bereits existierenden Truststore, um ein neues Pattern zu definieren"
+
+#: trustpoint/pki/forms/devids.py:58 trustpoint/pki/forms/issuing_cas.py:251
+#: trustpoint/pki/forms/issuing_cas.py:367 trustpoint/pki/forms/owner_credential.py:42
+#: trustpoint/pki/forms/truststores.py:40
+msgid "[Optional] Unique Name"
+msgstr "[Optional] Eindeutiger Name"
+
+#: trustpoint/pki/forms/issuing_cas.py:203
+msgid "Import a new Issuing CA from file"
+msgstr "Eine neue Issuing CA aus einer Datei importieren"
+
+#: trustpoint/pki/forms/issuing_cas.py:204
+msgid "Generate a key-pair and request an Issuing CA certificate"
+msgstr "Ein Schlüsselpaar generieren und ein Zertifikat der  Issuing CA anfordern"
+
+#: trustpoint/pki/forms/issuing_cas.py:205
+msgid "Configure a remote Issuing CA"
+msgstr "Konfigurieren Sie eine Remote-Issuing-CA"
+
+#: trustpoint/pki/forms/issuing_cas.py:225
+msgid "File Type"
+msgstr "Dateityp"
+
+#: trustpoint/pki/forms/issuing_cas.py:227
+msgid "PKCS#12"
+msgstr "PKCS#12"
+
+#: trustpoint/pki/forms/issuing_cas.py:228
+msgid "PEM, PKCS#1, PKCS#7, PKCS#8"
+msgstr "PEM, PKCS#1, PKCS#7, PKCS#8"
+
+#: trustpoint/pki/forms/issuing_cas.py:257
+msgid "PKCS#12 File (.p12, .pfx)"
+msgstr "PKCS#12-Datei (.p12, .pfx)"
+
+#: trustpoint/pki/forms/issuing_cas.py:261
+msgid "[Optional] PKCS#12 password"
+msgstr "[Optional] PKCS#12-Passwort"
+
+#: trustpoint/pki/forms/issuing_cas.py:276 trustpoint/pki/forms/truststores.py:102
+msgid ""
+"Unexpected error occurred while trying to get file contents. Please see logs for "
+"further details."
+msgstr ""
+"Beim Abrufen des Dateiinhalts ist ein unerwarteter Fehler aufgetreten. Weitere "
+"Details finden Sie in den Protokollen."
+
+#: trustpoint/pki/forms/issuing_cas.py:284
+msgid "The PKCS#12 password contains invalid data, that cannot be encoded in UTF-8."
+msgstr ""
+"Das PKCS#12-Passwort enthält ungültige Daten, die nicht in UTF-8 kodiert werden "
+"können."
+
+#: trustpoint/pki/forms/issuing_cas.py:308
+msgid ""
+"Failed to parse and load the uploaded file. Either wrong password or corrupted file."
+msgstr ""
+"Die hochgeladene Datei konnte nicht analysiert und geladen werden. Entweder ist das "
+"Passwort falsch oder die Datei ist beschädigt."
+
+#: trustpoint/pki/forms/issuing_cas.py:372
+msgid "Issuing CA Certificate (.cer, .der, .pem, .p7b, .p7c)"
+msgstr "Zertifikat der  Issuingn CA (.cer, .der, .pem, .p7b, .p7c)"
+
+#: trustpoint/pki/forms/issuing_cas.py:373 trustpoint/pki/forms/owner_credential.py:48
+msgid "[Optional] Certificate Chain (.pem, .p7b, .p7c)."
+msgstr "[Optional] Zertifikatskette (.pem, .p7b, .p7c)"
+
+#: trustpoint/pki/forms/issuing_cas.py:374 trustpoint/pki/forms/owner_credential.py:49
+msgid "Private Key File (.key, .pem)"
+msgstr "Private-Key-Datei (.key, .pem)"
+
+#: trustpoint/pki/forms/issuing_cas.py:378 trustpoint/pki/forms/owner_credential.py:53
+msgid "[Optional] Private Key File Password"
+msgstr "[Optional] Passwort der Private-Key-Datei"
+
+#: trustpoint/pki/forms/issuing_cas.py:491
+msgid "Failed to parse the Issuing CA certificate chain. Seems to be corrupted."
+msgstr "Fehler beim parsen der Zertifikatskette. Die Datei scheint beschädigt zu sein."
+
+#: trustpoint/pki/forms/issuing_cas.py:591 trustpoint/pki/models/credential.py:80
+msgid "Key Type"
+msgstr "Schlüsseltyp"
+
+#: trustpoint/pki/forms/issuing_cas.py:603
+msgid "Select the cryptographic key type and parameters"
+msgstr "Wählen Sie den kryptografischen Schlüsseltyp und die Parameter aus"
+
+#: trustpoint/pki/forms/issuing_cas.py:673 trustpoint/pki/models/ca.py:166
+msgid "EST Username"
+msgstr "EST Benutzername"
+
+#: trustpoint/pki/forms/issuing_cas.py:676 trustpoint/pki/models/ca.py:170
+msgid "Username for EST authentication"
+msgstr "Benutzername für die EST-Authentifizierung"
+
+#: trustpoint/pki/forms/issuing_cas.py:680
+msgid "EST Password"
+msgstr "EST Passwort"
+
+#: trustpoint/pki/forms/issuing_cas.py:683
+msgid "Password for EST authentication"
+msgstr "Passwort für die EST-Authentifizierung"
+
+#: trustpoint/pki/forms/issuing_cas.py:744
+msgid "CMP Shared Secret"
+msgstr "CMP Shared Secret"
+
+#: trustpoint/pki/forms/issuing_cas.py:747
+msgid "Shared secret for CMP authentication"
+msgstr "Shared Secret für die CMP-Authentifizierung"
+
+#: trustpoint/pki/forms/issuing_cas.py:795
+msgid "Trust Store"
+msgstr "Trust Store"
+
+#: trustpoint/pki/forms/issuing_cas.py:796
+msgid "Select a trust store to associate with this Issuing CA"
+msgstr ""
+"Wählen Sie einen Truststore aus, der mit dieser  Issuingn CA verknüpft werden soll"
+
+#: trustpoint/pki/forms/issuing_cas.py:815
+msgid ""
+"EST RA (Step 1/2): Import the Issuing CA chain. This establishes the RA certificate "
+"and hierarchy."
+msgstr ""
+"EST RA (Schritt 1/2): Importieren Sie die Zertifikatskette der  Issuing CA. Dadurch "
+"werden das RA-Zertifikat und die Hierarchie erstellt."
+
+#: trustpoint/pki/forms/issuing_cas.py:822
+msgid ""
+"EST RA (Step 2/2): Import the TLS server certificate (used for HTTPS connection "
+"security)."
+msgstr ""
+"EST RA (Schritt 2/2): Importieren Sie das TLS-Serverzertifikat (wird für die HTTPS-"
+"Verbindungssicherheit verwendet)."
+
+#: trustpoint/pki/forms/issuing_cas.py:829
+msgid "CMP: Only \"Issuing CA Chain\" truststores can be associated."
+msgstr "Keine Anwendungszertifikatsprofile in der Domäne zulässig."
+
+#: trustpoint/pki/forms/issuing_cas.py:836
+msgid ""
+"EST: Import the TLS server certificate of the remote PKI (used for HTTPS connection "
+"security)"
+msgstr ""
+"EST: Importieren Sie das TLS-Serverzertifikat der Remote-PKI (wird für die "
+"Sicherheit der HTTPS-Verbindung verwendet)."
+
+#: trustpoint/pki/forms/issuing_cas.py:845
+msgid "Expected CaModel that has a no_onboarding_config."
+msgstr "Erwartetes CA-Modell, das keine Onboarding-Konfiguration hat."
+
+#: trustpoint/pki/forms/issuing_cas.py:867 trustpoint/pki/models/ca.py:194
+msgid "Enable CRL Cycle Updates"
+msgstr "CRL-Zyklusaktualisierungen aktivieren"
+
+#: trustpoint/pki/forms/issuing_cas.py:869 trustpoint/pki/models/ca.py:196
+msgid "Enable automatic periodic CRL generation for this CA"
+msgstr "Automatische, periodische CRL-Generierung für diese CA aktivieren"
+
+#: trustpoint/pki/forms/issuing_cas.py:873 trustpoint/pki/models/ca.py:200
+msgid "CRL Cycle Interval (hours)"
+msgstr "CRL-Zyklusintervall (Stunden)"
+
+#: trustpoint/pki/forms/issuing_cas.py:875
+msgid "The interval in hours between CRL generations (minimum 5 minutes)"
+msgstr "Das Intervall in Stunden zwischen CRL-Generierungen (mindestens 5 Minuten)"
+
+#: trustpoint/pki/forms/issuing_cas.py:880 trustpoint/pki/models/ca.py:206
+msgid "CRL Validity (hours)"
+msgstr "CRL-Gültigkeit (Stunden)"
+
+#: trustpoint/pki/forms/issuing_cas.py:882
+msgid "The validity period in hours for generated CRLs"
+msgstr "Gültigkeitsdauer in Stunden für erstellte CRLs"
+
+#: trustpoint/pki/forms/issuing_cas.py:893 trustpoint/pki/models/ca.py:404
+msgid "CRL cycle interval must be at least 5 minutes"
+msgstr "Das CRL-Zyklusintervall muss mindestens 5 Minuten betragen"
+
+#: trustpoint/pki/forms/issuing_cas.py:920
+#, python-format
+msgid ""
+"CRL validity of %(hours).2f hours (%(days).1f days) exceeds the maximum of "
+"%(max_days)d days permitted by the active security policy."
+msgstr ""
+"Die CRL-Gültigkeit von %(hours).2f Stunden (%(days).1f Tagen) überschreitet das von "
+"der aktiven Sicherheitsrichtlinie zugelassene Maximum von %(max_days)d Tagen."
+
+#: trustpoint/pki/forms/owner_credential.py:47
+msgid "DevOwnerID Certificate (.cer, .der, .pem, .p7b, .p7c)"
+msgstr "DevOwnerID-Zertifikat (.cer, .der, .pem, .p7b, .p7c)"
+
+#: trustpoint/pki/forms/owner_credential.py:161
+msgid "Failed to parse the certificate chain. Seems to be corrupted."
+msgstr ""
+"Fehler beim Einlesen der Zertifikatskette. Die Datei scheint beschädigt zu sein."
+
+#: trustpoint/pki/forms/truststores.py:48 trustpoint/pki/models/truststore.py:83
+msgid "Intended Usage"
+msgstr "Verwendungszweck"
+
+#: trustpoint/pki/forms/truststores.py:53
+msgid "PEM, DER, or PKCS#7 File"
+msgstr "PEM, DER, oder PKCS#7 Datei"
+
+#: trustpoint/pki/forms/truststores.py:115
+msgid "Unable to process the Truststore. May be malformed / corrupted."
+msgstr ""
+"Trust Store konnte nicht verarbeitet werden. Möglicherweise fehlerhaft / beschädigt."
+
+#: trustpoint/pki/forms/truststores.py:187
+msgid "Truststore for Issuing CA Chain cannot be empty."
+msgstr "Der Truststore für die Zertifikatskette der  Issuing CA darf nicht leer sein."
+
+#: trustpoint/pki/forms/truststores.py:193
+msgid ""
+"Unable to validate certificate chain. The certificates do not form a valid chain."
+msgstr ""
+"Zertifikatskette kann nicht validiert werden. Die Zertifikate bilden keine gültige "
+"Kette."
+
+#: trustpoint/pki/forms/truststores.py:198
+msgid ""
+"Invalid certificate chain. Each certificate must be signed by the next certificate "
+"in the chain."
+msgstr ""
+"Ungültige Zertifikatskette. Jedes Zertifikat muss vom nächsten Zertifikat in der "
+"Kette signiert sein."
+
+#: trustpoint/pki/forms/truststores.py:204
+msgid ""
+"Incomplete certificate chain. The chain must end with a self-signed root CA "
+"certificate."
+msgstr ""
+"Unvollständige Zertifikatskette. Die Kette muss mit einem selbstsignierten Root-CA-"
+"Zertifikat enden."
+
+#: trustpoint/pki/forms/truststores.py:367
+msgid "Select Truststore Container Type"
+msgstr "Truststore-Container-Typ auswählen"
+
+#: trustpoint/pki/forms/truststores.py:385
+msgid "Select Truststore File Format"
+msgstr "Dateiformat des Truststores auswählen"
+
+#: trustpoint/pki/management/commands/generate_crls.py:15
+msgid "Generate CRLs for all CAs with enabled CRL cycle updates"
+msgstr "CRLs für alle CAs mit aktivierten CRL-Zyklusaktualisierungen generieren"
+
+#: trustpoint/pki/management/commands/generate_crls.py:22
+msgid "Generate CRL only for the CA with the specified ID"
+msgstr "CRL nur für die CA mit der angegebenen ID generieren"
+
+#: trustpoint/pki/management/commands/generate_crls.py:27
+msgid "Generate CRLs for all CAs with enabled cycles"
+msgstr "CRLs für alle CAs mit aktivierten CRL-Zyklusaktualisierungen generieren"
+
+#: trustpoint/pki/management/commands/generate_crls.py:42
+msgid "Please specify --ca-id <id> or --all"
+msgstr ""
+
+#: trustpoint/pki/management/commands/generate_crls.py:66
+msgid "No CAs with enabled CRL cycles found"
+msgstr "Keine CAs mit aktiviertem CRL-Zyklus gefunden"
+
+#: trustpoint/pki/management/commands/process_tasks.py:13
+msgid "Check for scheduled CRL generations and execute them if due"
+msgstr ""
+"Überprüfen Sie, ob CRL-Generierungen geplant sind, und führen Sie diese "
+"gegebenenfalls aus"
+
+#: trustpoint/pki/management/commands/run_task_worker.py:15
+msgid "Run a background worker that processes pending CRL generation tasks"
+msgstr ""
+"Einen Hintergrundprozess starten, der ausstehende CRL-Generierungsaufgaben "
+"verarbeitet"
+
+#: trustpoint/pki/management/commands/run_task_worker.py:23
+msgid "Check interval in seconds (default: 60)"
+msgstr "Überprüfungsintervall in Sekunden (Standard: 60)"
+
+#: trustpoint/pki/models/ca.py:56
+msgid "Keyless CA"
+msgstr "CA ohne Schlüssel"
+
+#: trustpoint/pki/models/ca.py:57
+msgid "Auto-Generated Root"
+msgstr "Automatisch generierte Root"
+
+#: trustpoint/pki/models/ca.py:58
+msgid "Auto-Generated"
+msgstr "Automatisch generiert"
+
+#: trustpoint/pki/models/ca.py:59
+msgid "Local-Unprotected"
+msgstr "Lokal-Ungeschützt"
+
+#: trustpoint/pki/models/ca.py:60
+msgid "Local-PKCS11"
+msgstr "Lokal-PKCS11"
+
+#: trustpoint/pki/models/ca.py:61
+msgid "Remote-EST-RA"
+msgstr "Remote-EST-RA"
+
+#: trustpoint/pki/models/ca.py:62
+msgid "Remote-CMP-RA"
+msgstr "Remote-CMP-RA"
+
+#: trustpoint/pki/models/ca.py:63
+msgid "Remote-Issuing-EST"
+msgstr "Remote-Issuing-EST"
+
+#: trustpoint/pki/models/ca.py:64
+msgid "Remote-Issuing-CMP"
+msgstr "Remote-Issuing-CMP"
+
+#: trustpoint/pki/models/ca.py:68
+msgid "CA Name"
+msgstr "CA-Name"
+
+#: trustpoint/pki/models/ca.py:72
+msgid "Unique identifier for this CA"
+msgstr "Eindeutige Kennung für diese CA"
+
+#: trustpoint/pki/models/ca.py:81
+msgid "Parent CA"
+msgstr "Übergeordnete CA"
+
+#: trustpoint/pki/models/ca.py:82
+msgid "The parent CA in the hierarchy (issuer of this CA)"
+msgstr "Die übergeordnete CA in der Hierarchie (Aussteller dieser CA)"
+
+#: trustpoint/pki/models/ca.py:86 trustpoint/pki/models/crl.py:64
+#: trustpoint/pki/models/domain.py:41
+msgid "Active"
+msgstr "Aktiv"
+
+#: trustpoint/pki/models/ca.py:88
+msgid "Whether this CA is currently active"
+msgstr "Ob diese CA derzeit aktiv ist"
+
+#: trustpoint/pki/models/ca.py:92 trustpoint/pki/models/credential.py:175
+#: trustpoint/pki/models/credential.py:1052 trustpoint/pki/models/crl.py:70
+#: trustpoint/pki/models/domain.py:45
+msgid "Created"
+msgstr "Erstellt"
+
+#: trustpoint/pki/models/ca.py:97 trustpoint/pki/models/crl.py:75
+#: trustpoint/pki/models/domain.py:46
+msgid "Updated"
+msgstr "Aktualisiert"
+
+#: trustpoint/pki/models/ca.py:103
+msgid "CA Type"
+msgstr "CA Typ"
+
+#: trustpoint/pki/models/ca.py:107
+msgid "Type of CA - KEYLESS for keyless CAs"
+msgstr ""
+
+#: trustpoint/pki/models/ca.py:117
+msgid "CA Certificate"
+msgstr "CA Zertifikat"
+
+#: trustpoint/pki/models/ca.py:118
+msgid "The CA certificate (for keyless CAs)"
+msgstr "Das CA-Zertifikat (für CAs ohne Schlüssel)"
+
+#: trustpoint/pki/models/ca.py:128
+msgid "Credential"
+msgstr "Zugangsdaten"
+
+#: trustpoint/pki/models/ca.py:129
+msgid "The CA credential with private key (for issuing CAs)"
+msgstr "Bei Remote- Issuing CAs müssen Anmeldedaten hinterlegt sein."
+
+#: trustpoint/pki/models/ca.py:138
+msgid "Chain Truststore"
+msgstr "Ketten-Truststore"
+
+#: trustpoint/pki/models/ca.py:139
+msgid "The truststore containing the full certificate chain for this CA."
+msgstr "Der Truststore, der die vollständige Zertifikatskette für diese CA enthält."
+
+#: trustpoint/pki/models/ca.py:143
+msgid "Remote Host"
+msgstr "Remote-Host"
+
+#: trustpoint/pki/models/ca.py:147
+msgid "The hostname or IP address of the remote PKI"
+msgstr "Der Hostname oder die IP-Adresse der Remote-PKI"
+
+#: trustpoint/pki/models/ca.py:151
+msgid "Remote Port"
+msgstr "Remote-Port"
+
+#: trustpoint/pki/models/ca.py:154
+msgid "The port number of the remote PKI"
+msgstr "Die Portnummer der Remote-PKI"
+
+#: trustpoint/pki/models/ca.py:158
+msgid "Remote Path"
+msgstr "Remote-Pfad"
+
+#: trustpoint/pki/models/ca.py:162
+msgid "The path on the remote PKI"
+msgstr "Der Pfad auf der Remote-PKI"
+
+#: trustpoint/pki/models/ca.py:179
+msgid "Onboarding Config"
+msgstr "Onboarding-Konfiguration"
+
+#: trustpoint/pki/models/ca.py:180
+msgid "Onboarding configuration for remote CA connection"
+msgstr "Onboarding-Konfiguration für Remote-CA-Verbindung"
+
+#: trustpoint/pki/models/ca.py:189
+msgid "No Onboarding Config"
+msgstr "Keine Onboarding-Konfiguration"
+
+#: trustpoint/pki/models/ca.py:190
+msgid "No-onboarding configuration for remote CA connection"
+msgstr "Keine Onboarding-Konfiguration für Remote-CA-Verbindung"
+
+#: trustpoint/pki/models/ca.py:202
+msgid "The interval in hours between CRL generations (minimum ~5 minutes)"
+msgstr "Das Intervall in Stunden zwischen CRL-Generierungen (mindestens 5 Minuten)"
+
+#: trustpoint/pki/models/ca.py:208
+msgid "The validity period in hours for generated CRLs (nextUpdate field)"
+msgstr "Die Gültigkeitsdauer in Stunden für erzeugte CRLs (nextUpdate-Feld)"
+
+#: trustpoint/pki/models/ca.py:212
+msgid "Last CRL Generation Started"
+msgstr "Letzte CRL-Generierung gestartet"
+
+#: trustpoint/pki/models/ca.py:215
+msgid "Timestamp when the last CRL generation task was started"
+msgstr "Zeitstempel, zu dem die letzte CRL-Generierungsaufgabe gestartet wurde"
+
+#: trustpoint/pki/models/ca.py:221 trustpoint/pki/models/crl.py:33
+#: trustpoint/pki/views/crls.py:310
+msgid "Certificate Authority"
+msgstr "Zertifizierungsstelle"
+
+#: trustpoint/pki/models/ca.py:222
+msgid "Certificate Authorities"
+msgstr "Zertifizierungsstellen"
+
+#: trustpoint/pki/models/ca.py:233
+msgid "Invalid CA configuration"
+msgstr "Ungültige CA-Konfiguration"
+
+#: trustpoint/pki/models/ca.py:408
+msgid "CRL validity period must be at least 1 hour"
+msgstr "Die Gültigkeitsdauer der CRL muss mindestens 1 Stunde betragen"
+
+#: trustpoint/pki/models/ca.py:417
+msgid "CRL cycle interval must not exceed the CRL validity period"
+msgstr "Das CRL-Zyklusintervall darf die Gültigkeitsdauer der CRL nicht überschreiten"
+
+#: trustpoint/pki/models/ca.py:429
+msgid "Remote CAs cannot have credential."
+msgstr "Remote-CAs können keine Anmeldedaten haben."
+
+#: trustpoint/pki/models/ca.py:431
+msgid "Remote CAs must have certificate set."
+msgstr "Bei Remote-CAs muss ein Zertifikat hinterlegt sein."
+
+#: trustpoint/pki/models/ca.py:433
+msgid "Remote host must be set for remote CAs."
+msgstr "Bei Remote-CAs muss ein Remote-Host angegeben werden."
+
+#: trustpoint/pki/models/ca.py:435
+msgid "Remote port must be set for remote CAs."
+msgstr "Bei Remote- Issuing CAs muss ein Remote-Port angegeben werden."
+
+#: trustpoint/pki/models/ca.py:437
+msgid "Remote path must be set for remote CAs."
+msgstr "Für Remote-CAs muss ein Remote-Pfad festgelegt werden."
+
+#: trustpoint/pki/models/ca.py:439
+msgid "Either onboarding or no-onboarding config must be set for remote CAs."
+msgstr ""
+"Für Remote-CAs muss entweder eine Onboarding- oder eine No-Onboarding-Konfiguration "
+"festgelegt sein."
+
+#: trustpoint/pki/models/ca.py:441
+msgid "Only one of onboarding or no-onboarding config can be set for remote CAs."
+msgstr ""
+"Für Remote-CAs darf nur eine der beiden Konfigurationen festgelegt sein: Onboarding "
+"oder No-Onboarding."
+
+#: trustpoint/pki/models/ca.py:446
+msgid "Remote issuing CAs cannot have certificate set."
+msgstr "Remote- Issuing CAs dürfen kein Zertifikat hinterlegt haben."
+
+#: trustpoint/pki/models/ca.py:449
+msgid "Remote issuing CAs must have credential set."
+msgstr "Bei Remote- Issuing CAs müssen Anmeldedaten hinterlegt sein."
+
+#: trustpoint/pki/models/ca.py:451
+msgid "ca_type must be set for remote issuing CAs."
+msgstr "ca_type muss für Remote- Issuing CAs festgelegt werden."
+
+#: trustpoint/pki/models/ca.py:453
+msgid "Remote host must be set for remote issuing CAs."
+msgstr "Bei Remote- Issuing CAs muss ein Remote-Host angegeben werden."
+
+#: trustpoint/pki/models/ca.py:455
+msgid "Remote port must be set for remote issuing CAs."
+msgstr "Bei Remote- Issuing CAs muss ein Remote-Port angegeben werden."
+
+#: trustpoint/pki/models/ca.py:457
+msgid "Remote path must be set for remote issuing CAs."
+msgstr "Für Remote- Issuing CAs muss ein Remote-Pfad festgelegt werden."
+
+#: trustpoint/pki/models/ca.py:459
+msgid "EST username must be set for remote EST issuing CAs."
+msgstr "Bei Remote-EST- Issuing CAs muss ein EST-Benutzername angegeben werden."
+
+#: trustpoint/pki/models/ca.py:461
+msgid "Either onboarding or no-onboarding config must be set for remote issuing CAs."
+msgstr ""
+"Für Remote- Issuing CAs muss entweder eine Onboarding- oder eine No-Onboarding-"
+"Konfiguration festgelegt werden."
+
+#: trustpoint/pki/models/ca.py:463
+msgid "Only one onboarding config can be set for remote issuing CAs."
+msgstr ""
+"Für Remote- Issuing CAs darf nur eine Onboarding-Konfiguration festgelegt werden."
+
+#: trustpoint/pki/models/ca.py:468
+msgid "Either certificate (keyless CA) or credential (issuing CA) must be set."
+msgstr ""
+"Es muss entweder ein Zertifikat (Ohne Schlüssel CA) oder ein Credential (Issuing CA) "
+"gesetzt werden."
+
+#: trustpoint/pki/models/ca.py:470
+msgid "Cannot set both certificate and credential."
+msgstr ""
+"Es können nicht sowohl Zertifikat als auch Anmeldeinformationen festgelegt werden."
+
+#: trustpoint/pki/models/ca.py:472
+msgid "ca_type must be set for issuing CAs."
+msgstr "ca_type muss für ausstellende Zertifizierungsstellen festgelegt werden."
+
+#: trustpoint/pki/models/ca.py:474
+msgid "ca_type must be KEYLESS for keyless CAs."
+msgstr ""
+
+#: trustpoint/pki/models/ca.py:478
+msgid "Remote fields can only be set for remote CAs."
+msgstr "Remote-Felder dürfen nur für Remote-CAs festgelegt werden."
+
+#: trustpoint/pki/models/ca.py:510 trustpoint/pki/models/ca.py:550
+msgid ""
+"The provided certificate is not a valid CA certificate; it does not contain a Basic "
+"Constraints extension."
+msgstr ""
+"Das bereitgestellte Zertifikat ist kein gültiges CA-Zertifikat; es enthält keine "
+"Erweiterung für grundlegende Einschränkungen."
+
+#: trustpoint/pki/models/ca.py:518 trustpoint/pki/models/ca.py:557
+msgid ""
+"The provided certificate is not a valid CA certificate; it is an End Entity "
+"certificate."
+msgstr ""
+"Das bereitgestellte Zertifikat ist kein gültiges CA-Zertifikat; es handelt sich um "
+"ein End-Entity-Zertifikat."
+
+#: trustpoint/pki/models/ca.py:663
+msgid "The provided credential is not a valid CA; it does not contain a certificate."
+msgstr ""
+"Die bereitgestellten Anmeldedaten sind keine gültige CA; sie enthalten kein "
+"Zertifikat."
+
+#: trustpoint/pki/models/cert_profile.py:18 trustpoint/pki/models/certificate.py:217
+#: trustpoint/pki/models/truststore.py:86
+msgid "Created-At"
+msgstr "Erstellt am"
+
+#: trustpoint/pki/models/cert_profile.py:19
+msgid "Updated-At"
+msgstr "Aktualisiert am"
+
+#: trustpoint/pki/models/certificate.py:62
+msgid "OK"
+msgstr "OK"
+
+#: trustpoint/pki/models/certificate.py:63
+msgid "Revoked"
+msgstr "Widerrufen"
+
+#: trustpoint/pki/models/certificate.py:64
+msgid "Expired"
+msgstr "Abgelaufen"
+
+#: trustpoint/pki/models/certificate.py:65
+msgid "Not Yet Valid"
+msgstr "Noch nicht gültig"
+
+#: trustpoint/pki/models/certificate.py:73
+msgid "Version 3"
+msgstr "Version 3"
+
+#: trustpoint/pki/models/certificate.py:128
+msgid "Self-Signed"
+msgstr "Selbstsigniert"
+
+#: trustpoint/pki/models/certificate.py:134
+msgid "Common Name"
+msgstr "Allgemeiner Name"
+
+#: trustpoint/pki/models/certificate.py:136
+msgid "Fingerprint (SHA256)"
+msgstr "Fingerprint (SHA256)"
+
+#: trustpoint/pki/models/certificate.py:143
+msgid "Signature Algorithm OID"
+msgstr "Signaturalgorithmus-OID"
+
+#: trustpoint/pki/models/certificate.py:147
+msgid "Signature Value"
+msgstr "Signaturwert"
+
+#: trustpoint/pki/models/certificate.py:153
+msgid "Version"
+msgstr "Version"
+
+#: trustpoint/pki/models/certificate.py:157
+msgid "Serial Number"
+msgstr "Seriennummer"
+
+#: trustpoint/pki/models/certificate.py:160
+msgid "Issuer"
+msgstr "Aussteller"
+
+#: trustpoint/pki/models/certificate.py:164
+msgid "Issuer Public Bytes"
+msgstr "Öffentliche Bytes des Ausstellers"
+
+#: trustpoint/pki/models/certificate.py:167
+msgid "Issuer Certificate"
+msgstr "Aussteller Zertifikat"
+
+#: trustpoint/pki/models/certificate.py:171
+msgid "Not Valid Before (UTC)"
+msgstr "Nicht gültig vor (UTC)"
+
+#: trustpoint/pki/models/certificate.py:172
+msgid "Not Valid After (UTC)"
+msgstr "Nicht gültig nach (UTC)"
+
+#: trustpoint/pki/models/certificate.py:179
+msgid "Subject"
+msgstr "Subjekt"
+
+#: trustpoint/pki/models/certificate.py:183
+msgid "Subject Public Bytes"
+msgstr "Öffentliche Bytes des Subjekts"
+
+#: trustpoint/pki/models/certificate.py:187
+msgid "Public Key Algorithm OID"
+msgstr "OID für Public-Key-Algorithmus"
+
+#: trustpoint/pki/models/certificate.py:191
+msgid "Public Key Algorithm"
+msgstr "Public-Key-Algorithmus"
+
+#: trustpoint/pki/models/certificate.py:194
+msgid "Public Key Size"
+msgstr "Länge des öffentlichen Schlüssels"
+
+#: trustpoint/pki/models/certificate.py:198
+msgid "Public Key Curve OID (ECC)"
+msgstr "Public Key Kurve OID (ECC)"
+
+#: trustpoint/pki/models/certificate.py:207
+msgid "Public Key Curve (ECC)"
+msgstr "Public Key Kurve (ECC)"
+
+#: trustpoint/pki/models/certificate.py:212
+msgid "Certificate (PEM)"
+msgstr "Zertifikat (PEM)"
+
+#: trustpoint/pki/models/certificate.py:213
+msgid "Public Key (PEM, SPKI)"
+msgstr "Public Key (PEM, SPKI)"
+
+#: trustpoint/pki/models/certificate.py:392
+msgid "Signature Algorithm"
+msgstr "Signaturalgorithmus"
+
+#: trustpoint/pki/models/certificate.py:398
+msgid "Signature Padding Scheme"
+msgstr "Signatur-Padding-Schema"
+
+#: trustpoint/pki/models/certificate.py:767
+msgid "Unspecified"
+msgstr "Nicht angegeben"
+
+#: trustpoint/pki/models/certificate.py:768
+msgid "Key Compromise"
+msgstr "Schlüsselkompromittierung"
+
+#: trustpoint/pki/models/certificate.py:769
+msgid "CA Compromise"
+msgstr "CA-Komprimittierung"
+
+#: trustpoint/pki/models/certificate.py:770
+msgid "Affiliation Changed"
+msgstr "Zugehörigkeit geändert"
+
+#: trustpoint/pki/models/certificate.py:771
+msgid "Superseded"
+msgstr "Ersetzt"
+
+#: trustpoint/pki/models/certificate.py:772
+msgid "Cessation of Operation"
+msgstr "Einstellung des Betriebs"
+
+#: trustpoint/pki/models/certificate.py:773
+msgid "Certificate Hold"
+msgstr "Zertifikatssperrung"
+
+#: trustpoint/pki/models/certificate.py:774
+msgid "Privilege Withdrawn"
+msgstr "Berechtigung entzogen"
+
+#: trustpoint/pki/models/certificate.py:775
+#, fuzzy
+msgid "AA Compromise"
+msgstr "AA-Kompromiss"
+
+#: trustpoint/pki/models/certificate.py:776
+msgid "Remove from CRL"
+msgstr "Aus CRL entfernen"
+
+#: trustpoint/pki/models/certificate.py:779
+msgid "Certificate"
+msgstr "Zertifikat"
+
+#: trustpoint/pki/models/certificate.py:782
+msgid "Revocation Date"
+msgstr "Widerrufsdatum"
+
+#: trustpoint/pki/models/certificate.py:785
+msgid "Revocation Reason"
+msgstr "Widerrufsgrund"
+
+#: trustpoint/pki/models/certificate.py:790 trustpoint/pki/models/credential.py:145
+#: trustpoint/pki/models/domain.py:36
+msgid "Issuing CA"
+msgstr "Issuing CA"
+
+#: trustpoint/pki/models/credential.py:53
+msgid "Credential already exists."
+msgstr "Zugangsdaten existieren bereits."
+
+#: trustpoint/pki/models/credential.py:61
+msgid "RSA"
+msgstr "RSA"
+
+#: trustpoint/pki/models/credential.py:62
+msgid "Elliptic Curve"
+msgstr "Elliptische Kurve"
+
+#: trustpoint/pki/models/credential.py:63
+msgid "AES"
+msgstr "AES"
+
+#: trustpoint/pki/models/credential.py:67
+msgid "Token Label"
+msgstr "Token Label"
+
+#: trustpoint/pki/models/credential.py:68
+msgid "Label of the HSM token containing the private key"
+msgstr "Label des HSM-Tokens, das den Privat Key enthält"
+
+#: trustpoint/pki/models/credential.py:73
+msgid "Key Label"
+msgstr "Schlüssel  Label"
+
+#: trustpoint/pki/models/credential.py:74
+msgid "Unique label of the private key within the token"
+msgstr "Eindeutiges Label des private key innerhalb des Tokens"
+
+#: trustpoint/pki/models/credential.py:81
+msgid "Type of the cryptographic key (RSA or EC)"
+msgstr "Typ des kryptografischen Schlüssels (RSA oder EC)"
+
+#: trustpoint/pki/models/credential.py:90 trustpoint/pki/models/credential.py:157
+msgid "PKCS#11 Private Key"
+msgstr "PKCS#11 Private Key"
+
+#: trustpoint/pki/models/credential.py:91
+msgid "PKCS#11 Private Keys"
+msgstr "PKCS#11 Private Keys"
+
+#: trustpoint/pki/models/credential.py:143
+msgid "Trustpoint TLS Server"
+msgstr "Trustpoint TLS-Server"
+
+#: trustpoint/pki/models/credential.py:144
+msgid "Root CA"
+msgstr "Root-CA"
+
+#: trustpoint/pki/models/credential.py:146
+msgid "Issued Credential"
+msgstr "Ausgestellte Zugangsdaten"
+
+#: trustpoint/pki/models/credential.py:147
+msgid "DevOwnerID"
+msgstr "Entwickler-ID"
+
+#: trustpoint/pki/models/credential.py:148
+msgid "Signer"
+msgstr "Signer"
+
+#: trustpoint/pki/models/credential.py:150
+msgid "Credential Type"
+msgstr "Credential-Typ"
+
+#: trustpoint/pki/models/credential.py:151
+msgid "Private key (PEM)"
+msgstr "Private key (PEM)"
+
+#: trustpoint/pki/models/credential.py:158
+msgid "Reference to HSM-stored private key"
+msgstr "Verweis auf im HSM gespeicherten privaten Schlüssel"
+
+#: trustpoint/pki/models/credential.py:1008
+msgid "IDevID Identifier"
+msgstr "IDevID-Kennung"
+
+#: trustpoint/pki/models/credential.py:1047
+#: trustpoint/pki/models/devid_registration.py:20
+#: trustpoint/pki/models/truststore.py:75
+msgid "Unique Name"
+msgstr "Einzigartiger Name"
+
+#: trustpoint/pki/models/credential.py:1088
+msgid ""
+"The provided credential is not a valid DevOwnerID; it does not contain a certificate."
+msgstr ""
+"Das angegebene Credential ist keine gültige DevOwnerID; es enthält kein Zertifikat."
+
+#: trustpoint/pki/models/credential.py:1093
+msgid ""
+"The provided certificate is not a valid DevOwnerID; it does not contain a SAN "
+"extension."
+msgstr ""
+"Das angegebene Zertifikat ist keine gültige DevOwnerID; es enthält keine SAN-"
+"Erweiterung."
+
+#: trustpoint/pki/models/credential.py:1103
+msgid ""
+"The provided certificate is not a valid DevOwnerID; it does not contain a valid "
+"IDevID reference in the SAN."
+msgstr ""
+"Das angegebene Zertifikat ist keine gültige DevOwnerID; es enthält keinen gültigen "
+"IDevID-Verweis in der SAN."
+
+#: trustpoint/pki/models/crl.py:34
+msgid "The CA that issued this CRL"
+msgstr "Die CA, die diese CRL ausgestellt hat"
+
+#: trustpoint/pki/models/crl.py:40
+msgid "CRL in PEM format"
+msgstr "CRL im PEM-Format"
+
+#: trustpoint/pki/models/crl.py:41
+msgid "The Certificate Revocation List in PEM format"
+msgstr "Die Zertifikatswiderrufsliste im PEM-Format"
+
+#: trustpoint/pki/models/crl.py:45
+msgid "CRL Number"
+msgstr "CRL-Nummer"
+
+#: trustpoint/pki/models/crl.py:46
+msgid "The CRL number from the CRL extension"
+msgstr "Die CRL-Nummer aus der CRL-Erweiterung"
+
+#: trustpoint/pki/models/crl.py:52
+msgid "This Update"
+msgstr "Dieses Update"
+
+#: trustpoint/pki/models/crl.py:53
+msgid "The thisUpdate field from the CRL"
+msgstr "Das thisUpdate-Feld aus der CRL"
+
+#: trustpoint/pki/models/crl.py:57
+msgid "Next Update"
+msgstr "Nächstes Update"
+
+#: trustpoint/pki/models/crl.py:60
+msgid "The nextUpdate field from the CRL"
+msgstr "Das nextUpdate-Feld aus der CRL"
+
+#: trustpoint/pki/models/crl.py:66
+msgid "Whether this is the current active CRL for the CA"
+msgstr "Ob dies die aktuell aktive CRL für die Zertifizierungsstelle ist"
+
+#: trustpoint/pki/models/crl.py:82
+msgid "Certificate Revocation List"
+msgstr "Zertifikatswiderrufsliste"
+
+#: trustpoint/pki/models/crl.py:83
+msgid "Certificate Revocation Lists"
+msgstr "Zertifikatswiderrufslisten"
+
+#: trustpoint/pki/models/crl.py:113 trustpoint/pki/models/crl.py:163
+msgid "The CRL signature is invalid. This CRL was not signed by this CA."
+msgstr "Die CRL-Signatur ist ungültig. Diese CRL wurde nicht von dieser CA signiert."
+
+#: trustpoint/pki/models/crl.py:145
+msgid "Failed to parse the CRL. It may be corrupted or invalid."
+msgstr "Die CRL konnte nicht geparst werden. Sie könnte beschädigt oder ungültig sein."
+
+#: trustpoint/pki/models/crl.py:150
+msgid "The CA does not have a valid certificate model."
+msgstr "Die CA verfügt über kein gültiges Zertifikatsmodell."
+
+#: trustpoint/pki/models/crl.py:157
+msgid "The CRL issuer does not match the CA subject."
+msgstr "Der CRL-Aussteller stimmt nicht mit dem CA-Subject überein."
+
+#: trustpoint/pki/models/crl.py:210
+msgid "Failed to parse the stored CRL."
+msgstr "Die gespeicherte CRL konnte nicht geparst werden."
+
+#: trustpoint/pki/models/devid_registration.py:26
+msgid "Associated Truststore"
+msgstr "Zugehöriger Truststore"
+
+#: trustpoint/pki/models/devid_registration.py:31
+msgid "Associated Domain"
+msgstr "Zugehörige Domain"
+
+#: trustpoint/pki/models/devid_registration.py:35
+msgid "Serial Number Pattern"
+msgstr "Muster der Seriennummer"
+
+#: trustpoint/pki/models/devid_registration.py:37
+msgid "A regex pattern to match valid serial numbers for this registration."
+msgstr ""
+"Ein Regex-Muster, um gültige Seriennummern für diese Registrierung zu erkennen."
+
+#: trustpoint/pki/models/domain.py:29
+msgid "Domain Name"
+msgstr "Domainname"
+
+#: trustpoint/pki/models/extension.py:114
+msgid "Name"
+msgstr "Name"
+
+#: trustpoint/pki/models/extension.py:154
+msgid "IPv4 Address"
+msgstr "IPv4-Adresse"
+
+#: trustpoint/pki/models/extension.py:155
+msgid "IPv6 Address"
+msgstr "IPv6-Adresse"
+
+#: trustpoint/pki/models/extension.py:156
+msgid "IPv4 Network"
+msgstr "IPv4-Netzwerk"
+
+#: trustpoint/pki/models/extension.py:157
+msgid "IPv6 Network"
+msgstr "IPv6-Netzwerk"
+
+#: trustpoint/pki/models/extension.py:265 trustpoint/pki/models/extension.py:321
+#: trustpoint/pki/models/extension.py:597 trustpoint/pki/models/extension.py:650
+#: trustpoint/pki/models/extension.py:708 trustpoint/pki/models/extension.py:1442
+msgid "Critical"
+msgstr "Kritisch"
+
+#: trustpoint/pki/models/extension.py:266
+msgid "CA"
+msgstr "CA"
+
+#: trustpoint/pki/models/extension.py:268
+msgid "Path Length Constraint"
+msgstr "Pfadlängenbeschränkung"
+
+#: trustpoint/pki/models/extension.py:322
+msgid "Digital Signature"
+msgstr "Digitale Signatur"
+
+#: trustpoint/pki/models/extension.py:323
+msgid "Content Commitment"
+msgstr "Inhaltsverpflichtung"
+
+#: trustpoint/pki/models/extension.py:324
+msgid "Key Encipherment"
+msgstr "Schlüsselverschlüsselung"
+
+#: trustpoint/pki/models/extension.py:325
+msgid "Data Encipherment"
+msgstr "Datenverschlüsselung"
+
+#: trustpoint/pki/models/extension.py:326
+msgid "Key Agreement"
+msgstr "Schlüsselvereinbarung"
+
+#: trustpoint/pki/models/extension.py:327
+msgid "Key Cert Sign"
+msgstr "Hash-Wert signieren"
+
+#: trustpoint/pki/models/extension.py:328
+msgid "CRL Sign"
+msgstr "CRL-Signatur"
+
+#: trustpoint/pki/models/extension.py:329
+msgid "Encipher Only"
+msgstr "Nur vershlüsseln"
+
+#: trustpoint/pki/models/extension.py:330
+msgid "Decipher Only"
+msgstr "Nur entschlüsseln"
+
+#: trustpoint/pki/models/extension.py:412
+msgid "RFC822 Names"
+msgstr "RFC822-Namen"
+
+#: trustpoint/pki/models/extension.py:416
+msgid "DNS Names"
+msgstr "DNS-Namen"
+
+#: trustpoint/pki/models/extension.py:420
+msgid "Directory Names"
+msgstr "Verzeichnisnamen"
+
+#: trustpoint/pki/models/extension.py:425
+msgid "Uniform Resource Identifiers"
+msgstr "Uniform Resource Identifier (URI)"
+
+#: trustpoint/pki/models/extension.py:430
+msgid "IP Addresses"
+msgstr "IP-Adressen"
+
+#: trustpoint/pki/models/extension.py:434
+msgid "Registered IDs"
+msgstr "Registrierte IDs"
+
+#: trustpoint/pki/models/extension.py:438
+msgid "Other Names"
+msgstr "Andere Namen"
+
+#: trustpoint/pki/models/extension.py:603 trustpoint/pki/models/extension.py:714
+msgid "Issuer Alternative Name Issuer"
+msgstr ""
+
+#: trustpoint/pki/models/extension.py:656
+msgid "Subject Alternative Name Subject"
+msgstr ""
+
+#: trustpoint/pki/models/extension.py:1285
+msgid "Name relative to crl issuer"
+msgstr "Name relativ zum CRL-Aussteller"
+
+#: trustpoint/pki/models/extension.py:1313
+msgid "Reasons"
+msgstr "Gründe"
+
+#: trustpoint/pki/models/extension.py:1315
+msgid "CRL Issuer"
+msgstr "CRL-Aussteller"
+
+#: trustpoint/pki/models/extension.py:1759
+#, fuzzy
+msgid "Subject Directory Attributes"
+msgstr "Verzeichnisattribute des Subjekts"
+
+#: trustpoint/pki/models/truststore.py:66
+msgid "IDevID"
+msgstr "IDevID"
+
+#: trustpoint/pki/models/truststore.py:67
+msgid "TLS"
+msgstr "TLS"
+
+#: trustpoint/pki/models/truststore.py:68
+msgid "Generic"
+msgstr "Generisch"
+
+#: trustpoint/pki/models/truststore.py:69
+msgid "Device Owner ID"
+msgstr "Gerätebesitzer-ID"
+
+#: trustpoint/pki/models/truststore.py:70
+msgid "Issuing CA Chain"
+msgstr "Zertifikatskette der  Issuing CA"
+
+#: trustpoint/pki/models/truststore.py:71
+msgid "OPC UA GDS Push"
+msgstr "OPC UA GDS Push"
+
+#: trustpoint/pki/models/truststore.py:79
+msgid "Truststore certificates"
+msgstr "Truststore Zertifikate"
+
+#: trustpoint/pki/models/truststore.py:126
+msgid "Trust Store Certificate Index (Order)"
+msgstr "Truststore-Zertifikatsindex (Reihenfolge)"
+
+#: trustpoint/pki/views/ca.py:111
+msgid "No CAs selected for deletion."
+msgstr "Keine Zertifizierungsstellen zum Löschen ausgewählt."
+
+#: trustpoint/pki/views/ca.py:124
+#, python-brace-format
+msgid "Successfully deleted {count} CA(s)."
+msgstr "{count} Zertifizierungsstellen wurden erfolgreich gelöscht."
+
+#: trustpoint/pki/views/ca.py:130
+msgid "Cannot delete the selected CA(s) because they are referenced by other objects."
+msgstr ""
+"Die ausgewählten Zertifizierungsstellen können nicht gelöscht werden, da sie von "
+"anderen Objekten referenziert werden."
+
+#: trustpoint/pki/views/cert_profiles.py:127
+#, python-brace-format
+msgid "Successfully updated Certificate Profile {name}."
+msgstr "Zertifikatsprofil „{name}“ erfolgreich aktualisiert."
+
+#: trustpoint/pki/views/cert_profiles.py:171
+#, python-brace-format
+msgid "Error generating certificate builder: {error}"
+msgstr "Fehler beim Erstellen des Zertifikatsgenerators: {error}"
+
+#: trustpoint/pki/views/cert_profiles.py:176
+msgid "Certificate builder generated successfully."
+msgstr "Zertifikatsgenerator erfolgreich erstellt."
+
+#: trustpoint/pki/views/cert_profiles.py:195
+msgid "No certificate profiles selected for deletion."
+msgstr "Es sind keine Zertifikatsprofile zur Löschung ausgewählt."
+
+#: trustpoint/pki/views/cert_profiles.py:209
+msgid ""
+"Cannot delete the selected Certificate Profile(s) because they are referenced by "
+"other objects."
+msgstr ""
+"Die ausgewählten Zertifikatsprofile können nicht gelöscht werden, da sie von anderen "
+"Objekten referenziert werden."
+
+#: trustpoint/pki/views/cert_profiles.py:216
+#, python-brace-format
+msgid "Successfully deleted {count} certificate profile(s)."
+msgstr "{count} Zertifikatsprofil(e) erfolgreich gelöscht."
+
+#: trustpoint/pki/views/crls.py:59
+msgid "No CRLs selected for deletion."
+msgstr "Es wurden keine CRLs zur Löschung ausgewählt."
+
+#: trustpoint/pki/views/crls.py:73
+msgid "Cannot delete the selected CRL(s) because they are referenced by other objects."
+msgstr ""
+"Die ausgewählten CRL(s) können nicht gelöscht werden, da sie von anderen Objekten "
+"referenziert werden."
+
+#: trustpoint/pki/views/crls.py:80
+#, python-brace-format
+msgid "Successfully deleted {count} CRL(s)."
+msgstr "{count} CRL(s) erfolgreich gelöscht."
+
+#: trustpoint/pki/views/crls.py:174
+#, python-format
+msgid "Failed to convert CRL to DER: %s"
+msgstr "Fehler bei der Konvertierung der CRL in DER: %s"
+
+#: trustpoint/pki/views/crls.py:196
+#, python-format
+msgid "Failed to convert CRL to PKCS#7 DER: %s"
+msgstr "Fehler bei der Konvertierung der CRL in PKCS#7 DER: %s"
+
+#: trustpoint/pki/views/crls.py:304
+msgid "CRL File"
+msgstr "CRL-Datei"
+
+#: trustpoint/pki/views/crls.py:305
+msgid "Select the CRL file to import (PEM, DER, PKCS#7 PEM, or PKCS#7 DER format)"
+msgstr ""
+"Wählen Sie die zu importierende CRL-Datei aus (PEM, DER, PKCS#7 PEM oder PKCS#7 DER)"
+
+#: trustpoint/pki/views/crls.py:312
+msgid "Select the CA that issued this CRL (optional)"
+msgstr "Wählen Sie die CA aus, die diese CRL ausgestellt hat (optional)"
+
+#: trustpoint/pki/views/crls.py:317
+msgid "Set as Active CRL"
+msgstr "Als aktive CRL festlegen"
+
+#: trustpoint/pki/views/crls.py:320
+msgid ""
+"Make this the active CRL for the selected CA (only applies when a CA is selected)"
+msgstr ""
+"Diese CRL als aktive CRL für die ausgewählte Zertifizierungsstelle festlegen (gilt "
+"nur, wenn eine Zertifizierungsstelle ausgewählt ist)"
+
+#: trustpoint/pki/views/crls.py:359
+#, python-format
+msgid "Successfully imported CRL for CA %(ca)s."
+msgstr "CRL für die CA %(ca)s erfolgreich importiert."
+
+#: trustpoint/pki/views/crls.py:364
+msgid "Successfully imported CRL with no associated CA."
+msgstr "CRL erfolgreich importiert, ohne dass eine CA zugeordnet ist."
+
+#: trustpoint/pki/views/crls.py:373
+#, python-format
+msgid "Failed to import CRL: %(error)s"
+msgstr "Fehler beim Importieren der CRL: %(error)s"
+
+#: trustpoint/pki/views/crls.py:405
+msgid "Unable to parse CRL. The file may be corrupted or in an unsupported format."
+msgstr ""
+"Die CRL konnte nicht eingelesen werden. Die Datei ist möglicherweise beschädigt oder "
+"in einem nicht unterstützten Format."
+
+#: trustpoint/pki/views/domains.py:95
+#, python-brace-format
+msgid "Successfully created domain {name}."
+msgstr "Domäne „{name}“ erfolgreich erstellt."
+
+#: trustpoint/pki/views/domains.py:175
+#, python-brace-format
+msgid ""
+"Alias \"{alias}\" not applied for profile {profile} as it is already in use. Please "
+"use an unique domain alias for each Certificate Profile."
+msgstr ""
+"Der Alias „{alias}“ wurde nicht für das Profil {profile} angewendet, da er bereits "
+"verwendet wird. Bitte verwenden Sie für jedes Zertifikatsprofil einen eindeutigen "
+"Domain-Alias."
+
+#: trustpoint/pki/views/domains.py:184
+msgid "Settings updated successfully."
+msgstr "Einstellungen erfolgreich aktualisiert."
+
+#: trustpoint/pki/views/domains.py:209
+msgid "No domains selected for deletion."
+msgstr "Es wurden keine Domains zur Löschung ausgewählt."
+
+#: trustpoint/pki/views/domains.py:222
+msgid ""
+"Cannot delete the selected Domain(s) because they are referenced by other objects."
+msgstr ""
+"Die ausgewählten Domain(s) können nicht gelöscht werden, da sie von anderen Objekten "
+"referenziert werden."
+
+#: trustpoint/pki/views/domains.py:229
+#, python-brace-format
+msgid "Successfully deleted {count} Domains."
+msgstr "{count} Domänen erfolgreich gelöscht."
+
+#: trustpoint/pki/views/domains.py:314
+#, python-brace-format
+msgid "Successfully created DevID registration pattern {name}."
+msgstr "DevID-Registrierungsmuster „{name}“ erfolgreich erstellt."
+
+#: trustpoint/pki/views/domains.py:336
+msgid "DevID Registration Pattern deleted successfully."
+msgstr "DevID-Registrierungsmuster erfolgreich gelöscht."
+
+#: trustpoint/pki/views/issuing_cas.py:163 trustpoint/pki/views/issuing_cas.py:179
+#, python-brace-format
+msgid "Successfully added Issuing CA {name}."
+msgstr "Issuing CA „{name}“ erfolgreich hinzugefügt."
+
+#: trustpoint/pki/views/issuing_cas.py:195 trustpoint/pki/views/issuing_cas.py:499
+#, python-brace-format
+msgid "Successfully created Issuing CA {name}. Please associate a trust store."
+msgstr ""
+"Issuing CA „{name}“ erfolgreich erstellt. Bitte weisen Sie einen Truststore zu."
+
+#: trustpoint/pki/views/issuing_cas.py:253
+#, python-brace-format
+msgid "For this CA configuration, only \"{usage}\" truststores are allowed."
+msgstr "Für diese CA-Konfiguration sind nur „{usage}“-Truststores zulässig."
+
+#: trustpoint/pki/views/issuing_cas.py:263
+#, python-brace-format
+msgid "Successfully imported truststore {name}."
+msgstr "Truststore „{name}“ erfolgreich importiert."
+
+#: trustpoint/pki/views/issuing_cas.py:383
+msgid ""
+"Successfully associated CA chain. Now please associate the TLS server certificate."
+msgstr ""
+"CA-Kette erfolgreich verknüpft. Bitte ordnen Sie nun das TLS-Serverzertifikat zu."
+
+#: trustpoint/pki/views/issuing_cas.py:389
+#, python-brace-format
+msgid "Successfully associated truststore with Issuing CA {name}."
+msgstr "Truststore erfolgreich mit der  Issuing CA „{name}“ verknüpft."
+
+#: trustpoint/pki/views/issuing_cas.py:417
+msgid ""
+"Certificate profile \"issuing_ca\" not found. Please create it or contact your "
+"administrator."
+msgstr ""
+"Zertifikatsprofil „issuing_ca“ nicht gefunden. Bitte erstellen Sie es oder wenden "
+"Sie sich an Ihren Administrator."
+
+#: trustpoint/pki/views/issuing_cas.py:470
+msgid "Certificate content defined. Please proceed to request the certificate via EST."
+msgstr ""
+"Inhalt des Zertifikats definiert. Bitte fahren Sie fort und fordern Sie das "
+"Zertifikat über EST an."
+
+#: trustpoint/pki/views/issuing_cas.py:482
+#, python-brace-format
+msgid "Successfully configured CMP RA {name}. Please associate a trust store."
+msgstr ""
+"CMP-RA „{name}“ erfolgreich konfiguriert. Bitte weisen Sie einen Truststore zu."
+
+#: trustpoint/pki/views/issuing_cas.py:521
+#, python-brace-format
+msgid ""
+"Successfully configured EST RA {name}. Please associate the CA chain trust store."
+msgstr ""
+"EST-RA „{name}“ erfolgreich konfiguriert. Bitte weisen Sie den Truststore der CA-"
+"Kette zu."
+
+#: trustpoint/pki/views/issuing_cas.py:546
+msgid "Certificate content defined. Please proceed to request the certificate via CMP."
+msgstr ""
+"Inhalt des Zertifikats definiert. Bitte fahren Sie fort und fordern Sie das "
+"Zertifikat über CMP an."
+
+#: trustpoint/pki/views/issuing_cas.py:616
+msgid "CRL cycle settings updated successfully."
+msgstr "CRL-Zyklus-Einstellungen erfolgreich aktualisiert."
+
+#: trustpoint/pki/views/issuing_cas.py:743
+msgid "EST certificate request not yet implemented."
+msgstr "EST-Zertifikatsanforderung noch nicht implementiert."
+
+#: trustpoint/pki/views/issuing_cas.py:876 trustpoint/pki/views/issuing_cas.py:1065
+msgid ""
+"Certificate content data not found. Please define the certificate content first."
+msgstr ""
+"Zertifikatsinhalt nicht gefunden. Bitte definieren Sie zuerst den Zertifikatsinhalt."
+
+#: trustpoint/pki/views/issuing_cas.py:886
+#, python-brace-format
+msgid "Successfully enrolled certificate for Issuing CA {name} via EST."
+msgstr "Zertifikat für die  Issuing CA {name} erfolgreich über EST registriert."
+
+#: trustpoint/pki/views/issuing_cas.py:890 trustpoint/pki/views/issuing_cas.py:1083
+#, python-brace-format
+msgid "Failed to build certificate request: {error}"
+msgstr "Fehler beim Erstellen der Zertifikatsanforderung: {error}"
+
+#: trustpoint/pki/views/issuing_cas.py:893 trustpoint/pki/views/issuing_cas.py:1086
+msgid "Certificate profile \"issuing_ca\" not found."
+msgstr "Zertifikatsprofil „issuing_ca“ nicht gefunden."
+
+#: trustpoint/pki/views/issuing_cas.py:899
+#, python-brace-format
+msgid "Failed to enroll certificate via EST: {error}"
+msgstr "Fehler bei der Zertifikatsregistrierung über EST: {error}"
+
+#: trustpoint/pki/views/issuing_cas.py:906 trustpoint/pki/views/issuing_cas.py:1099
+#, python-brace-format
+msgid "Unexpected error during certificate enrollment: {error}"
+msgstr "„Unerwarteter Fehler während der Zertifikatsregistrierung: {error}"
+
+#: trustpoint/pki/views/issuing_cas.py:920
+msgid "CMP certificate request not yet implemented."
+msgstr "CMP-Zertifikatsanforderung noch nicht implementiert."
+
+#: trustpoint/pki/views/issuing_cas.py:1079
+#, python-brace-format
+msgid "Successfully enrolled certificate for Issuing CA {name} via CMP."
+msgstr "Zertifikat für die  Issuing CA {name} erfolgreich über CMP registriert."
+
+#: trustpoint/pki/views/issuing_cas.py:1092
+#, python-brace-format
+msgid "Failed to enroll certificate via CMP: {error}"
+msgstr "Fehler bei der Zertifikatsregistrierung über CMP: {error}"
+
+#: trustpoint/pki/views/issuing_cas.py:1404
+msgid "No Issuing CAs selected for deletion."
+msgstr "Es wurden keine  Issuing CAs zur Löschung ausgewählt."
+
+#: trustpoint/pki/views/issuing_cas.py:1424
+msgid ""
+"Cannot delete the selected Issuing CA(s) because they are referenced by other "
+"objects."
+msgstr ""
+"Die ausgewählten austellenden CA(s) können nicht gelöscht werden, da sie von anderen "
+"Objekten referenziert werden."
+
+#: trustpoint/pki/views/issuing_cas.py:1431
+#, python-brace-format
+msgid "Successfully deleted {count} Issuing CA(s)."
+msgstr "{count}  Issuing CA(s) erfolgreich gelöscht."
+
+#: trustpoint/pki/views/issuing_cas.py:1461
+#, python-format
+msgid "CRL for Issuing CA %s has been generated."
+msgstr "CRL für die  Issuing Zertifizierungsstelle %s wurde generiert."
+
+#: trustpoint/pki/views/issuing_cas.py:1463
+#, python-format
+msgid "Failed to generate CRL for Issuing CA %s."
+msgstr "Fehler bei der Erstellung der CRL für die  Issuing CA %s."
+
+#: trustpoint/pki/views/issuing_cas.py:1492
+#, python-format
+msgid "No CRL available for CA %s."
+msgstr "Für CA %s ist keine CRL verfügbar."
+
+#: trustpoint/pki/views/issuing_cas.py:1504
+#, python-format
+msgid "Failed to convert CRL to DER for CA %s: %s"
+msgstr "Fehler bei der Konvertierung der CRL in DER für die CA %s: %s"
+
+#: trustpoint/pki/views/owner_credentials.py:97
+#, python-brace-format
+msgid "Successfully added DevOwnerID {name}."
+msgstr "DevOwnerID „{name}“ erfolgreich hinzugefügt."
+
+#: trustpoint/pki/views/owner_credentials.py:118
+msgid "No owner credentials selected for deletion."
+msgstr "Es wurden keine Besitzer-Anmeldedaten zur Löschung ausgewählt."
+
+#: trustpoint/pki/views/owner_credentials.py:132
+msgid ""
+"Cannot delete the selected DevOwnerID(s) because they are referenced by other "
+"objects."
+msgstr ""
+"Die ausgewählten DevOwnerID(s) können nicht gelöscht werden, da sie von anderen "
+"Objekten referenziert werden."
+
+#: trustpoint/pki/views/owner_credentials.py:139
+#, python-brace-format
+msgid "Successfully deleted {count} DevOwnerID(s)."
+msgstr "{count} DevOwnerID(s) erfolgreich gelöscht."
+
+#: trustpoint/pki/views/truststores.py:144
+#, python-format
+msgid "Successfully created the Truststore %(name)s with %(count)i certificate."
+msgid_plural ""
+"Successfully created the Truststore %(name)s with %(count)i certificates."
+msgstr[0] ""
+"Der Truststore „%(name)s“ wurde erfolgreich erstellt und enthält %(count)i "
+"Zertifikat."
+msgstr[1] ""
+"Der Truststore „%(name)s“ wurde erfolgreich erstellt und enthält %(count)i "
+"Zertifikate."
+
+#: trustpoint/pki/views/truststores.py:392
+msgid "No truststores selected for deletion."
+msgstr "Es wurden keine Truststores zur Löschung ausgewählt."
+
+#: trustpoint/pki/views/truststores.py:407
+msgid ""
+"Cannot delete the selected Truststore(s) because they are referenced by other "
+"objects."
+msgstr ""
+"Die ausgewählten Truststore(s) können nicht gelöscht werden, da sie von anderen "
+"Objekten referenziert werden."
+
+#: trustpoint/pki/views/truststores.py:414
+#, python-brace-format
+msgid "Successfully deleted {count} Truststore(s)."
+msgstr "{count} Truststore(s) erfolgreich gelöscht."

@@ -9,7 +9,6 @@ from cryptography.hazmat.primitives import hashes
 
 from devices.models import (
     DeviceModel,
-    IssuedCredentialModel,
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
     OnboardingConfigModel,
@@ -19,6 +18,7 @@ from request.authentication import (
     ClientCertificateAuthentication,
     IDevIDAuthentication,
 )
+from pki.models import IssuedCredentialModel
 from request.authentication.cmp import CmpSharedSecretAuthentication
 from request.authentication.est import UsernamePasswordAuthentication
 from request.request_context import BaseRequestContext, EstBaseRequestContext, CmpBaseRequestContext, HttpBaseRequestContext
@@ -109,7 +109,7 @@ class TestClientCertificateAuthenticationExtended:
         device_instance: dict[str, Any]
     ) -> None:
         """Test authentication fails when certificate is not found in database."""
-        device = device_instance['device']
+
         domain = device_instance['domain']
         
         # Create a certificate that's not in the database

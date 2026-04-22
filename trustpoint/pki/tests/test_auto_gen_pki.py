@@ -22,7 +22,7 @@ def test_auto_gen_pki(key_alg: AutoGenPkiKeyAlgorithm) -> None:
     mock_config = mock.MagicMock()
     mock_config.storage_type = KeyStorageConfig.StorageType.SOFTHSM
     mock_token = mock.MagicMock()
-    mock_token.module_path = '/usr/local/lib/libpkcs11-proxy.so'
+    mock_token.module_path = '/usr/lib/libpkcs11-proxy.so'
     mock_token.label = 'Trustpoint-SoftHSM'
     mock_token.slot = 0
     mock_issuing_ca = mock.MagicMock()

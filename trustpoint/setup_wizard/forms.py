@@ -146,7 +146,7 @@ class HsmSetupForm(forms.Form):
         self.fields['hsm_type'].initial = hsm_type
 
         if hsm_type == 'softhsm':
-            self.fields['module_path'].initial = '/usr/local/lib/libpkcs11-proxy.so'
+            self.fields['module_path'].initial = '/usr/lib/libpkcs11-proxy.so'
             self.fields['slot'].initial = 0
             self.fields['label'].initial = 'Trustpoint-SoftHSM'
 
@@ -190,7 +190,7 @@ class HsmSetupForm(forms.Form):
         if hsm_type == 'softhsm':
             cleaned_data['label'] = 'Trustpoint-SoftHSM'
             cleaned_data['slot'] = 0
-            cleaned_data['module_path'] = '/usr/local/lib/libpkcs11-proxy.so'
+            cleaned_data['module_path'] = '/usr/lib/libpkcs11-proxy.so'
         if hsm_type == 'physical':
             raise forms.ValidationError(_('Physical HSM is not yet supported.'))
         if hsm_type != 'softhsm':
@@ -222,7 +222,7 @@ class HsmSetupForm(forms.Form):
         """Clean module path field."""
         hsm_type = self.data.get('hsm_type')
         if hsm_type == 'softhsm':
-            return '/usr/local/lib/libpkcs11-proxy.so'
+            return '/usr/lib/libpkcs11-proxy.so'
         value = self.cleaned_data.get('module_path')
         if isinstance(value, str):
             return value

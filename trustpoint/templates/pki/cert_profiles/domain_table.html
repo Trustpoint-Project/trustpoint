@@ -19,7 +19,11 @@
         <tbody>
         {% for id, profile in profile_data.items %}
         <tr>
-            <td><input type="checkbox" name="cert_p_allowed_{{ id }}" {% if profile.is_allowed %}checked{% endif %}></td>
+            <td>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="cert_p_allowed_{{ id }}" name="cert_p_allowed_{{ id }}" {% if profile.is_allowed %}checked{% endif %}>
+                </div>
+            </td>
             <td>{{ profile.unique_name }}</td>
             <td><input type="text" class="form-control" name="cert_p_alias_{{ id }}" value="{{ profile.alias }}" placeholder="{{ profile.unique_name }}"></td>
         </tr>

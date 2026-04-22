@@ -42,28 +42,24 @@ else
     exit 2
 fi
 
-while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    # Check if nginx is actually running (not just processes exist)
-    if [ -f /run/nginx.pid ] && [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.pid)" 2>/dev/null; then
+
+if [ -f /run/nginx.pid ] && [ -s /run/nginx.pid ] && kill -0 "$(cat /run/nginx.pid)" 2>/dev/null; then
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
         log INFO "Nginx is running - reloading configuration (graceful)"
         if nginx -s reload; then
             log INFO "Nginx successfully reloaded with new TLS certificates"
             break
         else
-            # Don't exit here since nginx will pick up config on next start
             log WARN "Failed to gracefully reload nginx configuration, retrying in $DELAY seconds..."
             sleep $DELAY
             RETRY_COUNT=$((RETRY_COUNT + 1))
         fi
-    else
-        log WARN "Nginx is not currently running, retrying in $DELAY seconds..."
-        sleep $DELAY
-        RETRY_COUNT=$((RETRY_COUNT + 1))
+    done
+    if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+        log ERROR "Failed to reload Nginx after $MAX_RETRIES attempts, TLS certificates will be applied on next start"
     fi
-done
-if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-    log ERROR "Failed to reload Nginx after $MAX_RETRIES attempts, TLS certificates will be applied on next start"
+    sleep $DELAY
+else
+    log INFO "Nginx is not running yet - skipping reload, certificates will be loaded on startup"
 fi
-
-sleep $DELAY
 log INFO "TLS certificate update for nginx completed successfully"

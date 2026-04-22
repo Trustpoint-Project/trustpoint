@@ -17,6 +17,7 @@ from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.idevid import IDevIDAuthenticationError
 from pki.util.x509 import CertificateGenerator, ClientCertificateAuthenticationError
 
+from aoki.management.commands.aoki_gen_test_certs import AokiTestCertGenerator
 from aoki.views import AokiInitializationRequestView, AokiServiceMixin
 
 if TYPE_CHECKING:
@@ -47,8 +48,7 @@ def mock_tls_cert():
 @pytest.fixture
 def mock_idevid_cert():
     """Create a mock IDevID certificate."""
-    certs, keys = CertificateGenerator.create_test_pki(1)
-    return certs[1]
+    return AokiTestCertGenerator.generate_idevid_pki()
 
 
 @pytest.fixture
@@ -79,11 +79,10 @@ class TestAokiServiceMixin:
         san_uri = AokiServiceMixin.get_idevid_owner_san_uri(mock_idevid_cert)
         
         assert san_uri.startswith('dev-owner:')
-        parts = san_uri.split(':')[1].split('.')
-        assert len(parts) == 3
-        # Check that the x509 serial number and fingerprint are present
-        assert len(parts[1]) >= 16  # x509 serial number in hex
-        assert len(parts[2]) == 64  # SHA256 fingerprint in hex
+        parts = san_uri.split(':')[2].split('_')
+        assert len(parts) == 2
+        # Check that the subject serial number and fingerprint are present
+        assert len(parts[1]) == 64  # SHA256 fingerprint in hex
 
     def test_get_idevid_owner_san_uri_without_serial_number(self):
         """Test generating owner SAN URI when certificate has no serial number."""
@@ -92,27 +91,39 @@ class TestAokiServiceMixin:
         
         san_uri = AokiServiceMixin.get_idevid_owner_san_uri(cert)
         
-        assert san_uri.startswith('dev-owner:_.')
-        parts = san_uri.split(':')[1].split('.')
-        assert len(parts) == 3
-        assert parts[0] == '_'
+        assert san_uri.startswith('dev-owner:cert:_')
+        parts = san_uri.split(':')[2].split('_')
+        assert len(parts) == 2
+        assert parts[0] == ''
+
+    def test_get_idevid_owner_san_uri_uuid(self, mock_idevid_cert: x509.Certificate):
+        """Test generating owner SAN URI from IDevID certificate with serial number."""
+        san_uris = AokiServiceMixin.get_idevid_owner_san_uris_from_san(mock_idevid_cert)
+        assert len(san_uris) == 1
+
+        san_uri = san_uris[0]
+        
+        assert san_uri.startswith('dev-owner:uri:urn:uuid:')
+        parts = san_uri.split(':')
+        assert len(parts) == 5
+        assert len(parts[4]) == 36  # v4 UUID
 
     def test_get_owner_credential_exists(self, mock_idevid_cert: x509.Certificate, mock_owner_credential):
         """Test retrieving owner credential that exists in database."""
-        with patch.object(AokiServiceMixin, 'get_idevid_owner_san_uri', return_value='dev-owner:test.123.abc'):
+        with patch.object(AokiServiceMixin, 'get_idevid_owner_san_uri', return_value='dev-owner:cert:test_123abc'):
             with patch.object(IDevIDReferenceModel.objects, 'filter') as mock_filter:
                 mock_ref = Mock()
-                mock_ref.dev_owner_id.credential = mock_owner_credential
+                mock_ref.dev_owner_id.dev_owner_id_credential.credential = mock_owner_credential
                 mock_filter.return_value.first.return_value = mock_ref
                 
                 result = AokiServiceMixin.get_owner_credential(mock_idevid_cert)
                 
                 assert result == mock_owner_credential
-                mock_filter.assert_called_once_with(idevid_ref='dev-owner:test.123.abc')
+                mock_filter.assert_called_once_with(idevid_ref='dev-owner:cert:test_123abc')
 
     def test_get_owner_credential_not_exists(self, mock_idevid_cert: x509.Certificate):
         """Test retrieving owner credential that does not exist in database."""
-        with patch.object(AokiServiceMixin, 'get_idevid_owner_san_uri', return_value='dev-owner:test.123.abc'):
+        with patch.object(AokiServiceMixin, 'get_idevid_owner_san_uri', return_value='dev-owner:cert:test_123abc'):
             with patch.object(IDevIDReferenceModel.objects, 'filter') as mock_filter:
                 mock_filter.return_value.first.return_value = None
                 

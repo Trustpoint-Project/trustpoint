@@ -8,6 +8,12 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from onboarding.enums import (
+    NoOnboardingPkiProtocol,
+    OnboardingPkiProtocol,
+    OnboardingProtocol,
+    OnboardingStatus,
+)
 from pki.models.truststore import TruststoreModel
 from util.encrypted_fields import EncryptedCharField
 
@@ -24,46 +30,6 @@ __all__ = [
     'OnboardingProtocol',
     'OnboardingStatus',
 ]
-
-
-class OnboardingStatus(models.IntegerChoices):
-    """The onboarding status."""
-
-    PENDING = 1, _('Pending')
-    ONBOARDED = 2, _('Onboarded')
-
-
-class OnboardingProtocol(models.IntegerChoices):
-    """Choices of onboarding protocols."""
-
-    MANUAL = 0, _('Manual Onboarding')
-    CMP_IDEVID = 1, _('CMP - IDevID')
-    CMP_SHARED_SECRET = 2, _('CMP - Shared Secret')
-    EST_IDEVID = 3, _('EST - IDevID')
-    EST_USERNAME_PASSWORD = 4, _('EST - Username & Password')
-    AOKI = 5, _('AOKI')
-    BRSKI = 6, _('BRSKI')
-    OPC_GDS_PUSH = 7, _('OPC - GDS Push')
-
-
-class OnboardingPkiProtocol(models.IntegerChoices):
-    """Choices for onboarding pki protocols."""
-
-    # Bitmask: Only use powers of 2: 1, 2, 4, 8, 16 ...
-    CMP = 1, _('CMP')
-    EST = 2, _('EST')
-    OPC_GDS_PUSH = 4, _('OPC - GDS Push')
-
-
-class NoOnboardingPkiProtocol(models.IntegerChoices):
-    """Choices for no onboarding pki protocols."""
-
-    # Bitmask: Only use powers of 2: 1, 2, 4, 8, 16 ...
-    CMP_SHARED_SECRET = 1, _('CMP - Shared Secret (HMAC)')
-    # 2 reserved for CMP Client Certificate
-    EST_USERNAME_PASSWORD = 4, _('EST - Username & Password')
-    # 8 reserved for EST Client Certificate
-    MANUAL = 16, _('Manual')
 
 
 class AbstractPkiProtocolModel[T: models.IntegerChoices]:
@@ -157,6 +123,16 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
         related_name='idevid_onboarding_configs',
     )
 
+    trust_store = models.ForeignKey(
+        TruststoreModel,
+        verbose_name=_('Trust Store'),
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='onboarding_configs',
+        help_text=_('Trust store containing certificates to verify the remote server'),
+    )
+
     opc_trust_store = models.ForeignKey(
         TruststoreModel,
         verbose_name=_('OPC Server Truststore'),
@@ -199,13 +175,12 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
                 error_messages = self._validate_case_cmp_shared_secret_onboarding()
             case OnboardingProtocol.EST_IDEVID:
                 error_messages = self._validate_case_est_idevid_onboarding()
-            case OnboardingProtocol.EST_USERNAME_PASSWORD:
+            case OnboardingProtocol.EST_USERNAME_PASSWORD | OnboardingProtocol.REST_USERNAME_PASSWORD:
                 error_messages = self._validate_case_est_username_password_onboarding()
             case OnboardingProtocol.OPC_GDS_PUSH:
                 error_messages = self._validate_case_opc_gds_push_onboarding()
             case OnboardingProtocol.AOKI:
-                err_msg = 'AOKI is not yet supported as onboarding protocol.'
-                raise ValidationError(err_msg)
+                error_messages = self._validate_case_aoki_onboarding()
             case OnboardingProtocol.BRSKI:
                 err_msg = 'BRSKI is not yet supported as onboarding protocol.'
                 raise ValidationError(err_msg)
@@ -274,6 +249,18 @@ class OnboardingConfigModel(AbstractPkiProtocolModel[OnboardingPkiProtocol], mod
             The error_messages gathered.
         """
         return {}
+
+    def _validate_case_aoki_onboarding(self) -> dict[str, str]:
+        """Validates case OnboardingProtocol.AOKI."""
+        error_messages = {}
+
+        if self.est_password != '':
+            error_messages['est_password'] = 'EST password must not be set for AOKI onboarding.'  # noqa: S105
+
+        if self.cmp_shared_secret != '':
+            error_messages['cmp_shared_secret'] = 'CMP shared-secret must not be set for AOKI onboarding.'  # noqa: S105
+
+        return error_messages
 
     def _validate_case_cmp_shared_secret_onboarding(self) -> dict[str, str]:
         """Validates case OnboardingProtocol.CMP_SHARED_SECRET.
@@ -390,11 +377,21 @@ class NoOnboardingConfigModel(AbstractPkiProtocolModel[NoOnboardingPkiProtocol],
         if self.cmp_shared_secret == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.CMP_SHARED_SECRET):
             error_messages['cmp_shared_secret'] = 'CMP shared-secret must be set if CMP_SHARED_SECRET is enabled.'  # noqa: S105
 
-        if self.est_password != '' and not self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
-            error_messages['est_password'] = 'EST password must not be set if EST_USERNAME_PASSWORD is not enabled.'  # noqa: S105
+        est_enabled = self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD)
+        rest_enabled = self.has_pki_protocol(NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD)
+        est_or_rest_enabled = est_enabled or rest_enabled
 
-        if self.est_password == '' and self.has_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD):
-            error_messages['est_password'] = 'EST password must be set if EST_USERNAME_PASSWORD is enabled.'  # noqa: S105
+        if self.est_password != '' and not est_or_rest_enabled:
+            error_messages['est_password'] = (
+                'EST/REST password must not be set if neither EST_USERNAME_PASSWORD '  # noqa: S105
+                'nor REST_USERNAME_PASSWORD is enabled.'
+            )
+
+        if self.est_password == '' and est_or_rest_enabled:
+            error_messages['est_password'] = (
+                'EST/REST password must be set if EST_USERNAME_PASSWORD '  # noqa: S105
+                'or REST_USERNAME_PASSWORD is enabled.'
+            )
 
         if error_messages:
             raise ValidationError(error_messages)

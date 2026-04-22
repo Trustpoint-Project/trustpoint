@@ -13,7 +13,7 @@ class PKCS11ConfigFormTestCase(TestCase):
             'hsm_type': 'softhsm',
             'label': 'TestToken',
             'slot': 1,
-            'module_path': '/usr/local/lib/libpkcs11-proxy.so',
+            'module_path': '/usr/lib/libpkcs11-proxy.so',
         }
         # Create and log in a test user
         self.user = User.objects.create_user(username='testuser', password='testpassword')
@@ -46,7 +46,7 @@ class PKCS11ConfigFormTestCase(TestCase):
             defaults={
                 'hsm_type': 'softhsm',
                 'slot': 0,
-                'module_path': '/usr/local/lib/libpkcs11-proxy.so',
+                'module_path': '/usr/lib/libpkcs11-proxy.so',
             }
         )
 
@@ -58,4 +58,4 @@ class PKCS11ConfigFormTestCase(TestCase):
         cleaned_data = form.cleaned_data
         self.assertEqual(cleaned_data['label'], 'Trustpoint-SoftHSM')
         self.assertEqual(cleaned_data['slot'], 0)
-        self.assertEqual(cleaned_data['module_path'], '/usr/local/lib/libpkcs11-proxy.so')
+        self.assertEqual(cleaned_data['module_path'], '/usr/lib/libpkcs11-proxy.so')

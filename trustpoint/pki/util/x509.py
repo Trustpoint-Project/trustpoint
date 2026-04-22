@@ -16,9 +16,10 @@ from cryptography.x509 import load_pem_x509_certificate
 from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
+from trustpoint_core.oid import NamedCurve
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
-from management.models import KeyStorageConfig, SecurityConfig, WeakECCCurve, WeakSignatureAlgorithm
+from management.models import KeyStorageConfig, SecurityConfig
 from pki.models import CaModel
 from pki.util.keys import CryptographyUtils
 
@@ -472,16 +473,14 @@ class CertificateVerifier:
             msg = 'SecurityConfig or security_mode is not configured.'
             raise ValueError(msg)
 
-        config_values = security_config.NOTIFICATION_CONFIGURATIONS.get(security_config.security_mode, {})
-        if not config_values:
-            msg = f'No configuration found for security mode: {security_config.security_mode}'
-            raise ValueError(msg)
-
         public_key = certificate.public_key()
 
         if isinstance(public_key, rsa.RSAPublicKey):
-            minimum_key_size = config_values.get('rsa_minimum_key_size', 2048)
-            if public_key.key_size < minimum_key_size:
+            minimum_key_size = security_config.rsa_minimum_key_size
+            if minimum_key_size is None:
+                msg = 'RSA keys are not permitted by the active security policy.'
+                raise ValueError(msg)
+            if minimum_key_size > 0 and public_key.key_size < minimum_key_size:
                 err_msg = (
                     f'RSA certificate key size ({public_key.key_size} bits) is below the minimum '
                     f'required by security policy ({minimum_key_size} bits).'
@@ -506,21 +505,16 @@ class CertificateVerifier:
             msg = 'SecurityConfig or security_mode is not configured.'
             raise ValueError(msg)
 
-        config_values = security_config.NOTIFICATION_CONFIGURATIONS.get(security_config.security_mode, {})
-        if not config_values:
-            msg = f'No configuration found for security mode: {security_config.security_mode}'
-            raise ValueError(msg)
-
         public_key = certificate.public_key()
 
         if isinstance(public_key, ec.EllipticCurvePublicKey):
             curve_name = public_key.curve.name
-            weak_ecc_curve_oids = config_values.get('weak_ecc_curves', [])
-
-            for weak_curve_oid in weak_ecc_curve_oids:
-                # weak_curve_oid is a WeakECCCurve.ECCCurveChoices enum value
-                weak_curve = WeakECCCurve.objects.filter(oid=weak_curve_oid).first()
-                if weak_curve and weak_curve.oid == curve_name:
+            for not_permitted_curve_oid in security_config.not_permitted_ecc_curve_oids:
+                try:
+                    named_curve = NamedCurve.from_dotted_string(not_permitted_curve_oid)
+                except (KeyError, StopIteration):
+                    continue
+                if named_curve.ossl_curve_name == curve_name:
                     err_msg = (
                         f'ECC certificate uses a weak curve ({curve_name}) according to '
                         f'security policy ({security_config.get_security_mode_display()}).'
@@ -604,18 +598,11 @@ class CertificateVerifier:
             msg = 'SecurityConfig or security_mode is not configured.'
             raise ValueError(msg)
 
-        config_values = security_config.NOTIFICATION_CONFIGURATIONS.get(security_config.security_mode, {})
-        if not config_values:
-            msg = f'No configuration found for security mode: {security_config.security_mode}'
-            raise ValueError(msg)
-
         signature_algorithm_oid = certificate.signature_algorithm_oid
-        weak_signature_algorithm_oids = config_values.get('weak_signature_algorithms', [])
 
-        for weak_algo_oid in weak_signature_algorithm_oids:
-            # weak_algo_oid is a WeakSignatureAlgorithm.SignatureChoices enum value
-            weak_algo = WeakSignatureAlgorithm.objects.filter(oid=weak_algo_oid).first()
-            if weak_algo and weak_algo.oid == str(signature_algorithm_oid):
+        for weak_algo_oid in security_config.not_permitted_signature_algorithm_oids:
+            # Compare the certificate's signature algorithm OID against the stored weak OIDs
+            if weak_algo_oid == str(signature_algorithm_oid):
                 hash_algo = certificate.signature_hash_algorithm
                 algo_name = (
                     hash_algo.__class__.__name__ if hash_algo else 'unknown'

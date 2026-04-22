@@ -34,6 +34,7 @@ try:
 except FileNotFoundError:
     CONTAINER_ID = 'unknown'
 
+
 def app_version(_request: Any) -> dict[str, str]:
     """Provide application version and container ID for use in templates.
 
@@ -43,8 +44,8 @@ def app_version(_request: Any) -> dict[str, str]:
     Returns:
         dict: A dictionary containing the application version and container ID.
     """
-    return {'APP_VERSION': APP_VERSION,
-            'CONTAINER_ID': CONTAINER_ID}
+    return {'APP_VERSION': APP_VERSION, 'CONTAINER_ID': CONTAINER_ID}
+
 
 # Monkeypatching Django, so stubs will work for all generics,
 # see: https://github.com/typeddjango/django-stubs
@@ -78,12 +79,14 @@ PUBLIC_PATHS = [
     '/setup-wizard',
     '/.well-known/cmp',
     '/.well-known/est',
+    '/rest',
     '/aoki',
     '/crl',
 ]
 
 
 # ------------- Functions --------------
+
 
 def is_postgre_available() -> bool:
     """Checks whether PostgreSQL is available and issues differentiated error messages.
@@ -196,7 +199,7 @@ if _email_host:
     EMAIL_USE_TLS = (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (EMAIL_PORT == _SMTP_TLS_PORT)
     EMAIL_USE_SSL = (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (EMAIL_PORT == _SMTP_SSL_PORT)
 
-    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')       # auth only if both non-empty
+    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')  # auth only if both non-empty
     EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
     EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
 
@@ -262,6 +265,7 @@ INSTALLED_APPS = [
     'pki.apps.PkiConfig',
     'cmp.apps.CmpConfig',
     'est.apps.EstConfig',
+    'rest_pki.apps.RestPkiConfig',
     'signer.apps.SignerConfig',
     'aoki.apps.AokiConfig',
     'management.apps.ManagementConfig',
@@ -277,10 +281,11 @@ INSTALLED_APPS = [
     'crispy_bootstrap5',
     'django_filters',
     'dbbackup',
-    'workflows.apps.WorkflowsConfig',
     'rest_framework',
     'drf_spectacular',
     'django_q',
+    'drf_yasg',
+    'workflows2.apps.Workflows2Config',
 ]
 
 if DEVELOPMENT_ENV and not DOCKER_CONTAINER:
@@ -294,6 +299,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'trustpoint.middleware.Workflow2InlineDrainMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -312,6 +318,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'trustpoint.settings.app_version',
+                'management.context_processors.notification_alerts',
             ],
         },
     },
@@ -413,7 +420,8 @@ class UIConfig:
     """User interface configuration defaults."""
 
     paginate_by: ClassVar[int] = 50
-    notifications_paginate_by: ClassVar[int] = 5
+    notifications_paginate_by: ClassVar[int] = 50
+
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [

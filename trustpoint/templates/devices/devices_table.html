@@ -1,48 +1,59 @@
 {% load i18n %}
 {% load sort_tags %}
+{% load internationalization_tags %}
 {% block devices_table %}
-<table class="table">
+<table class="table" id="devices-table">
     <thead>
     <tr>
         <th id="checkbox-column"><input type="checkbox"/></th>
-        <th class="text-nowrap">
+        <th class="text-nowrap" data-col="name">
             <a href="{% url_sort 'common_name' %}">
                 {% trans 'Name' %} {{ request|sort_icon:'common_name' }}
             </a>
         </th>
-        <th class="text-nowrap">
+        <th class="text-nowrap" data-col="domain">
             <a href="{% url_sort 'domain' %}">
                 {% trans 'Domain' %} {{ request|sort_icon:'domain' }}
             </a>
         </th>
         {% if page_name != 'opc_ua_gds' %}
-        <th class="text-nowrap">
+        <th class="text-nowrap" data-col="serial_number">
             <a href="{% url_sort 'serial_number' %}">
                 {% trans 'Serial Number' %} {{ request|sort_icon:'serial_number' }}
             </a>
         </th>
         {% endif %}
-        <th class="text-nowrap">
+        <th class="text-nowrap" data-col="created_at">
             <a href="{% url_sort 'created_at' %}">
                 {% trans 'Created at' %} {{ request|sort_icon:'created_at' }}
             </a>
         </th>
-        <th class="text-nowrap">
-            <a href="{% url_sort 'onboarding_status' %}">
-                {% trans 'Onboarding Status' %} {{ request|sort_icon:'onboarding_status' }}
+        <th class="text-nowrap" data-col="enrollment">
+            <a href="{% url_sort 'enrollment_sort' %}">
+                {% trans 'Enrollment' %} {{ request|sort_icon:'enrollment_sort' }}
             </a>
         </th>
-        <th class="text-nowrap">
-            <a href="{% url_sort 'onboarding_protocol' %}">
-                {% trans 'Onboarding Protocol' %} {{ request|sort_icon:'onboarding_protocol' }}
+        <th class="text-nowrap" data-col="domain_credential">
+            <a href="{% url_sort 'domain_credential_sort' %}">
+                {% trans 'Domain Credential' %} {{ request|sort_icon:'domain_credential_sort' }}
             </a>
         </th>
-        <th class="text-nowrap">
-            <a href="{% url_sort 'pki_protocol' %}">
-                {% trans 'PKI Protocol' %} {{ request|sort_icon:'pki_protocol' }}
+        <th class="text-nowrap" data-col="application_certificates">
+            <a href="{% url_sort 'application_certificate_sort' %}">
+                {% trans 'Application Certificates' %} {{ request|sort_icon:'application_certificate_sort' }}
             </a>
         </th>
-        <th class="text-nowrap">{% trans 'Certificate Management' %}</th>
+        <th class="text-nowrap" data-col="onboarding_protocol">
+            <a href="{% url_sort 'onboarding_protocol_sort' %}">
+                {% trans 'Onboarding Protocol' %} {{ request|sort_icon:'onboarding_protocol_sort' }}
+            </a>
+        </th>
+        <th class="text-nowrap" data-col="pki_protocols">
+            <a href="{% url_sort 'pki_protocols_sort' %}">
+                {% trans 'PKI Protocols' %} {{ request|sort_icon:'pki_protocols_sort' }}
+            </a>
+        </th>
+        <th class="text-nowrap" data-col="clm">{% trans 'Certificate Management' %}</th>
     </tr>
     </thead>
     <tbody>
@@ -51,8 +62,8 @@
         <td class="row_checkbox">
             <input type="checkbox" name="row_checkbox" value="{{ device.id }}"/>
         </td>
-        <td>{{ device.common_name }}</td>
-        <td>
+        <td data-col="name">{{ device.common_name }}</td>
+        <td data-col="domain">
             {% if device.domain %}
             <a href="{% url 'pki:domains-detail' device.domain.pk %}">{{ device.domain }}</a>
             {% else %}
@@ -60,17 +71,48 @@
             {% endif %}
         </td>
         {% if page_name != 'opc_ua_gds' %}
-        <td>{{ device.serial_number }}</td>
+        <td data-col="serial_number">{{ device.serial_number }}</td>
         {% endif %}
-        <td>{{ device.created_at }}</td>
-        <td>
-            {{ device.onboarding_config.get_onboarding_status_display }}
+        <td data-col="created_at">{{ device.created_at|local_datetime }}</td>
+        <td data-col="enrollment">
+            {% with p=device.onboarding_progress %}
+            <span class="tp-status-badge tp-status-{{ p.status_key }}"
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
+                  data-bs-html="true"
+                  title="{{ p.tooltip }}">
+                <span class="tp-status-dot"></span>
+                {{ p.status_label }}
+            </span>
+            {% endwith %}
         </td>
-        <td>
-            {{ device.onboarding_config.get_onboarding_protocol_display }}
+        <td data-col="domain_credential">
+            {% with p=device.domain_credential_status %}
+            <span class="tp-status-badge tp-status-{{ p.status_key }}"
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
+                  data-bs-html="true"
+                  title="{{ p.tooltip }}">
+                <span class="tp-status-dot"></span>
+                {{ p.status_label }}
+            </span>
+            {% endwith %}
         </td>
-        <td>{{ device.pki_protocols| safe }}</td>
-        <td>{{ device.clm_button| safe }}</td>
+        <td data-col="application_certificates">
+            {% with p=device.application_certificate_status %}
+            <span class="tp-status-badge tp-status-{{ p.status_key }}"
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="top"
+                  data-bs-html="true"
+                  title="{{ p.tooltip }}">
+                <span class="tp-status-dot"></span>
+                {{ p.status_label }}
+            </span>
+            {% endwith %}
+        </td>
+        <td data-col="onboarding_protocol">{{ device.onboarding_progress.onboarding_protocol }}</td>
+        <td data-col="pki_protocols">{{ device.onboarding_progress.pki_protocols }}</td>
+        <td data-col="clm">{{ device.clm_button| safe }}</td>
     </tr>
     {% empty %}
     <tr>

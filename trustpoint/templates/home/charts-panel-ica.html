@@ -1,10 +1,7 @@
 {% load static %}
 
-<div class="row row-cols-1 row-cols-sm-1 row-cols-lg-2 py-3">
-  <div class="col">
-    {% include 'home/chart_dount_ica.html' %}
-  </div>
-  <div class="col">
+<div class="row py-3">
+  <div class="col-12 col-lg-6">
+    {% include 'home/dashboard_dount_chart.html' with title="Issuing CAs by Status" chartTitle="Issuing CAs" identifier="icaByCounts" dataset="issuing_ca_counts" filter_type="as_of" filter_label="As of" default_preset="today" %}
   </div>
 </div>
-

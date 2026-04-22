@@ -34,6 +34,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from management.models.audit_log import AuditLog
 from pki.forms import (
     CertificateIssuanceForm,
     IssuingCaAddFileImportPkcs12Form,
@@ -45,11 +46,13 @@ from pki.forms import (
     IssuingCaTruststoreAssociationForm,
     TruststoreAddForm,
 )
+from pki.forms.issuing_cas import IssuingCaImportMixin
 from pki.models import CaModel, CertificateModel, CredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.credential import CertificateChainOrderModel, PrimaryCredentialCertificate
+from pki.models.issued_credential import RemoteIssuedCredentialModel
 from pki.models.truststore import TruststoreModel
-from pki.serializer.issuing_ca import IssuingCaSerializer
+from pki.serializer.issuing_ca import IssuingCaImportSerializer, IssuingCaSerializer
 from pki.util.cert_profile import ProfileValidationError
 from request.clients import EstClient, EstClientError
 from request.clients.cmp_client import CmpClient, CmpClientError
@@ -162,6 +165,15 @@ class IssuingCaAddFileImportPkcs12View(IssuingCaContextMixin, FormView[IssuingCa
             self.request,
             _('Successfully added Issuing CA {name}.').format(name=form.cleaned_data['unique_name']),
         )
+        ca = CaModel.objects.filter(unique_name=form.cleaned_data['unique_name']).first()
+        if ca is not None:
+            actor = self.request.user if self.request.user.is_authenticated else None
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.CA_CREATED,
+                target=ca,
+                target_display=f'CA: {ca.unique_name}',
+                actor=actor,
+            )
         return super().form_valid(form)
 
 
@@ -178,6 +190,15 @@ class IssuingCaAddFileImportSeparateFilesView(IssuingCaContextMixin, FormView[Is
             self.request,
             _('Successfully added Issuing CA {name}.').format(name=form.cleaned_data['unique_name']),
         )
+        ca = CaModel.objects.filter(unique_name=form.cleaned_data['unique_name']).first()
+        if ca is not None:
+            actor = self.request.user if self.request.user.is_authenticated else None
+            AuditLog.create_entry(
+                operation_type=AuditLog.OperationType.CA_CREATED,
+                target=ca,
+                target_display=f'CA: {ca.unique_name}',
+                actor=actor,
+            )
         return super().form_valid(form)
 
 
@@ -195,6 +216,13 @@ class IssuingCaAddRequestEstView(IssuingCaContextMixin, FormView[IssuingCaAddReq
             _('Successfully created Issuing CA {name}. Please associate a trust store.').format(
                 name=ca.unique_name
             ),
+        )
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CA_CREATED,
+            target=ca,
+            target_display=f'CA: {ca.unique_name}',
+            actor=actor,
         )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
@@ -398,10 +426,37 @@ class IssuingCaTruststoreAssociationView(IssuingCaContextMixin, FormView[Issuing
 
 
 class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
-    """Mixin for defining certificate content using the issuing_ca profile."""
+    """Mixin for defining certificate content using a certificate profile."""
 
     ca_type_filter: CaModel.CaTypeChoice
     redirect_url_name: str
+    available_profiles: list[CertificateProfileModel]
+
+    def _resolve_cert_profile(self, request: HttpRequest) -> CertificateProfileModel | None:
+        """Resolve the certificate profile from the request query parameter or fall back to the default.
+
+        Returns the resolved profile, or ``None`` if no profiles are available.
+        """
+        all_profiles = list(CertificateProfileModel.objects.all().order_by('display_name', 'unique_name'))
+        if not all_profiles:
+            return None
+        self.available_profiles = all_profiles
+
+        selected_pk_str = request.GET.get('cert_profile_pk') or request.POST.get('cert_profile_pk')
+        if selected_pk_str:
+            try:
+                selected_pk = int(selected_pk_str)
+                for profile in all_profiles:
+                    if profile.pk == selected_pk:
+                        return profile
+            except (ValueError, TypeError):
+                # Ignore invalid cert_profile_pk values and fall back to the default profile selection.
+                pass
+
+        for profile in all_profiles:
+            if profile.unique_name == 'issuing_ca':
+                return profile
+        return all_profiles[0]
 
     def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Dispatch the request, ensuring the CA and profile exist."""
@@ -409,14 +464,14 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
             CaModel.objects.filter(ca_type=self.ca_type_filter),
             pk=kwargs['pk']
         )
-        try:
-            self.cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
-        except CertificateProfileModel.DoesNotExist:
+        resolved_profile = self._resolve_cert_profile(request)
+        if resolved_profile is None:
             messages.error(
                 request,
-                _('Certificate profile "issuing_ca" not found. Please create it or contact your administrator.')
+                _('No certificate profiles found. Please create one first.'),
             )
             return redirect('pki:issuing_cas')
+        self.cert_profile = resolved_profile
         return cast('HttpResponse', super().dispatch(request, *args, **kwargs))  # type: ignore[misc]
 
     def get_form_kwargs(self) -> dict[str, Any]:
@@ -431,6 +486,7 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
         context = super().get_context_data(**kwargs)
         context['issuing_ca'] = self.ca
         context['cert_profile'] = self.cert_profile
+        context['available_profiles'] = self.available_profiles
         context['profile_dict'] = self.get_form_kwargs()['profile']
         return context
 
@@ -445,6 +501,7 @@ class IssuingCaDefineCertContentMixin(LoggerMixin, IssuingCaContextMixin):
         """Handle the case where the form is valid."""
         self.logger.info('Form cleaned_data: %s', form.cleaned_data)
         self.request.session[f'cert_content_data_{self.ca.pk}'] = form.cleaned_data # type: ignore[attr-defined]
+        self.request.session[f'cert_profile_pk_{self.ca.pk}'] = self.cert_profile.pk  # type: ignore[attr-defined]
         messages.success(
             self.request, # type: ignore[attr-defined]
             self.get_success_message()
@@ -481,6 +538,13 @@ class RemoteRaAddRequestCmpMixin(IssuingCaContextMixin):
             self.request,  # type: ignore[attr-defined]
             _('Successfully configured CMP RA {name}. Please associate a trust store.').format(name=ca.unique_name)
         )
+        actor = self.request.user if self.request.user.is_authenticated else None  # type: ignore[attr-defined]
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CA_CREATED,
+            target=ca,
+            target_display=f'CA: {ca.unique_name}',
+            actor=actor,
+        )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
 
@@ -499,6 +563,13 @@ class IssuingCaAddRequestCmpView(IssuingCaContextMixin, FormView[IssuingCaAddReq
             _('Successfully created Issuing CA {name}. Please associate a trust store.').format(
                 name=ca.unique_name
             ),
+        )
+        actor = self.request.user if self.request.user.is_authenticated else None
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CA_CREATED,
+            target=ca,
+            target_display=f'CA: {ca.unique_name}',
+            actor=actor,
         )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
@@ -521,6 +592,13 @@ class RemoteRaAddRequestEstMixin(IssuingCaContextMixin):
             _('Successfully configured EST RA {name}. Please associate the CA chain trust store.').format(
                 name=ca.unique_name
             )
+        )
+        actor = self.request.user if self.request.user.is_authenticated else None  # type: ignore[attr-defined]
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.CA_CREATED,
+            target=ca,
+            target_display=f'CA: {ca.unique_name}',
+            actor=actor,
         )
         return redirect('pki:issuing_cas-truststore-association', pk=ca.pk)
 
@@ -744,7 +822,11 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
 
     def _perform_est_enrollment(self, ca: CaModel, cert_content_data: dict[str, Any], request: HttpRequest) -> None:
         """Perform the EST enrollment process."""
-        cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
+        cert_profile_pk = request.session.get(f'cert_profile_pk_{ca.pk}')
+        if not cert_profile_pk:
+            msg = 'Certificate profile not found in session'
+            raise ValueError(msg)
+        cert_profile = CertificateProfileModel.objects.get(pk=cert_profile_pk)
 
         request_data = self._build_request_data_from_form(cert_content_data)
         self.logger.info('Built request data: %s', request_data)
@@ -753,7 +835,7 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
             operation='simpleenroll',
             protocol='est',
             domain=None,
-            cert_profile_str='issuing_ca',
+            cert_profile_str=cert_profile.unique_name,
             certificate_profile_model=cert_profile,
             allow_ca_certificate_request=True,  # Allow CA cert requests for Issuing CA enrollment
             est_server_host=ca.remote_host,
@@ -811,7 +893,25 @@ class IssuingCaRequestCertEstView(IssuingCaRequestCertMixin, DetailView[CaModel]
             ca.credential = credential
             ca.save()
 
+        cn_attrs = cert_obj.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
+        common_name_value = cn_attrs[0].value if cn_attrs else ''
+        # Ensure common_name is a string
+        if isinstance(common_name_value, bytes):
+            common_name = common_name_value.decode('utf-8')
+        else:
+            common_name = str(common_name_value)
+        remote_issued_credential = RemoteIssuedCredentialModel(
+            common_name=common_name,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.LOCAL_CA,
+            issued_using_cert_profile=cert_profile.unique_name,
+            credential=ca.credential,
+            ca=ca,
+        )
+        remote_issued_credential.full_clean()
+        remote_issued_credential.save()
+
         del request.session[f'cert_content_data_{ca.pk}']
+        del request.session[f'cert_profile_pk_{ca.pk}']
 
     def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
         """Build request data structure from form data.
@@ -928,7 +1028,11 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         sender_kid: int | None = None,
     ) -> None:
         """Perform the CMP enrollment process."""
-        cert_profile = CertificateProfileModel.objects.get(unique_name='issuing_ca')
+        cert_profile_pk = request.session.get(f'cert_profile_pk_{ca.pk}')
+        if not cert_profile_pk:
+            msg = 'Certificate profile not found in session'
+            raise ValueError(msg)
+        cert_profile = CertificateProfileModel.objects.get(pk=cert_profile_pk)
 
         request_data = self._build_request_data_from_form(cert_content_data)
         self.logger.info('Built request data: %s', request_data)
@@ -937,7 +1041,7 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             operation='certification',
             protocol='cmp',
             domain=None,
-            cert_profile_str='issuing_ca',
+            cert_profile_str=cert_profile.unique_name,
             certificate_profile_model=cert_profile,
             allow_ca_certificate_request=True,
             cmp_server_host=ca.remote_host,
@@ -998,9 +1102,10 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             add_shared_secret_protection=True,
         )
 
-        self._save_cmp_certificates(ca, issued_cert, chain_certs)
+        self._save_cmp_certificates(ca, issued_cert, chain_certs, cert_profile)
 
         del request.session[f'cert_content_data_{ca.pk}']
+        del request.session[f'cert_profile_pk_{ca.pk}']
 
     def _build_request_data_from_form(self, cert_content_data: dict[str, Any]) -> dict[str, Any]:
         """Build request data structure from form data.
@@ -1174,6 +1279,7 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
         ca: CaModel,
         issued_cert: x509.Certificate,
         chain_certs: list[x509.Certificate],
+        cert_profile: CertificateProfileModel,
     ) -> None:
         """Save the issued certificate and chain certificates."""
         cert_model = CertificateModel.save_certificate(issued_cert)
@@ -1222,6 +1328,24 @@ class IssuingCaRequestCertCmpView(IssuingCaRequestCertMixin, DetailView[CaModel]
             ca.credential = credential
             ca.save()
             self._build_certificate_chain_for_credential(credential, ca.parent_ca)
+
+        # Create a RemoteIssuedCredentialModel to track the issued CA credential
+        cn_attrs = issued_cert.subject.get_attributes_for_oid(x509.oid.NameOID.COMMON_NAME)
+        common_name_value = cn_attrs[0].value if cn_attrs else ''
+        # Ensure common_name is a string
+        if isinstance(common_name_value, bytes):
+            common_name = common_name_value.decode('utf-8')
+        else:
+            common_name = str(common_name_value)
+        remote_issued_credential = RemoteIssuedCredentialModel(
+            common_name=common_name,
+            issued_credential_type=RemoteIssuedCredentialModel.RemoteIssuedCredentialType.LOCAL_CA,
+            issued_using_cert_profile=cert_profile.unique_name,
+            credential=ca.credential,
+            ca=ca,
+        )
+        remote_issued_credential.full_clean()
+        remote_issued_credential.save()
 
     def _build_ca_hierarchy(
         self,
@@ -1514,7 +1638,7 @@ class CrlDownloadView(IssuingCaContextMixin, DetailView[CaModel]):
         return response
 
 @extend_schema(tags=['Issuing-CA'])
-class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
+class IssuingCaViewSet(LoggerMixin, viewsets.ModelViewSet[CaModel]):
     """ViewSet for managing Issuing CA instances via REST API."""
 
     queryset = CaModel.objects.exclude(
@@ -1530,6 +1654,8 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
     filterset_fields: ClassVar = ['unique_name', 'is_active']
     search_fields: ClassVar = ['unique_name', 'credential__certificate__common_name']
     ordering_fields: ClassVar = ['unique_name', 'created_at', 'updated_at']
+
+    http_method_names = ['get', 'post', 'head', 'options']  # noqa: RUF012
 
     @extend_schema(
         summary='List Issuing CAs',
@@ -1558,6 +1684,131 @@ class IssuingCaViewSet(LoggerMixin, viewsets.ReadOnlyModelViewSet[CaModel]):
     def retrieve(self, request: Request) -> Response:
         """API endpoint to get a single Issuing CA by ID."""
         return super().retrieve(request)
+
+    @extend_schema(
+        summary='Import Issuing CA from PEM files',
+        description=(
+            'Import a new Issuing CA by supplying the private key, CA certificate, and an '
+            'optional certificate chain as PEM-encoded strings. '
+            'The certificate must be a CA certificate with keyCertSign and cRLSign key usages.'
+        ),
+        request=IssuingCaImportSerializer,
+        responses={
+            201: IssuingCaSerializer,
+            400: OpenApiTypes.OBJECT,
+        },
+        examples=[
+            OpenApiExample(
+                name='Import Issuing CA',
+                summary='Import an Issuing CA from separate PEM strings',
+                value={
+                    'unique_name': 'my-issuing-ca',
+                    'private_key_pem': '-----BEGIN EC PRIVATE KEY-----\n...\n-----END EC PRIVATE KEY-----',
+                    'private_key_password': '',
+                    'ca_certificate_pem': '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+                    'certificate_chain_pem': '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----',
+                },
+                request_only=True,
+            ),
+        ],
+    )
+    def create(self, request: Request, **_kwargs: Any) -> Response:
+        """Import a new Issuing CA from PEM-encoded key, certificate, and optional chain."""
+        serializer = IssuingCaImportSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        error_response, credential_serializer, unique_name, cert, _pk = (
+            self._build_credential_from_import_data(serializer.validated_data)
+        )
+        if error_response is not None:
+            return error_response
+
+        mixin = IssuingCaImportMixin()
+        chain = list(credential_serializer.additional_certificates or [])
+        try:
+            issuing_ca = mixin._finalize_issuing_ca_creation(  # noqa: SLF001
+                unique_name or None, cert, credential_serializer, chain
+            )
+        except ValidationError as exc:
+            return Response({'detail': exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        response_serializer = IssuingCaSerializer(issuing_ca)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+    def _build_credential_from_import_data(
+        self, data: dict[str, Any]
+    ) -> tuple[Response | None, Any, str, Any, Any]:
+        """Parse and validate PEM inputs; return an error Response or the built credential components."""
+        from trustpoint_core.serializer import (  # noqa: PLC0415
+            CertificateCollectionSerializer,
+            CertificateSerializer,
+            CredentialSerializer,
+            PrivateKeySerializer,
+        )
+
+        mixin = IssuingCaImportMixin()
+        unique_name: str = data.get('unique_name', '') or ''
+        private_key_pem: str = data['private_key_pem']
+        private_key_password: str = data.get('private_key_password', '') or ''
+        ca_certificate_pem: str = data['ca_certificate_pem']
+        certificate_chain_pem: str = data.get('certificate_chain_pem', '') or ''
+
+        try:
+            password_bytes = private_key_password.encode('utf-8') if private_key_password else None
+            private_key_serializer = PrivateKeySerializer.from_bytes(
+                private_key_pem.encode('utf-8'), password_bytes
+            )
+        except Exception:  # noqa: BLE001
+            err: Response = Response(
+                {'private_key_pem': 'Failed to parse private key. Check the PEM encoding and password.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+            return err, None, unique_name, None, None
+
+        try:
+            ca_certificate_serializer = CertificateSerializer.from_bytes(ca_certificate_pem.encode('utf-8'))
+        except Exception:  # noqa: BLE001
+            err = Response(
+                {'ca_certificate_pem': 'Failed to parse CA certificate. Check the PEM encoding.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+            return err, None, unique_name, None, None
+
+        cert_crypto = ca_certificate_serializer.as_crypto()
+        try:
+            mixin._validate_ca_certificate(cert_crypto)  # noqa: SLF001
+            mixin._check_duplicate_issuing_ca(cert_crypto)  # noqa: SLF001
+        except ValidationError as exc:
+            err = Response({'ca_certificate_pem': exc.message}, status=status.HTTP_400_BAD_REQUEST)
+            return err, None, unique_name, None, None
+
+        ca_certificate_chain_serializer = None
+        if certificate_chain_pem:
+            try:
+                ca_certificate_chain_serializer = CertificateCollectionSerializer.from_bytes(
+                    certificate_chain_pem.encode('utf-8')
+                )
+            except Exception:  # noqa: BLE001
+                err = Response(
+                    {'certificate_chain_pem': 'Failed to parse certificate chain. Check the PEM encoding.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+                return err, None, unique_name, None, None
+
+        credential_serializer = CredentialSerializer.from_serializers(
+            private_key_serializer=private_key_serializer,
+            certificate_serializer=ca_certificate_serializer,
+            certificate_collection_serializer=ca_certificate_chain_serializer,
+        )
+
+        try:
+            cert, pk = mixin._validate_credential_components(credential_serializer)  # noqa: SLF001
+        except ValidationError as exc:
+            return Response({'detail': exc.message}, status=status.HTTP_400_BAD_REQUEST), None, unique_name, None, None
+
+        mixin._prepare_credential_serializer(credential_serializer, unique_name or None, pk)  # noqa: SLF001
+        return None, credential_serializer, unique_name, cert, pk
 
     @extend_schema(
         summary='Generate CRL',

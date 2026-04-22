@@ -1,0 +1,143 @@
+"""REST-specific message responder classes."""
+
+import json
+
+from cryptography.hazmat.primitives.serialization import Encoding
+
+from onboarding.models import OnboardingStatus
+from request.request_context import BaseRequestContext, RestBaseRequestContext, RestCertificateRequestContext
+from request.workflow2_issuance import (
+    Workflow2IssuanceDecision,
+    get_workflow2_dispatch_outcome,
+    get_workflow2_issuance_decision,
+    get_workflow2_run_detail_path,
+)
+
+from .base import AbstractMessageResponder
+
+
+class RestMessageResponder(AbstractMessageResponder):
+    """Builds response to REST API requests."""
+
+    @staticmethod
+    def build_response(context: BaseRequestContext) -> None:
+        """Respond to a REST message."""
+        if not isinstance(context, RestBaseRequestContext):
+            exc_msg = 'RestMessageResponder requires a RestBaseRequestContext.'
+            raise TypeError(exc_msg)
+
+        if context.operation in ['enroll', 'reenroll']:
+            responder = RestCertificateMessageResponder()
+            return responder.build_response(context)
+        exc_msg = 'No suitable responder found for this REST message.'
+        context.http_response_status = 500
+        context.http_response_content = exc_msg
+        return RestErrorMessageResponder().build_response(context)
+
+
+class RestCertificateMessageResponder(RestMessageResponder):
+    """Respond to a REST enrollment request with the issued certificate."""
+
+    @staticmethod
+    def _check_workflow_state(context: RestCertificateRequestContext) -> bool:
+        """Check if the workflow state allows for certificate issuance."""
+        workflow2_outcome = get_workflow2_dispatch_outcome(context)
+        if workflow2_outcome is None:
+            return True
+
+        decision = get_workflow2_issuance_decision(context)
+        run_status = str(workflow2_outcome.run.status)
+        response_status: int
+        response_payload: dict[str, str]
+        if decision == Workflow2IssuanceDecision.WAIT:
+            response_status = 202
+            response_payload = {
+                'status': 'pending',
+                'detail': (
+                    'Enrollment request pending workflow approval.'
+                    if run_status == 'awaiting'
+                    else 'Enrollment request pending workflow processing.'
+                ),
+            }
+        elif decision == Workflow2IssuanceDecision.REJECT:
+            response_status = 403
+            response_payload = {
+                'status': 'rejected',
+                'detail': 'Enrollment request rejected by workflow.',
+            }
+        elif decision == Workflow2IssuanceDecision.FAIL:
+            detail = 'Enrollment request failed in workflow processing.'
+            run_path = get_workflow2_run_detail_path(context)
+            if run_path:
+                detail = f'{detail} Check here: -> {run_path}'
+            response_status = 500
+            response_payload = {'status': 'failed', 'detail': detail}
+        elif decision == Workflow2IssuanceDecision.CONTINUE:
+            return True
+        else:
+            response_status = 500
+            response_payload = {
+                'status': 'error',
+                'detail': f'Enrollment request is in an unsupported workflow state: {run_status}.',
+            }
+
+        context.http_response_status = response_status
+        context.http_response_content_type = 'application/json'
+        context.http_response_content = json.dumps(response_payload)
+        return False
+
+    @staticmethod
+    def build_response(context: BaseRequestContext) -> None:
+        """Respond to a REST enrollment request with the issued certificate as PEM in JSON."""
+        if not isinstance(context, RestCertificateRequestContext):
+            exc_msg = 'RestCertificateMessageResponder requires a RestCertificateRequestContext.'
+            raise TypeError(exc_msg)
+
+        if not RestCertificateMessageResponder._check_workflow_state(context):
+            return
+
+        if context.issued_certificate is None:
+            exc_msg = 'Issued certificate is not set in the context.'
+            raise ValueError(exc_msg)
+
+        cert_pem = context.issued_certificate.public_bytes(Encoding.PEM).decode('utf-8')
+
+        chain_pem_list = []
+        if context.issued_certificate_chain:
+            chain_pem_list = [
+                cert.public_bytes(Encoding.PEM).decode('utf-8')
+                for cert in context.issued_certificate_chain
+            ]
+
+        response_data = {
+            'certificate': cert_pem,
+            'certificate_chain': chain_pem_list,
+        }
+
+        if context.device and context.device.onboarding_config:
+            context.device.onboarding_config.onboarding_status = OnboardingStatus.ONBOARDED
+            context.device.onboarding_config.save()
+
+        context.http_response_status = 200
+        context.http_response_content = json.dumps(response_data)
+        context.http_response_content_type = 'application/json'
+
+
+class RestErrorMessageResponder(RestMessageResponder):
+    """Respond to a REST request with an error JSON payload."""
+
+    @staticmethod
+    def build_response(context: BaseRequestContext) -> None:
+        """Respond to a REST request with an error."""
+        if not isinstance(context, RestBaseRequestContext):
+            exc_msg = 'RestErrorMessageResponder requires a RestBaseRequestContext.'
+            raise TypeError(exc_msg)
+
+        status = context.http_response_status or 500
+        detail = context.http_response_content or 'An error occurred processing the REST request.'
+        if isinstance(detail, bytes):
+            detail = detail.decode('utf-8')
+
+        context.http_response_status = status
+        context.http_response_content = json.dumps({'status': 'error', 'detail': detail})
+        context.http_response_content_type = 'application/json'

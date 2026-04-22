@@ -16,8 +16,15 @@ from request.authorization import CmpAuthorization
 from request.message_parser import CmpMessageParser
 from request.message_responder.cmp import CmpMessageResponder
 from request.operation_processor.general import OperationProcessor
-from request.request_context import BaseRequestContext, CmpCertificateRequestContext
+from request.request_context import (
+    BaseRequestContext,
+    CmpBaseRequestContext,
+    CmpCertificateRequestContext,
+    HttpBaseRequestContext,
+)
 from request.request_validator.http_req import CmpHttpRequestValidator
+from request.workflow2_issuance import release_delivered_workflow2_request
+from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -81,11 +88,6 @@ class CmpRequestView(LoggerMixin, View):
         """Handles the POST requests to the CMP IR endpoint."""
         del args
         domain_name, cert_profile, operation = self._extract_path_params(kwargs)
-        if not cert_profile:
-            cert_profile = 'domain_credential'
-
-        # Allow CA certificate requests if using the issuing_ca profile
-        allow_ca_cert = cert_profile == 'issuing_ca'
 
         ctx: BaseRequestContext
         try:
@@ -95,7 +97,6 @@ class CmpRequestView(LoggerMixin, View):
                 protocol='cmp',
                 operation=operation,
                 cert_profile_str=cert_profile,
-                allow_ca_certificate_request=allow_ca_cert,
         )
         except Exception:
             err_msg = 'Failed to set up CMP request context.'
@@ -107,20 +108,29 @@ class CmpRequestView(LoggerMixin, View):
             validator.validate(ctx)
 
             parser = CmpMessageParser()
-            ctx = parser.parse(ctx)
+            ctx = cast('CmpBaseRequestContext', parser.parse(ctx))
 
             authenticator = CmpAuthentication()
             authenticator.authenticate(ctx)
 
             authorizer = CmpAuthorization(
-                ['initialization', 'certification', 'revocation']
+                ['initialization', 'certification', 'revocation', 'certconf']
             )
             authorizer.authorize(ctx)
 
+            Workflow2Handler().handle(ctx)
             OperationProcessor().process_operation(ctx)
         except Exception:
             self.logger.exception('Error processing CMP request')
 
-        CmpMessageResponder.build_response(ctx)
+        try:
+            CmpMessageResponder.build_response(ctx)
+            release_delivered_workflow2_request(ctx)
+        except Exception:
+            self.logger.exception('Error building CMP response')
+            if isinstance(ctx, HttpBaseRequestContext):
+                ctx.http_response_status = 500
+                ctx.http_response_content = 'Internal server error building CMP response.'
+                ctx.http_response_content_type = 'text/plain'
 
         return ctx.to_http_response()

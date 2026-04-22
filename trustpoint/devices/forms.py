@@ -16,10 +16,10 @@ from django.utils.translation import gettext_lazy as _
 
 from devices.models import (
     DeviceModel,
-    IssuedCredentialModel,
     RemoteDeviceCredentialDownloadModel,
 )
 from devices.utils import validate_application_uri, validate_common_name_characters
+from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import (
     NoOnboardingConfigModel,
     NoOnboardingPkiProtocol,
@@ -28,6 +28,7 @@ from onboarding.models import (
     OnboardingProtocol,
     OnboardingStatus,
 )
+from pki.models import IssuedCredentialModel
 from pki.models.certificate import RevokedCertificateModel
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
@@ -37,6 +38,12 @@ from util.field import UniqueNameValidator
 if TYPE_CHECKING:
     from django.db.models.query import QuerySet
 
+
+class SwitchCheckboxSelectMultiple(forms.CheckboxSelectMultiple):
+    """Custom CheckboxSelectMultiple widget that renders as Bootstrap switches."""
+
+    template_name = 'widgets/switch_checkbox_select_multiple.html'
+
 PASSWORD_MIN_LENGTH = 12
 OTP_SPLIT_PARTS = 2
 ALLOWED_CHARS = allowed_chars = string.ascii_letters + string.digits
@@ -45,6 +52,7 @@ ALLOWED_CHARS = allowed_chars = string.ascii_letters + string.digits
 ONBOARDING_PROTOCOLS_ALLOWED_FOR_FORMS = [
     (OnboardingProtocol.CMP_SHARED_SECRET.value, OnboardingProtocol.CMP_SHARED_SECRET.label),
     (OnboardingProtocol.EST_USERNAME_PASSWORD.value, OnboardingProtocol.EST_USERNAME_PASSWORD.label),
+    (OnboardingProtocol.REST_USERNAME_PASSWORD.value, OnboardingProtocol.REST_USERNAME_PASSWORD.label),
     (OnboardingProtocol.MANUAL.value, OnboardingProtocol.MANUAL.label),
     (OnboardingProtocol.AOKI.value, OnboardingProtocol.AOKI.label),
     (OnboardingProtocol.BRSKI.value, OnboardingProtocol.BRSKI.label),
@@ -336,10 +344,10 @@ class NoOnboardingCreateForm(forms.Form):
             (NoOnboardingPkiProtocol.CMP_SHARED_SECRET, NoOnboardingPkiProtocol.CMP_SHARED_SECRET.label),
             (NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD, NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD.label),
             (NoOnboardingPkiProtocol.MANUAL, NoOnboardingPkiProtocol.MANUAL.label),
+            (NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD, NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD.label),
         ],
         initial=NoOnboardingPkiProtocol.CMP_SHARED_SECRET,
-        widget=forms.CheckboxSelectMultiple,
-        label=_('Enabled PKI Protocols'),
+        widget=SwitchCheckboxSelectMultiple(),
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -348,14 +356,38 @@ class NoOnboardingCreateForm(forms.Form):
 
         self.helper = FormHelper()
         self.helper.form_tag = False
+
+        pki_protocols_html = self._render_pki_protocols_switches('no_onboarding_pki_protocols')
+
         self.helper.layout = Layout(
             HTML('<h2>General</h2><hr>'),
             Field('common_name'),
             Field('serial_number'),
             Field('domain'),
             HTML('<h2 class="mt-5">PKI Protocol Configuration</h2><hr>'),
-            Field('no_onboarding_pki_protocols'),
+            HTML('<label class="form-label">Enabled PKI Protocols</label>'),
+            HTML(pki_protocols_html),
         )
+
+    def _render_pki_protocols_switches(self, field_name: str) -> str:
+        """Renders PKI protocol switches as HTML."""
+        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
+        html_parts = ['<div class="mt-2">']
+
+        for choice in field.widget.choices:
+            value, label = choice[0], choice[1]
+            checked = str(value) in (self.initial.get(field_name, []) or [])
+            html_parts.append(
+                f'<div class="form-check form-switch mb-2">'
+                f'<input type="checkbox" class="form-check-input" role="switch" '
+                f'name="{field_name}" value="{value}" id="id_{field_name}_{value}" '
+                f'{"checked" if checked else ""}>'
+                f'<label class="form-check-label" for="id_{field_name}_{value}">{label}</label>'
+                f'</div>'
+            )
+
+        html_parts.append('</div>')
+        return ''.join(html_parts)
 
     def clean_common_name(self) -> str:
         """Validates the device name, i.e. checks if it is unique.
@@ -399,6 +431,10 @@ class NoOnboardingCreateForm(forms.Form):
         if NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD in no_onboarding_pki_protocols:
             no_onboarding_config_model.est_password = _get_secret()
 
+        rest_selected = NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD in no_onboarding_pki_protocols
+        if rest_selected and not no_onboarding_config_model.est_password:
+            no_onboarding_config_model.est_password = _get_secret()
+
         no_onboarding_config_model.full_clean()
 
         device_model = DeviceModel(
@@ -407,6 +443,8 @@ class NoOnboardingCreateForm(forms.Form):
 
         device_model.no_onboarding_config = no_onboarding_config_model
         device_model.full_clean()
+
+        PermittedProtocolsAuthorization().check(device_model)
 
         no_onboarding_config_model.save()
         device_model.save()
@@ -440,10 +478,10 @@ class OnboardingCreateForm(forms.Form):
         choices=[
             (OnboardingPkiProtocol.CMP, OnboardingPkiProtocol.CMP.label),
             (OnboardingPkiProtocol.EST, OnboardingPkiProtocol.EST.label),
+            (OnboardingPkiProtocol.REST, OnboardingPkiProtocol.REST.label),
         ],
         initial=OnboardingPkiProtocol.CMP,
-        widget=forms.CheckboxSelectMultiple,
-        label=_('Enabled PKI Protocols'),
+        widget=SwitchCheckboxSelectMultiple(),
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -452,6 +490,10 @@ class OnboardingCreateForm(forms.Form):
 
         self.helper = FormHelper()
         self.helper.form_tag = False
+
+        # Render the PKI protocols widget manually to avoid crispy-forms label rendering
+        pki_protocols_html = self._render_pki_protocols_switches('onboarding_pki_protocols')
+
         self.helper.layout = Layout(
             HTML('<h2>General</h2><hr>'),
             Field('common_name'),
@@ -460,8 +502,29 @@ class OnboardingCreateForm(forms.Form):
             HTML('<h2 class="mt-5">Onboarding Protocol</h2><hr>'),
             Field('onboarding_protocol'),
             HTML('<h2 class="mt-5">PKI Protocol Configuration</h2><hr>'),
-            Field('onboarding_pki_protocols'),
+            HTML('<label class="form-label">Enabled PKI Protocols</label>'),
+            HTML(pki_protocols_html),
         )
+
+    def _render_pki_protocols_switches(self, field_name: str) -> str:
+        """Renders PKI protocol switches as HTML."""
+        field: forms.MultipleChoiceField = self.fields[field_name]  # type: ignore[assignment]
+        html_parts = ['<div class="mt-2">']
+
+        for choice in field.widget.choices:
+            value, label = choice[0], choice[1]
+            checked = str(value) in (self.initial.get(field_name, []) or [])
+            html_parts.append(
+                f'<div class="form-check form-switch mb-2">'
+                f'<input type="checkbox" class="form-check-input" role="switch" '
+                f'name="{field_name}" value="{value}" id="id_{field_name}_{value}" '
+                f'{"checked" if checked else ""}>'
+                f'<label class="form-check-label" for="id_{field_name}_{value}">{label}</label>'
+                f'</div>'
+            )
+
+        html_parts.append('</div>')
+        return ''.join(html_parts)
 
     def clean_common_name(self) -> str:
         """Validates the device name, i.e. checks if it is unique.
@@ -510,7 +573,7 @@ class OnboardingCreateForm(forms.Form):
         if onboarding_protocol == OnboardingProtocol.CMP_SHARED_SECRET:
             onboarding_config_model.cmp_shared_secret = _get_secret()
 
-        if onboarding_protocol == OnboardingProtocol.EST_USERNAME_PASSWORD:
+        if onboarding_protocol in (OnboardingProtocol.EST_USERNAME_PASSWORD, OnboardingProtocol.REST_USERNAME_PASSWORD):
             onboarding_config_model.est_password = _get_secret()
 
         onboarding_config_model.full_clean()
@@ -524,6 +587,8 @@ class OnboardingCreateForm(forms.Form):
         )
 
         device_model.full_clean()
+
+        PermittedProtocolsAuthorization().check(device_model)
 
         onboarding_config_model.save()
         device_model.save()
@@ -628,6 +693,8 @@ class OpcUaGdsPushCreateForm(forms.Form):
 
         device_model.full_clean()
 
+        PermittedProtocolsAuthorization().check(device_model)
+
         onboarding_config_model.save()
         device_model.save()
 
@@ -656,6 +723,7 @@ class ClmDeviceModelOnboardingForm(forms.Form):
 
     pki_protocol_cmp = forms.BooleanField(label='CMP', required=False)
     pki_protocol_est = forms.BooleanField(label='EST', required=False)
+    pki_protocol_rest = forms.BooleanField(label='REST', required=False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the form."""
@@ -671,8 +739,15 @@ class ClmDeviceModelOnboardingForm(forms.Form):
             Field('onboarding_protocol'),
             Field('onboarding_status'),
             HTML('<h2>Enabled PKI-Protocols</h2><hr>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_cmp'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_est'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
+            Field('pki_protocol_rest'),
+            HTML('</div>'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
         )
@@ -713,7 +788,10 @@ class ClmDeviceModelOnboardingForm(forms.Form):
                 if not self.instance.onboarding_config.cmp_shared_secret:
                     self.instance.onboarding_config.cmp_shared_secret = _get_secret()
 
-            if onboarding_protocol_selected == OnboardingProtocol.EST_USERNAME_PASSWORD:
+            if onboarding_protocol_selected in (
+                OnboardingProtocol.EST_USERNAME_PASSWORD,
+                OnboardingProtocol.REST_USERNAME_PASSWORD,
+            ):
                 self.instance.onboarding_config.cmp_shared_secret = ''
                 if not self.instance.onboarding_config.est_password:
                     self.instance.onboarding_config.est_password = _get_secret()
@@ -724,6 +802,8 @@ class ClmDeviceModelOnboardingForm(forms.Form):
                 self.instance.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.CMP)
             if self.cleaned_data['pki_protocol_est'] is True:
                 self.instance.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.EST)
+            if self.cleaned_data['pki_protocol_rest'] is True:
+                self.instance.onboarding_config.add_pki_protocol(OnboardingPkiProtocol.REST)
 
             self.instance.onboarding_config.full_clean()
             self.instance.onboarding_config.save()
@@ -825,7 +905,9 @@ class ClmDeviceModelOpcUaGdsPushOnboardingForm(forms.Form):
             Field('onboarding_protocol'),
             Field('onboarding_status'),
             HTML('<h2>Enabled PKI-Protocols</h2><hr>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_opc_gds_push'),
+            HTML('</div>'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
         )
@@ -870,6 +952,7 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
     pki_protocol_cmp = forms.BooleanField(label='CMP - Shared-Secret (HMAC)', required=False)
     pki_protocol_est = forms.BooleanField(label='EST - Username & Password', required=False)
     pki_protocol_manual = forms.BooleanField(label='Manual', required=False)
+    pki_protocol_rest = forms.BooleanField(label='REST - Username & Password', required=False)
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initializes the form."""
@@ -882,9 +965,18 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
             Field('serial_number'),
             Field('domain'),
             HTML('<h2>Enabled PKI-Protocols</h2><hr>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_cmp'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_est'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
             Field('pki_protocol_manual'),
+            HTML('</div>'),
+            HTML('<div class="form-check form-switch">'),
+            Field('pki_protocol_rest'),
+            HTML('</div>'),
             HTML('<hr>'),
             Submit('submit', _('Apply Changes'), css_class='btn btn-primary w-100'),
         )
@@ -927,11 +1019,19 @@ class ClmDeviceModelNoOnboardingForm(forms.Form):
             self.instance.no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.EST_USERNAME_PASSWORD)
             if self.instance.no_onboarding_config.est_password == '':
                 self.instance.no_onboarding_config.est_password = _get_secret()
-        else:
-            self.instance.no_onboarding_config.est_password = ''
 
         if self.cleaned_data['pki_protocol_manual'] is True:
             self.instance.no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.MANUAL)
+
+        if self.cleaned_data['pki_protocol_rest'] is True:
+            self.instance.no_onboarding_config.add_pki_protocol(NoOnboardingPkiProtocol.REST_USERNAME_PASSWORD)
+            if self.instance.no_onboarding_config.est_password == '':
+                self.instance.no_onboarding_config.est_password = _get_secret()
+
+        est_enabled = self.cleaned_data['pki_protocol_est'] is True
+        rest_enabled = self.cleaned_data['pki_protocol_rest'] is True
+        if not est_enabled and not rest_enabled:
+            self.instance.no_onboarding_config.est_password = ''
 
         self.instance.no_onboarding_config.full_clean()
         self.instance.no_onboarding_config.save()

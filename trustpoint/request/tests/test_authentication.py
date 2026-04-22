@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
-from devices.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel
 
 from request.authentication.base import ClientCertificateAuthentication
 from request.authentication.est import UsernamePasswordAuthentication
@@ -118,7 +118,7 @@ class TestClientCertificateAuthentication:
 
     def test_authenticate_invalid_credential(self, domain_credential_est_onboarding, rsa_private_key):
         """Test authentication with invalid credential."""
-        device = domain_credential_est_onboarding['device']
+
 
         invalid_cert = x509.CertificateBuilder().subject_name(
             x509.Name([x509.NameAttribute(x509.NameOID.COMMON_NAME, 'Invalid Certificate')])

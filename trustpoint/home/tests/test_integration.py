@@ -27,7 +27,7 @@ class DashboardIntegrationTests(TestCase):
         response = self.client.get(self.url)
 
         assert response.status_code == 200
-        assert 'notifications' in response.context
+        assert 'page_category' in response.context
 
 
 class DashboardChartsDataIntegrationTests(TestCase):
@@ -65,7 +65,7 @@ class DashboardChartsDataIntegrationTests(TestCase):
         assert response.status_code == 400
         data = response.json()
         assert 'error' in data
-        assert 'Invalid date format' in data['error']
+        assert 'Invalid start_date format' in data['error']
 
     @patch.object(DeviceModel.objects, 'filter')
     def test_dashboard_data_with_exception(self, mock_filter: Mock) -> None:

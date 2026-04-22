@@ -1,0 +1,51 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+{% load internationalization_tags %}
+
+{% block content %}
+    <form method="POST" autocomplete="off">
+        {% csrf_token %}
+
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h1>{% trans 'Confirm TLS Deletion' %}</h1>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="tp-card-centered-content">
+                    {% for cert in certificates %}
+                        <h2>({{ forloop.counter }}) {% trans 'TLS' %}: {{ cert.common_name }}</h2>
+                        <hr class="hr-m">
+                        <div class="tp-kvp-list">
+                            <div>
+                                <div>{% trans 'Common Name' %}</div>
+                                <div>{{ cert.common_name }}</div>
+                            </div>
+                            <div>
+                                <div> {% trans 'Not valid after (UTC)' %}</div>
+                                <div>{{ cert.not_valid_after|local_datetime }}</div>
+                            </div>
+                            <div>
+                                <div>{% trans 'Public Key Algorithm' %}</div>
+                                <div>{{ cert.spki_algorithm }}</div>
+                            </div>
+                        </div>
+                        {% if not forloop.last %}
+
+                        {% endif %}
+                    {% endfor %}
+
+
+                </div>
+            </div>
+            <div class="card-footer d-flex">
+                <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'management:tls' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                    <button type="submit" class="btn btn-danger">{% trans 'Delete selected Certificates' %}</button>
+                </div>
+            </div>
+        </div>
+    </form>
+{% endblock content %}

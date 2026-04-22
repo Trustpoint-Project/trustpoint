@@ -3,9 +3,17 @@ from typing import Never
 
 from pyasn1_modules.rfc4210 import PKIMessage  # type: ignore[import-untyped]
 
+from cmp.models import CmpTransactionModel
 from cmp.util import PKIFailureInfo
-from devices.models import IssuedCredentialModel
-from request.request_context import BaseRequestContext, CmpBaseRequestContext, CmpRevocationRequestContext
+from pki.models import IssuedCredentialModel
+from request.cmp_transaction_state import CmpTransactionState
+from request.request_context import (
+    BaseRequestContext,
+    CmpBaseRequestContext,
+    CmpCertConfRequestContext,
+    CmpPollRequestContext,
+    CmpRevocationRequestContext,
+)
 from trustpoint.logger import LoggerMixin
 
 from .base import (
@@ -14,7 +22,9 @@ from .base import (
     CompositeAuthorization,
     DevOwnerIDAuthorization,
     DomainScopeValidation,
+    OnboardingDomainCredentialAuthorization,
     ProtocolAuthorization,
+    SecurityConfigAuthorization,
 )
 
 
@@ -58,22 +68,7 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
                 return
             valid, _reason = signer_credential.is_valid_domain_credential()
             if valid:
-                signer_device = signer_credential.device
-                if signer_device != context.device:
-                    error_message = (
-                        'Unauthorized revocation request: Signer device does not match the device '
-                        'associated with the certificate to be revoked.'
-                    )
-                    self.logger.warning(
-                        'Revocation authorization failed: Signer device does not match target device'
-                    )
-                    self._raise_authorization_error(error_message, context)
-
-                context.credential_to_revoke = IssuedCredentialModel.get_credential_for_serial_number(
-                    context.domain, context.device, context.cert_serial_number
-                )
-                self.logger.info('Revocation authorized: Domain credential revocation of credential %s',
-                                 context.credential_to_revoke.common_name)
+                self._authorize_domain_credential_revocation(context, signer_credential)
                 return
             error_message = (
                 'Unauthorized revocation request: Signer certificate does not match '
@@ -92,6 +87,189 @@ class CmpRevocationAuthorization(AuthorizationComponent, LoggerMixin):
 
     def _raise_authorization_error(self, message: str, context: BaseRequestContext) -> Never:
         """Raise a ValueError with the given message and sets generic Unauthorized as external response."""
+        context.error('Unauthorized', http_status=403, cmp_code=PKIFailureInfo.NOT_AUTHORIZED)
+        raise ValueError(message)
+
+    def _authorize_domain_credential_revocation(
+        self, context: CmpRevocationRequestContext, signer_credential: IssuedCredentialModel
+    ) -> None:
+        """Authorize revocation via a domain credential and set credential_to_revoke on the context."""
+        signer_device = signer_credential.device
+        if signer_device != context.device:
+            error_message = (
+                'Unauthorized revocation request: Signer device does not match the device '
+                'associated with the certificate to be revoked.'
+            )
+            self.logger.warning('Revocation authorization failed: Signer device does not match target device')
+            self._raise_authorization_error(error_message, context)
+
+        if context.device is None:
+            error_message = 'Device information is missing. Revocation authorization denied.'
+            self.logger.warning('Revocation authorization failed: Device information is missing')
+            self._raise_authorization_error(error_message, context)
+
+        if context.domain is None:
+            error_message = 'Domain information is missing. Revocation authorization denied.'
+            self.logger.warning('Revocation authorization failed: Domain information is missing')
+            self._raise_authorization_error(error_message, context)
+
+        if context.cert_serial_number is None:
+            error_message = 'Certificate serial number is missing. Revocation authorization denied.'
+            self.logger.warning('Revocation authorization failed: Certificate serial number is missing')
+            self._raise_authorization_error(error_message, context)
+
+        context.credential_to_revoke = IssuedCredentialModel.get_credential_for_serial_number(
+            context.domain, context.device, context.cert_serial_number
+        )
+        self.logger.info(
+            'Revocation authorized: Domain credential revocation of credential %s',
+            context.credential_to_revoke.common_name,
+        )
+
+
+class CmpCertConfAuthorization(AuthorizationComponent, LoggerMixin):
+    """Authorization component for certConf messages.
+
+    When the EE signals rejection (statusInfo.status == 2) the component looks
+    up the ``IssuedCredentialModel`` whose certificate hash matches the
+    ``cert_hash`` carried in the certConf body and stores it in
+    ``context.credential_to_revoke`` so that the operation processor can
+    revoke the certificate via the standard revocation pipeline.
+
+    For accepted certConf messages (status == 0 or no statusInfo) the
+    component is a no-op from a credential perspective.
+    """
+
+    def authorize(self, context: BaseRequestContext) -> None:
+        """Authorize and, on rejection, identify the credential to revoke."""
+        if context.operation not in ('certconf', 'initialization', 'certification'):
+            return
+        if not isinstance(context, CmpCertConfRequestContext):
+            return
+
+        # PKIStatus value 2 means "rejection" per RFC 4210 Section 5.2.3.
+        pki_status_rejection = 2
+        if context.cert_conf_status != pki_status_rejection:
+            self.logger.debug('certConf: status is accepted (or absent) — no credential lookup required.')
+            return
+
+        if not context.cert_hash:
+            error_message = 'certConf rejection received but certHash is missing. Authorization denied.'
+            self.logger.warning('certConf authorization failed: certHash is missing')
+            self._raise_authorization_error(error_message, context)
+
+        # The certHash in RFC 4210 §5.3.18 is computed as SHA-256 over the
+        # DER-encoded certificate.
+        cert_hash_hex: str = context.cert_hash.hex().upper()
+
+        cert_model = (
+            IssuedCredentialModel.objects.filter(
+                credential__certificate__sha256_fingerprint=cert_hash_hex
+            )
+            .select_related('credential', 'device', 'domain')
+            .first()
+        )
+
+        if cert_model is None:
+            error_message = (
+                f'certConf rejection: no issued credential found for certHash {cert_hash_hex}. '
+                'Authorization denied.'
+            )
+            self.logger.warning(
+                'certConf authorization failed: no credential found for certHash %s', cert_hash_hex
+            )
+            self._raise_authorization_error(error_message, context)
+
+        context.credential_to_revoke = cert_model
+        self.logger.info(
+            'certConf rejection: credential %s identified for revocation (certHash=%s)',
+            cert_model.common_name,
+            cert_hash_hex,
+        )
+
+    def _raise_authorization_error(self, message: str, context: BaseRequestContext) -> Never:
+        """Set a generic error on the context and raise ValueError."""
+        context.error('Unauthorized', http_status=403, cmp_code=PKIFailureInfo.NOT_AUTHORIZED)
+        raise ValueError(message)
+
+
+class CmpPollAuthorization(AuthorizationComponent, LoggerMixin):
+    """Authorize CMP pollReq messages against persisted CMP transaction state."""
+
+    def authorize(self, context: BaseRequestContext) -> None:
+        """Load and validate the CMP transaction for one pollReq."""
+        if not isinstance(context, CmpPollRequestContext):
+            return
+        if context.cmp_body_type != 'pollReq':
+            return
+
+        transaction_id = str(context.cmp_transaction_id or '').strip().lower()
+        if not transaction_id:
+            self._raise_authorization_error('CMP pollReq is missing a transactionID.', context)
+
+        transaction = self._get_poll_transaction(transaction_id=transaction_id, context=context)
+        self._validate_poll_transaction(context=context, transaction=transaction)
+        self._hydrate_context_from_transaction(context=context, transaction=transaction)
+
+    def _get_poll_transaction(
+        self,
+        *,
+        transaction_id: str,
+        context: CmpPollRequestContext,
+    ) -> CmpTransactionModel:
+        transaction = CmpTransactionState.get_by_transaction_id(transaction_id)
+        if transaction is None:
+            self._raise_authorization_error(
+                f'No CMP transaction found for transactionID {transaction_id}.',
+                context,
+            )
+        return transaction
+
+    def _validate_poll_transaction(
+        self,
+        *,
+        context: CmpPollRequestContext,
+        transaction: CmpTransactionModel,
+    ) -> None:
+        if context.operation is not None and context.operation != transaction.operation:
+            self._raise_authorization_error(
+                f'pollReq operation mismatch: expected {transaction.operation}, got {context.operation}.',
+                context,
+            )
+
+        if context.poll_cert_req_id != transaction.cert_req_id:
+            self._raise_authorization_error(
+                f'pollReq certReqId mismatch: expected {transaction.cert_req_id}, got {context.poll_cert_req_id}.',
+                context,
+            )
+
+        if (
+            context.device is not None
+            and transaction.device_id is not None
+            and context.device.id != transaction.device_id
+        ):
+            self._raise_authorization_error('pollReq device does not match the original CMP transaction.', context)
+        if (
+            context.domain is not None
+            and transaction.domain_id is not None
+            and context.domain.id != transaction.domain_id
+        ):
+            self._raise_authorization_error('pollReq domain does not match the original CMP transaction.', context)
+
+    @staticmethod
+    def _hydrate_context_from_transaction(
+        *,
+        context: CmpPollRequestContext,
+        transaction: CmpTransactionModel,
+    ) -> None:
+        context.operation = transaction.operation
+        context.cmp_transaction = transaction
+        context.device = context.device or transaction.device
+        context.domain = context.domain or transaction.domain
+        context.cert_profile_str = transaction.cert_profile or None
+        context.implicit_confirm = transaction.implicit_confirm
+
+    def _raise_authorization_error(self, message: str, context: BaseRequestContext) -> Never:
         context.error('Unauthorized', http_status=403, cmp_code=PKIFailureInfo.NOT_AUTHORIZED)
         raise ValueError(message)
 
@@ -140,6 +318,14 @@ class CmpOperationAuthorization(AuthorizationComponent, LoggerMixin):
         elif context.operation == 'revocation' and body_type == 'rr':
             CmpRevocationAuthorization().authorize(context)
             self.logger.info('CMP body type validation successful: RR body extracted')
+        elif context.operation in ('initialization', 'certification', 'certconf') and body_type == 'certConf':
+            # certConf is sent to the same endpoint as the original enrollment
+            # operation (RFC 9483 Section 6.1).  The CmpCertConfAuthorization
+            # component handles credential lookup for rejection-case revocation.
+            CmpCertConfAuthorization().authorize(context)
+            self.logger.info('CMP certConf body received for operation: %s', context.operation)
+        elif context.operation in ('initialization', 'certification') and body_type == 'pollReq':
+            self.logger.info('CMP pollReq body received for operation: %s', context.operation)
         else:
             err_msg = f'Expected CMP {context.operation} body, but got CMP {body_type.upper()} body.'
             raise ValueError(err_msg)
@@ -165,8 +351,11 @@ class CmpAuthorization(CompositeAuthorization):
         if allowed_operations is None:
             allowed_operations = ['certification', 'initialization']
 
+        self.add(ProtocolAuthorization(['cmp']))
+        self.add(CmpPollAuthorization())
         self.add(DomainScopeValidation())
         self.add(CertificateProfileAuthorization())
+        self.add(OnboardingDomainCredentialAuthorization())
         self.add(DevOwnerIDAuthorization())
-        self.add(ProtocolAuthorization(['cmp']))
         self.add(CmpOperationAuthorization(allowed_operations))
+        self.add(SecurityConfigAuthorization())

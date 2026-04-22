@@ -2,56 +2,150 @@
 
 {% block table_filter %}
 
-  {# --- Filter toggle + form --- #}
+  <div class="card-body pb-0 d-flex gap-2 align-items-center">
 
-  <div class="card-body pb-0">
-    <button
-      class="btn btn-sm btn-outline-secondary mb-1"
-      type="button"
-      data-bs-toggle="collapse"
-      data-bs-target="#filterCollapse"
-      aria-expanded="{% if request.GET %}true{% else %}false{% endif %}"
-      aria-controls="filterCollapse"
-    >
-      {% trans 'Filters' %}
-    </button>
-  </div>
+    {# --- Filters dropdown --- #}
+    <div class="dropdown mb-1">
+      <button class="btn btn-sm {% if filters_active %}btn-primary{% else %}btn-outline-secondary{% endif %} dropdown-toggle"
+              type="button"
+              id="tp-filter-dropdown-btn"
+              data-bs-toggle="dropdown"
+              data-bs-auto-close="outside"
+              aria-expanded="{% if filters_active %}true{% else %}false{% endif %}">
+        {% trans 'Filters' %}{% if filters_active %} <span class="badge bg-white text-primary ms-1">{% trans 'active' %}</span>{% endif %}
+      </button>
+      <div class="dropdown-menu p-3" id="tp-filter-dropdown-menu" style="min-width: 22rem;">
+        <form method="get" class="d-flex flex-column gap-2">
 
-  <div class="collapse{% if request.GET %} show{% endif %}" id="filterCollapse">
-    <div class="card-body">
-      <form method="get" class="row gx-3 gy-1 align-items-end">
+          <div>
+            <label for="{{ filter.form.common_name.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.common_name.label }}
+            </label>
+            {{ filter.form.common_name }}
+          </div>
 
-        <div class="col-md-4">
-          <label for="{{ filter.form.common_name.id_for_label }}" class="form-label">
-            {{ filter.form.common_name.label }}
+          <div>
+            <label for="{{ filter.form.serial_number.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.serial_number.label }}
+            </label>
+            {{ filter.form.serial_number }}
+          </div>
+
+          <div>
+            <label for="{{ filter.form.domain.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.domain.label }}
+            </label>
+            {{ filter.form.domain }}
+          </div>
+
+          <div>
+            <label for="{{ filter.form.enrollment_state.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.enrollment_state.label }}
+            </label>
+            {{ filter.form.enrollment_state }}
+          </div>
+
+          <div>
+            <label for="{{ filter.form.domain_credential_state.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.domain_credential_state.label }}
+            </label>
+            {{ filter.form.domain_credential_state }}
+          </div>
+
+          <div>
+            <label for="{{ filter.form.application_certificate_state.id_for_label }}" class="form-label mb-1 fw-semibold">
+              {{ filter.form.application_certificate_state.label }}
+            </label>
+            {{ filter.form.application_certificate_state }}
+          </div>
+
+          <div class="d-flex gap-2">
+            <div class="flex-fill">
+              <label for="{{ filter.form.created_at_from.id_for_label }}" class="form-label mb-1 fw-semibold">
+                {{ filter.form.created_at_from.label }}
+              </label>
+              {{ filter.form.created_at_from }}
+            </div>
+            <div class="flex-fill">
+              <label for="{{ filter.form.created_at_to.id_for_label }}" class="form-label mb-1 fw-semibold">
+                {{ filter.form.created_at_to.label }}
+              </label>
+              {{ filter.form.created_at_to }}
+            </div>
+          </div>
+
+          <div class="d-flex gap-2 mt-1">
+            <button type="submit" class="btn btn-primary btn-sm flex-fill">
+              {% trans 'Apply' %}
+            </button>
+            <a href="{% url table_url %}" class="btn btn-outline-secondary btn-sm flex-fill">
+              {% trans 'Reset' %}
+            </a>
+          </div>
+
+        </form>
+      </div>
+    </div>
+
+    {# --- Column visibility dropdown --- #}
+    <div class="dropdown mb-1">
+      <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+              data-bs-toggle="dropdown" aria-expanded="false"
+              data-bs-auto-close="outside">
+        {% trans 'Columns' %}
+      </button>
+      <ul class="dropdown-menu" id="tp-column-toggle-menu">
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="name" checked> {% trans 'Name' %}
           </label>
-          {{ filter.form.common_name }}
-        </div>
-
-        <div class="col-md-4">
-          <label for="{{ filter.form.serial_number.id_for_label }}" class="form-label">
-            {{ filter.form.serial_number.label }}
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="domain" checked> {% trans 'Domain' %}
           </label>
-          {{ filter.form.serial_number }}
-        </div>
-
-        <div class="col-md-4">
-          <label for="{{ filter.form.domain.id_for_label }}" class="form-label">
-            {{ filter.form.domain.label }}
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="serial_number"> {% trans 'Serial Number' %}
           </label>
-          {{ filter.form.domain }}
-        </div>
-
-        <div class="col-auto mt-2">
-          <button type="submit" class="btn btn-primary btn-sm">
-            {% trans 'Apply' %}
-          </button>
-          <a href="{% url table_url %}" class="btn btn-outline-secondary btn-sm">
-            {% trans 'Reset' %}
-          </a>
-        </div>
-
-      </form>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="created_at"> {% trans 'Created at' %}
+          </label>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="enrollment" checked> {% trans 'Enrollment' %}
+          </label>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="domain_credential" checked> {% trans 'Domain Credential' %}
+          </label>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="application_certificates" checked> {% trans 'Application Certificates' %}
+          </label>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="onboarding_protocol"> {% trans 'Onboarding Protocol' %}
+          </label>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="pki_protocols"> {% trans 'PKI Protocols' %}
+          </label>
+        </li>
+        <li>
+          <label class="dropdown-item d-flex align-items-center gap-2">
+            <input type="checkbox" class="tp-col-toggle form-check-input mt-0" data-col="clm" checked> {% trans 'Certificate Management' %}
+          </label>
+        </li>
+      </ul>
     </div>
   </div>
 

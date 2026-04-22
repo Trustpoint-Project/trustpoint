@@ -35,7 +35,7 @@ class SecurityLevelMixinTest(TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.security_config = SecurityConfig.objects.create(
-            security_mode=SecurityConfig.SecurityModeChoices.LOW,
+            security_mode=SecurityConfig.SecurityModeChoices.BROWNFIELD,
             auto_gen_pki=False,
         )
         self.factory = RequestFactory()
@@ -59,7 +59,7 @@ class SecurityLevelMixinTest(TestCase):
     def test_get_security_level_returns_current_level(self):
         """Test get_security_level returns the current security mode."""
         mixin = SecurityLevelMixin()
-        self.assertEqual(mixin.get_security_level(), SecurityConfig.SecurityModeChoices.LOW)
+        self.assertEqual(mixin.get_security_level(), SecurityConfig.SecurityModeChoices.BROWNFIELD)
 
     def test_get_security_level_with_different_modes(self):
         """Test get_security_level with different security modes."""
@@ -91,7 +91,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.security_config = SecurityConfig.objects.create(
-            security_mode=SecurityConfig.SecurityModeChoices.LOW,
+            security_mode=SecurityConfig.SecurityModeChoices.BROWNFIELD,
             auto_gen_pki=False,
         )
         self.factory = RequestFactory()
@@ -120,8 +120,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
             def get(self, request):
                 return HttpResponse('Allowed')
 
-        # Set to LOW where AutoGenPkiFeature is allowed
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.LOW
+        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
         self.security_config.save()
 
         request = self.factory.get('/test/')
@@ -145,8 +144,8 @@ class SecurityLevelMixinRedirectTest(TestCase):
             def get(self, request):
                 return HttpResponse('Should not reach here')
 
-        # Set to HIGHEST where MockSecurityFeature is not allowed
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.HIGHEST
+        # Set to CRITICAL where MockSecurityFeature is not allowed
+        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.CRITICAL
         self.security_config.save()
 
         request = self.factory.get('/test/')
@@ -177,8 +176,8 @@ class SecurityLevelMixinRedirectTest(TestCase):
             def get(self, request):
                 return HttpResponse('Should not reach here')
 
-        # Set to HIGHEST where MockSecurityFeature is not allowed
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.HIGHEST
+        # Set to CRITICAL where MockSecurityFeature is not allowed
+        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.CRITICAL
         self.security_config.save()
 
         request = self.factory.get('/test/')
@@ -189,7 +188,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
         setattr(request, '_messages', messages_storage)
 
         view = TestView.as_view()
-        response = view(request)
+        view(request)
 
         # Check that error message was added
         all_messages = list(messages.get_messages(request))
@@ -218,8 +217,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
             def get(self, request):
                 return HttpResponse('Allowed')
 
-        # Set to LOW where AutoGenPkiFeature is allowed
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.LOW
+        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
         self.security_config.save()
 
         request = self.factory.get('/test/')
@@ -243,8 +241,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
             def post(self, request):
                 return HttpResponse('Posted')
 
-        # Set to LOW where AutoGenPkiFeature is allowed
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.LOW
+        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
         self.security_config.save()
 
         request = self.factory.post('/test/')
@@ -268,8 +265,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
             def get(self, request, pk, slug=None):
                 return HttpResponse(f'pk={pk}, slug={slug}')
 
-        # Set to LOW where AutoGenPkiFeature is allowed
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.LOW
+        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.BROWNFIELD
         self.security_config.save()
 
         request = self.factory.get('/test/123/my-slug/')
@@ -291,7 +287,7 @@ class SecurityLevelMixinRedirectTest(TestCase):
         self.assertTrue(hasattr(mixin, 'sec'))
 
     def test_dispatch_with_dev_mode_allows_all_features(self):
-        """Test dispatch allows all features in DEV mode."""
+        """Test dispatch allows all features in LAB mode."""
 
         class TestView(SecurityLevelMixinRedirect, View):
             def __init__(self, **kwargs):
@@ -304,8 +300,8 @@ class SecurityLevelMixinRedirectTest(TestCase):
             def get(self, request):
                 return HttpResponse('Dev mode allowed')
 
-        # Set to DEV where all features are allowed
-        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.DEV
+        # Set to LAB where all features are allowed
+        self.security_config.security_mode = SecurityConfig.SecurityModeChoices.LAB
         self.security_config.save()
 
         request = self.factory.get('/test/')

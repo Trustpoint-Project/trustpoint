@@ -20,7 +20,9 @@ from trustpoint_core.serializer import (
 )
 
 from management.models import KeyStorageConfig
+from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
+from pki.authorization import PkiSecurityAuthorization
 from pki.models import CaModel
 from pki.models.ca import MIN_CRL_CYCLE_INTERVAL_HOURS
 from pki.models.certificate import CertificateModel
@@ -125,15 +127,13 @@ class IssuingCaImportMixin:
         Raises:
             ValidationError: If certificate verification fails.
         """
+        if not chain:
+            return
+
         try:
-            if chain:
-                # Use the last cert in the chain as the trust anchor (root)
-                trusted_roots = [chain[-1]]
-                untrusted_intermediates = chain[:-1]
-            else:
-                # No chain provided — verify as self-signed
-                trusted_roots = [cert]
-                untrusted_intermediates = []
+            # Use the last cert in the chain as the trust anchor (root).
+            trusted_roots = [chain[-1]]
+            untrusted_intermediates = chain[:-1]
 
             CertificateVerifier.verify_ca_cert(
                 cert=cert,
@@ -148,7 +148,7 @@ class IssuingCaImportMixin:
     def _finalize_issuing_ca_creation(
         self, unique_name: str | None, cert: x509.Certificate, credential_serializer: CredentialSerializer,
         chain: list[x509.Certificate] | None = None,
-    ) -> None:
+    ) -> CaModel:
         """Finalizes the creation of the Issuing CA after validation."""
         if not unique_name:
             unique_name = get_certificate_name(cert)
@@ -159,7 +159,7 @@ class IssuingCaImportMixin:
         self._verify_ca_cert_with_chain(cert, chain or [])
 
         try:
-            CaModel.create_new_issuing_ca(
+            issuing_ca = CaModel.create_new_issuing_ca(
                 credential_serializer=credential_serializer,
                 ca_type=get_ca_type_from_config(),
                 unique_name=unique_name,
@@ -168,6 +168,50 @@ class IssuingCaImportMixin:
             raise
         except Exception:  # noqa: BLE001
             self._raise_validation_error('Failed to process the Issuing CA. Please see logs for further details.')
+
+        no_onboarding_config = NoOnboardingConfigModel()
+        no_onboarding_config.set_pki_protocols([NoOnboardingPkiProtocol.MANUAL])
+        no_onboarding_config.save()
+
+        issuing_ca.no_onboarding_config = no_onboarding_config
+        PermittedProtocolsAuthorization().check(issuing_ca)
+        PkiSecurityAuthorization().check(issuing_ca)
+        issuing_ca.save(update_fields=['no_onboarding_config'])
+
+        return issuing_ca
+
+    def _validate_credential_components(
+        self, credential_serializer: CredentialSerializer
+    ) -> tuple[x509.Certificate, Any]:
+        """Validates the private key and certificate from the credential serializer."""
+        pk = credential_serializer.private_key
+        cert = credential_serializer.certificate
+
+        if cert is None:
+            self._raise_validation_error('Certificate is missing from credential serializer.')
+        if pk is None:
+            self._raise_validation_error('Private key is missing from credential serializer.')
+
+        if pk.public_key() != cert.public_key():
+            self._raise_validation_error('The provided private key does not match the Issuing CA certificate.')
+
+        return cert, pk
+
+    def _prepare_credential_serializer(
+        self, credential_serializer: CredentialSerializer, unique_name: str | None, pk: Any
+    ) -> None:
+        """Prepares the credential serializer with private key reference."""
+        if credential_serializer.private_key is None:
+            self._raise_validation_error('Private key is missing from credential serializer.')
+
+        private_key_location = get_private_key_location_from_config()
+        credential_serializer.private_key_reference = (
+            PrivateKeyReference.from_private_key(
+                private_key=pk,
+                key_label=unique_name,
+                location=private_key_location
+            )
+        )
 
 
 class IssuingCaAddMethodSelectForm(forms.Form):
@@ -382,9 +426,7 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
             corrupted, or if the password is invalid or incompatible.
         """
         private_key_file = self.cleaned_data.get('private_key_file')
-        private_key_file_password = (
-            self.data.get('private_key_file_password') if self.data.get('private_key_file_password') else None
-        )
+        private_key_file_password = self.data.get('private_key_file_password') or None
 
         if not private_key_file:
             err_msg = 'No private key file was uploaded.'
@@ -480,53 +522,6 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
 
         return None
 
-    def _validate_credential_components(
-        self, credential_serializer: CredentialSerializer
-    ) -> tuple[x509.Certificate, Any]:
-        """Validates the private key and certificate from the credential serializer.
-
-        Args:
-            credential_serializer: The credential serializer containing the private key and certificate.
-
-        Returns:
-            A tuple containing the certificate and private key.
-
-        Raises:
-            ValidationError: If the certificate or private key is missing or they don't match.
-        """
-        pk = credential_serializer.private_key
-        cert = credential_serializer.certificate
-
-        if cert is None:
-            self._raise_validation_error('Certificate is missing from credential serializer.')
-        if pk is None:
-            self._raise_validation_error('Private key is missing from credential serializer.')
-
-        # After the None checks above, mypy needs explicit assertion that these are not None
-        assert cert is not None  # noqa: S101
-        assert pk is not None  # noqa: S101
-
-        if pk.public_key() != cert.public_key():
-            self._raise_validation_error('The provided private key does not match the Issuing CA certificate.')
-
-        return cert, pk
-
-    def _prepare_credential_serializer(
-        self, credential_serializer: CredentialSerializer, unique_name: str | None, pk: Any
-    ) -> None:
-        """Prepares the credential serializer with private key reference."""
-        if credential_serializer.private_key is None:
-            self._raise_validation_error('Private key is missing from credential serializer.')
-
-        private_key_location = get_private_key_location_from_config()
-        credential_serializer.private_key_reference = (
-            PrivateKeyReference.from_private_key(
-                private_key=pk,
-                key_label=unique_name,
-                location=private_key_location
-            )
-        )
-
     def clean(self) -> None:
         """Cleans and validates the form data.
 
@@ -545,9 +540,7 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
         unique_name = cleaned_data.get('unique_name')
         private_key_serializer = cleaned_data.get('private_key_file')
         ca_certificate_serializer = cleaned_data.get('ca_certificate')
-        ca_certificate_chain_serializer = (
-            cleaned_data.get('ca_certificate_chain') if cleaned_data.get('ca_certificate_chain') else None
-        )
+        ca_certificate_chain_serializer = cleaned_data.get('ca_certificate_chain') or None
 
         if not private_key_serializer or not ca_certificate_serializer:
             return
@@ -701,6 +694,9 @@ class IssuingCaAddRequestEstForm(IssuingCaAddRequestMixin):
         instance.no_onboarding_config = no_onboarding_config
         instance.est_username = self.cleaned_data['est_username']
 
+        PermittedProtocolsAuthorization().check(instance)
+        PkiSecurityAuthorization().check(instance)
+
         instance.save()
         return instance
 
@@ -760,6 +756,9 @@ class IssuingCaAddRequestCmpForm(IssuingCaAddRequestMixin):
             trust_store=None,  # Will be set later via truststore association
         )
         instance.no_onboarding_config = no_onboarding_config
+
+        PermittedProtocolsAuthorization().check(instance)
+        PkiSecurityAuthorization().check(instance)
 
         instance.save()
         return instance
@@ -842,6 +841,7 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
             'crl_cycle_enabled',
             'crl_cycle_interval_hours',
             'crl_validity_hours',
+            'auto_crl_on_revocation_enabled',
         ]
 
     crl_cycle_enabled = forms.BooleanField(
@@ -864,6 +864,12 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
         widget=forms.NumberInput(attrs={'class': 'form-control', 'step': 'any'}),
     )
 
+    auto_crl_on_revocation_enabled = forms.BooleanField(
+        label=_('Auto-Generate CRL on Revocation'),
+        required=False,
+        help_text=_('Automatically generate a new CRL when a certificate is revoked'),
+    )
+
     def clean_crl_cycle_interval_hours(self) -> float:
         """Validate the CRL cycle interval."""
         interval = self.cleaned_data.get('crl_cycle_interval_hours')
@@ -874,14 +880,52 @@ class IssuingCaCrlCycleForm(forms.ModelForm[CaModel]):
             raise ValidationError(_('CRL cycle interval must be at least 5 minutes'))
         return interval_float
 
+    def clean_crl_validity_hours(self) -> float:
+        """Validate the CRL validity against the active security policy maximum."""
+        validity = self.cleaned_data.get('crl_validity_hours')
+        if validity is None:
+            validity = 24.0
+        validity_float = float(validity)
+
+        from management.models import SecurityConfig  # noqa: PLC0415
+        try:
+            cfg = SecurityConfig.objects.get()
+        except SecurityConfig.DoesNotExist:
+            return validity_float
+        except SecurityConfig.MultipleObjectsReturned:
+            cfg_or_none = SecurityConfig.objects.order_by('pk').first()
+            if cfg_or_none is None:
+                return validity_float
+            cfg = cfg_or_none
+
+        max_days: int | None = cfg.max_crl_validity_days
+        if max_days is not None:
+            max_hours = float(max_days) * 24
+            if validity_float > max_hours:
+                raise ValidationError(
+                    _(
+                        'CRL validity of %(hours).2f hours (%(days).1f days) exceeds the maximum of '
+                        '%(max_days)d days permitted by the active security policy.'
+                    ) % {
+                        'hours': validity_float,
+                        'days': validity_float / 24,
+                        'max_days': max_days,
+                    }
+                )
+        return validity_float
+
     def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]
         """Save the form and schedule the next CRL generation if enabled."""
-        instance = super().save(commit=commit)
+        instance = super().save(commit=False)
         if not isinstance(instance, CaModel):
             msg = 'Expected CaModel instance'
             raise TypeError(msg)
 
-        if commit and instance.crl_cycle_enabled:
-            instance.schedule_next_crl_generation()
+        PkiSecurityAuthorization().check(instance)
+
+        if commit:
+            instance.save()
+            if instance.crl_cycle_enabled:
+                instance.schedule_next_crl_generation()
 
         return instance

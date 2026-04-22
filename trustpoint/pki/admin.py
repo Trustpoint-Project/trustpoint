@@ -3,10 +3,19 @@
 from django.contrib import admin
 from django.http import HttpRequest
 
+from pki.models.issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
+
 from .models import CaModel
 from .models.certificate import CertificateModel
 from .models.credential import CertificateChainOrderModel, CredentialModel
 from .models.devid_registration import DevIdRegistration
+
+
+class IssuedCredentialModelAdmin(admin.ModelAdmin[IssuedCredentialModel]):
+    """Registers the IssuedCredentialModelAdmin with Django Admin."""
+
+class RemoteIssuedCredentialModelAdmin(admin.ModelAdmin[RemoteIssuedCredentialModel]):
+    """Registers the RemoteIssuedCredentialModelAdmin with Django Admin."""
 
 
 class DevIdRegistrationAdmin(admin.ModelAdmin[DevIdRegistration]):
@@ -75,6 +84,7 @@ class CaModelAdmin(admin.ModelAdmin[CaModel]):
                     'crl_cycle_enabled',
                     'crl_cycle_interval_hours',
                     'last_crl_generation_started_at',
+                    'auto_crl_on_revocation_enabled',
                 ),
                 'description': 'Configure automatic periodic CRL generation',
             }
@@ -89,3 +99,5 @@ admin.site.register(CredentialModel, CredentialModelAdmin)
 admin.site.register(CertificateChainOrderModel, CertificateChainOrderModelAdmin)
 admin.site.register(CaModel, CaModelAdmin)
 admin.site.register(DevIdRegistration, DevIdRegistrationAdmin)
+admin.site.register(IssuedCredentialModel, IssuedCredentialModelAdmin)
+admin.site.register(RemoteIssuedCredentialModel, RemoteIssuedCredentialModelAdmin)

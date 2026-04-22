@@ -287,7 +287,6 @@ const allowedPkiProtocolsWrapper = document.getElementById('id_allowed_pki_proto
 
 onboardingAndPkiConfigurationSelect?.addEventListener('change', function(event) {
    const selectedOptionValue = event.target.options[event.target.selectedIndex].value;
-   console.log(selectedOptionValue);
 
     switch (selectedOptionValue) {
         case 'est_username_password':
@@ -381,3 +380,64 @@ function displayOnly(sectionIdToDisplay) {
 certProfileSelect?.addEventListener("change", function() {
     displayOnly(certProfileSelect.value);   
 });
+
+// ---------------------------------------- Device Table — Column Visibility Toggle ----------------------------------------
+
+(function () {
+    const STORAGE_KEY = 'tp-devices-hidden-cols-v2';
+    const DEFAULT_HIDDEN = ['serial_number', 'created_at', 'onboarding_protocol', 'pki_protocols'];
+    const menu = document.getElementById('tp-column-toggle-menu');
+    const table = document.getElementById('devices-table');
+    if (!menu || !table) return;
+
+    /** Read the set of currently hidden column keys from localStorage.
+     *  On the very first visit (no stored value) fall back to DEFAULT_HIDDEN. */
+    function loadHidden() {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (stored === null) return new Set(DEFAULT_HIDDEN);
+            return new Set(JSON.parse(stored));
+        } catch (_) {
+            return new Set(DEFAULT_HIDDEN);
+        }
+    }
+
+    /** Persist the current hidden set to localStorage. */
+    function saveHidden(hidden) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify([...hidden]));
+    }
+
+    /** Show or hide all cells (th + td) belonging to the given column key. */
+    function applyVisibility(col, visible) {
+        table.querySelectorAll(`[data-col="${col}"]`).forEach(function (el) {
+            el.style.display = visible ? '' : 'none';
+        });
+    }
+
+    /** Sync every checkbox state and apply visibility from the hidden set. */
+    function applyAll(hidden) {
+        menu.querySelectorAll('.tp-col-toggle').forEach(function (cb) {
+            const col = cb.dataset.col;
+            const visible = !hidden.has(col);
+            cb.checked = visible;
+            applyVisibility(col, visible);
+        });
+    }
+
+    // Initialise from localStorage on page load.
+    applyAll(loadHidden());
+
+    // Handle checkbox changes.
+    menu.addEventListener('change', function (event) {
+        const cb = event.target;
+        if (!cb.classList.contains('tp-col-toggle')) return;
+        const hidden = loadHidden();
+        if (cb.checked) {
+            hidden.delete(cb.dataset.col);
+        } else {
+            hidden.add(cb.dataset.col);
+        }
+        saveHidden(hidden);
+        applyVisibility(cb.dataset.col, cb.checked);
+    });
+}());

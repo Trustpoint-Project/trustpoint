@@ -8,16 +8,73 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.safestring import mark_safe
+from django.utils.translation import gettext_lazy as _
 from pydantic import ValidationError as PydanticValidationError
 
+from management.models import SecurityConfig
 from pki.models.cert_profile import CertificateProfileModel
 from pki.util.cert_profile import CERT_PROFILE_KEYWORDS, JSONProfileVerifier
 from pki.util.cert_profile import CertProfileModel as CertProfilePydanticModel
 from pki.util.cert_req_converter import JSONCertRequestConverter
+from request.template_vars import build_variable_map_from_models, resolve_string, resolve_template_variables
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
     from cryptography.x509.base import CertificateBuilder
+
+    from devices.models import DeviceModel
+    from pki.models.domain import DomainModel
+    from request.request_context import BaseRequestContext
+
+
+def _validity_days_from_components(
+    days: float | None = None,
+    hours: float | None = None,
+    minutes: float | None = None,
+    seconds: float | None = None,
+    duration_seconds: float | None = None,
+) -> float:
+    """Return the total validity expressed in days from individual time components."""
+    total: float = 0.0
+    if days:
+        total += float(days)
+    if hours:
+        total += float(hours) / 24
+    if minutes:
+        total += float(minutes) / 1440
+    if seconds:
+        total += float(seconds) / 86400
+    if duration_seconds:
+        total += duration_seconds / 86400
+    return total
+
+
+def check_validity_days_against_security_config(total_days: float) -> None:
+    """Raise :class:`~django.core.exceptions.ValidationError` if *total_days* exceeds the policy limit."""
+    try:
+        cfg = SecurityConfig.objects.get()
+    except SecurityConfig.DoesNotExist:
+        return
+    except SecurityConfig.MultipleObjectsReturned:
+        cfg_or_none = SecurityConfig.objects.order_by('pk').first()
+        if cfg_or_none is None:
+            return
+        cfg = cfg_or_none
+
+    max_days: int | None = cfg.max_cert_validity_days
+    if max_days is None:
+        return
+
+    if total_days > float(max_days):
+        raise ValidationError(
+            _(
+                'The requested certificate validity of %(req_days).1f days exceeds the maximum of '
+                '%(max_days)d days permitted by the active security policy.'
+            ) % {
+                'req_days': total_days,
+                'max_days': max_days,
+            }
+        )
 
 class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel]):
     """Form for creating or updating Certificate Profiles.
@@ -56,7 +113,8 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
         """Validates the profile JSON to ensure it is a valid certificate profile.
 
         Raises:
-            ValidationError: If the profile JSON is not a valid certificate profile.
+            ValidationError: If the profile JSON is not a valid certificate profile,
+                or if the configured validity exceeds the security policy limit.
         """
         profile_json = self.cleaned_data['profile_json']
         if type(profile_json) is dict:
@@ -68,12 +126,34 @@ class CertProfileConfigForm(LoggerMixin, forms.ModelForm[CertificateProfileModel
                 error_message = f'Invalid JSON format: {e!s}'
                 raise forms.ValidationError(error_message) from e
         try:
-            CertProfilePydanticModel.model_validate(json_dict)
+            validated = CertProfilePydanticModel.model_validate(json_dict)
         except PydanticValidationError as e:
             error_message = f'This JSON is not a valid certificate profile: {e!s}'
             raise forms.ValidationError(error_message) from e
         self.instance.display_name = json_dict.get('display_name', '')
+        self.instance.credential_type = json_dict.get('credential_type', 'application')
+
+        self._check_validity_against_security_config(validated)
+
         return json.dumps(json_dict)
+
+    @staticmethod
+    def _validity_total_days(validated: CertProfilePydanticModel) -> float:
+        """Return the total validity of *validated* expressed in days."""
+        v = validated.validity
+        return _validity_days_from_components(
+            days=v.days,
+            hours=v.hours,
+            minutes=v.minutes,
+            seconds=float(v.seconds) if v.seconds is not None else None,
+            duration_seconds=v.duration.total_seconds() if v.duration is not None else None,
+        )
+
+    @staticmethod
+    def _check_validity_against_security_config(validated: CertProfilePydanticModel) -> None:
+        """Raise ValidationError if the profile's validity exceeds the security policy limit."""
+        total_days = CertProfileConfigForm._validity_total_days(validated)
+        check_validity_days_against_security_config(total_days)
 
 class ProfileBasedFormFieldBuilder(LoggerMixin):
     """Django form field builder that leverages JSONProfileVerifier.
@@ -113,6 +193,8 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
     }
 
     VALIDITY_LABELS: ClassVar[dict[str, str]] = {
+        'not_before': 'Not Before',
+        'not_after': 'Not After',
         'days': 'Days',
         'hours': 'Hours',
         'minutes': 'Minutes',
@@ -187,7 +269,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
 
-            initial_value = field_value if field_value else ''
+            initial_value = field_value or ''
 
             if field_name in ('c', 'country_name'):
                 self.fields[field_name] = forms.CharField(
@@ -228,7 +310,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
 
-            initial_value = field_value if field_value else ''
+            initial_value = field_value or ''
 
             self.fields[field_name] = forms.CharField(
                 required=is_required,
@@ -265,7 +347,7 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
             if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
 
-            initial_value = field_value if field_value else ''
+            initial_value = field_value or ''
 
             if field_name in ('c', 'country_name'):
                 self.fields[field_name] = forms.CharField(
@@ -314,14 +396,14 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
                 elif isinstance(sample_value, list):
                     field_value = ', '.join(str(v) for v in sample_value)
                 else:
-                    field_value = sample_value if sample_value else ''
+                    field_value = sample_value or ''
 
             display_label = self.SAN_LABELS.get(field_name, field_name.replace('_', ' ').title())
 
             if is_required:
                 display_label += ' <span class="badge" style="background-color: #dc3545; color: white;">Required</span>'
 
-            initial_value = field_value if field_value else ''
+            initial_value = field_value or ''
 
             self.fields[field_name] = forms.CharField(
                 required=is_required,
@@ -334,6 +416,19 @@ class ProfileBasedFormFieldBuilder(LoggerMixin):
     def _build_validity_fields_from_sample(self, validity: dict[str, Any]) -> None:
         """Build validity fields based on sample values."""
         profile_validity = self.profile.get('validity', {})
+
+        for ts_field in ('not_before', 'not_after'):
+            ts_value = validity.get(ts_field)
+            if ts_value is not None:
+                display_label = self.VALIDITY_LABELS.get(ts_field, ts_field.replace('_', ' ').title())
+                formatted = str(ts_value)
+                self.fields[ts_field] = forms.CharField(
+                    required=False,
+                    label=mark_safe(display_label),  # noqa: S308
+                    initial=formatted,
+                    disabled=True,
+                    widget=forms.TextInput(attrs={'class': 'form-control'}),
+                )
 
         for field_name, sample_value in validity.items():
             if field_name in CERT_PROFILE_KEYWORDS or field_name in ('not_before', 'not_after', 'duration'):
@@ -388,12 +483,22 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
         fields: Dynamically generated Django form fields
     """
 
-    def __init__(self, profile: dict[str, Any], *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        profile: dict[str, Any],
+        *args: Any,
+        device: DeviceModel | None = None,
+        domain: DomainModel | None = None,
+        **kwargs: Any,
+    ) -> None:
         """Initialize the form with a profile.
 
         Args:
             profile: Certificate profile definition (JSON format)
             *args: Additional positional arguments passed to parent form
+            device: Optional device model for resolving template variables
+                in field initial values (e.g. ``{{ device.rfc_4122_uuid }}``).
+            domain: Optional domain model for resolving template variables.
             **kwargs: Additional keyword arguments passed to parent form
         """
         super().__init__(*args, **kwargs)
@@ -403,7 +508,15 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
         field_builder = ProfileBasedFormFieldBuilder(self.profile)
         self.fields = field_builder.build_all_fields()
 
-    def get_certificate_builder(self) -> CertificateBuilder:
+        template_vars = build_variable_map_from_models(device=device, domain=domain)
+        if template_vars:
+            for field in self.fields.values():
+                if isinstance(field.initial, str):
+                    field.initial = resolve_string(field.initial, template_vars)
+
+    def get_certificate_builder(
+        self, request_context: BaseRequestContext | None = None,
+    ) -> CertificateBuilder:
         """Build a CertificateBuilder from the form data.
 
         This method converts the form data to JSON format and delegates
@@ -415,6 +528,9 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
         cert_request = self._form_data_to_json_request()
 
         validated_request = self.verifier.apply_profile_to_request(cert_request)
+
+        if request_context is not None:
+            validated_request = resolve_template_variables(validated_request, request_context)
 
         return JSONCertRequestConverter.from_json(validated_request)
 
@@ -476,8 +592,20 @@ class CertificateIssuanceForm(LoggerMixin, forms.Form):
     def _build_validity_from_form_data(self, cleaned_data: dict[str, Any]) -> dict[str, int]:
         """Build validity period from form data."""
         validity = {}
-        for field_name in ProfileBasedFormFieldBuilder.VALIDITY_LABELS:
+        for field_name in ('days', 'hours', 'minutes', 'seconds'):
             value = cleaned_data.get(field_name)
             if value:
                 validity[field_name] = int(value)
         return validity
+
+    def clean(self) -> dict[str, Any]:
+        """Validate the requested certificate validity against the active security policy."""
+        cleaned_data = cast('dict[str, Any]', super().clean())
+        total_days = _validity_days_from_components(
+            days=cleaned_data.get('days'),
+            hours=cleaned_data.get('hours'),
+            minutes=cleaned_data.get('minutes'),
+            seconds=cleaned_data.get('seconds'),
+        )
+        check_validity_days_against_security_config(total_days)
+        return cleaned_data

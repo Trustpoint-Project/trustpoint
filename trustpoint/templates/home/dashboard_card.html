@@ -1,0 +1,195 @@
+{% load static %}
+
+<div class="card rounded-5 h-100
+    {% if card_type == 'active' %}
+        card-count-active-container
+    {% elif card_type == 'expiring' %}
+        card-count-expiring-container
+    {% elif card_type == 'expired' or card_type == 'expiring_summary' %}
+        card-count-expired-container
+    {% endif %}
+">
+  <div class="card-body p-4 d-flex flex-column justify-content-between">
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+      <div class="flex-grow-1 pe-1" style="min-width: 0;">
+        <h6 class="fs-5 mb-0">{{ title }}</h6>
+        {% if note_text %}
+        <p class="small mb-0 mt-2 opacity-75">{{ note_text }}</p>
+        {% endif %}
+      </div>
+      
+      {% if link_url %}
+      <a
+        class="btn btn-sm rounded-circle d-inline-flex align-items-center justify-content-center p-0 card-count-btn-link"
+        href="{{ link_url }}">
+        <i class="bi bi-arrow-up-right"></i>
+      </a>
+      {% endif %}
+    </div>
+
+    <div class="d-flex align-items-end">
+      <p id="total_count_{{ identifier }}" class="fw-bold display-3 lh-1 mb-0 me-2"></p>
+
+      {% if card_type == 'active' %}
+      <span class="d-inline-flex align-items-center border border-white rounded-3 px-2 py-1 lh-1 position-relative card-count-delta">
+        <span id="delta_count_{{ identifier }}" class="small me-1 lh-1"></span>
+        <i class="bi bi-caret-up-fill fs-6 lh-1"></i>
+      </span>
+    
+      {% elif card_type == 'expiring' %}
+      <div class="d-grid align-content-center position-relative card-count-expiring-delta">
+        <span class="small text-end">24 Hours</span>
+        <span class="d-inline-flex align-items-center border border-white rounded-3 px-2 py-1 lh-1">
+          <span id="delta_count_24_{{ identifier }}" class="small lh-1"></span>
+          <i class="bi bi-caret-up-fill ms-1"></i>
+        </span>
+        <span class="small text-end">7 Days</span>
+        <span class="d-inline-flex align-items-center border border-white rounded-3 px-2 py-1 lh-1">
+          <span id="delta_count_7_{{ identifier }}" class="small lh-1"></span>
+          <i class="bi bi-caret-up-fill ms-1"></i>
+        </span>
+      </div>
+
+      {% elif card_type == 'expiring_summary' %}
+      <div class="d-grid align-content-center position-relative card-count-expiring-delta">
+        <span class="small text-end">Tomorrow</span>
+        <span class="d-inline-flex align-items-center border rounded-3 px-2 py-1 lh-1">
+          <span id="delta_count_tomorrow_{{ identifier }}" class="small lh-1"></span>
+          <i class="bi bi-caret-up-fill ms-1"></i>
+        </span>
+        <span class="small text-end">
+          {% if summary_variant == 'annual' %}30 Days{% else %}7 Days{% endif %}
+        </span>
+        <span class="d-inline-flex align-items-center border rounded-3 px-2 py-1 lh-1">
+          <span id="delta_count_week_{{ identifier }}" class="small lh-1"></span>
+          <i class="bi bi-caret-up-fill ms-1"></i>
+        </span>
+        <span class="small text-end">
+          {% if summary_variant == 'annual' %}365 Days{% else %}30 Days{% endif %}
+        </span>
+        <span class="d-inline-flex align-items-center border rounded-3 px-2 py-1 lh-1">
+          <span id="delta_count_month_{{ identifier }}" class="small lh-1"></span>
+          <i class="bi bi-caret-up-fill ms-1"></i>
+        </span>
+      </div>
+
+      {% elif card_type == 'expired' %}
+      <span class="d-inline-flex align-items-center border rounded-3 px-2 py-1 lh-1 position-relative card-count-delta">
+        <span id="delta_count_{{ identifier }}" class="small me-1 lh-1"></span>
+        <i class="bi bi-caret-up-fill fs-6 lh-1"></i>
+      </span>
+      {% endif %}
+
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('dashboardData', (event) => {
+    const today = event.detail.today;
+    const week = event.detail.week;
+
+    const uniqueId = "{{ identifier }}";
+    const type = "{{ card_type }}";
+    const dataKey = "{{ data_key|default:'' }}";
+    const dataset = "{{ dataset }}";
+    const summaryVariant = "{{ summary_variant|default:'default' }}";
+
+    let dataToday;
+    let dataWeek;
+
+    if (!today || !week) return;
+
+    if (!today[dataset] || !week[dataset]) return;
+
+    dataToday = today[dataset];
+    dataWeek = week[dataset];
+
+    if (type === 'expiring') {
+      const today_delta_24 = dataToday.expiring_in_1_day || 0;
+      const today_delta_7 = dataToday.expiring_in_7_days || 0;
+      const today_total = today_delta_24 + today_delta_7;
+
+      // Hide the card if there are no expiring items
+      if (today_total === 0) {
+        const cardElement = document.querySelector(`[id^="total_count_${uniqueId}"]`)?.closest('.card');
+        if (cardElement && cardElement.parentElement) {
+          cardElement.parentElement.style.display = 'none';
+        }
+        return;
+      }
+
+      // Display current window counts, not change since last week
+      const totalCountEl = document.getElementById(`total_count_${uniqueId}`);
+      const delta24El = document.getElementById(`delta_count_24_${uniqueId}`);
+      const delta7El = document.getElementById(`delta_count_7_${uniqueId}`);
+
+      if (totalCountEl) {
+        totalCountEl.textContent = today_total;
+      }
+
+      if (delta24El) {
+        delta24El.textContent = today_delta_24;
+      }
+
+      if (delta7El) {
+        delta7El.textContent = today_delta_7;
+      }
+
+      // Show positive counts (no delta icon needed for expiring cards)
+      updateDeltaIcon(`delta_count_24_${uniqueId}`, today_delta_24);
+      updateDeltaIcon(`delta_count_7_${uniqueId}`, today_delta_7);
+    } else if (type === 'expiring_summary') {
+      const todayCount = dataToday.expiring_in_1_day || 0;
+      const tomorrowCount = dataToday.expiring_tomorrow || 0;
+      const weekCount = summaryVariant === 'annual'
+        ? todayCount + (dataToday.expiring_in_7_days || 0) + (dataToday.expiring_in_30_days || 0)
+        : todayCount + (dataToday.expiring_in_7_days || 0);
+      const monthCount = summaryVariant === 'annual'
+        ? weekCount + (dataToday.expiring_in_365_days || 0)
+        : weekCount + (dataToday.expiring_in_30_days || 0);
+
+      const totalCountEl = document.getElementById(`total_count_${uniqueId}`);
+      const tomorrowEl = document.getElementById(`delta_count_tomorrow_${uniqueId}`);
+      const weekEl = document.getElementById(`delta_count_week_${uniqueId}`);
+      const monthEl = document.getElementById(`delta_count_month_${uniqueId}`);
+
+      if (totalCountEl) {
+        totalCountEl.textContent = todayCount;
+      }
+
+      if (tomorrowEl) {
+        tomorrowEl.textContent = tomorrowCount;
+      }
+
+      if (weekEl) {
+        weekEl.textContent = weekCount;
+      }
+
+      if (monthEl) {
+        monthEl.textContent = monthCount;
+      }
+
+      updateDeltaIcon(`delta_count_tomorrow_${uniqueId}`, tomorrowCount);
+      updateDeltaIcon(`delta_count_week_${uniqueId}`, weekCount);
+      updateDeltaIcon(`delta_count_month_${uniqueId}`, monthCount);
+
+    } else {
+      const metricKey = dataKey || type;
+      const currentVal = dataToday[metricKey] || 0;
+      const pastVal = dataWeek[metricKey] || 0;
+      const delta = currentVal - pastVal;
+      const totalCountEl = document.getElementById(`total_count_${uniqueId}`);
+      const deltaCountEl = document.getElementById(`delta_count_${uniqueId}`);
+
+      if (totalCountEl) {
+        totalCountEl.textContent = currentVal;
+      }
+
+      if (deltaCountEl) {
+        deltaCountEl.textContent = delta;
+        updateDeltaIcon(`delta_count_${uniqueId}`, delta);
+      }
+    }
+  });
+</script>

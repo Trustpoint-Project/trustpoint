@@ -1,5 +1,10 @@
 """Test suite for help_support views."""
-from django.test import RequestFactory, TestCase
+import os
+import tempfile
+import time
+from pathlib import Path
+
+from django.test import RequestFactory, TestCase, override_settings
 from management.views.help_support import HelpView
 
 
@@ -59,3 +64,62 @@ class HelpViewTest(TestCase):
         """Test HelpView is a TemplateView."""
         from django.views.generic import TemplateView
         self.assertTrue(issubclass(HelpView, TemplateView))
+
+    def test_get_context_data_with_active_build(self):
+        """Test context when a documentation build is actively running."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            base_dir = temp_path / 'project' / 'trustpoint'
+
+            # Setup fake directory structure
+            docs_dir = base_dir.parent / 'docs'
+            docs_dir.mkdir(parents=True)
+
+            # Create a fresh lock file
+            lock_file = docs_dir / '.building'
+            lock_file.touch()
+
+            with override_settings(BASE_DIR=base_dir):
+                context = self.view.get_context_data()
+
+                self.assertTrue(context['build_in_progress'])
+                self.assertTrue(lock_file.exists())  # Ensure it wasn't accidentally deleted
+
+    def test_get_context_data_with_stale_build_lock(self):
+        """Test context when a crashed build leaves a stale lock file."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            base_dir = temp_path / 'project' / 'trustpoint'
+
+
+            docs_dir = base_dir.parent / 'docs'
+            docs_dir.mkdir(parents=True)
+
+
+            lock_file = docs_dir / '.building'
+            lock_file.touch()
+
+
+            stale_time = time.time() - 400
+            os.utime(lock_file, (stale_time, stale_time))
+
+            with override_settings(BASE_DIR=base_dir):
+                context = self.view.get_context_data()
+
+                self.assertFalse(context['build_in_progress'])
+                self.assertFalse(lock_file.exists())
+
+    def test_get_context_data_with_local_docs_available(self):
+        """Test context when local documentation has been successfully built."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            base_dir = temp_path / 'project' / 'trustpoint'
+
+
+            docs_index = base_dir.parent / 'docs' / 'build' / 'html' / 'index.html'
+            docs_index.parent.mkdir(parents=True)
+            docs_index.touch()
+
+            with override_settings(BASE_DIR=base_dir):
+                context = self.view.get_context_data()
+                self.assertTrue(context['local_docs_available'])

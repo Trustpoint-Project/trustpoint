@@ -1,6 +1,7 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
 {% load crispy_forms_filters %}
+{% load internationalization_tags %}
 {% block content %}
 <div class="card">
     <div class="card-header">
@@ -38,11 +39,11 @@
                 </div>
                 <div>
                     <div>{% trans 'Updated' %}</div>
-                    <div>{{ issuing_ca.updated_at }}</div>
+                    <div>{{ issuing_ca.updated_at|local_datetime }}</div>
                 </div>
                 <div>
                     <div>{% trans 'Created' %}</div>
-                    <div>{{ issuing_ca.created_at }}</div>
+                    <div>{{ issuing_ca.created_at|local_datetime }}</div>
                 </div>
 
                 <div>
@@ -141,11 +142,11 @@
                             </div>
                             <div>
                                 <div>{% trans 'Not valid before' %}</div>
-                                <div>{{ issuing_ca_certificate.not_valid_before }}</div>
+                                <div>{{ issuing_ca_certificate.not_valid_before|local_datetime }}</div>
                             </div>
                             <div>
                                 <div>{% trans 'Not valid after' %}</div>
-                                <div>{{ issuing_ca_certificate.not_valid_after }}</div>
+                                <div>{{ issuing_ca_certificate.not_valid_after|local_datetime }}</div>
                             </div>
 
                 <div>
@@ -254,7 +255,7 @@
                 </div>
             {% endif %}
 
-            {% if not issuing_ca.ca_certificate_model and issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_EST or issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_CMP %}
+            {% if not issuing_ca.ca_certificate_model and issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_EST %}
             <h3>{% trans 'Certificate Request' %}</h3>
             <hr class="hr-m">
             <div class="tp-kvp-list">
@@ -265,7 +266,6 @@
                 <div>
                     <div>{% trans 'Actions' %}</div>
                     <div>
-                        {% if issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_EST %}
                         <form method="post"
                             action="{% url 'pki:issuing_cas-request-cert-est' pk=issuing_ca.pk %}"
                             style="display: inline;">
@@ -274,7 +274,22 @@
                                 {% trans 'Request CA Certificate via EST' %}
                             </button>
                         </form>
-                        {% elif issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_CMP %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if not issuing_ca.ca_certificate_model and issuing_ca.ca_type == issuing_ca.CaTypeChoice.REMOTE_ISSUING_CMP %}
+            <h3>{% trans 'Certificate Request' %}</h3>
+            <hr class="hr-m">
+            <div class="tp-kvp-list">
+                <div>
+                    <div>{% trans 'Status' %}</div>
+                    <div class="text-warning">{% trans 'Certificate not yet requested' %}</div>
+                </div>
+                <div>
+                    <div>{% trans 'Actions' %}</div>
+                    <div>
                         <form method="post"
                             action="{% url 'pki:issuing_cas-request-cert-cmp' pk=issuing_ca.pk %}"
                             style="display: inline;">
@@ -283,12 +298,10 @@
                                 {% trans 'Request CA Certificate via CMP' %}
                             </button>
                         </form>
-                        {% endif %}
                     </div>
                 </div>
             </div>
             {% endif %}
-
 
             <!-- CRL Management Card -->
             {% if issuing_ca.ca_certificate_model %}
@@ -350,7 +363,7 @@
                             <div>
                                 <div>{% trans 'Last CRL issued' %}</div>
                                 {% if issuing_ca.last_crl_issued_at %}
-                                <div>{{ issuing_ca.last_crl_issued_at }} (#{{ issuing_ca.crl_number }})</div>
+                                <div>{{ issuing_ca.last_crl_issued_at|local_datetime }} (#{{ issuing_ca.crl_number }})</div>
                                 {% else %}
                                 <div>{% trans 'No CRL has been issued yet.' %}</div>
                                 {% endif %}

@@ -105,14 +105,30 @@ facilitate an arbitrary amount of device ownership transfers.
 
 The DevOwnerID MUST have a ``SubjectAltName`` extension that lists the
 IDevID certificate(s) the DevOwnerID is valid for. Each IDevID is listed
-as a ``UniformResourceIdentifier`` (URI) with the fixed format:
-``dev-owner:<IDevID_Subj_SN>.<IDevID_x509_SN>.<IDevID_SHA256_Fingerpr>``,
-where: - ``IDevID_Subj_SN`` is the ``SerialNumber`` name attribute in
-the IDevID subject DN; or the character ``_`` (underscore) if this
-attribute is not present in the IDevID certificate - ``IDevID_x509_SN``
-is the X.509 Serial Number in lower case hexadecimal notation. -
-``IDevID_SHA256_Fingerpr`` is the SHA256 fingerprint of the IDevID
-certificate in lower case hexadecimal notation.
+as a ``UniformResourceIdentifier`` (URI) with one of the following two formats:
+
+IDevID certificate identifier format
+    ``dev-owner:cert:<IDevID-Subject-serialNumber>_<IDevID-SHA256-Fingerprint>``,
+    where: - ``IDevID-Subject-serialNumber`` is the ``SerialNumber`` name attribute in
+    the IDevID subject DN; or empty (``dev-owner:cert:_<IDevID-SHA256-Fingerprint>``) if this
+    attribute is not present in the IDevID certificate - 
+    ``IDevID-SHA256-Fingerprint`` is the SHA256 fingerprint of the IDevID
+    certificate in lowercase hexadecimal notation.
+
+Manufacturer-defined device-specific URI/UUID format
+    ``dev-owner:uri:<manufacturer-defined-URI>``, where
+    ``manufacturer-defined-URI`` is a URI defined by the manufacturer to
+    uniquely identify the device. This format is intended for devices that
+    do not have an IDevID certificate, but still want to use AOKI for
+    onboarding. However, it MAY be referenced in an IDevID certificate SAN URI entry.
+    The manufacturer-defined URI MUST be unique for each
+    device and SHOULD be generated in a way that prevents collisions (e.g.
+    using a random or time-based UUID generation method).
+
+    As an example, ``dev-owner:uri:urn:dev:org:38215-ModelX-REV2-SN987654`` is a manufacturer-specific arbitrary device identifier
+    that is guaranteed to be unique by combining an IANA-assigned PEN (Private Enterprise Number) with manufacturer-defined info,
+    such as a model number, revision number, and serial number.
+    Another example is ``dev-owner:uri:urn:uuid:123e4567-e89b-12d3-a456-426614174000`` for an UUID-based URI.
 
 Issuer
 ~~~~~~
@@ -188,9 +204,8 @@ variant is comprised of an ``AokiInitializationRequest`` HTTP request
 from the device to the Owner Service, followed by enrollment via a PKI
 protocol agreed upon by the Device and Owner Service. #### Protocol
 description The initial step is the automatic discovery of the Owner
-Service by the Device upon initial connection to the network. This is
-not defined herein, a suitable candidate for local networks would be
-mDNS with the service type ``_aoki._tcp.``.
+Service by the Device upon initial connection to the network. For link-local networks,
+mDNS with the service type ``_aoki._tcp.`` is defined for this purpose.
 
 The AOKI Initialization Request is an HTTP ``GET`` request from the
 Device to the Ownership Service on the endpoint ``/aoki/init``.

@@ -125,8 +125,10 @@ class OnboardingCmpIdevIdDomainCredentialStrategy(HelpPageStrategy):
             ],
         )
 
+        domain_cred_profile = help_context.domain.get_domain_credential_profile_name()
+
         enroll_cmd = CmpClientCertificateCommandBuilder.get_idevid_domain_credential_command(
-            host=f'{base}/domain_credential/{operation}'
+            host=f'{base}/{domain_cred_profile}/{operation}'
         )
 
         enroll_row = HelpRow(
@@ -181,10 +183,12 @@ class OnboardingEstIdevIdDomainCredentialStrategy(HelpPageStrategy):
             value_render_type=ValueRenderType.CODE,
         )
 
+        domain_cred_profile = help_context.domain.get_domain_credential_profile_name()
+
         enroll_row = HelpRow(
             _non_lazy('Enroll the Domain Credential with EST'),
             value=EstClientCertificateCommandBuilder.get_idevid_enroll_domain_credential_command(
-                host=f'{base}/domain_credential/{operation}'
+                host=f'{base}/{domain_cred_profile}/{operation}'
             ),
             value_render_type=ValueRenderType.CODE,
         )

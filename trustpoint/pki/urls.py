@@ -2,8 +2,9 @@
 
 from django.urls import path, re_path
 
+from devices.views import owner_credentials
 from help_pages import pki_help_views
-from pki.views import ca, cert_profiles, certificates, crls, domains, issuing_cas, owner_credentials, truststores
+from pki.views import ca, cert_profiles, certificates, crls, domains, issuing_cas, truststores
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView
 
@@ -256,8 +257,63 @@ urlpatterns = [
     ),
     path(
         'owner-credentials/add/',
-        owner_credentials.OwnerCredentialAddView.as_view(),
+        owner_credentials.OwnerCredentialAddMethodSelectView.as_view(),
         name='owner_credentials-add',
+    ),
+    path(
+        'owner-credentials/add/file-import/',
+        owner_credentials.OwnerCredentialFileImportView.as_view(),
+        name='owner_credentials-add-file_import',
+    ),
+    path(
+        'owner-credentials/add/est/',
+        owner_credentials.OwnerCredentialAddRequestEstMethodSelectView.as_view(),
+        name='owner_credentials-add-est',
+    ),
+    path(
+        'owner-credentials/add/est/no-onboarding/',
+        owner_credentials.OwnerCredentialAddRequestEstNoOnboardingView.as_view(),
+        name='owner_credentials-add-est-no-onboarding',
+    ),
+    path(
+        'owner-credentials/add/est/onboarding/',
+        owner_credentials.OwnerCredentialAddRequestEstOnboardingView.as_view(),
+        name='owner_credentials-add-est-onboarding',
+    ),
+    path(
+        'owner-credentials/truststore-association/<int:pk>/',
+        owner_credentials.OwnerCredentialTruststoreAssociationView.as_view(),
+        name='owner_credentials-truststore-association',
+    ),
+    path(
+        'owner-credentials/clm/<int:pk>/',
+        owner_credentials.OwnerCredentialCLMView.as_view(),
+        name='owner_credentials-clm',
+    ),
+    path(
+        'owner-credentials/define-cert-content-est/<int:pk>/',
+        owner_credentials.OwnerCredentialDefineCertContentEstView.as_view(),
+        name='owner_credentials-define-cert-content-est',
+    ),
+    path(
+        'owner-credentials/request-cert-est/<int:pk>/',
+        owner_credentials.OwnerCredentialRequestCertEstView.as_view(),
+        name='owner_credentials-request-cert-est',
+    ),
+    path(
+        'owner-credentials/define-cert-content-domain-credential-est/<int:pk>/',
+        owner_credentials.OwnerCredentialDefineCertContentDomainCredentialEstView.as_view(),
+        name='owner_credentials-define-cert-content-domain-credential-est',
+    ),
+    path(
+        'owner-credentials/request-domain-credential-est/<int:pk>/',
+        owner_credentials.OwnerCredentialRequestDomainCredentialEstView.as_view(),
+        name='owner_credentials-request-domain-credential-est',
+    ),
+    path(
+        'owner-credentials/<int:owner_pk>/issued-credential/<int:pk>/delete/',
+        owner_credentials.IssuedCredentialDeleteView.as_view(),
+        name='owner_credentials-issued-credential-delete',
     ),
     re_path(
         r'^owner-credentials/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',

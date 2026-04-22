@@ -22,7 +22,7 @@ jobs:
         
       # Build and start Docker containers with docker-compose
       - name: Build and start Docker containers
-        uses: hoverkraft-tech/compose-action@v2.5.0
+        uses: hoverkraft-tech/compose-action@v2.6.0
         with:
           compose-file: "./docker-compose.yml"
           up-flags: "--build --wait"
@@ -109,7 +109,7 @@ jobs:
       
       # Upload the behave HTML report
       - name: Upload Behave Test Report
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: r_200-behave-report

@@ -1,5 +1,6 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
+{% load internationalization_tags %}
 
 {% block content %}
 
@@ -43,7 +44,7 @@
                         </td>
                         <td>{{ truststore.unique_name }}</td>
                         <td>{{ truststore.get_intended_usage_display }}</td>
-                        <td>{{ truststore.created_at }}</td>
+                        <td>{{ truststore.created_at|local_datetime }}</td>
                         <td>
                             <a href="details/{{ truststore.id }}/" class="btn btn-primary tp-table-btn w-100">{% trans 'Details' %}</a>
                         </td>

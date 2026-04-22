@@ -4,8 +4,8 @@ from typing import Never
 
 from cryptography import x509
 
-from devices.models import DeviceModel, IssuedCredentialModel
-from pki.models import CredentialModel
+from devices.models import DeviceModel
+from pki.models import CredentialModel, IssuedCredentialModel
 from request.request_context import BaseRequestContext, EstBaseRequestContext, EstCertificateRequestContext
 from trustpoint.logger import LoggerMixin
 

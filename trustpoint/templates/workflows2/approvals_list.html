@@ -1,0 +1,154 @@
+{% extends 'trustpoint/base.html' %}
+{% load i18n %}
+{% block content %}
+
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+    <div>
+      <h1 class="h4 mb-0">{% trans "Approvals" %}</h1>
+      <div class="text-muted small">{% trans "Review and resolve approval steps that are blocking workflow execution." %}</div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Visible approvals" %}</div>
+          <div class="fs-4 fw-semibold">{{ summary_total }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Pending" %}</div>
+          <div class="fs-4 fw-semibold">{{ summary_pending }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Resolved" %}</div>
+          <div class="fs-4 fw-semibold">{{ summary_resolved }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-body">
+          <div class="text-muted small text-uppercase">{% trans "Expired" %}</div>
+          <div class="fs-4 fw-semibold">{{ summary_expired }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-3 align-items-end">
+        <div class="col-12 col-md-6 col-xl-4">
+          <label class="form-label">{% trans "Status" %}</label>
+          <select name="status" class="form-select">
+            <option value="">{% trans "All" %}</option>
+            {% for val, label in status_choices %}
+              <option value="{{ val }}" {% if status == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-6 col-xl-3">
+          <label class="form-label">{% trans "Sort" %}</label>
+          <select name="sort" class="form-select">
+            <option value="created" {% if sort == 'created' %}selected{% endif %}>{% trans "Newest first" %}</option>
+            <option value="created_asc" {% if sort == 'created_asc' %}selected{% endif %}>{% trans "Oldest first" %}</option>
+            <option value="expires" {% if sort == 'expires' %}selected{% endif %}>{% trans "Soonest expiry" %}</option>
+            <option value="expires_desc" {% if sort == 'expires_desc' %}selected{% endif %}>{% trans "Latest expiry" %}</option>
+            <option value="status" {% if sort == 'status' %}selected{% endif %}>{% trans "Status A-Z" %}</option>
+            <option value="status_desc" {% if sort == 'status_desc' %}selected{% endif %}>{% trans "Status Z-A" %}</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-4 col-xl-2">
+          <button class="btn btn-primary w-100" type="submit">{% trans "Apply filters" %}</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead>
+          <tr>
+            <th>{% trans "State" %}</th>
+            <th>{% trans "Approval" %}</th>
+            <th>{% trans "Workflow" %}</th>
+            <th>{% trans "Instance" %}</th>
+            <th>
+              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}sort={% if sort == 'created' %}created_asc{% else %}created{% endif %}">
+                {% trans "Created" %}
+              </a>
+            </th>
+            <th>
+              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}sort={% if sort == 'expires' %}expires_desc{% else %}expires{% endif %}">
+                {% trans "Expires" %}
+              </a>
+            </th>
+            <th class="text-end">{% trans "Open" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in approval_rows %}
+            <tr>
+              <td>
+                <span class="badge {{ row.badge }}">{{ row.approval.get_status_display }}</span>
+              </td>
+              <td>
+                <div class="fw-semibold">{{ row.step_meta.title }}</div>
+                <div class="text-muted small"><code>{{ row.approval.step_id }}</code></div>
+              </td>
+              <td>
+                <div class="fw-semibold"><a href="{% url 'workflows2:definitions_edit' row.approval.instance.definition.id %}">{{ row.approval.instance.definition.name }}</a></div>
+                {% if row.approval.instance.run_id %}
+                  <div class="small">
+                    <span class="text-muted">{% trans "Run" %}:</span>
+                    <a href="{% url 'workflows2:runs-detail' row.approval.instance.run.id %}" class="ms-1">
+                      <code>{{ row.approval.instance.run.id }}</code>
+                    </a>
+                  </div>
+                {% endif %}
+              </td>
+              <td>
+                <div class="small text-muted">{{ row.approval.instance.get_status_display }}</div>
+                <div class="small mt-1">
+                  <a href="{% url 'workflows2:instances-detail' row.approval.instance.id %}"><code>{{ row.approval.instance.id }}</code></a>
+                </div>
+              </td>
+              <td>{{ row.approval.created_at|date:"Y-m-d H:i" }}</td>
+              <td>
+                {% if row.approval.expires_at %}
+                  {{ row.approval.expires_at|date:"Y-m-d H:i" }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'workflows2:approvals-detail' row.approval.id %}">
+                  {% trans "Review" %}
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="7" class="text-center text-muted py-4">{% trans "No approvals found." %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% include 'trustpoint/pagination.html' with page_obj=page_obj %}
+</div>
+
+{% endblock %}

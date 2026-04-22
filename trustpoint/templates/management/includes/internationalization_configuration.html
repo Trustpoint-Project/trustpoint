@@ -1,0 +1,236 @@
+{% load i18n %}
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">{% trans "Internationalization" %}</h5>
+    </div>
+
+    <div class="card-body pt-4 pb-4">
+        <form method="POST" action="{% url 'management:settings-internationalization' %}" id="internationalization_configuration">
+            {% csrf_token %}
+
+            <fieldset class="form-group tp-form-group mb-3">
+                {% if form.date_format.label %}
+                    <label class="form-label" for="{{ form.date_format.id_for_label }}">
+                        {{ form.date_format.label }}
+                    </label>
+                {% endif %}
+                {{ form.date_format }}
+                {% if form.date_format.errors %}
+                    <div class="invalid-feedback d-block">
+                        {{ form.date_format.errors }}
+                    </div>
+                {% endif %}
+            </fieldset>
+
+            <fieldset class="form-group tp-form-group mb-3">
+                {% if form.language.label %}
+                    <label class="form-label" for="{{ form.language.id_for_label }}">
+                        {{ form.language.label }}
+                    </label>
+                {% endif %}
+                {{ form.language }}
+                {% if form.language.errors %}
+                    <div class="invalid-feedback d-block">
+                        {{ form.language.errors }}
+                    </div>
+                {% endif %}
+            </fieldset>
+
+            <fieldset class="form-group tp-form-group">
+                <label class="form-label" for="timezone-select-toggle">
+                    {% trans "Timezone" %}
+                </label>
+
+                {% if form.timezone.errors %}
+                    <div class="invalid-feedback d-block mb-2">
+                        {{ form.timezone.errors }}
+                    </div>
+                {% endif %}
+
+                <input
+                    type="hidden"
+                    name="{{ form.timezone.html_name }}"
+                    id="selected-timezone"
+                    value="{{ form.timezone.value|default:'UTC' }}"
+                >
+
+                <div class="timezone-select-wrapper">
+                    <button
+                        type="button"
+                        class="form-select timezone-select-toggle"
+                        id="timezone-select-toggle"
+                        aria-expanded="false"
+                    >
+                        <span id="timezone-selected-label">{{ form.timezone.value|default:'UTC' }}</span>
+                    </button>
+
+                    <div class="timezone-dropdown-menu" id="timezone-dropdown-menu">
+                        <div class="timezone-search-box">
+                            <input
+                                type="text"
+                                id="timezone-search"
+                                class="form-control"
+                                placeholder="{% trans 'Search timezone...' %}"
+                                autocomplete="off"
+                            >
+                        </div>
+
+                        <div class="timezone-options" id="timezone-options">
+                            {% for value, label in form.timezone.field.choices %}
+                                <button
+                                    type="button"
+                                    class="timezone-option{% if value == form.timezone.value %} selected{% endif %}"
+                                    data-value="{{ value }}"
+                                >
+                                    {{ label }}
+                                </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+        </form>
+    </div>
+
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button class="btn btn-primary" type="submit" form="internationalization_configuration">
+                {% trans "Save" %}
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+.timezone-select-wrapper {
+    position: relative;
+    max-width: 672px;
+    width: 100%;
+}
+
+.timezone-select-toggle {
+    width: 100%;
+    text-align: left;
+}
+
+.timezone-select-toggle::after {
+    display: none;
+}
+
+.timezone-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius, 0.375rem);
+    background: var(--bs-body-bg);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+}
+
+.timezone-dropdown-menu.show {
+    display: block;
+}
+
+.timezone-search-box {
+    padding: 0.5rem;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.timezone-options {
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.timezone-option {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    padding: 0.625rem 0.75rem;
+    cursor: pointer;
+}
+
+.timezone-option:hover,
+.timezone-option:focus,
+.timezone-option.selected {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.timezone-option.hidden {
+    display: none;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const wrapper = document.querySelector('.timezone-select-wrapper');
+    const toggle = document.getElementById('timezone-select-toggle');
+    const menu = document.getElementById('timezone-dropdown-menu');
+    const search = document.getElementById('timezone-search');
+    const hiddenInput = document.getElementById('selected-timezone');
+    const label = document.getElementById('timezone-selected-label');
+    const options = document.querySelectorAll('.timezone-option');
+
+    if (!wrapper || !toggle || !menu || !search || !hiddenInput || !label) {
+        return;
+    }
+
+    toggle.addEventListener('click', function (event) {
+        event.stopPropagation();
+        menu.classList.toggle('show');
+        toggle.setAttribute('aria-expanded', menu.classList.contains('show'));
+
+        if (menu.classList.contains('show')) {
+            setTimeout(function () {
+                search.focus();
+            }, 0);
+        }
+    });
+
+    search.addEventListener('click', function (event) {
+        event.stopPropagation();
+    });
+
+    search.addEventListener('input', function () {
+        const value = search.value.trim().toLowerCase();
+
+        options.forEach(function (option) {
+            const text = option.textContent.toLowerCase();
+            option.classList.toggle('hidden', !text.includes(value));
+        });
+    });
+
+    options.forEach(function (option) {
+        option.addEventListener('click', function () {
+            const value = this.dataset.value;
+
+            hiddenInput.value = value;
+            label.textContent = value;
+
+            options.forEach(function (opt) {
+                opt.classList.remove('selected');
+                opt.classList.remove('hidden');
+            });
+
+            this.classList.add('selected');
+            search.value = '';
+            menu.classList.remove('show');
+            toggle.setAttribute('aria-expanded', 'false');
+        });
+    });
+
+    document.addEventListener('click', function (event) {
+        if (!wrapper.contains(event.target)) {
+            menu.classList.remove('show');
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+    });
+});
+</script>

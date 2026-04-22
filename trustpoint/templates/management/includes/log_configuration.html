@@ -1,0 +1,18 @@
+{% load i18n %}
+
+<div class="card">
+    <div class="card-header"><h5 class="mb-0">{% trans "Log Configuration" %}</h5></div>
+    <div class="card-body pt-4 pb-4">
+        <form method="POST" action="{% url 'management:settings-logging' %}" id="loglevel_configuration">
+            {% csrf_token %}
+            <fieldset class="form-group tp-form-group">
+                {{ form.loglevel }}
+            </fieldset>
+        </form>
+    </div>
+    <div class="card-footer d-flex justify-content-between tp-sticky-footer">
+        <div class="tp-card-btn-footer m-1">
+            <button class="btn btn-primary" type="submit" form="loglevel_configuration">{% trans "Save" %}</button>
+        </div>
+    </div>
+</div>

@@ -71,6 +71,7 @@ urlpatterns += [
     path('crl/<int:pk>/', CrlDownloadView.as_view(), name='crl-download'),
     path('.well-known/cmp/', include('cmp.urls')),
     path('.well-known/est/', include('est.urls')),
+    path('rest/', include('rest_pki.urls')),
     path('aoki/', include('aoki.urls')),
     path('home/', include('home.urls')),
     path('devices/', include('devices.urls')),
@@ -82,14 +83,15 @@ urlpatterns += [
         name='javascript-catalog',
     ),
     path('', base.IndexView.as_view()),
-    path('workflows/', include('workflows.urls', namespace='workflows')),
     path('discovery/', include('discovery.urls')),
+    path('workflows2/', include('workflows2.urls', namespace='workflows2')),
 
     # API URLs
     path('api/', include('devices.api_urls')),
     path('api/', include('pki.api_urls')),
     path('api/', include('signer.api_urls')),
     path('api/', include('management.api_urls')),
+    path('api/', include('rest_pki.api_urls')),
 
     # JWT endpoints
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
@@ -98,5 +100,5 @@ urlpatterns += [
     # Swagger & Redoc
     path('schema/', SpectacularAPIView.as_view(), name='schema'),
     path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc')
+    path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]

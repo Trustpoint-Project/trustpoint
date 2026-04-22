@@ -1,6 +1,7 @@
 """Test suite for TLS views."""
 from unittest.mock import Mock, patch
 
+from django.contrib.auth.models import AnonymousUser
 from django.contrib.messages import get_messages
 from django.core.exceptions import ValidationError
 from django.test import RequestFactory, TestCase
@@ -276,7 +277,7 @@ class TlsViewTest(TestCase):
         form = Mock(spec=IPv4AddressForm)
         form.cleaned_data = {'ipv4_address': '192.168.1.100'}
         
-        response = self.view.form_valid(form)
+        self.view.form_valid(form)
         
         tls_settings = TlsSettings.objects.get(id=1)
         self.assertEqual(tls_settings.ipv4_address, '192.168.1.100')
@@ -289,7 +290,7 @@ class TlsViewTest(TestCase):
         """Test form_invalid shows error message."""
         form = Mock(spec=IPv4AddressForm)
         
-        with patch.object(self.view, 'render_to_response') as mock_render:
+        with patch.object(self.view, 'render_to_response'):
             self.view.form_invalid(form)
         
         messages_list = list(get_messages(self.view.request))
@@ -370,7 +371,7 @@ class GenerateTlsCertificateViewTest(TestCase):
             'domain_names': ['example.com'],
         }
         
-        response = self.view.form_valid(form)
+        self.view.form_valid(form)
         
         # Check generator was called
         mock_generator_class.assert_called_once_with(
@@ -417,7 +418,8 @@ class TlsAddFileImportPkcs12ViewTest(TestCase):
         self.factory = RequestFactory()
         self.view = TlsAddFileImportPkcs12View()
         self.view.request = self.factory.get('/tls/import/pkcs12/')
-        
+        self.view.request.user = AnonymousUser()
+
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
         setattr(self.view.request, 'session', 'session')
@@ -439,10 +441,11 @@ class TlsAddFileImportPkcs12ViewTest(TestCase):
     def test_form_valid_shows_success_message(self):
         """Test form_valid displays success message."""
         form = Mock(spec=TlsAddFileImportPkcs12Form)
-        
-        with patch.object(self.view, 'get_success_url', return_value='/tls/'):
-            response = self.view.form_valid(form)
-        
+
+        with patch('management.views.tls.AuditLog.create_entry'), \
+             patch.object(self.view, 'get_success_url', return_value='/tls/'):
+            self.view.form_valid(form)
+
         messages_list = list(get_messages(self.view.request))
         self.assertTrue(any('success' in str(msg).lower() for msg in messages_list))
 
@@ -455,7 +458,8 @@ class TlsAddFileImportSeparateFilesViewTest(TestCase):
         self.factory = RequestFactory()
         self.view = TlsAddFileImportSeparateFilesView()
         self.view.request = self.factory.get('/tls/import/separate/')
-        
+        self.view.request.user = AnonymousUser()
+
         # Enable message storage
         from django.contrib.messages.storage.fallback import FallbackStorage
         setattr(self.view.request, 'session', 'session')
@@ -477,10 +481,11 @@ class TlsAddFileImportSeparateFilesViewTest(TestCase):
     def test_form_valid_shows_success_message(self):
         """Test form_valid displays success message."""
         form = Mock(spec=TlsAddFileImportSeparateFilesForm)
-        
-        with patch.object(self.view, 'get_success_url', return_value='/tls/'):
-            response = self.view.form_valid(form)
-        
+
+        with patch('management.views.tls.AuditLog.create_entry'), \
+             patch.object(self.view, 'get_success_url', return_value='/tls/'):
+            self.view.form_valid(form)
+
         messages_list = list(get_messages(self.view.request))
         self.assertTrue(any('success' in str(msg).lower() for msg in messages_list))
 
@@ -553,7 +558,7 @@ class ActivateTlsServerViewTest(TestCase):
         # Mock credential not found
         mock_cred_get.side_effect = CredentialModel.DoesNotExist()
         
-        response = self.view.post(request, pk=99999)
+        self.view.post(request, pk=99999)
         
         # Check error message
         messages_list = list(get_messages(request))
@@ -576,7 +581,7 @@ class ActivateTlsServerViewTest(TestCase):
         # Mock validation error
         mock_get_or_create.side_effect = ValidationError('Test validation error')
         
-        response = self.view.post(request, pk=self.certificate.pk)
+        self.view.post(request, pk=self.certificate.pk)
         
         # Check error message
         messages_list = list(get_messages(request))
@@ -604,7 +609,7 @@ class ActivateTlsServerViewTest(TestCase):
         # Mock unexpected error
         mock_cmd_class.side_effect = Exception('Unexpected error')
         
-        response = self.view.post(request, pk=self.certificate.pk)
+        self.view.post(request, pk=self.certificate.pk)
         
         # Check error message
         messages_list = list(get_messages(request))

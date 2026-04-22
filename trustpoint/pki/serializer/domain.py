@@ -21,5 +21,24 @@ class DomainSerializer(serializers.ModelSerializer[DomainModel]):
         """Metadata for DomainSerializer, defining model and serialized fields."""
 
         model = DomainModel
-        fields: ClassVar[list[str]] = ['id', 'unique_name']
+        fields: ClassVar[list[str]] = ['id', 'unique_name', 'issuing_ca', 'is_active', 'domain_credential_profile']
         read_only_fields: ClassVar[list[str]] = ['id']
+
+
+class DomainDetailSerializer(serializers.ModelSerializer[DomainModel]):
+    """Detailed serializer for a single Domain instance."""
+
+    class Meta:
+        """Metadata for DomainDetailSerializer, defining model and serialized fields."""
+
+        model = DomainModel
+        fields: ClassVar[list[str]] = [
+            'id',
+            'unique_name',
+            'issuing_ca',
+            'is_active',
+            'domain_credential_profile',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields: ClassVar[list[str]] = ['id', 'created_at', 'updated_at']

@@ -3,7 +3,7 @@ import contextlib
 import types
 from abc import ABC, abstractmethod
 from types import TracebackType
-from typing import Any, ClassVar, Never
+from typing import Any, ClassVar, Never, Self
 
 import pkcs11  # type: ignore[import-untyped]
 from cryptography.hazmat.primitives import hashes
@@ -425,7 +425,7 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
         if hasattr(self, '_session') and self._session:
             self._session.close()
 
-    def __enter__(self) -> 'Pkcs11PrivateKey':
+    def __enter__(self) -> Self:
         """Context manager entry point.
 
         Returns:
@@ -554,7 +554,7 @@ class Pkcs11AESKey:
                 self._session.close()
             self._session = None
 
-    def __enter__(self) -> 'Pkcs11AESKey':
+    def __enter__(self) -> Self:
         """Context manager entry."""
         return self
 

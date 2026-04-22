@@ -2,12 +2,32 @@
 
 from django.urls import path, re_path
 
-from .views import IndexView, backup, help_support, key_storage, logging, notifications, settings, tls
+from .views import (
+    IndexView,
+    audit_log,
+    backup,
+    docs,
+    help_support,
+    key_storage,
+    logging,
+    notifications,
+    settings,
+    tls,
+)
 
 app_name = 'management'
 urlpatterns = [
     path('', IndexView.as_view(), name='index'),
-    # path('settings/', settings.settings, name='settings'),  # noqa: ERA001
+    # Settings URLs
+    path('settings/', settings.SettingsTabView.as_view(), name='settings'),
+    path('settings/internationalization/',settings.InternationalizationSettingsView.as_view(),name='settings-internationalization'),
+    path('settings/security/', settings.SecuritySettingsView.as_view(), name='settings-security'),
+    path('settings/logging/', settings.LoggingSettingsView.as_view(), name='settings-logging'),
+    path('settings/notifications/', settings.NotificationSettingsView.as_view(), name='settings-notifications'),
+    path('settings/metrics/', settings.MetricsSettingsView.as_view(), name='settings-metrics'),
+    # Backward compatibility for log level change
+    path('loglevel/change', settings.ChangeLogLevelView.as_view(), name='change-loglevel'),
+    # Logging file views
     path('logging/files/', logging.LoggingFilesTableView.as_view(), name='logging-files'),
     re_path(
         r'^logging/files/details/(?P<filename>trustpoint\.log(?:\.\d{1,5})?)/?$',
@@ -24,8 +44,7 @@ urlpatterns = [
         logging.LoggingFilesDownloadMultipleView.as_view(),
         name='logging-files-download-multiple',
     ),
-    path('loglevel/change', settings.ChangeLogLevelView.as_view(), name='change-loglevel'),
-    path('settings/', settings.SettingsView.as_view(), name='settings'),
+    # TLS views
     path('tls/', tls.TlsView.as_view(), name='tls'),
     path('tls/add/method-select/', tls.TlsAddMethodSelectView.as_view(),
         name='tls-add-method_select',
@@ -43,12 +62,13 @@ urlpatterns = [
         tls.TlsAddFileImportSeparateFilesView.as_view(),
         name='tls-add-file_import-separate_files',
     ),
-    path('tls/activate/<int:pk>', tls.ActivateTlsServerView.as_view(), name='activate-tls'),
-    path(
-        'backups/',
-        backup.BackupManageView.as_view(extra_context={'page_category': 'management', 'page_name': 'backup'}),
-        name='backups'
+    re_path(
+        r'^tls/delete(?:/(?P<pks>([0-9]+/)*[0-9]*))?/?$',
+        tls.TlsBulkDeleteConfirmView.as_view(),
+        name='tls-delete_confirm',
     ),
+    path('tls/activate/<int:pk>', tls.ActivateTlsServerView.as_view(), name='activate-tls'),
+    # Backup views
     path(
         'backups/',
         backup.BackupManageView.as_view(extra_context={'page_category': 'management', 'page_name': 'backup'}),
@@ -61,8 +81,20 @@ urlpatterns = [
         name='backup-download-multiple'
     ),
     path('backups/delete-multiple/', backup.BackupFilesDeleteMultipleView.as_view(), name='backup-delete-multiple'),
+    # Other views
     path('help/', help_support.HelpView.as_view(), name='help'),
+    path('docs/build/trigger/', docs.BuildDocsTriggerView.as_view(), name='trigger_build_docs'),
+    path('docs/', docs.ServeLocalDocsView.as_view(), name='local_docs'),
+    path('docs/<path:path>', docs.ServeLocalDocsView.as_view(), name='local_docs_path'),
     path('key_storage/', key_storage.KeyStorageConfigView.as_view(), name='key_storage'),
     path('notifications/refresh/', notifications.RefreshNotificationsView.as_view(), name='refresh_notifications'),
     path('notifications/<int:pk>/delete/', notifications.NotificationDeleteView.as_view(), name='notification_delete'),
+    path('notifications/', notifications.NotificationsListView.as_view(), name='notifications'),
+    path('notifications/<int:pk>/', notifications.NotificationDetailsView.as_view(), name='notification_details'),
+    path('notifications/<int:pk>/mark-as-solved/',
+        notifications.NotificationMarkSolvedView.as_view(), name='mark_as_solved'),
+    path('notifications/<int:pk>/toggle-read/',
+        notifications.NotificationToggleReadView.as_view(), name='notification_toggle_read'),
+    # Audit log
+    path('audit-log/', audit_log.AuditLogListView.as_view(), name='audit-log'),
 ]

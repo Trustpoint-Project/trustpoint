@@ -17,7 +17,7 @@ from devices.issuer import (
     OpcUaClientCredentialIssuer,
     OpcUaServerCredentialIssuer,
 )
-from devices.models import IssuedCredentialModel
+from pki.models import IssuedCredentialModel
 from onboarding.models import OnboardingStatus
 
 
@@ -63,7 +63,7 @@ class TestSaveCredentialToDbMixin:
         first_credential = issuer.issue_domain_credential()
         
         # Get the certificate
-        first_cert = first_credential.credential.get_certificate()
+        first_credential.credential.get_certificate()
         
         # Issue another credential with just public key (should update existing one)
         private_key = KeyGenerator.generate_private_key(domain=domain)
@@ -258,7 +258,6 @@ class TestLocalDomainCredentialIssuer:
         
         # Ensure device has onboarding config
         assert device.onboarding_config is not None
-        initial_status = device.onboarding_config.onboarding_status
         
         issuer = LocalDomainCredentialIssuer(device=device, domain=domain)
         
