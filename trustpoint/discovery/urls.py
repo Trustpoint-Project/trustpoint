@@ -12,7 +12,7 @@ urlpatterns = [
     path('stop-scan/', views.stop_scan, name='stop_scan'),
     path('clear/', views.clear_devices, name='clear_devices'),
     path('device/<int:device_id>/', views.device_detail, name='device_detail'),
-    path('port/add/', views.add_port, name='add_port'),       
-    path('port/delete/<int:port_id>/', views.delete_port, name='delete_port'), 
+    path('port/add/', views.add_port, name='add_port'),
+    path('port/delete/<int:port_id>/', views.delete_port, name='delete_port'),
     path('export-csv/', views.export_csv, name='export_csv'),
 ]

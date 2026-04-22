@@ -87,7 +87,7 @@ class OTScanner:
                 with socket.create_connection((ip, port), timeout=self.timeout):
                     found_ports.append(port)
                     found = True
-                    
+
                     ssl_data = self._get_ssl_info(ip, port)
                     if ssl_data.get('ssl_open'):
                         result['ssl_info'] = ssl_data
