@@ -18,7 +18,7 @@
 .tp-setup-form-heading {
     color: var(--bs-emphasis-color);
     font-size: clamp(2.2rem, 1.8rem + 1vw, 2.85rem);
-    font-weight: 900;
+    font-weight: 500;
     letter-spacing: -0.03em;
     line-height: 1;
     margin: 0;
@@ -104,11 +104,9 @@
 
 .tp-setup-option-figure {
     align-items: center;
-    background:
-        radial-gradient(circle at top, color-mix(in srgb, white 18%, transparent), transparent 62%),
-        color-mix(in srgb, var(--bs-primary) 16%, transparent);
-    border: 1px solid color-mix(in srgb, var(--bs-primary) 28%, transparent);
-    border-radius: 1.35rem;
+    background: color-mix(in srgb, var(--bs-primary) 10%, transparent);
+    border: 2px solid color-mix(in srgb, var(--bs-primary) 28%, transparent);
+    border-radius: 50%;
     color: var(--bs-primary);
     display: inline-flex;
     height: 4.75rem;
@@ -121,10 +119,14 @@
     width: 2.2rem;
 }
 
+.tp-setup-option-figure.rocket-icon svg {
+    transform: translate(-1px, 1px); /* Visual centering adjustment for the rocket icon */
+}
+
 .tp-setup-option-title {
     color: var(--bs-emphasis-color);
     font-size: clamp(1.55rem, 1.35rem + 0.4vw, 1.95rem);
-    font-weight: 800;
+    font-weight: 500;
     letter-spacing: -0.02em;
     line-height: 1.1;
     margin: 0;
@@ -177,7 +179,8 @@
 .tp-setup-form {
     display: grid;
     gap: 1.5rem;
-    padding: clamp(1.35rem, 1rem + 1.4vw, 2.2rem);
+    padding: clamp(1.35rem, 1rem + 1.4vw, 1.6rem);
+    padding-bottom: 1.7rem; /* Fixed bottom padding for equal spacing of action buttons between hr and bottom */
     position: relative;
     z-index: 1;
 }
@@ -230,7 +233,6 @@
     background: color-mix(in srgb, var(--bs-body-bg) 94%, var(--bs-primary) 3%);
     border-color: color-mix(in srgb, var(--bs-primary) 50%, var(--bs-border-color));
     box-shadow: 0 0 0 0.24rem color-mix(in srgb, var(--bs-primary) 15%, transparent);
-    transform: translateY(-1px);
 }
 
 .tp-form-group input[type="file"] {
@@ -333,12 +335,13 @@
     --bs-btn-hover-color: #fff;
     --bs-btn-hover-bg: #0c57d0;
     --bs-btn-hover-border-color: #0945a4;
-    --bs-btn-active-color: #0a4db8;
-    --bs-btn-active-bg: transparent;
+    --bs-btn-active-color: #fff;
+    --bs-btn-active-bg: #0d66e4;
     --bs-btn-active-border-color: #0a4db8;
     --bs-btn-focus-shadow-rgb: 10, 77, 184;
     align-items: center;
     border-radius: 0.95rem;
+    border: 0px;
     box-shadow:
         0 0.9rem 2rem color-mix(in srgb, #0a4db8 26%, transparent),
         inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
@@ -394,6 +397,7 @@
     --bs-btn-focus-shadow-rgb: 77, 84, 91;
     align-items: center;
     border-radius: 0.95rem;
+    border: 0px;
     box-shadow:
         0 0.7rem 1.5rem color-mix(in srgb, #4d545b 18%, transparent),
         inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
@@ -756,12 +760,10 @@
 
 .tp-fresh-install-shell .tp-choice-option:hover .tp-choice-card {
     border-color: color-mix(in srgb, var(--bs-primary) 45%, var(--bs-border-color));
-    transform: translateY(-1px);
 }
 
 .tp-fresh-install-shell .tp-choice-option.is-disabled:hover .tp-choice-card {
     border-color: color-mix(in srgb, var(--bs-border-color) 88%, transparent);
-    transform: none;
 }
 
 .tp-fresh-install-shell .tp-choice-option input:focus-visible + .tp-choice-card {
@@ -802,12 +804,13 @@
 
 .tp-fresh-install-shell .tp-wizard-body {
     padding: var(--tp-fresh-install-inner-padding);
+    padding-bottom: 1.7rem; /* Fixed bottom padding for equal spacing of action buttons between hr and bottom */
 }
 
 .tp-fresh-install-shell .tp-wizard-heading {
     color: var(--bs-emphasis-color);
     font-size: clamp(1.55rem, 1.35rem + 0.55vw, 1.95rem);
-    font-weight: 800;
+    font-weight: 600;
     letter-spacing: -0.02em;
     line-height: 1.05;
     margin: 0 0 1.35rem;

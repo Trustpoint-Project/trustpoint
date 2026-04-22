@@ -412,6 +412,7 @@ hr.hr-m {
 
 #bs-override .btn {
     font-weight: var(--tp-font-weight-h);
+    border-radius: 0.55rem;
 }
 
 #bs-override .form-select, #bs-override .form-control {
