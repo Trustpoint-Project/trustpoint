@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from uuid import UUID
+from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives import serialization
 from django.db import transaction
 from django.utils import timezone
 
+from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
-from crypto.domain.algorithms import SupportedPublicKey
-from crypto.domain.policies import KeyPolicy
-from crypto.domain.refs import ManagedKeyRef
+from crypto.domain.algorithms import KeyAlgorithm
+from crypto.domain.policies import KeyPolicy, SigningExecutionMode
 from crypto.models import (
     CryptoManagedKeyModel,
     CryptoProviderCapabilitySnapshotModel,
@@ -21,6 +21,12 @@ from crypto.models import (
     ManagedKeyStatus,
     ProbeStatus,
 )
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+    from crypto.domain.algorithms import SupportedPublicKey
+    from crypto.domain.refs import ManagedKeyRef
 
 
 @dataclass(frozen=True, slots=True)
@@ -165,18 +171,28 @@ class CryptoManagedKeyRepository:
         self,
         *,
         profile: CryptoProviderProfileModel,
-        key_ref: ManagedKeyRef,
+        alias: str,
+        binding: Pkcs11ManagedKeyBinding,
         public_key: SupportedPublicKey,
         policy: KeyPolicy,
     ) -> CryptoManagedKeyModel:
         """Persist a newly created managed-key binding."""
+        public_key_fingerprint = self.public_key_fingerprint_sha256(public_key)
+        if (
+            binding.public_key_fingerprint_sha256 is not None
+            and binding.public_key_fingerprint_sha256 != public_key_fingerprint
+        ):
+            msg = 'Generated managed-key fingerprint does not match the PKCS#11 binding fingerprint.'
+            raise ValueError(msg)
+
         return CryptoManagedKeyModel.objects.create(
-            alias=key_ref.alias,
+            alias=alias,
             provider_profile=profile,
-            key_id_hex=key_ref.key_id_hex,
-            label=key_ref.label,
-            algorithm=key_ref.algorithm.value,
-            public_key_fingerprint_sha256=self.public_key_fingerprint_sha256(public_key),
+            key_id_hex=binding.key_id_hex,
+            label=alias,
+            algorithm=binding.algorithm.value,
+            public_key_fingerprint_sha256=public_key_fingerprint,
+            signing_execution_mode=binding.signing_execution_mode.value,
             policy_snapshot=self.policy_snapshot(policy),
             status=ManagedKeyStatus.ACTIVE,
             last_verified_at=timezone.now(),
@@ -188,15 +204,12 @@ class CryptoManagedKeyRepository:
         self,
         *,
         managed_key: CryptoManagedKeyModel,
-        label: str | None = None,
     ) -> CryptoManagedKeyModel:
         """Mark a managed key as successfully verified against the provider."""
         managed_key.status = ManagedKeyStatus.ACTIVE
         managed_key.last_verified_at = timezone.now()
         managed_key.last_verification_error = None
-        if label is not None:
-            managed_key.label = label
-        managed_key.save(update_fields=['status', 'last_verified_at', 'last_verification_error', 'label', 'updated_at'])
+        managed_key.save(update_fields=['status', 'last_verified_at', 'last_verification_error', 'updated_at'])
         return managed_key
 
     @transaction.atomic
@@ -247,11 +260,22 @@ class CryptoManagedKeyRepository:
         return managed_key.to_managed_key_ref()
 
     @staticmethod
+    def build_pkcs11_binding(managed_key: CryptoManagedKeyModel) -> Pkcs11ManagedKeyBinding:
+        """Convert a persisted managed-key record into the PKCS#11 adapter binding."""
+        return Pkcs11ManagedKeyBinding(
+            key_id=bytes.fromhex(managed_key.key_id_hex),
+            algorithm=KeyAlgorithm(managed_key.algorithm),
+            public_key_fingerprint_sha256=managed_key.public_key_fingerprint_sha256,
+            signing_execution_mode=SigningExecutionMode(managed_key.signing_execution_mode),
+        )
+
+    @staticmethod
     def policy_snapshot(policy: KeyPolicy) -> dict[str, object]:
         """Serialize the durable policy summary stored with a managed key."""
         return {
             'extractable': policy.extractable,
             'ephemeral': policy.ephemeral,
+            'signing_execution_mode': policy.signing_execution_mode.value,
             'usages': sorted(usage.value for usage in policy.usages),
         }
 

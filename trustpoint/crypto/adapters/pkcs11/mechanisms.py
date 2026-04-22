@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from crypto.domain.algorithms import EllipticCurveName, HashAlgorithmName, KeyAlgorithm
 from crypto.domain.errors import MechanismUnsupportedError
 from crypto.domain.policies import KeyPolicy, KeyUsage
-from pkcs11 import Attribute, KeyType, Mechanism
-from pkcs11.util.ec import encode_named_curve_parameters
+from pkcs11 import Attribute, KeyType, Mechanism  # type: ignore[import-untyped]
+from pkcs11.util.ec import encode_named_curve_parameters  # type: ignore[import-untyped]
 
 
 def _build_hash_mechanism_map(member_names: dict[HashAlgorithmName, str]) -> dict[HashAlgorithmName, Mechanism]:
@@ -56,7 +58,7 @@ def key_type_for_algorithm(algorithm: KeyAlgorithm) -> KeyType:
 
 def ec_parameters_for_curve(curve: EllipticCurveName) -> bytes:
     """Return DER-encoded EC domain parameters for a named curve."""
-    return encode_named_curve_parameters(_CURVE_OIDS[curve])
+    return cast('bytes', encode_named_curve_parameters(_CURVE_OIDS[curve]))
 
 
 def private_key_template(*, key_id: bytes, label: str, policy: KeyPolicy) -> dict[Attribute, object]:

@@ -26,12 +26,11 @@ class EllipticCurveName(str, Enum):
 
     def to_cryptography_curve(self) -> ec.EllipticCurve:
         """Build the matching cryptography curve instance."""
-        curve_map = {
-            EllipticCurveName.SECP256R1: ec.SECP256R1,
-            EllipticCurveName.SECP384R1: ec.SECP384R1,
-            EllipticCurveName.SECP521R1: ec.SECP521R1,
-        }
-        return curve_map[self]()
+        if self is EllipticCurveName.SECP256R1:
+            return ec.SECP256R1()
+        if self is EllipticCurveName.SECP384R1:
+            return ec.SECP384R1()
+        return ec.SECP521R1()
 
 
 class HashAlgorithmName(str, Enum):
@@ -44,13 +43,13 @@ class HashAlgorithmName(str, Enum):
 
     def to_cryptography_hash(self) -> hashes.HashAlgorithm:
         """Build the matching cryptography hash object."""
-        hash_map = {
-            HashAlgorithmName.SHA224: hashes.SHA224,
-            HashAlgorithmName.SHA256: hashes.SHA256,
-            HashAlgorithmName.SHA384: hashes.SHA384,
-            HashAlgorithmName.SHA512: hashes.SHA512,
-        }
-        return hash_map[self]()
+        if self is HashAlgorithmName.SHA224:
+            return hashes.SHA224()
+        if self is HashAlgorithmName.SHA256:
+            return hashes.SHA256()
+        if self is HashAlgorithmName.SHA384:
+            return hashes.SHA384()
+        return hashes.SHA512()
 
 
 class SignatureAlgorithm(str, Enum):

@@ -78,7 +78,6 @@ class Pkcs11ProviderProfile:
     max_sessions: int = 8
     borrow_timeout_seconds: float = 5.0
     rw_sessions: bool = True
-    allow_legacy_label_lookup: bool = False
 
     def __post_init__(self) -> None:
         """Validate basic provider settings."""

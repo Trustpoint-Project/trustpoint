@@ -21,7 +21,6 @@ def test_refresh_capabilities_returns_non_empty_mechanism_set(
             "can_generate_rsa",
             "can_generate_ec",
             "can_sign_rsa_pkcs1v15",
-            "can_sign_rsa_pss",
             "can_sign_ecdsa",
         )
     )

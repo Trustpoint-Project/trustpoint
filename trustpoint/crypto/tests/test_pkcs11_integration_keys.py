@@ -61,7 +61,7 @@ def test_generate_managed_key_and_fetch_public_key(live_pkcs11_backend, live_pkc
     )
 
     alias = f"pytest-{scenario.name}-{secrets.token_hex(6)}"
-    key = live_pkcs11_backend.generate_managed_key(
+    binding = live_pkcs11_backend.generate_managed_key(
         alias=alias,
         key_spec=scenario.key_spec,
         policy=KeyPolicy(
@@ -71,6 +71,6 @@ def test_generate_managed_key_and_fetch_public_key(live_pkcs11_backend, live_pkc
         ),
     )
 
-    public_key = live_pkcs11_backend.get_public_key(key)
+    public_key = live_pkcs11_backend.get_public_key(binding)
     assert public_key is not None
     assert isinstance(public_key, scenario.expected_public_key_type)

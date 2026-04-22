@@ -1,15 +1,17 @@
-"""Contained PKCS#11 backend implementation."""
+"""Contained PKCS#11 adapter implementation."""
 
 from __future__ import annotations
 
 import hashlib
 import secrets
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
-import pkcs11
+import pkcs11  # type: ignore[import-untyped]
+from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding, Pkcs11ManagedKeyVerification
 from crypto.adapters.pkcs11.capability_probe import Pkcs11CapabilityProbe
 from crypto.adapters.pkcs11.error_map import map_pkcs11_error
 from crypto.adapters.pkcs11.locator import Pkcs11ObjectLocator
@@ -21,19 +23,15 @@ from crypto.domain.errors import (
     CryptoError,
     KeyAlreadyExistsError,
     KeyNotFoundError,
-    MechanismUnsupportedError,
     ProviderConfigurationError,
     ProviderUnavailableError,
+    UnsupportedKeySpecError,
 )
-from crypto.domain.refs import (
-    ManagedKeyRef,
-    ManagedKeyVerification,
-    ManagedKeyVerificationStatus,
-)
-from crypto.domain.specs import EcKeySpec, KeySpec, algorithm_for_key_spec
+from crypto.domain.refs import ManagedKeyVerificationStatus
+from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec, algorithm_for_key_spec
 from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, PKCS11Error
-from pkcs11.util.ec import encode_ec_public_key, encode_ecdsa_signature
-from pkcs11.util.rsa import encode_rsa_public_key
+from pkcs11.util.ec import encode_ec_public_key, encode_ecdsa_signature  # type: ignore[import-untyped]
+from pkcs11.util.rsa import encode_rsa_public_key  # type: ignore[import-untyped]
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -48,12 +46,7 @@ type LibraryLoader = Callable[[str], Any]
 
 
 class Pkcs11Backend(LoggerMixin):
-    """PKCS#11-backed implementation of the new crypto backend contract.
-
-    This implementation is intentionally standard-first and avoids any
-    vendor-specific behavior. Vendor quirks, if needed later, belong in a
-    separate override layer behind the same contract.
-    """
+    """PKCS#11-backed provider adapter for managed key operations."""
 
     provider_name = 'pkcs11'
 
@@ -65,7 +58,7 @@ class Pkcs11Backend(LoggerMixin):
         capability_probe: Pkcs11CapabilityProbe | None = None,
         locator: Pkcs11ObjectLocator | None = None,
     ) -> None:
-        """Initialize the PKCS#11 backend."""
+        """Initialize the PKCS#11 adapter."""
         self._profile = profile
         self._library_loader = library_loader
         self._capability_probe = capability_probe or Pkcs11CapabilityProbe()
@@ -90,9 +83,8 @@ class Pkcs11Backend(LoggerMixin):
         return self._capabilities
 
     def close(self) -> None:
-        """Close any pooled PKCS#11 sessions held by this backend."""
-        if self._session_pool is not None:
-            self._session_pool.close()
+        """Close any pooled PKCS#11 sessions held by this adapter."""
+        self._reset_runtime_state()
 
     def probe_capabilities(self) -> Pkcs11Capabilities:
         """Probe the configured token and cache the result."""
@@ -104,7 +96,7 @@ class Pkcs11Backend(LoggerMixin):
             self._capabilities = self._capability_probe.probe(slot=self._resolved_slot, token=self._resolved_token)
         return self._capabilities
 
-    def generate_managed_key(self, *, alias: str, key_spec: KeySpec, policy: KeyPolicy) -> ManagedKeyRef:
+    def generate_managed_key(self, *, alias: str, key_spec: KeySpec, policy: KeyPolicy) -> Pkcs11ManagedKeyBinding:
         """Generate a managed PKCS#11-backed key pair."""
         key_algorithm = algorithm_for_key_spec(key_spec)
         key_id = secrets.token_bytes(16)
@@ -112,6 +104,7 @@ class Pkcs11Backend(LoggerMixin):
         try:
             with self._session_pool_for_token().session() as session:
                 self._ensure_alias_is_available(session=session, alias=alias)
+
                 if isinstance(key_spec, EcKeySpec):
                     generated_public_key_object = self._generate_ec_keypair(
                         session=session,
@@ -120,7 +113,7 @@ class Pkcs11Backend(LoggerMixin):
                         key_spec=key_spec,
                         policy=policy,
                     )
-                else:
+                elif isinstance(key_spec, RsaKeySpec):
                     generated_public_key_object = self._generate_rsa_keypair(
                         session=session,
                         alias=alias,
@@ -128,6 +121,9 @@ class Pkcs11Backend(LoggerMixin):
                         key_spec=key_spec,
                         policy=policy,
                     )
+                else:
+                    msg = f'Unsupported key specification: {type(key_spec).__name__}.'
+                    raise UnsupportedKeySpecError(msg)
 
                 fingerprint = self._fingerprint_generated_public_key(
                     public_key_object=generated_public_key_object,
@@ -140,28 +136,22 @@ class Pkcs11Backend(LoggerMixin):
         except PKCS11Error as exc:
             raise map_pkcs11_error(exc, operation='key generation') from exc
 
-        return ManagedKeyRef(
-            alias=alias,
-            provider=self.provider_name,
+        return Pkcs11ManagedKeyBinding(
             key_id=key_id,
-            label=alias,
             algorithm=key_algorithm,
             public_key_fingerprint_sha256=fingerprint,
             signing_execution_mode=policy.signing_execution_mode,
         )
 
-    def verify_managed_key(self, key: ManagedKeyRef) -> ManagedKeyVerification:
-        """Verify that a managed-key reference still resolves to the expected key."""
+    def verify_managed_key(self, key: Pkcs11ManagedKeyBinding) -> Pkcs11ManagedKeyVerification:
+        """Verify that a managed-key binding still resolves to the expected key."""
         try:
             public_key = self.get_public_key(key)
         except KeyNotFoundError:
-            return ManagedKeyVerification(
-                key=key,
+            return Pkcs11ManagedKeyVerification(
                 status=ManagedKeyVerificationStatus.MISSING,
                 resolved_public_key_fingerprint_sha256=None,
             )
-        except CryptoError:
-            raise
 
         resolved_fingerprint = self._fingerprint_public_key(public_key)
 
@@ -169,43 +159,36 @@ class Pkcs11Backend(LoggerMixin):
             key.public_key_fingerprint_sha256 is not None
             and key.public_key_fingerprint_sha256 != resolved_fingerprint
         ):
-            return ManagedKeyVerification(
-                key=key,
+            return Pkcs11ManagedKeyVerification(
                 status=ManagedKeyVerificationStatus.MISMATCH,
                 resolved_public_key_fingerprint_sha256=resolved_fingerprint,
             )
 
-        return ManagedKeyVerification(
-            key=key,
+        return Pkcs11ManagedKeyVerification(
             status=ManagedKeyVerificationStatus.PRESENT,
             resolved_public_key_fingerprint_sha256=resolved_fingerprint,
         )
 
-    def get_public_key(self, key: ManagedKeyRef) -> SupportedPublicKey:
-        """Load the public key for a managed PKCS#11-managed key."""
+    def get_public_key(self, key: Pkcs11ManagedKeyBinding) -> SupportedPublicKey:
+        """Load the public key for a managed PKCS#11 key binding."""
         try:
             with self._session_pool_for_token().session() as session:
-                public_key_object = self._locator.public_key(
-                    session,
-                    key,
-                    allow_label_fallback=self._profile.allow_legacy_label_lookup,
-                )
+                public_key_object = self._locator.public_key(session, key)
                 der = self._encode_public_key_der(public_key_object, key.algorithm)
         except CryptoError:
             raise
         except PKCS11Error as exc:
             raise map_pkcs11_error(exc, operation='public-key lookup') from exc
 
-        return serialization.load_der_public_key(der)
+        public_key = serialization.load_der_public_key(der)
+        if isinstance(public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)):
+            return public_key
 
-    def sign(self, *, key: ManagedKeyRef, data: bytes, request: SignRequest) -> bytes:
-        """Sign bytes using a managed PKCS#11 key.
+        msg = f'Unsupported public-key type returned by PKCS#11 provider: {type(public_key).__name__}.'
+        raise ProviderUnavailableError(msg)
 
-        The effective PKCS#11 signing path is determined by:
-        - the requested signature operation
-        - current provider capabilities
-        - the managed key's signing_execution_mode
-        """
+    def sign(self, *, key: Pkcs11ManagedKeyBinding, data: bytes, request: SignRequest) -> bytes:
+        """Sign bytes using a managed PKCS#11 key binding."""
         capabilities = self.probe_capabilities()
         operation = resolve_signing_operation(
             key_algorithm=key.algorithm,
@@ -217,26 +200,38 @@ class Pkcs11Backend(LoggerMixin):
 
         try:
             with self._session_pool_for_token().session() as session:
-                private_key = self._locator.private_key(
-                    session,
-                    key,
-                    allow_label_fallback=self._profile.allow_legacy_label_lookup,
-                )
-                signature = private_key.sign(operation.payload, mechanism=operation.mechanism)
+                private_key = self._locator.private_key(session, key)
+                signature = cast('Any', private_key).sign(operation.payload, mechanism=operation.mechanism)
         except CryptoError:
             raise
         except PKCS11Error as exc:
             raise map_pkcs11_error(exc, operation='signing') from exc
 
         if key.algorithm is KeyAlgorithm.EC:
-            return encode_ecdsa_signature(signature)
+            return cast('bytes', encode_ecdsa_signature(signature))
         return bytes(signature)
+
+    def destroy_managed_key(self, key: Pkcs11ManagedKeyBinding) -> None:
+        """Best-effort removal of the provider objects for a managed key binding."""
+        try:
+            with self._session_pool_for_token().session() as session:
+                for resolver in (self._locator.private_key, self._locator.public_key):
+                    try:
+                        obj = resolver(session, key)
+                    except KeyNotFoundError:
+                        continue
+                    cast('Any', obj).destroy()
+        except CryptoError:
+            raise
+        except PKCS11Error as exc:
+            raise map_pkcs11_error(exc, operation='key destruction') from exc
 
     def _reset_runtime_state(self) -> None:
         """Drop cached runtime provider state so the next operation re-resolves it."""
         if self._session_pool is not None:
             self._session_pool.close()
 
+        self._library = None
         self._session_pool = None
         self._resolved_slot = None
         self._resolved_token = None
@@ -299,11 +294,7 @@ class Pkcs11Backend(LoggerMixin):
         return self._session_pool
 
     def _ensure_alias_is_available(self, *, session: Session, alias: str) -> None:
-        """Guard against duplicate application aliases on the token.
-
-        Alias uniqueness is treated as application identity uniqueness, not as
-        an algorithm-specific namespace.
-        """
+        """Guard against duplicate application aliases on the token."""
         filters = {
             Attribute.CLASS: ObjectClass.PRIVATE_KEY,
             Attribute.LABEL: alias,
@@ -319,7 +310,7 @@ class Pkcs11Backend(LoggerMixin):
         session: Session,
         alias: str,
         key_id: bytes,
-        key_spec: KeySpec,
+        key_spec: RsaKeySpec,
         policy: KeyPolicy,
     ) -> Any | None:
         """Generate an RSA key pair and return the generated public-key object when available."""
@@ -370,7 +361,6 @@ class Pkcs11Backend(LoggerMixin):
         )
         return self._fingerprint_public_key_der(der)
 
-
     def _fingerprint_public_key_der(self, der: bytes) -> str:
         """Return the SHA-256 fingerprint of DER-encoded public-key bytes."""
         return hashlib.sha256(der).hexdigest()
@@ -387,28 +377,25 @@ class Pkcs11Backend(LoggerMixin):
         public_key_object: Any | None,
         algorithm: KeyAlgorithm,
     ) -> str | None:
-        """Return a stable SPKI fingerprint for a generated public key when available.
-
-        Some unit-test fakes or provider return values may not expose enough PKCS#11
-        public-key attributes to encode the key immediately after generation. In that
-        case, treat fingerprinting as unavailable instead of failing key generation.
-        """
+        """Return a stable SPKI fingerprint for a generated public key when available."""
         if public_key_object is None:
             return None
 
         try:
             der = self._encode_public_key_der(public_key_object, algorithm)
             public_key = serialization.load_der_public_key(der)
-        except Exception:
+        except (PKCS11Error, TypeError, ValueError):
             return None
 
-        return self._fingerprint_public_key(public_key)
+        if isinstance(public_key, (rsa.RSAPublicKey, ec.EllipticCurvePublicKey)):
+            return self._fingerprint_public_key(public_key)
+        return None
 
     def _encode_public_key_der(self, public_key_object: Any, algorithm: KeyAlgorithm) -> bytes:
         """Encode a PKCS#11 public key into DER for cryptography loading."""
         if algorithm is KeyAlgorithm.RSA:
-            return encode_rsa_public_key(public_key_object)
+            return cast('bytes', encode_rsa_public_key(public_key_object))
         if algorithm is KeyAlgorithm.EC:
-            return encode_ec_public_key(public_key_object)
+            return cast('bytes', encode_ec_public_key(public_key_object))
         msg = f'Unsupported key algorithm for DER encoding: {algorithm!r}'
         raise ProviderUnavailableError(msg)

@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSelector
 from crypto.domain.algorithms import KeyAlgorithm
+from crypto.domain.policies import SigningExecutionMode
 from crypto.domain.refs import ManagedKeyRef
 
 
@@ -55,7 +56,6 @@ class CryptoProviderProfileModel(models.Model):
     max_sessions = models.PositiveIntegerField(default=8)
     borrow_timeout_seconds = models.FloatField(default=5.0)
     rw_sessions = models.BooleanField(default=True)
-    allow_legacy_label_lookup = models.BooleanField(default=False)
 
     active = models.BooleanField(default=False)
 
@@ -121,26 +121,29 @@ class CryptoProviderProfileModel(models.Model):
             slot_id=self.slot_id,
         )
 
-        kwargs: dict[str, object] = {
-            'name': self.name,
-            'module_path': self.module_path,
-            'token': selector,
-            'max_sessions': self.max_sessions,
-            'borrow_timeout_seconds': self.borrow_timeout_seconds,
-            'rw_sessions': self.rw_sessions,
-            'allow_legacy_label_lookup': self.allow_legacy_label_lookup,
-        }
-
         if self.auth_source == ProviderAuthSource.ENV:
-            kwargs['user_pin_env_var'] = self.auth_source_ref
-        elif self.auth_source == ProviderAuthSource.FILE:
-            kwargs['user_pin_file'] = self.auth_source_ref
-        else:
-            raise ValidationError(
-                {'auth_source': f'Unsupported auth source {self.auth_source!r}. Only env and file are allowed.'}
+            return Pkcs11ProviderProfile(
+                name=self.name,
+                module_path=self.module_path,
+                token=selector,
+                user_pin_env_var=self.auth_source_ref,
+                max_sessions=self.max_sessions,
+                borrow_timeout_seconds=self.borrow_timeout_seconds,
+                rw_sessions=self.rw_sessions,
             )
-
-        return Pkcs11ProviderProfile(**kwargs)
+        if self.auth_source == ProviderAuthSource.FILE:
+            return Pkcs11ProviderProfile(
+                name=self.name,
+                module_path=self.module_path,
+                token=selector,
+                user_pin_file=self.auth_source_ref,
+                max_sessions=self.max_sessions,
+                borrow_timeout_seconds=self.borrow_timeout_seconds,
+                rw_sessions=self.rw_sessions,
+            )
+        raise ValidationError(
+            {'auth_source': f'Unsupported auth source {self.auth_source!r}. Only env and file are allowed.'}
+        )
 
     def __str__(self) -> str:
         return self.name
@@ -176,6 +179,11 @@ class CryptoManagedKeyModel(models.Model):
     public_key_fingerprint_sha256 = models.CharField(
         max_length=64,
         help_text='SHA-256 fingerprint of SubjectPublicKeyInfo DER, hex encoded.',
+    )
+    signing_execution_mode = models.CharField(
+        max_length=32,
+        default=SigningExecutionMode.COMPLETE_HSM.value,
+        help_text='How Trustpoint is allowed to execute managed-key signing.',
     )
 
     policy_snapshot = models.JSONField(
@@ -223,6 +231,12 @@ class CryptoManagedKeyModel(models.Model):
         if self.algorithm not in allowed_algorithms:
             raise ValidationError({'algorithm': f'Unsupported key algorithm {self.algorithm!r}.'})
 
+        allowed_signing_modes = {member.value for member in SigningExecutionMode}
+        if self.signing_execution_mode not in allowed_signing_modes:
+            raise ValidationError(
+                {'signing_execution_mode': f'Unsupported signing execution mode {self.signing_execution_mode!r}.'}
+            )
+
         if len(self.public_key_fingerprint_sha256) != 64:
             raise ValidationError(
                 {'public_key_fingerprint_sha256': 'Public-key SHA-256 fingerprint must be 64 hex characters.'}
@@ -237,11 +251,11 @@ class CryptoManagedKeyModel(models.Model):
     def to_managed_key_ref(self) -> ManagedKeyRef:
         """Convert the persisted model back into an application-facing managed-key ref."""
         return ManagedKeyRef(
+            id=self.id,
             alias=self.alias,
-            provider='pkcs11',
-            key_id=bytes.fromhex(self.key_id_hex),
-            label=self.label or self.alias,
             algorithm=KeyAlgorithm(self.algorithm),
+            public_key_fingerprint_sha256=self.public_key_fingerprint_sha256,
+            signing_execution_mode=SigningExecutionMode(self.signing_execution_mode),
         )
 
     def __str__(self) -> str:

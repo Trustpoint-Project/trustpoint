@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from crypto.adapters.pkcs11.mechanisms import ecdsa_hash_mechanisms, rsa_pkcs1v15_hash_mechanisms
 from crypto.domain.errors import ProviderUnavailableError
-from pkcs11 import Mechanism, PKCS11Error
+from pkcs11 import Mechanism, PKCS11Error  # type: ignore[import-untyped]
 
 if TYPE_CHECKING:
     from pkcs11 import Slot, Token
@@ -327,7 +327,6 @@ class Pkcs11CapabilityProbe:
             'can_generate_rsa': has('CKM_RSA_PKCS_KEY_PAIR_GEN'),
             'can_generate_ec': has('CKM_EC_KEY_PAIR_GEN'),
             'supports_raw_rsa_pkcs1v15': has('CKM_RSA_PKCS'),
-            'supports_raw_rsa_pss': has('CKM_RSA_PKCS_PSS'),
             'supports_raw_ecdsa': has('CKM_ECDSA'),
             'can_wrap_keys': has('CKM_AES_KEY_WRAP'),
             'can_unwrap_keys': has('CKM_AES_KEY_WRAP'),
@@ -341,7 +340,6 @@ class Pkcs11CapabilityProbe:
         derived['can_sign_ecdsa'] = (
             derived['supports_raw_ecdsa'] or any(ecdsa_exact_support.values())
         )
-        derived['can_sign_rsa_pss'] = derived['supports_raw_rsa_pss']
         return derived
 
     def _format_version(self, value: Any) -> str | None:

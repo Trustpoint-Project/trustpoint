@@ -12,7 +12,6 @@ class RsaKeySpec:
     """Specification for an RSA key pair."""
 
     key_size: int
-    public_exponent: int = 65537
 
 
 @dataclass(frozen=True, slots=True)

@@ -74,7 +74,6 @@ def _ensure_pytest_local_hsm_profile() -> tuple[CryptoProviderProfileModel | Non
             'max_sessions': 4,
             'borrow_timeout_seconds': 2.0,
             'rw_sessions': True,
-            'allow_legacy_label_lookup': False,
             'active': True,
         },
     )

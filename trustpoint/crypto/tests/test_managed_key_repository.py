@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
 import pytest
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
-from crypto.domain.algorithms import EllipticCurveName, KeyAlgorithm
-from crypto.domain.policies import KeyPolicy
-from crypto.domain.refs import ManagedKeyRef
+from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
+from crypto.domain.algorithms import KeyAlgorithm
+from crypto.domain.policies import KeyPolicy, SigningExecutionMode
 from crypto.models import (
     CryptoManagedKeyModel,
     CryptoProviderProfileModel,
@@ -28,30 +28,31 @@ def test_create_managed_key_persists_binding() -> None:
         active=True,
     )
     public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
-    key_ref = ManagedKeyRef(
-        alias='ca/root',
-        provider='pkcs11',
+    binding = Pkcs11ManagedKeyBinding(
         key_id=b'\x01\x02\x03\x04',
-        label='ca/root',
         algorithm=KeyAlgorithm.RSA,
+        signing_execution_mode=SigningExecutionMode.ALLOW_SOFTWARE_HASH,
     )
 
     repo = CryptoManagedKeyRepository()
     managed_key = repo.create_managed_key(
         profile=profile,
-        key_ref=key_ref,
+        alias='ca/root',
+        binding=binding,
         public_key=public_key,
-        policy=KeyPolicy.managed_signing_key(),
+        policy=KeyPolicy.managed_signing_key(signing_execution_mode=SigningExecutionMode.ALLOW_SOFTWARE_HASH),
     )
 
     assert managed_key.alias == 'ca/root'
     assert managed_key.provider_profile_id == profile.pk
     assert managed_key.key_id_hex == '01020304'
     assert managed_key.algorithm == 'rsa'
+    assert managed_key.signing_execution_mode == SigningExecutionMode.ALLOW_SOFTWARE_HASH.value
     assert managed_key.status == ManagedKeyStatus.ACTIVE
     assert len(managed_key.public_key_fingerprint_sha256) == 64
     assert managed_key.policy_snapshot['extractable'] is False
     assert managed_key.policy_snapshot['ephemeral'] is False
+    assert managed_key.policy_snapshot['signing_execution_mode'] == SigningExecutionMode.ALLOW_SOFTWARE_HASH.value
     assert 'sign' in managed_key.policy_snapshot['usages']
 
 
@@ -72,15 +73,17 @@ def test_build_managed_key_ref_round_trips() -> None:
         label='signer/ec',
         algorithm='ec',
         public_key_fingerprint_sha256='a' * 64,
+        signing_execution_mode=SigningExecutionMode.ALLOW_SOFTWARE_HASH.value,
         policy_snapshot={'extractable': False, 'ephemeral': False, 'usages': ['sign', 'verify']},
     )
 
     key_ref = managed_key.to_managed_key_ref()
 
+    assert key_ref.id == managed_key.id
     assert key_ref.alias == 'signer/ec'
-    assert key_ref.key_id == bytes.fromhex('0a0b0c0d')
-    assert key_ref.label == 'signer/ec'
     assert key_ref.algorithm is KeyAlgorithm.EC
+    assert key_ref.public_key_fingerprint_sha256 == 'a' * 64
+    assert key_ref.signing_execution_mode is SigningExecutionMode.ALLOW_SOFTWARE_HASH
 
 
 @pytest.mark.django_db
@@ -100,6 +103,7 @@ def test_mark_missing_sets_status_and_error() -> None:
         label='ca/root',
         algorithm='rsa',
         public_key_fingerprint_sha256='b' * 64,
+        signing_execution_mode=SigningExecutionMode.COMPLETE_HSM.value,
         policy_snapshot={'extractable': False, 'ephemeral': False, 'usages': ['sign']},
     )
 

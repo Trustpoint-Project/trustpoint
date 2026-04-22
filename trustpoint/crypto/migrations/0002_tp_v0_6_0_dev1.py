@@ -20,6 +20,7 @@ class Migration(migrations.Migration):
                 ('label', models.CharField(blank=True, help_text='Optional human-readable PKCS#11 label.', max_length=255, null=True)),
                 ('algorithm', models.CharField(max_length=16)),
                 ('public_key_fingerprint_sha256', models.CharField(help_text='SHA-256 fingerprint of SubjectPublicKeyInfo DER, hex encoded.', max_length=64)),
+                ('signing_execution_mode', models.CharField(default='complete_hsm', help_text='How Trustpoint is allowed to execute managed-key signing.', max_length=32)),
                 ('policy_snapshot', models.JSONField(default=dict, help_text='Persisted summary of the key policy at creation time.')),
                 ('status', models.CharField(choices=[('active', 'Active'), ('missing', 'Missing from provider'), ('mismatch', 'Public key mismatch'), ('error', 'Verification error')], default='active', max_length=16)),
                 ('created_at', models.DateTimeField(default=django.utils.timezone.now, editable=False)),
@@ -60,6 +61,10 @@ class Migration(migrations.Migration):
             model_name='cryptoproviderprofilemodel',
             new_name='crypto_prov_token_s_f2cce0_idx',
             old_name='crypto_prov_token_s_1b1624_idx',
+        ),
+        migrations.RemoveField(
+            model_name='cryptoproviderprofilemodel',
+            name='allow_legacy_label_lookup',
         ),
         migrations.AlterField(
             model_name='cryptoproviderprofilemodel',

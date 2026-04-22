@@ -13,7 +13,7 @@ from crypto.adapters.pkcs11.mechanisms import (
 from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm, SignatureAlgorithm
 from crypto.domain.errors import MechanismUnsupportedError
 from crypto.domain.policies import SigningExecutionMode
-from pkcs11 import Mechanism
+from pkcs11 import Mechanism  # type: ignore[import-untyped]
 
 if TYPE_CHECKING:
     from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities

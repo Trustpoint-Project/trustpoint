@@ -8,8 +8,8 @@ from threading import Lock
 from typing import TYPE_CHECKING
 
 from crypto.domain.errors import SessionUnavailableError
-from pkcs11 import PKCS11Error
-from pkcs11.exceptions import UserAlreadyLoggedIn
+from pkcs11 import PKCS11Error  # type: ignore[import-untyped]
+from pkcs11.exceptions import UserAlreadyLoggedIn  # type: ignore[import-untyped]
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:

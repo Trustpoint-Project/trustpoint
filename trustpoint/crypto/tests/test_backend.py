@@ -8,10 +8,10 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa, utils
 from pkcs11 import Attribute, Mechanism, NoSuchKey, ObjectClass
 
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
+from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSelector
 from crypto.domain.algorithms import EllipticCurveName, KeyAlgorithm
 from crypto.domain.policies import KeyPolicy
-from crypto.domain.refs import ManagedKeyRef
 from crypto.domain.specs import EcKeySpec, RsaKeySpec, SignRequest
 
 
@@ -244,14 +244,14 @@ def test_generate_managed_rsa_key_uses_pkcs11_keygen() -> None:
     session = FakeSession()
     backend = _build_backend(session)
 
-    key_ref = backend.generate_managed_key(
+    binding = backend.generate_managed_key(
         alias='ca/root',
         key_spec=RsaKeySpec(key_size=2048),
         policy=KeyPolicy.managed_signing_key(),
     )
 
-    assert key_ref.alias == 'ca/root'
-    assert key_ref.algorithm is KeyAlgorithm.RSA
+    assert binding.algorithm is KeyAlgorithm.RSA
+    assert binding.key_id
     assert session.generate_keypair_calls
 
 
@@ -291,15 +291,12 @@ def test_get_public_key_loads_rsa_public_key() -> None:
         ),
     )
     backend = _build_backend(session)
-    key_ref = ManagedKeyRef(
-        alias=label,
-        provider='pkcs11',
+    binding = Pkcs11ManagedKeyBinding(
         key_id=key_id,
-        label=label,
         algorithm=KeyAlgorithm.RSA,
     )
 
-    public_key = backend.get_public_key(key_ref)
+    public_key = backend.get_public_key(binding)
 
     assert isinstance(public_key, rsa.RSAPublicKey)
     assert public_key.key_size == 2048
@@ -320,15 +317,12 @@ def test_sign_encodes_ecdsa_signature_as_der() -> None:
         )
     )
     backend = _build_backend(session)
-    key_ref = ManagedKeyRef(
-        alias=label,
-        provider='pkcs11',
+    binding = Pkcs11ManagedKeyBinding(
         key_id=key_id,
-        label=label,
         algorithm=KeyAlgorithm.EC,
     )
 
-    signature = backend.sign(key=key_ref, data=b'payload', request=SignRequest.ecdsa_sha256())
+    signature = backend.sign(key=binding, data=b'payload', request=SignRequest.ecdsa_sha256())
 
     assert utils.decode_dss_signature(signature) == (123, 456)
 
@@ -346,15 +340,12 @@ def test_sign_uses_rsa_hashing_mechanism() -> None:
     )
     session = FakeSession(private_key=private_key)
     backend = _build_backend(session)
-    key_ref = ManagedKeyRef(
-        alias=label,
-        provider='pkcs11',
+    binding = Pkcs11ManagedKeyBinding(
         key_id=key_id,
-        label=label,
         algorithm=KeyAlgorithm.RSA,
     )
 
-    signature = backend.sign(key=key_ref, data=b'payload', request=SignRequest.rsa_pkcs1v15_sha256())
+    signature = backend.sign(key=binding, data=b'payload', request=SignRequest.rsa_pkcs1v15_sha256())
 
     assert signature == b'rsa-signature'
     assert private_key.calls == [(b'payload', Mechanism.SHA256_RSA_PKCS)]

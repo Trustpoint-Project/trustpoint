@@ -84,7 +84,7 @@ def test_signing_contract(live_pkcs11_backend, live_pkcs11_capabilities, scenari
     )
 
     alias = f"pytest-{scenario.name}-{secrets.token_hex(6)}"
-    key = live_pkcs11_backend.generate_managed_key(
+    binding = live_pkcs11_backend.generate_managed_key(
         alias=alias,
         key_spec=scenario.key_spec,
         policy=KeyPolicy(
@@ -97,7 +97,7 @@ def test_signing_contract(live_pkcs11_backend, live_pkcs11_capabilities, scenari
 
     payload = f"trustpoint-signing-contract:{scenario.name}".encode("utf-8")
     signature = live_pkcs11_backend.sign(
-        key=key,
+        key=binding,
         data=payload,
         request=scenario.sign_request,
     )
@@ -105,7 +105,7 @@ def test_signing_contract(live_pkcs11_backend, live_pkcs11_capabilities, scenari
     assert isinstance(signature, bytes)
     assert signature
 
-    public_key = live_pkcs11_backend.get_public_key(key)
+    public_key = live_pkcs11_backend.get_public_key(binding)
 
     if scenario.verifier_kind == "rsa":
         public_key.verify(

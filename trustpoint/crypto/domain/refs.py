@@ -1,36 +1,34 @@
-"""Stable references to backend-managed crypto material."""
+"""Stable application-facing references to backend-managed crypto material."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from crypto.domain.policies import SigningExecutionMode
-
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from crypto.domain.algorithms import KeyAlgorithm
+    from crypto.domain.policies import SigningExecutionMode
 
 
 @dataclass(frozen=True, slots=True)
 class ManagedKeyRef:
-    """Opaque application-facing reference to a managed key."""
+    """Opaque application-facing reference to a managed key.
 
+    This handle is intentionally provider-agnostic. PKCS#11 object identity is
+    persisted server-side and must not leak into business code.
+    """
+
+    id: UUID
     alias: str
-    provider: str
-    key_id: bytes
-    label: str
     algorithm: KeyAlgorithm
-    public_key_fingerprint_sha256: str | None = None
-    signing_execution_mode: SigningExecutionMode = SigningExecutionMode.COMPLETE_HSM
-
-    @property
-    def key_id_hex(self) -> str:
-        """Return the PKCS#11 object id as a hex string."""
-        return self.key_id.hex()
+    public_key_fingerprint_sha256: str
+    signing_execution_mode: SigningExecutionMode
 
 
-class ManagedKeyVerificationStatus(str, Enum):
+class ManagedKeyVerificationStatus(StrEnum):
     """Verification outcome for a managed-key reference."""
 
     PRESENT = 'present'
