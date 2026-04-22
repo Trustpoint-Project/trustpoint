@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from django.core.exceptions import ValidationError
-
-from crypto.adapters.pkcs11.backend import Pkcs11Backend
+from crypto.application.backend_factory import BackendAdapterFactory, DefaultBackendAdapterFactory
 from crypto.domain.errors import CryptoError, KeyNotFoundError, ProviderConfigurationError
 from crypto.domain.refs import ManagedKeyRef, ManagedKeyVerification, ManagedKeyVerificationStatus
 from crypto.models import CryptoManagedKeyModel, CryptoProviderProfileModel
@@ -15,13 +12,10 @@ from crypto.repositories import CryptoManagedKeyRepository, CryptoProviderProfil
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
-    from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
-    from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile
+    from crypto.application.provider_backend import ManagedKeyBackendAdapter
     from crypto.domain.algorithms import SupportedPublicKey
     from crypto.domain.policies import KeyPolicy
     from crypto.domain.specs import KeySpec, SignRequest
-
-type AdapterFactory = Callable[[Pkcs11ProviderProfile], Pkcs11Backend]
 
 
 class TrustpointCryptoBackend(LoggerMixin):
@@ -34,12 +28,12 @@ class TrustpointCryptoBackend(LoggerMixin):
         *,
         profile_repository: CryptoProviderProfileRepository | None = None,
         managed_key_repository: CryptoManagedKeyRepository | None = None,
-        adapter_factory: AdapterFactory | None = None,
+        adapter_factory: BackendAdapterFactory | None = None,
     ) -> None:
         """Initialize the application-facing crypto backend."""
         self._profile_repository = profile_repository or CryptoProviderProfileRepository()
         self._managed_key_repository = managed_key_repository or CryptoManagedKeyRepository()
-        self._adapter_factory = adapter_factory or (lambda profile: Pkcs11Backend(profile=profile))
+        self._adapter_factory = adapter_factory or DefaultBackendAdapterFactory()
 
     def verify_provider(self) -> None:
         """Validate that the active provider can be loaded and used."""
@@ -61,6 +55,7 @@ class TrustpointCryptoBackend(LoggerMixin):
             managed_key = self._managed_key_repository.create_managed_key(
                 profile=profile,
                 alias=alias,
+                provider_label=getattr(binding, 'provider_label', None) or alias,
                 binding=binding,
                 public_key=public_key,
                 policy=policy,
@@ -81,7 +76,7 @@ class TrustpointCryptoBackend(LoggerMixin):
         adapter = self._build_adapter(managed_key.provider_profile)
 
         try:
-            binding = self._managed_key_repository.build_pkcs11_binding(managed_key)
+            binding = self._managed_key_repository.build_backend_binding(managed_key)
             verification = adapter.verify_managed_key(binding)
         except CryptoError as exc:
             self._managed_key_repository.mark_error(managed_key=managed_key, error_summary=str(exc))
@@ -113,7 +108,7 @@ class TrustpointCryptoBackend(LoggerMixin):
         managed_key = self._load_managed_key(key)
         adapter = self._build_adapter(managed_key.provider_profile)
         try:
-            return adapter.get_public_key(self._managed_key_repository.build_pkcs11_binding(managed_key))
+            return adapter.get_public_key(self._managed_key_repository.build_backend_binding(managed_key))
         finally:
             adapter.close()
 
@@ -123,7 +118,7 @@ class TrustpointCryptoBackend(LoggerMixin):
         adapter = self._build_adapter(managed_key.provider_profile)
         try:
             return adapter.sign(
-                key=self._managed_key_repository.build_pkcs11_binding(managed_key),
+                key=self._managed_key_repository.build_backend_binding(managed_key),
                 data=data,
                 request=request,
             )
@@ -139,35 +134,30 @@ class TrustpointCryptoBackend(LoggerMixin):
             raise ProviderConfigurationError(msg) from exc
 
     def _load_managed_key(self, key: ManagedKeyRef) -> CryptoManagedKeyModel:
-        """Resolve an application-facing managed key reference to its stored binding."""
+        """Resolve an application-facing managed-key reference to its stored binding."""
         try:
             return self._managed_key_repository.get_by_id(managed_key_id=key.id)
         except CryptoManagedKeyModel.DoesNotExist as exc:
             msg = f'Managed key {key.id} does not exist.'
             raise KeyNotFoundError(msg) from exc
 
-    def _build_adapter(self, profile_model: CryptoProviderProfileModel) -> Pkcs11Backend:
-        """Build a PKCS#11 adapter for a persisted provider profile."""
-        try:
-            provider_profile = profile_model.build_provider_profile()
-        except ValidationError as exc:
-            msg = f'Provider profile {profile_model.name!r} is invalid.'
-            raise ProviderConfigurationError(msg) from exc
-        return self._adapter_factory(provider_profile)
+    def _build_adapter(self, profile_model: CryptoProviderProfileModel) -> ManagedKeyBackendAdapter:
+        """Build a backend-kind-specific adapter for a persisted provider profile."""
+        return self._adapter_factory.build(profile_model)
 
     def _cleanup_orphaned_binding(
         self,
         *,
-        adapter: Pkcs11Backend,
+        adapter: ManagedKeyBackendAdapter,
         alias: str,
-        binding: Pkcs11ManagedKeyBinding,
+        binding: object,
     ) -> None:
         """Best-effort cleanup of a generated key if DB persistence fails."""
         try:
             adapter.destroy_managed_key(binding)
         except CryptoError as exc:
             self.logger.warning(
-                'Failed to clean up orphaned PKCS#11 managed key for alias %r after persistence failure: %s',
+                'Failed to clean up orphaned managed key for alias %r after persistence failure: %s',
                 alias,
                 exc,
             )

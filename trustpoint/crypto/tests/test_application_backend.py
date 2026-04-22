@@ -17,16 +17,19 @@ from crypto.domain.policies import KeyPolicy, SigningExecutionMode
 from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.specs import RsaKeySpec, SignRequest
 from crypto.models import (
+    BackendKind,
     CryptoManagedKeyModel,
+    CryptoManagedKeyPkcs11BindingModel,
+    CryptoProviderPkcs11ConfigModel,
     CryptoProviderProfileModel,
     ManagedKeyStatus,
-    ProviderAuthSource,
+    Pkcs11AuthSource,
 )
 
 
 @dataclass
 class FakeAdapter:
-    """Minimal PKCS#11 adapter fake for application-backend tests."""
+    """Minimal backend adapter fake for application-backend tests."""
 
     public_key: object
     generated_binding: Pkcs11ManagedKeyBinding
@@ -76,75 +79,106 @@ class FakeAdapter:
         self.close_calls += 1
 
 
-@pytest.mark.django_db
-def test_generate_managed_key_persists_opaque_ref_and_signing_mode() -> None:
+@dataclass
+class FakeAdapterFactory:
+    """Factory shim matching the new backend-factory contract."""
+
+    adapter: FakeAdapter
+
+    def build(self, _profile_model: CryptoProviderProfileModel) -> FakeAdapter:
+        """Return the configured fake adapter."""
+        return self.adapter
+
+
+def _create_pkcs11_profile(*, name: str, active: bool = True) -> CryptoProviderProfileModel:
+    """Create a generic provider profile plus PKCS#11 config."""
     profile = CryptoProviderProfileModel.objects.create(
-        name='provider-1',
+        name=name,
+        backend_kind=BackendKind.PKCS11,
+        active=active,
+    )
+    CryptoProviderPkcs11ConfigModel.objects.create(
+        profile=profile,
         module_path='/usr/lib/test-pkcs11.so',
         token_serial='1234',
-        auth_source=ProviderAuthSource.FILE,
+        token_label=None,
+        slot_id=None,
+        auth_source=Pkcs11AuthSource.FILE,
         auth_source_ref='/tmp/user-pin.txt',
-        active=True,
+        max_sessions=4,
+        borrow_timeout_seconds=2.0,
+        rw_sessions=True,
     )
+    return profile
+
+
+@pytest.mark.django_db
+def test_generate_managed_key_persists_opaque_ref_and_signing_mode() -> None:
+    profile = _create_pkcs11_profile(name='provider-1', active=True)
+
     public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
     adapter = FakeAdapter(
         public_key=public_key,
         generated_binding=Pkcs11ManagedKeyBinding(
             key_id=b'\x01\x02\x03\x04',
             algorithm=KeyAlgorithm.RSA,
-            signing_execution_mode=SigningExecutionMode.ALLOW_SOFTWARE_HASH,
+            signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
         ),
     )
-    backend = TrustpointCryptoBackend(adapter_factory=lambda _profile: adapter)
+    backend = TrustpointCryptoBackend(adapter_factory=FakeAdapterFactory(adapter=adapter))
 
     key_ref = backend.generate_managed_key(
         alias='ca/root',
         key_spec=RsaKeySpec(key_size=2048),
-        policy=KeyPolicy.managed_signing_key(signing_execution_mode=SigningExecutionMode.ALLOW_SOFTWARE_HASH),
+        policy=KeyPolicy.managed_signing_key(signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH),
     )
 
     managed_key = CryptoManagedKeyModel.objects.get(pk=key_ref.id)
+    pkcs11_binding = CryptoManagedKeyPkcs11BindingModel.objects.get(managed_key=managed_key)
+
     assert managed_key.provider_profile_id == profile.pk
+    assert managed_key.provider_label == 'ca/root'
+    assert pkcs11_binding.key_id_hex == '01020304'
     assert key_ref.alias == 'ca/root'
     assert key_ref.algorithm is KeyAlgorithm.RSA
     assert key_ref.public_key_fingerprint_sha256 == managed_key.public_key_fingerprint_sha256
-    assert key_ref.signing_execution_mode is SigningExecutionMode.ALLOW_SOFTWARE_HASH
-    assert managed_key.signing_execution_mode == SigningExecutionMode.ALLOW_SOFTWARE_HASH.value
+    assert key_ref.signing_execution_mode is SigningExecutionMode.ALLOW_APPLICATION_HASH
+    assert managed_key.signing_execution_mode == SigningExecutionMode.ALLOW_APPLICATION_HASH.value
     assert adapter.get_public_key_calls == [adapter.generated_binding]
     assert adapter.close_calls == 1
 
 
 @pytest.mark.django_db
 def test_sign_routes_through_persisted_pkcs11_binding() -> None:
-    profile = CryptoProviderProfileModel.objects.create(
-        name='provider-1',
-        module_path='/usr/lib/test-pkcs11.so',
-        token_serial='1234',
-        auth_source=ProviderAuthSource.FILE,
-        auth_source_ref='/tmp/user-pin.txt',
-        active=True,
-    )
+    profile = _create_pkcs11_profile(name='provider-1', active=True)
+
     public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
     adapter = FakeAdapter(
         public_key=public_key,
         generated_binding=Pkcs11ManagedKeyBinding(
             key_id=b'\xaa\xbb\xcc\xdd',
             algorithm=KeyAlgorithm.RSA,
-            signing_execution_mode=SigningExecutionMode.ALLOW_SOFTWARE_HASH,
+            signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
         ),
         signature=b'app-signature',
     )
+
     managed_key = CryptoManagedKeyModel.objects.create(
         alias='signer/rsa',
+        provider_label='signer/rsa',
         provider_profile=profile,
-        key_id_hex='aabbccdd',
-        label='signer/rsa',
         algorithm='rsa',
         public_key_fingerprint_sha256='b' * 64,
-        signing_execution_mode=SigningExecutionMode.ALLOW_SOFTWARE_HASH.value,
+        signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH.value,
         policy_snapshot={'extractable': False, 'ephemeral': False, 'usages': ['sign', 'verify']},
     )
-    backend = TrustpointCryptoBackend(adapter_factory=lambda _profile: adapter)
+    CryptoManagedKeyPkcs11BindingModel.objects.create(
+        managed_key=managed_key,
+        provider_profile=profile,
+        key_id_hex='aabbccdd',
+    )
+
+    backend = TrustpointCryptoBackend(adapter_factory=FakeAdapterFactory(adapter=adapter))
 
     signature = backend.sign(
         key=managed_key.to_managed_key_ref(),
@@ -155,21 +189,16 @@ def test_sign_routes_through_persisted_pkcs11_binding() -> None:
     assert signature == b'app-signature'
     binding, payload, request = adapter.sign_calls[0]
     assert binding.key_id == bytes.fromhex('aabbccdd')
-    assert binding.signing_execution_mode is SigningExecutionMode.ALLOW_SOFTWARE_HASH
+    assert binding.signing_execution_mode is SigningExecutionMode.ALLOW_APPLICATION_HASH
+    assert binding.provider_label == 'signer/rsa'
     assert payload == b'payload'
     assert request.signature_algorithm is SignRequest.rsa_pkcs1v15_sha256().signature_algorithm
 
 
 @pytest.mark.django_db
 def test_verify_managed_key_updates_repository_status() -> None:
-    profile = CryptoProviderProfileModel.objects.create(
-        name='provider-1',
-        module_path='/usr/lib/test-pkcs11.so',
-        token_serial='1234',
-        auth_source=ProviderAuthSource.FILE,
-        auth_source_ref='/tmp/user-pin.txt',
-        active=True,
-    )
+    profile = _create_pkcs11_profile(name='provider-1', active=True)
+
     public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
     adapter = FakeAdapter(
         public_key=public_key,
@@ -182,17 +211,23 @@ def test_verify_managed_key_updates_repository_status() -> None:
             resolved_public_key_fingerprint_sha256='c' * 64,
         ),
     )
+
     managed_key = CryptoManagedKeyModel.objects.create(
         alias='verify/rsa',
+        provider_label='verify/rsa',
         provider_profile=profile,
-        key_id_hex='aabbccdd',
-        label='verify/rsa',
         algorithm='rsa',
         public_key_fingerprint_sha256='b' * 64,
-        signing_execution_mode=SigningExecutionMode.COMPLETE_HSM.value,
+        signing_execution_mode=SigningExecutionMode.COMPLETE_BACKEND.value,
         policy_snapshot={'extractable': False, 'ephemeral': False, 'usages': ['sign', 'verify']},
     )
-    backend = TrustpointCryptoBackend(adapter_factory=lambda _profile: adapter)
+    CryptoManagedKeyPkcs11BindingModel.objects.create(
+        managed_key=managed_key,
+        provider_profile=profile,
+        key_id_hex='aabbccdd',
+    )
+
+    backend = TrustpointCryptoBackend(adapter_factory=FakeAdapterFactory(adapter=adapter))
 
     verification = backend.verify_managed_key(managed_key.to_managed_key_ref())
 

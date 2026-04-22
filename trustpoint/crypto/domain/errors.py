@@ -14,7 +14,7 @@ class ProviderUnavailableError(CryptoError):
 
 
 class AuthenticationError(CryptoError):
-    """Raised when the provider rejects authentication."""
+    """Raised when the provider rejects authentication or key-unsealing material."""
 
 
 class SessionUnavailableError(CryptoError):
@@ -35,3 +35,15 @@ class UnsupportedKeySpecError(CryptoError):
 
 class MechanismUnsupportedError(CryptoError):
     """Raised when the provider cannot satisfy an algorithm/mechanism request."""
+
+
+class UnsupportedBackendKindError(CryptoError):
+    """Raised when Trustpoint encounters an unknown backend kind."""
+
+
+class InternalConsistencyError(CryptoError):
+    """Raised when backend-produced crypto state is internally inconsistent."""
+
+
+class ProviderOperationNotImplementedError(CryptoError):
+    """Raised when a configured backend exists but an operation is not implemented yet."""

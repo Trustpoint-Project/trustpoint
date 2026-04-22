@@ -47,8 +47,8 @@ def resolve_signing_operation(
     """Resolve a PKCS#11 signing operation from capabilities and key policy.
 
     There are only two explicit modes:
-    - COMPLETE_HSM
-    - ALLOW_SOFTWARE_HASH
+    - COMPLETE_BACKEND
+    - ALLOW_APPLICATION_HASH
 
     No implicit legacy behavior is applied.
     """
@@ -94,7 +94,7 @@ def _resolve_rsa_signing_operation(
     exact_mechanism = rsa_pkcs1v15_mechanism_for_hash(request.hash_algorithm)
     raw_mechanism = Mechanism.RSA_PKCS
 
-    if signing_execution_mode is SigningExecutionMode.COMPLETE_HSM:
+    if signing_execution_mode is SigningExecutionMode.COMPLETE_BACKEND:
         if not capabilities.supports(exact_mechanism):
             msg = (
                 f'Token does not support the complete in-HSM PKCS#11 mechanism {exact_mechanism.name} '
@@ -104,7 +104,7 @@ def _resolve_rsa_signing_operation(
 
         return Pkcs11SignOperation(mechanism=exact_mechanism, payload=data)
 
-    if signing_execution_mode is SigningExecutionMode.ALLOW_SOFTWARE_HASH:
+    if signing_execution_mode is SigningExecutionMode.ALLOW_APPLICATION_HASH:
         if capabilities.supports(raw_mechanism):
             digest = _hash_bytes(data=data, algorithm=request.hash_algorithm)
             payload = _RSA_DIGEST_INFO_PREFIX[request.hash_algorithm] + digest
@@ -139,7 +139,7 @@ def _resolve_ec_signing_operation(
     exact_mechanism = ecdsa_mechanism_for_hash(request.hash_algorithm)
     raw_mechanism = Mechanism.ECDSA
 
-    if signing_execution_mode is SigningExecutionMode.COMPLETE_HSM:
+    if signing_execution_mode is SigningExecutionMode.COMPLETE_BACKEND:
         if not capabilities.supports(exact_mechanism):
             msg = (
                 f'Token does not support the complete in-HSM PKCS#11 mechanism {exact_mechanism.name} '
@@ -149,7 +149,7 @@ def _resolve_ec_signing_operation(
 
         return Pkcs11SignOperation(mechanism=exact_mechanism, payload=data)
 
-    if signing_execution_mode is SigningExecutionMode.ALLOW_SOFTWARE_HASH:
+    if signing_execution_mode is SigningExecutionMode.ALLOW_APPLICATION_HASH:
         if capabilities.supports(raw_mechanism):
             digest = _hash_bytes(data=data, algorithm=request.hash_algorithm)
             return Pkcs11SignOperation(mechanism=raw_mechanism, payload=digest)
@@ -169,7 +169,7 @@ def _resolve_ec_signing_operation(
 
 
 def _hash_bytes(*, data: bytes, algorithm: HashAlgorithmName) -> bytes:
-    """Hash bytes for ALLOW_SOFTWARE_HASH mode."""
+    """Hash bytes for ALLOW_APPLICATION_HASH mode."""
     if algorithm is HashAlgorithmName.SHA224:
         return hashlib.sha224(data).digest()
     if algorithm is HashAlgorithmName.SHA256:

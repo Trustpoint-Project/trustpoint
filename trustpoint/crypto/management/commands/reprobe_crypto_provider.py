@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from django.core.management.base import BaseCommand, CommandError
 
-from crypto.adapters.pkcs11.backend import Pkcs11Backend
+from crypto.application.backend_factory import DefaultBackendAdapterFactory
 from crypto.domain.errors import CryptoError
 from crypto.models import CryptoProviderProfileModel
 from crypto.repositories import CryptoProviderProfileRepository
 
 
 class Command(BaseCommand):
-    """Reprobe a configured PKCS#11 provider profile and persist the result."""
+    """Reprobe a configured crypto provider profile and persist the capability snapshot."""
 
     help = "Reprobe a crypto provider profile and persist the capability snapshot."
 
@@ -25,6 +25,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         profile_name = options.get("profile")
         repository = CryptoProviderProfileRepository()
+        adapter_factory = DefaultBackendAdapterFactory()
 
         if profile_name:
             try:
@@ -37,7 +38,11 @@ class Command(BaseCommand):
             except CryptoProviderProfileModel.DoesNotExist as exc:
                 raise CommandError("No active provider profile is configured.") from exc
 
-        backend = Pkcs11Backend(profile=profile.build_provider_profile())
+        try:
+            backend = adapter_factory.build(profile)
+        except CryptoError as exc:
+            repository.record_probe_failure(profile=profile, error_summary=str(exc))
+            raise CommandError(f"Provider initialization failed: {exc}") from exc
 
         try:
             capabilities = backend.refresh_capabilities()
@@ -48,7 +53,10 @@ class Command(BaseCommand):
         finally:
             backend.close()
 
-        self.stdout.write(self.style.SUCCESS(
-            f"Reprobe succeeded for profile {profile.name!r}. "
-            f"snapshot_id={result.snapshot_id} changed={result.changed} hash={result.probe_hash}"
-        ))
+        self.stdout.write(
+            self.style.SUCCESS(
+                f"Reprobe succeeded for profile {profile.name!r}. "
+                f"backend_kind={profile.backend_kind} "
+                f"snapshot_id={result.snapshot_id} changed={result.changed} hash={result.probe_hash}"
+            )
+        )

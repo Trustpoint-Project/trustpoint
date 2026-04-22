@@ -7,10 +7,10 @@ from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSele
 
 __all__ = [
     'Pkcs11Backend',
-    'Pkcs11ManagedKeyBinding',
-    'Pkcs11ManagedKeyVerification',
     'Pkcs11Capabilities',
     'Pkcs11CapabilityProbe',
+    'Pkcs11ManagedKeyBinding',
+    'Pkcs11ManagedKeyVerification',
     'Pkcs11ProviderProfile',
     'Pkcs11TokenSelector',
 ]

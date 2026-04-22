@@ -23,17 +23,19 @@ class KeyUsage(str, Enum):
 class SigningExecutionMode(str, Enum):
     """How Trustpoint is allowed to execute managed-key signing for a key.
 
-    COMPLETE_HSM:
-        The HSM must perform the complete digest+sign operation using an exact
-        PKCS#11 mechanism such as CKM_SHA256_RSA_PKCS or CKM_ECDSA_SHA256.
+    COMPLETE_BACKEND:
+        The configured backend must perform the complete digest+sign operation.
+        For PKCS#11 that means mechanisms such as CKM_SHA256_RSA_PKCS or
+        CKM_ECDSA_SHA256. For software or remote backends it means the backend
+        receives the original message and performs hashing and signing itself.
 
-    ALLOW_SOFTWARE_HASH:
-        Trustpoint may hash or prepare the payload in software and then invoke
-        a raw HSM signing mechanism such as CKM_RSA_PKCS or CKM_ECDSA.
+    ALLOW_APPLICATION_HASH:
+        Trustpoint may hash or prepare the payload in application code and then
+        invoke a raw backend signing operation.
     """
 
-    COMPLETE_HSM = 'complete_hsm'
-    ALLOW_SOFTWARE_HASH = 'allow_software_hash'
+    COMPLETE_BACKEND = 'complete_backend'
+    ALLOW_APPLICATION_HASH = 'allow_application_hash'
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,7 +44,7 @@ class KeyPolicy:
 
     extractable: bool = False
     ephemeral: bool = False
-    signing_execution_mode: SigningExecutionMode = SigningExecutionMode.COMPLETE_HSM
+    signing_execution_mode: SigningExecutionMode = SigningExecutionMode.COMPLETE_BACKEND
     usages: frozenset[KeyUsage] = field(
         default_factory=lambda: frozenset({KeyUsage.SIGN, KeyUsage.VERIFY}),
     )
@@ -51,7 +53,7 @@ class KeyPolicy:
     def managed_signing_key(
         cls,
         *,
-        signing_execution_mode: SigningExecutionMode = SigningExecutionMode.COMPLETE_HSM,
+        signing_execution_mode: SigningExecutionMode = SigningExecutionMode.COMPLETE_BACKEND,
     ) -> Self:
         """Build the default policy for long-lived managed signing keys."""
         return cls(

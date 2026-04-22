@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.db import transaction
 
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.domain.errors import (
@@ -15,8 +17,10 @@ from crypto.domain.errors import (
     SessionUnavailableError,
 )
 from crypto.models import (
+    BackendKind,
+    CryptoProviderPkcs11ConfigModel,
     CryptoProviderProfileModel,
-    ProviderAuthSource,
+    Pkcs11AuthSource,
 )
 
 
@@ -30,14 +34,38 @@ def _read_text_file(path: Path) -> str | None:
 
 
 def _ensure_pytest_local_hsm_profile() -> tuple[CryptoProviderProfileModel | None, str | None]:
-    """Ensure the pytest DB contains a local-dev PKCS#11 provider profile."""
-    profile_model = CryptoProviderProfileModel.objects.filter(active=True).order_by('id').first()
-    if profile_model is not None:
-        return profile_model, None
+    """Ensure the pytest DB contains a usable local-dev PKCS#11 provider profile."""
+    preferred_names = (
+        'local-dev-softhsm',
+        'pytest-local-dev-pkcs11',
+    )
 
-    profile_model = CryptoProviderProfileModel.objects.order_by('id').first()
-    if profile_model is not None:
-        return profile_model, None
+    for name in preferred_names:
+        profile = (
+            CryptoProviderProfileModel.objects.select_related('pkcs11_config')
+            .filter(name=name, backend_kind=BackendKind.PKCS11)
+            .first()
+        )
+        if profile is not None:
+            return profile, None
+
+    existing_active = (
+        CryptoProviderProfileModel.objects.select_related('pkcs11_config')
+        .filter(active=True, backend_kind=BackendKind.PKCS11)
+        .order_by('id')
+        .first()
+    )
+    if existing_active is not None:
+        return existing_active, None
+
+    existing_any = (
+        CryptoProviderProfileModel.objects.select_related('pkcs11_config')
+        .filter(backend_kind=BackendKind.PKCS11)
+        .order_by('id')
+        .first()
+    )
+    if existing_any is not None:
+        return existing_any, None
 
     module_path = Path(settings.HSM_DEFAULT_PKCS11_MODULE_PATH)
     if not module_path.exists():
@@ -62,21 +90,32 @@ def _ensure_pytest_local_hsm_profile() -> tuple[CryptoProviderProfileModel | Non
             'HSM_DEFAULT_TOKEN_LABEL is not set'
         )
 
-    profile_model, _ = CryptoProviderProfileModel.objects.update_or_create(
-        name='pytest-local-dev-softhsm',
-        defaults={
-            'module_path': str(module_path),
-            'token_serial': token_serial,
-            'token_label': token_label,
-            'slot_id': None,
-            'auth_source': ProviderAuthSource.FILE,
-            'auth_source_ref': str(pin_file),
-            'max_sessions': 4,
-            'borrow_timeout_seconds': 2.0,
-            'rw_sessions': True,
-            'active': True,
-        },
-    )
+    with transaction.atomic():
+        CryptoProviderProfileModel.objects.filter(active=True).update(active=False)
+
+        profile_model, _ = CryptoProviderProfileModel.objects.update_or_create(
+            name='pytest-local-dev-pkcs11',
+            defaults={
+                'backend_kind': BackendKind.PKCS11,
+                'active': True,
+            },
+        )
+
+        CryptoProviderPkcs11ConfigModel.objects.update_or_create(
+            profile=profile_model,
+            defaults={
+                'module_path': str(module_path),
+                'token_serial': token_serial,
+                'token_label': token_label,
+                'slot_id': None,
+                'auth_source': Pkcs11AuthSource.FILE,
+                'auth_source_ref': str(pin_file),
+                'max_sessions': 4,
+                'borrow_timeout_seconds': 2.0,
+                'rw_sessions': True,
+            },
+        )
+
     return profile_model, None
 
 
@@ -86,14 +125,18 @@ def live_pkcs11_backend(db):
     profile_model, reason = _ensure_pytest_local_hsm_profile()
     if profile_model is None:
         pytest.skip(
-            'Skipping PKCS#11 integration tests: no crypto provider profile is configured '
+            'Skipping PKCS#11 integration tests: no PKCS#11 provider profile is configured '
             f'and no local-dev PKCS#11 settings could seed one ({reason}).'
         )
 
     try:
-        profile = profile_model.build_provider_profile()
-    except ProviderConfigurationError as exc:
-        pytest.skip(f'Skipping PKCS#11 integration tests: provider profile is invalid ({exc}).')
+        config = profile_model.pkcs11_config
+        profile = config.build_provider_profile()
+    except (ObjectDoesNotExist, ValidationError, ProviderConfigurationError) as exc:
+        pytest.skip(
+            'Skipping PKCS#11 integration tests: provider profile is invalid '
+            f'(profile={profile_model.name!r}, backend_kind={profile_model.backend_kind!r}, exc={exc!r}).'
+        )
 
     backend = Pkcs11Backend(profile=profile)
 
@@ -105,7 +148,15 @@ def live_pkcs11_backend(db):
         SessionUnavailableError,
         ProviderConfigurationError,
     ) as exc:
-        pytest.skip(f'Skipping PKCS#11 integration tests: no usable HSM/token is available ({exc}).')
+        pytest.skip(
+            'Skipping PKCS#11 integration tests: no usable HSM/token is available '
+            f'(profile={profile_model.name!r}, '
+            f'module_path={config.module_path!r}, '
+            f'token_serial={config.token_serial!r}, '
+            f'token_label={config.token_label!r}, '
+            f'auth_source_ref={config.auth_source_ref!r}, '
+            f'exc={exc!r}, cause={exc.__cause__!r}).'
+        )
 
     try:
         yield backend

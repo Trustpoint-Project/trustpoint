@@ -1,8 +1,8 @@
-"""Internal PKCS#11 binding types for managed keys."""
+"""Internal binding types for the software backend."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from crypto.domain.policies import SigningExecutionMode
@@ -13,24 +13,21 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, slots=True)
-class Pkcs11ManagedKeyBinding:
-    """Provider-specific PKCS#11 identity for a managed key."""
+class SoftwareManagedKeyBinding:
+    """Durable software-managed key binding."""
 
-    key_id: bytes
+    key_handle: str
     algorithm: KeyAlgorithm
+    encrypted_private_key_pkcs8_der: bytes
+    encryption_metadata: dict[str, object] = field(default_factory=dict)
     public_key_fingerprint_sha256: str | None = None
     signing_execution_mode: SigningExecutionMode = SigningExecutionMode.COMPLETE_BACKEND
     provider_label: str | None = None
 
-    @property
-    def key_id_hex(self) -> str:
-        """Return the PKCS#11 object id as a hex string."""
-        return self.key_id.hex()
-
 
 @dataclass(frozen=True, slots=True)
-class Pkcs11ManagedKeyVerification:
-    """Verification result for a provider-specific PKCS#11 managed-key binding."""
+class SoftwareManagedKeyVerification:
+    """Verification result for a software-managed key binding."""
 
     status: ManagedKeyVerificationStatus
     resolved_public_key_fingerprint_sha256: str | None = None

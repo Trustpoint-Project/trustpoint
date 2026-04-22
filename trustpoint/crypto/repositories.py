@@ -12,11 +12,23 @@ from django.utils import timezone
 
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
+from crypto.adapters.rest.bindings import RestManagedKeyBinding
+from crypto.adapters.rest.capabilities import RestCapabilities
+from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
+from crypto.adapters.software.capabilities import SoftwareCapabilities
 from crypto.domain.algorithms import KeyAlgorithm
+from crypto.domain.errors import InternalConsistencyError, UnsupportedBackendKindError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
 from crypto.models import (
+    BackendKind,
     CryptoManagedKeyModel,
+    CryptoManagedKeyPkcs11BindingModel,
+    CryptoManagedKeyRestBindingModel,
+    CryptoManagedKeySoftwareBindingModel,
+    CryptoProviderCapabilityPkcs11DetailModel,
+    CryptoProviderCapabilityRestDetailModel,
     CryptoProviderCapabilitySnapshotModel,
+    CryptoProviderCapabilitySoftwareDetailModel,
     CryptoProviderProfileModel,
     ManagedKeyStatus,
     ProbeStatus,
@@ -27,6 +39,9 @@ if TYPE_CHECKING:
 
     from crypto.domain.algorithms import SupportedPublicKey
     from crypto.domain.refs import ManagedKeyRef
+
+ProviderCapabilities = Pkcs11Capabilities | SoftwareCapabilities | RestCapabilities
+ManagedKeyBinding = Pkcs11ManagedKeyBinding | SoftwareManagedKeyBinding | RestManagedKeyBinding
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,10 +70,9 @@ class CryptoProviderProfileRepository:
         self,
         *,
         profile: CryptoProviderProfileModel,
-        capabilities: Pkcs11Capabilities,
+        capabilities: ProviderCapabilities,
     ) -> ProbeRefreshResult:
         """Persist a successful capability probe as a new snapshot."""
-        snapshot_payload = capabilities.to_json_dict()
         probe_hash = capabilities.fingerprint()
 
         previous_hash = None
@@ -69,14 +83,44 @@ class CryptoProviderProfileRepository:
             profile=profile,
             status=ProbeStatus.SUCCESS,
             probe_hash=probe_hash,
-            token_label=capabilities.token.label,
-            token_serial=capabilities.token.serial,
-            token_model=capabilities.token.model,
-            token_manufacturer=capabilities.token.manufacturer,
-            slot_id=capabilities.token.slot_id,
-            snapshot=snapshot_payload,
             error_summary=None,
         )
+
+        if profile.backend_kind == BackendKind.PKCS11:
+            if not isinstance(capabilities, Pkcs11Capabilities):
+                msg = 'PKCS#11 provider profile cannot persist non-PKCS#11 capabilities.'
+                raise InternalConsistencyError(msg)
+            CryptoProviderCapabilityPkcs11DetailModel.objects.create(
+                snapshot=snapshot,
+                token_label=capabilities.token.label,
+                token_serial=capabilities.token.serial,
+                token_model=capabilities.token.model,
+                token_manufacturer=capabilities.token.manufacturer,
+                slot_id=capabilities.token.slot_id,
+                snapshot_payload=capabilities.to_json_dict(),
+            )
+
+        elif profile.backend_kind == BackendKind.SOFTWARE:
+            if not isinstance(capabilities, SoftwareCapabilities):
+                msg = 'Software provider profile cannot persist non-software capabilities.'
+                raise InternalConsistencyError(msg)
+            CryptoProviderCapabilitySoftwareDetailModel.objects.create(
+                snapshot=snapshot,
+                snapshot_payload=capabilities.to_json_dict(),
+            )
+
+        elif profile.backend_kind == BackendKind.REST:
+            if not isinstance(capabilities, RestCapabilities):
+                msg = 'REST provider profile cannot persist non-REST capabilities.'
+                raise InternalConsistencyError(msg)
+            CryptoProviderCapabilityRestDetailModel.objects.create(
+                snapshot=snapshot,
+                snapshot_payload=capabilities.to_json_dict(),
+            )
+
+        else:
+            msg = f'Unsupported backend kind {profile.backend_kind!r}.'
+            raise UnsupportedBackendKindError(msg)
 
         profile.current_capability_snapshot = snapshot
         profile.last_probe_status = ProbeStatus.SUCCESS
@@ -111,12 +155,6 @@ class CryptoProviderProfileRepository:
             profile=profile,
             status=ProbeStatus.FAILURE,
             probe_hash='',
-            token_label=None,
-            token_serial=None,
-            token_model=None,
-            token_manufacturer=None,
-            slot_id=None,
-            snapshot={},
             error_summary=error_summary,
         )
 
@@ -135,7 +173,7 @@ class CryptoProviderProfileRepository:
         )
         return snapshot
 
-    def load_current_capabilities(self, *, profile: CryptoProviderProfileModel) -> Pkcs11Capabilities | None:
+    def load_current_capabilities(self, *, profile: CryptoProviderProfileModel) -> ProviderCapabilities | None:
         """Load the current effective capability snapshot for a profile."""
         if profile.last_probe_status != ProbeStatus.SUCCESS:
             return None
@@ -144,11 +182,21 @@ class CryptoProviderProfileRepository:
         if snapshot is None or snapshot.status != ProbeStatus.SUCCESS:
             return None
 
-        return Pkcs11Capabilities.from_json_dict(snapshot.snapshot)
+        if profile.backend_kind == BackendKind.PKCS11:
+            return Pkcs11Capabilities.from_json_dict(snapshot.pkcs11_detail.snapshot_payload)
+
+        if profile.backend_kind == BackendKind.SOFTWARE:
+            return SoftwareCapabilities.from_json_dict(snapshot.software_detail.snapshot_payload)
+
+        if profile.backend_kind == BackendKind.REST:
+            return RestCapabilities.from_json_dict(snapshot.rest_detail.snapshot_payload)
+
+        msg = f'Unsupported backend kind {profile.backend_kind!r}.'
+        raise UnsupportedBackendKindError(msg)
 
 
 class CryptoManagedKeyRepository:
-    """Persistence helpers for managed PKCS#11-backed key references."""
+    """Persistence helpers for backend-managed key references."""
 
     def get_by_id(self, *, managed_key_id: UUID) -> CryptoManagedKeyModel:
         """Return a managed-key record by UUID."""
@@ -172,24 +220,24 @@ class CryptoManagedKeyRepository:
         *,
         profile: CryptoProviderProfileModel,
         alias: str,
-        binding: Pkcs11ManagedKeyBinding,
+        provider_label: str | None,
+        binding: ManagedKeyBinding,
         public_key: SupportedPublicKey,
         policy: KeyPolicy,
     ) -> CryptoManagedKeyModel:
         """Persist a newly created managed-key binding."""
-        public_key_fingerprint = self.public_key_fingerprint_sha256(public_key)
-        if (
-            binding.public_key_fingerprint_sha256 is not None
-            and binding.public_key_fingerprint_sha256 != public_key_fingerprint
-        ):
-            msg = 'Generated managed-key fingerprint does not match the PKCS#11 binding fingerprint.'
-            raise ValueError(msg)
+        self._validate_profile_binding_compatibility(profile, binding)
 
-        return CryptoManagedKeyModel.objects.create(
+        public_key_fingerprint = self.public_key_fingerprint_sha256(public_key)
+        binding_fingerprint = binding.public_key_fingerprint_sha256
+        if binding_fingerprint is not None and binding_fingerprint != public_key_fingerprint:
+            msg = 'Generated managed-key fingerprint does not match the backend binding fingerprint.'
+            raise InternalConsistencyError(msg)
+
+        managed_key = CryptoManagedKeyModel(
             alias=alias,
+            provider_label=provider_label,
             provider_profile=profile,
-            key_id_hex=binding.key_id_hex,
-            label=alias,
             algorithm=binding.algorithm.value,
             public_key_fingerprint_sha256=public_key_fingerprint,
             signing_execution_mode=binding.signing_execution_mode.value,
@@ -198,6 +246,11 @@ class CryptoManagedKeyRepository:
             last_verified_at=timezone.now(),
             last_verification_error=None,
         )
+        managed_key.full_clean()
+        managed_key.save()
+
+        self._persist_backend_binding(profile=profile, managed_key=managed_key, binding=binding)
+        return managed_key
 
     @transaction.atomic
     def mark_verification_success(
@@ -260,14 +313,46 @@ class CryptoManagedKeyRepository:
         return managed_key.to_managed_key_ref()
 
     @staticmethod
-    def build_pkcs11_binding(managed_key: CryptoManagedKeyModel) -> Pkcs11ManagedKeyBinding:
-        """Convert a persisted managed-key record into the PKCS#11 adapter binding."""
-        return Pkcs11ManagedKeyBinding(
-            key_id=bytes.fromhex(managed_key.key_id_hex),
-            algorithm=KeyAlgorithm(managed_key.algorithm),
-            public_key_fingerprint_sha256=managed_key.public_key_fingerprint_sha256,
-            signing_execution_mode=SigningExecutionMode(managed_key.signing_execution_mode),
-        )
+    def build_backend_binding(managed_key: CryptoManagedKeyModel) -> ManagedKeyBinding:
+        """Convert a persisted managed-key record into the backend-specific binding."""
+        algorithm = KeyAlgorithm(managed_key.algorithm)
+        signing_execution_mode = SigningExecutionMode(managed_key.signing_execution_mode)
+
+        if managed_key.provider_profile.backend_kind == BackendKind.PKCS11:
+            binding = managed_key.pkcs11_binding
+            return Pkcs11ManagedKeyBinding(
+                key_id=bytes.fromhex(binding.key_id_hex),
+                algorithm=algorithm,
+                public_key_fingerprint_sha256=managed_key.public_key_fingerprint_sha256,
+                signing_execution_mode=signing_execution_mode,
+                provider_label=managed_key.provider_label,
+            )
+
+        if managed_key.provider_profile.backend_kind == BackendKind.SOFTWARE:
+            binding = managed_key.software_binding
+            return SoftwareManagedKeyBinding(
+                key_handle=binding.key_handle,
+                algorithm=algorithm,
+                encrypted_private_key_pkcs8_der=bytes(binding.encrypted_private_key_pkcs8_der),
+                encryption_metadata=binding.encryption_metadata,
+                public_key_fingerprint_sha256=managed_key.public_key_fingerprint_sha256,
+                signing_execution_mode=signing_execution_mode,
+                provider_label=managed_key.provider_label,
+            )
+
+        if managed_key.provider_profile.backend_kind == BackendKind.REST:
+            binding = managed_key.rest_binding
+            return RestManagedKeyBinding(
+                remote_key_id=binding.remote_key_id,
+                algorithm=algorithm,
+                remote_key_version=binding.remote_key_version,
+                public_key_fingerprint_sha256=managed_key.public_key_fingerprint_sha256,
+                signing_execution_mode=signing_execution_mode,
+                provider_label=managed_key.provider_label,
+            )
+
+        msg = f'Unsupported backend kind {managed_key.provider_profile.backend_kind!r}.'
+        raise UnsupportedBackendKindError(msg)
 
     @staticmethod
     def policy_snapshot(policy: KeyPolicy) -> dict[str, object]:
@@ -287,3 +372,69 @@ class CryptoManagedKeyRepository:
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
         return hashlib.sha256(spki_der).hexdigest()
+
+    @staticmethod
+    def _validate_profile_binding_compatibility(
+        profile: CryptoProviderProfileModel,
+        binding: ManagedKeyBinding,
+    ) -> None:
+        """Validate that a binding instance matches the owning backend kind."""
+        if profile.backend_kind == BackendKind.PKCS11 and isinstance(binding, Pkcs11ManagedKeyBinding):
+            return
+        if profile.backend_kind == BackendKind.SOFTWARE and isinstance(binding, SoftwareManagedKeyBinding):
+            return
+        if profile.backend_kind == BackendKind.REST and isinstance(binding, RestManagedKeyBinding):
+            return
+
+        msg = (
+            f'Backend binding type {type(binding).__name__} does not match '
+            f'provider backend kind {profile.backend_kind!r}.'
+        )
+        raise InternalConsistencyError(msg)
+
+    @staticmethod
+    def _persist_backend_binding(
+        *,
+        profile: CryptoProviderProfileModel,
+        managed_key: CryptoManagedKeyModel,
+        binding: ManagedKeyBinding,
+    ) -> None:
+        """Persist the backend-specific binding record."""
+        if profile.backend_kind == BackendKind.PKCS11 and isinstance(binding, Pkcs11ManagedKeyBinding):
+            model = CryptoManagedKeyPkcs11BindingModel(
+                managed_key=managed_key,
+                provider_profile=profile,
+                key_id_hex=binding.key_id_hex,
+            )
+            model.full_clean()
+            model.save()
+            return
+
+        if profile.backend_kind == BackendKind.SOFTWARE and isinstance(binding, SoftwareManagedKeyBinding):
+            model = CryptoManagedKeySoftwareBindingModel(
+                managed_key=managed_key,
+                provider_profile=profile,
+                key_handle=binding.key_handle,
+                encrypted_private_key_pkcs8_der=binding.encrypted_private_key_pkcs8_der,
+                encryption_metadata=binding.encryption_metadata,
+            )
+            model.full_clean()
+            model.save()
+            return
+
+        if profile.backend_kind == BackendKind.REST and isinstance(binding, RestManagedKeyBinding):
+            model = CryptoManagedKeyRestBindingModel(
+                managed_key=managed_key,
+                provider_profile=profile,
+                remote_key_id=binding.remote_key_id,
+                remote_key_version=binding.remote_key_version,
+            )
+            model.full_clean()
+            model.save()
+            return
+
+        msg = (
+            f'Cannot persist binding type {type(binding).__name__} for '
+            f'backend kind {profile.backend_kind!r}.'
+        )
+        raise InternalConsistencyError(msg)

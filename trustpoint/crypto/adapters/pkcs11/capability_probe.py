@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING, Any
 
 from crypto.adapters.pkcs11.mechanisms import ecdsa_hash_mechanisms, rsa_pkcs1v15_hash_mechanisms
 from crypto.domain.errors import ProviderUnavailableError
-from pkcs11 import Mechanism, PKCS11Error  # type: ignore[import-untyped]
+from pkcs11 import PKCS11Error  # type: ignore[import-untyped]
+from pkcs11 import Mechanism  # type: ignore[import-untyped]
 
 if TYPE_CHECKING:
     from pkcs11 import Slot, Token
@@ -215,6 +216,8 @@ class Pkcs11CapabilityProbe:
                 mechanisms=mechanisms,
                 derived_features=self._derive_features(mechanisms=mechanisms, token_flags=token_flags),
             )
+        except ProviderUnavailableError:
+            raise
         except (PKCS11Error, OSError, TypeError, ValueError) as exc:
             msg = 'Failed to probe PKCS#11 provider capabilities.'
             raise ProviderUnavailableError(msg) from exc
@@ -283,12 +286,30 @@ class Pkcs11CapabilityProbe:
         return _sorted_flag_names(getattr(token, 'flags', None))
 
     def _probe_mechanisms(self, *, slot: Slot) -> dict[str, MechanismCapability]:
-        """Probe supported mechanisms and per-mechanism metadata."""
+        """Probe supported mechanisms and per-mechanism metadata.
+
+        Some PKCS#11 stacks and proxy layers advertise mechanisms via
+        get_mechanisms() but then reject get_mechanism_info() for a subset of
+        them with CKR_MECHANISM_INVALID. Treat those entries as unusable and
+        skip them instead of failing the whole provider probe.
+        """
         mechanism_entries: dict[str, MechanismCapability] = {}
 
-        for mechanism in slot.get_mechanisms():
+        try:
+            advertised_mechanisms = tuple(slot.get_mechanisms())
+        except (PKCS11Error, OSError, TypeError, ValueError) as exc:
+            msg = 'Failed to enumerate PKCS#11 mechanisms.'
+            raise ProviderUnavailableError(msg) from exc
+
+        for mechanism in advertised_mechanisms:
             mechanism_name = _mechanism_storage_name(mechanism)
-            info = slot.get_mechanism_info(mechanism)
+
+            try:
+                info = slot.get_mechanism_info(mechanism)
+            except (PKCS11Error, OSError, TypeError, ValueError):
+                # Skip mechanisms that cannot be introspected portably.
+                continue
+
             mechanism_entries[mechanism_name] = MechanismCapability(
                 name=mechanism_name,
                 code=_mechanism_storage_code(mechanism),
@@ -296,6 +317,13 @@ class Pkcs11CapabilityProbe:
                 min_key_size=_optional_int(getattr(info, 'min_key_size', None) or getattr(info, 'ulMinKeySize', None)),
                 max_key_size=_optional_int(getattr(info, 'max_key_size', None) or getattr(info, 'ulMaxKeySize', None)),
             )
+
+        if advertised_mechanisms and not mechanism_entries:
+            msg = (
+                'PKCS#11 provider advertised mechanisms but none exposed portable '
+                'mechanism metadata via Slot.get_mechanism_info().'
+            )
+            raise ProviderUnavailableError(msg)
 
         return dict(sorted(mechanism_entries.items()))
 
