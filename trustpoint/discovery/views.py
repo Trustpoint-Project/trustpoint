@@ -2,6 +2,7 @@
 
 import csv
 import threading
+from typing import Any
 
 from django.contrib import messages
 from django.db.models import Q
@@ -52,7 +53,7 @@ class ScanManager:
             cls.scanner_instance = None
 
     @classmethod
-    def get_state(cls) -> dict:
+    def get_state(cls) -> dict[str, Any]:
         with cls._lock:
             return {
                 'scan_running': cls.is_running,
