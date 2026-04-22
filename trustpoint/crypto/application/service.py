@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 class TrustpointCryptoBackend(LoggerMixin):
-    """Stateless application-facing crypto backend for Trustpoint."""
+    """Stateless application-facing crypto service for the configured instance backend."""
 
     provider_name = 'trustpoint'
 
@@ -36,8 +36,8 @@ class TrustpointCryptoBackend(LoggerMixin):
         self._adapter_factory = adapter_factory or DefaultBackendAdapterFactory()
 
     def verify_provider(self) -> None:
-        """Validate that the active provider can be loaded and used."""
-        profile = self._get_active_profile()
+        """Validate that the configured instance backend can be loaded and used."""
+        profile = self._get_configured_profile()
         adapter = self._build_adapter(profile)
         try:
             adapter.verify_provider()
@@ -45,8 +45,8 @@ class TrustpointCryptoBackend(LoggerMixin):
             adapter.close()
 
     def generate_managed_key(self, *, alias: str, key_spec: KeySpec, policy: KeyPolicy) -> ManagedKeyRef:
-        """Generate a managed key and persist its application binding."""
-        profile = self._get_active_profile()
+        """Generate a managed key using the configured instance backend."""
+        profile = self._get_configured_profile()
         adapter = self._build_adapter(profile)
 
         try:
@@ -125,12 +125,12 @@ class TrustpointCryptoBackend(LoggerMixin):
         finally:
             adapter.close()
 
-    def _get_active_profile(self) -> CryptoProviderProfileModel:
-        """Return the active provider profile or raise a configuration error."""
+    def _get_configured_profile(self) -> CryptoProviderProfileModel:
+        """Return the configured instance backend profile or raise a configuration error."""
         try:
-            return self._profile_repository.get_active_profile()
+            return self._profile_repository.get_configured_profile()
         except CryptoProviderProfileModel.DoesNotExist as exc:
-            msg = 'No active crypto provider profile is configured.'
+            msg = 'No configured crypto backend profile exists for this Trustpoint instance.'
             raise ProviderConfigurationError(msg) from exc
 
     def _load_managed_key(self, key: ManagedKeyRef) -> CryptoManagedKeyModel:

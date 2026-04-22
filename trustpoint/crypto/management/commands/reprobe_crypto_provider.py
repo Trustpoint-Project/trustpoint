@@ -19,7 +19,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--profile",
             type=str,
-            help="Provider profile name. If omitted, the active profile is used.",
+            help="Provider profile name. If omitted, the configured instance backend profile is used.",
         )
 
     def handle(self, *args, **options):
@@ -34,9 +34,9 @@ class Command(BaseCommand):
                 raise CommandError(f"Provider profile {profile_name!r} does not exist.") from exc
         else:
             try:
-                profile = repository.get_active_profile()
+                profile = repository.get_configured_profile()
             except CryptoProviderProfileModel.DoesNotExist as exc:
-                raise CommandError("No active provider profile is configured.") from exc
+                raise CommandError("No configured crypto backend profile exists for this Trustpoint instance.") from exc
 
         try:
             backend = adapter_factory.build(profile)

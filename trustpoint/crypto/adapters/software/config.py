@@ -11,7 +11,7 @@ from crypto.domain.errors import AuthenticationError, ProviderConfigurationError
 
 @dataclass(frozen=True, slots=True)
 class SoftwareProviderProfile:
-    """Configuration for the durable software-managed backend."""
+    """Configuration for the durable development-only software backend."""
 
     name: str
     encryption_source: str

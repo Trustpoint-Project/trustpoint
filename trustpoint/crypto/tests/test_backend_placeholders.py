@@ -1,0 +1,38 @@
+"""Tests for backend placeholder and environment guard behavior."""
+
+from __future__ import annotations
+
+import pytest
+from django.test import override_settings
+
+from crypto.adapters.rest.backend import RestBackend
+from crypto.adapters.rest.config import RestProviderProfile
+from crypto.adapters.software.backend import SoftwareBackend
+from crypto.adapters.software.config import SoftwareProviderProfile
+from crypto.domain.errors import DevelopmentOnlyBackendError, ProviderOperationNotImplementedError
+
+
+def test_rest_backend_scaffold_is_not_operational() -> None:
+    backend = RestBackend(
+        profile=RestProviderProfile(
+            name='rest-placeholder',
+            base_url='https://example.invalid',
+            auth_type='none',
+        )
+    )
+
+    with pytest.raises(ProviderOperationNotImplementedError, match='cannot be configured'):
+        backend.verify_provider()
+
+
+@override_settings(DEVELOPMENT_ENV=False)
+def test_software_backend_is_rejected_outside_development_env() -> None:
+    backend = SoftwareBackend(
+        profile=SoftwareProviderProfile(
+            name='dev-software',
+            encryption_source='dev_plaintext',
+        )
+    )
+
+    with pytest.raises(DevelopmentOnlyBackendError, match='development-only'):
+        backend.verify_provider()

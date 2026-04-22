@@ -22,7 +22,7 @@ class BackendAdapterFactory(Protocol):
 
 
 class DefaultBackendAdapterFactory:
-    """Default backend-adapter factory."""
+    """Default backend-adapter factory for the configured instance backend."""
 
     def build(self, profile_model: CryptoProviderProfileModel) -> ManagedKeyBackendAdapter:
         """Construct the configured backend adapter."""

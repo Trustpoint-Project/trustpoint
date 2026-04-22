@@ -66,7 +66,7 @@ class RestAuthType(models.TextChoices):
 
 
 class CryptoProviderProfileModel(models.Model):
-    """Configured provider profile."""
+    """Configured backend profile for this Trustpoint instance."""
 
     name = models.CharField(max_length=100, unique=True)
     backend_kind = models.CharField(max_length=16, choices=BackendKind.choices)
@@ -114,8 +114,27 @@ class CryptoProviderProfileModel(models.Model):
         if self.backend_kind not in allowed_kinds:
             raise ValidationError({'backend_kind': f'Unsupported backend kind {self.backend_kind!r}.'})
 
+        existing_backend_kinds = set(
+            CryptoProviderProfileModel.objects.exclude(pk=self.pk).values_list('backend_kind', flat=True)
+        )
+        if existing_backend_kinds and self.backend_kind not in existing_backend_kinds:
+            configured_backend_kind = sorted(existing_backend_kinds)[0]
+            raise ValidationError(
+                {
+                    'backend_kind': (
+                        'Trustpoint instances cannot mix crypto backend kinds. '
+                        f'This instance is already configured for {configured_backend_kind!r}.'
+                    )
+                }
+            )
+
     def __str__(self) -> str:
         return self.name
+
+    def save(self, *args, **kwargs):
+        """Persist the profile after enforcing single-backend validation."""
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class CryptoProviderPkcs11ConfigModel(models.Model):

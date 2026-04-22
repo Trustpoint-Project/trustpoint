@@ -47,3 +47,7 @@ class InternalConsistencyError(CryptoError):
 
 class ProviderOperationNotImplementedError(CryptoError):
     """Raised when a configured backend exists but an operation is not implemented yet."""
+
+
+class DevelopmentOnlyBackendError(CryptoError):
+    """Raised when a development-only backend is used outside a development environment."""

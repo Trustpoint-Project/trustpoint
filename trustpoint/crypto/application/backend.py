@@ -12,12 +12,12 @@ if TYPE_CHECKING:
 
 
 class CryptoBackend(Protocol):
-    """Minimal application-facing backend contract for managed key operations."""
+    """Minimal application-facing backend contract for the configured instance backend."""
 
     provider_name: str
 
     def verify_provider(self) -> None:
-        """Validate that the configured provider can be loaded and used."""
+        """Validate that the configured instance backend can be loaded and used."""
 
     def generate_managed_key(self, *, alias: str, key_spec: KeySpec, policy: KeyPolicy) -> ManagedKeyRef:
         """Generate and persist a new backend-managed key."""

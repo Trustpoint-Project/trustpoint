@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import pytest
+from django.core.exceptions import ValidationError
 
 from crypto.adapters.software.capabilities import SoftwareCapabilities
 from crypto.models import (
     BackendKind,
     CryptoProviderCapabilitySnapshotModel,
     CryptoProviderCapabilitySoftwareDetailModel,
+    CryptoProviderPkcs11ConfigModel,
     CryptoProviderProfileModel,
     CryptoProviderSoftwareConfigModel,
+    Pkcs11AuthSource,
     ProbeStatus,
     SoftwareKeyEncryptionSource,
 )
@@ -29,6 +32,28 @@ def _create_software_profile(*, name: str, active: bool = True) -> CryptoProvide
         encryption_source=SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
         encryption_source_ref=None,
         allow_exportable_private_keys=False,
+    )
+    return profile
+
+
+def _create_pkcs11_profile(*, name: str, active: bool = True) -> CryptoProviderProfileModel:
+    """Create a generic provider profile plus PKCS#11 config."""
+    profile = CryptoProviderProfileModel.objects.create(
+        name=name,
+        backend_kind=BackendKind.PKCS11,
+        active=active,
+    )
+    CryptoProviderPkcs11ConfigModel.objects.create(
+        profile=profile,
+        module_path='/usr/lib/test-pkcs11.so',
+        token_serial='1234',
+        token_label=None,
+        slot_id=None,
+        auth_source=Pkcs11AuthSource.FILE,
+        auth_source_ref='/tmp/user-pin.txt',
+        max_sessions=4,
+        borrow_timeout_seconds=2.0,
+        rw_sessions=True,
     )
     return profile
 
@@ -115,3 +140,11 @@ def test_load_current_capabilities_round_trips_software_snapshot() -> None:
 
     assert isinstance(loaded, SoftwareCapabilities)
     assert loaded.to_json_dict() == capabilities.to_json_dict()
+
+
+@pytest.mark.django_db
+def test_instance_cannot_mix_backend_kinds() -> None:
+    _create_software_profile(name='dev-software', active=True)
+
+    with pytest.raises(ValidationError, match='cannot mix crypto backend kinds'):
+        _create_pkcs11_profile(name='production-hsm', active=False)

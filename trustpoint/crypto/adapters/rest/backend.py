@@ -27,7 +27,7 @@ class RestBackend:
         self._capabilities: RestCapabilities | None = None
 
     def verify_provider(self) -> None:
-        """Validate local REST backend configuration."""
+        """Reject the scaffold until a real REST provider implementation exists."""
         self.probe_capabilities()
 
     def refresh_capabilities(self) -> RestCapabilities:
@@ -44,19 +44,11 @@ class RestBackend:
         self._capabilities = None
 
     def probe_capabilities(self) -> RestCapabilities:
-        """Return the current scaffold capability snapshot."""
+        """Reject the scaffold until a real REST provider implementation exists."""
         self._profile.require_auth_value()
-        if self._capabilities is None:
-            self._capabilities = RestCapabilities(
-                supported_key_algorithms=(),
-                supported_signature_algorithms=(),
-                supported_signing_execution_modes=(
-                    SigningExecutionMode.COMPLETE_BACKEND.value,
-                    SigningExecutionMode.ALLOW_APPLICATION_HASH.value,
-                ),
-                implemented_operations=(),
-            )
-        return self._capabilities
+        raise ProviderOperationNotImplementedError(
+            'REST backend support is scaffolded only and cannot be configured for a Trustpoint instance yet.',
+        )
 
     def generate_managed_key(self, *, alias: str, key_spec: KeySpec, policy: KeyPolicy) -> RestManagedKeyBinding:
         """Create a managed key on the remote backend."""

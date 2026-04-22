@@ -57,9 +57,13 @@ class ProbeRefreshResult:
 class CryptoProviderProfileRepository:
     """Persistence helpers for provider profiles and capability snapshots."""
 
-    def get_active_profile(self) -> CryptoProviderProfileModel:
-        """Return the one active provider profile."""
+    def get_configured_profile(self) -> CryptoProviderProfileModel:
+        """Return the configured backend profile for this Trustpoint instance."""
         return CryptoProviderProfileModel.objects.get(active=True)
+
+    def get_active_profile(self) -> CryptoProviderProfileModel:
+        """Backward-compatible alias for the configured instance backend profile."""
+        return self.get_configured_profile()
 
     def get_profile(self, *, profile_id: int) -> CryptoProviderProfileModel:
         """Return a provider profile by primary key."""
