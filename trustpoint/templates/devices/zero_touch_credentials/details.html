@@ -47,16 +47,16 @@
             <thead>
                 <tr>
                     <th class="text-nowrap">{% trans 'Subject Serial Number' %}</th>
-                    <th class="text-nowrap">{% trans 'X.509 Serial Number' %}</th>
+                    <th class="text-nowrap">{% trans 'SAN URI' %}</th>
                     <th class="text-nowrap">{% trans 'SHA-256 Fingerprint' %}</th>
-                    <th class="text-nowrap">{% trans 'Certificate' %}</th>
+                    <th class="text-nowrap">{% trans 'DevOwnerID Certificate' %}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for ref in idevid_refs %}
                 <tr>
                     <td>{{ ref.idevid_subject_serial_number|default:"—" }}</td>
-                    <td>{{ ref.idevid_x509_serial_number|default:"—" }}</td>
+                    <td>{{ ref.idevid_san_uri|default:"—" }}</td>
                     <td class="small text-break">{{ ref.idevid_sha256_fingerprint|default:"—" }}</td>
                     <td>
                         {% if ref.dev_owner_id_certificate %}

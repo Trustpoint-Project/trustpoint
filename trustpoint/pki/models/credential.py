@@ -1034,22 +1034,32 @@ class IDevIDReferenceModel(models.Model):
         The stored ``idevid_ref`` format is ``dev-owner:<subj_sn>.<x509_sn>.<sha256_fingerprint>``.
         This property strips the ``dev-owner:`` scheme prefix and returns the first segment.
         """
+        if not self.idevid_ref.startswith('dev-owner:cert:'):
+            return ''
         try:
-            # Remove 'dev-owner:' prefix before splitting
-            return self.idevid_ref.removeprefix('dev-owner:').split('.')[0]
+            # Remove 'dev-owner:cert:' prefix before splitting
+            return self.idevid_ref.removeprefix('dev-owner:cert:').split('_')[0]
         except IndexError:
             return ''
 
     @property
-    def idevid_x509_serial_number(self) -> str:
-        """Returns the IDevID X.509 Serial Number from the SAN of the DevOwnerID certificate.
+    def idevid_san_uri(self) -> str:
+        """Returns the IDevID SAN URI reference from the DevOwnerID certificate.
 
-        Second dot-separated segment after stripping the ``dev-owner:`` prefix.
+        Second dot-separated segment after stripping the ``dev-owner:uri:`` prefix.
         """
-        try:
-            return self.idevid_ref.removeprefix('dev-owner:').split('.')[1]
-        except IndexError:
+        if not self.idevid_ref.startswith('dev-owner:uri:'):
             return ''
+        return self.idevid_ref.removeprefix('dev-owner:uri:')
+
+    @property
+    def idevid_subj_sn_or_san_uri(self) -> str:
+        """Returns the IDevID Subject Serial Number or SAN URI from the SAN of the DevOwnerID certificate.
+
+        This property returns the Subject Serial Number if the stored reference
+        starts with ``dev-owner:cert:``, and returns the SAN URI if it starts with ``dev-owner:uri:``.
+        """
+        return self.idevid_subject_serial_number or self.idevid_san_uri
 
     @property
     def idevid_sha256_fingerprint(self) -> str:
@@ -1057,8 +1067,10 @@ class IDevIDReferenceModel(models.Model):
 
         Third dot-separated segment after stripping the ``dev-owner:`` prefix.
         """
+        if not self.idevid_ref.startswith('dev-owner:cert:'):
+            return ''
         try:
-            return self.idevid_ref.removeprefix('dev-owner:').split('.')[2]
+            return self.idevid_ref.removeprefix('dev-owner:cert:').split('_')[1]
         except IndexError:
             return ''
 

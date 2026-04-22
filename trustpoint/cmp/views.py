@@ -16,8 +16,15 @@ from request.authorization import CmpAuthorization
 from request.message_parser import CmpMessageParser
 from request.message_responder.cmp import CmpMessageResponder
 from request.operation_processor.general import OperationProcessor
-from request.request_context import BaseRequestContext, CmpCertificateRequestContext, HttpBaseRequestContext
+from request.request_context import (
+    BaseRequestContext,
+    CmpBaseRequestContext,
+    CmpCertificateRequestContext,
+    HttpBaseRequestContext,
+)
 from request.request_validator.http_req import CmpHttpRequestValidator
+from request.workflow2_issuance import release_delivered_workflow2_request
+from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -101,7 +108,7 @@ class CmpRequestView(LoggerMixin, View):
             validator.validate(ctx)
 
             parser = CmpMessageParser()
-            ctx = parser.parse(ctx)
+            ctx = cast('CmpBaseRequestContext', parser.parse(ctx))
 
             authenticator = CmpAuthentication()
             authenticator.authenticate(ctx)
@@ -111,12 +118,14 @@ class CmpRequestView(LoggerMixin, View):
             )
             authorizer.authorize(ctx)
 
+            Workflow2Handler().handle(ctx)
             OperationProcessor().process_operation(ctx)
         except Exception:
             self.logger.exception('Error processing CMP request')
 
         try:
             CmpMessageResponder.build_response(ctx)
+            release_delivered_workflow2_request(ctx)
         except Exception:
             self.logger.exception('Error building CMP response')
             if isinstance(ctx, HttpBaseRequestContext):

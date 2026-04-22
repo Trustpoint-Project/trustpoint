@@ -24,6 +24,7 @@ from pki.forms import (
     OwnerCredentialAddRequestEstNoOnboardingForm,
     OwnerCredentialAddRequestEstOnboardingForm,
     OwnerCredentialFileImportForm,
+    OwnerCredentialOnboardingSetupForm,
     OwnerCredentialTruststoreAssociationForm,
 )
 from pki.models import OwnerCredentialModel, RemoteIssuedCredentialModel
@@ -137,6 +138,14 @@ class OwnerCredentialFileImportView(ZeroTouchContextMixin, FormView[OwnerCredent
         )
         action = self.request.POST.get('action', 'add_only')
         if action == 'add_with_truststore':
+            owner_credential = form.cleaned_data.get('_owner_credential')
+            if owner_credential:
+                return HttpResponseRedirect(
+                    reverse(
+                        'devices:zero_touch_credentials-onboarding-setup',
+                        kwargs={'pk': owner_credential.pk},
+                    )
+                )
             return HttpResponseRedirect(reverse('pki:truststores-add'))
         return super().form_valid(form)
 
@@ -371,6 +380,91 @@ class OwnerCredentialTruststoreAssociationView(
             ),
         )
         return HttpResponseRedirect(reverse_lazy('devices:zero_touch_credentials'))
+
+
+class OwnerCredentialOnboardingSetupView(
+    LoggerMixin, ZeroTouchContextMixin, FormView[OwnerCredentialOnboardingSetupForm]
+):
+    """Combined view for setting up AOKI zero-touch onboarding after DevOwnerID file import.
+
+    Handles truststore import, domain association, and DevID registration pattern
+    creation in a single step. Pre-populates the serial number pattern from the
+    IDevID references found in the DevOwnerID certificate's SAN.
+    """
+
+    form_class = OwnerCredentialOnboardingSetupForm
+    template_name = 'devices/zero_touch_credentials/onboarding_setup.html'
+    success_url = reverse_lazy('devices:zero_touch_credentials')
+
+    def get_owner_credential(self) -> OwnerCredentialModel:
+        """Get the OwnerCredentialModel from the URL pk."""
+        return get_object_or_404(OwnerCredentialModel, pk=self.kwargs['pk'])
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Pass the OwnerCredentialModel instance to the form."""
+        kwargs = super().get_form_kwargs()
+        kwargs['owner_credential'] = self.get_owner_credential()
+        return kwargs
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Add the owner credential and IDevID references to the context."""
+        context = super().get_context_data(**kwargs)
+        owner_credential = self.get_owner_credential()
+        context['owner_credential'] = owner_credential
+
+        # Collect IDevID subject serial numbers for the regex helper
+        idevid_refs = list(
+            owner_credential.idevid_ref_set.all()
+        )
+        idevid_reference_strs = [
+            ref.idevid_subj_sn_or_san_uri
+            for ref in idevid_refs
+            if ref.idevid_subj_sn_or_san_uri
+        ]
+        context['idevid_reference_strs'] = idevid_reference_strs
+        context['idevid_refs'] = idevid_refs
+
+        # Build a suggested regex from the serial numbers
+        if idevid_reference_strs:
+            import re  # noqa: PLC0415
+            escaped = [re.escape(sn) for sn in idevid_reference_strs]
+            if len(escaped) == 1:
+                context['suggested_pattern'] = f'^{escaped[0]}$'
+            else:
+                context['suggested_pattern'] = '^(' + '|'.join(escaped) + ')$'
+        else:
+            context['suggested_pattern'] = ''
+
+        return context
+
+    def form_valid(self, form: OwnerCredentialOnboardingSetupForm) -> HttpResponse:
+        """Show success messages and redirect to the zero-touch credentials list."""
+        owner_credential = self.get_owner_credential()
+        truststore = form.cleaned_data.get('_truststore')
+        dev_id_registration = form.cleaned_data.get('_dev_id_registration')
+
+        if truststore and dev_id_registration:
+            messages.success(
+                self.request,
+                _(
+                    'AOKI onboarding setup complete for "{name}": '
+                    'truststore "{ts}" and registration pattern "{reg}" created '
+                    'in domain "{domain}".'
+                ).format(
+                    name=owner_credential.unique_name,
+                    ts=truststore.unique_name,
+                    reg=dev_id_registration.unique_name,
+                    domain=dev_id_registration.domain.unique_name,
+                ),
+            )
+
+        return super().form_valid(form)
+
+    def form_invalid(self, form: OwnerCredentialOnboardingSetupForm) -> HttpResponse:
+        """Show form-level errors as Django messages."""
+        for error in form.non_field_errors():
+            messages.error(self.request, str(error))
+        return super().form_invalid(form)
 
 
 class OwnerCredentialCLMView(ZeroTouchContextMixin, DetailView[OwnerCredentialModel]):

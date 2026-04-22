@@ -1,0 +1,27 @@
+{
+    "type": "cert_profile",
+    "display_name": "IDevID (IEEE 802.1AR)",
+    "subj": {
+        "allow": "*",
+        "serial_number": {"required": true}
+    },
+    "reject_mods": false,
+    "ext": {
+        "basic_constraints": {
+            "ca": false,
+            "critical": true
+        },
+        "key_usage": {
+            "digital_signature": true,
+            "key_agreement": true,
+            "critical": true
+        },
+        "subject_alternative_name": {
+            "allow": "*"
+        }
+    },
+    "validity": {
+        "not_before": "{{ time.now }}",
+        "not_after": "9999-12-31T23:59:59Z"
+    }
+}

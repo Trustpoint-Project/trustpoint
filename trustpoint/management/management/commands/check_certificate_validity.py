@@ -95,7 +95,7 @@ class Command(BaseCommand):
         """
         if not NotificationModel.objects.filter(event=event, certificate=certificate).exists():
             message_data = {'common_name': certificate.common_name,
-                            'not_valid_after': certificate.not_valid_after.isoformat()}
+                            'not_valid_after': certificate.not_valid_after.strftime('%Y-%m-%d %H:%M:%S')}
             notification = NotificationModel.objects.create(
                 certificate=certificate,
                 created_at=timezone.now(),
