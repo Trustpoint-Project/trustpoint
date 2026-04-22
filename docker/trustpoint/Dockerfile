@@ -127,7 +127,13 @@ RUN mkdir -p /etc/trustpoint/secrets && \
 # NGINX configuration.
 RUN rm -f /etc/nginx/sites-enabled/*
 COPY ./docker/trustpoint/nginx/trustpoint-nginx-https.conf /etc/nginx/sites-available/trustpoint
+
 RUN chmod +x /etc/trustpoint/wizard/transition/*.sh
+RUN chmod +x /etc/trustpoint/wizard/configure_nginx.sh
+RUN chmod +x /etc/trustpoint/wizard/update_tls.sh
+RUN chmod +x /etc/trustpoint/wizard/update_tls_nginx.sh
+RUN chmod +x /etc/trustpoint/wizard/wizard_restore.sh
+
 
 # Make entrypoint and local/dev PKCS#11 bootstrap helper executable.
 RUN chmod +x ./docker/trustpoint/entrypoint.sh ./docker/trustpoint/scripts/upsert_local_dev_pkcs11_profile.sh

@@ -1,0 +1,73 @@
+{% extends 'users/base.html' %}
+{% load static %}
+{% load i18n %}
+
+{% block head %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
+{% endblock head %}
+
+{% block content %}
+
+    <section class="tp-setup-form-shell">
+        {% if messages %}
+            <div class="messages tp-messages text-center tp-setup-form-messages">
+                {% for message in messages %}
+                    <div class="tp-message alert
+                        {% if message.tags %}
+                            {% if message.tags == "error" %}
+                                alert-danger
+                            {% else %}
+                                alert-{{ message.tags }}
+                            {% endif %}
+                        {% endif %} d-flex" role="alert">
+
+                        <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="{{ message.tags }}:">
+                            <use href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use></svg>
+                        <div>
+                            {{ message }}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="tp-setup-form-header">
+            <h1 class="tp-setup-form-heading">{% trans "Restore from Backup" %}</h1>
+        </div>
+
+        <div class="tp-setup-form-panel">
+            <form method="post" action="" enctype="multipart/form-data" class="tp-setup-form text-start">
+                {% csrf_token %}
+
+                <fieldset class="tp-form-group">
+                    <div class="mb-3">
+                        <label for="backup_file" class="form-label">{% trans "Backup File" %}</label>
+                        <input type="file" name="backup_file" id="backup_file" accept=".dump,.gz,.sql,.zip"
+                            required class="form-control">
+                        <div class="form-text">{% trans "Select the backup file to restore from." %}</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="backup_password" class="form-label">
+                            {% trans "Backup Password" %}
+                            <small class="text-muted">({% trans "optional" %})</small>
+                        </label>
+                        <input type="password" name="backup_password" id="backup_password"
+                            placeholder="{% trans 'Enter backup password if required' %}"
+                            autocomplete="current-password" class="form-control">
+                        <div class="form-text">{% trans "Enter the backup password if the backup was created with DEK encryption. Leave empty if no password was set." %}</div>
+                    </div>
+                </fieldset>
+
+                <hr class="tp-setup-form-divider">
+
+                <div class="tp-setup-form-actions">
+                    <a href="{% url 'setup_wizard:index' %}" class="btn tp-setup-form-back">{% trans "Back" %}</a>
+                    <button type="submit" class="btn tp-setup-form-submit">{% trans "Restore from Backup" %}</button>
+                </div>
+            </form>
+        </div>
+    </section>
+
+{% endblock content %}

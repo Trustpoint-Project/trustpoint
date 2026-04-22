@@ -23,8 +23,8 @@ def set_test_env(monkeypatch):
 
 
 def test_debug_setting():
-    """Ensure DEBUG is correctly set for development."""
-    assert settings.DEBUG is True, 'DEBUG should be enabled for development.'
+    """Ensure DEBUG tracks the configured container mode."""
+    assert settings.DEBUG is (not settings.DOCKER_CONTAINER), 'DEBUG should be the inverse of DOCKER_CONTAINER.'
 
 
 def test_database_settings(monkeypatch):
@@ -133,12 +133,13 @@ def test_public_paths():
     """Ensure PUBLIC_PATHS is defined and contains expected values."""
     public_paths = settings.PUBLIC_PATHS
     expected_paths = [
-        '/setup-wizard',
         '/.well-known/cmp',
         '/.well-known/est',
         '/rest',
+        '/api',
         '/aoki',
         '/crl',
+        '/setup-wizard',
     ]
     assert isinstance(public_paths, list), 'PUBLIC_PATHS should be a list.'
     assert public_paths == expected_paths, 'PUBLIC_PATHS should match the defined values.'

@@ -1,0 +1,80 @@
+{% extends 'users/base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block head %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
+{% endblock head %}
+
+{% block content %}
+
+    {% if messages %}
+        <div class="messages tp-messages text-center">
+            {% for message in messages %}
+                <div class="tp-message alert
+                    {% if message.tags %}
+                        {% if message.tags == "error" %}
+                            alert-danger
+                        {% else %}
+                            alert-{{ message.tags }}
+                        {% endif %}
+                    {% endif %} d-flex" role="alert">
+
+                    <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="{{ message.tags }}:">
+                        <use href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use></svg>
+                    <div>
+                        {{ message }}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <section class="tp-setup-wizard-shell">
+        <div class="tp-setup-wizard-header">
+            <h1 class="tp-setup-wizard-heading">{% trans "Welcome to Trustpoint !" %}</h1>
+        </div>
+        <div class="row g-4 tp-setup-wizard-grid justify-content-center">
+            <!-- Setup from Scratch Option -->
+            <div class="col-5">
+                <a href="{% url 'setup_wizard:create_super_user' %}" class="card h-100 tp-setup-option-card">
+                    <div class="card-body tp-setup-option-body">
+                        <div class="tp-setup-option-copy">
+                            <div class="tp-setup-option-figure rocket-icon" aria-hidden="true">
+                                <svg class="bi" fill="currentColor" viewBox="0 0 16 16">
+                                    <use href="{% static 'img/icons.svg' %}#icon-rocket"></use>
+                                </svg>
+                            </div>
+                            <h5 class="tp-setup-option-title">{% trans 'Setup Trustpoint from Scratch' %}</h5>
+                            <p class="tp-setup-option-text">
+                            {% trans 'Configure a new Trustpoint instance with fresh settings' %}
+                            </p>
+                        </div>
+                    </div>
+                </a>
+            </div>
+
+            <!-- Restore from Backup Option -->
+            <div class="col-5">
+                <a href="{% url 'setup_wizard:restore_backup' %}" class="card h-100 tp-setup-option-card">
+                    <div class="card-body tp-setup-option-body">
+                        <div class="tp-setup-option-copy">
+                            <div class="tp-setup-option-figure" aria-hidden="true">
+                                <svg class="bi" fill="currentColor" viewBox="0 0 16 16">
+                                    <use href="{% static 'img/icons.svg' %}#icon-boxes"></use>
+                                </svg>
+                            </div>
+                            <h5 class="tp-setup-option-title">{% trans 'Restore from Backup' %}</h5>
+                            <p class="tp-setup-option-text">
+                            {% trans 'Restore Trustpoint configuration from a previous backup' %}
+                            </p>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    </section>
+
+{% endblock content %}

@@ -20,13 +20,15 @@
                 <img src="{% static 'img/tp-logo-horizontal-white-point.png' %}" alt="Trustpoint" id="tp-logo" class="dark-only">
                 <!-- <img src="{% static 'img/tp-logo-horizontal-0A74FF.png' %}" alt="Trustpoint" id="tp-logo" class="dark-only"> -->
             </a>
-            <div class="d-flex">
-                <div class="theme-toggle theme-toggle-icon">
-                    <svg class="bi theme-icon dark-only" width="20" height="20" fill="#ffffff" role="img" aria-label="Change theme">
-                        <use href="{% static 'img/icons.svg' %}#icon-sun-fill"></use></svg>
-                    <svg class="bi theme-icon light-only" width="20" height="20" fill="#000000" role="img" aria-label="Change theme">
-                        <use href="{% static 'img/icons.svg' %}#icon-night"></use></svg>
-                </div>
+            <div class="d-flex align-items-center gap-2">
+                {% block header_actions %}
+                    <div class="theme-toggle theme-toggle-icon">
+                        <svg class="bi theme-icon dark-only" width="20" height="20" fill="#ffffff" role="img" aria-label="Change theme">
+                            <use href="{% static 'img/icons.svg' %}#icon-sun-fill"></use></svg>
+                        <svg class="bi theme-icon light-only" width="20" height="20" fill="#000000" role="img" aria-label="Change theme">
+                            <use href="{% static 'img/icons.svg' %}#icon-night"></use></svg>
+                    </div>
+                {% endblock header_actions %}
             </div>
         </header>
 
