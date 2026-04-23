@@ -247,26 +247,7 @@
     padding: 0.35rem;
 }
 
-.tp-form-group input[type="file"]::file-selector-button {
-    appearance: none;
-    background-color: color-mix(in srgb, var(--bs-primary) 10%, var(--bs-body-bg)) !important;
-    border: 1px solid color-mix(in srgb, var(--bs-primary) 18%, var(--bs-border-color)) !important;
-    border-radius: 0.72rem;
-    color: var(--bs-emphasis-color) !important;
-    cursor: pointer;
-    font-weight: 700;
-    margin: 0.05rem 0.85rem 0.05rem 0.05rem;
-    padding: 0.68rem 1rem;
-    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
-}
-
-.tp-form-group input[type="file"]:hover::file-selector-button,
-.tp-form-group input[type="file"]:focus::file-selector-button,
-.tp-form-group input[type="file"]:active::file-selector-button {
-    background-color: color-mix(in srgb, var(--bs-primary) 22%, var(--bs-body-bg)) !important;
-    border-color: color-mix(in srgb, var(--bs-primary) 34%, var(--bs-border-color)) !important;
-}
-
+.tp-form-group input[type="file"]::file-selector-button,
 .tp-form-group input[type="file"]::-webkit-file-upload-button {
     -webkit-appearance: none;
     appearance: none;
@@ -281,6 +262,9 @@
     transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
+.tp-form-group input[type="file"]:hover::file-selector-button,
+.tp-form-group input[type="file"]:focus::file-selector-button,
+.tp-form-group input[type="file"]:active::file-selector-button,
 .tp-form-group input[type="file"]:hover::-webkit-file-upload-button,
 .tp-form-group input[type="file"]:focus::-webkit-file-upload-button,
 .tp-form-group input[type="file"]:active::-webkit-file-upload-button {
@@ -465,10 +449,6 @@
 
 .tp-fresh-install-shell {
     --tp-fresh-install-width: 68rem;
-    --tp-fresh-install-accent: #0a4db8;
-    --tp-fresh-install-accent-border: #083f97;
-    --tp-fresh-install-accent-hover: #0c57d0;
-    --tp-fresh-install-accent-hover-border: #0945a4;
     --tp-fresh-install-inner-padding: clamp(1.35rem, 1rem + 1.4vw, 2.2rem);
     margin: 0 auto;
     max-width: 72rem;
