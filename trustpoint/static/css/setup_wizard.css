@@ -533,14 +533,6 @@
     padding: 1.35rem 1.35rem 0;
 }
 
-.tp-fresh-install-shell .card-header::after {
-    border-bottom: 1px solid color-mix(in srgb, var(--bs-primary) 18%, var(--bs-border-color));
-    content: "";
-    display: block;
-    margin-top: 1rem;
-    width: 100%;
-}
-
 .tp-fresh-install-shell .card-header > .px-1.py-2 {
     padding: 0 !important;
 }
@@ -944,7 +936,7 @@
     --bs-btn-hover-bg: var(--tp-fresh-install-accent-hover);
     --bs-btn-hover-border-color: var(--tp-fresh-install-accent-hover-border);
     --bs-btn-active-color: var(--tp-fresh-install-accent);
-    --bs-btn-active-bg: transparent;
+    --bs-btn-active-bg: #0d66e4;
     --bs-btn-active-border-color: var(--tp-fresh-install-accent);
     --bs-btn-focus-shadow-rgb: 10, 77, 184;
     box-shadow:
@@ -1042,7 +1034,7 @@
 html[data-bs-theme="light"] .tp-fresh-install-shell .tp-summary-loading-card::before {
     background:
         radial-gradient(
-            circle at top,
+            circle at center,
             color-mix(in srgb, var(--tp-fresh-install-accent) 22%, white) 0%,
             color-mix(in srgb, var(--tp-fresh-install-accent) 14%, transparent) 34%,
             transparent 60%
@@ -1099,7 +1091,7 @@ html[data-bs-theme="light"] .tp-fresh-install-shell .tp-summary-loading-card::be
 .tp-fresh-install-shell .tp-summary-loading-title {
     color: var(--bs-emphasis-color);
     font-size: clamp(2rem, 1.75rem + 0.72vw, 2.4rem);
-    font-weight: 900;
+    font-weight: 600;
     letter-spacing: -0.03em;
     line-height: 1.02;
     margin: 0;

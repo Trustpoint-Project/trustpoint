@@ -77,6 +77,10 @@ docs = [
     "pillow >= 11.2.1",
     "sphinxcontrib-openapi>=0.8.4",
 ]
+# Docker gunicorn
+docker = [
+    "gunicorn[gevent]>=25.3.0",
+]
 
 [build-system]
 requires = ["hatchling"]
