@@ -5,6 +5,7 @@ from django.urls import resolve, reverse
 
 from setup_wizard import urls
 from setup_wizard.views import (
+    FreshInstallBackendConfigView,
     FreshInstallCancelView,
     FreshInstallCryptoStorageView,
     FreshInstallDemoDataView,
@@ -44,6 +45,7 @@ class SetupWizardUrlsTestCase(TestCase):
     def test_fresh_install_urls(self) -> None:
         cases = [
             ('setup_wizard:fresh_install_crypto_storage', '/setup-wizard/fresh-install/crypto-storage/', FreshInstallCryptoStorageView),
+            ('setup_wizard:fresh_install_backend_config', '/setup-wizard/fresh-install/backend-config/', FreshInstallBackendConfigView),
             ('setup_wizard:fresh_install_demo_data', '/setup-wizard/fresh-install/demo-data/', FreshInstallDemoDataView),
             ('setup_wizard:fresh_install_tls_config', '/setup-wizard/fresh-install/tls-config/', FreshInstallTlsConfigView),
             ('setup_wizard:fresh_install_summary', '/setup-wizard/fresh-install/summary/', FreshInstallSummaryView),

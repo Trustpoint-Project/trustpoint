@@ -322,6 +322,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'trustpoint.settings.app_version',
+                'trustpoint.context_processors.trustpoint_runtime_banner',
                 'management.context_processors.notification_alerts',
             ],
         },

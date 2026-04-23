@@ -5,15 +5,12 @@ HSM_ROOT="${TRUSTPOINT_HSM_ROOT:-/var/lib/trustpoint/hsm}"
 HSM_CONFIG_DIR="${TRUSTPOINT_HSM_CONFIG_DIR:-${HSM_ROOT}/config}"
 METADATA_FILE="${TRUSTPOINT_LOCAL_HSM_METADATA_FILE:-${HSM_CONFIG_DIR}/local-dev-token.env}"
 
-if [[ ! -r "${METADATA_FILE}" ]]; then
-  printf '[local-dev-pkcs11-profile] metadata file not found: %s\n' "${METADATA_FILE}" >&2
-  exit 1
+if [[ -r "${METADATA_FILE}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "${METADATA_FILE}"
+  set +a
 fi
-
-set -a
-# shellcheck disable=SC1090
-. "${METADATA_FILE}"
-set +a
 
 : "${TRUSTPOINT_LOCAL_HSM_PROFILE_NAME:?missing profile name in metadata}"
 : "${TRUSTPOINT_LOCAL_HSM_MODULE_PATH:?missing module path in metadata}"

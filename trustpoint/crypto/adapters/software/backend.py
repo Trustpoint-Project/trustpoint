@@ -234,8 +234,11 @@ class SoftwareBackend:
 
     @staticmethod
     def _assert_development_environment() -> None:
-        """Reject the software backend outside explicit development environments."""
-        if getattr(settings, 'DEVELOPMENT_ENV', False):
+        """Reject the software backend outside explicit dev or demo-style environments."""
+        if getattr(settings, 'DEVELOPMENT_ENV', False) or getattr(settings, 'DOCKER_CONTAINER', False):
             return
-        msg = 'The software crypto backend is development-only and must not be used outside DEVELOPMENT_ENV.'
+        msg = (
+            'The software crypto backend is for development, testing, and demo-style container setups only '
+            'and must not be used in hardened production deployments.'
+        )
         raise DevelopmentOnlyBackendError(msg)

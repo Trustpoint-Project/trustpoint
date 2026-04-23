@@ -86,6 +86,7 @@ class FakeSession:
         self.private_key = private_key or FakePrivateKey()
         self.public_key = public_key
         self.duplicate_aliases = duplicate_aliases or set()
+        self.close_calls = 0
         self.generate_keypair_calls: list[tuple[object, object, dict[str, object]]] = []
         self.domain_parameter_calls: list[tuple[object, dict[Attribute, bytes], bool]] = []
         self.domain_parameters = FakeDomainParameters()
@@ -160,6 +161,7 @@ class FakeSession:
 
     def close(self) -> None:
         """Satisfy the session-pool interface."""
+        self.close_calls += 1
 
 
 class FakeToken:
@@ -253,6 +255,16 @@ def test_generate_managed_rsa_key_uses_pkcs11_keygen() -> None:
     assert binding.algorithm is KeyAlgorithm.RSA
     assert binding.key_id
     assert session.generate_keypair_calls
+
+
+def test_verify_authentication_opens_authenticated_session() -> None:
+    """Authentication verification should open a PKCS#11 session with the configured PIN."""
+    session = FakeSession()
+    backend = _build_backend(session)
+
+    backend.verify_authentication()
+
+    assert session.close_calls == 1
 
 
 def test_generate_managed_ec_key_uses_domain_parameters() -> None:

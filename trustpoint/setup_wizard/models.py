@@ -136,9 +136,10 @@ class SetupWizardConfigModel(models.Model):
         """Enumerate the ordered steps in the fresh-install wizard."""
 
         CRYPTO_STORAGE = 0, gettext_lazy('Crypto-Storage')
-        DEMO_DATA = 1, gettext_lazy('Demo-Data')
-        TLS_CONFIG = 2, gettext_lazy('TLS-Config')
-        SUMMARY = 3, gettext_lazy('Summary')
+        BACKEND_CONFIG = 1, gettext_lazy('Backend-Config')
+        DEMO_DATA = 2, gettext_lazy('Demo-Data')
+        TLS_CONFIG = 3, gettext_lazy('TLS-Config')
+        SUMMARY = 4, gettext_lazy('Summary')
 
     fresh_install_current_step = models.PositiveSmallIntegerField(
         choices=FreshInstallCurrentStep,
@@ -150,6 +151,11 @@ class SetupWizardConfigModel(models.Model):
     fresh_install_crypto_storage_submitted = models.BooleanField(
         default=False,
         help_text='Whether the crypto storage step was submitted.',
+    )
+
+    fresh_install_backend_config_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the backend configuration step was submitted.',
     )
 
     fresh_install_demo_data_submitted = models.BooleanField(
@@ -194,9 +200,50 @@ class SetupWizardConfigModel(models.Model):
 
         SoftwareStorage = 0, gettext_lazy('Software Storage')
         HsmStorage = 1, gettext_lazy('HSM Storage')
+        RestBackend = 2, gettext_lazy('REST Backend')
 
     crypto_storage = models.PositiveSmallIntegerField(
         choices=CryptoStorageType, null=False, blank=False, default=CryptoStorageType.SoftwareStorage
+    )
+
+    class FreshInstallPkcs11AuthSource(models.TextChoices):
+        """Enumerate how the PKCS#11 backend resolves the user PIN."""
+
+        FILE = 'file', gettext_lazy('PIN file')
+        ENV = 'env', gettext_lazy('Environment variable')
+
+    fresh_install_pkcs11_module_path = models.TextField(
+        blank=True,
+        default='',
+        help_text='Configured PKCS#11 module path staged during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_token_label = models.CharField(
+        max_length=128,
+        blank=True,
+        default='',
+        help_text='Configured PKCS#11 token label staged during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_token_serial = models.CharField(
+        max_length=128,
+        blank=True,
+        default='',
+        help_text='Configured PKCS#11 token serial staged during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_slot_id = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text='Configured PKCS#11 slot id staged during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_auth_source = models.CharField(
+        max_length=16,
+        choices=FreshInstallPkcs11AuthSource.choices,
+        default=FreshInstallPkcs11AuthSource.FILE,
+        help_text='How the PKCS#11 backend resolves the user PIN during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_auth_source_ref = models.TextField(
+        blank=True,
+        default='',
+        help_text='PIN file path or environment variable name staged during the fresh-install wizard.',
     )
 
     inject_demo_data = models.BooleanField(null=False, blank=False, help_text='Inject demo data.', default=True)
@@ -236,6 +283,7 @@ class SetupWizardConfigModel(models.Model):
         """Return whether the given fresh-install step was submitted."""
         submitted_fields = {
             self.FreshInstallCurrentStep.CRYPTO_STORAGE: self.fresh_install_crypto_storage_submitted,
+            self.FreshInstallCurrentStep.BACKEND_CONFIG: self.fresh_install_backend_config_submitted,
             self.FreshInstallCurrentStep.DEMO_DATA: self.fresh_install_demo_data_submitted,
             self.FreshInstallCurrentStep.TLS_CONFIG: self.fresh_install_tls_config_submitted,
             self.FreshInstallCurrentStep.SUMMARY: self.fresh_install_summary_submitted,
@@ -246,6 +294,7 @@ class SetupWizardConfigModel(models.Model):
         """Mark the given fresh-install step as submitted."""
         field_name = {
             self.FreshInstallCurrentStep.CRYPTO_STORAGE: 'fresh_install_crypto_storage_submitted',
+            self.FreshInstallCurrentStep.BACKEND_CONFIG: 'fresh_install_backend_config_submitted',
             self.FreshInstallCurrentStep.DEMO_DATA: 'fresh_install_demo_data_submitted',
             self.FreshInstallCurrentStep.TLS_CONFIG: 'fresh_install_tls_config_submitted',
             self.FreshInstallCurrentStep.SUMMARY: 'fresh_install_summary_submitted',

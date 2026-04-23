@@ -109,6 +109,11 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
                 config_model.fresh_install_crypto_storage_submitted,
             ),
             (
+                '/setup-wizard/fresh-install/backend-config/',
+                reverse('setup_wizard:fresh_install_backend_config'),
+                config_model.fresh_install_backend_config_submitted,
+            ),
+            (
                 '/setup-wizard/fresh-install/demo-data/',
                 reverse('setup_wizard:fresh_install_demo_data'),
                 config_model.fresh_install_demo_data_submitted,

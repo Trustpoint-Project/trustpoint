@@ -130,6 +130,7 @@ COPY ./docker/trustpoint/nginx/trustpoint-nginx-https.conf /etc/nginx/sites-avai
 
 RUN chmod +x /etc/trustpoint/wizard/transition/*.sh
 RUN chmod +x /etc/trustpoint/wizard/configure_nginx.sh
+RUN chmod +x /etc/trustpoint/wizard/install_pkcs11_assets.sh
 RUN chmod +x /etc/trustpoint/wizard/update_tls.sh
 RUN chmod +x /etc/trustpoint/wizard/update_tls_nginx.sh
 RUN chmod +x /etc/trustpoint/wizard/wizard_restore.sh

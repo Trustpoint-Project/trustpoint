@@ -196,6 +196,7 @@
         </nav>
 
         <main class="tp-main">
+            {% include 'includes/trustpoint_runtime_banner.html' %}
             {% if messages %}
                 <div class="messages tp-messages text-center">
                     {% for message in messages %}

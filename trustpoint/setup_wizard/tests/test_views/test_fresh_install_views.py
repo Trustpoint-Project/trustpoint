@@ -1,10 +1,25 @@
 """Tests for the redesigned fresh-install wizard views."""
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import Mock
 
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 
-from setup_wizard.views import FreshInstallFormBaseView, FreshInstallSummaryTruststoreDownloadView, FreshInstallTlsConfigView
+from crypto.models import (
+    BackendKind,
+    CryptoProviderPkcs11ConfigModel,
+    CryptoProviderProfileModel,
+    CryptoProviderSoftwareConfigModel,
+    SoftwareKeyEncryptionSource,
+)
+from setup_wizard.models import SetupWizardConfigModel
+from setup_wizard.views import (
+    FreshInstallFormBaseView,
+    FreshInstallSummaryTruststoreDownloadView,
+    FreshInstallSummaryView,
+    FreshInstallTlsConfigView,
+)
 
 
 class FreshInstallTlsConfigViewTests(SimpleTestCase):
@@ -52,3 +67,46 @@ class FreshInstallSummaryTruststoreDownloadViewTests(SimpleTestCase):
 
         self.assertEqual(content, b'der')
         self.assertEqual(content_type, 'application/pkix-cert')
+
+
+class FreshInstallSummaryBackendConfigurationTests(TestCase):
+    """Tests for configuring the crypto backend from the summary step."""
+
+    @override_settings(DEVELOPMENT_ENV=True)
+    def test_configure_instance_crypto_backend_creates_software_profile(self) -> None:
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.SoftwareStorage
+        config_model.save()
+
+        FreshInstallSummaryView._configure_instance_crypto_backend(config_model)
+
+        profile = CryptoProviderProfileModel.objects.get(active=True)
+        software_config = CryptoProviderSoftwareConfigModel.objects.get(profile=profile)
+        self.assertEqual(profile.backend_kind, BackendKind.SOFTWARE)
+        self.assertEqual(software_config.encryption_source, SoftwareKeyEncryptionSource.DEV_PLAINTEXT)
+
+    def test_configure_instance_crypto_backend_creates_pkcs11_profile(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            module_path = temp_root / 'libpkcs11.so'
+            pin_file = temp_root / 'user-pin.txt'
+            module_path.write_text('', encoding='utf-8')
+            pin_file.write_text('1234', encoding='utf-8')
+
+            with override_settings(
+                HSM_DEFAULT_PKCS11_MODULE_PATH=module_path,
+                HSM_DEFAULT_USER_PIN_FILE=pin_file,
+                HSM_DEFAULT_TOKEN_LABEL='Trustpoint-SoftHSM',
+            ):
+                config_model = SetupWizardConfigModel.get_singleton()
+                config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+                config_model.fresh_install_pkcs11_token_label = 'Trustpoint-SoftHSM'
+                config_model.save()
+
+                FreshInstallSummaryView._configure_instance_crypto_backend(config_model)
+
+        profile = CryptoProviderProfileModel.objects.get(active=True)
+        pkcs11_config = CryptoProviderPkcs11ConfigModel.objects.get(profile=profile)
+        self.assertEqual(profile.backend_kind, BackendKind.PKCS11)
+        self.assertEqual(pkcs11_config.token_label, 'Trustpoint-SoftHSM')
+        self.assertIsNone(pkcs11_config.token_serial)

@@ -19,6 +19,11 @@ urlpatterns = [
         name='fresh_install_crypto_storage',
     ),
     path(
+        'fresh-install/backend-config/',
+        views.FreshInstallBackendConfigView.as_view(),
+        name='fresh_install_backend_config',
+    ),
+    path(
         'fresh-install/demo-data/',
         views.FreshInstallDemoDataView.as_view(),
         name='fresh_install_demo_data',

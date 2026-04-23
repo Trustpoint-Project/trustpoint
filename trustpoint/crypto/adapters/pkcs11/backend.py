@@ -30,6 +30,7 @@ from crypto.domain.errors import (
 from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec, algorithm_for_key_spec
 from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, PKCS11Error
+from pkcs11.exceptions import UserAlreadyLoggedIn  # type: ignore[import-untyped]
 from pkcs11.util.ec import encode_ec_public_key, encode_ecdsa_signature  # type: ignore[import-untyped]
 from pkcs11.util.rsa import encode_rsa_public_key  # type: ignore[import-untyped]
 from trustpoint.logger import LoggerMixin
@@ -81,6 +82,34 @@ class Pkcs11Backend(LoggerMixin):
     def current_capabilities(self) -> Pkcs11Capabilities | None:
         """Return the currently cached capability snapshot, if any."""
         return self._capabilities
+
+    def verify_authentication(self) -> None:
+        """Verify that the configured PKCS#11 user PIN can open an authenticated session."""
+        self._ensure_token_loaded()
+        if self._resolved_token is None:
+            msg = 'PKCS#11 token resolution failed before authentication verification.'
+            raise ProviderUnavailableError(msg)
+
+        try:
+            session = self._resolved_token.open(
+                user_pin=self._profile.require_user_pin(),
+                rw=self._profile.rw_sessions,
+            )
+        except UserAlreadyLoggedIn as exc:
+            msg = (
+                'Trustpoint already has an authenticated PKCS#11 session open and cannot '
+                'conclusively re-validate the entered user PIN right now.'
+            )
+            raise ProviderUnavailableError(msg) from exc
+        except CryptoError:
+            raise
+        except PKCS11Error as exc:
+            raise map_pkcs11_error(exc, operation='token authentication') from exc
+        else:
+            try:
+                session.close()
+            except PKCS11Error as exc:
+                raise map_pkcs11_error(exc, operation='token authentication') from exc
 
     def close(self) -> None:
         """Close any pooled PKCS#11 sessions held by this adapter."""
