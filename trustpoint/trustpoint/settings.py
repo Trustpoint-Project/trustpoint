@@ -83,7 +83,8 @@ PUBLIC_PATHS = [
     '/api',
     '/aoki',
     '/crl',
-    '/setup-wizard'
+    '/setup-wizard',
+    '/devices/browser',
 ]
 
 
