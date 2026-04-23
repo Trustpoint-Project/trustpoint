@@ -37,7 +37,7 @@
         </div>
 
         <div class="tp-setup-form-panel">
-            <form method="post" action="" enctype="multipart/form-data" class="tp-setup-form text-start">
+            <form method="post" action="{% url 'setup_wizard:restore' %}" enctype="multipart/form-data" class="tp-setup-form text-start">
                 {% csrf_token %}
 
                 <fieldset class="tp-form-group">

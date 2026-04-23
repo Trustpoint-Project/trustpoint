@@ -77,6 +77,8 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         '/setup-wizard/create-super-user/',
         '/setup-wizard/restore-backup',
         '/setup-wizard/restore-backup/',
+        '/setup-wizard/restore',
+        '/setup-wizard/restore/',
     )
 
     ALLOWED_NON_AUTH_PATHS = (
@@ -182,8 +184,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         """
         redirect_dest: str | None = None
 
-        msg = f'\n\npath_info: {request.path_info}'
-        self.logger.critical(msg)
+        self.logger.debug('\n\npath_info: %s', request.path_info)
 
         # handle dev environment
         if not settings.DOCKER_CONTAINER:
@@ -192,8 +193,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
             return self.get_response(request)
 
         setup_wizard_completed = SetupWizardCompletedModel.setup_wizard_completed()
-        msg = f'setup_wizard_completed: {setup_wizard_completed}'
-        self.logger.critical(msg)
+        self.logger.debug('setup_wizard_completed: %s', setup_wizard_completed)
 
         # handle wizard completed cases
         if setup_wizard_completed:
@@ -202,17 +202,15 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
             return self.get_response(request)
 
         users_exists = get_user_model().objects.exists()
-        msg = f'user_exists: {users_exists}'
-        self.logger.critical(msg)
+        self.logger.debug('user_exists: %s', users_exists)
 
         # if no user exists, only allow the views before creating a user
         if not users_exists and request.path_info not in self.ALLOWED_NO_USER_CREATED:
-            self.logger.critical('redirecting to wizard index')
+            self.logger.debug('redirecting to wizard index')
             redirect_dest = self.SETUP_WIZARD_INDEX_REVERSE
 
         authenticated = request.user.is_authenticated
-        msg = f'authenticated: {authenticated}'
-        self.logger.critical(msg)
+        self.logger.debug('authenticated: %s', authenticated)
 
         # if a user exists but is not authenticated, redirect to login page
         if not authenticated and users_exists and request.path_info not in self.ALLOWED_NON_AUTH_PATHS:
@@ -230,10 +228,10 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
             redirect_dest = self._get_fresh_install_redirect_path(request.path_info)
 
         if redirect_dest:
-            self.logger.critical('redirecting dest: %s', redirect_dest)
+            self.logger.debug('redirecting dest: %s', redirect_dest)
             return redirect(redirect_dest, permanent=False)
 
-        self.logger.critical('NOT redirecting')
+        self.logger.debug('NOT redirecting')
         return self.get_response(request)
 
 
