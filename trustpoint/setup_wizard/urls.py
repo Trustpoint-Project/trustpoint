@@ -44,7 +44,7 @@ urlpatterns = [
     #     SetupWizardBackupPasswordView.as_view(), # noqa: ERA001
     #     name='backup_password', # noqa: ERA001
     # ),
-    # path('restore/', BackupRestoreView.as_view(), name='restore'), # noqa: ERA001
+    path('restore/', views.BackupRestoreView.as_view(), name='restore'),
     # path('auto_restore_password/', BackupAutoRestorePasswordView.as_view(),
     # name='auto_restore_password'),
 ]
