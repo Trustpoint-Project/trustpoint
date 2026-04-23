@@ -442,7 +442,7 @@ class StandardInitializationStrategy(InitializationStrategy):
         # Compile messages
         context.output.write('Compiling translation messages...')
         with io.StringIO() as fake_out:
-            call_command('compilemessages', '-l', 'de', '-l', 'en', stdout=fake_out)
+            call_command('compilemessages', '-l', 'de', '-l', 'en', '--ignore', '.venv', stdout=fake_out)
 
         # Initialize notifications
         self._initialize_notifications(context)
