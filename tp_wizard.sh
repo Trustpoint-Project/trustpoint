@@ -325,7 +325,6 @@ print_local_hsm_wizard_handoff(){
   echo
   echo "Trustpoint setup wizard handoff:"
   printf "  %-20s %s\n" "Local proxy client:" "${module_path}"
-  printf "  %-20s %s\n" "Optional docker cp:" "docker cp \"trustpoint:${module_path}\" \"./libpkcs11-proxy.so\""
   printf "  %-20s %s\n" "Wizard token label:" "${token_label}"
   [[ -n "$user_pin" ]] && printf "  %-20s %s\n" "Wizard user PIN:" "${user_pin}"
 }
@@ -1029,7 +1028,6 @@ final_summary(){
       printf "%-22s %s\n" "Token serial:" "$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
       printf "%-22s %s\n" "Profile name:" "$(local_hsm_value TRUSTPOINT_LOCAL_HSM_PROFILE_NAME)"
       printf "%-22s %s\n" "Local proxy client:" "/usr/lib/libpkcs11-proxy.so"
-      printf "%-22s %s\n" "Optional docker cp:" "docker cp \"trustpoint:/usr/lib/libpkcs11-proxy.so\" \"./libpkcs11-proxy.so\""
       printf "%-22s %s\n" "Wizard token label:" "$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL)"
       [[ -n "$(local_hsm_user_pin)" ]] && printf "%-22s %s\n" "Wizard user PIN:" "$(local_hsm_user_pin)"
     }

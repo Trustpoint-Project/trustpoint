@@ -7,7 +7,6 @@ from unittest.mock import Mock, patch
 import pytest
 from django import forms
 from django.core.files.uploadedfile import SimpleUploadedFile
-from management.models import KeyStorageConfig
 from trustpoint_core.serializer import PrivateKeyLocation
 
 from pki.forms import (
@@ -32,30 +31,20 @@ class TestGetPrivateKeyLocationFromConfig:
     """Test the get_private_key_location_from_config function."""
 
     def test_returns_hsm_provided_for_softhsm(self):
-        """Test that HSM_PROVIDED is returned for SOFTHSM storage type."""
-        with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
-            mock_config = Mock()
-            mock_config.storage_type = KeyStorageConfig.StorageType.SOFTHSM
-            mock_get_config.return_value = mock_config
-            
+        """Test that HSM_PROVIDED is returned for a configured HSM backend."""
+        with patch('pki.forms.issuing_cas.is_hsm_backend_configured', return_value=True):
             result = get_private_key_location_from_config()
             assert result == PrivateKeyLocation.HSM_PROVIDED
 
     def test_returns_hsm_provided_for_physical_hsm(self):
-        """Test that HSM_PROVIDED is returned for PHYSICAL_HSM storage type."""
-        with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
-            mock_config = Mock()
-            mock_config.storage_type = KeyStorageConfig.StorageType.PHYSICAL_HSM
-            mock_get_config.return_value = mock_config
-            
+        """Test that HSM_PROVIDED is returned for any PKCS#11-backed runtime."""
+        with patch('pki.forms.issuing_cas.is_hsm_backend_configured', return_value=True):
             result = get_private_key_location_from_config()
             assert result == PrivateKeyLocation.HSM_PROVIDED
 
     def test_returns_software_when_config_does_not_exist(self):
-        """Test that SOFTWARE is returned when KeyStorageConfig does not exist."""
-        with patch('pki.forms.issuing_cas.KeyStorageConfig.get_config') as mock_get_config:
-            mock_get_config.side_effect = KeyStorageConfig.DoesNotExist()
-            
+        """Test that SOFTWARE is returned when no HSM backend is configured."""
+        with patch('pki.forms.issuing_cas.is_hsm_backend_configured', return_value=False):
             result = get_private_key_location_from_config()
             assert result == PrivateKeyLocation.SOFTWARE
 

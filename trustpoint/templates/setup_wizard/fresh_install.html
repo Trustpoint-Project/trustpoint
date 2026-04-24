@@ -287,7 +287,16 @@
                                 {% endif %}
                                 {% if form.staged_pkcs11_module_name %}
                                     <div class="tp-backend-state-pill">
-                                        Current staged library: {{ form.staged_pkcs11_module_name }}
+                                        <span>Current staged library: {{ form.staged_pkcs11_module_name }}</span>
+                                        <button
+                                            type="submit"
+                                            name="wizard_action"
+                                            value="clear_module"
+                                            class="tp-backend-state-pill-dismiss"
+                                            formnovalidate
+                                            aria-label="Remove staged library"
+                                            title="Remove staged library"
+                                        >×</button>
                                     </div>
                                 {% endif %}
                                 <div class="tp-backend-field">
@@ -334,7 +343,16 @@
                                         {{ form.pkcs11_user_pin }}
                                         {% if form.has_staged_pkcs11_pin %}
                                             <div class="tp-backend-state-pill">
-                                                A user PIN is already staged for this wizard session.
+                                                <span>A user PIN is already staged for this wizard session.</span>
+                                                <button
+                                                    type="submit"
+                                                    name="wizard_action"
+                                                    value="clear_pin"
+                                                    class="tp-backend-state-pill-dismiss"
+                                                    formnovalidate
+                                                    aria-label="Remove staged user PIN"
+                                                    title="Remove staged user PIN"
+                                                >×</button>
                                             </div>
                                         {% endif %}
                                         {% if form.pkcs11_user_pin.help_text %}

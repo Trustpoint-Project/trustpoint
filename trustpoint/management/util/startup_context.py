@@ -4,240 +4,122 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from management.models import KeyStorageConfig
-from setup_wizard import SetupWizardState
+from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
+from crypto.runtime import configured_backend_kind
+from setup_wizard.models import SetupWizardCompletedModel, SetupWizardConfigModel
+from setup_wizard.tls_credential import load_staged_tls_credential
 
 if TYPE_CHECKING:
     from packaging.version import Version
 
-    from management.models import PKCS11Token
+    from crypto.models import BackendKind
     from management.util.startup_strategies import OutputWriter, StartupContext
 
 
 class StartupContextBuilder:
-    """Builder for creating StartupContext objects."""
+    """Builder for creating simplified startup context objects."""
 
     def __init__(self, output: OutputWriter, current_version: Version) -> None:
-        """Initialize the context builder.
-
-        Args:
-            output: The output writer for logging.
-            current_version: The current application version.
-        """
+        """Initialize the context builder."""
         self.output = output
         self.current_version = current_version
         self.db_version: Version | None = None
-        self.wizard_state: SetupWizardState | None = None
-        self.wizard_completed: bool = False
-        self.storage_type: KeyStorageConfig.StorageType | None = None
-        self.is_hsm: bool = False
-        self.dek_accessible: bool = False
-        self.has_kek: bool = False
-        self.has_backup_encrypted_dek: bool = False
+        self.wizard_completed = False
+        self.wizard_current_step: SetupWizardConfigModel.FreshInstallCurrentStep | None = None
+        self.backend_kind: BackendKind | None = None
+        self.appsecrets_configured = False
+        self.has_staged_tls = False
 
-    def with_db_version(self, db_version: Version) -> StartupContextBuilder:
-        """Set the database version.
-
-        Args:
-            db_version: The version from the database.
-
-        Returns:
-            Self for method chaining.
-        """
+    def with_db_version(self, db_version: Version | None) -> StartupContextBuilder:
+        """Set the previously persisted application version."""
         self.db_version = db_version
         return self
 
     def collect_wizard_state(self) -> StartupContextBuilder:
-        """Collect wizard state information.
-
-        Returns:
-            Self for method chaining.
-        """
-        self.output.write('Checking wizard completion state...')
-        try:
-            self.wizard_state = SetupWizardState.get_current_state()
-            self.output.write(f'Current wizard state: {self.wizard_state}')
-            self.wizard_completed = self.wizard_state == SetupWizardState.WIZARD_COMPLETED
-            self.output.write(f'Wizard is completed: {self.wizard_completed}')
-        except RuntimeError as e:
-            self.output.write(f'Could not determine wizard state: {e}')
-            self.wizard_completed = False
+        """Collect wizard completion and current step from the database singletons."""
+        self.output.write('Checking setup wizard state from the database...')
+        completed_row, _ = SetupWizardCompletedModel.objects.get_or_create(
+            singleton_id=SetupWizardCompletedModel.SINGLETON_ID
+        )
+        config = SetupWizardConfigModel.get_singleton()
+        self.wizard_completed = completed_row.setup_completed_at is not None
+        self.wizard_current_step = config.FreshInstallCurrentStep(config.fresh_install_current_step)
+        self.output.write(f'Wizard is completed: {self.wizard_completed}')
+        self.output.write(f'Current bootstrap wizard step: {self.wizard_current_step.name}')
         return self
 
-    def collect_storage_config(self) -> StartupContextBuilder:
-        """Collect storage configuration information.
-
-        Returns:
-            Self for method chaining.
-        """
-        self.output.write('Checking storage type configuration...')
+    def collect_backend_state(self) -> StartupContextBuilder:
+        """Collect the configured managed-crypto backend kind, if any."""
+        self.output.write('Checking configured crypto backend...')
         try:
-            config = KeyStorageConfig.objects.first()
-            if not config:
-                self.output.write('No KeyStorageConfig found')
-                self.storage_type = None
-                self.is_hsm = False
-                return self
-
-            self.storage_type = KeyStorageConfig.StorageType(config.storage_type)
-            self.is_hsm = self.storage_type in (
-                KeyStorageConfig.StorageType.SOFTHSM,
-                KeyStorageConfig.StorageType.PHYSICAL_HSM
-            )
-            self.output.write(f'Storage type: {self.storage_type}')
-            self.output.write(f'Storage requires backup recovery: {self.is_hsm}')
-        except Exception as e:  # noqa: BLE001
-            self.output.write(f'Error checking storage type: {e}')
-            self.storage_type = None
-            self.is_hsm = False
-        return self
-
-    def collect_dek_state(self) -> StartupContextBuilder:
-        """Collect DEK accessibility information.
-
-        Returns:
-            Self for method chaining.
-        """
-        if not self.is_hsm:
-            # DEK state only relevant for HSM configurations
-            self.dek_accessible = True
+            self.backend_kind = configured_backend_kind()
+        except Exception as exc:  # noqa: BLE001
+            self.output.write(f'Could not determine crypto backend configuration: {exc}')
+            self.backend_kind = None
             return self
 
-        self.output.write('Checking DEK accessibility...')
-        try:
-            config = KeyStorageConfig.objects.first()
-            if not config or not config.hsm_config:
-                self.output.write('No HSM configuration found')
-                self.dek_accessible = False
-                return self
-
-            token = config.hsm_config
-            self.output.write(f'Token label: {token.label}')
-            self.output.write(f'encrypted_dek present: {bool(token.encrypted_dek)}')
-            self.output.write(f'bek_encrypted_dek present: {bool(token.bek_encrypted_dek)}')
-
-            self.has_backup_encrypted_dek = bool(token.bek_encrypted_dek)
-
-            self.has_kek = self._check_kek_exists_on_hsm(token)
-
-            if not token.encrypted_dek and not token.bek_encrypted_dek:
-                self.output.write('>>> No DEK found - backup password required')
-                self.dek_accessible = False
-                return self
-
-            cached_dek = token.get_dek_cache()
-            if cached_dek:
-                self.output.write('>>> DEK available in cache - system operational')
-                self.dek_accessible = True
-                return self
-
-            if not self.has_kek:
-                self.output.write('>>> KEK not available on HSM - cannot unwrap DEK')
-                self.dek_accessible = False
-                return self
-
-            self.output.write('Attempting to unwrap DEK to verify KEK accessibility...')
-            try:
-                dek = token.get_dek()
-                if dek:
-                    self.output.write('>>> DEK successfully unwrapped - KEK is accessible')
-                    self.dek_accessible = True
-                else:
-                    self.output.write('>>> DEK unwrap returned None')
-                    self.dek_accessible = False
-            except Exception as unwrap_error:  # noqa: BLE001
-                self.output.write(f'>>> DEK unwrap failed: {unwrap_error}')
-                self.output.write('>>> KEK unavailable - backup password required')
-                self.dek_accessible = False
-
-        except Exception as e:  # noqa: BLE001
-            self.output.write(f'Error checking DEK status: {e}')
-            self.dek_accessible = False
+        if self.backend_kind is None:
+            self.output.write('No active crypto backend profile is configured yet.')
+        else:
+            self.output.write(f'Configured crypto backend: {self.backend_kind.value}')
         return self
 
-    def _check_kek_exists_on_hsm(self, token: PKCS11Token) -> bool:
-        """Check if the KEK actually exists on the physical HSM.
-
-        This method verifies that the KEK is not just referenced in the database,
-        but actually exists on the physical HSM by attempting to load it.
-
-        Args:
-            token: The PKCS11Token to check.
-
-        Returns:
-            bool: True if KEK exists on HSM, False otherwise.
-        """
+    def collect_appsecret_state(self) -> StartupContextBuilder:
+        """Collect whether the app-secret subsystem has a coherent configuration row."""
+        self.output.write('Checking application-secret backend configuration...')
         try:
-            kek_exists = token.load_kek()
+            backend = AppSecretBackendModel.objects.first()
+        except Exception as exc:  # noqa: BLE001
+            self.output.write(f'Could not inspect app-secret backend configuration: {exc}')
+            self.appsecrets_configured = False
+            return self
 
-            if kek_exists:
-                self.output.write('>>> KEK verified to exist on HSM')
+        if backend is None:
+            self.output.write('No application-secret backend is configured yet.')
+            self.appsecrets_configured = False
+            return self
+
+        try:
+            if backend.backend_kind == AppSecretBackendKind.PKCS11:
+                backend.pkcs11_config
+                self.appsecrets_configured = True
+            elif backend.backend_kind == AppSecretBackendKind.SOFTWARE:
+                backend.software_config
+                self.appsecrets_configured = True
             else:
-                self.output.write('>>> KEK does not exist on HSM')
+                self.appsecrets_configured = False
+        except Exception:  # noqa: BLE001
+            self.appsecrets_configured = False
 
-        except Exception as e:  # noqa: BLE001
-            self.output.write(f'>>> Error checking for KEK on HSM: {e}')
-            return False
-        else:
-            return kek_exists
+        self.output.write(f'Application-secret backend configured: {self.appsecrets_configured}')
+        return self
+
+    def collect_tls_staging_state(self) -> StartupContextBuilder:
+        """Collect whether a staged wizard TLS credential exists for bootstrap mode."""
+        self.output.write('Checking for staged bootstrap TLS material...')
+        try:
+            self.has_staged_tls = load_staged_tls_credential() is not None
+        except Exception as exc:  # noqa: BLE001
+            self.output.write(f'Could not load staged TLS material: {exc}')
+            self.has_staged_tls = False
+            return self
+
+        self.output.write(f'Staged TLS credential available: {self.has_staged_tls}')
+        return self
 
     def build(self) -> StartupContext:
-        """Build the StartupContext object.
+        """Build the StartupContext object."""
+        from management.util.startup_strategies import StartupContext, WizardState  # noqa: PLC0415
 
-        Returns:
-            The constructed StartupContext.
-        """
-        from management.util.startup_strategies import (  # noqa: PLC0415
-            DekCacheState,
-            StartupContext,
-            WizardState,
-        )
-
-        # Map wizard completed bool to wizard state enum
         wizard_state_enum = WizardState.COMPLETED if self.wizard_completed else WizardState.INCOMPLETE
 
-        # Map DEK accessibility to cache state (only for HSM)
-        dek_cache = (
-            (DekCacheState.CACHED if self.dek_accessible else DekCacheState.NOT_CACHED)
-            if self.is_hsm
-            else None
-        )
-
         return StartupContext(
-            db_initialized=True,
+            current_version=self.current_version,
             db_version=self.db_version,
-            current_version=self.current_version,
             wizard_state_enum=wizard_state_enum,
-            wizard_state_raw=self.wizard_state,
-            storage_type=self.storage_type,
-            dek_cache_state=dek_cache,
-            has_kek=self.has_kek,
-            has_backup_encrypted_dek=self.has_backup_encrypted_dek,
-            output=self.output,
-        )
-
-    def build_for_db_init(self) -> StartupContext:
-        """Build a minimal StartupContext for database initialization scenarios.
-
-        This is used when the database is not initialized or has no version,
-        so we can't query for wizard state, storage config, or DEK state.
-
-        Returns:
-            A minimal StartupContext with db_initialized=False.
-        """
-        # Import here to avoid circular imports
-        from management.util.startup_strategies import (  # noqa: PLC0415
-            StartupContext,
-            WizardState,
-        )
-
-        return StartupContext(
-            db_initialized=False,
-            db_version=None,
-            current_version=self.current_version,
-            wizard_state_enum=WizardState.INCOMPLETE,
-            wizard_state_raw=None,
-            storage_type=None,  # Safe default for uninitialized DB
-            dek_cache_state=None,
+            wizard_current_step=self.wizard_current_step,
+            backend_kind=self.backend_kind,
+            appsecrets_configured=self.appsecrets_configured,
+            has_staged_tls=self.has_staged_tls,
             output=self.output,
         )

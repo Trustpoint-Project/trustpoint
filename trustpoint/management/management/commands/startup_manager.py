@@ -1,13 +1,10 @@
-"""Example integration of startup strategies into managestartup command.
+"""Startup manager for Trustpoint bootstrap and completed-runtime startup."""
 
-This file shows how to refactor the managestartup.py command to use the strategy pattern.
-Copy the relevant parts into managestartup.py to complete the refactoring.
-"""
+from __future__ import annotations
 
 from django.conf import settings as django_settings
-from django.core.management import CommandError
+from django.core.management import CommandError, call_command
 from django.core.management.base import BaseCommand
-from django.db.utils import OperationalError, ProgrammingError
 from packaging.version import InvalidVersion, Version
 
 from management.models import AppVersion
@@ -17,96 +14,61 @@ from management.util.startup_strategies import StartupStrategySelector
 
 
 class Command(BaseCommand):
-    """A Django management command to check and update the Trustpoint version."""
+    """Prepare Trustpoint startup state after migrations are safe."""
 
-    help = 'Updates app version'
+    help = 'Prepare Trustpoint startup, bootstrap, and TLS runtime state.'
 
     def handle(self, **_options: dict[str, str]) -> None:
         """Entrypoint for the command."""
         self.manage_startup()
 
     def manage_startup(self) -> None:
-        """Checks current state of trustpoint and acts accordingly."""
+        """Ensure the DB schema is ready, then choose bootstrap or completed-runtime startup."""
         self.stdout.write('=== Starting Trustpoint Startup Sequence ===')
-
         output = CommandOutputWrapper(self.stdout, self.style)
 
-        current_version_str = django_settings.APP_VERSION
-        current_version = self._parse_version(current_version_str)
+        current_version = self._parse_version(django_settings.APP_VERSION)
         output.write(f'Current app version: {current_version}')
 
-        try:
-            app_version = AppVersion.objects.first()
-            output.write(f'App version from DB: {app_version.version if app_version else "None"}')
-        except (ProgrammingError, OperationalError):
-            output.write('AppVersion table not found. DB not initialized')
+        output.write('Running database migrations...')
+        call_command('migrate')
 
-            context = StartupContextBuilder(output, current_version).build_for_db_init()
-
-            strategy = StartupStrategySelector.select_startup_strategy(
-                db_initialized=False,
-                has_version=False
-            )
-            strategy.execute(context)
-            return
-
-        if not app_version:
-            output.write('DB initialized but AppVersion record not found')
-
-            context = StartupContextBuilder(output, current_version).build_for_db_init()
-
-            strategy = StartupStrategySelector.select_startup_strategy(
-                db_initialized=True,
-                has_version=False
-            )
-            strategy.execute(context)
-            return
-
-        db_version = self._parse_version(app_version.version)
+        app_version = AppVersion.objects.first()
+        if app_version is None:
+            output.write('App version from DB: None')
+            db_version = None
+        else:
+            output.write(f'App version from DB: {app_version.version}')
+            db_version = self._parse_version(app_version.version)
 
         context = (
             StartupContextBuilder(output, current_version)
             .with_db_version(db_version)
             .collect_wizard_state()
-            .collect_storage_config()
-            .collect_dek_state()
+            .collect_backend_state()
+            .collect_appsecret_state()
+            .collect_tls_staging_state()
             .build()
         )
 
+        strategy = StartupStrategySelector.select_startup_strategy(context)
+        output.write(f'Selected strategy: {strategy.__class__.__name__}')
+        output.write(f'Strategy description: {strategy.get_description()}')
+
         try:
-            strategy = StartupStrategySelector.select_startup_strategy(
-                db_initialized=True,
-                has_version=True,
-                context=context,
-                app_version=app_version
-            )
-
-            output.write(f'Selected strategy: {strategy.__class__.__name__}')
-            output.write(f'Strategy description: {strategy.get_description()}')
-
             strategy.execute(context)
-
-            output.write(output.success('=== Startup Sequence Completed Successfully ==='))
-
-        except RuntimeError as e:
-            error_msg = str(e)
+        except RuntimeError as exc:
+            error_msg = str(exc)
             output.write(output.error(error_msg))
-            raise CommandError(error_msg) from e
+            raise CommandError(error_msg) from exc
 
-    def _parse_version(self, version_str: str) -> Version:
-        """Parse a version string into a Version object.
+        output.write(output.success('=== Startup Sequence Completed Successfully ==='))
 
-        Args:
-            version_str: The version string to parse.
-
-        Returns:
-            The parsed Version object.
-
-        Raises:
-            CommandError: If the version string is invalid.
-        """
+    @staticmethod
+    def _parse_version(version_str: str) -> Version:
+        """Parse and validate an application version string."""
         try:
             return Version(version_str)
-        except InvalidVersion as e:
-            exc_msg = f'Invalid version format: {version_str}'
-            raise CommandError(exc_msg) from e
+        except InvalidVersion as exc:
+            msg = f'Invalid version format: {version_str}'
+            raise CommandError(msg) from exc

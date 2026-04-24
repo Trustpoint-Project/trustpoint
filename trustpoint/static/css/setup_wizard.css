@@ -921,9 +921,39 @@
     color: var(--bs-emphasis-color);
     display: inline-flex;
     font-size: 0.85rem;
-    gap: 0.35rem;
+    gap: 0.7rem;
     justify-self: start;
     padding: 0.35rem 0.7rem;
+}
+
+.tp-fresh-install-shell .tp-backend-state-pill-dismiss {
+    align-items: center;
+    appearance: none;
+    background-color: color-mix(in srgb, var(--bs-success) 16%, var(--bs-body-bg));
+    border: 1px solid color-mix(in srgb, var(--bs-success) 26%, var(--bs-border-color));
+    border-radius: 999px;
+    color: var(--bs-emphasis-color);
+    cursor: pointer;
+    display: inline-flex;
+    flex: 0 0 auto;
+    font-size: 1rem;
+    font-weight: 700;
+    height: 1.35rem;
+    justify-content: center;
+    line-height: 1;
+    min-width: 1.35rem;
+    padding: 0;
+    transition:
+        background-color 0.18s ease,
+        border-color 0.18s ease,
+        transform 0.18s ease;
+}
+
+.tp-fresh-install-shell .tp-backend-state-pill-dismiss:hover,
+.tp-fresh-install-shell .tp-backend-state-pill-dismiss:focus-visible {
+    background-color: color-mix(in srgb, var(--bs-success) 22%, var(--bs-body-bg));
+    border-color: color-mix(in srgb, var(--bs-success) 34%, var(--bs-border-color));
+    transform: scale(1.03);
 }
 
 .tp-fresh-install-shell .tp-backend-quickstart-block {

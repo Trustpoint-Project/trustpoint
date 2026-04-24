@@ -11,7 +11,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from management.models import KeyStorageConfig
+from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel, AppSecretSoftwareConfigModel
 from signer.models import SignerModel, SignedMessageModel
 
 
@@ -33,8 +33,14 @@ def authenticated_client(api_client):
 
 @pytest.fixture
 def key_storage_config():
-    """Create a software key storage configuration."""
-    return KeyStorageConfig.objects.create(pk=1, storage_type='software')
+    """Create a development app-secret backend for signer API tests."""
+    backend = AppSecretBackendModel.get_singleton()
+    backend.backend_kind = AppSecretBackendKind.SOFTWARE
+    backend.save()
+    config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
+    config.raw_dek = b'a' * 32
+    config.save()
+    return config
 
 
 @pytest.fixture

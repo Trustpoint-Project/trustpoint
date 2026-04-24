@@ -2,10 +2,16 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from django.test import SimpleTestCase, TestCase, override_settings
 
+from appsecrets.models import (
+    AppSecretBackendKind,
+    AppSecretBackendModel,
+    AppSecretPkcs11ConfigModel,
+    AppSecretSoftwareConfigModel,
+)
 from crypto.models import (
     BackendKind,
     CryptoProviderPkcs11ConfigModel,
@@ -47,12 +53,9 @@ class FreshInstallSummaryTruststoreDownloadViewTests(SimpleTestCase):
         self.root_ca_serializer.as_pem.return_value = b'pem'
         self.root_ca_serializer.as_der.return_value = b'der'
 
-        self.tls_credential = Mock()
-        self.tls_credential.get_root_ca_certificate_serializer.return_value = self.root_ca_serializer
-
     def test_get_root_ca_certificate_and_content_type_for_pem(self) -> None:
         content, content_type = FreshInstallSummaryTruststoreDownloadView._get_root_ca_certificate_and_content_type(
-            self.tls_credential,
+            self.root_ca_serializer,
             'pem',
         )
 
@@ -61,7 +64,7 @@ class FreshInstallSummaryTruststoreDownloadViewTests(SimpleTestCase):
 
     def test_get_root_ca_certificate_and_content_type_for_der(self) -> None:
         content, content_type = FreshInstallSummaryTruststoreDownloadView._get_root_ca_certificate_and_content_type(
-            self.tls_credential,
+            self.root_ca_serializer,
             'der',
         )
 
@@ -84,6 +87,20 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
         software_config = CryptoProviderSoftwareConfigModel.objects.get(profile=profile)
         self.assertEqual(profile.backend_kind, BackendKind.SOFTWARE)
         self.assertEqual(software_config.encryption_source, SoftwareKeyEncryptionSource.DEV_PLAINTEXT)
+
+    @override_settings(DEVELOPMENT_ENV=True)
+    def test_configure_app_secret_backend_creates_software_backend(self) -> None:
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.SoftwareStorage
+        config_model.save()
+
+        with patch('setup_wizard.views.get_app_secret_service') as mock_get_service:
+            mock_get_service.return_value.ensure_backend_ready.return_value = None
+            FreshInstallSummaryView._configure_app_secret_backend(config_model)
+
+        backend = AppSecretBackendModel.objects.get(pk=AppSecretBackendModel.SINGLETON_ID)
+        AppSecretSoftwareConfigModel.objects.get(backend=backend)
+        self.assertEqual(backend.backend_kind, AppSecretBackendKind.SOFTWARE)
 
     def test_configure_instance_crypto_backend_creates_pkcs11_profile(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -110,3 +127,39 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
         self.assertEqual(profile.backend_kind, BackendKind.PKCS11)
         self.assertEqual(pkcs11_config.token_label, 'Trustpoint-SoftHSM')
         self.assertIsNone(pkcs11_config.token_serial)
+
+    def test_configure_app_secret_backend_creates_pkcs11_backend(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            module_path = temp_root / 'libpkcs11.so'
+            pin_file = temp_root / 'user-pin.txt'
+            module_path.write_text('', encoding='utf-8')
+            pin_file.write_text('1234', encoding='utf-8')
+
+            profile = CryptoProviderProfileModel.objects.create(
+                name='trustpoint-pkcs11-backend',
+                backend_kind=BackendKind.PKCS11,
+                active=True,
+            )
+            CryptoProviderPkcs11ConfigModel.objects.create(
+                profile=profile,
+                module_path=str(module_path),
+                token_label='Trustpoint-SoftHSM',
+                token_serial=None,
+                slot_id=None,
+                auth_source='file',
+                auth_source_ref=str(pin_file),
+            )
+
+            config_model = SetupWizardConfigModel.get_singleton()
+            config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+            config_model.save()
+
+            with patch('setup_wizard.views.get_app_secret_service') as mock_get_service:
+                mock_get_service.return_value.ensure_backend_ready.return_value = None
+                FreshInstallSummaryView._configure_app_secret_backend(config_model)
+
+        backend = AppSecretBackendModel.objects.get(pk=AppSecretBackendModel.SINGLETON_ID)
+        secret_config = AppSecretPkcs11ConfigModel.objects.get(backend=backend)
+        self.assertEqual(backend.backend_kind, AppSecretBackendKind.PKCS11)
+        self.assertEqual(secret_config.token_label, 'Trustpoint-SoftHSM')

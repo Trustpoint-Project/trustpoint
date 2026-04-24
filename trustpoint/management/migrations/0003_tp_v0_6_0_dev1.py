@@ -53,6 +53,11 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterField(
             model_name='securityconfig',
+            name='require_physical_hsm',
+            field=models.BooleanField(default=False, help_text='Require the Trustpoint instance to use the PKCS#11-backed managed crypto backend.'),
+        ),
+        migrations.AlterField(
+            model_name='securityconfig',
             name='security_mode',
             field=models.CharField(choices=[('0', 'Lab / Custom'), ('1', 'Brownfield Compatible'), ('2', 'Industrial Standard'), ('3', 'Hardened Production'), ('4', 'Critical Infrastructure')], default='1', max_length=6),
         ),

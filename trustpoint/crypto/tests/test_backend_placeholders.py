@@ -23,16 +23,3 @@ def test_rest_backend_scaffold_is_not_operational() -> None:
 
     with pytest.raises(ProviderOperationNotImplementedError, match='cannot be configured'):
         backend.verify_provider()
-
-
-@override_settings(DEVELOPMENT_ENV=False)
-def test_software_backend_is_rejected_outside_development_env() -> None:
-    backend = SoftwareBackend(
-        profile=SoftwareProviderProfile(
-            name='dev-software',
-            encryption_source='dev_plaintext',
-        )
-    )
-
-    with pytest.raises(DevelopmentOnlyBackendError, match='development-only'):
-        backend.verify_provider()

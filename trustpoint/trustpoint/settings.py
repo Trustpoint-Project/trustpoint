@@ -260,6 +260,7 @@ TIME_ZONE = 'UTC'
 INSTALLED_APPS = [
     'help_pages.apps.HelpPagesConfig',
     'shared.apps.SharedConfig',
+    'appsecrets.apps.AppSecretsConfig',
     'setup_wizard.apps.SetupWizardConfig',
     'users.apps.UsersConfig',
     'home.apps.HomeConfig',
@@ -322,7 +323,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'trustpoint.settings.app_version',
-                'trustpoint.context_processors.trustpoint_runtime_banner',
+                'trustpoint.views.context_processors.trustpoint_runtime_banner',
                 'management.context_processors.notification_alerts',
             ],
         },

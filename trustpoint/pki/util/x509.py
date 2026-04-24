@@ -19,7 +19,8 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import NamedCurve
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
-from management.models import KeyStorageConfig, SecurityConfig
+from crypto.runtime import configured_private_key_location
+from management.models import SecurityConfig
 from pki.models import CaModel
 from pki.util.keys import CryptographyUtils
 
@@ -287,7 +288,7 @@ class CertificateGenerator:
         chain: list[x509.Certificate],
         private_key: PrivateKey,
         unique_name: str = 'issuing_ca',
-        ca_type: CaModel.CaTypeChoice = CaModel.CaTypeChoice.LOCAL_UNPROTECTED,
+        ca_type: CaModel.CaTypeChoice = CaModel.CaTypeChoice.LOCAL_PKCS11,
         parent_ca: CaModel | None = None,
     ) -> CaModel:
         """Saves an Issuing CA certificate to the database and returns the CaModel.
@@ -309,58 +310,9 @@ class CertificateGenerator:
             additional_certificates=chain
         )
 
-        # Determine private key location based on CA type and storage configuration
-        if ca_type == CaModel.CaTypeChoice.LOCAL_UNPROTECTED:
-            # Unprotected local CAs always use software storage
-            private_key_location = PrivateKeyLocation.SOFTWARE
-        elif ca_type in [
-            CaModel.CaTypeChoice.AUTOGEN_ROOT,
-            CaModel.CaTypeChoice.AUTOGEN,
-        ]:
-            # Auto-generated CAs use the configured storage type
-            try:
-                config = KeyStorageConfig.get_config()
-            except KeyStorageConfig.DoesNotExist as e:
-                error_msg = (
-                    f'Cannot create auto-generated CA "{unique_name}": KeyStorageConfig not found. '
-                    'Please configure key storage first.'
-                )
-                logger.exception(error_msg)
-                raise ValueError(error_msg) from e
-
-            if config.storage_type in [
-                KeyStorageConfig.StorageType.SOFTHSM,
-                KeyStorageConfig.StorageType.PHYSICAL_HSM
-            ]:
-                private_key_location = PrivateKeyLocation.HSM_PROVIDED
-            else:
-                # Software storage
-                private_key_location = PrivateKeyLocation.SOFTWARE
-        else:
-            # For protected CAs (LOCAL_PKCS11), HSM storage is required
-            try:
-                config = KeyStorageConfig.get_config()
-            except KeyStorageConfig.DoesNotExist as e:
-                error_msg = (
-                    f'Cannot create protected CA "{unique_name}": KeyStorageConfig not found. '
-                    'Protected CAs require HSM storage configuration.'
-                )
-                logger.exception(error_msg)
-                raise ValueError(error_msg) from e
-
-            if config.storage_type in [
-                KeyStorageConfig.StorageType.SOFTHSM,
-                KeyStorageConfig.StorageType.PHYSICAL_HSM
-            ]:
-                private_key_location = PrivateKeyLocation.HSM_PROVIDED
-            else:
-                error_msg = (
-                    f'Cannot create protected CA "{unique_name}" with storage type "{config.storage_type}". '
-                    f'Protected CAs require HSM storage (SoftHSM or Physical HSM), but current storage type is: '
-                    f'{config.storage_type}'
-                )
-                logger.error(error_msg)
-                raise ValueError(error_msg)
+        # CA/business classification must not decide backend placement.
+        # The configured Trustpoint backend determines where private keys live.
+        private_key_location = configured_private_key_location()
 
         if not issuing_ca_credential_serializer.private_key:
             err_msg = 'Issuing CA credential serializer must have a private key before saving.'
@@ -885,5 +837,3 @@ class CertificateVerifier:
             untrusted_intermediates = []
 
         return CertificateVerifier._build_ca_chain(cert, trusted_roots, untrusted_intermediates)
-
-

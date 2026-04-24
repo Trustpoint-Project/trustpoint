@@ -48,7 +48,7 @@ class SecurityConfig(models.Model):
     * :attr:`allow_ca_issuance` — whether BasicConstraints ca=True is permitted in issued certs.
     * :attr:`allow_auto_gen_pki` — whether auto-generated PKI may be enabled.
     * :attr:`allow_self_signed_ca` — whether self-signed CAs with credentials are allowed.
-    * :attr:`require_physical_hsm` — whether key storage must be a physical HSM.
+    * :attr:`require_physical_hsm` — whether the configured managed crypto backend must be PKCS#11-backed.
     * :attr:`permitted_no_onboarding_pki_protocols` — JSON list of allowed
       :class:`onboarding.models.NoOnboardingPkiProtocol` integer values.
     * :attr:`permitted_onboarding_protocols` — JSON list of allowed
@@ -183,7 +183,7 @@ class SecurityConfig(models.Model):
 
     require_physical_hsm = models.BooleanField(
         default=False,
-        help_text=_('Require key storage to use a physical HSM (KeyStorageConfig.StorageType.PHYSICAL_HSM).'),
+        help_text=_('Require the Trustpoint instance to use the PKCS#11-backed managed crypto backend.'),
     )
 
     # -- Protocol allow-lists (stored as JSON lists of integer values) -----
@@ -436,17 +436,15 @@ class SecurityConfig(models.Model):
         """Return violations for the require_physical_hsm constraint."""
         if not defaults['require_physical_hsm']:
             return []
-        from management.models.key_storage import KeyStorageConfig  # noqa: PLC0415
-        try:
-            ks = KeyStorageConfig.get_config()
-            if ks.storage_type != KeyStorageConfig.StorageType.PHYSICAL_HSM:
-                return [str(_(
-                    'Key storage is "%(storage_type)s" but %(mode)s requires a Physical HSM.'
-                ) % {'storage_type': ks.get_storage_type_display(), 'mode': mode_label})]
-        except KeyStorageConfig.DoesNotExist:
+        from crypto.models import BackendKind  # noqa: PLC0415
+        from crypto.runtime import configured_backend_kind  # noqa: PLC0415
+
+        backend_kind = configured_backend_kind()
+        if backend_kind != BackendKind.PKCS11:
+            configured = backend_kind.value if backend_kind is not None else _('unconfigured')
             return [str(_(
-                '%(mode)s requires a Physical HSM but no key storage configuration exists.'
-            ) % {'mode': mode_label})]
+                'The configured crypto backend is "%(backend)s" but %(mode)s requires the PKCS#11-managed HSM backend.'
+            ) % {'backend': configured, 'mode': mode_label})]
         return []
 
     def _check_auto_gen_pki(self, defaults: _SecurityModeDefaults, mode_label: str) -> list[str]:

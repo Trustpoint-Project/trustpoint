@@ -3,10 +3,6 @@
 import pytest
 from unittest import mock
 
-
-
-from management.models import KeyStorageConfig
-
 from pki.auto_gen_pki import AutoGenPki
 
 from pki.models import CertificateModel, DomainModel, CaModel
@@ -18,13 +14,10 @@ from pki.util.keys import AutoGenPkiKeyAlgorithm
 @pytest.mark.parametrize('key_alg', [AutoGenPkiKeyAlgorithm.RSA2048, AutoGenPkiKeyAlgorithm.SECP256R1])
 def test_auto_gen_pki(key_alg: AutoGenPkiKeyAlgorithm) -> None:
     """Test that the auto-generated PKI can be correctly enabled, used and disabled."""
-    # Mock KeyStorageConfig.get_config() to return a config with SOFTHSM for protected CA creation
-    mock_config = mock.MagicMock()
-    mock_config.storage_type = KeyStorageConfig.StorageType.SOFTHSM
-    mock_token = mock.MagicMock()
-    mock_token.module_path = '/usr/lib/libpkcs11-proxy.so'
-    mock_token.label = 'Trustpoint-SoftHSM'
-    mock_token.slot = 0
+    mock_pkcs11_config = mock.MagicMock()
+    mock_pkcs11_config.module_path = '/usr/lib/libpkcs11-proxy.so'
+    mock_pkcs11_config.token_label = 'Trustpoint-SoftHSM'
+    mock_pkcs11_config.build_provider_profile.return_value.require_user_pin.return_value = '1234'
     mock_issuing_ca = mock.MagicMock()
     mock_issuing_ca.pk = 1
     mock_issuing_ca.credential.certificate.certificate_status = CertificateModel.CertificateStatus.REVOKED
@@ -40,8 +33,8 @@ def test_auto_gen_pki(key_alg: AutoGenPkiKeyAlgorithm) -> None:
             return None
         return mock_issuing_ca
 
-    with mock.patch.object(KeyStorageConfig, 'get_config', return_value=mock_config), \
-         mock.patch('pki.models.credential.PKCS11Token.objects.first', return_value=mock_token), \
+    with mock.patch('pki.util.x509.is_hsm_backend_configured', return_value=True), \
+         mock.patch('pki.models.credential.require_active_pkcs11_config', return_value=mock_pkcs11_config), \
          mock.patch('pki.models.CaModel.create_new_issuing_ca', return_value=mock_issuing_ca), \
          mock.patch('pki.models.domain.DomainModel.objects.get_or_create', return_value=(mock_domain, True)), \
          mock.patch('pki.models.domain.DomainModel.objects.get', return_value=mock_domain), \

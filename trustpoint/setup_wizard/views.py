@@ -10,6 +10,7 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from cryptography.hazmat.primitives import hashes
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
@@ -26,7 +27,16 @@ from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.views.generic import FormView, TemplateView, View
+from trustpoint_core.serializer import CertificateSerializer
 
+from appsecrets.models import (
+    AppSecretBackendKind,
+    AppSecretBackendModel,
+    AppSecretPkcs11AuthSource,
+    AppSecretPkcs11ConfigModel,
+    AppSecretSoftwareConfigModel,
+)
+from appsecrets.service import clear_app_secret_cache, get_app_secret_service
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSelector
 from crypto.models import (
@@ -37,7 +47,7 @@ from crypto.models import (
     Pkcs11AuthSource,
     SoftwareKeyEncryptionSource,
 )
-from management.models import KeyStorageConfig, PKCS11Token
+from management.models import PKCS11Token
 from management.nginx_paths import (
     NGINX_CERT_CHAIN_PATH,
     NGINX_CERT_PATH,
@@ -55,7 +65,11 @@ from setup_wizard.pkcs11_local_dev import local_dev_pkcs11_handoff_available, lo
 from setup_wizard.tls_credential import (
     TlsServerCredentialFileParser,
     TlsServerCredentialGenerator,
+    clear_staged_tls_credential,
     extract_staged_tls_sans,
+    get_staged_root_ca_certificate_serializer,
+    load_staged_tls_credential,
+    stage_tls_credential,
 )
 from trustpoint.logger import LoggerMixin
 
@@ -431,6 +445,44 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
         return request.POST.get('wizard_action') == 'test_connection'
 
     @staticmethod
+    def _is_clear_module_submission(request: HttpRequest) -> bool:
+        """Return whether the current POST requests staged library removal."""
+        return request.POST.get('wizard_action') == 'clear_module'
+
+    @staticmethod
+    def _is_clear_pin_submission(request: HttpRequest) -> bool:
+        """Return whether the current POST requests staged PIN removal."""
+        return request.POST.get('wizard_action') == 'clear_pin'
+
+    @staticmethod
+    def _clear_staged_pkcs11_module(config_model: SetupWizardConfigModel) -> None:
+        """Remove the currently staged PKCS#11 library for this wizard session."""
+        cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_module_path)
+        config_model.fresh_install_pkcs11_module_path = ''
+        config_model.save(update_fields=['fresh_install_pkcs11_module_path'])
+
+    @staticmethod
+    def _clear_staged_pkcs11_pin(config_model: SetupWizardConfigModel) -> None:
+        """Remove the currently staged PKCS#11 user PIN for this wizard session."""
+        cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_auth_source_ref)
+        config_model.fresh_install_pkcs11_auth_source_ref = ''
+        config_model.save(update_fields=['fresh_install_pkcs11_auth_source_ref'])
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle staged PKCS#11 asset removal before running normal form validation."""
+        config_model = SetupWizardConfigModel.get_singleton()
+        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            if self._is_clear_module_submission(request):
+                self._clear_staged_pkcs11_module(config_model)
+                messages.success(request, 'The staged PKCS#11 library was removed for this wizard session.')
+                return redirect('setup_wizard:fresh_install_backend_config')
+            if self._is_clear_pin_submission(request):
+                self._clear_staged_pkcs11_pin(config_model)
+                messages.success(request, 'The staged PKCS#11 user PIN was removed for this wizard session.')
+                return redirect('setup_wizard:fresh_install_backend_config')
+        return super().post(request, *args, **kwargs)
+
+    @staticmethod
     def _stage_uploaded_pkcs11_module(uploaded_module: Any) -> str:
         """Write an uploaded PKCS#11 library to private one-time wizard staging."""
         staging_root = wizard_pkcs11_staging_root()
@@ -618,7 +670,7 @@ class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigFo
         config_model = SetupWizardConfigModel.get_singleton()
         initial['tls_mode'] = config_model.fresh_install_tls_mode
 
-        ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans(config_model.fresh_install_tls_credential)
+        ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans()
         if not (ipv4_addresses or ipv6_addresses or dns_names):
             return initial
 
@@ -705,12 +757,10 @@ class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigFo
                 )
 
             with transaction.atomic():
-                config_model.fresh_install_tls_credential = CredentialModel.save_credential_serializer(
-                    credential_serializer=tls_credential_serializer,
-                    credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
-                )
+                stage_tls_credential(tls_credential_serializer)
+                config_model.fresh_install_tls_credential = None
                 config_model.mark_step_submitted(self.step_state)
-                config_model.save()
+                config_model.save(update_fields=['fresh_install_tls_mode', 'fresh_install_tls_config_submitted', 'fresh_install_current_step', 'fresh_install_tls_credential'])
                 if previous_tls_credential is not None:
                     previous_tls_credential.force_delete()
 
@@ -773,10 +823,18 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
     def _apply_staged_tls_credential(self, config_model: SetupWizardConfigModel) -> None:
         """Promote the staged TLS credential to active and apply it for nginx."""
-        staged_tls_credential = config_model.fresh_install_tls_credential
-        if staged_tls_credential is None:
+        staged_tls_serializer = load_staged_tls_credential()
+        if staged_tls_serializer is None:
             err_msg = 'No staged TLS Server Credential found.'
             raise ValueError(err_msg)
+
+        previous_tls_credential = config_model.fresh_install_tls_credential
+        staged_tls_credential = CredentialModel.save_credential_serializer(
+            credential_serializer=staged_tls_serializer,
+            credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
+        )
+        config_model.fresh_install_tls_credential = staged_tls_credential
+        config_model.save(update_fields=['fresh_install_tls_credential'])
 
         active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
         active_tls.credential = staged_tls_credential
@@ -784,6 +842,13 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
         self._write_pem_files(staged_tls_credential)
         execute_shell_script(UPDATE_TLS_NGINX, 'no_hsm')
+        sha256_fingerprint = staged_tls_credential.get_certificate().fingerprint(hashes.SHA256())
+        formatted_fingerprint = ':'.join(f'{byte:02X}' for byte in sha256_fingerprint)
+        self.logger.info('TLS SHA256 fingerprint: %s', formatted_fingerprint)
+        clear_staged_tls_credential()
+
+        if previous_tls_credential is not None and previous_tls_credential.pk != staged_tls_credential.pk:
+            previous_tls_credential.force_delete()
 
     @staticmethod
     def _load_existing_backend_profile(backend_kind: BackendKind) -> CryptoProviderProfileModel | None:
@@ -856,6 +921,72 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
                 setattr(config, field_name, value)
         config.full_clean()
         config.save()
+
+    @staticmethod
+    def _configure_software_app_secret_backend() -> None:
+        """Configure the development-only software app-secret backend."""
+        if not (getattr(settings, 'DEVELOPMENT_ENV', False) or getattr(settings, 'DOCKER_CONTAINER', False)):
+            err_msg = 'The software app-secret backend is only allowed for development or demo-style container setups.'
+            raise DjangoValidationError(err_msg)
+
+        backend = AppSecretBackendModel.get_singleton()
+        backend.backend_kind = AppSecretBackendKind.SOFTWARE
+        backend.save()
+
+        AppSecretPkcs11ConfigModel.objects.filter(backend=backend).delete()
+        software_config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
+        software_config.full_clean()
+        software_config.save()
+
+        clear_app_secret_cache()
+        get_app_secret_service().ensure_backend_ready()
+
+    @staticmethod
+    def _configure_pkcs11_app_secret_backend() -> None:
+        """Configure the PKCS#11-backed app-secret subsystem from the active crypto profile."""
+        crypto_profile = CryptoProviderProfileModel.objects.get(active=True, backend_kind=BackendKind.PKCS11)
+        crypto_config = crypto_profile.pkcs11_config
+
+        backend = AppSecretBackendModel.get_singleton()
+        backend.backend_kind = AppSecretBackendKind.PKCS11
+        backend.save()
+
+        AppSecretSoftwareConfigModel.objects.filter(backend=backend).delete()
+        secret_config, created = AppSecretPkcs11ConfigModel.objects.get_or_create(
+            backend=backend,
+            defaults={
+                'module_path': crypto_config.module_path,
+                'token_label': crypto_config.token_label,
+                'token_serial': crypto_config.token_serial,
+                'slot_id': crypto_config.slot_id,
+                'auth_source': AppSecretPkcs11AuthSource(crypto_config.auth_source),
+                'auth_source_ref': crypto_config.auth_source_ref,
+            },
+        )
+
+        changed_runtime = False
+        desired_values = {
+            'module_path': crypto_config.module_path,
+            'token_label': crypto_config.token_label,
+            'token_serial': crypto_config.token_serial,
+            'slot_id': crypto_config.slot_id,
+            'auth_source': AppSecretPkcs11AuthSource(crypto_config.auth_source),
+            'auth_source_ref': crypto_config.auth_source_ref,
+        }
+        if not created:
+            for field_name, value in desired_values.items():
+                if getattr(secret_config, field_name) != value:
+                    changed_runtime = True
+                setattr(secret_config, field_name, value)
+            if changed_runtime:
+                secret_config.wrapped_dek = None
+                secret_config.backup_encrypted_dek = None
+
+        secret_config.full_clean()
+        secret_config.save()
+
+        clear_app_secret_cache()
+        get_app_secret_service().ensure_backend_ready()
 
     @staticmethod
     def _map_pkcs11_install_exit_code_to_message(return_code: int) -> str:
@@ -1011,18 +1142,21 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         err_msg = f'Unsupported crypto storage selection {config_model.crypto_storage!r}.'
         raise DjangoValidationError(err_msg)
 
-    @staticmethod
-    def _sync_legacy_key_storage_config(config_model: SetupWizardConfigModel) -> None:
-        """Keep the legacy key-storage singleton aligned while old code still depends on it."""
-        key_storage_config = KeyStorageConfig.get_or_create_default()
+    @classmethod
+    def _configure_app_secret_backend(cls, config_model: SetupWizardConfigModel) -> None:
+        """Configure the separate application-secret subsystem."""
         if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.SoftwareStorage:
-            key_storage_config.storage_type = KeyStorageConfig.StorageType.SOFTWARE
-        elif config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-            key_storage_config.storage_type = KeyStorageConfig.StorageType.SOFTHSM
-        else:
-            err_msg = f'Unsupported crypto storage selection {config_model.crypto_storage!r}.'
+            cls._configure_software_app_secret_backend()
+            return
+        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            cls._configure_pkcs11_app_secret_backend()
+            return
+        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.RestBackend:
+            err_msg = 'The REST backend does not yet support application-secret encryption.'
             raise DjangoValidationError(err_msg)
-        key_storage_config.save(update_fields=['storage_type'])
+
+        err_msg = f'Unsupported crypto storage selection {config_model.crypto_storage!r}.'
+        raise DjangoValidationError(err_msg)
 
     def form_valid(self, form: FreshInstallSummaryModelForm) -> HttpResponse:
         """Apply the first summary step actions before continuing the setup flow."""
@@ -1030,7 +1164,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             with transaction.atomic():
                 config_model = SetupWizardConfigModel.get_singleton()
                 self._configure_instance_crypto_backend(config_model)
-                self._sync_legacy_key_storage_config(config_model)
+                self._configure_app_secret_backend(config_model)
                 call_command('create_default_cert_profiles')
                 if config_model.inject_demo_data:
                     call_command('add_domains_and_devices')
@@ -1071,15 +1205,10 @@ class FreshInstallSummaryTruststoreDownloadView(LoginRequiredMixin, LoggerMixin,
 
     @staticmethod
     def _get_root_ca_certificate_and_content_type(
-        tls_credential: CredentialModel,
+        root_ca_certificate_serializer: CertificateSerializer,
         file_format: str,
     ) -> tuple[bytes, str]:
         """Return the staged root CA certificate in the requested format."""
-        root_ca_certificate_serializer = tls_credential.get_root_ca_certificate_serializer()
-        if root_ca_certificate_serializer is None:
-            err_msg = 'No root CA certificate available for download.'
-            raise ValueError(err_msg)
-
         if file_format == 'pem':
             return root_ca_certificate_serializer.as_pem(), 'application/x-pem-file'
         if file_format == 'der':
@@ -1095,13 +1224,16 @@ class FreshInstallSummaryTruststoreDownloadView(LoginRequiredMixin, LoggerMixin,
             messages.add_message(request, messages.ERROR, 'Only PEM and DER downloads are supported.')
             return redirect('setup_wizard:fresh_install_summary', permanent=False)
 
-        tls_credential = SetupWizardConfigModel.get_singleton().fresh_install_tls_credential
-        if tls_credential is None:
+        root_ca_certificate_serializer = get_staged_root_ca_certificate_serializer()
+        if root_ca_certificate_serializer is None:
             messages.add_message(request, messages.ERROR, 'No truststore available for download.')
             return redirect('setup_wizard:fresh_install_summary', permanent=False)
 
         try:
-            trust_store, content_type = self._get_root_ca_certificate_and_content_type(tls_credential, file_format)
+            trust_store, content_type = self._get_root_ca_certificate_and_content_type(
+                root_ca_certificate_serializer,
+                file_format,
+            )
         except ValueError as exception:
             messages.add_message(request, messages.ERROR, str(exception))
             return redirect('setup_wizard:fresh_install_summary', permanent=False)
@@ -1151,11 +1283,13 @@ class FreshInstallCancelView(LoginRequiredMixin, LoggerMixin, View):
         config_model = SetupWizardConfigModel.get_singleton()
         cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_module_path)
         cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_auth_source_ref)
+        clear_staged_tls_credential()
         self._cleanup_partial_runtime_artifacts()
 
         with transaction.atomic():
             ActiveTrustpointTlsServerCredentialModel.objects.all().delete()
             CryptoProviderProfileModel.objects.all().delete()
+            AppSecretBackendModel.objects.all().delete()
             PKCS11Token.objects.all().delete()
             for credential in list(CredentialModel.objects.all()):
                 credential.force_delete()
@@ -1163,6 +1297,7 @@ class FreshInstallCancelView(LoginRequiredMixin, LoggerMixin, View):
             SetupWizardConfigModel.objects.filter(pk=SetupWizardConfigModel.SINGLETON_ID).delete()
             User.objects.filter(pk=user_pk).delete()
 
+        clear_app_secret_cache()
         logout(request)
         return redirect('setup_wizard:index', permanent=False)
 

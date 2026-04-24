@@ -16,7 +16,7 @@ from django.utils.translation import gettext_lazy
 from .models import SetupWizardConfigModel
 from .pkcs11_local_dev import local_dev_pkcs11_handoff_available, local_dev_pkcs11_module_path
 from .pkcs11_staging import existing_wizard_pkcs11_staged_file
-from .tls_credential import extract_staged_tls_sans
+from .tls_credential import extract_staged_tls_sans, staged_tls_common_name
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -454,8 +454,7 @@ class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
         super().__init__(*args, **kwargs)
 
         instance = self.instance
-        tls_credential = instance.fresh_install_tls_credential
-        ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans(tls_credential)
+        ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans()
         self.fields['storage_selection'].initial = dict(CRYPTO_BACKEND_TYPE_CHOICES).get(
             instance.crypto_storage,
             instance.get_crypto_storage_display(),
@@ -464,9 +463,7 @@ class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
             gettext_lazy('Yes') if instance.inject_demo_data else gettext_lazy('No')
         )
         self.fields['tls_server_configuration'].initial = instance.get_fresh_install_tls_mode_display()
-        self.fields['tls_common_name'].initial = (
-            tls_credential.certificate.common_name if tls_credential and tls_credential.certificate else '-'
-        )
+        self.fields['tls_common_name'].initial = staged_tls_common_name() or '-'
         self.fields['tls_ipv4_addresses'].initial = self._format_tls_summary_values(
             ipv4_addresses,
             gettext_lazy('No IPv4 Address Configured'),

@@ -3,6 +3,8 @@ import base64
 from typing import Any
 
 import pytest
+from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel, AppSecretSoftwareConfigModel
+from appsecrets.service import clear_app_secret_cache
 from cryptography import x509
 from cryptography.hazmat._oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
@@ -66,6 +68,26 @@ def complete_setup_wizard_by_default(monkeypatch: pytest.MonkeyPatch, request: p
         'setup_wizard_completed',
         classmethod(lambda cls: True),
     )
+
+
+@pytest.fixture(autouse=True)
+def configure_app_secret_backend_for_tests(request: pytest.FixtureRequest) -> None:
+    """Provide a development app-secret backend for tests that save encrypted model fields."""
+    test_path = str(request.node.fspath)
+    excluded_paths = (
+        '/trustpoint/tests/test_settings.py',
+    )
+    if any(path_fragment in test_path for path_fragment in excluded_paths):
+        return
+
+    request.getfixturevalue('db')
+    backend = AppSecretBackendModel.get_singleton()
+    backend.backend_kind = AppSecretBackendKind.SOFTWARE
+    backend.save()
+    config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
+    config.raw_dek = b'a' * 32
+    config.save()
+    clear_app_secret_cache()
 
 
 # ----------------------------
