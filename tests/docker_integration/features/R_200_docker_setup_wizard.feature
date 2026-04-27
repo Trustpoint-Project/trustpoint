@@ -15,17 +15,17 @@ Feature: Docker Setup Wizard
     When the user creates a superuser with username "admin" and password "AdminPass123!"
     Then the user should be redirected to the login page
     When the user logs in with username "admin" and password "AdminPass123!"
-    Then the wizard should be at the crypto storage step
-    When the user selects "Software" as crypto storage
+    Then the wizard should be at the crypto storage setup step
+    When the user selects "Software Storage" as crypto storage
     And the user submits the form
     Then the wizard should be at the demo data step
-    When the user selects "Continue without Demo Data"
+    When the user selects "Yes" for demo data
     And the user submits the form
     Then the wizard should be at the TLS server credential selection step
-    When the user clicks "Generate Certificate"
+    When the user selects "Generate credential" as the TLS mode
     And the user submits the SAN form with default values
     Then the wizard should be at the summary step
-    When the user clicks "Apply TLS configuration"
+    When the user clicks "Apply and Continue"
     And the user waits for the server to restart
     Then the setup should be complete
     And the user should successfully access the dashboard
