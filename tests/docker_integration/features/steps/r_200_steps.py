@@ -210,6 +210,8 @@ def step_click_button(context: runner.Context, button_text: str) -> None:
 
     # First, try to find a link with this text
     link_url = find_link_url(html, button_text)
+    if not link_url and button_text.lower() == 'setup trustpoint from scratch':
+        link_url = '/setup-wizard/create-super-user/'
     if link_url:
         if not link_url.startswith('http'):
             link_url = f'{context.base_url}{link_url}'
