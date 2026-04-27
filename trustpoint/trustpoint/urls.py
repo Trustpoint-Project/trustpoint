@@ -85,6 +85,9 @@ urlpatterns += [
     path('', base.IndexView.as_view()),
     path('workflows2/', include('workflows2.urls', namespace='workflows2')),
 
+    # OCSP endpoint
+    path('.well-known/ocsp/', include('ocsp.urls')),
+
     # API URLs
     path('api/', include('devices.api_urls')),
     path('api/', include('pki.api_urls')),
