@@ -30,10 +30,14 @@ from .devid_registration import DevIdRegistration
 from .cert_profile import CertificateProfileModel
 from .truststore import TruststoreModel, TruststoreOrderModel
 from .issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
+from .ca_rollover import CaRolloverModel, CaRolloverState, CaRolloverStrategyType
 
 __all__ = [
     'AttributeTypeAndValue',
     'CaModel',
+    'CaRolloverModel',
+    'CaRolloverState',
+    'CaRolloverStrategyType',
     'CertificateExtension',
     'CertificateModel',
     'CertificateProfileModel',
