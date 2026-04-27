@@ -7,7 +7,7 @@ import secrets
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn, cast
 
-import pkcs11  # type: ignore[import-untyped]
+import pkcs11
 from argon2.low_level import Type, hash_secret_raw
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -307,7 +307,7 @@ class PKCS11Token(models.Model, LoggerMixin):
 
             # DEK is already 32 bytes (multiple of 16), no padding needed for AES-ECB
             # Encrypt using AES-ECB
-            encrypted_data = wrap_key.encrypt(
+            encrypted_data = wrap_key.encrypt(  # type: ignore[attr-defined]
                 dek_bytes,
                 mechanism=pkcs11.Mechanism.AES_ECB
             )
@@ -586,7 +586,7 @@ class PKCS11Token(models.Model, LoggerMixin):
             encrypted_data = wrapped_data[8:]
 
             # Decrypt using AES-ECB (no unpadding needed as DEK is exactly 32 bytes)
-            decrypted_data = wrap_key.decrypt(
+            decrypted_data = wrap_key.decrypt(  # type: ignore[attr-defined]
                 encrypted_data,
                 mechanism=pkcs11.Mechanism.AES_ECB
             )
@@ -652,11 +652,11 @@ class PKCS11Token(models.Model, LoggerMixin):
         msg = f'Failed to unwrap DEK: {e}'
         raise RuntimeError(msg) from e
 
-    def _cleanup_session(self, session: pkcs11.Session) -> None:
+    def _cleanup_session(self, session: pkcs11.Session | None) -> None:
         """Cleanup the session from memory.
 
         Args:
-            session (pkcs11.Session): The session object.
+            session (pkcs11.Session | None): The session object.
         """
         if session:
             try:
