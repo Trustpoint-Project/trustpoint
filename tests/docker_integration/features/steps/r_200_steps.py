@@ -160,12 +160,20 @@ def step_verify_crypto_storage_step(context: runner.Context) -> None:
 def step_select_crypto_storage(context: runner.Context, storage_type: str) -> None:
     """Select the crypto storage type."""
     storage_mapping = {
-        'file system': 'software',
-        'software': 'software',
-        'softhsm': 'softhsm',
-        'physical hsm': 'physical_hsm',
+        'software storage': 0,
+        'hsm storage': 1,
     }
-    context.selected_storage = storage_mapping.get(storage_type.lower(), 'software')
+    context.selected_storage = storage_mapping.get(storage_type.lower(), 0)
+
+
+@when('the user selects "{demo_data_option}" for demo data')
+def step_select_demo_data(context: runner.Context, demo_data_option: str) -> None:
+    """Select the demo data type."""
+    demo_data_mapping = {
+        'yes': True,
+        'no': False,
+    }
+    context.selected_demo_data = demo_data_mapping.get(demo_data_option.lower(), True)
 
 
 @when('the user submits the form')
@@ -175,8 +183,11 @@ def step_submit_form(context: runner.Context) -> None:
     current_url = context.response.url
     form_data = {'csrfmiddlewaretoken': csrf_token}
     if hasattr(context, 'selected_storage'):
-        form_data['storage_type'] = context.selected_storage
+        form_data['crypto_storage'] = context.selected_storage
         delattr(context, 'selected_storage')
+    if hasattr(context, 'selected_demo_data'):
+        form_data['inject_demo_data'] = context.selected_demo_data
+        delattr(context, 'selected_demo_data')
     context.response = context.session.post(current_url, data=form_data, allow_redirects=True)
     assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
         f'Form submission failed: {context.response.status_code}'
@@ -187,7 +198,7 @@ def step_verify_setup_mode_step(context: runner.Context) -> None:
     """Verify the wizard is at the setup mode selection step."""
     check_for_errors(context.response.text, context.response.url)
     content = context.response.text.lower()
-    assert 'setup mode' in content or 'fresh' in content or 'restore' in content, \
+    assert 'welcome' in content or 'fresh' in content or 'restore' in content, \
         f'Not at setup mode step. URL: {context.response.url}'
 
 
@@ -238,7 +249,7 @@ def step_verify_tls_selection_step(context: runner.Context) -> None:
     check_for_errors(context.response.text, context.response.url)
     content = context.response.text.lower()
     assert 'tls' in content, f'Not at TLS selection step. URL: {context.response.url}'
-    assert 'generate' in content or 'import' in content, \
+    assert 'generate' in content or 'upload' in content, \
         f'Missing generate/import options. URL: {context.response.url}'
 
 
@@ -249,6 +260,12 @@ def step_verify_tls_generation_step(context: runner.Context) -> None:
     content = context.response.text.lower()
     assert 'san' in content or 'subject alternative' in content or 'generate' in content, \
         f'Not at TLS generation step. URL: {context.response.url}'
+    
+
+@when('the user selects "Generate credential" as the TLS mode')
+def step_select_tls_mode(context: runner.Context) -> None:
+    """Select "Generate credential" as the TLS mode."""
+    context.selected_tls_mode = 'generate'
 
 
 @when('the user submits the SAN form with default values')
@@ -261,6 +278,7 @@ def step_submit_san_form(context: runner.Context) -> None:
         'ipv4_addresses': '127.0.0.1',
         'ipv6_addresses': '::1',
         'domain_names': 'localhost',
+        'tls_mode': context.selected_tls_mode,
     }
     context.response = context.session.post(current_url, data=form_data, allow_redirects=True)
     assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
@@ -304,6 +322,15 @@ def step_verify_demo_data_step(context: runner.Context) -> None:
     content = context.response.text.lower()
     assert 'demo' in content or 'data' in content, \
         f'Not at demo data step. URL: {context.response.url}'
+    
+
+@then('the wizard should be at the summary step')
+def step_verify_summary_step(context: runner.Context) -> None:
+    """Verify the wizard is at the summary step."""
+    check_for_errors(context.response.text, context.response.url)
+    content = context.response.text.lower()
+    assert 'summary' in content or 'review' in content, \
+        f'Not at summary step. URL: {context.response.url}'
 
 
 @then('the wizard should be at the superuser creation step')
