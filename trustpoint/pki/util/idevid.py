@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import re
 import secrets
+import uuid
 from typing import TYPE_CHECKING
 
 from cryptography import x509
@@ -178,13 +179,17 @@ class IDevIDAuthenticator(LoggerMixin):
 
     @staticmethod
     def get_idevid_uuid(idevid_cert: x509.Certificate) -> str | None:
-        """Get the first UUID from the IDevID certificate SAN, or None if there is no UUID in the IDevID SAN."""
+        """Get the first valid UUID from the IDevID certificate SAN, or None if no valid UUID in the IDevID SAN."""
         san_uris = IDevIDAuthenticator.get_idevid_san_uris(idevid_cert)
         if not san_uris:
             return None
         for uri in san_uris:
             if uri.startswith('urn:uuid:'):
-                return uri.removeprefix('urn:uuid:')
+                uri_candidate = uri.removeprefix('urn:uuid:')
+                try:
+                    return str(uuid.UUID(uri_candidate))
+                except ValueError:
+                    continue
         return None
 
     @classmethod
