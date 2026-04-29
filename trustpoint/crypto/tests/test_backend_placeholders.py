@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from django.test import override_settings
 
 from crypto.adapters.rest.backend import RestBackend
 from crypto.adapters.rest.config import RestProviderProfile
