@@ -5,138 +5,124 @@
 {% block content %}
     <div class="card">
         <div class="card-header">
-            <h1>{% trans "Key Storage Configuration" %}</h1>
+            <h1>{% trans "Crypto Backend Configuration" %}</h1>
         </div>
         <div class="card-body pt-4 pb-4">
-            {% if not config %}
+            <div class="alert alert-info">
+                <strong>{% trans 'Information:' %}</strong>
+                {% trans 'Trustpoint backend configuration is set during the setup wizard. This view shows the configured managed-crypto and application-secret backends. Provider probing can be refreshed manually.' %}
+            </div>
+
+            {% if not crypto_profile %}
                 <div class="alert alert-warning">
                     <svg class="bi me-2" width="20" height="20" fill="currentColor">
                         <use href="{% static 'img/icons.svg' %}#icon-warning"></use>
                     </svg>
-                    {% trans 'Key storage configuration not found.' %}
+                    {% trans 'No configured managed-crypto backend profile was found.' %}
                 </div>
             {% else %}
-                <div class="alert alert-info">
-                    <strong>{% trans 'Information:' %}</strong>
-                    {% trans 'Changing the storage type after initial configuration is not currently supported. The storage type is set during the initial setup wizard and cannot be modified afterwards.' %}
-                </div>                
                 <div class="row g-4 mb-4">
-                    <!-- Software Storage Option -->
-                    <div class="col-md-4">
-                        <div class="card h-100 {% if config.storage_type != 'software' %}opacity-50{% endif %}">
-                            <div class="card-body text-center">
-                                <svg class="bi mb-3" width="48" height="48" fill="currentColor">
-                                    <use href="{% static 'img/icons.svg' %}#icon-computer"></use>
-                                </svg>
-                                <h5 class="card-title">{% trans 'Software Storage' %}</h5>
-                                <p class="card-text">
-                                    {% trans 'Store cryptographic keys in software without encryption' %}
-                                </p>
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-header">
+                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                                    <h4 class="mb-0">{% trans 'Managed Crypto Backend' %}</h4>
+                                    <form method="post" class="m-0">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="reprobe">
+                                        <button type="submit" class="btn btn-primary btn-sm">
+                                            {% trans 'Update Probe Status' %}
+                                        </button>
+                                    </form>
+                                </div>
                             </div>
-                            <div class="card-footer bg-transparent border-0 pt-0 pb-3 text-center">
-                                <span class="badge bg-warning mb-3">{% trans 'Not recommended for production!' %}</span>
-                                {% if config.storage_type == 'software' %}
-                                    <div class="alert alert-success mt-3">
-                                        <strong>{% trans 'Currently Active' %}</strong>
-                                    </div>
-                                {% else %}
-                                    <div class="alert alert-secondary mt-3">
-                                        {% trans 'Not Active' %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
+                            <div class="card-body">
+                                <dl class="row mb-0">
+                                    <dt class="col-sm-4">{% trans 'Profile' %}</dt>
+                                    <dd class="col-sm-8">{{ crypto_profile.name }}</dd>
 
-                    <!-- SoftHSM Option -->
-                    <div class="col-md-4">
-                        <div class="card h-100 {% if config.storage_type != 'softhsm' %}opacity-50{% endif %}">
-                            <div class="card-body text-center">
-                                <svg class="bi mb-3" width="48" height="48" fill="currentColor">
-                                    <use href="{% static 'img/icons.svg' %}#icon-shield"></use>
-                                </svg>
-                                <h5 class="card-title">{% trans 'SoftHSM Container' %}</h5>
-                                <p class="card-text">
-                                    {% trans 'Software-based HSM with encryption and secure key storage' %}
-                                </p>
-                            </div>
-                            <div class="card-footer bg-transparent border-0 pt-0 pb-3 text-center">
-                                <span class="badge bg-warning mb-3">{% trans 'Not recommended for production!' %}</span>
-                                {% if config.storage_type == 'softhsm' %}
-                                    <div class="alert alert-success mt-3">
-                                        <strong>{% trans 'Currently Active' %}</strong>
-                                    </div>
-                                {% else %}
-                                    <div class="alert alert-secondary mt-3">
-                                        {% trans 'Not Active' %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
+                                    <dt class="col-sm-4">{% trans 'Backend' %}</dt>
+                                    <dd class="col-sm-8">{{ crypto_profile.get_backend_kind_display }}</dd>
 
-                    <!-- Physical HSM Option -->
-                    <div class="col-md-4">
-                        <div class="card h-100 {% if config.storage_type != 'physical_hsm' %}opacity-50{% endif %}">
-                            <div class="card-body text-center">
-                                <svg class="bi mb-3" width="48" height="48" fill="currentColor">
-                                    <use href="{% static 'img/icons.svg' %}#icon-hardware"></use>
-                                </svg>
-                                <h5 class="card-title">{% trans 'Physical HSM' %}</h5>
-                                <p class="card-text mb-3">
-                                    {% trans 'Hardware-based secure cryptographic storage device' %}
-                                </p>
-                            </div>
-                            <div class="card-footer bg-transparent border-0 pt-0 pb-3 text-center">
-                                <span class="badge bg-success mb-3">{% trans 'Recommended for production!' %}</span>
-                                {% if config.storage_type == 'physical_hsm' %}
-                                    <div class="alert alert-success mt-3">
-                                        <strong>{% trans 'Currently Active' %}</strong>
-                                    </div>
-                                {% else %}
-                                    <div class="alert alert-secondary mt-3">
-                                        {% trans 'Not Active' %}
-                                    </div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {% if config.storage_type == 'software' %}
-                    <!-- Software Storage - Additional Info -->
-                    <hr class="my-4">
-                    <div class="alert alert-warning">
-                        <svg class="bi me-2" width="20" height="20" fill="currentColor">
-                            <use href="{% static 'img/icons.svg' %}#icon-warning"></use>
-                        </svg>
-                        <strong>{% trans 'Warning:' %}</strong>
-                        {% trans 'Software storage does not encrypt private keys. This mode is not recommended for production environments. Cryptographic keys are stored directly in the database without hardware security module protection.' %}
-                    </div>
-                {% else %}
-                    <!-- HSM Configuration Display (Read-only) -->
-                    <hr class="my-4">
-                    <h4 class="mb-3">{% trans "HSM Configuration" %}</h4>
-                    {% if hsm_config %}
-                        <div class="row">
-                            <div class="col-md-6">
-                                <dl class="row">
-                                    <dt class="col-sm-4">{% trans "Token Label:" %}</dt>
-                                    <dd class="col-sm-8">{{ hsm_config.label }}</dd>
-                                    
-                                    <dt class="col-sm-4">{% trans "Slot Number:" %}</dt>
-                                    <dd class="col-sm-8">{{ hsm_config.slot }}</dd>
-                                    
-                                    <dt class="col-sm-4">{% trans "Module Path:" %}</dt>
-                                    <dd class="col-sm-8"><code>{{ hsm_config.module_path }}</code></dd>
+                                    <dt class="col-sm-4">{% trans 'Probe Status' %}</dt>
+                                    <dd class="col-sm-8">{{ crypto_profile.get_last_probe_status_display }}</dd>
                                 </dl>
                             </div>
                         </div>
-                    {% else %}
-                        <div class="alert alert-warning">
-                            {% trans 'HSM configuration not found. Please configure the HSM token.' %}
+                    </div>
+
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-header">
+                                <h4 class="mb-0">{% trans 'Application-Secret Backend' %}</h4>
+                            </div>
+                            <div class="card-body">
+                                {% if app_secret_backend %}
+                                    <dl class="row mb-0">
+                                        <dt class="col-sm-4">{% trans 'Backend' %}</dt>
+                                        <dd class="col-sm-8">{{ app_secret_backend.get_backend_kind_display }}</dd>
+                                    </dl>
+                                {% else %}
+                                    <div class="alert alert-warning mb-0">
+                                        {% trans 'No configured application-secret backend was found.' %}
+                                    </div>
+                                {% endif %}
+                            </div>
                         </div>
-                    {% endif %}
+                    </div>
+                </div>
+
+                {% if is_pkcs11_backend and pkcs11_config %}
+                    <div class="card">
+                        <div class="card-header">
+                            <h4 class="mb-0">{% trans 'PKCS#11 Provider Details' %}</h4>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-3">{% trans 'Module Path' %}</dt>
+                                <dd class="col-sm-9"><code>{{ pkcs11_config.module_path }}</code></dd>
+
+                                <dt class="col-sm-3">{% trans 'Token Label' %}</dt>
+                                <dd class="col-sm-9">{{ pkcs11_config.token_label|default:"-" }}</dd>
+
+                                <dt class="col-sm-3">{% trans 'Token Serial' %}</dt>
+                                <dd class="col-sm-9">{{ pkcs11_token_serial_display }}</dd>
+
+                                <dt class="col-sm-3">{% trans 'Slot ID' %}</dt>
+                                <dd class="col-sm-9">{{ pkcs11_slot_id_display }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                {% elif is_software_backend and software_config %}
+                    <div class="card">
+                        <div class="card-header">
+                            <h4 class="mb-0">{% trans 'Software Backend Details' %}</h4>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-4">{% trans 'Encryption Source' %}</dt>
+                                <dd class="col-sm-8">{{ software_config.get_encryption_source_display }}</dd>
+
+                                <dt class="col-sm-4">{% trans 'Encryption Source Ref' %}</dt>
+                                <dd class="col-sm-8">{{ software_config.encryption_source_ref|default:"-" }}</dd>
+                            </dl>
+                        </div>
+                    </div>
+                {% elif is_rest_backend and rest_config %}
+                    <div class="card">
+                        <div class="card-header">
+                            <h4 class="mb-0">{% trans 'REST Backend Details' %}</h4>
+                        </div>
+                        <div class="card-body">
+                            <dl class="row mb-0">
+                                <dt class="col-sm-4">{% trans 'Base URL' %}</dt>
+                                <dd class="col-sm-8"><code>{{ rest_config.base_url }}</code></dd>
+
+                                <dt class="col-sm-4">{% trans 'Auth Type' %}</dt>
+                                <dd class="col-sm-8">{{ rest_config.get_auth_type_display }}</dd>
+                            </dl>
+                        </div>
+                    </div>
                 {% endif %}
             {% endif %}
         </div>

@@ -6,7 +6,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.core.management.base import BaseCommand
-from management.models import KeyStorageConfig, SecurityConfig
+from management.models import SecurityConfig
 from pki.models import CaModel
 from pki.util.x509 import CertificateVerifier
 
@@ -46,25 +46,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             self.stdout.write(message)
 
     def get_ca_type_from_storage_config(self) -> CaModel.CaTypeChoice:
-        """Determine the CA type based on the crypto storage configuration.
-
-        Returns:
-            CaModel.CaTypeChoice: The appropriate CA type.
-        """
-        try:
-            config = KeyStorageConfig.get_config()
-            if config.storage_type in [
-                KeyStorageConfig.StorageType.SOFTHSM,
-                KeyStorageConfig.StorageType.PHYSICAL_HSM
-            ]:
-                return CaModel.CaTypeChoice.LOCAL_PKCS11
-            return CaModel.CaTypeChoice.LOCAL_UNPROTECTED
-        except KeyStorageConfig.DoesNotExist:
-            self.log_and_stdout(
-                'KeyStorageConfig not found, defaulting to LOCAL_UNPROTECTED',
-                level='warning'
-            )
-            return CaModel.CaTypeChoice.LOCAL_UNPROTECTED
+        """Return the legacy local managed-CA type for generated demo CAs."""
+        return CaModel.CaTypeChoice.LOCAL_PKCS11
 
     def generate_empty_crl(
         self,

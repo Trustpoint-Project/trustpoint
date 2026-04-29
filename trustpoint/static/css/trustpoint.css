@@ -395,6 +395,43 @@ a.tp-primary:focus, a.tp-primary:hover, a.tp-primary:active,
     align-items: center;
 }
 
+.tp-users-main-content {
+    width: 100%;
+}
+
+.tp-runtime-banner {
+    background: linear-gradient(
+        135deg,
+        color-mix(in srgb, #d89500 14%, var(--bs-body-bg)),
+        color-mix(in srgb, #f0b33e 10%, var(--bs-body-bg))
+    );
+    border: 1px solid color-mix(in srgb, #d89500 36%, var(--bs-border-color));
+    border-radius: 1rem;
+    box-shadow:
+        0 0.8rem 1.8rem color-mix(in srgb, #d89500 10%, transparent),
+        inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
+    display: grid;
+    gap: 0.35rem;
+    margin: 0 auto 1.2rem;
+    max-width: 72rem;
+    padding: 0.95rem 1.1rem;
+}
+
+.tp-runtime-banner-kicker {
+    color: color-mix(in srgb, var(--bs-emphasis-color) 85%, #d89500 15%);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    line-height: 1.1;
+    text-transform: uppercase;
+}
+
+.tp-runtime-banner-copy {
+    color: var(--bs-emphasis-color);
+    line-height: 1.45;
+    margin: 0;
+}
+
 .tp-card-users {
     width: 90vw;
     max-width: 25rem;

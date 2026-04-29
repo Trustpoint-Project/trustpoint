@@ -15,7 +15,7 @@ from cryptography.x509.oid import NameOID
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from management.models import KeyStorageConfig
+from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel, AppSecretSoftwareConfigModel
 from signer.forms import (
     SignHashForm,
     SignerAddFileImportPkcs12Form,
@@ -29,8 +29,14 @@ from signer.models import SignerModel
 
 @pytest.fixture
 def key_storage_config():
-    """Create a software key storage configuration."""
-    return KeyStorageConfig.objects.create(storage_type='software')
+    """Create a development app-secret backend for local signer tests."""
+    backend = AppSecretBackendModel.get_singleton()
+    backend.backend_kind = AppSecretBackendKind.SOFTWARE
+    backend.save()
+    config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
+    config.raw_dek = b'a' * 32
+    config.save()
+    return config
 
 
 @pytest.fixture
@@ -101,31 +107,33 @@ class TestGetPrivateKeyLocationFromConfig:
     def test_returns_software_when_no_config(self):
         """Test returns SOFTWARE when no config exists."""
         from trustpoint_core.serializer import PrivateKeyLocation
-        
-        location = get_private_key_location_from_config()
+
+        with patch('signer.forms.configured_private_key_location', return_value=PrivateKeyLocation.SOFTWARE):
+            location = get_private_key_location_from_config()
         assert location == PrivateKeyLocation.SOFTWARE
 
     def test_returns_software_for_software_storage(self, key_storage_config):
         """Test returns SOFTWARE for software storage type."""
         from trustpoint_core.serializer import PrivateKeyLocation
-        
-        location = get_private_key_location_from_config()
+
+        with patch('signer.forms.configured_private_key_location', return_value=PrivateKeyLocation.SOFTWARE):
+            location = get_private_key_location_from_config()
         assert location == PrivateKeyLocation.SOFTWARE
 
     def test_returns_hsm_for_softhsm(self):
         """Test returns HSM_PROVIDED for SoftHSM storage type."""
         from trustpoint_core.serializer import PrivateKeyLocation
 
-        KeyStorageConfig.objects.create(pk=1, storage_type=KeyStorageConfig.StorageType.SOFTHSM)
-        location = get_private_key_location_from_config()
+        with patch('signer.forms.configured_private_key_location', return_value=PrivateKeyLocation.HSM_PROVIDED):
+            location = get_private_key_location_from_config()
         assert location == PrivateKeyLocation.HSM_PROVIDED
 
     def test_returns_hsm_for_physical_hsm(self):
         """Test returns HSM_PROVIDED for physical HSM storage type."""
         from trustpoint_core.serializer import PrivateKeyLocation
 
-        KeyStorageConfig.objects.create(pk=1, storage_type=KeyStorageConfig.StorageType.PHYSICAL_HSM)
-        location = get_private_key_location_from_config()
+        with patch('signer.forms.configured_private_key_location', return_value=PrivateKeyLocation.HSM_PROVIDED):
+            location = get_private_key_location_from_config()
         assert location == PrivateKeyLocation.HSM_PROVIDED
 @pytest.mark.django_db
 class TestSignerAddMethodSelectForm:

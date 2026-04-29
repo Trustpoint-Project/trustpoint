@@ -99,6 +99,11 @@
         <div class="card tp-card-setup-wizard tp-card-setup-content text-center"{% if form.storage_selection %} data-summary-submit-card{% endif %}>
             <div class="card-body tp-wizard-body">
                 <h2 class="tp-wizard-heading">{{ body_heading }}</h2>
+                {% if wizard_notice %}
+                    <div class="alert alert-info text-start" role="alert">
+                        {{ wizard_notice }}
+                    </div>
+                {% endif %}
                 <fieldset class="form-group tp-form-group">
                     {% if form.non_field_errors and not form.tls_mode %}
                         <div class="alert alert-danger">
@@ -108,6 +113,14 @@
 
                     {% if form.storage_selection %}
                         <div class="tp-summary-list">
+                            <div class="tp-summary-item">
+                                <div class="tp-summary-label">{{ form.operational_admin.label }}</div>
+                                <div class="tp-summary-value">{{ form.operational_admin.value|default:"-" }}</div>
+                            </div>
+                            <div class="tp-summary-item">
+                                <div class="tp-summary-label">{{ form.operational_database.label }}</div>
+                                <div class="tp-summary-value">{{ form.operational_database.value|default:"-" }}</div>
+                            </div>
                             <div class="tp-summary-item">
                                 <div class="tp-summary-label">{{ form.storage_selection.label }}</div>
                                 <div class="tp-summary-value">{{ form.storage_selection.value|default:"-" }}</div>
@@ -266,35 +279,153 @@
                                 {% endif %}
                             </div>
                         </div>
+                    {% elif form.is_pkcs11_backend_config %}
+                        <div class="tp-backend-setup">
+                            <section class="tp-backend-section">
+                                <div class="tp-backend-section-kicker">Required</div>
+                                <h3 class="tp-backend-section-title">PKCS#11 Library</h3>
+                                {% if form.local_dev_pkcs11_handoff_available %}
+                                    <p class="tp-backend-section-copy">
+                                        Upload the exact PKCS#11 shared library Trustpoint should use for this installation. When a local <code>tp_wizard</code> SoftHSM handoff is available, you may leave this empty and Trustpoint will use its local proxy client for this setup session.
+                                    </p>
+                                {% else %}
+                                    <p class="tp-backend-section-copy">
+                                        Upload the exact shared library Trustpoint should use for this installation.
+                                    </p>
+                                {% endif %}
+                                {% if form.staged_pkcs11_module_name %}
+                                    <div class="tp-backend-state-pill">
+                                        <span>Current staged library: {{ form.staged_pkcs11_module_name }}</span>
+                                        <button
+                                            type="submit"
+                                            name="wizard_action"
+                                            value="clear_module"
+                                            class="tp-backend-state-pill-dismiss"
+                                            formnovalidate
+                                            aria-label="Remove staged library"
+                                            title="Remove staged library"
+                                        >×</button>
+                                    </div>
+                                {% endif %}
+                                <div class="tp-backend-field">
+                                    <label class="tp-backend-field-label" for="{{ form.pkcs11_module_upload.id_for_label }}">
+                                        {{ form.pkcs11_module_upload.label }}
+                                    </label>
+                                    {{ form.pkcs11_module_upload }}
+                                    {% if form.pkcs11_module_upload.help_text %}
+                                        <div class="form-text">{{ form.pkcs11_module_upload.help_text }}</div>
+                                    {% endif %}
+                                    {% if form.pkcs11_module_upload.errors %}
+                                        <div class="text-danger mt-2">
+                                            {{ form.pkcs11_module_upload.errors }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </section>
+
+                            <section class="tp-backend-section">
+                                <div class="tp-backend-section-kicker">Required</div>
+                                <h3 class="tp-backend-section-title">Token Access</h3>
+                                <p class="tp-backend-section-copy">
+                                    Trustpoint will use the token label to find the token and will create the PIN file for the configured backend automatically.
+                                </p>
+                                <div class="tp-backend-grid">
+                                    <div class="tp-backend-field">
+                                        <label class="tp-backend-field-label" for="{{ form.fresh_install_pkcs11_token_label.id_for_label }}">
+                                            {{ form.fresh_install_pkcs11_token_label.label }}
+                                        </label>
+                                        {{ form.fresh_install_pkcs11_token_label }}
+                                        {% if form.fresh_install_pkcs11_token_label.help_text %}
+                                            <div class="form-text">{{ form.fresh_install_pkcs11_token_label.help_text }}</div>
+                                        {% endif %}
+                                        {% if form.fresh_install_pkcs11_token_label.errors %}
+                                            <div class="text-danger mt-2">
+                                                {{ form.fresh_install_pkcs11_token_label.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="tp-backend-field">
+                                        <label class="tp-backend-field-label" for="{{ form.pkcs11_user_pin.id_for_label }}">
+                                            {{ form.pkcs11_user_pin.label }}
+                                        </label>
+                                        {{ form.pkcs11_user_pin }}
+                                        {% if form.has_staged_pkcs11_pin %}
+                                            <div class="tp-backend-state-pill">
+                                                <span>A user PIN is already staged for this wizard session.</span>
+                                                <button
+                                                    type="submit"
+                                                    name="wizard_action"
+                                                    value="clear_pin"
+                                                    class="tp-backend-state-pill-dismiss"
+                                                    formnovalidate
+                                                    aria-label="Remove staged user PIN"
+                                                    title="Remove staged user PIN"
+                                                >×</button>
+                                            </div>
+                                        {% endif %}
+                                        {% if form.pkcs11_user_pin.help_text %}
+                                            <div class="form-text">{{ form.pkcs11_user_pin.help_text }}</div>
+                                        {% endif %}
+                                        {% if form.pkcs11_user_pin.errors %}
+                                            <div class="text-danger mt-2">
+                                                {{ form.pkcs11_user_pin.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+                    {% elif form.is_software_backend_config %}
+                        <div class="tp-backend-setup">
+                            <section class="tp-backend-section">
+                                <div class="tp-backend-section-kicker">Development Mode</div>
+                                <h3 class="tp-backend-section-title">No Additional Backend Configuration Needed</h3>
+                                <p class="tp-backend-section-copy">
+                                    The development and testing backend is ready to use as-is. Continue when you want this Trustpoint instance to stay in demo mode.
+                                </p>
+                            </section>
+                        </div>
                     {% else %}
                         {% for field in form %}
-                            <div class="mb-3 text-start">
-                                {% if field.field.widget.input_type == 'radio' %}
-                                    <div class="tp-choice-group">
-                                        {% for option in field %}
-                                            <label for="{{ option.id_for_label }}" class="tp-choice-option{% if option.data.disabled %} is-disabled{% endif %}">
-                                                {{ option.tag }}
-                                                <span class="tp-choice-card">
-                                                    <span class="tp-choice-title">{{ option.choice_label }}</span>
-                                                    {% if option.data.description %}
-                                                        <span class="tp-choice-description">{{ option.data.description }}</span>
-                                                    {% endif %}
-                                                </span>
-                                            </label>
-                                        {% endfor %}
-                                    </div>
-                                {% else %}
-                                    {{ field }}
-                                {% endif %}
-                                {% if field.help_text %}
-                                    <div class="form-text">{{ field.help_text }}</div>
-                                {% endif %}
-                                {% if field.errors %}
-                                    <div class="text-danger mt-2">
-                                        {{ field.errors }}
-                                    </div>
-                                {% endif %}
-                            </div>
+                            {% if field.is_hidden %}
+                                {{ field }}
+                            {% else %}
+                                <div class="mb-3 text-start">
+                                    {% if field.field.widget.input_type == 'radio' %}
+                                        <div class="tp-choice-group">
+                                            {% for option in field %}
+                                                <label for="{{ option.id_for_label }}" class="tp-choice-option{% if option.data.disabled %} is-disabled{% endif %}">
+                                                    {{ option.tag }}
+                                                    <span class="tp-choice-card">
+                                                        <span class="tp-choice-title-row">
+                                                            <span class="tp-choice-title">{{ option.choice_label }}</span>
+                                                            {% if option.data.disabled %}
+                                                                <span class="tp-choice-badge">Coming Soon</span>
+                                                            {% endif %}
+                                                        </span>
+                                                        {% if option.data.description %}
+                                                            <span class="tp-choice-description">{{ option.data.description }}</span>
+                                                        {% endif %}
+                                                    </span>
+                                                </label>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        {% if field.label %}
+                                            <label class="tp-backend-field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                        {% endif %}
+                                        {{ field }}
+                                    {% endif %}
+                                    {% if field.help_text %}
+                                        <div class="form-text">{{ field.help_text }}</div>
+                                    {% endif %}
+                                    {% if field.errors %}
+                                        <div class="text-danger mt-2">
+                                            {{ field.errors }}
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
                         {% endfor %}
                     {% endif %}
                 </fieldset>
@@ -307,6 +438,16 @@
                                 type="submit"
                                 formaction="{% url 'setup_wizard:fresh_install_cancel' %}"
                                 formnovalidate>{% trans 'Cancel' %}</button>
+                    {% endif %}
+                    {% if form.is_pkcs11_backend_config %}
+                        <button class="btn tp-setup-form-secondary" type="submit" name="wizard_action" value="test_connection">
+                            {% trans 'Test HSM Connection' %}
+                        </button>
+                    {% endif %}
+                    {% if form.is_database_config %}
+                        <button class="btn tp-setup-form-secondary" type="submit" name="wizard_action" value="test_database">
+                            {% trans 'Test Database Connection' %}
+                        </button>
                     {% endif %}
                     <button class="btn tp-setup-form-submit" type="submit">
                         {% trans 'Apply and Continue' %}

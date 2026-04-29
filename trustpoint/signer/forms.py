@@ -16,7 +16,7 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from management.models import KeyStorageConfig
+from crypto.runtime import configured_private_key_location
 from pki.models.certificate import CertificateModel
 from signer.models import SignerModel
 from trustpoint.logger import LoggerMixin
@@ -24,18 +24,8 @@ from util.field import UniqueNameValidator, get_certificate_name
 
 
 def get_private_key_location_from_config() -> PrivateKeyLocation:
-    """Determine the appropriate PrivateKeyLocation based on KeyStorageConfig."""
-    try:
-        storage_config = KeyStorageConfig.get_config()
-        if storage_config.storage_type in [
-            KeyStorageConfig.StorageType.SOFTHSM,
-            KeyStorageConfig.StorageType.PHYSICAL_HSM
-        ]:
-            return PrivateKeyLocation.HSM_PROVIDED
-    except KeyStorageConfig.DoesNotExist:
-        pass
-
-    return PrivateKeyLocation.SOFTWARE
+    """Determine the appropriate PrivateKeyLocation from the configured crypto backend."""
+    return configured_private_key_location()
 
 
 class SignerAddMethodSelectForm(forms.Form):

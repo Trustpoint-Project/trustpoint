@@ -1,7 +1,10 @@
 """Test suite for KeyStorageConfigForm and IPv4AddressForm."""
+from django.core.exceptions import ValidationError
 from django.test import TestCase
+
+from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
+from crypto.models import BackendKind, CryptoProviderProfileModel
 from management.forms import IPv4AddressForm, KeyStorageConfigForm
-from management.models import KeyStorageConfig
 
 
 class IPv4AddressFormTest(TestCase):
@@ -61,122 +64,73 @@ class IPv4AddressFormTest(TestCase):
 class KeyStorageConfigFormTest(TestCase):
     """Test suite for KeyStorageConfigForm."""
 
-    def setUp(self):
-        """Set up test fixtures."""
-        # Clean up any existing config
-        KeyStorageConfig.objects.all().delete()
-
     def test_form_fields_exist(self):
-        """Test that storage_type field exists."""
+        """Test that the read-only backend summary fields exist."""
         form = KeyStorageConfigForm()
-        self.assertIn('storage_type', form.fields)
+        self.assertIn('managed_crypto_backend', form.fields)
+        self.assertIn('app_secret_backend', form.fields)
 
-    def test_storage_type_field_is_radio_select(self):
-        """Test that storage_type uses RadioSelect widget."""
+    def test_backend_fields_are_disabled(self):
+        """Test that backend fields are read-only after setup."""
         form = KeyStorageConfigForm()
-        from django.forms import RadioSelect
-        self.assertIsInstance(form.fields['storage_type'].widget, RadioSelect)
+        self.assertTrue(form.fields['managed_crypto_backend'].disabled)
+        self.assertTrue(form.fields['app_secret_backend'].disabled)
 
-    def test_storage_type_choices(self):
-        """Test that storage_type has correct choices."""
+    def test_backend_choices(self):
+        """Test that backend fields expose the current backend enums."""
         form = KeyStorageConfigForm()
-        choices = [choice[0] for choice in form.fields['storage_type'].choices]
+        managed_choices = [choice[0] for choice in form.fields['managed_crypto_backend'].choices]
+        app_secret_choices = [choice[0] for choice in form.fields['app_secret_backend'].choices]
 
-        self.assertIn('software', choices)
-        self.assertIn('softhsm', choices)
-        self.assertIn('physical_hsm', choices)
+        self.assertIn(BackendKind.SOFTWARE, managed_choices)
+        self.assertIn(BackendKind.PKCS11, managed_choices)
+        self.assertIn(AppSecretBackendKind.SOFTWARE, app_secret_choices)
+        self.assertIn(AppSecretBackendKind.PKCS11, app_secret_choices)
 
-    def test_form_valid_with_software_storage(self):
-        """Test form is valid with software storage type."""
-        form_data = {'storage_type': 'software'}
-        form = KeyStorageConfigForm(data=form_data)
+    def test_form_initializes_from_active_backends(self):
+        """Test that the form summarizes the configured operational backends."""
+        CryptoProviderProfileModel.objects.create(name='software', backend_kind=BackendKind.SOFTWARE, active=True)
+        app_secret_backend = AppSecretBackendModel.get_singleton()
+        app_secret_backend.backend_kind = AppSecretBackendKind.SOFTWARE
+        app_secret_backend.save()
+
+        form = KeyStorageConfigForm()
+
+        self.assertEqual(form.fields['managed_crypto_backend'].initial, BackendKind.SOFTWARE)
+        self.assertEqual(form.fields['app_secret_backend'].initial, AppSecretBackendKind.SOFTWARE)
+
+    def test_form_valid_with_no_posted_changes(self):
+        """Test the read-only summary form can validate without changes."""
+        form = KeyStorageConfigForm(data={})
         self.assertTrue(form.is_valid())
 
-    def test_form_valid_with_softhsm_storage(self):
-        """Test form is valid with softhsm storage type."""
-        form_data = {'storage_type': 'softhsm'}
-        form = KeyStorageConfigForm(data=form_data)
-        self.assertTrue(form.is_valid())
+    def test_save_with_commit_is_rejected(self):
+        """Test post-setup backend mutation through management is rejected."""
+        form = KeyStorageConfigForm(data={})
 
-    def test_form_valid_with_physical_hsm_storage(self):
-        """Test form is valid with physical_hsm storage type."""
-        form_data = {'storage_type': 'physical_hsm'}
-        form = KeyStorageConfigForm(data=form_data)
-        self.assertTrue(form.is_valid())
+        with self.assertRaises(ValidationError):
+            form.save_with_commit()
 
-    def test_clean_returns_cleaned_data(self):
-        """Test clean method returns cleaned data."""
-        form_data = {'storage_type': 'software'}
-        form = KeyStorageConfigForm(data=form_data)
-        self.assertTrue(form.is_valid())
-        self.assertEqual(form.cleaned_data['storage_type'], 'software')
+    def test_save_without_commit_is_rejected(self):
+        """Test post-setup backend mutation through management is rejected."""
+        form = KeyStorageConfigForm(data={})
 
-    def test_save_with_commit_creates_instance(self):
-        """Test save_with_commit creates or updates config instance."""
-        form_data = {'storage_type': 'softhsm'}
-        form = KeyStorageConfigForm(data=form_data)
-        self.assertTrue(form.is_valid())
-
-        config = form.save_with_commit()
-        self.assertIsNotNone(config)
-        self.assertEqual(config.storage_type, 'softhsm')
-
-        # Verify it's saved in database
-        saved_config = KeyStorageConfig.objects.first()
-        self.assertEqual(saved_config.storage_type, 'softhsm')
-
-    def test_save_with_commit_updates_existing_instance(self):
-        """Test save_with_commit updates existing instance."""
-        # Create initial config using the model's method
-        initial_config = KeyStorageConfig.get_or_create_default()
-        initial_config.storage_type = 'software'
-        initial_config.save()
-
-        # Update to different storage type
-        form_data = {'storage_type': 'physical_hsm'}
-        form = KeyStorageConfigForm(data=form_data)
-        self.assertTrue(form.is_valid())
-
-        config = form.save_with_commit()
-        self.assertEqual(config.storage_type, 'physical_hsm')
-
-        # Verify the singleton behavior - should still be only one instance
-        self.assertTrue(KeyStorageConfig.objects.count() <= 2)  # May have id=1 and default
-
-    def test_save_without_commit_returns_instance(self):
-        """Test save_without_commit returns unsaved instance."""
-        form_data = {'storage_type': 'softhsm'}
-        form = KeyStorageConfigForm(data=form_data)
-        self.assertTrue(form.is_valid())
-
-        config = form.save_without_commit()
-        self.assertIsNotNone(config)
-        self.assertEqual(config.storage_type, 'softhsm')
-
-        # The instance should exist (singleton pattern gets or creates)
-        self.assertIsNotNone(KeyStorageConfig.objects.first())
+        with self.assertRaises(ValidationError):
+            form.save_without_commit()
 
     def test_form_initialization(self):
         """Test form initializes correctly."""
         form = KeyStorageConfigForm()
         self.assertIsNotNone(form.fields)
 
-    def test_form_with_instance(self):
-        """Test form works with existing instance."""
-        config = KeyStorageConfig.objects.create(storage_type='software')
-
-        form_data = {'storage_type': 'softhsm'}
-        form = KeyStorageConfigForm(data=form_data, instance=config)
-        self.assertTrue(form.is_valid())
-
-    def test_storage_type_field_has_help_text(self):
-        """Test that storage_type field has help text."""
+    def test_managed_backend_field_has_label(self):
+        """Test that managed backend field has a useful label."""
         form = KeyStorageConfigForm()
-        help_text = form.fields['storage_type'].help_text
-        self.assertIn('cryptographic material', help_text.lower())
+        label = str(form.fields['managed_crypto_backend'].label)
+        self.assertIn('Managed Crypto Backend', label)
 
-    def test_storage_type_field_has_label(self):
-        """Test that storage_type field has correct label."""
+    def test_app_secret_backend_field_has_label(self):
+        """Test that app-secret backend field has a useful label."""
         form = KeyStorageConfigForm()
-        label = str(form.fields['storage_type'].label)
-        self.assertIn('Storage Type', label)
+        label = str(form.fields['app_secret_backend'].label)
+        self.assertIn('Application-Secret Backend', label)

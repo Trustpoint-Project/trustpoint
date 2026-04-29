@@ -262,7 +262,7 @@ def step_verify_tls_generation_step(context: runner.Context) -> None:
     content = context.response.text.lower()
     assert 'san' in content or 'subject alternative' in content or 'generate' in content, \
         f'Not at TLS generation step. URL: {context.response.url}'
-    
+
 
 @when('the user selects "Generate credential" as the TLS mode')
 def step_select_tls_mode(context: runner.Context) -> None:
@@ -324,7 +324,7 @@ def step_verify_demo_data_step(context: runner.Context) -> None:
     content = context.response.text.lower()
     assert 'demo' in content or 'data' in content, \
         f'Not at demo data step. URL: {context.response.url}'
-    
+
 
 @then('the wizard should be at the summary step')
 def step_verify_summary_step(context: runner.Context) -> None:

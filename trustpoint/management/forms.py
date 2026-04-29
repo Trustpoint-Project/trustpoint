@@ -22,13 +22,13 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
+from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
+from crypto.models import BackendKind, CryptoProviderProfileModel
 from management.models import (
     BackupOptions,
     InternationalizationConfig,
-    KeyStorageConfig,
     LoggingConfig,
     NotificationConfig,
-    PKCS11Token,
     SecurityConfig,
 )
 from management.models.workflows2 import WorkflowExecutionConfig
@@ -830,151 +830,81 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
         """Return the saved credential."""
         return self.saved_credential
 
-class KeyStorageConfigForm(forms.ModelForm[KeyStorageConfig]):
-    """Form for configuring cryptographic material storage options."""
+class KeyStorageConfigForm(forms.Form):
+    """Read-only summary form for the configured managed-crypto and app-secret backends."""
 
-    storage_type = forms.ChoiceField(
-        widget=forms.RadioSelect,
-        label=_('Storage Type'),
-        help_text=_('Select how cryptographic material should be stored'),
-        choices=[
-            ('software', _('Software Storage')),
-            ('softhsm', _('SoftHSM Container')),
-            ('physical_hsm', _('Physical HSM')),
-        ]
+    managed_crypto_backend = forms.ChoiceField(
+        choices=BackendKind.choices,
+        required=False,
+        disabled=True,
+        label=_('Managed Crypto Backend'),
+    )
+    app_secret_backend = forms.ChoiceField(
+        choices=AppSecretBackendKind.choices,
+        required=False,
+        disabled=True,
+        label=_('Application-Secret Backend'),
     )
 
-    class Meta:
-        """ModelForm Meta configuration for KeyStorageConfig."""
-        model = KeyStorageConfig
-        fields: ClassVar[list[str]] = ['storage_type']
-
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the form."""
+        """Initialize the read-only backend summary."""
         super().__init__(*args, **kwargs)
+        profile = CryptoProviderProfileModel.objects.filter(active=True).first()
+        backend = AppSecretBackendModel.objects.first()
+        self.fields['managed_crypto_backend'].initial = profile.backend_kind if profile else None
+        self.fields['app_secret_backend'].initial = backend.backend_kind if backend else None
 
-    def clean(self) -> dict[str, Any]:
-        """Custom validation for the form."""
-        cleaned_data: dict[str, Any] = super().clean() or {}
-        return cleaned_data
+    def save_with_commit(self) -> NoReturn:
+        """Reject legacy post-setup backend mutation through the management UI."""
+        msg = _('Trustpoint backend configuration is managed by the setup wizard and cannot be changed here.')
+        raise ValidationError(msg)
 
-    def save_with_commit(self) -> KeyStorageConfig:
-        """Save the form with commit, ensuring singleton behavior."""
-        instance = KeyStorageConfig.get_or_create_default()
-        instance.storage_type = self.cleaned_data['storage_type']
-        instance.save(update_fields=['storage_type', 'last_updated'])
-        return instance
+    def save_without_commit(self) -> NoReturn:
+        """Reject legacy post-setup backend mutation through the management UI."""
+        msg = _('Trustpoint backend configuration is managed by the setup wizard and cannot be changed here.')
+        raise ValidationError(msg)
 
-    def save_without_commit(self) -> KeyStorageConfig:
-        """Save the form without commit, ensuring singleton behavior."""
-        instance = KeyStorageConfig.get_or_create_default()
-        instance.storage_type = self.cleaned_data['storage_type']
-        return instance
 
 class PKCS11ConfigForm(forms.Form):
-    """Form for configuring PKCS#11 settings including HSM PIN and token information."""
+    """Read-only summary form for the configured PKCS#11 managed-crypto backend."""
 
-    HSM_TYPE_CHOICES: ClassVar[list[tuple[str, Any]]] = [
-        ('softhsm', _('SoftHSM')),
-        ('physical', _('Physical HSM')),
-    ]
-
-    hsm_type = forms.ChoiceField(
-        choices=HSM_TYPE_CHOICES,
-        initial='softhsm',
-        widget=forms.RadioSelect,
-        label=_('HSM Type'),
-        help_text=_('Select the type of HSM to configure.')
-    )
-
-    label = forms.CharField(
+    token_label = forms.CharField(
         label=_('Token Label'),
-        max_length=100,
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
-        help_text=_('Unique label for the PKCS#11 token'),
-        required=False
+        required=False,
+        disabled=True,
     )
-
-    slot = forms.IntegerField(
+    slot_id = forms.IntegerField(
         label=_('Slot Number'),
-        widget=forms.NumberInput(attrs={'class': 'form-control'}),
-        help_text=_('Slot number where the token is located'),
-        min_value=0,
-        required=False
+        required=False,
+        disabled=True,
     )
-
     module_path = forms.CharField(
         label=_('Module Path'),
-        max_length=255,
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
-        help_text=_('Path to the PKCS#11 module library file'),
-        initial='/usr/lib/libpkcs11-proxy.so',
-        required=False
+        required=False,
+        disabled=True,
+    )
+    auth_source_ref = forms.CharField(
+        label=_('Authentication Source'),
+        required=False,
+        disabled=True,
     )
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the PKCS11ConfigForm with existing token data if available."""
+        """Initialize the read-only PKCS#11 summary from the active backend profile."""
         super().__init__(*args, **kwargs)
+        profile = CryptoProviderProfileModel.objects.filter(active=True, backend_kind=BackendKind.PKCS11).first()
+        config = getattr(profile, 'pkcs11_config', None) if profile is not None else None
+        if config is None:
+            return
+        self.fields['token_label'].initial = config.token_label
+        self.fields['slot_id'].initial = config.slot_id
+        self.fields['module_path'].initial = config.module_path
+        self.fields['auth_source_ref'].initial = config.auth_source_ref
 
-        try:
-            token = PKCS11Token.objects.first()
-            if token:
-                self.fields['label'].initial = token.label
-                self.fields['slot'].initial = token.slot
-                self.fields['module_path'].initial = token.module_path
-        except PKCS11Token.DoesNotExist:
-            pass
-
-    def clean(self) -> dict[str, Any]:
-        """Custom validation for the form."""
-        cleaned_data: dict[str, Any] = super().clean() or {}
-        hsm_type = cleaned_data.get('hsm_type')
-
-        if hsm_type == 'softhsm':
-            cleaned_data['label'] = 'Trustpoint-SoftHSM'
-            cleaned_data['slot'] = 0
-            cleaned_data['module_path'] = '/usr/lib/libpkcs11-proxy.so'
-        elif hsm_type == 'physical':
-            raise forms.ValidationError(_('Physical HSM is not yet supported.'))
-
-        return cleaned_data
-
-    def clean_label(self) -> str:
-        """Validate that label is unique, excluding current token if updating."""
-        hsm_type = self.data.get('hsm_type')
-        if hsm_type == 'softhsm':
-            return 'Trustpoint-SoftHSM'
-
-        label = self.cleaned_data.get('label', '')
-        existing = PKCS11Token.objects.filter(label=label)
-
-        current_token = PKCS11Token.objects.first()
-        if current_token:
-            existing = existing.exclude(pk=current_token.pk)
-
-        if existing.exists():
-            raise forms.ValidationError(_('A token with this label already exists.'))
-
-        return str(label)
-
-    def save_token_config(self) -> PKCS11Token:
-        """Save or update token configuration."""
-        data = self.cleaned_data
-        token, created = PKCS11Token.objects.get_or_create(
-            label=data['label'],
-            defaults={
-                'hsm_type': data['hsm_type'],
-                'slot': data['slot'],
-                'module_path': data['module_path'],
-            }
-        )
-
-        if not created:
-            for field, value in data.items():
-                if field != 'label':
-                    setattr(token, field, value)
-            token.save()
-        return token
+    def save_token_config(self) -> NoReturn:
+        """Reject legacy PKCS#11 token mutation through the management UI."""
+        msg = _('PKCS#11 backend configuration is managed by the setup wizard and cannot be changed here.')
+        raise ValidationError(msg)
 
 class WorkflowExecutionConfigForm(forms.ModelForm[WorkflowExecutionConfig]):
     """Form for managing Workflow 2 execution settings."""

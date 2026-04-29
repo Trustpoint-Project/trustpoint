@@ -1,255 +1,103 @@
-"""Encrypted fields for sensitive data using PKCS#11 DEK encryption."""
+"""Thin Django field wrappers over the application-secret encryption subsystem."""
 
 from __future__ import annotations
 
-import base64
-import os
+import math
 from typing import Any, Never
 
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from management.models import KeyStorageConfig, PKCS11Token
+from appsecrets.service import CIPHERTEXT_PREFIX, decrypt_app_secret, encrypt_app_secret
 
 
-class EncryptedTextField(models.TextField[str, str]):
-    """A TextField that automatically encrypts/decrypts data using PKCS#11 DEK.
+class _EncryptedFieldMixin:
+    """Shared encryption/decryption helpers for encrypted Django model fields."""
 
-    This field uses AES-256-CBC encryption with the DEK (Data Encryption Key)
-    from the PKCS#11 token to encrypt sensitive data before storing it in the database.
-    """
-
-    description = _('Encrypted text field using PKCS#11 DEK')
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the encrypted field."""
-        super().__init__(*args, **kwargs)
+    description = _('Encrypted field using Trustpoint application secrets')
 
     def raise_validation_error(self, msg: str) -> Never:
-        """Raise a ValidationError with the given message.
-
-        Args:
-            msg (str): The error message to include in the ValidationError.
-
-        Raises:
-            ValidationError: Always raised with the provided message.
-        """
+        """Raise a ValidationError with the given message."""
         raise ValidationError(msg)
 
     def should_encrypt(self) -> bool:
-        """Check if encryption should be used based on crypto storage configuration.
+        """Return whether values should be routed through the app-secret subsystem."""
+        return True
 
-        Returns:
-            bool: True if storage type is SoftHSM or Physical HSM, False for software storage.
-
-        Raises:
-            ValidationError: If crypto storage config is not found or there's an error accessing it.
-        """
-        try:
-
-            crypto_config = KeyStorageConfig.objects.first()
-            if not crypto_config:
-                msg = 'No crypto storage configuration found. Please configure storage type first.'
-                self.raise_validation_error(msg)
-
-        except Exception as e:
-            if isinstance(e, ValidationError):
-                raise
-            msg = f'Failed to check crypto storage configuration: {e}'
-            raise ValidationError(msg) from e
-        else:
-                return crypto_config.storage_type in [
-                    KeyStorageConfig.StorageType.SOFTHSM,
-                    KeyStorageConfig.StorageType.PHYSICAL_HSM
-                ]
-
-    def get_dek(self) -> bytes:
-        """Get the DEK from PKCS#11 token, preferring cached value.
-
-        Returns:
-            bytes: The 32-byte DEK.
-
-        Raises:
-            ValidationError: If no PKCS#11 token is configured or DEK unavailable.
-        """
-        token = PKCS11Token.objects.first()
-        if not token:
-            raise ValidationError(_('No PKCS#11 token configured for encryption.'))
-
-        dek_cache = token.get_dek_cache()
-        if dek_cache:
-            return dek_cache
-
-        try:
-            return token.get_dek()
-        except Exception as e:
-            raise ValidationError(_('Failed to retrieve DEK from PKCS#11 token: %s') % e) from e
-
-    def encrypt_value(self, value: str) -> str:
-        """Encrypt a string value using AES-256-GCM with the PKCS#11 DEK.
-
-        Args:
-            value: The plaintext string to encrypt.
-
-        Returns:
-            str: Base64-encoded encrypted data in format: nonce:tag:ciphertext
-        """
-        if not value:
+    def encrypt_value(self, value: str | None) -> str | None:
+        """Encrypt a string value for database storage."""
+        if value in (None, ''):
             return value
-
         if not self.should_encrypt():
             return value
-
         try:
-            dek = self.get_dek()
+            return encrypt_app_secret(value)
+        except Exception as exc:
+            error_msg = str(exc) or type(exc).__name__
+            raise ValidationError(_('Failed to encrypt field value: %s') % error_msg) from exc
 
-            # Generate a random nonce for GCM
-            nonce = os.urandom(12)  # 12 bytes for GCM
-
-            # Add random padding to obscure length patterns
-            padding_length = os.urandom(1)[0] % 16  # 0-15 random bytes
-            padded_value = value + '\x00' * padding_length + chr(padding_length)
-
-            # Create cipher
-            cipher = Cipher(algorithms.AES(dek), modes.GCM(nonce))
-            encryptor = cipher.encryptor()
-
-            # Encrypt (no padding needed for GCM)
-            ciphertext = encryptor.update(padded_value.encode('utf-8'))
-            encryptor.finalize()
-
-            # Get authentication tag
-            tag = encryptor.tag
-
-            # Return base64-encoded nonce + tag + ciphertext
-            combined = nonce + tag + ciphertext
-            return base64.b64encode(combined).decode('ascii')
-
-        except Exception as e:
-            raise ValidationError(_('Failed to encrypt field value: %s') % e) from e
-
-    def decrypt_value(self, encrypted_value: str) -> str:
-        """Decrypt a base64-encoded encrypted value using the PKCS#11 DEK.
-
-        Args:
-            encrypted_value: Base64-encoded encrypted data.
-
-        Returns:
-            str: The decrypted plaintext string.
-        """
-        if not encrypted_value:
+    def decrypt_value(self, encrypted_value: str | None) -> str | None:
+        """Decrypt a stored string value."""
+        if encrypted_value in (None, ''):
             return encrypted_value
-
         if not self.should_encrypt():
             return encrypted_value
-
         try:
-            dek = self.get_dek()
-
-            # Decode from base64
-            combined = base64.b64decode(encrypted_value.encode('ascii'))
-
-            # Extract nonce, tag, and ciphertext
-            nonce = combined[:12]       # First 12 bytes are nonce
-            tag = combined[12:28]       # Next 16 bytes are auth tag
-            ciphertext = combined[28:]  # Rest is ciphertext
-
-            # Create cipher with tag for authentication
-            cipher = Cipher(algorithms.AES(dek), modes.GCM(nonce, tag))
-            decryptor = cipher.decryptor()
-
-            # Decrypt and verify authenticity
-            padded_data = decryptor.update(ciphertext)
-            decryptor.finalize()  # Raises exception if authentication fails
-
-            # Remove random padding
-            padding_length = ord(padded_data[-1:])
-            max_padding_length = 16
-            data = padded_data[:-padding_length - 1] if padding_length < max_padding_length else padded_data
-
-            return data.decode('utf-8')
-
-        except Exception as e:
-            error_msg = str(e) or type(e).__name__
-            raise ValidationError(_('Failed to decrypt field value: %s') % error_msg) from e
+            return decrypt_app_secret(encrypted_value)
+        except Exception as exc:
+            error_msg = str(exc) or type(exc).__name__
+            raise ValidationError(_('Failed to decrypt field value: %s') % error_msg) from exc
 
     def from_db_value(self, value: Any, expression: Any, connection: Any) -> str | None:  # noqa: ARG002
-        """Convert value from database to Python object.
-
-        This method is called when data is loaded from the database.
-        """
+        """Convert the database representation to a Python string."""
         if value is None:
             return value
-        return self.decrypt_value(value)
+        return self.decrypt_value(str(value))
 
     def to_python(self, value: Any) -> str | None:
-        """Convert value to Python object.
-
-        This method is called during deserialization and in forms.
-        """
+        """Normalize incoming values to strings."""
         if isinstance(value, str) or value is None:
             return value
         return str(value)
 
     def get_prep_value(self, value: Any) -> str | None:
-        """Convert Python object to database value.
-
-        This method is called when saving data to the database.
-        """
+        """Convert the Python representation to the database representation."""
         if value is None:
             return value
         return self.encrypt_value(str(value))
 
 
-class EncryptedCharField(models.CharField[str, str]):
-    """A CharField that automatically encrypts/decrypts data using PKCS#11 DEK.
+class EncryptedTextField(_EncryptedFieldMixin, models.TextField[str, str]):
+    """Text field whose value is encrypted via the app-secret subsystem."""
 
-    Similar to EncryptedTextField but with CharField constraints.
-    """
 
-    description = _('Encrypted char field using PKCS#11 DEK')
+class EncryptedCharField(_EncryptedFieldMixin, models.CharField[str, str]):
+    """Char field whose value is encrypted via the app-secret subsystem."""
+
+    description = _('Encrypted char field using Trustpoint application secrets')
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the encrypted field.
-
-        The max_length parameter should be the plaintext size limit.
-        The field keeps this value internally for consistent field declaration.
-        """
+        """Store the plaintext max length while keeping the DB column large enough for ciphertext."""
         self._plaintext_max_length = kwargs.get('max_length')
         super().__init__(*args, **kwargs)
 
     @staticmethod
     def _calculate_encrypted_length(plaintext_max_length: int) -> int:
-        """Calculate the database field size needed for encrypted + base64 data.
-
-        Args:
-            plaintext_max_length: The plaintext data size limit.
-
-        Returns:
-            int: The database field size needed to store encrypted + base64 encoded data.
-        """
-        encrypted_length = ((plaintext_max_length + 16 + 15) // 16) * 16  # Padded length
-        encrypted_length += 16  # IV
-        return int(encrypted_length * 4/3) + 4  # Base64 overhead
+        """Calculate the database column size needed for prefixed base64 AES-GCM ciphertext."""
+        payload_length = plaintext_max_length + 12 + 16
+        base64_length = 4 * math.ceil(payload_length / 3)
+        return len(CIPHERTEXT_PREFIX) + base64_length
 
     def deconstruct(self) -> tuple[str, str, list[Any], dict[str, Any]]:
-        """Return field deconstruction for migrations.
-
-        This method ensures that the encrypted size (not plaintext) is stored in migrations,
-        but the model field keeps the plaintext max_length, preventing migration regeneration.
-        """
+        """Persist the plaintext max length in migrations."""
         name, path, args, kwargs = super().deconstruct()
         if self._plaintext_max_length is not None:
             kwargs['max_length'] = self._plaintext_max_length
         return name, path, list(args), kwargs
 
     def db_type(self, connection: Any) -> str:
-        """Return the database column type with encrypted size.
-
-        This ensures the database actually has enough space for encrypted data.
-        """
+        """Use a column size that fits encrypted values rather than plaintext."""
         if self._plaintext_max_length is None:
             db_type_result = super().db_type(connection)
             if db_type_result is None:
@@ -257,147 +105,3 @@ class EncryptedCharField(models.CharField[str, str]):
             return db_type_result
         encrypted_length = self._calculate_encrypted_length(self._plaintext_max_length)
         return f'varchar({encrypted_length})'
-
-    def raise_validation_error(self, msg: str) -> Never:
-        """Raise a ValidationError with the given message.
-
-        Args:
-            msg (str): The error message to include in the ValidationError.
-
-        Raises:
-            ValidationError: Always raised with the provided message.
-        """
-        raise ValidationError(msg)
-
-    def should_encrypt(self) -> bool:
-        """Check if encryption should be used based on crypto storage configuration.
-
-        Returns:
-            bool: True if storage type is SoftHSM or Physical HSM, False for software storage.
-
-        Raises:
-            ValidationError: If crypto storage config is not found or there's an error accessing it.
-        """
-        try:
-            crypto_config = KeyStorageConfig.objects.first()
-            if not crypto_config:
-                msg = 'No crypto storage configuration found. Please configure storage type first.'
-                self.raise_validation_error(msg)
-
-        except Exception as e:
-            if isinstance(e, ValidationError):
-                raise
-            msg = f'Failed to check crypto storage configuration: {e}'
-            raise ValidationError(msg) from e
-        else:
-                return crypto_config.storage_type in [
-                    KeyStorageConfig.StorageType.SOFTHSM,
-                    KeyStorageConfig.StorageType.PHYSICAL_HSM
-                ]
-
-    def get_dek(self) -> bytes:
-        """Get the DEK from PKCS#11 token, preferring cached value."""
-        token = PKCS11Token.objects.first()
-        if not token:
-            raise ValidationError(_('No PKCS#11 token configured for encryption.'))
-
-        dek_cache = token.get_dek_cache()
-        if dek_cache:
-            return dek_cache
-
-        try:
-            return token.get_dek()
-        except Exception as e:
-            raise ValidationError(_('Failed to retrieve DEK from PKCS#11 token: %s') % e) from e
-
-    def encrypt_value(self, value: str) -> str:
-        """Encrypt a string value using AES-256-GCM with the PKCS#11 DEK."""
-        if not value:
-            return value
-
-        if not self.should_encrypt():
-            return value
-
-        try:
-            dek = self.get_dek()
-
-            # Generate a random nonce for GCM
-            nonce = os.urandom(12)  # 12 bytes for GCM
-
-            # Add random padding to obscure length patterns
-            padding_length = os.urandom(1)[0] % 16  # 0-15 random bytes
-            padded_value = value + '\x00' * padding_length + chr(padding_length)
-
-            # Create cipher
-            cipher = Cipher(algorithms.AES(dek), modes.GCM(nonce))
-            encryptor = cipher.encryptor()
-
-            # Encrypt (no padding needed for GCM)
-            ciphertext = encryptor.update(padded_value.encode('utf-8'))
-            encryptor.finalize()
-
-            # Get authentication tag
-            tag = encryptor.tag
-
-            # Return base64-encoded nonce + tag + ciphertext
-            combined = nonce + tag + ciphertext
-            return base64.b64encode(combined).decode('ascii')
-
-        except Exception as e:
-            raise ValidationError(_('Failed to encrypt field value: %s') % e) from e
-
-    def decrypt_value(self, encrypted_value: str) -> str:
-        """Decrypt a base64-encoded encrypted value using the PKCS#11 DEK."""
-        if not encrypted_value:
-            return encrypted_value
-
-        if not self.should_encrypt():
-            return encrypted_value
-
-        try:
-            dek = self.get_dek()
-
-            # Decode from base64
-            combined = base64.b64decode(encrypted_value.encode('ascii'))
-
-            # Extract nonce, tag, and ciphertext
-            nonce = combined[:12]       # First 12 bytes are nonce
-            tag = combined[12:28]       # Next 16 bytes are auth tag
-            ciphertext = combined[28:]  # Rest is ciphertext
-
-            # Create cipher with tag for authentication
-            cipher = Cipher(algorithms.AES(dek), modes.GCM(nonce, tag))
-            decryptor = cipher.decryptor()
-
-            # Decrypt and verify authenticity
-            padded_data = decryptor.update(ciphertext)
-            decryptor.finalize()  # Raises exception if authentication fails
-
-            # Remove random padding
-            padding_length = ord(padded_data[-1:])
-            max_padding_length = 16
-            data = padded_data[:-padding_length - 1] if padding_length < max_padding_length else padded_data
-
-            return data.decode('utf-8')
-
-        except Exception as e:
-            error_msg = str(e) or type(e).__name__
-            raise ValidationError(_('Failed to decrypt field value: %s') % error_msg) from e
-
-    def from_db_value(self, value: Any, expression: Any, connection: Any) -> str | None:  # noqa: ARG002
-        """Convert value from database to Python object."""
-        if value is None:
-            return value
-        return self.decrypt_value(value)
-
-    def to_python(self, value: Any) -> str | None:
-        """Convert value to Python object."""
-        if isinstance(value, str) or value is None:
-            return value
-        return str(value)
-
-    def get_prep_value(self, value: Any) -> str | None:
-        """Convert Python object to database value."""
-        if value is None:
-            return value
-        return self.encrypt_value(str(value))

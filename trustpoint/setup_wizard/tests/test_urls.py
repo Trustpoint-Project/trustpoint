@@ -1,22 +1,25 @@
 """Tests for the redesigned setup_wizard URL configuration."""
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import resolve, reverse
 
 from setup_wizard import urls
 from setup_wizard.views import (
+    FreshInstallAdminUserView,
+    FreshInstallBackendConfigView,
     FreshInstallCancelView,
     FreshInstallCryptoStorageView,
+    FreshInstallDatabaseView,
     FreshInstallDemoDataView,
     FreshInstallSummaryTruststoreDownloadView,
     FreshInstallSummaryView,
     FreshInstallTlsConfigView,
-    SetupWizardCreateSuperUserView,
     SetupWizardIndexView,
     SetupWizardRestoreBackupView,
 )
 
 
+@override_settings(ROOT_URLCONF='trustpoint.urls_bootstrap')
 class SetupWizardUrlsTestCase(TestCase):
     """Test cases for the current setup_wizard URL patterns."""
 
@@ -29,12 +32,6 @@ class SetupWizardUrlsTestCase(TestCase):
         resolver = resolve(url)
         self.assertEqual(resolver.func.view_class, SetupWizardIndexView)
 
-    def test_create_super_user_url(self) -> None:
-        url = reverse('setup_wizard:create_super_user')
-        self.assertEqual(url, '/setup-wizard/create-super-user/')
-        resolver = resolve(url)
-        self.assertEqual(resolver.func.view_class, SetupWizardCreateSuperUserView)
-
     def test_restore_backup_url(self) -> None:
         url = reverse('setup_wizard:restore_backup')
         self.assertEqual(url, '/setup-wizard/restore-backup/')
@@ -43,9 +40,36 @@ class SetupWizardUrlsTestCase(TestCase):
 
     def test_fresh_install_urls(self) -> None:
         cases = [
-            ('setup_wizard:fresh_install_crypto_storage', '/setup-wizard/fresh-install/crypto-storage/', FreshInstallCryptoStorageView),
-            ('setup_wizard:fresh_install_demo_data', '/setup-wizard/fresh-install/demo-data/', FreshInstallDemoDataView),
-            ('setup_wizard:fresh_install_tls_config', '/setup-wizard/fresh-install/tls-config/', FreshInstallTlsConfigView),
+            (
+                'setup_wizard:fresh_install_admin_user',
+                '/setup-wizard/fresh-install/admin-user/',
+                FreshInstallAdminUserView,
+            ),
+            (
+                'setup_wizard:fresh_install_database',
+                '/setup-wizard/fresh-install/database/',
+                FreshInstallDatabaseView,
+            ),
+            (
+                'setup_wizard:fresh_install_crypto_storage',
+                '/setup-wizard/fresh-install/crypto-storage/',
+                FreshInstallCryptoStorageView,
+            ),
+            (
+                'setup_wizard:fresh_install_backend_config',
+                '/setup-wizard/fresh-install/backend-config/',
+                FreshInstallBackendConfigView,
+            ),
+            (
+                'setup_wizard:fresh_install_demo_data',
+                '/setup-wizard/fresh-install/demo-data/',
+                FreshInstallDemoDataView,
+            ),
+            (
+                'setup_wizard:fresh_install_tls_config',
+                '/setup-wizard/fresh-install/tls-config/',
+                FreshInstallTlsConfigView,
+            ),
             ('setup_wizard:fresh_install_summary', '/setup-wizard/fresh-install/summary/', FreshInstallSummaryView),
             ('setup_wizard:fresh_install_cancel', '/setup-wizard/fresh-install/cancel/', FreshInstallCancelView),
         ]

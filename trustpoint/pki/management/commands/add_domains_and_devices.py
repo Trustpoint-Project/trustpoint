@@ -12,7 +12,7 @@ from devices.models import DeviceModel
 from onboarding.models import OnboardingConfigModel, NoOnboardingConfigModel
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
-from management.models import KeyStorageConfig
+from crypto.runtime import configured_private_key_location
 from pki.models import CaModel, DevIdRegistration, DomainModel, CaModel, TruststoreModel
 from pki.util.x509 import CertificateGenerator
 from onboarding.models import OnboardingPkiProtocol, NoOnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
@@ -72,18 +72,8 @@ def get_random_onboarding_pki_protocols(
 
 
 def _get_private_key_location_from_config() -> PrivateKeyLocation:
-    """Determine the appropriate PrivateKeyLocation based on KeyStorageConfig."""
-    try:
-        storage_config = KeyStorageConfig.get_config()
-        if storage_config.storage_type in [
-            KeyStorageConfig.StorageType.SOFTHSM,
-            KeyStorageConfig.StorageType.PHYSICAL_HSM
-        ]:
-            return PrivateKeyLocation.HSM_PROVIDED
-    except KeyStorageConfig.DoesNotExist:
-        pass
-
-    return PrivateKeyLocation.SOFTWARE
+    """Determine the appropriate PrivateKeyLocation from the configured crypto backend."""
+    return configured_private_key_location()
 
 
 def create_signer_for_domain(

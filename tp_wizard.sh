@@ -9,8 +9,10 @@ VOL_DB="${PROJECT}_postgres_data"
 
 # trustpoint image handling
 TP_DOCKERFILE="docker/trustpoint/Dockerfile"
+HSM_DOCKERFILE="docker/softhsm/Dockerfile"
 TP_REPO="trustpointproject/trustpoint"
 APP_IMAGE="${TP_REPO}:latest"   # overridden to trustpoint:local when BUILD_LOCAL=true
+SOFTHSM_IMAGE="trustpoint:softhsm-local"
 BUILD_LOCAL=false
 
 # Fixed images
@@ -18,6 +20,7 @@ PG_IMAGE="postgres:15.14"
 MAILPIT_IMAGE="axllent/mailpit:v1.27"
 SFTPGO_IMAGE="drakkan/sftpgo:2.6.x-slim"
 WF2_WORKER_NAME="trustpoint-worker"
+SOFTHSM_NAME="softhsm"
 
 # Fixed trustpoint ports
 APP_HTTP_HOST=80
@@ -40,13 +43,22 @@ DEF_SFTPGO_WEB_PORT=8080
 DEF_SFTPGO_ADMIN_USER="admin"
 DEF_SFTPGO_ADMIN_PASS="testing321"
 SFTPGO_ROOT="${PWD}/sftpgo-data"
-WF2_FOLDER="${PWD}/workflow2Folder"
-WF2_WORKER_ENV_FILE="${WF2_FOLDER}/worker.env"
-WF2_WORKER_README="${WF2_FOLDER}/README.txt"
 DEF_WF2_WORKER_LEASE=30
 DEF_WF2_WORKER_BATCH=10
 DEF_WF2_WORKER_SLEEP=1
 MAILPIT_PROBE_TIMEOUT=20
+
+# Local/dev SoftHSM defaults
+LOCAL_HSM_ROOT="${PWD}/var/hsm"
+LOCAL_HSM_CONFIG_DIR="${LOCAL_HSM_ROOT}/config"
+LOCAL_HSM_LIB_DIR="${LOCAL_HSM_ROOT}/lib"
+LOCAL_HSM_TOKEN_DIR="${LOCAL_HSM_ROOT}/tokens"
+LOCAL_HSM_CONTAINER_ROOT="/var/lib/trustpoint/hsm"
+LOCAL_HSM_CONTAINER_CONFIG_DIR="${LOCAL_HSM_CONTAINER_ROOT}/config"
+LOCAL_HSM_CONTAINER_TOKEN_DIR="${LOCAL_HSM_CONTAINER_ROOT}/tokens"
+LOCAL_HSM_TOKEN_LABEL="Trustpoint-SoftHSM"
+LOCAL_HSM_PROFILE_NAME="local-dev-softhsm"
+LOCAL_HSM_METADATA_FILE="${LOCAL_HSM_CONFIG_DIR}/local-dev-token.env"
 
 # Timeouts
 READINESS_TIMEOUT=90
@@ -101,6 +113,24 @@ print_container_status_row(){
   printf "%-20s %-10s %-10s %s\n" "$n" "$(container_state "$n")" "$(container_health "$n")" "$(container_image "$n")"
 }
 
+fix_bind_mount_owner(){
+  local dir="$1"
+  [[ -d "$dir" ]] || return 0
+  docker run --rm \
+    -v "${dir}:/target" \
+    debian:trixie-slim \
+    bash -lc "chown -R $(id -u):$(id -g) /target"
+}
+
+purge_bind_mount_dir(){
+  local dir="$1"
+  [[ -d "$dir" ]] || return 0
+  docker run --rm \
+    -v "${dir}:/target" \
+    debian:trixie-slim \
+    bash -lc 'rm -rf /target/* /target/.[!.]* /target/..?* 2>/dev/null || true'
+}
+
 # quick TCP connect test (true if something accepts on host:port)
 tcp_check(){ local host="$1" port="$2" ts=$(( $(date +%s) + ${3:-5} )); while (( $(date +%s) < ts )); do (exec 3<>"/dev/tcp/$host/$port") >/dev/null 2>&1 && { exec 3>&- 3<&-; return 0; }; sleep 1; done; return 1; }
 port_in_use(){ tcp_check 127.0.0.1 "$1" 1; }
@@ -123,6 +153,7 @@ mask(){ local s="$1" n=${#1}; (( n<=2 )) && { printf '%s' '**'; return; }; print
 
 # -------------------------- Wizard state -------------------------------------
 EN_APP=false; EN_PG=false; EN_MAILPIT=false; EN_SFTPGO=false; EN_WF2_WORKER=false
+EN_LOCAL_HSM=false
 
 DB_INTERNAL=true
 DB_HOST="$DEF_DB_HOST_INTERNAL"   # default host when internal
@@ -152,7 +183,7 @@ WF2_WORKER_BATCH="$DEF_WF2_WORKER_BATCH"
 WF2_WORKER_SLEEP="$DEF_WF2_WORKER_SLEEP"
 
 # CLI target flags
-ONLY_APP=false; ONLY_DB=false; ONLY_MAIL=false; ONLY_SFTP=false; ONLY_WF2_WORKER=false
+ONLY_APP=false; ONLY_DB=false; ONLY_MAIL=false; ONLY_SFTP=false; ONLY_WF2_WORKER=false; ONLY_HSM=false
 NOWAIT=false
 
 # -------------------------- Steps --------------------------------------------
@@ -253,6 +284,51 @@ step_workflows2_worker(){
   )
 }
 
+step_local_hsm(){
+  $EN_APP || return 0
+  EN_LOCAL_HSM=$(
+    ask_yes_no "Start a separate SoftHSM PKCS#11 proxy server container for local/dev testing? Trustpoint loads the proxy client library; the SoftHSM container keeps the real token store and serves PKCS#11 over the proxy." "y" && echo true || echo false
+  )
+}
+
+prepare_local_hsm_root(){
+  $EN_LOCAL_HSM || return 0
+  mkdir -p "$LOCAL_HSM_CONFIG_DIR" "$LOCAL_HSM_LIB_DIR" "$LOCAL_HSM_TOKEN_DIR"
+
+  # Normalize ownership so a non-root SoftHSM container can reuse files
+  # created by older root-based runs without requiring host sudo.
+  fix_bind_mount_owner "$LOCAL_HSM_ROOT"
+
+  chmod 750 "$LOCAL_HSM_ROOT" "$LOCAL_HSM_CONFIG_DIR" "$LOCAL_HSM_LIB_DIR" 2>/dev/null || true
+  chmod 700 "$LOCAL_HSM_TOKEN_DIR" 2>/dev/null || true
+}
+
+local_hsm_value(){
+  local key="$1"
+  [[ -f "$LOCAL_HSM_METADATA_FILE" ]] || return 0
+  sed -n "s/^${key}=//p" "$LOCAL_HSM_METADATA_FILE" | head -n1
+}
+
+local_hsm_user_pin(){
+  local pin_file="${LOCAL_HSM_CONFIG_DIR}/user-pin.txt"
+  [[ -f "$pin_file" ]] || return 0
+  tr -d '\r\n' < "$pin_file"
+}
+
+print_local_hsm_wizard_handoff(){
+  local module_path token_label user_pin
+  module_path="/usr/lib/libpkcs11-proxy.so"
+  token_label="$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL)"
+  token_label="${token_label:-$LOCAL_HSM_TOKEN_LABEL}"
+  user_pin="$(local_hsm_user_pin)"
+
+  echo
+  echo "Trustpoint setup wizard handoff:"
+  printf "  %-20s %s\n" "Local proxy client:" "${module_path}"
+  printf "  %-20s %s\n" "Wizard token label:" "${token_label}"
+  [[ -n "$user_pin" ]] && printf "  %-20s %s\n" "Wizard user PIN:" "${user_pin}"
+}
+
 show_plan(){
   echo
   echo "==================== Configuration Summary (Planned) ===================="
@@ -262,11 +338,11 @@ show_plan(){
   printf "%-22s %s\n" "trustpoint enabled:" "$EN_APP"
   if $EN_APP; then
     if $BUILD_LOCAL; then
-      printf "%-22s %s\n" "App image:" "Build local → trustpoint:local"
+      printf "%-22s %s\n" "App image:" "Build local -> trustpoint:local"
     else
-      printf "%-22s %s\n" "App image:" "Pull → ${APP_IMAGE}"
+      printf "%-22s %s\n" "App image:" "Pull -> ${APP_IMAGE}"
     fi
-    printf "%-22s %s\n" "Host ports:" "80→80 (HTTP), 443→443 (HTTPS)"
+    printf "%-22s %s\n" "Host ports:" "80->80 (HTTP), 443->443 (HTTPS)"
   fi
   echo
   printf "%-22s %s\n" "Internal Postgres:" "$DB_INTERNAL"
@@ -290,7 +366,15 @@ show_plan(){
   printf "%-22s %s\n" "workflows2 worker:" "$EN_WF2_WORKER"
   $EN_WF2_WORKER && {
     printf "%-22s %s\n" "Worker container:" "${WF2_WORKER_NAME}"
-    printf "%-22s %s\n" "workflow2 folder:" "${WF2_FOLDER}"
+  }
+  echo
+  printf "%-22s %s\n" "SoftHSM service:" "$EN_LOCAL_HSM"
+  $EN_LOCAL_HSM && {
+    printf "%-22s %s\n" "SoftHSM image:" "Build local -> ${SOFTHSM_IMAGE}"
+    printf "%-22s %s\n" "SoftHSM container:" "${SOFTHSM_NAME}"
+    printf "%-22s %s\n" "HSM root:" "${LOCAL_HSM_ROOT}"
+    printf "%-22s %s\n" "Token label:" "${LOCAL_HSM_TOKEN_LABEL}"
+    printf "%-22s %s\n" "Profile name:" "${LOCAL_HSM_PROFILE_NAME}"
   }
   echo
   printf "%-22s %s\n" "SFTPGo enabled:" "$EN_SFTPGO"
@@ -305,7 +389,9 @@ show_plan(){
 
 # -------------------------- Build/Pull & Start -------------------------------
 build_trustpoint_image(){ [[ -f "$TP_DOCKERFILE" ]] || log "Dockerfile not found: $TP_DOCKERFILE"; log "Building trustpoint image..."; docker build -f "$TP_DOCKERFILE" -t "trustpoint:local" .; }
+build_softhsm_image(){ [[ -f "$HSM_DOCKERFILE" ]] || log "Dockerfile not found: $HSM_DOCKERFILE"; log "Building SoftHSM image..."; docker build -f "$HSM_DOCKERFILE" -t "$SOFTHSM_IMAGE" .; }
 pull_trustpoint_image(){ log "Pulling ${APP_IMAGE} ..."; docker pull "${APP_IMAGE}" >/dev/null; }
+
 configure_app_image_prompt(){
   if ask_yes_no "Build trustpoint locally from ${TP_DOCKERFILE}? (No = pull from Docker Hub)" "y"; then
     BUILD_LOCAL=true
@@ -317,6 +403,7 @@ configure_app_image_prompt(){
     APP_IMAGE="${TP_REPO}:${tag}"
   fi
 }
+
 resolve_app_image(){
   if ! $EN_APP && ! $EN_WF2_WORKER; then
     return 0
@@ -327,6 +414,12 @@ resolve_app_image(){
     pull_trustpoint_image
   fi
 }
+
+resolve_softhsm_image(){
+  $EN_LOCAL_HSM || return 0
+  build_softhsm_image
+}
+
 configure_selected(){
   if $ONLY_DB; then
     EN_PG=true
@@ -334,6 +427,7 @@ configure_selected(){
   fi
   $ONLY_MAIL && EN_MAILPIT=true
   $ONLY_SFTP && EN_SFTPGO=true
+  $ONLY_HSM && EN_LOCAL_HSM=true
 
   if $ONLY_APP; then
     EN_APP=true
@@ -344,6 +438,14 @@ configure_selected(){
   elif $ONLY_WF2_WORKER; then
     EN_WF2_WORKER=true
     configure_app_image_prompt
+  fi
+
+  # Local/dev safeguard:
+  # If the user starts only the app or worker but we already have a local/dev
+  # HSM metadata file or a running SoftHSM container, carry the HSM mount/config
+  # along automatically so the PKCS#11 provider profile does not become broken.
+  if { $ONLY_APP || $ONLY_WF2_WORKER; } && { [[ -f "$LOCAL_HSM_METADATA_FILE" ]] || exists "$SOFTHSM_NAME"; }; then
+    EN_LOCAL_HSM=true
   fi
 
   if $ONLY_APP || $ONLY_WF2_WORKER; then
@@ -365,7 +467,6 @@ start_postgres(){
   ensure_volumes
   local name="postgres"
   stop_one "$name"
-  # safety: host port must still be free (non-interactive runs)
   if port_in_use "$DB_PORT"; then die "Host port ${DB_PORT} is already in use. Choose another port or stop the process using it."; fi
   log "Starting PostgreSQL..."
   docker run -d --name "$name" --network "$NET" \
@@ -420,68 +521,81 @@ start_sftpgo(){
     "$SFTPGO_IMAGE" >/dev/null
 }
 
-prepare_workflows2_worker_folder(){
-  $EN_WF2_WORKER || return 0
-  mkdir -p "$WF2_FOLDER"
-  chmod 700 "$WF2_FOLDER" 2>/dev/null || true
-  cat > "$WF2_WORKER_README" <<EOF2
-This folder was created by tp_wizard.sh for the optional dedicated workflows2 worker.
+start_softhsm(){
+  $EN_LOCAL_HSM || return 0
+  local name="$SOFTHSM_NAME"
+  stop_one "$name"
+  prepare_local_hsm_root
 
-Files:
-- worker.env : environment passed to the worker container
+  log "Starting separate SoftHSM PKCS#11 proxy server container..."
+  docker run -d --name "$name" --network "$NET" \
+    --user "$(id -u):$(id -g)" \
+    -v "${LOCAL_HSM_CONFIG_DIR}:${LOCAL_HSM_CONTAINER_CONFIG_DIR}" \
+    -v "${LOCAL_HSM_TOKEN_DIR}:${LOCAL_HSM_CONTAINER_TOKEN_DIR}" \
+    -e "TRUSTPOINT_HSM_ROOT=${LOCAL_HSM_CONTAINER_ROOT}" \
+    -e "TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL=${LOCAL_HSM_TOKEN_LABEL}" \
+    -e "TRUSTPOINT_LOCAL_HSM_PROFILE_NAME=${LOCAL_HSM_PROFILE_NAME}" \
+    -e "TRUSTPOINT_LOCAL_HSM_AUTO_BOOTSTRAP=1" \
+    "$SOFTHSM_IMAGE" >/dev/null
 
-Container:
-- ${WF2_WORKER_NAME}
-EOF2
-  chmod 644 "$WF2_WORKER_README" 2>/dev/null || true
-
-  cat > "$WF2_WORKER_ENV_FILE" <<EOF2
-POSTGRES_DB=${APP_DB_NAME}
-DATABASE_USER=${APP_DB_USER}
-DATABASE_PASSWORD=${APP_DB_PASS}
-DATABASE_HOST=${APP_DB_HOST}
-DATABASE_PORT=${APP_DB_PORT}
-TRUSTPOINT_SERVICE_ROLE=worker
-WORKFLOWS2_WORKER_ID=${WF2_WORKER_NAME}
-WORKFLOWS2_WORKER_LEASE=${WF2_WORKER_LEASE}
-WORKFLOWS2_WORKER_BATCH=${WF2_WORKER_BATCH}
-WORKFLOWS2_WORKER_SLEEP=${WF2_WORKER_SLEEP}
-DEFAULT_FROM_EMAIL=no-reply@trustpoint.local
-EOF2
-
-  if $EN_MAILPIT; then
-    cat >> "$WF2_WORKER_ENV_FILE" <<EOF2
-EMAIL_HOST=mailpit
-EMAIL_PORT=1025
-EMAIL_USE_TLS=0
-EMAIL_USE_SSL=0
-EOF2
+  sleep 1
+  if ! running "$name"; then
+    docker logs "$name" >&2 || true
+    die "SoftHSM container failed to stay running."
   fi
-  chmod 600 "$WF2_WORKER_ENV_FILE" 2>/dev/null || true
 }
 
 start_app(){
   $EN_APP || return 0
   local name="trustpoint"
   stop_one "$name"
-  # die early if 80/443 are busy
   if port_in_use "$APP_HTTP_HOST"; then die "Host port ${APP_HTTP_HOST} is in use (trustpoint HTTP)."; fi
   if port_in_use "$APP_HTTPS_HOST"; then die "Host port ${APP_HTTPS_HOST} is in use (trustpoint HTTPS)."; fi
 
   log "Starting trustpoint..."
   local smtp_env=()
+  local hsm_env=()
+  local hsm_mounts=()
+
+  if ! $EN_LOCAL_HSM && [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
+    warn "Local/dev HSM metadata exists, but Trustpoint is being started without the local SoftHSM proxy settings."
+    warn "Use './tp_wizard.sh up trustpoint hsm' or enable SoftHSM in the full wizard."
+  fi
+
   if $EN_MAILPIT; then
     smtp_env+=( -e "EMAIL_HOST=mailpit" -e "EMAIL_PORT=1025" -e "EMAIL_USE_TLS=0" -e "EMAIL_USE_SSL=0" -e "DEFAULT_FROM_EMAIL=no-reply@trustpoint.local" )
   fi
+
+  if $EN_LOCAL_HSM; then
+    prepare_local_hsm_root
+    hsm_mounts+=(
+      -v "${LOCAL_HSM_CONFIG_DIR}:${LOCAL_HSM_CONTAINER_CONFIG_DIR}"
+      -v "${LOCAL_HSM_LIB_DIR}:${LOCAL_HSM_CONTAINER_ROOT}/lib"
+    )
+    hsm_env+=(
+      -e "TRUSTPOINT_HSM_ROOT=${LOCAL_HSM_CONTAINER_ROOT}"
+      -e "PKCS11_PROXY_SOCKET=tcp://${SOFTHSM_NAME}:5657"
+      -e "TRUSTPOINT_LOCAL_HSM_ENABLED=1"
+      -e "TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL=${LOCAL_HSM_TOKEN_LABEL}"
+      -e "TRUSTPOINT_LOCAL_HSM_PROFILE_NAME=${LOCAL_HSM_PROFILE_NAME}"
+      -e "TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL=$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
+      -e "TRUSTPOINT_LOCAL_HSM_MODULE_PATH=/usr/lib/libpkcs11-proxy.so"
+      -e "TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE=${LOCAL_HSM_CONTAINER_ROOT}/config/user-pin.txt"
+    )
+  fi
+
   docker run -d --name "$name" --network "$NET" \
     -p "${APP_HTTP_HOST}:80" \
     -p "${APP_HTTPS_HOST}:443" \
+    "${hsm_mounts[@]}" \
+    -e "TRUSTPOINT_PHASE=auto" \
     -e "POSTGRES_DB=$APP_DB_NAME" \
     -e "DATABASE_USER=$APP_DB_USER" \
     -e "DATABASE_PASSWORD=$APP_DB_PASS" \
     -e "DATABASE_HOST=$APP_DB_HOST" \
     -e "DATABASE_PORT=$APP_DB_PORT" \
     "${smtp_env[@]}" \
+    "${hsm_env[@]}" \
     "$APP_IMAGE" >/dev/null
 }
 
@@ -489,14 +603,125 @@ start_workflows2_worker(){
   $EN_WF2_WORKER || return 0
   local name="$WF2_WORKER_NAME"
   stop_one "$name"
-  prepare_workflows2_worker_folder
+
   log "Starting dedicated workflows2 worker..."
+
+  local env_args=(
+    -e "TRUSTPOINT_PHASE=auto"
+    -e "POSTGRES_DB=${APP_DB_NAME}"
+    -e "DATABASE_USER=${APP_DB_USER}"
+    -e "DATABASE_PASSWORD=${APP_DB_PASS}"
+    -e "DATABASE_HOST=${APP_DB_HOST}"
+    -e "DATABASE_PORT=${APP_DB_PORT}"
+    -e "TRUSTPOINT_SERVICE_ROLE=worker"
+    -e "WORKFLOWS2_WORKER_ID=${WF2_WORKER_NAME}"
+    -e "WORKFLOWS2_WORKER_LEASE=${WF2_WORKER_LEASE}"
+    -e "WORKFLOWS2_WORKER_BATCH=${WF2_WORKER_BATCH}"
+    -e "WORKFLOWS2_WORKER_SLEEP=${WF2_WORKER_SLEEP}"
+    -e "DEFAULT_FROM_EMAIL=no-reply@trustpoint.local"
+  )
+  local hsm_mounts=()
+
+  if $EN_LOCAL_HSM; then
+    prepare_local_hsm_root
+    hsm_mounts+=(
+      -v "${LOCAL_HSM_CONFIG_DIR}:${LOCAL_HSM_CONTAINER_CONFIG_DIR}"
+      -v "${LOCAL_HSM_LIB_DIR}:${LOCAL_HSM_CONTAINER_ROOT}/lib"
+    )
+    env_args+=(
+      -e "TRUSTPOINT_HSM_ROOT=${LOCAL_HSM_CONTAINER_ROOT}"
+      -e "PKCS11_PROXY_SOCKET=tcp://${SOFTHSM_NAME}:5657"
+      -e "TRUSTPOINT_LOCAL_HSM_ENABLED=1"
+      -e "TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL=${LOCAL_HSM_TOKEN_LABEL}"
+      -e "TRUSTPOINT_LOCAL_HSM_PROFILE_NAME=${LOCAL_HSM_PROFILE_NAME}"
+      -e "TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL=$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
+      -e "TRUSTPOINT_LOCAL_HSM_MODULE_PATH=/usr/lib/libpkcs11-proxy.so"
+      -e "TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE=${LOCAL_HSM_CONTAINER_ROOT}/config/user-pin.txt"
+    )
+  fi
+
+  if $EN_MAILPIT; then
+    env_args+=(
+      -e "EMAIL_HOST=mailpit"
+      -e "EMAIL_PORT=1025"
+      -e "EMAIL_USE_TLS=0"
+      -e "EMAIL_USE_SSL=0"
+    )
+  fi
+
   docker run -d --name "$name" --network "$NET" \
-    --env-file "$WF2_WORKER_ENV_FILE" \
+    "${hsm_mounts[@]}" \
+    "${env_args[@]}" \
     "$APP_IMAGE" >/dev/null
 }
 
+provision_local_hsm(){
+  $EN_LOCAL_HSM || return 0
+
+  prepare_local_hsm_root
+
+  exists "$SOFTHSM_NAME" || die "SoftHSM container ${SOFTHSM_NAME} does not exist."
+  if ! running "$SOFTHSM_NAME"; then
+    docker logs "$SOFTHSM_NAME" >&2 || true
+    die "SoftHSM container ${SOFTHSM_NAME} is not running."
+  fi
+
+  if [[ ! -f "$LOCAL_HSM_METADATA_FILE" ]]; then
+    warn "SoftHSM metadata file ${LOCAL_HSM_METADATA_FILE} is not present on the host yet."
+  fi
+
+  if exists trustpoint && running trustpoint; then
+    log "Trying to configure the active PKCS#11 provider profile in Trustpoint..."
+    if ! docker exec trustpoint bash -lc \
+      "cd /var/www/html/trustpoint && ./docker/trustpoint/scripts/upsert_local_dev_pkcs11_profile.sh"; then
+      warn "SoftHSM is ready, but the local/dev provider profile was not upserted."
+      warn "This usually means the Trustpoint crypto tables do not exist yet, or the project database migrations are out of sync."
+    fi
+  else
+    warn "Trustpoint container is not running yet; SoftHSM is ready, but the local/dev provider profile was not upserted."
+  fi
+
+  local token_serial
+  token_serial="$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
+
+  if [[ -n "$token_serial" ]]; then
+    ok "SoftHSM token '${LOCAL_HSM_TOKEN_LABEL}' is ready (serial ${token_serial})."
+  else
+    ok "SoftHSM token '${LOCAL_HSM_TOKEN_LABEL}' is ready."
+  fi
+  ok "Trustpoint PKCS#11 proxy client is expected at /usr/lib/libpkcs11-proxy.so."
+  print_local_hsm_wizard_handoff
+}
+
 # -------------------------- Readiness & Provision -----------------------------
+await_softhsm_ready(){
+  $EN_LOCAL_HSM || return 0
+
+  if ! exists "$SOFTHSM_NAME"; then
+    warn "SoftHSM container ${SOFTHSM_NAME} does not exist."
+    return 0
+  fi
+
+  echo "Waiting (<= ${READINESS_TIMEOUT}s) for SoftHSM PKCS#11 proxy in container ${SOFTHSM_NAME} ..."
+  local until=$(( $(date +%s) + READINESS_TIMEOUT ))
+  while (( $(date +%s) < until )); do
+    if ! running "$SOFTHSM_NAME"; then
+      docker logs "$SOFTHSM_NAME" >&2 || true
+      die "SoftHSM container stopped before the proxy became ready."
+    fi
+
+    if docker exec "$SOFTHSM_NAME" bash -lc "nc -z 127.0.0.1 5657" >/dev/null 2>&1; then
+      ok "SoftHSM PKCS#11 proxy ready in ${SOFTHSM_NAME}"
+      return 0
+    fi
+
+    printf "."
+    sleep 1
+  done
+  echo
+  warn "SoftHSM PKCS#11 proxy not confirmed after ${READINESS_TIMEOUT}s"
+}
+
 await_sftpgo_ready(){
   $EN_SFTPGO || return 0
   local PORT; PORT="$(sftpgo_web_port)"
@@ -511,7 +736,8 @@ await_sftpgo_ready(){
       ok "SFTPGo API port open on :${PORT}"
       return 0
     fi
-    printf "."; sleep 1
+    printf "."
+    sleep 1
   done
   echo
   warn "SFTPGo API not confirmed after ${READINESS_TIMEOUT}s"
@@ -523,15 +749,18 @@ await_readiness(){
     echo "Waiting (<= ${READINESS_TIMEOUT}s) for PostgreSQL on localhost:${DB_PORT} ..."
     while (( $(date +%s) < deadline )); do
       if tcp_check 127.0.0.1 "$DB_PORT" 1; then ok "PostgreSQL ready on :$DB_PORT"; break; fi
-      printf "."; sleep 1
+      printf "."
+      sleep 1
     done
     echo
   fi
+  await_softhsm_ready
   if $EN_APP; then
     echo "Waiting (<= ${READINESS_TIMEOUT}s) for trustpoint HTTP on localhost:${APP_HTTP_HOST} ..."
     while (( $(date +%s) < deadline )); do
       if tcp_check 127.0.0.1 "$APP_HTTP_HOST" 1; then ok "trustpoint reachable on :$APP_HTTP_HOST"; break; fi
-      printf "."; sleep 1
+      printf "."
+      sleep 1
     done
     echo
   fi
@@ -559,7 +788,7 @@ JSON
     cat /tmp/sftpgo_vf_upsert.json >&2
     return 1
   fi
-  ok "Virtual folder '${vf_name}' → '${mapped}' ready."
+  ok "Virtual folder '${vf_name}' -> '${mapped}' ready."
 }
 
 provision_sftpgo_backup_user(){
@@ -638,17 +867,60 @@ wait_tls_fingerprint(){
   local start; start="$(date +%s)"
   local start_iso; start_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   local end=$(( start + TLS_FP_TIMEOUT ))
+  echo "Waiting (<= ${TLS_FP_TIMEOUT}s) for trustpoint TLS fingerprint ..."
+
+  local existing_logs
+  existing_logs="$(docker logs trustpoint 2>/dev/null || true)"
+  if extract_tls_fingerprint_once "$existing_logs"; then
+    TLS_FP_ELAPSED=0
+    ok "trustpoint TLS fingerprint found in existing logs"
+    return 0
+  fi
+
   while (( $(date +%s) < end )); do
     local chunk
     chunk="$(docker logs --since "$start_iso" trustpoint 2>/dev/null || true)"
     if extract_tls_fingerprint_once "$chunk"; then
       TLS_FP_ELAPSED=$(( $(date +%s) - start ))
+      ok "trustpoint TLS fingerprint found"
       return 0
     fi
+    printf "."
     sleep 3
   done
+  echo
   TLS_FP_ELAPSED=$(( $(date +%s) - start ))
   return 1
+}
+
+latest_bootstrap_log_value(){
+  local key="$1"
+  exists trustpoint || return 0
+  docker logs trustpoint 2>/dev/null \
+    | sed -nE "s/.*Trustpoint bootstrap ${key}: ([^[:space:]]+).*/\1/p" \
+    | tail -n1
+}
+
+latest_legacy_bootstrap_login_line(){
+  exists trustpoint || return 0
+  docker logs trustpoint 2>/dev/null \
+    | awk '/Trustpoint bootstrap login generated.*Username: .*Password:/ { line=$0 } END { if (line) print line }'
+}
+
+print_bootstrap_login_from_logs(){
+  local line username password
+  username="$(latest_bootstrap_log_value username || true)"
+  password="$(latest_bootstrap_log_value password || true)"
+
+  if [[ -z "$username" || -z "$password" ]]; then
+    line="$(latest_legacy_bootstrap_login_line || true)"
+    username="$(sed -nE 's/.*Username: ([^ ]+) Password: .*/\1/p' <<<"$line")"
+    password="$(sed -nE 's/.*Password: ([^[:space:]]+).*/\1/p' <<<"$line")"
+  fi
+
+  [[ -n "$username" && -n "$password" ]] || return 0
+
+  printf "%-22s %s\n" "Bootstrap login:" "${username} / ${password}"
 }
 
 mailpit_has_subject(){
@@ -708,12 +980,12 @@ show_runtime_status(){
   echo "=========================== Runtime Status (Live) ========================"
   printf "%-22s %s\n" "Network:" "${NET} (${net_state})"
   printf "%-22s %s\n" "DB volume:" "${VOL_DB} (${vol_state})"
-  printf "%-22s %s\n" "workflow2 folder:" "$([ -d "$WF2_FOLDER" ] && echo "${WF2_FOLDER} (present)" || echo "${WF2_FOLDER} (absent)")"
   echo
   printf "%-20s %-10s %-10s %s\n" "Container" "State" "Health" "Image"
   print_container_status_row trustpoint
   print_container_status_row postgres
   print_container_status_row mailpit
+  print_container_status_row "$SOFTHSM_NAME"
   print_container_status_row sftpgo
   print_container_status_row "$WF2_WORKER_NAME"
   echo
@@ -730,9 +1002,17 @@ show_runtime_status(){
 
     [[ -n "$http_port" ]] && printf "%-22s %s\n" "trustpoint HTTP:" "http://localhost:${http_port}"
     [[ -n "$https_port" ]] && printf "%-22s %s\n" "trustpoint HTTPS:" "https://localhost:${https_port}"
+    print_bootstrap_login_from_logs
     printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings"
     if [[ -n "$db_host" || -n "$db_port" || -n "$db_name" || -n "$db_user" ]]; then
       printf "%-22s %s\n" "DB connect:" "host=${db_host:-?} port=${db_port:-?} db=${db_name:-?} user=${db_user:-?} pass=$(mask "${db_pass:-}")"
+    fi
+
+    if exists "$SOFTHSM_NAME" || [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
+      [[ -f "$LOCAL_HSM_METADATA_FILE" ]] && {
+        printf "%-22s %s\n" "SoftHSM serial:" "$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
+        printf "%-22s %s\n" "PKCS#11 module:" "/usr/lib/libpkcs11-proxy.so"
+      }
     fi
   fi
 
@@ -748,6 +1028,10 @@ show_runtime_status(){
     mailpit_smtp="$(container_host_port mailpit 1025/tcp)"
     [[ -n "$mailpit_ui" ]] && printf "%-22s %s\n" "Mailpit UI:" "http://localhost:${mailpit_ui}"
     [[ -n "$mailpit_smtp" ]] && printf "%-22s %s\n" "Mailpit SMTP:" "localhost:${mailpit_smtp}"
+  fi
+
+  if exists "$SOFTHSM_NAME"; then
+    printf "%-22s %s\n" "SoftHSM service:" "${SOFTHSM_NAME} (network-only :5657)"
   fi
 
   if exists "$WF2_WORKER_NAME"; then
@@ -781,10 +1065,11 @@ final_summary(){
   echo
   echo "========================= Runtime Summary (Actual) ======================="
   printf "%-22s %s\n" "Network:" "$NET"
-  printf "%-22s %s\n" "Containers:" "$(docker ps --format '{{.Names}}' | grep -E '^(trustpoint|postgres|mailpit|sftpgo|trustpoint-worker)$' || true)"
+  printf "%-22s %s\n" "Containers:" "$(docker ps --format '{{.Names}}' | grep -E '^(trustpoint|postgres|mailpit|softhsm|sftpgo|trustpoint-worker)$' || true)"
   echo
   if $EN_APP; then
     printf "%-22s %s\n" "trustpoint:" "http://localhost:80  |  https://localhost:443"
+    print_bootstrap_login_from_logs
     printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings (default: auto)"
   fi
   if $DB_INTERNAL; then
@@ -794,10 +1079,23 @@ final_summary(){
     printf "%-22s %s\n" "DB connect:" "host=${APP_DB_HOST} port=${APP_DB_PORT} db=${APP_DB_NAME} user=${APP_DB_USER} pass=$(mask "$APP_DB_PASS")"
   fi
   $EN_MAILPIT && printf "%-22s %s\n" "Mailpit UI:" "http://localhost:${MAILPIT_UI_PORT}  (SMTP :${MAILPIT_SMTP_PORT})"
+
+  if exists "$SOFTHSM_NAME" || [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
+    printf "%-22s %s\n" "SoftHSM service:" "${SOFTHSM_NAME} (proxy at tcp://${SOFTHSM_NAME}:5657)"
+    printf "%-22s %s\n" "Token label:" "${LOCAL_HSM_TOKEN_LABEL}"
+    [[ -f "$LOCAL_HSM_METADATA_FILE" ]] && {
+      printf "%-22s %s\n" "Token serial:" "$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
+      printf "%-22s %s\n" "Profile name:" "$(local_hsm_value TRUSTPOINT_LOCAL_HSM_PROFILE_NAME)"
+      printf "%-22s %s\n" "Local proxy client:" "/usr/lib/libpkcs11-proxy.so"
+      printf "%-22s %s\n" "Wizard token label:" "$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL)"
+      [[ -n "$(local_hsm_user_pin)" ]] && printf "%-22s %s\n" "Wizard user PIN:" "$(local_hsm_user_pin)"
+    }
+  fi
+
   if $EN_WF2_WORKER; then
     printf "%-22s %s\n" "workflows2 worker:" "${WF2_WORKER_NAME}"
-    printf "%-22s %s\n" "workflow2 folder:" "${WF2_FOLDER}"
   fi
+
   if $EN_SFTPGO; then
     local PORT; PORT="$(sftpgo_web_port)"
     printf "%-22s %s\n" "SFTPGo Web:" "http://localhost:${PORT}/web/admin"
@@ -808,6 +1106,7 @@ final_summary(){
     printf "%-22s %s\n" "Backup URL:" "sftp://${SFTPGO_BACKUP_USER}:***@127.0.0.1:${SFTPGO_SFTP_PORT}/"
     printf "%-22s %s\n" "Data dir:" "${SFTPGO_ROOT}"
   fi
+
   if $EN_APP; then
     if [[ -n "$TLS_FP_FOUND" ]]; then
       printf "%-22s %s\n" "TLS fingerprint:" "$TLS_FP_FOUND"
@@ -833,17 +1132,21 @@ wizard(){
   step_app_db_binding
   step_helpers
   step_workflows2_worker
+  step_local_hsm
   show_plan
   ask_yes_no "Proceed with these settings?" "y" || { warn "Aborted by user."; exit 1; }
   resolve_app_image
+  resolve_softhsm_image
   $DB_INTERNAL && ensure_volumes
   start_postgres
   start_mailpit
+  start_softhsm
   start_sftpgo
   $EN_WF2_WORKER || stop_one "$WF2_WORKER_NAME"
   start_app
   start_workflows2_worker
   $NOWAIT || await_readiness
+  $NOWAIT || provision_local_hsm
   $NOWAIT || provision_sftpgo_backup_user
   $NOWAIT || verify_mailpit_delivery
   $NOWAIT || wait_tls_fingerprint || true
@@ -855,26 +1158,27 @@ usage(){
   cat <<'EOF2'
 Commands:
   (no command)       Run interactive wizard
-  up [demo|trustpoint|db|mail|sftp|worker] [--nowait]
-  down [demo|trustpoint|db|mail|sftp|worker]
-  logs [trustpoint|db|mail|sftp|worker]
+  up [demo|trustpoint|db|mail|hsm|sftp|worker] [--nowait]
+  down [demo|trustpoint|db|mail|hsm|sftp|worker]
+  logs [trustpoint|db|mail|hsm|sftp|worker]
   status
   nuke
   help
 
-Also supported (legacy): --only trustpoint|db|mail|sftp|worker|demo
+Also supported (legacy): --only trustpoint|db|mail|hsm|sftp|worker|demo
 EOF2
 }
 
 map_only_to_flags(){
   case "$1" in
-    demo)  ONLY_APP=true; ONLY_DB=true; ONLY_MAIL=true; ONLY_SFTP=true ;;
+    demo)  ONLY_APP=true; ONLY_DB=true; ONLY_MAIL=true; ONLY_HSM=true; ONLY_SFTP=true ;;
     trustpoint|app)  ONLY_APP=true ;;
     db)   ONLY_DB=true ;;
     mail) ONLY_MAIL=true ;;
+    hsm|softhsm) ONLY_HSM=true ;;
     sftp) ONLY_SFTP=true ;;
     worker) ONLY_WF2_WORKER=true ;;
-    *) die "Unknown target: $1 (use trustpoint|db|mail|sftp|worker|demo)";;
+    *) die "Unknown target: $1 (use trustpoint|db|mail|hsm|sftp|worker|demo)" ;;
   esac
 }
 
@@ -882,27 +1186,37 @@ set_targets_from_args(){
   local any=false
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      demo|trustpoint|app|db|mail|sftp|worker) map_only_to_flags "$1"; any=true; shift ;;
+      demo|trustpoint|app|db|mail|hsm|softhsm|sftp|worker) map_only_to_flags "$1"; any=true; shift ;;
       --only) map_only_to_flags "${2:-}"; any=true; shift 2 ;;
       --nowait) NOWAIT=true; shift ;;
       *) die "Unknown option/target: $1" ;;
     esac
   done
-  if ! $any; then ONLY_APP=true; ONLY_DB=true; fi
+
+  # Default local/dev bring-up:
+  # start Trustpoint, PostgreSQL, and the local SoftHSM service together.
+  if ! $any; then
+    ONLY_APP=true
+    ONLY_DB=true
+    ONLY_HSM=true
+  fi
 }
 
 start_selected(){
   configure_selected
   ensure_network
   resolve_app_image
+  resolve_softhsm_image
   $ONLY_DB   && { EN_PG=true; ensure_volumes; start_postgres; }
   $ONLY_MAIL && { EN_MAILPIT=true; start_mailpit; }
+  $ONLY_HSM  && start_softhsm
   $ONLY_SFTP && { EN_SFTPGO=true; start_sftpgo; }
   $EN_WF2_WORKER || { $ONLY_APP && stop_one "$WF2_WORKER_NAME"; }
   $ONLY_APP  && start_app
   $EN_WF2_WORKER && start_workflows2_worker
 
   $NOWAIT || await_readiness
+  $NOWAIT || provision_local_hsm
   $NOWAIT || provision_sftpgo_backup_user
   $NOWAIT || verify_mailpit_delivery
   $NOWAIT || wait_tls_fingerprint || true
@@ -911,12 +1225,13 @@ start_selected(){
 
 down_selected(){
   local done=false
-  $ONLY_APP   && { stop_one trustpoint; stop_one "$WF2_WORKER_NAME"; done=true; }
-  $ONLY_DB    && stop_one postgres   && done=true
-  $ONLY_MAIL  && stop_one mailpit    && done=true
-  $ONLY_SFTP  && stop_one sftpgo     && done=true
+  $ONLY_APP && { stop_one trustpoint; stop_one "$WF2_WORKER_NAME"; done=true; }
+  $ONLY_DB && stop_one postgres && done=true
+  $ONLY_MAIL && stop_one mailpit && done=true
+  $ONLY_HSM && stop_one "$SOFTHSM_NAME" && done=true
+  $ONLY_SFTP && stop_one sftpgo && done=true
   $ONLY_WF2_WORKER && stop_one "$WF2_WORKER_NAME" && done=true
-  $done || { stop_one trustpoint; stop_one postgres; stop_one mailpit; stop_one sftpgo; stop_one "$WF2_WORKER_NAME"; }
+  $done || { stop_one trustpoint; stop_one postgres; stop_one mailpit; stop_one "$SOFTHSM_NAME"; stop_one sftpgo; stop_one "$WF2_WORKER_NAME"; }
   ok "Stopped."
 }
 
@@ -924,6 +1239,7 @@ logs_selected(){
   local target="trustpoint"
   $ONLY_DB && target="postgres"
   $ONLY_MAIL && target="mailpit"
+  $ONLY_HSM && target="$SOFTHSM_NAME"
   $ONLY_SFTP && target="sftpgo"
   $ONLY_WF2_WORKER && target="$WF2_WORKER_NAME"
   exists "$target" || die "Container not found: $target"
@@ -931,17 +1247,35 @@ logs_selected(){
 }
 
 nuke_cmd(){
-  read -r -p "Remove ALL project containers, network, DB volume, ./sftpgo-data, and ./workflow2Folder? [y/N] " a; [[ "${a}" == "y" ]] || exit 0
+  read -r -p "Remove ALL project containers, network, DB volume, ./var/hsm, and ./sftpgo-data? [y/N] " a; [[ "${a}" == "y" ]] || exit 0
   read -r -p "Are you sure? This is destructive. [y/N] " b; [[ "${b}" == "y" ]] || exit 0
+
   mapfile -t project_volumes < <(collect_project_volumes)
-  stop_one trustpoint; stop_one postgres; stop_one mailpit; stop_one sftpgo; stop_one "$WF2_WORKER_NAME"
+
+  stop_one trustpoint
+  stop_one postgres
+  stop_one mailpit
+  stop_one "$SOFTHSM_NAME"
+  stop_one sftpgo
+  stop_one "$WF2_WORKER_NAME"
+
   docker network rm "$NET" >/dev/null 2>&1 || true
+
   for v in "${project_volumes[@]}"; do
     [[ -n "$v" ]] || continue
     docker volume rm "$v" >/dev/null 2>&1 || true
   done
-  if [[ -d "$SFTPGO_ROOT" ]]; then rm -rf "$SFTPGO_ROOT"; fi
-  if [[ -d "$WF2_FOLDER" ]]; then rm -rf "$WF2_FOLDER"; fi
+
+  if [[ -d "$LOCAL_HSM_ROOT" ]]; then
+    purge_bind_mount_dir "$LOCAL_HSM_ROOT"
+    rm -rf "$LOCAL_HSM_ROOT" 2>/dev/null || true
+  fi
+
+  if [[ -d "$SFTPGO_ROOT" ]]; then
+    purge_bind_mount_dir "$SFTPGO_ROOT"
+    rm -rf "$SFTPGO_ROOT" 2>/dev/null || true
+  fi
+
   ok "Project resources removed."
 }
 

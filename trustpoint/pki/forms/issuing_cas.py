@@ -19,7 +19,7 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from management.models import KeyStorageConfig
+from crypto.runtime import is_hsm_backend_configured
 from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.authorization import PkiSecurityAuthorization
@@ -36,33 +36,20 @@ from util.validation import validate_remote_ca_connection
 
 
 def get_private_key_location_from_config() -> PrivateKeyLocation:
-    """Determine the appropriate PrivateKeyLocation based on KeyStorageConfig."""
-    try:
-        storage_config = KeyStorageConfig.get_config()
-        if storage_config.storage_type in [
-            KeyStorageConfig.StorageType.SOFTHSM,
-            KeyStorageConfig.StorageType.PHYSICAL_HSM
-        ]:
-            return PrivateKeyLocation.HSM_PROVIDED
-    except KeyStorageConfig.DoesNotExist:
-        pass
-
+    """Determine the appropriate PrivateKeyLocation from the configured crypto backend."""
+    if is_hsm_backend_configured():
+        return PrivateKeyLocation.HSM_PROVIDED
     return PrivateKeyLocation.SOFTWARE
 
 
 def get_ca_type_from_config() -> CaModel.CaTypeChoice:
-    """Determine the appropriate CA type based on KeyStorageConfig."""
-    try:
-        storage_config = KeyStorageConfig.get_config()
-        if storage_config.storage_type in [
-            KeyStorageConfig.StorageType.SOFTHSM,
-            KeyStorageConfig.StorageType.PHYSICAL_HSM
-        ]:
-            return CaModel.CaTypeChoice.LOCAL_PKCS11
-    except KeyStorageConfig.DoesNotExist:
-        pass
+    """Return the local managed-CA type used for newly created Trustpoint-managed CAs.
 
-    return CaModel.CaTypeChoice.LOCAL_UNPROTECTED
+    The enum name is legacy. In the new architecture we no longer derive backend
+    placement from the CA type, so locally managed CAs use one stable local type
+    until the model can be renamed in a later migration.
+    """
+    return CaModel.CaTypeChoice.LOCAL_PKCS11
 
 
 class IssuingCaImportMixin:
