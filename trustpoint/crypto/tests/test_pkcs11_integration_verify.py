@@ -62,7 +62,6 @@ def test_verify_managed_key_reports_mismatch_for_wrong_fingerprint(live_pkcs11_b
 
 
 def test_verify_managed_key_reports_missing_for_unknown_key(live_pkcs11_backend) -> None:
-    alias = f"pytest-missing-{secrets.token_hex(6)}"
     missing = Pkcs11ManagedKeyBinding(
         key_id=secrets.token_bytes(16),
         algorithm=KeyAlgorithm.RSA,
