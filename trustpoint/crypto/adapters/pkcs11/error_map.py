@@ -45,7 +45,10 @@ def map_pkcs11_error(exception: Exception, *, operation: str) -> CryptoError:
         return AuthenticationError(f'PKCS#11 authentication failed during {operation}.')
     if isinstance(exception, (MechanismInvalid, MechanismParamInvalid)):
         return MechanismUnsupportedError(f'PKCS#11 mechanism unsupported during {operation}.')
-    if isinstance(exception, (AttributeValueInvalid, DomainParamsInvalid, KeySizeRange, TemplateIncomplete, TemplateInconsistent)):
+    if isinstance(
+        exception,
+        (AttributeValueInvalid, DomainParamsInvalid, KeySizeRange, TemplateIncomplete, TemplateInconsistent),
+    ):
         return UnsupportedKeySpecError(f'PKCS#11 key specification unsupported during {operation}.')
     if isinstance(exception, (SessionClosed, SessionCount, SessionHandleInvalid)):
         return SessionUnavailableError(f'PKCS#11 session failed during {operation}.')

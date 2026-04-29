@@ -1,4 +1,4 @@
-"""Startup manager for Trustpoint bootstrap and completed-runtime startup."""
+"""Operational startup manager for Trustpoint."""
 
 from __future__ import annotations
 
@@ -10,20 +10,24 @@ from packaging.version import InvalidVersion, Version
 from management.models import AppVersion
 from management.util.output_wrapper import CommandOutputWrapper
 from management.util.startup_context import StartupContextBuilder
-from management.util.startup_strategies import StartupStrategySelector
+from management.util.startup_strategies import CompletedRuntimeStartupStrategy
 
 
 class Command(BaseCommand):
-    """Prepare Trustpoint startup state after migrations are safe."""
+    """Prepare Trustpoint operational runtime state after migrations are safe."""
 
-    help = 'Prepare Trustpoint startup, bootstrap, and TLS runtime state.'
+    help = 'Prepare Trustpoint operational runtime and TLS state.'
 
     def handle(self, **_options: dict[str, str]) -> None:
         """Entrypoint for the command."""
         self.manage_startup()
 
     def manage_startup(self) -> None:
-        """Ensure the DB schema is ready, then choose bootstrap or completed-runtime startup."""
+        """Ensure the operational DB schema is ready, then initialize runtime state."""
+        if getattr(django_settings, 'TRUSTPOINT_IS_BOOTSTRAP', False):
+            msg = 'startup_manager is operational-only. Use bootstrap_manager with TRUSTPOINT_PHASE=bootstrap.'
+            raise CommandError(msg)
+
         self.stdout.write('=== Starting Trustpoint Startup Sequence ===')
         output = CommandOutputWrapper(self.stdout, self.style)
 
@@ -44,15 +48,14 @@ class Command(BaseCommand):
         context = (
             StartupContextBuilder(output, current_version)
             .with_db_version(db_version)
-            .collect_wizard_state()
             .collect_backend_state()
             .collect_appsecret_state()
             .collect_tls_staging_state()
             .build()
         )
 
-        strategy = StartupStrategySelector.select_startup_strategy(context)
-        output.write(f'Selected strategy: {strategy.__class__.__name__}')
+        strategy = CompletedRuntimeStartupStrategy()
+        output.write('Selected operational startup path.')
         output.write(f'Strategy description: {strategy.get_description()}')
 
         try:

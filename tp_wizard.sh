@@ -555,6 +555,7 @@ start_app(){
   log "Starting trustpoint..."
   local smtp_env=()
   local hsm_env=()
+  local hsm_mounts=()
 
   if ! $EN_LOCAL_HSM && [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
     warn "Local/dev HSM metadata exists, but Trustpoint is being started without the local SoftHSM proxy settings."
@@ -567,6 +568,10 @@ start_app(){
 
   if $EN_LOCAL_HSM; then
     prepare_local_hsm_root
+    hsm_mounts+=(
+      -v "${LOCAL_HSM_CONFIG_DIR}:${LOCAL_HSM_CONTAINER_CONFIG_DIR}"
+      -v "${LOCAL_HSM_LIB_DIR}:${LOCAL_HSM_CONTAINER_ROOT}/lib"
+    )
     hsm_env+=(
       -e "TRUSTPOINT_HSM_ROOT=${LOCAL_HSM_CONTAINER_ROOT}"
       -e "PKCS11_PROXY_SOCKET=tcp://${SOFTHSM_NAME}:5657"
@@ -582,6 +587,8 @@ start_app(){
   docker run -d --name "$name" --network "$NET" \
     -p "${APP_HTTP_HOST}:80" \
     -p "${APP_HTTPS_HOST}:443" \
+    "${hsm_mounts[@]}" \
+    -e "TRUSTPOINT_PHASE=auto" \
     -e "POSTGRES_DB=$APP_DB_NAME" \
     -e "DATABASE_USER=$APP_DB_USER" \
     -e "DATABASE_PASSWORD=$APP_DB_PASS" \
@@ -600,6 +607,7 @@ start_workflows2_worker(){
   log "Starting dedicated workflows2 worker..."
 
   local env_args=(
+    -e "TRUSTPOINT_PHASE=auto"
     -e "POSTGRES_DB=${APP_DB_NAME}"
     -e "DATABASE_USER=${APP_DB_USER}"
     -e "DATABASE_PASSWORD=${APP_DB_PASS}"
@@ -612,9 +620,14 @@ start_workflows2_worker(){
     -e "WORKFLOWS2_WORKER_SLEEP=${WF2_WORKER_SLEEP}"
     -e "DEFAULT_FROM_EMAIL=no-reply@trustpoint.local"
   )
+  local hsm_mounts=()
 
   if $EN_LOCAL_HSM; then
     prepare_local_hsm_root
+    hsm_mounts+=(
+      -v "${LOCAL_HSM_CONFIG_DIR}:${LOCAL_HSM_CONTAINER_CONFIG_DIR}"
+      -v "${LOCAL_HSM_LIB_DIR}:${LOCAL_HSM_CONTAINER_ROOT}/lib"
+    )
     env_args+=(
       -e "TRUSTPOINT_HSM_ROOT=${LOCAL_HSM_CONTAINER_ROOT}"
       -e "PKCS11_PROXY_SOCKET=tcp://${SOFTHSM_NAME}:5657"
@@ -637,6 +650,7 @@ start_workflows2_worker(){
   fi
 
   docker run -d --name "$name" --network "$NET" \
+    "${hsm_mounts[@]}" \
     "${env_args[@]}" \
     "$APP_IMAGE" >/dev/null
 }
@@ -853,17 +867,60 @@ wait_tls_fingerprint(){
   local start; start="$(date +%s)"
   local start_iso; start_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   local end=$(( start + TLS_FP_TIMEOUT ))
+  echo "Waiting (<= ${TLS_FP_TIMEOUT}s) for trustpoint TLS fingerprint ..."
+
+  local existing_logs
+  existing_logs="$(docker logs trustpoint 2>/dev/null || true)"
+  if extract_tls_fingerprint_once "$existing_logs"; then
+    TLS_FP_ELAPSED=0
+    ok "trustpoint TLS fingerprint found in existing logs"
+    return 0
+  fi
+
   while (( $(date +%s) < end )); do
     local chunk
     chunk="$(docker logs --since "$start_iso" trustpoint 2>/dev/null || true)"
     if extract_tls_fingerprint_once "$chunk"; then
       TLS_FP_ELAPSED=$(( $(date +%s) - start ))
+      ok "trustpoint TLS fingerprint found"
       return 0
     fi
+    printf "."
     sleep 3
   done
+  echo
   TLS_FP_ELAPSED=$(( $(date +%s) - start ))
   return 1
+}
+
+latest_bootstrap_log_value(){
+  local key="$1"
+  exists trustpoint || return 0
+  docker logs trustpoint 2>/dev/null \
+    | sed -nE "s/.*Trustpoint bootstrap ${key}: ([^[:space:]]+).*/\1/p" \
+    | tail -n1
+}
+
+latest_legacy_bootstrap_login_line(){
+  exists trustpoint || return 0
+  docker logs trustpoint 2>/dev/null \
+    | awk '/Trustpoint bootstrap login generated.*Username: .*Password:/ { line=$0 } END { if (line) print line }'
+}
+
+print_bootstrap_login_from_logs(){
+  local line username password
+  username="$(latest_bootstrap_log_value username || true)"
+  password="$(latest_bootstrap_log_value password || true)"
+
+  if [[ -z "$username" || -z "$password" ]]; then
+    line="$(latest_legacy_bootstrap_login_line || true)"
+    username="$(sed -nE 's/.*Username: ([^ ]+) Password: .*/\1/p' <<<"$line")"
+    password="$(sed -nE 's/.*Password: ([^[:space:]]+).*/\1/p' <<<"$line")"
+  fi
+
+  [[ -n "$username" && -n "$password" ]] || return 0
+
+  printf "%-22s %s\n" "Bootstrap login:" "${username} / ${password}"
 }
 
 mailpit_has_subject(){
@@ -945,6 +1002,7 @@ show_runtime_status(){
 
     [[ -n "$http_port" ]] && printf "%-22s %s\n" "trustpoint HTTP:" "http://localhost:${http_port}"
     [[ -n "$https_port" ]] && printf "%-22s %s\n" "trustpoint HTTPS:" "https://localhost:${https_port}"
+    print_bootstrap_login_from_logs
     printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings"
     if [[ -n "$db_host" || -n "$db_port" || -n "$db_name" || -n "$db_user" ]]; then
       printf "%-22s %s\n" "DB connect:" "host=${db_host:-?} port=${db_port:-?} db=${db_name:-?} user=${db_user:-?} pass=$(mask "${db_pass:-}")"
@@ -1011,6 +1069,7 @@ final_summary(){
   echo
   if $EN_APP; then
     printf "%-22s %s\n" "trustpoint:" "http://localhost:80  |  https://localhost:443"
+    print_bootstrap_login_from_logs
     printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings (default: auto)"
   fi
   if $DB_INTERNAL; then

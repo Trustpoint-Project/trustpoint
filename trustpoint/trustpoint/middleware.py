@@ -63,30 +63,30 @@ class TrustpointLoginRequiredMiddleware(LoggerMixin):
 class SetupWizardRedirectMiddleware(LoggerMixin):
     """Redirect requests based on whether the global setup wizard has completed."""
 
-    USERS_LOGIN_REVERSE = reverse('users:login')
+    USERS_LOGIN_REVERSE = '/users/login/'
 
     SETUP_WIZARD_PATH = '/setup-wizard'
-    SETUP_WIZARD_INDEX_REVERSE = reverse('setup_wizard:index')
+    SETUP_WIZARD_INDEX_REVERSE = '/setup-wizard/'
 
-    WIZARD_COMPLETED_HOME_REVERSE = reverse('home:index')
+    WIZARD_COMPLETED_HOME_REVERSE = '/home/'
 
     ALLOWED_NO_USER_CREATED = (
         '/setup-wizard',
         '/setup-wizard/',
-        '/setup-wizard/create-super-user',
-        '/setup-wizard/create-super-user/',
         '/setup-wizard/restore-backup',
         '/setup-wizard/restore-backup/',
+        '/users/login',
+        '/users/login/',
     )
 
     ALLOWED_NON_AUTH_PATHS = (
         '/users/login',
         '/users/login/',
     )
-    ALLOWED_NON_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH = reverse('users:login')
+    ALLOWED_NON_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH = '/users/login/'
 
     ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS = (
-        '/setup-wizard/fresh-install',
+        '/setup-wizard',
         '/users/logout',
     )
 
@@ -104,28 +104,38 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         config_model = SetupWizardConfigModel.get_singleton()
         return (
             (
+                '/setup-wizard/fresh-install/admin-user/',
+                '/setup-wizard/fresh-install/admin-user/',
+                config_model.fresh_install_admin_user_submitted,
+            ),
+            (
+                '/setup-wizard/fresh-install/database/',
+                '/setup-wizard/fresh-install/database/',
+                config_model.fresh_install_database_submitted,
+            ),
+            (
                 '/setup-wizard/fresh-install/crypto-storage/',
-                reverse('setup_wizard:fresh_install_crypto_storage'),
+                '/setup-wizard/fresh-install/crypto-storage/',
                 config_model.fresh_install_crypto_storage_submitted,
             ),
             (
                 '/setup-wizard/fresh-install/backend-config/',
-                reverse('setup_wizard:fresh_install_backend_config'),
+                '/setup-wizard/fresh-install/backend-config/',
                 config_model.fresh_install_backend_config_submitted,
             ),
             (
                 '/setup-wizard/fresh-install/demo-data/',
-                reverse('setup_wizard:fresh_install_demo_data'),
+                '/setup-wizard/fresh-install/demo-data/',
                 config_model.fresh_install_demo_data_submitted,
             ),
             (
                 '/setup-wizard/fresh-install/tls-config/',
-                reverse('setup_wizard:fresh_install_tls_config'),
+                '/setup-wizard/fresh-install/tls-config/',
                 config_model.fresh_install_tls_config_submitted,
             ),
             (
                 '/setup-wizard/fresh-install/summary/',
-                reverse('setup_wizard:fresh_install_summary'),
+                '/setup-wizard/fresh-install/summary/',
                 config_model.fresh_install_summary_submitted,
             ),
         )
@@ -190,8 +200,11 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         msg = f'\n\npath_info: {request.path_info}'
         self.logger.critical(msg)
 
+        if getattr(settings, 'TRUSTPOINT_IS_OPERATIONAL', False):
+            return self.get_response(request)
+
         # handle dev environment
-        if not settings.DOCKER_CONTAINER:
+        if not settings.DOCKER_CONTAINER and not getattr(settings, 'TRUSTPOINT_IS_BOOTSTRAP', False):
             if request.path_info.startswith(self.SETUP_WIZARD_PATH):
                 return redirect(self.USERS_LOGIN_REVERSE, permanent=False)
             return self.get_response(request)

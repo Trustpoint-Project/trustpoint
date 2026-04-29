@@ -21,6 +21,7 @@ from devices.models import (
     RemoteDeviceCredentialDownloadModel,
 )
 from django.http import HttpRequest
+from django.test import SimpleTestCase, TransactionTestCase
 from django.test.client import RequestFactory
 from management.models import KeyStorageConfig
 from pki.models import CertificateModel, CredentialModel, IssuedCredentialModel
@@ -32,9 +33,20 @@ from pki.util.x509 import CertificateGenerator
 from trustpoint_core.serializer import CredentialSerializer
 
 
+def _is_db_less_django_simple_test(request: pytest.FixtureRequest) -> bool:
+    """Return whether the collected unittest class intentionally forbids DB access."""
+    test_cls = getattr(request.node, 'cls', None)
+    if not isinstance(test_cls, type):
+        return False
+    return issubclass(test_cls, SimpleTestCase) and not issubclass(test_cls, TransactionTestCase)
+
+
 @pytest.fixture(autouse=True)
 def enable_db_access_for_all_tests(request: pytest.FixtureRequest) -> None:
     """Enable DB access for application tests that exercise Django models/views."""
+    if _is_db_less_django_simple_test(request):
+        return
+
     test_path = str(request.node.fspath)
     excluded_paths = (
         '/trustpoint/tests/test_settings.py',
@@ -73,6 +85,9 @@ def complete_setup_wizard_by_default(monkeypatch: pytest.MonkeyPatch, request: p
 @pytest.fixture(autouse=True)
 def configure_app_secret_backend_for_tests(request: pytest.FixtureRequest) -> None:
     """Provide a development app-secret backend for tests that save encrypted model fields."""
+    if _is_db_less_django_simple_test(request):
+        return
+
     test_path = str(request.node.fspath)
     excluded_paths = (
         '/trustpoint/tests/test_settings.py',

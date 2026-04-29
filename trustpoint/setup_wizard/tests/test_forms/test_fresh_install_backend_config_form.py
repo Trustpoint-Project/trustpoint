@@ -59,7 +59,7 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
                 'pkcs11_user_pin': '1234',
             },
             files={
-                'pkcs11_module_upload': SimpleUploadedFile('libpkcs11-vendor.so', b'pkcs11-bytes'),
+                'pkcs11_module_upload': SimpleUploadedFile('libpkcs11-vendor.so', b'\x7fELFpkcs11-bytes'),
             },
             instance=config_model,
         )
@@ -86,7 +86,7 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
             temp_root = Path(temp_dir)
             module_path = temp_root / 'uploaded-pkcs11-module.so'
             pin_path = temp_root / 'user-pin.txt'
-            module_path.write_bytes(b'pkcs11-bytes')
+            module_path.write_bytes(b'\x7fELFpkcs11-bytes')
             pin_path.write_text('1234', encoding='utf-8')
 
             config_model = SetupWizardConfigModel.get_singleton()
@@ -102,4 +102,4 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
                 instance=config_model,
             )
 
-        self.assertTrue(form.is_valid(), form.errors)
+            self.assertTrue(form.is_valid(), form.errors)

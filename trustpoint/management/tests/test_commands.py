@@ -156,62 +156,70 @@ class InitTrustpointCommandTest(TestCase):
 class StartupManagerCommandTest(TestCase):
     """Test suite for startup_manager command."""
 
-    @patch('management.management.commands.startup_manager.StartupStrategySelector')
+    @patch('management.management.commands.startup_manager.call_command')
+    @patch('management.management.commands.startup_manager.CompletedRuntimeStartupStrategy')
     @patch('management.management.commands.startup_manager.StartupContextBuilder')
-    def test_startup_manager_db_not_initialized(
+    def test_startup_manager_operational_startup(
         self,
         mock_builder: MagicMock,
-        mock_selector: MagicMock
+        mock_strategy_class: MagicMock,
+        mock_call_command: MagicMock,
     ) -> None:
-        """Test startup_manager when database is not initialized."""
-        # Simulate ProgrammingError when querying AppVersion
-        with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
-            from django.db.utils import ProgrammingError
-            mock_first.side_effect = ProgrammingError('relation does not exist')
-            
-            mock_context = Mock()
-            mock_builder_instance = Mock()
-            mock_builder_instance.build_for_db_init.return_value = mock_context
-            mock_builder.return_value = mock_builder_instance
-            
-            mock_strategy = Mock()
-            mock_selector.select_startup_strategy.return_value = mock_strategy
-            
-            out = StringIO()
-            call_command('startup_manager', stdout=out)
-            
-            mock_selector.select_startup_strategy.assert_called_once_with(
-                db_initialized=False,
-                has_version=False
-            )
-            mock_strategy.execute.assert_called_once_with(mock_context)
-
-    @patch('management.management.commands.startup_manager.StartupStrategySelector')
-    @patch('management.management.commands.startup_manager.StartupContextBuilder')
-    def test_startup_manager_db_initialized_no_version(
-        self,
-        mock_builder: MagicMock,
-        mock_selector: MagicMock
-    ) -> None:
-        """Test startup_manager when database is initialized but no version record."""
+        """Test startup_manager executes the operational startup path."""
         with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
             mock_first.return_value = None
-            
+
             mock_context = Mock()
+            mock_context.is_wizard_completed = True
             mock_builder_instance = Mock()
-            mock_builder_instance.build_for_db_init.return_value = mock_context
+            mock_builder_instance.with_db_version.return_value = mock_builder_instance
+            mock_builder_instance.collect_backend_state.return_value = mock_builder_instance
+            mock_builder_instance.collect_appsecret_state.return_value = mock_builder_instance
+            mock_builder_instance.collect_tls_staging_state.return_value = mock_builder_instance
+            mock_builder_instance.build.return_value = mock_context
             mock_builder.return_value = mock_builder_instance
-            
+
             mock_strategy = Mock()
-            mock_selector.select_startup_strategy.return_value = mock_strategy
-            
+            mock_strategy_class.return_value = mock_strategy
+
             out = StringIO()
             call_command('startup_manager', stdout=out)
-            
-            mock_selector.select_startup_strategy.assert_called_once_with(
-                db_initialized=True,
-                has_version=False
-            )
+
+            mock_call_command.assert_called_once_with('migrate')
+            mock_strategy_class.assert_called_once_with()
+            mock_strategy.execute.assert_called_once_with(mock_context)
+
+    @patch('management.management.commands.startup_manager.call_command')
+    @patch('management.management.commands.startup_manager.CompletedRuntimeStartupStrategy')
+    @patch('management.management.commands.startup_manager.StartupContextBuilder')
+    def test_startup_manager_runtime_error_becomes_command_error(
+        self,
+        mock_builder: MagicMock,
+        mock_strategy_class: MagicMock,
+        mock_call_command: MagicMock,
+    ) -> None:
+        """Test startup_manager reports operational dependency failures clearly."""
+        with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
+            mock_first.return_value = None
+
+            mock_context = Mock()
+            mock_builder_instance = Mock()
+            mock_builder_instance.with_db_version.return_value = mock_builder_instance
+            mock_builder_instance.collect_backend_state.return_value = mock_builder_instance
+            mock_builder_instance.collect_appsecret_state.return_value = mock_builder_instance
+            mock_builder_instance.collect_tls_staging_state.return_value = mock_builder_instance
+            mock_builder_instance.build.return_value = mock_context
+            mock_builder.return_value = mock_builder_instance
+            mock_strategy = Mock()
+            mock_strategy.execute.side_effect = RuntimeError('missing backend')
+            mock_strategy_class.return_value = mock_strategy
+
+            out = StringIO()
+            with self.assertRaises(CommandError):
+                call_command('startup_manager', stdout=out)
+
+            mock_call_command.assert_called_once_with('migrate')
+            mock_strategy_class.assert_called_once_with()
 
     def test_startup_manager_version_parsing(self) -> None:
         """Test startup_manager can parse version from settings."""

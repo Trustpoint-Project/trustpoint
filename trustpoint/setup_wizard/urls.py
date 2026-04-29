@@ -7,11 +7,20 @@ from setup_wizard import views
 app_name = 'setup_wizard'
 urlpatterns = [
     path('', views.SetupWizardIndexView.as_view(), name='index'),
-    path('create-super-user/', views.SetupWizardCreateSuperUserView.as_view(), name='create_super_user'),
     path(
         'restore-backup/',
         views.SetupWizardRestoreBackupView.as_view(),
         name='restore_backup',
+    ),
+    path(
+        'fresh-install/admin-user/',
+        views.FreshInstallAdminUserView.as_view(),
+        name='fresh_install_admin_user',
+    ),
+    path(
+        'fresh-install/database/',
+        views.FreshInstallDatabaseView.as_view(),
+        name='fresh_install_database',
     ),
     path(
         'fresh-install/crypto-storage/',

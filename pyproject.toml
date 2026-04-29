@@ -126,6 +126,7 @@ convention = "google"
 DJANGO_SETTINGS_MODULE = 'trustpoint.settings'
 pythonpath = ["trustpoint"]
 python_files = 'test_*.py'
+norecursedirs = ['var']
 md_report = true
 md_report_output = 'md-report.md'
 markers = [

@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from appsecrets.service import CIPHERTEXT_PREFIX, AppSecretError, decrypt_app_secret, encrypt_app_secret
+from appsecrets.service import CIPHERTEXT_PREFIX, decrypt_app_secret, encrypt_app_secret
 
 
 class _EncryptedFieldMixin:
@@ -33,8 +33,9 @@ class _EncryptedFieldMixin:
             return value
         try:
             return encrypt_app_secret(value)
-        except AppSecretError as exc:
-            raise ValidationError(_('Failed to encrypt field value: %s') % exc) from exc
+        except Exception as exc:
+            error_msg = str(exc) or type(exc).__name__
+            raise ValidationError(_('Failed to encrypt field value: %s') % error_msg) from exc
 
     def decrypt_value(self, encrypted_value: str | None) -> str | None:
         """Decrypt a stored string value."""

@@ -125,7 +125,7 @@ class SoftwareAppSecretService(BaseAppSecretService):
         self.ensure_backend_ready()
         signature = self._signature()
         with _DEK_CACHE_LOCK:
-            if _DEK_CACHE_SIGNATURE == signature and _DEK_CACHE_VALUE is not None:
+            if signature == _DEK_CACHE_SIGNATURE and _DEK_CACHE_VALUE is not None:
                 return _DEK_CACHE_VALUE
 
             dek = bytes(self._config.raw_dek or b'')
@@ -180,7 +180,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
         self.ensure_backend_ready()
         signature = self._signature()
         with _DEK_CACHE_LOCK:
-            if _DEK_CACHE_SIGNATURE == signature and _DEK_CACHE_VALUE is not None:
+            if signature == _DEK_CACHE_SIGNATURE and _DEK_CACHE_VALUE is not None:
                 return _DEK_CACHE_VALUE
 
             wrapped_dek = bytes(self._config.wrapped_dek or b'')

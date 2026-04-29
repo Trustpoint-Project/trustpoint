@@ -13,3 +13,4 @@ www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/update_tls.sh
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/update_tls_nginx.sh
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/install_pkcs11_assets.sh
 www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/wizard_restore.sh
+www-data ALL=(root) NOPASSWD: /etc/trustpoint/wizard/switch_to_operational.sh

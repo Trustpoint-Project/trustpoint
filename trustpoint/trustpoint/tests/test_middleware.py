@@ -90,6 +90,12 @@ class TestTrustpointLoginRequiredMiddleware:
 class TestSetupWizardRedirectMiddleware:
     """Test cases for SetupWizardRedirectMiddleware."""
 
+    @pytest.fixture(autouse=True)
+    def bootstrap_phase(self, settings):
+        """Run setup-wizard redirect tests in bootstrap phase."""
+        settings.TRUSTPOINT_IS_OPERATIONAL = False
+        settings.TRUSTPOINT_IS_BOOTSTRAP = True
+
     @pytest.fixture
     def middleware(self):
         """Instantiate SetupWizardRedirectMiddleware with a mock response handler."""
@@ -108,17 +114,18 @@ class TestSetupWizardRedirectMiddleware:
         return request
 
     def test_non_docker_setup_wizard_requests_redirect_to_login(self, middleware, settings):
-        """In development mode, setup-wizard paths should bounce to login."""
+        """Bootstrap mode should serve setup-wizard paths in local development."""
         settings.DOCKER_CONTAINER = False
         request = self._request('/setup-wizard/', AnonymousUser())
 
         response = middleware(request)
 
-        assert response.status_code == 302
-        assert response['Location'] == '/users/login/'
+        assert response.status_code == 200
 
     def test_non_docker_non_wizard_requests_pass_through(self, middleware, settings):
-        """In development mode, normal requests should pass through."""
+        """Operational phase should ignore setup-wizard redirect handling."""
+        settings.TRUSTPOINT_IS_OPERATIONAL = True
+        settings.TRUSTPOINT_IS_BOOTSTRAP = False
         settings.DOCKER_CONTAINER = False
         request = self._request('/home/', AnonymousUser())
 
@@ -158,11 +165,23 @@ class TestSetupWizardRedirectMiddleware:
         assert response.status_code == 302
         assert response['Location'] == '/users/login/'
 
+    def test_authenticated_user_can_open_setup_index(self, middleware, settings):
+        """Authenticated bootstrap users should be able to choose the setup flow."""
+        settings.DOCKER_CONTAINER = True
+        user = User.objects.create_user(username='tester', password='secret123')
+        request = self._request('/setup-wizard/', user)
+
+        response = middleware(request)
+
+        assert response.status_code == 200
+
     def test_authenticated_user_redirects_to_first_unsubmitted_step(self, middleware, settings):
         """Authenticated users should be sent to the first incomplete fresh-install step."""
         settings.DOCKER_CONTAINER = True
         user = User.objects.create_user(username='tester', password='secret123')
         config = SetupWizardConfigModel.get_singleton()
+        config.fresh_install_admin_user_submitted = False
+        config.fresh_install_database_submitted = False
         config.fresh_install_crypto_storage_submitted = False
         config.fresh_install_demo_data_submitted = False
         config.fresh_install_tls_config_submitted = False
@@ -173,14 +192,17 @@ class TestSetupWizardRedirectMiddleware:
         response = middleware(request)
 
         assert response.status_code == 302
-        assert response['Location'] == '/setup-wizard/fresh-install/crypto-storage/'
+        assert response['Location'] == '/setup-wizard/fresh-install/admin-user/'
 
     def test_authenticated_user_cannot_skip_ahead(self, middleware, settings):
         """Authenticated users should be redirected back to the first incomplete step."""
         settings.DOCKER_CONTAINER = True
         user = User.objects.create_user(username='tester', password='secret123')
         config = SetupWizardConfigModel.get_singleton()
+        config.fresh_install_admin_user_submitted = True
+        config.fresh_install_database_submitted = True
         config.fresh_install_crypto_storage_submitted = True
+        config.fresh_install_backend_config_submitted = True
         config.fresh_install_demo_data_submitted = False
         config.fresh_install_tls_config_submitted = False
         config.fresh_install_summary_submitted = False

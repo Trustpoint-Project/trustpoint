@@ -181,7 +181,8 @@ class CryptoProviderPkcs11ConfigModel(models.Model):
         if self.borrow_timeout_seconds <= 0:
             raise ValidationError({'borrow_timeout_seconds': 'borrow_timeout_seconds must be greater than zero.'})
         if not any((self.token_label, self.token_serial, self.slot_id is not None)):
-            raise ValidationError('At least one token selector field must be configured.')
+            msg = 'At least one token selector field must be configured.'
+            raise ValidationError(msg)
 
     def build_provider_profile(self) -> Pkcs11ProviderProfile:
         """Convert the Django model into the adapter-level PKCS#11 provider profile."""

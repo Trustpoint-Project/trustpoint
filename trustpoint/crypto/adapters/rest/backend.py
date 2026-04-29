@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Never
 
-from crypto.adapters.rest.capabilities import RestCapabilities
 from crypto.domain.errors import ProviderOperationNotImplementedError
-from crypto.domain.policies import SigningExecutionMode
 
 if TYPE_CHECKING:
     from crypto.adapters.rest.bindings import RestManagedKeyBinding
+    from crypto.adapters.rest.capabilities import RestCapabilities
     from crypto.adapters.rest.config import RestProviderProfile
     from crypto.domain.algorithms import SupportedPublicKey
     from crypto.domain.policies import KeyPolicy
@@ -46,36 +45,42 @@ class RestBackend:
     def probe_capabilities(self) -> RestCapabilities:
         """Reject the scaffold until a real REST provider implementation exists."""
         self._profile.require_auth_value()
+        msg = 'REST backend support is scaffolded only and cannot be configured for a Trustpoint instance yet.'
         raise ProviderOperationNotImplementedError(
-            'REST backend support is scaffolded only and cannot be configured for a Trustpoint instance yet.',
+            msg,
         )
 
     def generate_managed_key(self, *, alias: str, key_spec: KeySpec, policy: KeyPolicy) -> RestManagedKeyBinding:
         """Create a managed key on the remote backend."""
+        msg = 'REST backend scaffold does not implement generate_managed_key yet.'
         raise ProviderOperationNotImplementedError(
-            'REST backend scaffold does not implement generate_managed_key yet.',
+            msg,
         )
 
-    def verify_managed_key(self, key: RestManagedKeyBinding):
+    def verify_managed_key(self, key: RestManagedKeyBinding) -> Never:
         """Verify a remote managed key binding."""
+        msg = 'REST backend scaffold does not implement verify_managed_key yet.'
         raise ProviderOperationNotImplementedError(
-            'REST backend scaffold does not implement verify_managed_key yet.',
+            msg,
         )
 
     def get_public_key(self, key: RestManagedKeyBinding) -> SupportedPublicKey:
         """Load the public key for a remote managed key."""
+        msg = 'REST backend scaffold does not implement get_public_key yet.'
         raise ProviderOperationNotImplementedError(
-            'REST backend scaffold does not implement get_public_key yet.',
+            msg,
         )
 
     def sign(self, *, key: RestManagedKeyBinding, data: bytes, request: SignRequest) -> bytes:
         """Sign bytes using a remote managed key."""
+        msg = 'REST backend scaffold does not implement sign yet.'
         raise ProviderOperationNotImplementedError(
-            'REST backend scaffold does not implement sign yet.',
+            msg,
         )
 
     def destroy_managed_key(self, key: RestManagedKeyBinding) -> None:
         """Best-effort removal of an orphaned remote managed key."""
+        msg = 'REST backend scaffold does not implement destroy_managed_key yet.'
         raise ProviderOperationNotImplementedError(
-            'REST backend scaffold does not implement destroy_managed_key yet.',
+            msg,
         )

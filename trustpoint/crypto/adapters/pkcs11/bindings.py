@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from crypto.domain.policies import SigningExecutionMode
-from crypto.domain.refs import ManagedKeyVerificationStatus
 
 if TYPE_CHECKING:
     from crypto.domain.algorithms import KeyAlgorithm
+    from crypto.domain.refs import ManagedKeyVerificationStatus
 
 
 @dataclass(frozen=True, slots=True)

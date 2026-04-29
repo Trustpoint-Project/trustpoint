@@ -10,13 +10,12 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+import psycopg
 from cryptography.hazmat.primitives import hashes
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import logout
-from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management import CommandError, call_command
 from django.db import DatabaseError, transaction
@@ -27,7 +26,6 @@ from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.views.generic import FormView, TemplateView, View
-from trustpoint_core.serializer import CertificateSerializer
 
 from appsecrets.models import (
     AppSecretBackendKind,
@@ -56,12 +54,17 @@ from management.nginx_paths import (
 from pki.models import CaModel, CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from setup_wizard import SetupWizardState
+from setup_wizard.operational_handoff import (
+    refresh_pending_operational_env,
+    run_operational_handoff,
+    run_operational_runtime_switch,
+)
+from setup_wizard.pkcs11_local_dev import local_dev_pkcs11_handoff_available, local_dev_pkcs11_module_path
 from setup_wizard.pkcs11_staging import (
     cleanup_wizard_pkcs11_staged_path,
     existing_wizard_pkcs11_staged_file,
     wizard_pkcs11_staging_root,
 )
-from setup_wizard.pkcs11_local_dev import local_dev_pkcs11_handoff_available, local_dev_pkcs11_module_path
 from setup_wizard.tls_credential import (
     TlsServerCredentialFileParser,
     TlsServerCredentialGenerator,
@@ -76,8 +79,10 @@ from trustpoint.logger import LoggerMixin
 from .forms import (
     BackupPasswordForm,
     BackupRestoreForm,
+    FreshInstallAdminUserModelForm,
     FreshInstallBackendConfigModelForm,
     FreshInstallCryptoStorageModelForm,
+    FreshInstallDatabaseModelForm,
     FreshInstallDemoDataModelForm,
     FreshInstallModelBaseForm,
     FreshInstallSummaryModelForm,
@@ -88,6 +93,7 @@ from .models import SetupWizardCompletedModel, SetupWizardConfigModel
 
 if TYPE_CHECKING:
     from django.utils.functional import Promise
+    from trustpoint_core.serializer import CertificateSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +103,15 @@ UPDATE_TLS_NGINX = STATE_FILE_DIR / Path('update_tls_nginx.sh')
 INSTALL_PKCS11_ASSETS = STATE_FILE_DIR / Path('install_pkcs11_assets.sh')
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
+
+
+def _path_exists(path: Path) -> bool:
+    """Return whether a setup-wizard path exists without leaking permission errors."""
+    try:
+        return path.exists()
+    except OSError:
+        return False
+
 
 # TODO(AlexHx8472): no transitions anymore  # noqa: FIX002
 SCRIPT_WIZARD_BACKUP_PASSWORD = STATE_FILE_DIR / Path('transition/wizard_backup_password.sh')
@@ -155,7 +170,7 @@ def execute_shell_script(script: Path, *args: str) -> None:
         raise subprocess.CalledProcessError(result.returncode, str(script_path))
 
 
-# Index and User Creation Views ---------------------------------------------------------------------------------------
+# Index Views ---------------------------------------------------------------------------------------------------------
 
 
 class SetupWizardIndexView(LoggerMixin, TemplateView):
@@ -167,9 +182,8 @@ class SetupWizardIndexView(LoggerMixin, TemplateView):
     def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests for the setup mode wizard page.
 
-        This method validates the current state of the setup wizard and redirects
-        the user to the appropriate page. If the application is not running in a
-        Docker container, the user is redirected to the login page.
+        Bootstrap routing and authentication are enforced by the middleware; the
+        index view itself only renders the available setup flows.
 
         Args:
             *args: Additional positional arguments.
@@ -180,52 +194,6 @@ class SetupWizardIndexView(LoggerMixin, TemplateView):
                           or the login page if the setup is not in a Docker container.
         """
         return super().get(*args, **kwargs)
-
-
-class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User]]):
-    """View for handling the creation of a superuser during the setup wizard.
-
-    This view is part of the setup wizard process. It allows an admin to create a
-    superuser account, ensuring that the application has at least one administrative
-    user configured. The view validates the input using the `UserCreationForm`
-    and transitions the wizard state upon successful completion.
-    """
-
-    http_method_names = ('get', 'post')
-    form_class: type[UserCreationForm[User]] = UserCreationForm
-    template_name = 'setup_wizard/create_super_user.html'
-    success_url = reverse_lazy('users:login')
-
-    def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
-        """Handle form submission for creating a superuser.
-
-        Args:
-            form: The form containing the data for the superuser creation.
-
-        Returns:
-            HttpResponseRedirect: Redirect to the next step or login page.
-        """
-        try:
-            username = form.cleaned_data['username']
-            password = form.cleaned_data['password1']
-            call_command('createsuperuser', interactive=False, username=username, email='')
-
-            user = User.objects.get(username=username)
-            user.set_password(password)
-            user.save()
-
-        except User.DoesNotExist as e:
-            messages.add_message(self.request, messages.ERROR, f'User not found error: {e}')
-            return redirect('setup_wizard:create_super_user', permanent=False)
-        except Exception:
-            err_msg = 'An unexpected error occurred.'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('setup_wizard:create_super_user', permanent=False)
-
-        SetupWizardCompletedModel.objects.get_or_create(singleton_id=SetupWizardCompletedModel.SINGLETON_ID)
-
-        return super().form_valid(form)
 
 
 # Config Wizard -------------------------------------------------------------------------------------------------------
@@ -274,6 +242,12 @@ class FreshInstallFormBaseView[FormT: BaseForm](LoginRequiredMixin, LoggerMixin,
         config_model = SetupWizardConfigModel.get_singleton()
         current_state = config_model.get_current_step()
         viewed_step = self.step_state
+        admin_user_submitted = config_model.is_step_submitted(
+            SetupWizardConfigModel.FreshInstallCurrentStep.ADMIN_USER
+        )
+        database_submitted = config_model.is_step_submitted(
+            SetupWizardConfigModel.FreshInstallCurrentStep.DATABASE
+        )
         crypto_storage_submitted = config_model.is_step_submitted(
             SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE
         )
@@ -283,6 +257,18 @@ class FreshInstallFormBaseView[FormT: BaseForm](LoginRequiredMixin, LoggerMixin,
         demo_data_submitted = config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.DEMO_DATA)
         tls_config_submitted = config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.TLS_CONFIG)
         summary_submitted = config_model.is_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY)
+        admin_user_state = self._get_step_state(
+            SetupWizardConfigModel.FreshInstallCurrentStep.ADMIN_USER,
+            viewed_step,
+            current_state,
+            is_submitted=admin_user_submitted,
+        )
+        database_state = self._get_step_state(
+            SetupWizardConfigModel.FreshInstallCurrentStep.DATABASE,
+            viewed_step,
+            current_state,
+            is_submitted=database_submitted,
+        )
         crypto_storage_state = self._get_step_state(
             SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE,
             viewed_step,
@@ -315,6 +301,18 @@ class FreshInstallFormBaseView[FormT: BaseForm](LoginRequiredMixin, LoggerMixin,
         )
 
         context['steps'] = [
+            {
+                'label': 'Admin User',
+                'url': reverse('setup_wizard:fresh_install_admin_user'),
+                'state': str(admin_user_state),
+                'submitted': admin_user_submitted,
+            },
+            {
+                'label': 'Database',
+                'url': reverse('setup_wizard:fresh_install_database'),
+                'state': str(database_state),
+                'submitted': database_submitted,
+            },
             {
                 'label': 'Crypto Backend',
                 'url': reverse('setup_wizard:fresh_install_crypto_storage'),
@@ -399,6 +397,63 @@ class FreshInstallModelFormBaseView[FormT: FreshInstallModelBaseForm](FreshInsta
         return super().form_valid(form)
 
 
+class FreshInstallAdminUserView(FreshInstallModelFormBaseView[FreshInstallAdminUserModelForm]):
+    """Render the fresh-install step for staging the operational administrator."""
+
+    form_class = FreshInstallAdminUserModelForm
+    template_name = 'setup_wizard/fresh_install.html'
+    success_url = reverse_lazy('setup_wizard:fresh_install_database')
+
+    step_state = SetupWizardConfigModel.FreshInstallCurrentStep.ADMIN_USER
+    body_heading = 'Create Operational Admin'
+
+
+class FreshInstallDatabaseView(FreshInstallModelFormBaseView[FreshInstallDatabaseModelForm]):
+    """Render the fresh-install step for staging the operational PostgreSQL database."""
+
+    form_class = FreshInstallDatabaseModelForm
+    template_name = 'setup_wizard/fresh_install.html'
+    success_url = reverse_lazy('setup_wizard:fresh_install_crypto_storage')
+
+    step_state = SetupWizardConfigModel.FreshInstallCurrentStep.DATABASE
+    back_url = reverse_lazy('setup_wizard:fresh_install_admin_user')
+    body_heading = 'Configure Operational Database'
+
+    @staticmethod
+    def _is_test_connection_submission(request: HttpRequest) -> bool:
+        """Return whether the current POST requests a database connection test."""
+        return request.POST.get('wizard_action') == 'test_database'
+
+    @staticmethod
+    def _test_database_connection(form: FreshInstallDatabaseModelForm) -> None:
+        """Open a PostgreSQL connection using staged database settings."""
+        with psycopg.connect(
+            dbname=form.cleaned_data['operational_db_name'],
+            user=form.cleaned_data['operational_db_user'],
+            password=form.cleaned_data['operational_db_password'],
+            host=form.cleaned_data['operational_db_host'],
+            port=form.cleaned_data['operational_db_port'],
+            connect_timeout=5,
+        ):
+            return
+
+    def form_valid(self, form: FreshInstallDatabaseModelForm) -> HttpResponse:
+        """Persist or test the staged database configuration."""
+        if self._is_test_connection_submission(self.request):
+            form.save()
+            try:
+                self._test_database_connection(form)
+            except Exception as exception:
+                self.logger.exception('Operational PostgreSQL connection test failed.')
+                error_detail = str(exception).strip() or type(exception).__name__
+                form.add_error(None, f'Could not connect to PostgreSQL: {error_detail}')
+                return self.render_to_response(self.get_context_data(form=form))
+            messages.success(self.request, 'PostgreSQL connection successful.')
+            return redirect('setup_wizard:fresh_install_database')
+
+        return super().form_valid(form)
+
+
 class FreshInstallCryptoStorageView(FreshInstallModelFormBaseView[FreshInstallCryptoStorageModelForm]):
     """Render the fresh-install step for choosing cryptographic storage."""
 
@@ -407,6 +462,7 @@ class FreshInstallCryptoStorageView(FreshInstallModelFormBaseView[FreshInstallCr
     success_url = reverse_lazy('setup_wizard:fresh_install_backend_config')
 
     step_state = SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE
+    back_url = reverse_lazy('setup_wizard:fresh_install_database')
     body_heading = 'Select Crypto Backend'
 
     @staticmethod
@@ -571,7 +627,7 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
             backend = Pkcs11Backend(profile=self._build_pkcs11_test_profile(form))
             backend.verify_authentication()
             capabilities = backend.probe_capabilities()
-        except Exception as exception:  # noqa: BLE001
+        except Exception as exception:
             self.logger.exception('PKCS#11 setup-wizard connection test failed.')
             error_detail = str(exception).strip() or type(exception).__name__
             form.add_error(None, f'Could not connect to the configured PKCS#11 backend: {error_detail}')
@@ -614,7 +670,9 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
             if user_pin and 'pkcs11_user_pin' not in form.errors:
                 cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_auth_source_ref)
                 form.instance.fresh_install_pkcs11_auth_source_ref = self._stage_pkcs11_user_pin(str(user_pin))
-                form.instance.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
+                form.instance.fresh_install_pkcs11_auth_source = (
+                    SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
+                )
                 form.has_staged_pkcs11_pin = True
                 update_fields.extend(
                     [
@@ -725,7 +783,6 @@ class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigFo
         tls_mode = form.cleaned_data['tls_mode']
         try:
             config_model = SetupWizardConfigModel.get_singleton()
-            previous_tls_credential = config_model.fresh_install_tls_credential
             config_model.fresh_install_tls_mode = tls_mode
 
             if tls_mode == SetupWizardConfigModel.FreshInstallTlsConfigType.GENERATE:
@@ -758,11 +815,14 @@ class FreshInstallTlsConfigView(FreshInstallFormBaseView[FreshInstallTlsConfigFo
 
             with transaction.atomic():
                 stage_tls_credential(tls_credential_serializer)
-                config_model.fresh_install_tls_credential = None
                 config_model.mark_step_submitted(self.step_state)
-                config_model.save(update_fields=['fresh_install_tls_mode', 'fresh_install_tls_config_submitted', 'fresh_install_current_step', 'fresh_install_tls_credential'])
-                if previous_tls_credential is not None:
-                    previous_tls_credential.force_delete()
+                config_model.save(
+                    update_fields=[
+                        'fresh_install_tls_mode',
+                        'fresh_install_tls_config_submitted',
+                        'fresh_install_current_step',
+                    ]
+                )
 
             return super().form_valid(form)
         except DjangoValidationError as exception:
@@ -787,6 +847,15 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
     step_state = SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY
     back_url = reverse_lazy('setup_wizard:fresh_install_tls_config')
     body_heading = 'Summary'
+
+    def _build_wizard_notice(self, *, config_model: SetupWizardConfigModel) -> str | None:
+        """Return guidance after bootstrap configuration has been applied."""
+        if getattr(settings, 'TRUSTPOINT_IS_BOOTSTRAP', False) and config_model.operational_config_applied:
+            return (
+                'Operational configuration has been applied, but this bootstrap process is still serving the '
+                'wizard. Submit this step to retry the runtime switch.'
+            )
+        return None
 
     @staticmethod
     def _map_tls_apply_exit_code_to_message(return_code: int) -> str:
@@ -828,13 +897,10 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             err_msg = 'No staged TLS Server Credential found.'
             raise ValueError(err_msg)
 
-        previous_tls_credential = config_model.fresh_install_tls_credential
         staged_tls_credential = CredentialModel.save_credential_serializer(
             credential_serializer=staged_tls_serializer,
             credential_type=CredentialModel.CredentialTypeChoice.TRUSTPOINT_TLS_SERVER,
         )
-        config_model.fresh_install_tls_credential = staged_tls_credential
-        config_model.save(update_fields=['fresh_install_tls_credential'])
 
         active_tls, _ = ActiveTrustpointTlsServerCredentialModel.objects.get_or_create(id=1)
         active_tls.credential = staged_tls_credential
@@ -846,9 +912,6 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         formatted_fingerprint = ':'.join(f'{byte:02X}' for byte in sha256_fingerprint)
         self.logger.info('TLS SHA256 fingerprint: %s', formatted_fingerprint)
         clear_staged_tls_credential()
-
-        if previous_tls_credential is not None and previous_tls_credential.pk != staged_tls_credential.pk:
-            previous_tls_credential.force_delete()
 
     @staticmethod
     def _load_existing_backend_profile(backend_kind: BackendKind) -> CryptoProviderProfileModel | None:
@@ -900,7 +963,9 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
     def _configure_software_backend(cls) -> None:
         """Configure the dev/testing software backend for the instance."""
         if not (getattr(settings, 'DEVELOPMENT_ENV', False) or getattr(settings, 'DOCKER_CONTAINER', False)):
-            err_msg = 'The dev/testing crypto backend can only be configured for development or demo-style container setups.'
+            err_msg = (
+                'The dev/testing crypto backend can only be configured for development or demo-style container setups.'
+            )
             raise DjangoValidationError(err_msg)
 
         profile = cls._activate_profile(
@@ -1075,7 +1140,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             (config_model.fresh_install_pkcs11_module_path or '').strip() or str(FINAL_WIZARD_PKCS11_MODULE_PATH)
         )
         fallback_module_path = Path(settings.HSM_DEFAULT_PKCS11_MODULE_PATH)
-        if not module_path.exists() and fallback_module_path.exists():
+        if not _path_exists(module_path) and _path_exists(fallback_module_path):
             module_path = fallback_module_path
 
         token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or getattr(
@@ -1085,10 +1150,10 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             (config_model.fresh_install_pkcs11_auth_source_ref or '').strip() or str(FINAL_WIZARD_PKCS11_PIN_PATH)
         )
         fallback_pin_path = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
-        if auth_source_ref and not Path(auth_source_ref).exists() and fallback_pin_path.exists():
+        if auth_source_ref and not _path_exists(Path(auth_source_ref)) and _path_exists(fallback_pin_path):
             auth_source_ref = str(fallback_pin_path)
 
-        if not module_path.exists():
+        if not _path_exists(module_path):
             err_msg = f'The PKCS#11 module path does not exist: {module_path}'
             raise DjangoValidationError(err_msg)
         if not token_label:
@@ -1160,6 +1225,40 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
     def form_valid(self, form: FreshInstallSummaryModelForm) -> HttpResponse:
         """Apply the first summary step actions before continuing the setup flow."""
+        if getattr(settings, 'TRUSTPOINT_IS_BOOTSTRAP', False):
+            try:
+                config_model = SetupWizardConfigModel.get_singleton()
+                result = None
+                if config_model.operational_config_applied:
+                    result = refresh_pending_operational_env(config_model)
+                    switch_result = run_operational_runtime_switch(result.pending_env_file)
+                else:
+                    result = run_operational_handoff(config_model)
+                    config_model.mark_step_submitted(self.step_state)
+                    config_model.operational_config_applied = True
+                    config_model.save(update_fields=['fresh_install_summary_submitted', 'operational_config_applied'])
+                    switch_result = run_operational_runtime_switch(result.pending_env_file)
+            except DjangoValidationError as exception:
+                for error_message in exception.messages:
+                    form.add_error(None, error_message)
+                self.logger.exception('Error applying bootstrap configuration to operational runtime.')
+                return self.form_invalid(form)
+
+            if switch_result.switched:
+                return redirect('/users/login/', permanent=False)
+
+            handoff_marker_message = ''
+            if result is not None:
+                handoff_marker_message = f'The handoff marker was written to {result.env_file}. '
+            messages.success(
+                self.request,
+                (
+                    'Operational configuration was applied successfully. '
+                    f'{handoff_marker_message}{switch_result.detail}'
+                ),
+            )
+            return redirect('setup_wizard:fresh_install_summary')
+
         try:
             with transaction.atomic():
                 config_model = SetupWizardConfigModel.get_singleton()
@@ -1267,18 +1366,13 @@ class FreshInstallCancelView(LoginRequiredMixin, LoggerMixin, View):
                 continue
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Delete staged wizard data, the current user, and log the session out."""
+        """Delete staged wizard data and log the bootstrap user out."""
         del args
         del kwargs
 
         if SetupWizardCompletedModel.setup_wizard_completed():
             self.logger.warning('Ignoring fresh-install cancel request because setup is already completed.')
             return redirect('setup_wizard:index', permanent=False)
-
-        user_pk = request.user.pk
-        if user_pk is None:
-            err_msg = 'Authenticated user is missing a primary key.'
-            raise ValueError(err_msg)
 
         config_model = SetupWizardConfigModel.get_singleton()
         cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_module_path)
@@ -1287,15 +1381,7 @@ class FreshInstallCancelView(LoginRequiredMixin, LoggerMixin, View):
         self._cleanup_partial_runtime_artifacts()
 
         with transaction.atomic():
-            ActiveTrustpointTlsServerCredentialModel.objects.all().delete()
-            CryptoProviderProfileModel.objects.all().delete()
-            AppSecretBackendModel.objects.all().delete()
-            PKCS11Token.objects.all().delete()
-            for credential in list(CredentialModel.objects.all()):
-                credential.force_delete()
-
             SetupWizardConfigModel.objects.filter(pk=SetupWizardConfigModel.SINGLETON_ID).delete()
-            User.objects.filter(pk=user_pk).delete()
 
         clear_app_secret_cache()
         logout(request)
@@ -1353,7 +1439,10 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
         ]
         return context
 
-    def form_valid(self, form: BackupPasswordForm) -> HttpResponse:  # noqa: PLR0911 - Multiple returns needed for comprehensive error handling
+    def form_valid(
+        self,
+        form: BackupPasswordForm,
+    ) -> HttpResponse:
         """Handle valid form submission."""
         password = form.cleaned_data.get('password')
 

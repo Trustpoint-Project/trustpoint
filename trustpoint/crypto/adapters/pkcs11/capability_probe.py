@@ -9,8 +9,10 @@ from typing import TYPE_CHECKING, Any
 
 from crypto.adapters.pkcs11.mechanisms import ecdsa_hash_mechanisms, rsa_pkcs1v15_hash_mechanisms
 from crypto.domain.errors import ProviderUnavailableError
-from pkcs11 import PKCS11Error  # type: ignore[import-untyped]
-from pkcs11 import Mechanism  # type: ignore[import-untyped]
+from pkcs11 import (
+    Mechanism,  # type: ignore[import-untyped]
+    PKCS11Error,  # type: ignore[import-untyped]
+)
 
 if TYPE_CHECKING:
     from pkcs11 import Slot, Token
@@ -351,7 +353,9 @@ class Pkcs11CapabilityProbe:
 
         derived = {
             'login_required': 'LOGIN_REQUIRED' in token_flag_set or 'CKF_LOGIN_REQUIRED' in token_flag_set,
-            'user_pin_initialized': 'USER_PIN_INITIALIZED' in token_flag_set or 'CKF_USER_PIN_INITIALIZED' in token_flag_set,
+            'user_pin_initialized': (
+                'USER_PIN_INITIALIZED' in token_flag_set or 'CKF_USER_PIN_INITIALIZED' in token_flag_set
+            ),
             'can_generate_rsa': has('CKM_RSA_PKCS_KEY_PAIR_GEN'),
             'can_generate_ec': has('CKM_EC_KEY_PAIR_GEN'),
             'supports_raw_rsa_pkcs1v15': has('CKM_RSA_PKCS'),

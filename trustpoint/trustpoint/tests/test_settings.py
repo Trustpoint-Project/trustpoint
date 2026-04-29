@@ -3,7 +3,6 @@
 import importlib
 import os
 from pathlib import Path
-from unittest import mock
 
 import pytest
 from django.apps import apps
@@ -20,6 +19,12 @@ def set_test_env(monkeypatch):
     monkeypatch.setenv('DATABASE_PASSWORD', 'test_password')
     monkeypatch.setenv('DATABASE_HOST', 'localhost')
     monkeypatch.setenv('DATABASE_PORT', '5432')
+    monkeypatch.setenv('TRUSTPOINT_OPERATIONAL_DATABASE', 'postgresql')
+    monkeypatch.delenv('TRUSTPOINT_PHASE', raising=False)
+    yield
+    monkeypatch.delenv('TRUSTPOINT_PHASE', raising=False)
+    monkeypatch.delenv('TRUSTPOINT_OPERATIONAL_DATABASE', raising=False)
+    importlib.reload(settings)
 
 
 def test_debug_setting():
@@ -28,48 +33,49 @@ def test_debug_setting():
 
 
 def test_database_settings(monkeypatch):
-    """Ensure database settings are set correctly."""
-    with mock.patch('socket.create_connection') as mock_socket_conn:
-        mock_socket_conn.return_value.__enter__ = mock.MagicMock()
-        mock_socket_conn.return_value.__exit__ = mock.MagicMock()
+    """Ensure operational database settings are explicit and do not probe availability."""
+    monkeypatch.setenv('TRUSTPOINT_PHASE', 'operational')
+    monkeypatch.setenv('TRUSTPOINT_OPERATIONAL_DATABASE', 'postgresql')
+    importlib.reload(settings)
 
-        with mock.patch('psycopg.connect') as mock_psycopg:
-            mock_psycopg.return_value.__enter__ = mock.MagicMock()
-            mock_psycopg.return_value.__exit__ = mock.MagicMock()
+    databases = settings.DATABASES
 
-            monkeypatch.setattr(settings, 'POSTGRESQL', True)
-            monkeypatch.setattr(settings, 'DATABASE_ENGINE', 'django.db.backends.postgresql')
-            monkeypatch.setattr(settings, 'DATABASE_HOST', 'localhost')
-            monkeypatch.setattr(settings, 'DATABASE_PORT', '5432')
-            monkeypatch.setattr(settings, 'DATABASE_USER', 'test_user')
-            monkeypatch.setattr(settings, 'DATABASE_PASSWORD', 'test_password')
-
-            monkeypatch.setattr(settings, 'is_postgre_available', lambda: True)
-
-            importlib.reload(settings)
-
-            databases = settings.DATABASES
-
-            assert databases['default']['ENGINE'] == 'django.db.backends.postgresql', "Database ENGINE should be 'django.db.backends.postgresql'."
-            assert databases['default']['USER'] == 'test_user', "Database USER should be 'test_user'."
-            assert databases['default']['PASSWORD'] == 'test_password', "Database PASSWORD should be 'test_password'."
-            assert databases['default']['HOST'] == 'localhost', "Database HOST should be 'localhost'."
-            assert databases['default']['PORT'] == '5432', "Database PORT should be '5432'."
+    assert settings.TRUSTPOINT_PHASE == 'operational'
+    assert settings.ROOT_URLCONF == 'trustpoint.urls'
+    assert databases['default']['ENGINE'] == 'django.db.backends.postgresql'
+    assert databases['default']['USER'] == 'test_user'
+    assert databases['default']['PASSWORD'] == 'test_password'
+    assert databases['default']['HOST'] == 'localhost'
+    assert databases['default']['PORT'] == '5432'
 
 
+def test_local_development_defaults_to_sqlite(monkeypatch):
+    """Ensure local development remains SQLite-backed unless explicitly overridden."""
+    monkeypatch.delenv('TRUSTPOINT_PHASE', raising=False)
+    monkeypatch.delenv('TRUSTPOINT_OPERATIONAL_DATABASE', raising=False)
+    importlib.reload(settings)
 
-def test_database_fallback_to_sqlite(monkeypatch):
-    """Ensure database falls back to SQLite when PostgreSQL is unavailable."""
-    with mock.patch('socket.create_connection', side_effect=OSError):
-        with mock.patch('psycopg.connect', side_effect=Exception('Login failed')):
-            monkeypatch.setattr(settings, 'POSTGRESQL', True)
+    databases = settings.DATABASES
 
-            importlib.reload(settings)
+    assert settings.TRUSTPOINT_PHASE == 'operational'
+    assert databases['default']['ENGINE'] == 'django.db.backends.sqlite3'
+    assert str(databases['default']['NAME']).endswith('db.sqlite3')
 
-            databases = settings.DATABASES
 
-            assert databases['default']['ENGINE'] == 'django.db.backends.sqlite3', 'Database should fall back to SQLite when PostgreSQL is unavailable.'
-            assert str(databases['default']['NAME']).endswith('db.sqlite3'), "SQLite database NAME should default to 'db.sqlite3'."
+def test_bootstrap_database_settings(monkeypatch, tmp_path):
+    """Ensure bootstrap uses its own SQLite database and URL surface."""
+    bootstrap_db = tmp_path / 'bootstrap.sqlite3'
+    monkeypatch.setenv('TRUSTPOINT_PHASE', 'bootstrap')
+    monkeypatch.setenv('TRUSTPOINT_BOOTSTRAP_DB_PATH', str(bootstrap_db))
+    importlib.reload(settings)
+
+    databases = settings.DATABASES
+
+    assert settings.TRUSTPOINT_PHASE == 'bootstrap'
+    assert settings.ROOT_URLCONF == 'trustpoint.urls_bootstrap'
+    assert databases['default']['ENGINE'] == 'django.db.backends.sqlite3'
+    assert databases['default']['NAME'] == str(bootstrap_db)
+    assert 'trustpoint.middleware.Workflow2InlineDrainMiddleware' not in settings.MIDDLEWARE
 
 def test_secret_key():
     """Ensure the secret key is defined."""
@@ -139,7 +145,6 @@ def test_public_paths():
         '/api',
         '/aoki',
         '/crl',
-        '/setup-wizard',
     ]
     assert isinstance(public_paths, list), 'PUBLIC_PATHS should be a list.'
     assert public_paths == expected_paths, 'PUBLIC_PATHS should match the defined values.'

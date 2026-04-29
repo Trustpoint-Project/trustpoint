@@ -1,4 +1,4 @@
-"""Startup strategies for Trustpoint bootstrap and completed runtime startup."""
+"""Startup helpers for Trustpoint bootstrap TLS and operational runtime startup."""
 
 from __future__ import annotations
 
@@ -8,21 +8,24 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from cryptography.hazmat.primitives import hashes
 from django.core.management import call_command
-from packaging.version import Version
 from trustpoint_core.serializer import CertificateCollectionSerializer, CredentialSerializer
 
 from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
 from appsecrets.service import DEK_LENGTH_BYTES, AppSecretConfigurationError, get_app_secret_service
-from crypto.models import BackendKind
 from management.models import AppVersion, NotificationConfig
 from management.nginx_paths import NGINX_CERT_CHAIN_PATH, NGINX_CERT_PATH, NGINX_KEY_PATH
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from setup_wizard.models import SetupWizardConfigModel
 from setup_wizard.tls_credential import TlsServerCredentialGenerator, load_staged_tls_credential
+
+if TYPE_CHECKING:
+    from packaging.version import Version
+
+    from crypto.models import BackendKind
+    from setup_wizard.models import SetupWizardConfigModel
 
 
 class OutputWriter(Protocol):
@@ -93,6 +96,7 @@ class TlsMaterialStrategy(ABC):
     @staticmethod
     def _write_pem_files(private_key_pem: str, certificate_pem: str, chain_pem: str) -> None:
         """Write PEM files to the nginx runtime locations."""
+        NGINX_KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
         NGINX_KEY_PATH.write_text(private_key_pem)
         NGINX_CERT_PATH.write_text(certificate_pem)
 
@@ -188,7 +192,7 @@ class ActiveDatabaseTlsMaterialStrategy(TlsMaterialStrategy):
             private_key_pem = credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
             certificate_pem = credential_model.get_certificate_serializer().as_pem().decode()
             chain_pem = credential_model.get_certificate_chain_serializer().as_pem().decode()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             msg = f'Failed to restore the active TLS credential from the database: {exc}'
             raise RuntimeError(msg) from exc
 
@@ -261,43 +265,6 @@ class RuntimeInitialization:
             context.output.write(context.output.warning(f'Could not initialize notifications: {exc}'))
 
 
-class BootstrapStartupStrategy(StartupStrategy):
-    """Wizard-incomplete startup: bootstrap mode without encrypted DB secret dependencies."""
-
-    def __init__(
-        self,
-        tls_strategy: TlsMaterialStrategy | None = None,
-        runtime_initialization: RuntimeInitialization | None = None,
-    ) -> None:
-        self.tls_strategy = tls_strategy or BootstrapTlsMaterialStrategy()
-        self.runtime_initialization = runtime_initialization or RuntimeInitialization()
-
-    def execute(self, context: StartupContext) -> None:
-        """Enter bootstrap mode and prepare temporary/staged TLS for nginx."""
-        context.output.write(self.get_description())
-        self._ensure_bootstrap_db_state(context)
-        self.tls_strategy.apply(context)
-        self.runtime_initialization.initialize(context)
-
-    def get_description(self) -> str:
-        """Return the branch description."""
-        return 'Bootstrap mode startup (setup wizard incomplete)'
-
-    @staticmethod
-    def _ensure_bootstrap_db_state(context: StartupContext) -> None:
-        """Ensure the wizard DB singleton exists and points at the bootstrap entry step."""
-        config = SetupWizardConfigModel.get_singleton()
-        bootstrap_step = SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE
-        if config.fresh_install_current_step != bootstrap_step:
-            context.output.write(
-                'Setup wizard is incomplete; resetting DB-backed current step to CRYPTO_STORAGE.'
-            )
-            config.fresh_install_current_step = bootstrap_step
-            config.save(update_fields=['fresh_install_current_step'])
-        else:
-            context.output.write('Bootstrap wizard step is already CRYPTO_STORAGE.')
-
-
 class CompletedRuntimeStartupStrategy(StartupStrategy):
     """Wizard-complete startup: require appsecrets and restore active TLS from encrypted DB state."""
 
@@ -361,32 +328,8 @@ class CompletedRuntimeStartupStrategy(StartupStrategy):
         except AppSecretConfigurationError as exc:
             msg = f'The application-secret backend is configured but not usable: {exc}'
             raise RuntimeError(msg) from exc
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             msg = f'Failed to initialize the application-secret backend: {exc}'
             raise RuntimeError(msg) from exc
 
         context.output.write(context.output.success('Application-secret backend is ready.'))
-
-
-class StartupStrategySelector:
-    """Selector for the simplified startup branch model."""
-
-    @staticmethod
-    def select_startup_strategy(context: StartupContext) -> StartupStrategy:
-        """Select bootstrap mode or completed-runtime mode."""
-        StartupStrategySelector._log_strategy_selection(context)
-        if context.is_wizard_completed:
-            return CompletedRuntimeStartupStrategy()
-        return BootstrapStartupStrategy()
-
-    @staticmethod
-    def _log_strategy_selection(context: StartupContext) -> None:
-        """Log the simplified startup state that drives branch selection."""
-        context.output.write('=== Determining Startup Branch ===')
-        context.output.write(f'Wizard State: {context.wizard_state_enum.value}')
-        current_step = context.wizard_current_step.name if context.wizard_current_step is not None else 'unknown'
-        context.output.write(f'Wizard Step: {current_step}')
-        backend_kind = context.backend_kind.value if context.backend_kind is not None else 'unconfigured'
-        context.output.write(f'Configured Backend: {backend_kind}')
-        context.output.write(f'App-Secret Backend Configured: {context.appsecrets_configured}')
-        context.output.write(f'Staged Bootstrap TLS Available: {context.has_staged_tls}')

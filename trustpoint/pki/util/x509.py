@@ -19,7 +19,7 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import NamedCurve
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
-from crypto.runtime import configured_private_key_location
+from crypto.runtime import is_hsm_backend_configured
 from management.models import SecurityConfig
 from pki.models import CaModel
 from pki.util.keys import CryptographyUtils
@@ -312,7 +312,9 @@ class CertificateGenerator:
 
         # CA/business classification must not decide backend placement.
         # The configured Trustpoint backend determines where private keys live.
-        private_key_location = configured_private_key_location()
+        private_key_location = (
+            PrivateKeyLocation.HSM_PROVIDED if is_hsm_backend_configured() else PrivateKeyLocation.SOFTWARE
+        )
 
         if not issuing_ca_credential_serializer.private_key:
             err_msg = 'Issuing CA credential serializer must have a private key before saving.'

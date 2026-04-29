@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
@@ -10,14 +10,14 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 type SupportedPublicKey = rsa.RSAPublicKey | ec.EllipticCurvePublicKey
 
 
-class KeyAlgorithm(str, Enum):
+class KeyAlgorithm(StrEnum):
     """Top-level key algorithm families supported by the backend."""
 
     RSA = 'rsa'
     EC = 'ec'
 
 
-class EllipticCurveName(str, Enum):
+class EllipticCurveName(StrEnum):
     """Named elliptic curves currently supported by the backend."""
 
     SECP256R1 = 'secp256r1'
@@ -33,7 +33,7 @@ class EllipticCurveName(str, Enum):
         return ec.SECP521R1()
 
 
-class HashAlgorithmName(str, Enum):
+class HashAlgorithmName(StrEnum):
     """Hash algorithms exposed through the backend contract."""
 
     SHA224 = 'sha224'
@@ -52,7 +52,7 @@ class HashAlgorithmName(str, Enum):
         return hashes.SHA512()
 
 
-class SignatureAlgorithm(str, Enum):
+class SignatureAlgorithm(StrEnum):
     """Signature algorithms exposed by the backend contract."""
 
     RSA_PKCS1V15 = 'rsa-pkcs1v15'

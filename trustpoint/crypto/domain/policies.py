@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Self
 
 
-class KeyUsage(str, Enum):
+class KeyUsage(StrEnum):
     """Normalized key usages understood by the backend."""
 
     SIGN = 'sign'
@@ -20,7 +20,7 @@ class KeyUsage(str, Enum):
     CRL_SIGN = 'crl_sign'
 
 
-class SigningExecutionMode(str, Enum):
+class SigningExecutionMode(StrEnum):
     """How Trustpoint is allowed to execute managed-key signing for a key.
 
     COMPLETE_BACKEND:

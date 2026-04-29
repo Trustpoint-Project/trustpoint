@@ -107,7 +107,8 @@ class AppSecretPkcs11ConfigModel(models.Model):
         if not self.auth_source_ref.strip():
             raise ValidationError({'auth_source_ref': 'auth_source_ref must not be empty.'})
         if not any((self.token_label, self.token_serial, self.slot_id is not None)):
-            raise ValidationError('At least one token selector field must be configured.')
+            msg = 'At least one token selector field must be configured.'
+            raise ValidationError(msg)
         if not self.kek_label.strip():
             raise ValidationError({'kek_label': 'kek_label must not be empty.'})
 

@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
 from crypto.runtime import configured_backend_kind
-from setup_wizard.models import SetupWizardCompletedModel, SetupWizardConfigModel
 from setup_wizard.tls_credential import load_staged_tls_credential
 
 if TYPE_CHECKING:
@@ -24,8 +23,6 @@ class StartupContextBuilder:
         self.output = output
         self.current_version = current_version
         self.db_version: Version | None = None
-        self.wizard_completed = False
-        self.wizard_current_step: SetupWizardConfigModel.FreshInstallCurrentStep | None = None
         self.backend_kind: BackendKind | None = None
         self.appsecrets_configured = False
         self.has_staged_tls = False
@@ -33,19 +30,6 @@ class StartupContextBuilder:
     def with_db_version(self, db_version: Version | None) -> StartupContextBuilder:
         """Set the previously persisted application version."""
         self.db_version = db_version
-        return self
-
-    def collect_wizard_state(self) -> StartupContextBuilder:
-        """Collect wizard completion and current step from the database singletons."""
-        self.output.write('Checking setup wizard state from the database...')
-        completed_row, _ = SetupWizardCompletedModel.objects.get_or_create(
-            singleton_id=SetupWizardCompletedModel.SINGLETON_ID
-        )
-        config = SetupWizardConfigModel.get_singleton()
-        self.wizard_completed = completed_row.setup_completed_at is not None
-        self.wizard_current_step = config.FreshInstallCurrentStep(config.fresh_install_current_step)
-        self.output.write(f'Wizard is completed: {self.wizard_completed}')
-        self.output.write(f'Current bootstrap wizard step: {self.wizard_current_step.name}')
         return self
 
     def collect_backend_state(self) -> StartupContextBuilder:
@@ -81,10 +65,12 @@ class StartupContextBuilder:
 
         try:
             if backend.backend_kind == AppSecretBackendKind.PKCS11:
-                backend.pkcs11_config
+                pkcs11_config = backend.pkcs11_config
+                del pkcs11_config
                 self.appsecrets_configured = True
             elif backend.backend_kind == AppSecretBackendKind.SOFTWARE:
-                backend.software_config
+                software_config = backend.software_config
+                del software_config
                 self.appsecrets_configured = True
             else:
                 self.appsecrets_configured = False
@@ -111,13 +97,11 @@ class StartupContextBuilder:
         """Build the StartupContext object."""
         from management.util.startup_strategies import StartupContext, WizardState  # noqa: PLC0415
 
-        wizard_state_enum = WizardState.COMPLETED if self.wizard_completed else WizardState.INCOMPLETE
-
         return StartupContext(
             current_version=self.current_version,
             db_version=self.db_version,
-            wizard_state_enum=wizard_state_enum,
-            wizard_current_step=self.wizard_current_step,
+            wizard_state_enum=WizardState.COMPLETED,
+            wizard_current_step=None,
             backend_kind=self.backend_kind,
             appsecrets_configured=self.appsecrets_configured,
             has_staged_tls=self.has_staged_tls,

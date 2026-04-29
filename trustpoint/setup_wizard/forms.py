@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import ipaddress
 import re
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 from django import forms
 from django.conf import settings
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy
@@ -25,13 +27,15 @@ if TYPE_CHECKING:
 
 CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
     str(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage): gettext_lazy(
-        'Use the built-in development and demo backend. Suitable for local testing, demos, and non-production container setups.'
+        'Use the built-in development and demo backend. Suitable for local testing, demos, and non-production '
+        'container setups.'
     ),
     str(SetupWizardConfigModel.CryptoStorageType.HsmStorage): gettext_lazy(
         'Use the PKCS#11 backend with a configured HSM, SoftHSM, or PKCS#11 proxy/module.'
     ),
     str(SetupWizardConfigModel.CryptoStorageType.RestBackend): gettext_lazy(
-        'Planned backend type for future remote crypto integrations. Visible here for roadmap transparency, but not usable yet.'
+        'Planned backend type for future remote crypto integrations. Visible here for roadmap transparency, but not '
+        'usable yet.'
     ),
 }
 
@@ -91,7 +95,7 @@ class WizardCardRadioSelect(forms.RadioSelect):
         name: str,
         value: object,
         label: str | int,
-        selected: bool,  # noqa: FBT001
+        selected: bool,
         index: int,
         subindex: int | None = None,
         attrs: dict[str, object] | None = None,
@@ -147,6 +151,129 @@ def _software_backend_available_in_wizard() -> bool:
 def _pkcs11_backend_available_in_wizard() -> bool:
     """Return whether the PKCS#11 backend may be configured in the wizard."""
     return True
+
+
+class FreshInstallAdminUserModelForm(FreshInstallModelBaseForm):
+    """Form for staging the first operational administrator."""
+
+    password1 = forms.CharField(
+        label=gettext_lazy('Password'),
+        strip=False,
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}),
+    )
+    password2 = forms.CharField(
+        label=gettext_lazy('Password confirmation'),
+        strip=False,
+        widget=forms.PasswordInput(attrs={'autocomplete': 'new-password'}),
+    )
+
+    class Meta:
+        """ModelForm configuration for the operational admin user step."""
+
+        model = SetupWizardConfigModel
+        fields = ('operational_admin_username', 'operational_admin_email')
+        labels: ClassVar[dict[str, str | Promise]] = {
+            'operational_admin_username': gettext_lazy('Admin username'),
+            'operational_admin_email': gettext_lazy('Admin email'),
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Style the admin-user fields."""
+        super().__init__(*args, **kwargs)
+        self.is_admin_user_config = True
+        for field in self.fields.values():
+            field.widget.attrs.setdefault('class', 'form-control')
+
+    def clean_operational_admin_username(self) -> str:
+        """Normalize and require the operational admin username."""
+        username = (self.cleaned_data.get('operational_admin_username') or '').strip()
+        if not username:
+            err_msg = gettext_lazy('Enter the operational admin username.')
+            raise forms.ValidationError(err_msg)
+        return username
+
+    def clean(self) -> dict[str, Any]:
+        """Validate the staged operational admin password."""
+        cleaned_data = super().clean()
+        password1 = cleaned_data.get('password1')
+        password2 = cleaned_data.get('password2')
+        if password1 and password2 and password1 != password2:
+            self.add_error('password2', gettext_lazy('The two password fields did not match.'))
+        if password1:
+            try:
+                validate_password(password1)
+            except DjangoValidationError as exc:
+                self.add_error('password1', exc)
+        return cleaned_data
+
+    def save(self, commit: bool = True) -> SetupWizardConfigModel:
+        """Persist the staged admin fields and password hash."""
+        instance = super().save(commit=False)
+        instance.operational_admin_password_hash = make_password(self.cleaned_data['password1'])
+        if commit:
+            instance.save()
+        return instance
+
+
+class FreshInstallDatabaseModelForm(FreshInstallModelBaseForm):
+    """Form for staging the operational PostgreSQL connection."""
+
+    class Meta:
+        """ModelForm configuration for the operational database step."""
+
+        model = SetupWizardConfigModel
+        fields = (
+            'operational_db_host',
+            'operational_db_port',
+            'operational_db_name',
+            'operational_db_user',
+            'operational_db_password',
+        )
+        labels: ClassVar[dict[str, str | Promise]] = {
+            'operational_db_host': gettext_lazy('PostgreSQL host'),
+            'operational_db_port': gettext_lazy('PostgreSQL port'),
+            'operational_db_name': gettext_lazy('Database name'),
+            'operational_db_user': gettext_lazy('Database user'),
+            'operational_db_password': gettext_lazy('Database password'),
+        }
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            'operational_db_password': forms.PasswordInput(render_value=True),
+        }
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Style the database fields."""
+        super().__init__(*args, **kwargs)
+        self.is_database_config = True
+        for field in self.fields.values():
+            field.widget.attrs.setdefault('class', 'form-control')
+
+    def clean_operational_db_host(self) -> str:
+        """Normalize and require the PostgreSQL host."""
+        value = (self.cleaned_data.get('operational_db_host') or '').strip()
+        if not value:
+            raise forms.ValidationError(gettext_lazy('Enter the PostgreSQL host name or IP address.'))
+        return value
+
+    def clean_operational_db_name(self) -> str:
+        """Normalize and require the PostgreSQL database name."""
+        value = (self.cleaned_data.get('operational_db_name') or '').strip()
+        if not value:
+            raise forms.ValidationError(gettext_lazy('Enter the PostgreSQL database name.'))
+        return value
+
+    def clean_operational_db_port(self) -> int:
+        """Validate the PostgreSQL TCP port."""
+        value = self.cleaned_data['operational_db_port']
+        if value < 1 or value > 65535:
+            raise forms.ValidationError(gettext_lazy('Enter a TCP port between 1 and 65535.'))
+        return value
+
+    def clean_operational_db_user(self) -> str:
+        """Normalize and require the PostgreSQL user."""
+        value = (self.cleaned_data.get('operational_db_user') or '').strip()
+        if not value:
+            raise forms.ValidationError(gettext_lazy('Enter the PostgreSQL user name.'))
+        return value
 
 
 class FreshInstallCryptoStorageModelForm(FreshInstallModelBaseForm):
@@ -283,14 +410,20 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
 
         if self.local_dev_pkcs11_handoff_available:
             local_dev_module = local_dev_pkcs11_module_path()
-            if str(self.instance.fresh_install_pkcs11_module_path).strip() == str(local_dev_module) and local_dev_module.is_file():
+            if (
+                str(self.instance.fresh_install_pkcs11_module_path).strip() == str(local_dev_module)
+                and local_dev_module.is_file()
+            ):
                 return local_dev_module
 
         module_path = (self.instance.fresh_install_pkcs11_module_path or '').strip()
         if not module_path:
             return None
         candidate = Path(module_path)
-        if not candidate.is_file():
+        try:
+            if not candidate.is_file():
+                return None
+        except OSError:
             return None
         return candidate
 
@@ -303,7 +436,10 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         if not pin_path:
             return None
         candidate = Path(pin_path)
-        if not candidate.is_file():
+        try:
+            if not candidate.is_file():
+                return None
+        except OSError:
             return None
         return candidate
 
@@ -345,10 +481,8 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         except (AttributeError, OSError):
             header = b''
         finally:
-            try:
+            with contextlib.suppress(AttributeError, OSError):
                 uploaded_module.seek(0)
-            except (AttributeError, OSError):
-                pass
 
         if header and header != b'\x7fELF':
             err_msg = gettext_lazy('Upload a valid Linux ELF shared library.')
@@ -407,6 +541,16 @@ class FreshInstallDemoDataModelForm(FreshInstallModelBaseForm):
 class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
     """Read-only summary form for the final fresh-install step."""
 
+    operational_admin = forms.CharField(
+        label=gettext_lazy('Operational Admin'),
+        required=False,
+        disabled=True,
+    )
+    operational_database = forms.CharField(
+        label=gettext_lazy('Operational Database'),
+        required=False,
+        disabled=True,
+    )
     storage_selection = forms.CharField(
         label=gettext_lazy('Crypto Backend'),
         required=False,
@@ -455,6 +599,11 @@ class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
 
         instance = self.instance
         ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans()
+        self.fields['operational_admin'].initial = instance.operational_admin_username or '-'
+        self.fields['operational_database'].initial = (
+            f'{instance.operational_db_user}@{instance.operational_db_host}:'
+            f'{instance.operational_db_port}/{instance.operational_db_name}'
+        )
         self.fields['storage_selection'].initial = dict(CRYPTO_BACKEND_TYPE_CHOICES).get(
             instance.crypto_storage,
             instance.get_crypto_storage_display(),

@@ -33,6 +33,14 @@ def _read_text_file(path: Path) -> str | None:
     return value or None
 
 
+def _path_exists(path: Path) -> bool:
+    """Return whether a local HSM path is readable and exists."""
+    try:
+        return path.exists()
+    except OSError:
+        return False
+
+
 def _ensure_pytest_local_hsm_profile() -> tuple[CryptoProviderProfileModel | None, str | None]:
     """Ensure the pytest DB contains a usable local-dev PKCS#11 provider profile."""
     preferred_names = (
@@ -68,12 +76,12 @@ def _ensure_pytest_local_hsm_profile() -> tuple[CryptoProviderProfileModel | Non
         return existing_any, None
 
     module_path = Path(settings.HSM_DEFAULT_PKCS11_MODULE_PATH)
-    if not module_path.exists():
-        return None, f'PKCS#11 module path does not exist: {module_path}'
+    if not _path_exists(module_path):
+        return None, f'PKCS#11 module path does not exist or is not readable: {module_path}'
 
     pin_file = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
-    if not pin_file.exists():
-        return None, f'user PIN file does not exist: {pin_file}'
+    if not _path_exists(pin_file):
+        return None, f'user PIN file does not exist or is not readable: {pin_file}'
 
     token_serial = None
     token_serial_file = getattr(settings, 'HSM_DEFAULT_TOKEN_SERIAL_FILE', None)

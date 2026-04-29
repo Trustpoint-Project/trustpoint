@@ -3,6 +3,7 @@
 from datetime import UTC
 from typing import Any, ClassVar, Final, Self
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils import timezone
@@ -77,6 +78,8 @@ class SetupWizardCompletedModel(models.Model):
         Returns:
             False if row does not exist or setup_completed_at is NULL, True otherwise.
         """
+        if getattr(settings, 'TRUSTPOINT_IS_OPERATIONAL', False):
+            return True
         return cls.objects.filter(pk=cls.SINGLETON_ID, setup_completed_at__isnull=False).exists()
 
     def clean(self) -> None:
@@ -135,17 +138,29 @@ class SetupWizardConfigModel(models.Model):
     class FreshInstallCurrentStep(models.IntegerChoices):
         """Enumerate the ordered steps in the fresh-install wizard."""
 
-        CRYPTO_STORAGE = 0, gettext_lazy('Crypto-Storage')
-        BACKEND_CONFIG = 1, gettext_lazy('Backend-Config')
-        DEMO_DATA = 2, gettext_lazy('Demo-Data')
-        TLS_CONFIG = 3, gettext_lazy('TLS-Config')
-        SUMMARY = 4, gettext_lazy('Summary')
+        ADMIN_USER = 0, gettext_lazy('Admin User')
+        DATABASE = 1, gettext_lazy('Database')
+        CRYPTO_STORAGE = 2, gettext_lazy('Crypto-Storage')
+        BACKEND_CONFIG = 3, gettext_lazy('Backend-Config')
+        DEMO_DATA = 4, gettext_lazy('Demo-Data')
+        TLS_CONFIG = 5, gettext_lazy('TLS-Config')
+        SUMMARY = 6, gettext_lazy('Summary')
 
     fresh_install_current_step = models.PositiveSmallIntegerField(
         choices=FreshInstallCurrentStep,
         null=False,
         blank=True,
-        default=FreshInstallCurrentStep.CRYPTO_STORAGE,
+        default=FreshInstallCurrentStep.ADMIN_USER,
+    )
+
+    fresh_install_admin_user_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the operational admin-user step was submitted.',
+    )
+
+    fresh_install_database_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the operational database step was submitted.',
     )
 
     fresh_install_crypto_storage_submitted = models.BooleanField(
@@ -186,13 +201,55 @@ class SetupWizardConfigModel(models.Model):
         help_text='Selected TLS configuration mode during the fresh-install wizard.',
     )
 
-    fresh_install_tls_credential = models.ForeignKey(
-        'pki.CredentialModel',
-        on_delete=models.SET_NULL,
-        null=True,
+    operational_admin_username = models.CharField(
+        max_length=150,
         blank=True,
-        related_name='+',
-        help_text='Pending TLS server credential staged during the fresh-install wizard.',
+        default='admin',
+        help_text='Username for the first operational administrator.',
+    )
+    operational_admin_email = models.EmailField(
+        blank=True,
+        default='',
+        help_text='Email address for the first operational administrator.',
+    )
+    operational_admin_password_hash = models.CharField(
+        max_length=256,
+        blank=True,
+        default='',
+        help_text='Hashed password for the first operational administrator.',
+    )
+
+    operational_db_host = models.CharField(
+        max_length=255,
+        blank=True,
+        default='postgres',
+        help_text='Operational PostgreSQL host name or IP address.',
+    )
+    operational_db_port = models.PositiveIntegerField(
+        default=5432,
+        help_text='Operational PostgreSQL TCP port.',
+    )
+    operational_db_name = models.CharField(
+        max_length=128,
+        blank=True,
+        default='trustpoint_db',
+        help_text='Operational PostgreSQL database name.',
+    )
+    operational_db_user = models.CharField(
+        max_length=128,
+        blank=True,
+        default='admin',
+        help_text='Operational PostgreSQL user name.',
+    )
+    operational_db_password = models.CharField(
+        max_length=256,
+        blank=True,
+        default='',
+        help_text='Operational PostgreSQL password.',
+    )
+    operational_config_applied = models.BooleanField(
+        default=False,
+        help_text='Whether the bootstrap configuration was applied to the operational runtime.',
     )
 
     class CryptoStorageType(models.IntegerChoices):
@@ -282,6 +339,8 @@ class SetupWizardConfigModel(models.Model):
     def is_step_submitted(self, step: FreshInstallCurrentStep) -> bool:
         """Return whether the given fresh-install step was submitted."""
         submitted_fields = {
+            self.FreshInstallCurrentStep.ADMIN_USER: self.fresh_install_admin_user_submitted,
+            self.FreshInstallCurrentStep.DATABASE: self.fresh_install_database_submitted,
             self.FreshInstallCurrentStep.CRYPTO_STORAGE: self.fresh_install_crypto_storage_submitted,
             self.FreshInstallCurrentStep.BACKEND_CONFIG: self.fresh_install_backend_config_submitted,
             self.FreshInstallCurrentStep.DEMO_DATA: self.fresh_install_demo_data_submitted,
@@ -293,6 +352,8 @@ class SetupWizardConfigModel(models.Model):
     def mark_step_submitted(self, step: FreshInstallCurrentStep) -> None:
         """Mark the given fresh-install step as submitted."""
         field_name = {
+            self.FreshInstallCurrentStep.ADMIN_USER: 'fresh_install_admin_user_submitted',
+            self.FreshInstallCurrentStep.DATABASE: 'fresh_install_database_submitted',
             self.FreshInstallCurrentStep.CRYPTO_STORAGE: 'fresh_install_crypto_storage_submitted',
             self.FreshInstallCurrentStep.BACKEND_CONFIG: 'fresh_install_backend_config_submitted',
             self.FreshInstallCurrentStep.DEMO_DATA: 'fresh_install_demo_data_submitted',

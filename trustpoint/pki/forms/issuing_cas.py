@@ -19,7 +19,7 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from crypto.runtime import configured_private_key_location
+from crypto.runtime import is_hsm_backend_configured
 from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.authorization import PkiSecurityAuthorization
@@ -37,7 +37,9 @@ from util.validation import validate_remote_ca_connection
 
 def get_private_key_location_from_config() -> PrivateKeyLocation:
     """Determine the appropriate PrivateKeyLocation from the configured crypto backend."""
-    return configured_private_key_location()
+    if is_hsm_backend_configured():
+        return PrivateKeyLocation.HSM_PROVIDED
+    return PrivateKeyLocation.SOFTWARE
 
 
 def get_ca_type_from_config() -> CaModel.CaTypeChoice:

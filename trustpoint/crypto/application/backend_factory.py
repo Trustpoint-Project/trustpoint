@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.rest.backend import RestBackend
 from crypto.adapters.software.backend import SoftwareBackend
-from crypto.application.provider_backend import ManagedKeyBackendAdapter
 from crypto.domain.errors import ProviderConfigurationError, UnsupportedBackendKindError
 from crypto.models import BackendKind, CryptoProviderProfileModel
+
+if TYPE_CHECKING:
+    from crypto.application.provider_backend import ManagedKeyBackendAdapter
 
 
 class BackendAdapterFactory(Protocol):

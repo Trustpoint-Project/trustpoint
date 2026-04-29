@@ -2,7 +2,15 @@
 
 from django.contrib.messages import get_messages
 from django.test import RequestFactory, TestCase
-from management.models import KeyStorageConfig, PKCS11Token
+
+from crypto.models import (
+    BackendKind,
+    CryptoProviderPkcs11ConfigModel,
+    CryptoProviderProfileModel,
+    CryptoProviderSoftwareConfigModel,
+    Pkcs11AuthSource,
+    SoftwareKeyEncryptionSource,
+)
 from management.views.key_storage import KeyStorageConfigView
 
 
@@ -34,104 +42,102 @@ class KeyStorageConfigViewTest(TestCase):
         self.assertEqual(self.view.extra_context['page_name'], 'key_storage')
 
     def test_get_context_data_with_software_config(self):
-        """Test get_context_data with KeyStorageConfig in software storage mode."""
-        config = KeyStorageConfig.objects.create(
-            pk=1,
-            storage_type=KeyStorageConfig.StorageType.SOFTWARE
+        """Test get_context_data with an active software backend profile."""
+        profile = CryptoProviderProfileModel.objects.create(
+            name='software',
+            backend_kind=BackendKind.SOFTWARE,
+            active=True,
+        )
+        software_config = CryptoProviderSoftwareConfigModel.objects.create(
+            profile=profile,
+            encryption_source=SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
+            encryption_source_ref='dev',
         )
 
         context = self.view.get_context_data()
 
-        self.assertIn('config', context)
-        self.assertEqual(context['config'], config)
+        self.assertEqual(context['crypto_profile'], profile)
+        self.assertEqual(context['software_config'], software_config)
+        self.assertTrue(context['is_software_backend'])
         self.assertIn('page_title', context)
 
     def test_get_context_data_with_softhsm_config(self):
-        """Test get_context_data with SoftHSM storage type."""
-        token = PKCS11Token.objects.create(
-            label='test-token',
-            slot=0,
+        """Test get_context_data with a PKCS#11 backend profile."""
+        profile = CryptoProviderProfileModel.objects.create(
+            name='pkcs11',
+            backend_kind=BackendKind.PKCS11,
+            active=True,
         )
-        config = KeyStorageConfig.objects.create(
-            pk=1,
-            storage_type=KeyStorageConfig.StorageType.SOFTHSM,
-            hsm_config=token,
+        pkcs11_config = CryptoProviderPkcs11ConfigModel.objects.create(
+            profile=profile,
+            module_path='/usr/lib/libpkcs11-proxy.so',
+            token_label='test-token',
+            slot_id=0,
+            auth_source=Pkcs11AuthSource.FILE,
+            auth_source_ref='/tmp/pin',
         )
 
         context = self.view.get_context_data()
 
-        self.assertIn('config', context)
-        self.assertEqual(context['config'], config)
-        self.assertIn('hsm_config', context)
-        self.assertEqual(context['hsm_config'], token)
+        self.assertEqual(context['crypto_profile'], profile)
+        self.assertEqual(context['pkcs11_config'], pkcs11_config)
+        self.assertTrue(context['is_pkcs11_backend'])
+        self.assertEqual(context['pkcs11_token_serial_display'], '-')
+        self.assertEqual(context['pkcs11_slot_id_display'], 0)
 
     def test_get_context_data_with_physical_hsm_config(self):
-        """Test get_context_data with physical HSM storage type."""
-        token = PKCS11Token.objects.create(
-            label='physical-token',
-            slot=1,
+        """Test get_context_data displays configured token serial and slot."""
+        profile = CryptoProviderProfileModel.objects.create(
+            name='physical-pkcs11',
+            backend_kind=BackendKind.PKCS11,
+            active=True,
         )
-        KeyStorageConfig.objects.create(
-            pk=1,
-            storage_type=KeyStorageConfig.StorageType.PHYSICAL_HSM,
-            hsm_config=token,
+        pkcs11_config = CryptoProviderPkcs11ConfigModel.objects.create(
+            profile=profile,
+            module_path='/opt/vendor/libpkcs11.so',
+            token_serial='serial-1',
+            slot_id=1,
+            auth_source=Pkcs11AuthSource.FILE,
+            auth_source_ref='/tmp/pin',
         )
 
         context = self.view.get_context_data()
 
-        self.assertIn('hsm_config', context)
-        self.assertEqual(context['hsm_config'], token)
+        self.assertEqual(context['pkcs11_config'], pkcs11_config)
+        self.assertEqual(context['pkcs11_token_serial_display'], 'serial-1')
+        self.assertEqual(context['pkcs11_slot_id_display'], 1)
 
     def test_get_context_data_with_hsm_but_no_config_reference(self):
-        """Test get_context_data with HSM type but no hsm_config set."""
-        token = PKCS11Token.objects.create(
-            label='orphan-token',
-            slot=2,
-        )
-        KeyStorageConfig.objects.create(
-            pk=1,
-            storage_type=KeyStorageConfig.StorageType.SOFTHSM,
-            hsm_config=None,  # No config reference
-        )
+        """Test get_context_data with PKCS#11 profile but missing config relation."""
+        CryptoProviderProfileModel.objects.create(name='pkcs11', backend_kind=BackendKind.PKCS11, active=True)
 
         context = self.view.get_context_data()
 
-        # Should fall back to first token
-        self.assertIn('hsm_config', context)
-        self.assertEqual(context['hsm_config'], token)
+        self.assertTrue(context['is_pkcs11_backend'])
+        self.assertIsNone(context['pkcs11_config'])
+        self.assertEqual(context['pkcs11_token_serial_display'], '-')
 
     def test_get_context_data_with_hsm_no_tokens_at_all(self):
-        """Test get_context_data with HSM type but no tokens in database."""
-        KeyStorageConfig.objects.create(
-            pk=1,
-            storage_type=KeyStorageConfig.StorageType.SOFTHSM,
-            hsm_config=None,
-        )
+        """Test get_context_data without any crypto profile."""
 
         context = self.view.get_context_data()
 
-        self.assertIn('hsm_config', context)
-        self.assertIsNone(context['hsm_config'])
+        self.assertIsNone(context['crypto_profile'])
+        self.assertIsNone(context['pkcs11_config'])
 
     def test_get_context_data_no_config_exists(self):
-        """Test get_context_data when no KeyStorageConfig exists."""
+        """Test get_context_data when no crypto backend profile exists."""
         context = self.view.get_context_data()
 
-        self.assertIn('config', context)
-        self.assertIsNone(context['config'])
+        self.assertIn('crypto_profile', context)
+        self.assertIsNone(context['crypto_profile'])
 
-        # Check warning message was added
         messages_list = list(get_messages(self.view.request))
         self.assertEqual(len(messages_list), 1)
-        self.assertIn('not found', str(messages_list[0]))
+        self.assertIn('No configured crypto backend profile', str(messages_list[0]))
 
     def test_get_context_data_preserves_parent_context(self):
         """Test get_context_data preserves context from parent class."""
-        KeyStorageConfig.objects.create(
-            pk=1,
-            storage_type=KeyStorageConfig.StorageType.SOFTWARE
-        )
-
         context = self.view.get_context_data(custom_key='custom_value')
 
         self.assertIn('custom_key', context)

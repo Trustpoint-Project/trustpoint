@@ -58,9 +58,7 @@ class Pkcs11TokenSelector:
             return False
         if self.token_label is not None and self.token_label != normalized_label:
             return False
-        if self.token_serial is not None and self.token_serial != normalized_serial:
-            return False
-        return True
+        return not (self.token_serial is not None and self.token_serial != normalized_serial)
 
 
 @dataclass(frozen=True, slots=True)

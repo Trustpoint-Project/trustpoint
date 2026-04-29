@@ -87,11 +87,14 @@ USER root
 RUN mkdir -p /var/www/html/trustpoint/trustpoint/media/log \
              /var/www/html/trustpoint/trustpoint/collected_static \
              /var/www/html/trustpoint/docker/trustpoint/nginx/tls \
+             /var/lib/trustpoint/bootstrap \
              /var/lib/trustpoint/hsm/config && \
     chown -R www-data:www-data /var/www/html/trustpoint/trustpoint/ && \
+    chown -R www-data:www-data /var/lib/trustpoint/bootstrap && \
     chown -R www-data:www-data /var/lib/trustpoint/hsm && \
     chown -R www-data:www-data /var/www/html/trustpoint/docker/trustpoint/nginx/tls && \
     chmod -R 755 /var/www/html/trustpoint/trustpoint/ && \
+    chmod 750 /var/lib/trustpoint/bootstrap && \
     chmod 750 /var/lib/trustpoint/hsm /var/lib/trustpoint/hsm/config && \
     chmod -R 755 /var/www/html/trustpoint/docker/trustpoint/nginx/tls
 
@@ -134,6 +137,7 @@ RUN chmod +x /etc/trustpoint/wizard/install_pkcs11_assets.sh
 RUN chmod +x /etc/trustpoint/wizard/update_tls.sh
 RUN chmod +x /etc/trustpoint/wizard/update_tls_nginx.sh
 RUN chmod +x /etc/trustpoint/wizard/wizard_restore.sh
+RUN chmod +x /etc/trustpoint/wizard/switch_to_operational.sh
 
 
 # Make entrypoint and local/dev PKCS#11 bootstrap helper executable.

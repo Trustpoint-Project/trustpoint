@@ -8,9 +8,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
-    depends_on:
-      - postgres
     environment:
+      TRUSTPOINT_PHASE: "${TRUSTPOINT_PHASE:-auto}"
       POSTGRES_DB: "trustpoint_db"
       DATABASE_USER: "admin"
       DATABASE_PASSWORD: "testing321"
@@ -26,6 +25,7 @@ services:
       - postgres
       - trustpoint
     environment:
+      TRUSTPOINT_PHASE: "${TRUSTPOINT_PHASE:-auto}"
       POSTGRES_DB: "trustpoint_db"
       DATABASE_USER: "admin"
       DATABASE_PASSWORD: "testing321"
@@ -51,3 +51,7 @@ services:
 
 volumes:
   postgres_data:
+
+networks:
+  default:
+    name: trustpoint-net

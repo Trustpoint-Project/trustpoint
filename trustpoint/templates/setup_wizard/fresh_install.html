@@ -114,6 +114,14 @@
                     {% if form.storage_selection %}
                         <div class="tp-summary-list">
                             <div class="tp-summary-item">
+                                <div class="tp-summary-label">{{ form.operational_admin.label }}</div>
+                                <div class="tp-summary-value">{{ form.operational_admin.value|default:"-" }}</div>
+                            </div>
+                            <div class="tp-summary-item">
+                                <div class="tp-summary-label">{{ form.operational_database.label }}</div>
+                                <div class="tp-summary-value">{{ form.operational_database.value|default:"-" }}</div>
+                            </div>
+                            <div class="tp-summary-item">
                                 <div class="tp-summary-label">{{ form.storage_selection.label }}</div>
                                 <div class="tp-summary-value">{{ form.storage_selection.value|default:"-" }}</div>
                             </div>
@@ -434,6 +442,11 @@
                     {% if form.is_pkcs11_backend_config %}
                         <button class="btn tp-setup-form-secondary" type="submit" name="wizard_action" value="test_connection">
                             {% trans 'Test HSM Connection' %}
+                        </button>
+                    {% endif %}
+                    {% if form.is_database_config %}
+                        <button class="btn tp-setup-form-secondary" type="submit" name="wizard_action" value="test_database">
+                            {% trans 'Test Database Connection' %}
                         </button>
                     {% endif %}
                     <button class="btn tp-setup-form-submit" type="submit">
