@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import re
 import secrets
+import uuid
 from typing import TYPE_CHECKING
 
 from cryptography import x509
@@ -118,8 +120,9 @@ class IDevIDAuthenticator(LoggerMixin):
         return matching_registrations
 
     @staticmethod
-    def _auto_create_device_from_idevid(
-        idevid_cert: x509.Certificate, idevid_subj_sn: str, domain: DomainModel,
+    def _auto_create_device_from_idevid(  # noqa: PLR0913 (multiple args are cleaner here than re-extracting values from idevid again)
+        idevid_cert: x509.Certificate, idevid_subj_sn: str, idevid_uuid: str | None,
+        domain: DomainModel,
         pki_protocol: OnboardingPkiProtocol,
         onboarding_protocol: OnboardingProtocol,
     ) -> DeviceModel:
@@ -142,8 +145,12 @@ class IDevIDAuthenticator(LoggerMixin):
             serial_number=idevid_subj_sn,
             common_name=common_name,
             domain=domain,
-            onboarding_config=onboarding_config_model
+            onboarding_config=onboarding_config_model,
         )
+        # if a device with the same UUID already exists (e.g. in a different domain),
+        # this will violate the unique constraint, so a random UUID is assigned instead
+        if idevid_uuid and not DeviceModel.objects.filter(rfc_4122_uuid=idevid_uuid).exists():
+            device.rfc_4122_uuid = idevid_uuid
         onboarding_config_model.full_clean()
         onboarding_config_model.save()
         device.full_clean()
@@ -169,6 +176,21 @@ class IDevIDAuthenticator(LoggerMixin):
         except x509.ExtensionNotFound:
             return None
         return san_ext.value.get_values_for_type(x509.UniformResourceIdentifier)
+
+    @staticmethod
+    def get_idevid_uuid(idevid_cert: x509.Certificate) -> str | None:
+        """Get the first valid UUID from the IDevID certificate SAN, or None if no valid UUID in the IDevID SAN."""
+        san_uris = IDevIDAuthenticator.get_idevid_san_uris(idevid_cert)
+        if not san_uris:
+            return None
+        for uri in san_uris:
+            if uri.startswith('urn:uuid:'):
+                uri_candidate = uri.removeprefix('urn:uuid:')
+                try:
+                    return str(uuid.UUID(uri_candidate))
+                except ValueError:
+                    continue
+        return None
 
     @classmethod
     def authenticate_idevid_from_x509_no_device(
@@ -220,7 +242,25 @@ class IDevIDAuthenticator(LoggerMixin):
         domain, idevid_subj_sn = cls.authenticate_idevid_from_x509_no_device(
             idevid_cert=idevid_cert, intermediate_cas=intermediate_cas, domain=domain
         )
-        # Check if we have a device with the same serial number
+        # Check if we have an existing device with the same UUID in the domain already
+        idevid_uuid = cls.get_idevid_uuid(idevid_cert)
+        if idevid_uuid:
+            existing_device = None
+            with contextlib.suppress(DeviceModel.DoesNotExist):
+                existing_device = DeviceModel.objects.get(
+                    domain=domain,
+                    rfc_4122_uuid=idevid_uuid,
+                )
+            # Multiple objects returned can not happen since rfc_4122_uuid is unique,
+            # but if it does, error out (MultipleObjectsReturned)
+            # TODO(Air): This may be an issue onboarding the same physical device to multiple domains,  #noqa: FIX002
+            # since the same IDevID certificate with the same UUID would be used for onboarding in each domain.
+            # Therefore, support for one device onboarding to multiple domains in the future,
+            # rather than creating a new device for each domain in Trustpoint may be desirable.
+
+            if existing_device:
+                return existing_device
+        # Check if we have an existing device with the same serial number in the domain already
         if idevid_subj_sn:
             existing_device = None
             try:
@@ -239,9 +279,11 @@ class IDevIDAuthenticator(LoggerMixin):
 
             if existing_device:
                 return existing_device
+
         return cls._auto_create_device_from_idevid(
             idevid_cert=idevid_cert,
             idevid_subj_sn=idevid_subj_sn or '',
+            idevid_uuid=idevid_uuid,
             domain=domain,
             onboarding_protocol=onboarding_protocol,
             pki_protocol=pki_protocol

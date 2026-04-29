@@ -337,8 +337,7 @@ class CmpSignatureBasedInitializationAuthentication(CmpAuthenticationBase):
     def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate using CMP signature-based protection for initialization requests."""
         if not isinstance(context, CmpCertificateRequestContext):
-            exc_msg = 'CmpSignatureBasedInitializationAuthentication requires a CmpCertificateRequestContext.'
-            raise TypeError(exc_msg)
+            return # Skip, auth method only applicable for CmpCertificateRequestContext
 
         if not self._should_authenticate(context):
             return
@@ -435,8 +434,7 @@ class CmpSignatureBasedCertificationAuthentication(CmpAuthenticationBase):
     def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate using CMP signature-based protection for certification requests."""
         if not isinstance(context, CmpCertificateRequestContext):
-            exc_msg = 'CmpSignatureBasedCertificationAuthentication requires a CmpCertificateRequestContext.'
-            raise TypeError(exc_msg)
+            return # Skip, auth method only applicable for CmpCertificateRequestContext
 
         if not self._should_authenticate(context):
             return
@@ -623,8 +621,7 @@ class CmpSignatureBasedRevocationAuthentication(CmpAuthenticationBase):
     def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate using CMP signature-based protection for revocation requests."""
         if not isinstance(context, CmpRevocationRequestContext):
-            exc_msg = 'CmpSignatureBasedRevocationAuthentication requires a CmpRevocationRequestContext.'
-            raise TypeError(exc_msg)
+            return # Skip, auth method only applicable for CmpRevocationRequestContext
 
         if not self._should_authenticate(context):
             return
@@ -675,8 +672,7 @@ class CmpSignatureBasedPollAuthentication(CmpAuthenticationBase):
     def authenticate(self, context: BaseRequestContext) -> None:
         """Authenticate one CMP pollReq using either a domain credential or IDevID."""
         if not isinstance(context, CmpPollRequestContext):
-            exc_msg = 'CmpSignatureBasedPollAuthentication requires a CmpPollRequestContext.'
-            raise TypeError(exc_msg)
+            return # Skip, auth method only applicable for CmpPollRequestContext
 
         if not self._should_authenticate(context):
             return
@@ -752,8 +748,7 @@ class CmpCertConfAuthentication(CmpAuthenticationBase):
     def authenticate(self, context: BaseRequestContext) -> None:
         """Resolve domain and device from the cert_hash in the certConf body."""
         if not isinstance(context, CmpCertConfRequestContext):
-            exc_msg = 'CmpCertConfAuthentication requires a CmpCertConfRequestContext.'
-            raise TypeError(exc_msg)
+            return # Skip, auth method only applicable for CmpCertConfRequestContext
 
         if not context.cert_hash:
             self._raise_value_error('certConf message is missing certHash — cannot resolve domain.')

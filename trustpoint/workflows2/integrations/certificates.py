@@ -53,7 +53,7 @@ def _build_event_source_for_record(
         trustpoint=True,
         ca_id=_resolve_ca_id(domain=domain, ca_id=ca_id if ca_id is not None else explicit_ca_id),
         domain_id=domain.id if domain is not None else None,
-        device_id=str(device.id) if device is not None else None,
+        device_id=device.id if device is not None else None,
     )
 
 
