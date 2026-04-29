@@ -1,21 +1,50 @@
 {% extends 'users/base.html' %}
+{% load static %}
 {% load i18n %}
+
+{% block head %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
+{% endblock head %}
+
 {% block content %}
-    <div class="card tp-card-users text-center">
-        <div class="card-header">
-            <h1>{% trans "Trustpoint - Logout" %}</h1>
-        </div>
-        <div class="card-body pt-4">
 
-            <p>{% trans "You have been logged out." %}</p>
-            {# <p><a href="{% url 'users:login' %}" >{% trans "Login again." %}</a></p> #}
+    <section class="tp-setup-form-shell">
+        {% if messages %}
+            <div class="messages tp-messages text-center tp-setup-form-messages">
+                {% for message in messages %}
+                    <div class="tp-message alert
+                        {% if message.tags %}
+                            {% if message.tags == "error" %}
+                                alert-danger
+                            {% else %}
+                                alert-{{ message.tags }}
+                            {% endif %}
+                        {% endif %} d-flex" role="alert">
 
+                        <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="{{ message.tags }}:">
+                            <use href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use></svg>
+                        <div>
+                            {{ message }}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="tp-setup-form-header">
+            <h1 class="tp-setup-form-heading">{% trans "Logout" %}</h1>
         </div>
-        <div class="card-footer tp-form-btn-group tp-form-btn-group">
-            {# TODO: Back button as soon as we have a landing page. #}
-            {# <a href="#" class="btn btn-secondary">{% trans "Back to Home" %}</a> #}
-            <a href="{% url 'users:login' %}" class="btn btn-primary">{% trans "Login again" %}</a>
+
+        <div class="tp-setup-form-panel">
+            <div class="tp-setup-form">
+                <p class="tp-setup-form-copy">{% trans "You have been logged out." %}</p>
+                <hr class="tp-setup-form-divider">
+                <div class="tp-setup-form-actions">
+                    <a href="{% url 'users:login' %}" class="btn tp-setup-form-submit">{% trans "Login again" %}</a>
+                </div>
+            </div>
         </div>
-    </div>
+    </section>
 
 {% endblock content %}

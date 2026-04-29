@@ -1,0 +1,13 @@
+<label for="{{ widget.attrs.id }}" class="tp-choice-option">
+    <input type="{{ widget.type }}"
+           name="{{ widget.name }}"
+           value="{{ widget.value|stringformat:'s' }}"
+           {% include "django/forms/widgets/attrs.html" %}
+           {% if widget.selected %}checked{% endif %}>
+    <span class="tp-choice-card">
+        <span class="tp-choice-title">{{ widget.label }}</span>
+        {% if widget.description %}
+            <span class="tp-choice-description">{{ widget.description }}</span>
+        {% endif %}
+    </span>
+</label>

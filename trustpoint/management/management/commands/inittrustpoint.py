@@ -56,7 +56,7 @@ class Command(BaseCommand):
             call_command('collectstatic', '--noinput', stdout=fake_out)
             self.stdout.write('Done')
             self.stdout.write('Compiling Messages...')
-            call_command('compilemessages', '-l', 'de', '-l', 'en', stdout=fake_out)
+            call_command('compilemessages', '-l', 'de', '-l', 'en', '--ignore', '.venv', stdout=fake_out)
             self.stdout.write('Done')
 
         if options.get('tls'):
