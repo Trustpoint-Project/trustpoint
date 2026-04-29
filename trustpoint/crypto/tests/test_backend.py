@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from cryptography.hazmat.primitives.asymmetric import ec, rsa, utils
+from cryptography.hazmat.primitives.asymmetric import rsa, utils
 from pkcs11 import Attribute, Mechanism, NoSuchKey, ObjectClass
 
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
