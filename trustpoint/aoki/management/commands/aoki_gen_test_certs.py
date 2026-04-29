@@ -90,7 +90,7 @@ class AokiTestCertGenerator:
                     [
                         x509.DNSName('test_idevid.alt'),
                         # Example manufacturer-defined UUID
-                        x509.UniformResourceIdentifier('urn:uuid:9f568186-7559-44d3-a7b2-e2ea124bf0b3')
+                        x509.UniformResourceIdentifier('urn:uuid:a0a0a0a0-a0a0-40a0-a0a0-a0a0a0a0a0a0')
                     ]), False),
             ],
             validity_days=99999,

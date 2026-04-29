@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 DEVICE_TRACKED_FIELDS: tuple[str, ...] = (
     'common_name',
     'serial_number',
+
     'domain_id',
     'ip_address',
     'opc_server_port',
@@ -43,14 +44,15 @@ def serialize_source(source: Any) -> dict[str, Any]:
         'trustpoint': bool(getattr(source, 'trustpoint', False)),
         'ca_id': _json_scalar(getattr(source, 'ca_id', None)),
         'domain_id': _json_scalar(getattr(source, 'domain_id', None)),
-        'device_id': str(device_id) if (device_id := getattr(source, 'device_id', None)) is not None else None,
+        'device_id': _json_scalar(getattr(source, 'device_id', None)),
     }
 
 
 def build_device_snapshot(device: Any) -> dict[str, Any]:
     """Return a stable JSON-safe snapshot of tracked device fields."""
     snapshot: dict[str, Any] = {
-        'id': str(device_id) if (device_id := getattr(device, 'id', None)) is not None else None,
+        'id': _json_scalar(getattr(device, 'id', None)),
+        'uuid': device.rfc_4122_uuid_str if hasattr(device, 'rfc_4122_uuid_str') else None,
     }
     for field_name in DEVICE_TRACKED_FIELDS:
         snapshot[field_name] = _json_scalar(getattr(device, field_name, None))

@@ -121,7 +121,7 @@ def _build_certificate_request_dispatch(
         trustpoint=False,
         ca_id=issuing_ca.id,
         domain_id=context.domain.id,
-        device_id=str(context.device.id),
+        device_id=context.device.id,
     )
 
     fingerprint = hashlib.sha256(context.cert_requested.tbs_certrequest_bytes).hexdigest()
@@ -210,7 +210,7 @@ def _build_cmp_request_dispatch(
         trustpoint=False,
         ca_id=issuing_ca.id,
         domain_id=context.domain.id,
-        device_id=str(context.device.id),
+        device_id=context.device.id,
     )
     certconf_status = getattr(context, 'cert_conf_status', None)
     certconf_status_str = ''
@@ -301,7 +301,7 @@ def _build_device_source(context: BaseRequestContext) -> EventSource:
         trustpoint=True,
         ca_id=_resolve_device_ca_id(domain),
         domain_id=domain_id,
-        device_id=str(context.device.id) if context.device is not None else None,
+        device_id=context.device.id if context.device is not None else None,
     )
 
 

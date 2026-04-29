@@ -43,9 +43,17 @@ def merge(*groups: Iterable[ContextVar]) -> tuple[ContextVar, ...]:
 DEVICE_CONTEXT = ctx(
     ContextVar(
         'event.device.id',
+        'int',
+        _('Device database ID.'),
+        title=_('Device ID'),
+        group='event.device',
+        example=38,
+    ),
+    ContextVar(
+        'event.device.uuid',
         'uuid',
         _('Device UUID.'),
-        title=_('Device ID'),
+        title=_('Device UUID'),
         group='event.device',
         example='550e8400-e29b-41d4-a716-446655440000',
     ),

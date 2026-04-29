@@ -244,7 +244,11 @@ class IDevIDAuthentication(AuthenticationComponent, LoggerMixin):
 
 
 class CompositeAuthentication(AuthenticationComponent, LoggerMixin):
-    """Composite authenticator for grouping and executing multiple authentication methods."""
+    """Composite authenticator for grouping and executing multiple authentication methods.
+
+    Authentication is deemed successful if any one of the registered components
+    successfully authenticates the request by adding the associated device to the context.
+    """
 
     def __init__(self) -> None:
         """Initialize the composite authenticator with a set of authentication components."""
