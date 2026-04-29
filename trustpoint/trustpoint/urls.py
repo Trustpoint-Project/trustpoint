@@ -90,6 +90,7 @@ urlpatterns += [
     path('api/', include('signer.api_urls')),
     path('api/', include('management.api_urls')),
     path('api/', include('rest_pki.api_urls')),
+    path('api/', include('workflows2.api_urls')),
 
     # JWT endpoints
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),

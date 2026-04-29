@@ -1,3 +1,10 @@
+:root {
+    --tp-fresh-install-accent: #0a4db8;
+    --tp-fresh-install-accent-border: #083f97;
+    --tp-fresh-install-accent-hover: #0c57d0;
+    --tp-fresh-install-accent-hover-border: #0945a4;
+}
+
 .tp-setup-wizard-shell {
     --tp-setup-grid-width: 57.6rem;
     --tp-setup-grid-gap: 3rem;
@@ -240,26 +247,7 @@
     padding: 0.35rem;
 }
 
-.tp-form-group input[type="file"]::file-selector-button {
-    appearance: none;
-    background-color: color-mix(in srgb, var(--bs-primary) 10%, var(--bs-body-bg)) !important;
-    border: 1px solid color-mix(in srgb, var(--bs-primary) 18%, var(--bs-border-color)) !important;
-    border-radius: 0.72rem;
-    color: var(--bs-emphasis-color) !important;
-    cursor: pointer;
-    font-weight: 700;
-    margin: 0.05rem 0.85rem 0.05rem 0.05rem;
-    padding: 0.68rem 1rem;
-    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
-}
-
-.tp-form-group input[type="file"]:hover::file-selector-button,
-.tp-form-group input[type="file"]:focus::file-selector-button,
-.tp-form-group input[type="file"]:active::file-selector-button {
-    background-color: color-mix(in srgb, var(--bs-primary) 22%, var(--bs-body-bg)) !important;
-    border-color: color-mix(in srgb, var(--bs-primary) 34%, var(--bs-border-color)) !important;
-}
-
+.tp-form-group input[type="file"]::file-selector-button,
 .tp-form-group input[type="file"]::-webkit-file-upload-button {
     -webkit-appearance: none;
     appearance: none;
@@ -274,6 +262,9 @@
     transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
+.tp-form-group input[type="file"]:hover::file-selector-button,
+.tp-form-group input[type="file"]:focus::file-selector-button,
+.tp-form-group input[type="file"]:active::file-selector-button,
 .tp-form-group input[type="file"]:hover::-webkit-file-upload-button,
 .tp-form-group input[type="file"]:focus::-webkit-file-upload-button,
 .tp-form-group input[type="file"]:active::-webkit-file-upload-button {
@@ -330,20 +321,20 @@
 
 .tp-setup-form-submit {
     --bs-btn-color: #fff;
-    --bs-btn-bg: #0a4db8;
-    --bs-btn-border-color: #083f97;
+    --bs-btn-bg: var(--tp-fresh-install-accent);
+    --bs-btn-border-color: var(--tp-fresh-install-accent-border);
     --bs-btn-hover-color: #fff;
-    --bs-btn-hover-bg: #0c57d0;
-    --bs-btn-hover-border-color: #0945a4;
+    --bs-btn-hover-bg: var(--tp-fresh-install-accent-hover);
+    --bs-btn-hover-border-color: var(--tp-fresh-install-accent-hover-border);
     --bs-btn-active-color: #fff;
     --bs-btn-active-bg: #0d66e4;
-    --bs-btn-active-border-color: #0a4db8;
+    --bs-btn-active-border-color: var(--tp-fresh-install-accent);
     --bs-btn-focus-shadow-rgb: 10, 77, 184;
     align-items: center;
     border-radius: 0.95rem;
     border: 0px;
     box-shadow:
-        0 0.9rem 2rem color-mix(in srgb, #0a4db8 26%, transparent),
+        0 0.9rem 2rem color-mix(in srgb, var(--tp-fresh-install-accent) 26%, transparent),
         inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
     display: inline-flex;
     font-size: 1rem;
@@ -363,24 +354,24 @@
 
 .tp-setup-form-submit:hover {
     box-shadow:
-        0 1.1rem 2.3rem color-mix(in srgb, #0a4db8 30%, transparent),
+        0 1.1rem 2.3rem color-mix(in srgb, var(--tp-fresh-install-accent) 30%, transparent),
         inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
     transform: translateY(-1px);
 }
 
 .tp-setup-form-submit:focus-visible {
     box-shadow:
-        0 0 0 0.24rem color-mix(in srgb, #0a4db8 22%, transparent),
-        0 1.1rem 2.3rem color-mix(in srgb, #0a4db8 30%, transparent),
+        0 0 0 0.24rem color-mix(in srgb, var(--tp-fresh-install-accent) 22%, transparent),
+        0 1.1rem 2.3rem color-mix(in srgb, var(--tp-fresh-install-accent) 30%, transparent),
         inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
 }
 
-.tp-setup-form-actions .tp-setup-form-submit.btn:active,
-.tp-setup-form-actions .tp-setup-form-submit.btn:active:focus-visible {
+.tp-setup-form-submit.btn:active,
+.tp-setup-form-submit.btn:active:focus-visible {
     box-shadow:
-        0 0.4rem 1rem color-mix(in srgb, #0a4db8 16%, transparent),
-        inset 0 0 0 1px color-mix(in srgb, #0a4db8 18%, transparent),
-        inset 0 0.12rem 0.45rem color-mix(in srgb, #0a4db8 12%, transparent);
+        0 0.4rem 1rem color-mix(in srgb, var(--tp-fresh-install-accent) 16%, transparent),
+        inset 0 0 0 1px color-mix(in srgb, var(--tp-fresh-install-accent) 18%, transparent),
+        inset 0 0.12rem 0.45rem color-mix(in srgb, var(--tp-fresh-install-accent) 12%, transparent);
     transform: translateY(1px);
 }
 
@@ -425,12 +416,14 @@
     transform: translateY(-1px);
 }
 
+.tp-setup-form-back:active,
 .tp-setup-form-back:focus-visible {
     box-shadow:
         0 0 0 0.24rem color-mix(in srgb, #4d545b 22%, transparent),
         0 0.85rem 1.75rem color-mix(in srgb, #4d545b 22%, transparent),
         inset 0 1px 0 color-mix(in srgb, white 14%, transparent);
     color: #fff;
+    transform: translateY(1px);
 }
 
 /* Fresh install wizard */
@@ -456,10 +449,6 @@
 
 .tp-fresh-install-shell {
     --tp-fresh-install-width: 68rem;
-    --tp-fresh-install-accent: #0a4db8;
-    --tp-fresh-install-accent-border: #083f97;
-    --tp-fresh-install-accent-hover: #0c57d0;
-    --tp-fresh-install-accent-hover-border: #0945a4;
     --tp-fresh-install-inner-padding: clamp(1.35rem, 1rem + 1.4vw, 2.2rem);
     margin: 0 auto;
     max-width: 72rem;
@@ -531,14 +520,6 @@
     background: transparent;
     border-bottom: 0;
     padding: 1.35rem 1.35rem 0;
-}
-
-.tp-fresh-install-shell .card-header::after {
-    border-bottom: 1px solid color-mix(in srgb, var(--bs-primary) 18%, var(--bs-border-color));
-    content: "";
-    display: block;
-    margin-top: 1rem;
-    width: 100%;
 }
 
 .tp-fresh-install-shell .card-header > .px-1.py-2 {
@@ -1268,7 +1249,7 @@
 html[data-bs-theme="light"] .tp-fresh-install-shell .tp-summary-loading-card::before {
     background:
         radial-gradient(
-            circle at top,
+            circle at center,
             color-mix(in srgb, var(--tp-fresh-install-accent) 22%, white) 0%,
             color-mix(in srgb, var(--tp-fresh-install-accent) 14%, transparent) 34%,
             transparent 60%
@@ -1325,7 +1306,7 @@ html[data-bs-theme="light"] .tp-fresh-install-shell .tp-summary-loading-card::be
 .tp-fresh-install-shell .tp-summary-loading-title {
     color: var(--bs-emphasis-color);
     font-size: clamp(2rem, 1.75rem + 0.72vw, 2.4rem);
-    font-weight: 900;
+    font-weight: 600;
     letter-spacing: -0.03em;
     line-height: 1.02;
     margin: 0;

@@ -1,5 +1,5 @@
 FROM python:3.14-slim-trixie
-COPY --from=ghcr.io/astral-sh/uv:0.11.7 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.11.8 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -60,7 +60,7 @@ ENV LANG=en_US.UTF-8 \
 WORKDIR /var/www/html/trustpoint/
 
 ARG BRANCH=""
-COPY --chown=www-data:www-data ./ ./
+COPY --chown=www-data:www-data pyproject.toml uv.lock ./
 
 # This allows you to use an argument if you want to build a specific branch, e.g.:
 # docker build --build-arg BRANCH=main ...
@@ -76,9 +76,11 @@ RUN if [ "${BRANCH}" != "" ]; then \
     chown www-data:www-data /var/www/html/trustpoint/
 
 USER www-data
-RUN uv sync --group docs --python-preference only-system
-RUN uv pip install gunicorn[gevent]
+# Install dependencies before copying the entire codebase to leverage Docker caching and speed up subsequent builds
+RUN uv sync --no-install-project --no-dev --group docs --group docker --python-preference only-system
 
+COPY --chown=www-data:www-data ./ ./
+RUN uv sync --no-dev --group docs --group docker --python-preference only-system
 USER root
 
 # Prepare Trustpoint runtime directories.
@@ -131,16 +133,14 @@ RUN mkdir -p /etc/trustpoint/secrets && \
 RUN rm -f /etc/nginx/sites-enabled/*
 COPY ./docker/trustpoint/nginx/trustpoint-nginx-https.conf /etc/nginx/sites-available/trustpoint
 
-RUN chmod +x /etc/trustpoint/wizard/transition/*.sh
-RUN chmod +x /etc/trustpoint/wizard/configure_nginx.sh
-RUN chmod +x /etc/trustpoint/wizard/install_pkcs11_assets.sh
-RUN chmod +x /etc/trustpoint/wizard/update_tls.sh
-RUN chmod +x /etc/trustpoint/wizard/update_tls_nginx.sh
-RUN chmod +x /etc/trustpoint/wizard/wizard_restore.sh
-RUN chmod +x /etc/trustpoint/wizard/switch_to_operational.sh
-
-
-# Make entrypoint and local/dev PKCS#11 bootstrap helper executable.
-RUN chmod +x ./docker/trustpoint/entrypoint.sh ./docker/trustpoint/scripts/upsert_local_dev_pkcs11_profile.sh
+RUN chmod +x /etc/trustpoint/wizard/transition/*.sh \
+             /etc/trustpoint/wizard/configure_nginx.sh \
+             /etc/trustpoint/wizard/install_pkcs11_assets.sh \
+             /etc/trustpoint/wizard/switch_to_operational.sh \
+             /etc/trustpoint/wizard/update_tls.sh \
+             /etc/trustpoint/wizard/update_tls_nginx.sh \
+             /etc/trustpoint/wizard/wizard_restore.sh \
+             ./docker/trustpoint/entrypoint.sh \
+             ./docker/trustpoint/scripts/upsert_local_dev_pkcs11_profile.sh
 
 ENTRYPOINT ["docker/trustpoint/entrypoint.sh"]

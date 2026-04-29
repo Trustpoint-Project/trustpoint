@@ -1399,7 +1399,7 @@ class SetupWizardRestoreBackupView(TemplateView):
         template_name (str): Path to the template used for rendering the initial page.
     """
 
-    http_method_names = ('get',)
+    http_method_names = ('get',) # BackupRestoreView handles submitted POST form
     template_name = 'setup_wizard/restore_backup.html'
 
 
