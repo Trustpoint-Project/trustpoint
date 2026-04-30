@@ -7,7 +7,7 @@ from unittest.mock import patch
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
-from setup_wizard.forms import FreshInstallBackendConfigModelForm
+from setup_wizard.forms import CRYPTO_BACKEND_TYPE_CHOICES, FreshInstallBackendConfigModelForm
 from setup_wizard.models import SetupWizardConfigModel
 
 
@@ -23,6 +23,28 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
         self.assertTrue(form.fields['fresh_install_pkcs11_token_label'].widget.is_hidden)
         self.assertTrue(form.fields['pkcs11_module_upload'].widget.is_hidden)
         self.assertTrue(form.fields['pkcs11_user_pin'].widget.is_hidden)
+
+    def test_software_backend_config_accepts_empty_hidden_pkcs11_fields(self) -> None:
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.SoftwareStorage
+
+        form = FreshInstallBackendConfigModelForm(
+            data={
+                'fresh_install_pkcs11_token_label': '',
+                'pkcs11_user_pin': '',
+            },
+            instance=config_model,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_software_backend_choice_uses_demo_testing_label(self) -> None:
+        choices = dict(CRYPTO_BACKEND_TYPE_CHOICES)
+
+        self.assertEqual(
+            str(choices[SetupWizardConfigModel.CryptoStorageType.SoftwareStorage]),
+            'Software Demo / Testing Backend',
+        )
 
     def test_pkcs11_form_prefills_token_label(self) -> None:
         config_model = SetupWizardConfigModel.get_singleton()

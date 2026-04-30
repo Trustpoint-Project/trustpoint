@@ -118,14 +118,17 @@ class OperationalBootstrapApplier:
 
     @classmethod
     def _configure_software_backend(cls) -> None:
-        """Configure the dev/testing software backend for the operational instance."""
+        """Configure the software demo/testing backend for the operational instance."""
         if not (getattr(settings, 'DEVELOPMENT_ENV', False) or getattr(settings, 'DOCKER_CONTAINER', False)):
-            err_msg = 'The dev/testing crypto backend can only be configured for development container setups.'
+            err_msg = (
+                'The software demo/testing backend can only be configured for development, testing, or '
+                'demo-style container setups.'
+            )
             raise DjangoValidationError(err_msg)
 
         profile = cls._activate_profile(
             backend_kind=BackendKind.SOFTWARE,
-            default_name='trustpoint-software-backend',
+            default_name='trustpoint-software-demo-testing-backend',
         )
         defaults = {
             'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
@@ -144,9 +147,12 @@ class OperationalBootstrapApplier:
 
     @staticmethod
     def _configure_software_app_secret_backend() -> None:
-        """Configure the development-only software app-secret backend."""
+        """Configure the software app-secret backend for demo/testing use."""
         if not (getattr(settings, 'DEVELOPMENT_ENV', False) or getattr(settings, 'DOCKER_CONTAINER', False)):
-            err_msg = 'The software app-secret backend is only allowed for development container setups.'
+            err_msg = (
+                'The software app-secret backend is only allowed for development, testing, or demo-style '
+                'container setups.'
+            )
             raise DjangoValidationError(err_msg)
 
         backend = AppSecretBackendModel.get_singleton()

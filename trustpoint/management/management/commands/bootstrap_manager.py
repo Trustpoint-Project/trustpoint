@@ -97,7 +97,7 @@ class Command(BaseCommand):
     @staticmethod
     def _create_bootstrap_login(output: CommandOutputWrapper) -> None:
         """Create or rotate the temporary bootstrap login and log the password."""
-        username = getattr(settings, 'TRUSTPOINT_BOOTSTRAP_USERNAME', 'tp-admin')
+        username = getattr(settings, 'TRUSTPOINT_BOOTSTRAP_USERNAME', 'admin')
         password = secrets.token_urlsafe(8)
         user_model = get_user_model()
         user, _created = user_model.objects.get_or_create(

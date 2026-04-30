@@ -35,7 +35,7 @@ SupportedPrivateKey = 'RSAPrivateKey | EllipticCurvePrivateKey'
 
 
 class SoftwareBackend:
-    """Software-backed provider adapter for development-only managed key operations."""
+    """Software-backed provider adapter for demo/testing managed key operations."""
 
     provider_name = 'software'
 

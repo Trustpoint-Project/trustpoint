@@ -151,7 +151,7 @@ _TRUSTPOINT_PHASE_ENV = os.getenv('TRUSTPOINT_PHASE', '').strip().lower()
 TRUSTPOINT_PHASE_CONFIGURED = _TRUSTPOINT_PHASE_ENV in TRUSTPOINT_VALID_PHASES or (
     _TRUSTPOINT_PHASE_ENV == TRUSTPOINT_PHASE_AUTO and DOCKER_CONTAINER and TRUSTPOINT_IS_OPERATIONAL
 )
-TRUSTPOINT_BOOTSTRAP_USERNAME = os.getenv('TRUSTPOINT_BOOTSTRAP_USERNAME', 'tp-admin')
+TRUSTPOINT_BOOTSTRAP_USERNAME = os.getenv('TRUSTPOINT_BOOTSTRAP_USERNAME', 'admin')
 
 if TRUSTPOINT_IS_BOOTSTRAP:
     PUBLIC_PATHS.append('/setup-wizard')
@@ -187,6 +187,29 @@ TRUSTPOINT_OPERATIONAL_DATABASE = os.environ.get(
     'TRUSTPOINT_OPERATIONAL_DATABASE',
     _DEFAULT_OPERATIONAL_DATABASE,
 ).strip().lower()
+TRUSTPOINT_LOCAL_SOFTWARE_BACKEND_NAME = os.environ.get(
+    'TRUSTPOINT_LOCAL_SOFTWARE_BACKEND_NAME',
+    'trustpoint-software-demo-testing-backend',
+)
+
+
+def _env_flag(name: str, *, default: bool) -> bool:
+    """Return a boolean environment flag."""
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = _env_flag(
+    'TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND',
+    default=(
+        TRUSTPOINT_IS_OPERATIONAL
+        and DEVELOPMENT_ENV
+        and not DOCKER_CONTAINER
+        and TRUSTPOINT_OPERATIONAL_DATABASE == 'sqlite'
+    ),
+)
 
 
 # Settomg for email backend

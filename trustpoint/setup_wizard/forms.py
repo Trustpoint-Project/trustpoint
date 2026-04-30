@@ -27,8 +27,8 @@ if TYPE_CHECKING:
 
 CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
     str(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage): gettext_lazy(
-        'Use the built-in development and demo backend. Suitable for local testing, demos, and non-production '
-        'container setups.'
+        'Use the built-in software backend. Suitable for local development, automated testing, demos, and '
+        'non-production container setups.'
     ),
     str(SetupWizardConfigModel.CryptoStorageType.HsmStorage): gettext_lazy(
         'Use the PKCS#11 backend with a configured HSM, SoftHSM, or PKCS#11 proxy/module.'
@@ -40,7 +40,7 @@ CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
 }
 
 CRYPTO_BACKEND_TYPE_CHOICES = (
-    (SetupWizardConfigModel.CryptoStorageType.SoftwareStorage, gettext_lazy('Dev / Testing Backend')),
+    (SetupWizardConfigModel.CryptoStorageType.SoftwareStorage, gettext_lazy('Software Demo / Testing Backend')),
     (SetupWizardConfigModel.CryptoStorageType.HsmStorage, gettext_lazy('PKCS#11 Backend')),
     (SetupWizardConfigModel.CryptoStorageType.RestBackend, gettext_lazy('REST Backend')),
 )
@@ -144,7 +144,7 @@ class FreshInstallModelBaseForm(forms.ModelForm[SetupWizardConfigModel]):
 
 
 def _software_backend_available_in_wizard() -> bool:
-    """Return whether the development/testing software backend may be configured."""
+    """Return whether the software demo/testing backend may be configured."""
     return True
 
 
@@ -309,7 +309,7 @@ class FreshInstallCryptoStorageModelForm(FreshInstallModelBaseForm):
         crypto_storage = cast('SetupWizardConfigModel.CryptoStorageType', self.cleaned_data['crypto_storage'])
         if int(crypto_storage) == SetupWizardConfigModel.CryptoStorageType.SoftwareStorage:
             if not _software_backend_available_in_wizard():
-                err_msg = gettext_lazy('The software crypto backend is only available in development environments.')
+                err_msg = gettext_lazy('The software demo/testing backend is not available in this environment.')
                 raise forms.ValidationError(err_msg)
             return crypto_storage
         if int(crypto_storage) == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
@@ -452,6 +452,8 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
 
     def clean_fresh_install_pkcs11_token_label(self) -> str:
         """Require a token label for the simplified PKCS#11 wizard path."""
+        if self.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            return ''
         token_label = (self.cleaned_data.get('fresh_install_pkcs11_token_label') or '').strip()
         if not token_label:
             err_msg = gettext_lazy('Enter the PKCS#11 token label.')

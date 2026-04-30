@@ -5,11 +5,13 @@ from __future__ import annotations
 from django.core.exceptions import ObjectDoesNotExist
 from trustpoint_core.serializer import PrivateKeyLocation
 
+from crypto.local_development import ensure_local_software_backends
 from crypto.models import BackendKind, CryptoProviderPkcs11ConfigModel, CryptoProviderProfileModel
 
 
 def get_configured_profile() -> CryptoProviderProfileModel | None:
     """Return the active configured crypto profile, if any."""
+    ensure_local_software_backends()
     return CryptoProviderProfileModel.objects.filter(active=True).first()
 
 

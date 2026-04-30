@@ -17,6 +17,7 @@ from appsecrets.models import (
     AppSecretPkcs11ConfigModel,
     AppSecretSoftwareConfigModel,
 )
+from crypto.local_development import ensure_local_software_backends
 
 DEK_LENGTH_BYTES: Final[int] = 32
 AES_GCM_NONCE_BYTES: Final[int] = 12
@@ -110,7 +111,10 @@ class SoftwareAppSecretService(BaseAppSecretService):
         if self._config.raw_dek:
             return
         if not (getattr(settings, 'DEVELOPMENT_ENV', False) or getattr(settings, 'DOCKER_CONTAINER', False)):
-            msg = 'The software app-secret backend is only allowed for development or demo container setups.'
+            msg = (
+                'The software app-secret backend is only allowed for development, testing, or demo-style '
+                'container setups.'
+            )
             raise AppSecretConfigurationError(msg)
 
         self._config.raw_dek = os.urandom(DEK_LENGTH_BYTES)
@@ -249,6 +253,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
 
 def get_app_secret_service() -> BaseAppSecretService:
     """Return the active application-secret service implementation."""
+    ensure_local_software_backends()
     backend = AppSecretBackendModel.objects.first()
     if backend is None:
         msg = 'The application-secret backend has not been configured yet.'

@@ -19,6 +19,7 @@ from crypto.adapters.software.capabilities import SoftwareCapabilities
 from crypto.domain.algorithms import KeyAlgorithm
 from crypto.domain.errors import InternalConsistencyError, UnsupportedBackendKindError
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.local_development import ensure_local_software_backends
 from crypto.models import (
     BackendKind,
     CryptoManagedKeyModel,
@@ -59,6 +60,7 @@ class CryptoProviderProfileRepository:
 
     def get_configured_profile(self) -> CryptoProviderProfileModel:
         """Return the configured backend profile for this Trustpoint instance."""
+        ensure_local_software_backends()
         return CryptoProviderProfileModel.objects.get(active=True)
 
     def get_active_profile(self) -> CryptoProviderProfileModel:
