@@ -1109,78 +1109,6 @@
     width: 50%;
 }
 
-.tp-fresh-install-shell .tp-setup-form-submit {
-    --bs-btn-color: #fff;
-    --bs-btn-bg: var(--tp-fresh-install-accent);
-    --bs-btn-border-color: var(--tp-fresh-install-accent-border);
-    --bs-btn-hover-color: #fff;
-    --bs-btn-hover-bg: var(--tp-fresh-install-accent-hover);
-    --bs-btn-hover-border-color: var(--tp-fresh-install-accent-hover-border);
-    --bs-btn-active-color: var(--tp-fresh-install-accent);
-    --bs-btn-active-bg: transparent;
-    --bs-btn-active-border-color: var(--tp-fresh-install-accent);
-    --bs-btn-focus-shadow-rgb: 10, 77, 184;
-    box-shadow:
-        0 0.9rem 2rem color-mix(in srgb, var(--tp-fresh-install-accent) 26%, transparent),
-        inset 0 1px 0 color-mix(in srgb, white 16%, transparent);
-}
-
-.tp-fresh-install-shell .tp-setup-form-submit:hover {
-    box-shadow:
-        0 1.1rem 2.3rem color-mix(in srgb, var(--tp-fresh-install-accent) 30%, transparent),
-        inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
-}
-
-.tp-fresh-install-shell .tp-setup-form-submit:focus-visible {
-    box-shadow:
-        0 0 0 0.24rem color-mix(in srgb, var(--tp-fresh-install-accent) 22%, transparent),
-        0 1.1rem 2.3rem color-mix(in srgb, var(--tp-fresh-install-accent) 30%, transparent),
-        inset 0 1px 0 color-mix(in srgb, white 18%, transparent);
-}
-
-.tp-fresh-install-shell .tp-setup-form-submit.btn:active,
-.tp-fresh-install-shell .tp-setup-form-submit.btn:active:focus-visible {
-    box-shadow:
-        0 0.4rem 1rem color-mix(in srgb, var(--tp-fresh-install-accent) 16%, transparent),
-        inset 0 0 0 1px color-mix(in srgb, var(--tp-fresh-install-accent) 18%, transparent),
-        inset 0 0.12rem 0.45rem color-mix(in srgb, var(--tp-fresh-install-accent) 12%, transparent);
-    transform: translateY(1px);
-}
-
-.tp-fresh-install-shell .tp-setup-form-secondary {
-    --bs-btn-color: var(--bs-emphasis-color);
-    --bs-btn-bg: color-mix(in srgb, var(--bs-body-bg) 88%, var(--tp-fresh-install-accent) 8%);
-    --bs-btn-border-color: color-mix(in srgb, var(--tp-fresh-install-accent) 24%, var(--bs-border-color));
-    --bs-btn-hover-color: var(--bs-emphasis-color);
-    --bs-btn-hover-bg: color-mix(in srgb, var(--bs-body-bg) 78%, var(--tp-fresh-install-accent) 12%);
-    --bs-btn-hover-border-color: color-mix(in srgb, var(--tp-fresh-install-accent) 34%, var(--bs-border-color));
-    --bs-btn-active-color: var(--bs-emphasis-color);
-    --bs-btn-active-bg: color-mix(in srgb, var(--bs-body-bg) 72%, var(--tp-fresh-install-accent) 16%);
-    --bs-btn-active-border-color: color-mix(in srgb, var(--tp-fresh-install-accent) 36%, var(--bs-border-color));
-    --bs-btn-focus-shadow-rgb: 10, 77, 184;
-    border-radius: 0.95rem;
-    border-width: 1px;
-    box-shadow:
-        0 0.7rem 1.6rem color-mix(in srgb, var(--tp-fresh-install-accent) 10%, transparent),
-        inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
-    font-size: 1rem;
-    font-weight: 800;
-}
-
-.tp-fresh-install-shell .tp-setup-form-secondary:hover {
-    box-shadow:
-        0 0.9rem 1.8rem color-mix(in srgb, var(--tp-fresh-install-accent) 14%, transparent),
-        inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
-    transform: translateY(-1px);
-}
-
-.tp-fresh-install-shell .tp-setup-form-secondary:focus-visible {
-    box-shadow:
-        0 0 0 0.24rem color-mix(in srgb, var(--tp-fresh-install-accent) 16%, transparent),
-        0 0.9rem 1.8rem color-mix(in srgb, var(--tp-fresh-install-accent) 14%, transparent),
-        inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
-}
-
 .tp-fresh-install-shell .tp-setup-form-back.disabled,
 .tp-fresh-install-shell .tp-setup-form-back[aria-disabled="true"] {
     box-shadow: none;
@@ -1391,4 +1319,28 @@ html[data-bs-theme="light"] .tp-fresh-install-shell .tp-summary-loading-card::be
 .tp-fresh-install-shell .tp-wizard-step-available .tp-wizard-step-indicator,
 .tp-fresh-install-shell .tp-wizard-step-disabled .tp-wizard-step-indicator {
     display: none;
+}
+
+.tp-fresh-install-shell .tp-setup-form-secondary {
+    --bs-btn-color: var(--bs-emphasis-color);
+    --bs-btn-bg: color-mix(in srgb, var(--bs-body-bg) 88%, var(--tp-fresh-install-accent) 8%);
+    --bs-btn-border-color: color-mix(in srgb, var(--tp-fresh-install-accent) 24%, var(--bs-border-color));
+    --bs-btn-hover-color: var(--bs-emphasis-color);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--bs-body-bg) 78%, var(--tp-fresh-install-accent) 12%);
+    --bs-btn-hover-border-color: color-mix(in srgb, var(--tp-fresh-install-accent) 34%, var(--bs-border-color));
+    --bs-btn-active-color: var(--bs-emphasis-color);
+    --bs-btn-active-bg: color-mix(in srgb, var(--bs-body-bg) 72%, var(--tp-fresh-install-accent) 16%);
+    --bs-btn-active-border-color: color-mix(in srgb, var(--tp-fresh-install-accent) 36%, var(--bs-border-color));
+    --bs-btn-focus-shadow-rgb: 10, 77, 184;
+    border-radius: 0.95rem;
+    border-width: 1px;
+    box-shadow: 0 0.7rem 1.6rem color-mix(in srgb, var(--tp-fresh-install-accent) 10%, transparent);
+    font-size: 1rem;
+    font-weight: 800;
+}
+
+.tp-fresh-install-shell .tp-setup-form-secondary:hover,
+.tp-fresh-install-shell .tp-setup-form-secondary:focus-visible {
+    box-shadow: 0 0.9rem 1.8rem color-mix(in srgb, var(--tp-fresh-install-accent) 14%, transparent);
+    transform: translateY(-1px);
 }
