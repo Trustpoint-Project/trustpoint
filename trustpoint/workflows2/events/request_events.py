@@ -1,0 +1,132 @@
+"""Canonical request-pipeline events owned by Workflow 2."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Event:
+    """Describe one request-pipeline event emitted into workflows2."""
+
+    key: str
+    protocol: str
+    operation: str
+    handler: str
+
+
+class Events:
+    """Central definition of request events supported by workflows2."""
+
+    est_simpleenroll = Event(
+        key='est_simpleenroll',
+        protocol='est',
+        operation='simpleenroll',
+        handler='certificate_request',
+    )
+
+    est_simplereenroll = Event(
+        key='est_simplereenroll',
+        protocol='est',
+        operation='simplereenroll',
+        handler='certificate_request',
+    )
+
+    rest_enroll = Event(
+        key='rest_enroll',
+        protocol='rest',
+        operation='enroll',
+        handler='certificate_request',
+    )
+
+    rest_reenroll = Event(
+        key='rest_reenroll',
+        protocol='rest',
+        operation='reenroll',
+        handler='certificate_request',
+    )
+
+    cmp_initialization = Event(
+        key='cmp_initialization',
+        protocol='cmp',
+        operation='initialization',
+        handler='certificate_request',
+    )
+
+    cmp_certification = Event(
+        key='cmp_certification',
+        protocol='cmp',
+        operation='certification',
+        handler='certificate_request',
+    )
+
+    cmp_certconf = Event(
+        key='cmp_certconf',
+        protocol='cmp',
+        operation='certconf',
+        handler='certificate_request',
+    )
+
+    device_created = Event(
+        key='device_created',
+        protocol='device',
+        operation='created',
+        handler='device_action',
+    )
+
+    device_updated = Event(
+        key='device_updated',
+        protocol='device',
+        operation='updated',
+        handler='device_action',
+    )
+
+    device_deleted = Event(
+        key='device_deleted',
+        protocol='device',
+        operation='deleted',
+        handler='device_action',
+    )
+
+    @classmethod
+    def all(cls) -> list[Event]:
+        """Return every request event defined on this class."""
+        return [value for value in vars(cls).values() if isinstance(value, Event)]
+
+    @classmethod
+    def protocols(cls) -> list[str]:
+        """Return the unique request protocols."""
+        return sorted({event.protocol for event in cls.all() if event.protocol})
+
+    @classmethod
+    def operations_for(cls, protocol: str) -> list[str]:
+        """Return all operations for the given protocol."""
+        normalized_protocol = (protocol or '').strip().lower()
+        return sorted(
+            {
+                event.operation
+                for event in cls.all()
+                if event.protocol == normalized_protocol and event.operation
+            }
+        )
+
+    @classmethod
+    def find(
+        cls,
+        protocol: str | None,
+        operation: str | None,
+        *,
+        handler: str | None = None,
+    ) -> Event | None:
+        """Return the matching request event for the given protocol and operation."""
+        normalized_protocol = (protocol or '').strip().lower()
+        normalized_operation = (operation or '').strip().lower()
+        normalized_handler = (handler or '').strip().lower()
+
+        for event in cls.all():
+            if event.protocol != normalized_protocol or event.operation != normalized_operation:
+                continue
+            if normalized_handler and event.handler != normalized_handler:
+                continue
+            return event
+        return None

@@ -17,6 +17,7 @@ def test_valid_profile_instance() -> None:
     }
     verifier = JSONProfileVerifier(template)
     assert isinstance(verifier, JSONProfileVerifier)
+    assert verifier.profile_dict['credential_type'] == 'application'
 
 
 def test_invalid_profile_instance() -> None:
@@ -26,6 +27,17 @@ def test_invalid_profile_instance() -> None:
     }
     with pytest.raises(ValidationError):
         JSONProfileVerifier(template)
+
+
+def test_invalid_credential_type() -> None:
+    """Test that an invalid credential type raises an error."""
+    template = {
+        'type': 'cert_profile',
+        'credential_type': 'invalid_type'
+    }
+    with pytest.raises(ValidationError):
+        JSONProfileVerifier(template)
+
 
 def test_incomplete_profile_instance() -> None:
     """Test that an incomplete profile instance raises an error.

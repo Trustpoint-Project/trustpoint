@@ -127,7 +127,8 @@ class TestValidateWebhookUrl:
             with pytest.raises(ValidationError):
                 validate_webhook_url(f'https://{host}/webhook')
 
-    def test_dns_resolution_failure(self):
+    @patch('socket.getaddrinfo', side_effect=socket.gaierror)
+    def test_dns_resolution_failure(self, _mock_getaddrinfo):
         """Test that unresolvable hostnames are rejected."""
         with pytest.raises(ValidationError):
             validate_webhook_url('https://nonexistent-domain-12345.com/webhook')

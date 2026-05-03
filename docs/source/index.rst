@@ -42,6 +42,14 @@ Welcome to Trustpoint's documentation!
    security/pkcs11
    security/db_encryption
 
+
+.. toctree::
+   :maxdepth: 2
+   :caption: 🌟 Features
+
+   features/mdns
+
+
 .. toctree::
    :maxdepth: 2
    :caption: 📍 Indices and Tables

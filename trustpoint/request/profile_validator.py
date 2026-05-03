@@ -7,6 +7,7 @@ from cmp.util import PKIFailureInfo as CMPErrs
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from pki.util.cert_req_converter import JSONCertRequestConverter
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
+from request.template_vars import resolve_template_variables
 from trustpoint.logger import LoggerMixin
 
 
@@ -52,6 +53,8 @@ class ProfileValidator(LoggerMixin):
             raise ValueError(exc_msg) from e
 
         cls.logger.info('Validated Cert Request JSON: %s', validated_request)
+
+        validated_request = resolve_template_variables(validated_request, context)
 
         context.cert_requested_profile_validated = JSONCertRequestConverter.from_json(
             validated_request,

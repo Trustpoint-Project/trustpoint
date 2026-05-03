@@ -1,7 +1,27 @@
 {% load static %}
 <div class="card rounded-5 position-relative donut-chart-card-container">
   <div class="card-body">
-    <h6 class="mb-3 fs-5">{{ title }}</h6>
+    <div class="d-flex justify-content-between align-items-start gap-3 mb-3 dashboard-chart-header">
+      <h6 class="mb-0 fs-5">{{ title }}</h6>
+
+      {% if filter_type %}
+      <div class="dashboard-chart-filter-control">
+        <span class="small text-body-secondary">{{ filter_label|default:'Filter' }}</span>
+        <select id="chart_filter_{{ identifier }}" class="form-select form-select-sm dashboard-chart-filter">
+          {% if filter_type == 'period' %}
+          <option value="today" {% if default_preset == 'today' %}selected{% endif %}>Today</option>
+          <option value="last_week" {% if default_preset == 'last_week' %}selected{% endif %}>Last 7 Days</option>
+          <option value="last_month" {% if default_preset == 'last_month' %}selected{% endif %}>Last 30 Days</option>
+          <option value="total" {% if default_preset == 'total' %}selected{% endif %}>Total</option>
+          {% elif filter_type == 'as_of' %}
+          <option value="today" {% if default_preset == 'today' %}selected{% endif %}>Today</option>
+          <option value="in_7_days" {% if default_preset == 'in_7_days' %}selected{% endif %}>In 7 Days</option>
+          <option value="in_30_days" {% if default_preset == 'in_30_days' %}selected{% endif %}>In 30 Days</option>
+          {% endif %}
+        </select>
+      </div>
+      {% endif %}
+    </div>
 
     <div class="position-relative donut-chart-container">
       <canvas id="chart_dount_{{ identifier }}"></canvas>
@@ -11,6 +31,12 @@
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    initializeDonutChart('{{ identifier }}', '{{ dataset }}', '{{ chartTitle }}');
+    initializeDonutChart(
+      '{{ identifier }}',
+      '{{ dataset }}',
+      '{{ chartTitle }}',
+      '{{ filter_type|default:"" }}',
+      '{{ default_preset|default:"" }}'
+    );
   });
 </script>

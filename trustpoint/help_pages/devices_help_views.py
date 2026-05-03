@@ -43,6 +43,7 @@ from help_pages.commands import (
 from help_pages.forms import IpAddressForm
 from help_pages.help_section import HelpPage, HelpRow, HelpSection, ValueRenderType
 from pki.models import IssuedCredentialModel
+from pki.models.cert_profile import CertificateProfileModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
 from pki.util.cert_profile import JSONProfileVerifier, ProfileValidationError
 from trustpoint.page_context import (
@@ -88,10 +89,7 @@ class BaseHelpView(PageContextMixin, DetailView[DeviceModel]):
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
         allowed_app_profiles = list(
-            domain.get_allowed_cert_profiles().exclude(
-                certificate_profile__unique_name=domain.get_domain_credential_profile_name()
-            )
-        )
+            domain.get_allowed_cert_profiles(credential_type=CertificateProfileModel.ProfileCredentialType.APPLICATION))
 
         return HelpContext(
             device=device,
@@ -1931,10 +1929,7 @@ class AokiCmpHelpView(PageContextMixin, TemplateView):
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
         allowed_app_profiles = list(
-            domain.get_allowed_cert_profiles().exclude(
-                certificate_profile__unique_name=domain.get_domain_credential_profile_name()
-            )
-        )
+            domain.get_allowed_cert_profiles(credential_type=CertificateProfileModel.ProfileCredentialType.APPLICATION))
 
         return HelpContext(
             device=None,
@@ -2018,10 +2013,7 @@ class AokiEstHelpView(PageContextMixin, TemplateView):
             raise Http404(PublicKeyInfoMissingErrorMsg)
 
         allowed_app_profiles = list(
-            domain.get_allowed_cert_profiles().exclude(
-                certificate_profile__unique_name=domain.get_domain_credential_profile_name()
-            )
-        )
+            domain.get_allowed_cert_profiles(credential_type=CertificateProfileModel.ProfileCredentialType.APPLICATION))
 
         return HelpContext(
             device=None,
