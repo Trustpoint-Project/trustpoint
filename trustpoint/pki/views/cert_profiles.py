@@ -86,6 +86,7 @@ class CertProfileConfigView(LoggerMixin, CertProfileContextMixin,
 
         default_json = { # new profile default
             'type': 'cert_profile',
+            'credential_type': CertificateProfileModel.ProfileCredentialType.APPLICATION,
             'subj': {},
             'ext': {},
         }

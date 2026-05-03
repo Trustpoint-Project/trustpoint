@@ -21,10 +21,13 @@
                     <hr class="hr-m">
                     <div class="tp-kvp-list">
                         {% for field in form %}
-                            {% if field.name in 'common_name,organization_name,organizational_unit_name,country_name,state_or_province_name,locality_name,email_address' %}
+                            {% if field.name in 'common_name,organization_name,organizational_unit_name,country_name,state_or_province_name,locality_name,email_address,serial_number' %}
                                 <div>
                                     <div>{{ field.label }}</div>
                                     <div>{{ field }}</div>
+                                    {% if field.errors %}
+                                        <div class="text-danger">{{ field.errors }}</div>
+                                    {% endif %}
                                 </div>
                             {% endif %}
                         {% endfor %}
@@ -37,6 +40,9 @@
                                 <div>
                                     <div>{{ field.label }}</div>
                                     <div>{{ field }}</div>
+                                    {% if field.errors %}
+                                        <div class="text-danger">{{ field.errors }}</div>
+                                    {% endif %}
                                 </div>
                             {% endif %}
                         {% endfor %}
@@ -45,10 +51,13 @@
                     <hr class="hr-m">
                     <div class="tp-kvp-list">
                         {% for field in form %}
-                            {% if field.name in 'days,hours,minutes,seconds' %}
+                            {% if field.name in 'not_before,not_after,days,hours,minutes,seconds' %}
                                 <div>
                                     <div>{{ field.label }}</div>
                                     <div>{{ field }}</div>
+                                    {% if field.errors %}
+                                        <div class="text-danger">{{ field.errors }}</div>
+                                    {% endif %}
                                 </div>
                             {% endif %}
                         {% endfor %}

@@ -21,8 +21,6 @@ class CredentialIssueProcessor(AbstractOperationProcessor, LoggerMixin):
         if not isinstance(context, BaseCredentialRequestContext):
             exc_msg = 'Credential issuance requires a subclass of BaseCredentialRequestContext.'
             raise TypeError(exc_msg)
-        if context.enrollment_request and not context.enrollment_request.is_valid():
-            return
         if not context.cert_requested or not isinstance(context.cert_requested, CertificateBuilder):
             exc_msg = 'Credential issuance requires a certificate request in context.'
             raise ValueError(exc_msg)

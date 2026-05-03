@@ -8,7 +8,7 @@ They can also specify default values for fields and validate the request against
 
 import enum
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import (
@@ -18,6 +18,7 @@ from pydantic import (
     ConfigDict,
     Field,
     field_validator,
+    model_validator,
 )
 from trustpoint_core.oid import NameOid
 
@@ -212,8 +213,14 @@ class ExtensionsModel(BaseModel):
 
 class ValidityModel(BaseModel):
     """Model for the validity period of a certificate profile."""
-    not_before: AwareDatetime | None = None  # ISO 8601 format
-    not_after: AwareDatetime | None = None  # ISO 8601 format
+    not_before: AwareDatetime | None = Field(
+        default=None,
+        validation_alias=AliasChoices('not_before', 'notBefore'),
+    )
+    not_after: AwareDatetime | None = Field(
+        default=None,
+        validation_alias=AliasChoices('not_after', 'notAfter'),
+    )
     days: float | None = None  # Number of days for validity
     hours: float | None = None  # Number of hours for validity
     minutes: float | None = None  # Number of minutes for validity
@@ -224,7 +231,36 @@ class ValidityModel(BaseModel):
     validity_max: timedelta | None = None  # Maximum validity period in ISO 8601 format
     validity_min: timedelta | None = None  # Minimum validity period in ISO 8601 format
 
-    model_config = ConfigDict(extra='ignore')  # allow, ignore (default)
+    model_config = ConfigDict(extra='ignore', populate_by_name=True)
+
+
+class ProfileValidityModel(BaseModel):
+    """Validity model for certificate profiles.
+
+    Unlike :class:`ValidityModel` (used for certificate requests), this model
+    also accepts plain strings for ``not_before`` / ``not_after`` so that
+    template variables such as ``{{ time.now }}`` can be stored in the profile
+    and resolved at issuance time.
+    """
+    not_before: AwareDatetime | str | None = Field(
+        default=None,
+        validation_alias=AliasChoices('not_before', 'notBefore'),
+    )
+    not_after: AwareDatetime | str | None = Field(
+        default=None,
+        validation_alias=AliasChoices('not_after', 'notAfter'),
+    )
+    days: float | None = None
+    hours: float | None = None
+    minutes: float | None = None
+    seconds: int | None = None
+    duration: timedelta | None = None
+
+    offset_s: int | None = None
+    validity_max: timedelta | None = None
+    validity_min: timedelta | None = None
+
+    model_config = ConfigDict(extra='ignore', populate_by_name=True)
 
 class CertProfileBaseModel(BaseModel):
     """Base model for each nesting level of certificate profiles.
@@ -285,9 +321,16 @@ class CertProfileModel(CertProfileBaseModel):
     """Model for a certificate profile."""
     type: Literal['cert_profile']
     display_name: str | None = None
+    credential_type: Literal['application', 'domain'] = 'application'
     subject: ProfileSubjectModel = Field(validation_alias='subj', default=ProfileSubjectModel())
     extensions: ProfileExtensionsModel = Field(validation_alias='ext', default=ProfileExtensionsModel())
-    validity: ValidityModel = Field(default=ValidityModel(days=10))
+    validity: ProfileValidityModel = Field(default=ProfileValidityModel(days=10))
+
+    @model_validator(mode='after')
+    def mark_profile_type_as_set(self) -> 'CertProfileModel':
+        """This ensures 'credential_type' is never excluded by the dump 'exclude_unset=True'."""
+        self.__pydantic_fields_set__.add('credential_type')
+        return self
 
 
 class CertRequestModel(BaseModel):
@@ -340,8 +383,9 @@ class JSONProfileVerifier:
         Excludes None, since we check it separately.
 
         List is considered a simple type here (e.g. for SAN dns_names).
+        datetime is considered simple since it appears in validity (not_before/not_after).
         """
-        return isinstance(value, (str, int, float, bool, list))
+        return isinstance(value, (str, int, float, bool, list, datetime, timedelta))
 
     def _handle_request_only_fields(
             self, request: dict[str, Any], profile: dict[str, Any],

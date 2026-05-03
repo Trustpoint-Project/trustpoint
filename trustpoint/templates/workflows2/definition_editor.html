@@ -1,0 +1,183 @@
+{% extends "trustpoint/base.html" %}
+{% load i18n static %}
+
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
+
+{% block content %}
+<div
+  id="wf2-editor-root"
+  class="container-fluid py-3"
+  data-mode="{{ mode }}"
+  data-context-catalog-url="{% url 'workflows2:context_catalog' %}"
+>
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+      {% if mode == "create" %}
+        <h1 class="h4 mb-0">{% trans "New workflow (v2)" %}</h1>
+      {% else %}
+        <h1 class="h4 mb-0">{% trans "Edit workflow (v2)" %}</h1>
+        <div class="text-muted small">{% trans "ID" %}: <code>{{ definition.id }}</code></div>
+      {% endif %}
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'workflows2:definitions_list' %}">{% trans "Back" %}</a>
+  </div>
+
+  {% if compile_error %}
+    <div class="alert alert-danger">
+      <div class="fw-semibold">{% trans "Compile error" %}</div>
+      <div class="font-monospace mt-2 wf2-pre-wrap">{{ compile_error }}</div>
+    </div>
+  {% endif %}
+
+  <div class="row g-3">
+    <div class="col-12 col-xl-7">
+      <div class="card">
+        <div class="card-body">
+          <form method="post" id="wf2-form" novalidate>
+            {% csrf_token %}
+
+            <div class="mb-3">
+              <label class="form-label">{{ form.name.label }}</label>
+              {{ form.name }}
+            </div>
+
+            <div class="form-check mb-3">
+              {{ form.enabled }}
+              <label class="form-check-label">{{ form.enabled.label }}</label>
+            </div>
+
+            <div class="mb-3">
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <label class="form-label mb-0">{{ form.yaml_text.label }}</label>
+                <div class="d-flex gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-open-guide">
+                    {% trans "Guide" %}
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-secondary"
+                    id="wf2-format-yaml"
+                    disabled
+                    title="{% trans 'Formatting will be reconnected after semantic YAML document operations are added.' %}"
+                  >
+                    {% trans "Format YAML" %}
+                  </button>
+                </div>
+              </div>
+
+              <div id="wf2-code-editor" class="wf2-editor-host" aria-label="{% trans 'Workflow YAML editor' %}"></div>
+
+              <div class="wf2-hidden-textarea">
+                {{ form.yaml_text }}
+              </div>
+
+              {% if form.yaml_text.help_text %}
+                <div class="form-text">{{ form.yaml_text.help_text }}</div>
+              {% endif %}
+
+              <div class="form-text mt-2" id="wf2-editor-status">
+                {% trans "Loading editor…" %}
+              </div>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button class="btn btn-primary" type="submit">{% trans "Save & Compile" %}</button>
+              {% if mode == "edit" %}
+                <a class="btn btn-outline-secondary" href="{% url 'workflows2:definitions_edit' definition.id %}">
+                  {% trans "Reload" %}
+                </a>
+              {% endif %}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-xl-5">
+      <div class="card mb-3" id="wf2-graph-card" tabindex="0">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <div class="fw-semibold">{% trans "Interactive flow editor" %}</div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small" id="wf2-graph-status">{% trans "Loading…" %}</span>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-secondary"
+              id="wf2-graph-expand"
+              aria-expanded="false"
+            >
+              {% trans "Expand" %}
+            </button>
+          </div>
+        </div>
+
+        <div class="card-body wf2-graph-card-body">
+          <div class="wf2-graph-issues-wrap">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <div class="fw-semibold">{% trans "Issues" %}</div>
+              <div class="small text-muted">
+                {% trans "Syntax, draft-graph, and editor issues" %}
+              </div>
+            </div>
+
+            <div
+              id="wf2-issues-list"
+              class="wf2-issues-panel"
+              aria-live="polite"
+            >
+              <div class="text-muted">{% trans "No current issues." %}</div>
+            </div>
+          </div>
+
+          <div
+            id="wf2-graph-editor"
+            class="wf2-graph-editor-host"
+            aria-label="{% trans 'Interactive workflow graph editor' %}"
+          >
+            {% trans "Loading graph…" %}
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <div class="fw-semibold">{% trans "Compiled IR" %}</div>
+          {% if definition %}
+            <span class="text-muted small"><code>{{ definition.ir_hash }}</code></span>
+          {% endif %}
+        </div>
+        <div class="card-body">
+          {% if ir_json %}
+            <pre class="wf2-pretty-box mb-0">{{ ir_json|safe }}</pre>
+          {% else %}
+            <div class="text-muted">{% trans "Save to compile and display IR." %}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<aside id="wf2-guide-drawer" class="wf2-guide-drawer" aria-hidden="true">
+  <div class="wf2-guide-drawer-header">
+    <div>
+      <div class="fw-semibold">{% trans "Workflow guide" %}</div>
+      <div class="text-muted small">{% trans "Minimal YAML help for the section you are editing." %}</div>
+    </div>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="wf2-close-guide">
+      {% trans "Close" %}
+    </button>
+  </div>
+
+  <div class="wf2-guide-drawer-body">
+    <div id="wf2-guide-content" class="wf2-guide-content">
+      {% trans "Loading guide…" %}
+    </div>
+  </div>
+</aside>
+
+<script defer src="{% static 'js/workflows2/editor_bundle.js' %}"></script>
+
+{% endblock %}

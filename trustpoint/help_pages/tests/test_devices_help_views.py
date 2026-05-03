@@ -47,7 +47,7 @@ class BaseHelpViewTests(TestCase):
         mock_domain = Mock()
         mock_domain.unique_name = 'test-domain'
         mock_domain.public_key_info = Mock()
-        mock_domain.get_allowed_cert_profiles.return_value.exclude.return_value = []
+        mock_domain.get_allowed_cert_profiles.return_value = []
 
         mock_device = Mock()
         mock_device.domain = mock_domain
@@ -110,7 +110,7 @@ class BaseHelpViewTests(TestCase):
         mock_domain = Mock()
         mock_domain.unique_name = 'test-domain'
         mock_domain.public_key_info = Mock()
-        mock_domain.get_allowed_cert_profiles.return_value.exclude.return_value = []
+        mock_domain.get_allowed_cert_profiles.return_value = []
 
         mock_device = Mock()
         mock_device.domain = mock_domain

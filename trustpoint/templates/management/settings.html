@@ -1,16 +1,20 @@
 {% extends 'trustpoint/base.html' %}
 {% load i18n %}
+
 {% block head %}
     <script src="{% url 'javascript-catalog' %}"></script>
 {% endblock head %}
+
 {% block content %}
 <div class="tp-settings-layout">
 
   <div class="tp-settings-tabs">
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=internationalization" data-settings-tab="panel-internationalization">{% trans "Internationalization" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=security" data-settings-tab="panel-security">{% trans "Security" %}</a>
+    <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=workflow" data-settings-tab="panel-workflow">{% trans "Workflow Execution" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=log" data-settings-tab="panel-log">{% trans "Logging" %}</a>
     <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=notifications" data-settings-tab="panel-notifications">{% trans "Notifications" %}</a>
+    <a class="tp-settings-tab-link" href="{% url 'management:settings' %}?tab=metrics" data-settings-tab="panel-metrics">{% trans "Metrics" %}</a>
   </div>
 
   <div class="tp-settings-content">
@@ -23,12 +27,62 @@
       {% include 'management/includes/security_configuration.html' with form=security_form %}
     </div>
 
+    <div id="panel-workflow" class="tp-settings-panel">
+      <div class="card">
+        <div class="card-body pt-4 pb-4">
+          <form method="POST" enctype="multipart/form-data" id="workflow_execution_configuration">
+            {% csrf_token %}
+            <input type="hidden" name="form_name" value="workflow_execution">
+
+            <fieldset class="form-group tp-form-group">
+              {{ workflow_execution_form.as_p }}
+            </fieldset>
+
+            <div class="alert alert-info mt-3" role="alert">
+              <div class="text-start">
+                <strong>{% trans "Worker detection" %}</strong><br>
+                {% trans "A worker is considered available if a heartbeat was seen within" %}
+                {{ workflow_worker_stale_after_seconds }}
+                {% trans "seconds." %}
+                <br><br>
+                {% if workflow_worker_any_alive %}
+                  <strong>{% trans "Status" %}:</strong> {% trans "Worker detected" %}<br>
+                  <strong>{% trans "Latest worker" %}:</strong> {{ workflow_worker_latest_id }}<br>
+                  <strong>{% trans "Last seen" %}:</strong> {{ workflow_worker_latest_seen }}
+                {% else %}
+                  <strong>{% trans "Status" %}:</strong> {% trans "No worker detected" %}
+                {% endif %}
+
+                {% if workflow_inline_takeover_enabled %}
+                  <br><br>
+                  <strong>{% trans "Inline takeover" %}:</strong>
+                  {% trans "When mode is auto or inline, the web process will drain queued workflow jobs on incoming requests whenever no live worker is available." %}
+                {% endif %}
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div class="card-footer d-flex justify-content-between">
+          <div class="tp-card-btn-footer m-1">
+            <button class="btn btn-primary" type="submit" form="workflow_execution_configuration">
+              {% trans "Save" %}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div id="panel-log" class="tp-settings-panel">
       {% include 'management/includes/log_configuration.html' with form=logging_form %}
     </div>
 
     <div id="panel-notifications" class="tp-settings-panel">
       {% include 'management/includes/notification_configuration.html' with form=notification_form %}
+    </div>
+
+    <div id="panel-metrics" class="tp-settings-panel">
+      {% include 'management/includes/metrics.html' %}
     </div>
 
   </div>

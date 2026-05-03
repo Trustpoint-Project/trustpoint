@@ -33,6 +33,24 @@
 
 {#    <div class="container-fluid p-0 m-0 d-flex">#}
         <nav class="tp-sidenav">
+            {% if notification_alert_total > 0 %}
+                <div class="mb-2">
+                    <a href="{% url 'management:notifications' %}?unread_only=1" class="text-decoration-none d-flex flex-column gap-1">
+                        {% if notification_alert_critical_count > 0 %}
+                            <span class="badge bg-danger d-flex align-items-center gap-1 px-2 py-2" style="font-size: 0.8rem; border-radius: 0.5rem;">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                {{ notification_alert_critical_count }} {% trans "Critical" %}
+                            </span>
+                        {% endif %}
+                        {% if notification_alert_warning_count > 0 %}
+                            <span class="badge bg-warning text-dark d-flex align-items-center gap-1 px-2 py-2" style="font-size: 0.8rem; border-radius: 0.5rem;">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                {{ notification_alert_warning_count }} {% trans "Warning" %}
+                            </span>
+                        {% endif %}
+                    </a>
+                </div>
+            {% endif %}
             <div class="tp-menu-group">
                 <a href="{% url 'home:dashboard' %}" class="tp-menu-head {% if page_name == 'dashboard' %}tp-menu-active{% endif %}">
                     <svg class="bi" fill="currentColor" role="img">
@@ -104,34 +122,39 @@
                     <a href="{% url 'management:tls' %}" class="tp-menu-item {% if page_name == 'tls' %}tp-menu-active{% endif %}">{% trans "TLS" %}</a>
                     <a href="{% url 'management:backups' %}" class="tp-menu-item {% if page_name == 'backup' %}tp-menu-active{% endif %}">{% trans "Backups" %}</a>
                     <a href="{% url 'management:key_storage' %}" class="tp-menu-item {% if page_name == 'key_storage' %}tp-menu-active{% endif %}">{% trans "Key Storage" %}</a>
+                    <a href="{% url 'management:notifications' %}" class="tp-menu-item {% if page_name == 'notifications' %}tp-menu-active{% endif %}">{% trans "Notifications" %}</a>
                 </div>
             </div>
 
             <div class="tp-menu-group">
-                <a href="{% url 'workflows:definition_table' %}"
-                    class="tp-menu-head {% if page_category == 'workflows' %}tp-menu-active{% endif %}">
+                <a href="{% url 'workflows2:definitions_list' %}"
+                class="tp-menu-head {% if page_category == 'workflows2' %}tp-menu-active{% endif %}">
                     <svg class="bi" fill="currentColor" role="img">
-                    <use href="{% static 'img/icons.svg' %}#icon-card-checklist"></use>
+                        <use href="{% static 'img/icons.svg' %}#icon-card-checklist"></use>
                     </svg>
                     {% translate "Workflows" %}
-                    <div class="btn-collapse" data-category="workflows"
-                        aria-expanded="{% if page_category == 'workflows' %}true{% else %}false{% endif %}">
+                    <div class="btn-collapse" data-category="workflows2"
+                        aria-expanded="{% if page_category == 'workflows2' %}true{% else %}false{% endif %}">
                     </div>
                 </a>
 
-                <div class="tp-menu-collapse {% if page_category == 'workflows' %}show{% endif %}">
-                    <a href="{% url 'workflows:definition_table' %}"
-                    class="tp-menu-item {% if page_name == 'definitions' %}tp-menu-active{% endif %}">
-                    {% trans "Workflows" %}
+                <div class="tp-menu-collapse {% if page_category == 'workflows2' %}show{% endif %}">
+                    <a href="{% url 'workflows2:definitions_list' %}"
+                    class="tp-menu-item {% if page_name == 'definitions_list' %}tp-menu-active{% endif %}">
+                        {% trans "Definitions" %}
                     </a>
 
-                    <a href="{% url 'workflows:request_table' %}"
-                    class="tp-menu-item {% if page_name == 'pending_requests' %}tp-menu-active{% endif %}">
-                    {% trans "Pending Requests" %}
+                    <a href="{% url 'workflows2:runs-list' %}"
+                    class="tp-menu-item {% if page_name == 'runs-list' %}tp-menu-active{% endif %}">
+                        {% trans "Runs" %}
                     </a>
 
+                    <a href="{% url 'workflows2:approvals-list' %}"
+                    class="tp-menu-item {% if page_name == 'approvals-list' %}tp-menu-active{% endif %}">
+                        {% trans "Approvals" %}
+                    </a>
                 </div>
-                </div>
+            </div>
             <div class="tp-menu-footer">
                 <div class="tp-menu-group">
                     <button class="tp-menu-head theme-toggle" type="button">

@@ -157,13 +157,20 @@ class DomainModel(models.Model):
             raise ValueError(err_msg)
         return self.issuing_ca
 
-    def get_allowed_cert_profiles(self) -> models.QuerySet[DomainAllowedCertificateProfileModel]:
+    def get_allowed_cert_profiles(self, credential_type: CertificateProfileModel.ProfileCredentialType | None = None
+                                  ) -> models.QuerySet[DomainAllowedCertificateProfileModel]:
         """Gets the allowed certificate profiles for this domain.
+
+        Args:
+            credential_type: Optional filter for the certificate profile type.
 
         Returns:
             QuerySet of allowed DomainAllowedCertificateProfileModel instances.
         """
-        return self.certificate_profiles.select_related('certificate_profile').all()
+        queryset = self.certificate_profiles.select_related('certificate_profile').all()
+        if credential_type is not None:
+            queryset = queryset.filter(certificate_profile__credential_type=credential_type)
+        return queryset
 
     def get_allowed_cert_profile_names(self) -> set[str]:
         """Gets the set of allowed certificate profile names for this domain.

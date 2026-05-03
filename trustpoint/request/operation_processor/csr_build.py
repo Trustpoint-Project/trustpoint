@@ -17,6 +17,7 @@ from cryptography.x509 import (
 
 from pki.util.cert_profile import JSONProfileVerifier
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
+from request.template_vars import resolve_template_variables
 from trustpoint.logger import LoggerMixin
 
 from .base import AbstractOperationProcessor
@@ -259,6 +260,8 @@ class ProfileAwareCsrBuilder(CsrBuilder):
         profile_json = context.certificate_profile_model.profile
         profile_verifier = JSONProfileVerifier(profile_json)
         context.validated_request_data = profile_verifier.apply_profile_to_request(context.request_data)
+
+        context.validated_request_data = resolve_template_variables(context.validated_request_data, context)
 
         self.logger.debug('Applied profile validation. Validated data: %s', context.validated_request_data)
 

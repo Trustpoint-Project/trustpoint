@@ -45,8 +45,6 @@ class CertificateIssueProcessor(AbstractOperationProcessor):
         if not isinstance(context, BaseCertificateRequestContext):
             exc_msg = 'Certificate issuance requires a subclass of BaseCertificateRequestContext.'
             raise TypeError(exc_msg)
-        if context.enrollment_request and not context.enrollment_request.is_valid():
-            return None
 
         if context.domain and context.domain.issuing_ca:
             issuing_ca = context.domain.issuing_ca
@@ -106,7 +104,10 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
         request: HttpRequest | None = None
         if isinstance(context, HttpBaseRequestContext):
             request = context.raw_message
-        port = request.META.get('SERVER_PORT', '') if request else ''
+        request_meta = getattr(request, 'META', {}) if request else {}
+        if not isinstance(request_meta, dict):
+            request_meta = {}
+        port = request_meta.get('SERVER_PORT', '')
         if port == '443': # CRL always served via HTTP
             port = ''
         port_str = f':{port}' if port else ''

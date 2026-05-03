@@ -6,22 +6,18 @@
   </div>
 </div>
 
+{% url 'pki:certificates' as certs_url %}
+
 <!-- panels row -->
-<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-3">
+<div class="row g-3">
 
   <!-- number of certificates-->
-  <div class="col">
-    {% url 'pki:certificates' as certs_url %}
-    {% include "home/dashboard_card.html" with title="Active Certificates" card_type="active" identifier="active_certs" dataset="cert_counts" link_url=certs_url %}
+  <div class="col-12 col-sm-6 col-lg-3">
+    {% include "home/dashboard_card.html" with title="Active Certificates" card_type="active" identifier="active_certs" dataset="cert_counts" link_url=certs_url|add:'?status=ok&expiry_window=after_30_days' %}
   </div>
 
-  <!-- number of Expiring Certificates -->
-  <div class="col">
-    {% include "home/dashboard_card.html" with title="Expiring Certificates" card_type="expiring" identifier="expiring_certs" dataset="cert_counts" %} 
-  </div>
-
-  <!-- Onboarded Devices / expired certs -->
-  <div class="col">
-    {% include "home/dashboard_card.html" with title="Expired Certificates" card_type="expired" identifier="expired_certs" dataset="cert_counts" %}
+  <!-- Expiring certificates summary -->
+  <div class="col-12 col-sm-6 col-lg-3">
+    {% include "home/dashboard_card.html" with title="Expiring Certificates" card_type="expiring_summary" identifier="expiring_certs" dataset="cert_counts" link_url=certs_url|add:'?status=ok&expiry_window=30_days' %}
   </div>
 </div>

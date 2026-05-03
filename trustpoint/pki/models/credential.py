@@ -670,6 +670,40 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         self.certificates.clear()
         # CertificateChainOrderModel is deleted via CASCADE
 
+    @transaction.atomic
+    def force_delete(self) -> tuple[int, dict[str, int]]:
+        """Delete the credential without running ``pre_delete`` and then delete its certificates."""
+        certificates_to_delete: list[CertificateModel] = [
+            chain_entry.certificate
+            for chain_entry in self.ordered_certificate_chain_queryset.order_by('-order')
+        ]
+        if self.certificate is not None:
+            certificates_to_delete.append(self.certificate)
+
+        count = models.Model.delete(self)
+        deleted_certificate_pks: set[int] = set()
+        for certificate in certificates_to_delete:
+            if certificate.pk in deleted_certificate_pks:
+                continue
+            deleted_certificate_pks.add(certificate.pk)
+            certificate_in_db = CertificateModel.objects.filter(pk=certificate.pk).first()
+            if certificate_in_db is None:
+                continue
+            if self._certificate_has_remaining_protected_references(certificate_in_db):
+                continue
+            certificate_in_db.delete()
+        return count
+
+    @staticmethod
+    def _certificate_has_remaining_protected_references(certificate: CertificateModel) -> bool:
+        """Return whether the certificate is still referenced through protected relations."""
+        return (
+            certificate.credential_set.exists()
+            or certificate.certificatechainordermodel_set.exists()
+            or certificate.primary_certificate_set.exists()
+            or certificate.keyless_cas.exists()
+        )
+
     def get_private_key(self) -> PrivateKey:
         """Gets an abstraction of the credential private key.
 
@@ -798,14 +832,13 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return None
 
     def get_root_ca_certificate_serializer(self) -> None | CertificateSerializer:
-        """Gets the root CA certificate serializer."""
+        """Get the root CA certificate serializer or a self-signed main certificate."""
         last_certificate_in_chain = self.certificatechainordermodel_set.order_by('order').last()
-        if last_certificate_in_chain is None:
-            if self.certificate is None:
-                return None
-            return self.certificate.get_certificate_serializer()
-        if last_certificate_in_chain.certificate.is_root_ca:
+        if last_certificate_in_chain is not None and last_certificate_in_chain.certificate.is_root_ca:
             return last_certificate_in_chain.certificate.get_certificate_serializer()
+
+        if self.certificate is not None and self.certificate.is_self_signed:
+            return self.get_certificate_serializer()
         return None
 
     def get_credential_serializer(self) -> CredentialSerializer:
@@ -1034,22 +1067,32 @@ class IDevIDReferenceModel(models.Model):
         The stored ``idevid_ref`` format is ``dev-owner:<subj_sn>.<x509_sn>.<sha256_fingerprint>``.
         This property strips the ``dev-owner:`` scheme prefix and returns the first segment.
         """
+        if not self.idevid_ref.startswith('dev-owner:cert:'):
+            return ''
         try:
-            # Remove 'dev-owner:' prefix before splitting
-            return self.idevid_ref.removeprefix('dev-owner:').split('.')[0]
+            # Remove 'dev-owner:cert:' prefix before splitting
+            return self.idevid_ref.removeprefix('dev-owner:cert:').split('_')[0]
         except IndexError:
             return ''
 
     @property
-    def idevid_x509_serial_number(self) -> str:
-        """Returns the IDevID X.509 Serial Number from the SAN of the DevOwnerID certificate.
+    def idevid_san_uri(self) -> str:
+        """Returns the IDevID SAN URI reference from the DevOwnerID certificate.
 
-        Second dot-separated segment after stripping the ``dev-owner:`` prefix.
+        Second dot-separated segment after stripping the ``dev-owner:uri:`` prefix.
         """
-        try:
-            return self.idevid_ref.removeprefix('dev-owner:').split('.')[1]
-        except IndexError:
+        if not self.idevid_ref.startswith('dev-owner:uri:'):
             return ''
+        return self.idevid_ref.removeprefix('dev-owner:uri:')
+
+    @property
+    def idevid_subj_sn_or_san_uri(self) -> str:
+        """Returns the IDevID Subject Serial Number or SAN URI from the SAN of the DevOwnerID certificate.
+
+        This property returns the Subject Serial Number if the stored reference
+        starts with ``dev-owner:cert:``, and returns the SAN URI if it starts with ``dev-owner:uri:``.
+        """
+        return self.idevid_subject_serial_number or self.idevid_san_uri
 
     @property
     def idevid_sha256_fingerprint(self) -> str:
@@ -1057,8 +1100,10 @@ class IDevIDReferenceModel(models.Model):
 
         Third dot-separated segment after stripping the ``dev-owner:`` prefix.
         """
+        if not self.idevid_ref.startswith('dev-owner:cert:'):
+            return ''
         try:
-            return self.idevid_ref.removeprefix('dev-owner:').split('.')[2]
+            return self.idevid_ref.removeprefix('dev-owner:cert:').split('_')[1]
         except IndexError:
             return ''
 
@@ -1330,5 +1375,3 @@ class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):
         self.logger.debug('Deleting remote issued credentials of owner credential %s', self)
         for issued in self.remote_issued_credentials.all():
             issued.credential.delete()
-
-

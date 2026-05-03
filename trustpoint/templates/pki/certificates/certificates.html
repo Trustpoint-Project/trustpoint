@@ -11,6 +11,7 @@
         <h1>{% trans "Certificates" %}</h1>
         {% endif %}
     </div>
+    {% include 'pki/certificates/table_filter.html' with table_url='pki:certificates' %}
     <div class="card-body text-start" style="overflow: auto; flex-grow: 1; max-height: 90%">
         {% include 'pki/certificates/table.html' %}
     </div>

@@ -1,6 +1,7 @@
 {
     "type": "cert_profile",
     "display_name": "Issuing CA",
+    "credential_type": "application",
     "subj": {
         "allow": "*",
         "common_name": {"required": true},

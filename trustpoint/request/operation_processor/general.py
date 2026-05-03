@@ -7,11 +7,15 @@ from request.request_context import (
     BaseRevocationRequestContext,
     CmpBaseRequestContext,
     CmpCertConfRequestContext,
+    CmpCertificateRequestContext,
+    CmpPollRequestContext,
 )
 from trustpoint.logger import LoggerMixin
 
 from .base import AbstractOperationProcessor
 from .cert_conf import CertConfProcessor
+from .cmp_certificate_request import CmpCertificateRequestProcessor
+from .cmp_poll import CmpPollProcessor
 from .issue_cert import CertificateIssueProcessor
 from .revoke_cert import CertificateRevocationProcessor
 
@@ -22,17 +26,22 @@ class OperationProcessor(AbstractOperationProcessor, LoggerMixin):
     def process_operation(self, context: BaseRequestContext) -> None:
         """Process the requested operation."""
         processor_instance: AbstractOperationProcessor
-        if isinstance(context, CmpCertConfRequestContext):
+        if isinstance(context, CmpPollRequestContext):
+            processor_instance = CmpPollProcessor()
+        elif isinstance(context, CmpCertConfRequestContext):
             processor_instance = CertConfProcessor()
+        elif isinstance(context, CmpCertificateRequestContext):
+            processor_instance = CmpCertificateRequestProcessor()
         elif isinstance(context, BaseCertificateRequestContext):
-            # Process certificate issuance operation
             processor_instance = CertificateIssueProcessor()
         elif isinstance(context, BaseRevocationRequestContext):
-            # Process certificate revocation operation
             processor_instance = CertificateRevocationProcessor()
         else:
-            context.error('No suitable operation processor available for the given context.',
-                          http_status=500, cmp_code=PKIFailureInfo.SYSTEM_FAILURE)
+            context.error(
+                'No suitable operation processor available for the given context.',
+                http_status=500,
+                cmp_code=PKIFailureInfo.SYSTEM_FAILURE,
+            )
             exc_msg = f'No suitable operation processor available for the given context {context}.'
             raise TypeError(exc_msg)
 

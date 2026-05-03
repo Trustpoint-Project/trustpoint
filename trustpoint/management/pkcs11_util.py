@@ -1,11 +1,13 @@
+# TODO(Air): Remove when reworking pkcs11.  # noqa: FIX002
+# mypy: ignore-errors
 """PKCS#11 Utility Functions."""
 import contextlib
 import types
 from abc import ABC, abstractmethod
 from types import TracebackType
-from typing import Any, ClassVar, Never
+from typing import Any, ClassVar, Never, Self
 
-import pkcs11  # type: ignore[import-untyped]
+import pkcs11
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import (
     ec,
@@ -18,7 +20,7 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.hazmat.primitives.serialization import Encoding, KeySerializationEncryption, PrivateFormat
 from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, lib
-from pkcs11.exceptions import NoSuchKey, PKCS11Error  # type: ignore[import-untyped]
+from pkcs11.exceptions import NoSuchKey, PKCS11Error
 from trustpoint_core.oid import NamedCurve
 
 from trustpoint.logger import LoggerMixin
@@ -37,7 +39,7 @@ class Pkcs11Utilities(LoggerMixin):
             lib_path (str): Path to the PKCS#11 library.
         """
         self._lib = lib(lib_path)
-        self._slots_cache = None
+        self._slots_cache: list[pkcs11.Slot] | None = None
         self._tokens_cache: list[pkcs11.Token] = []
 
     def _raise_value_error(self, message: str) -> Never:
@@ -425,7 +427,7 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
         if hasattr(self, '_session') and self._session:
             self._session.close()
 
-    def __enter__(self) -> 'Pkcs11PrivateKey':
+    def __enter__(self) -> Self:
         """Context manager entry point.
 
         Returns:
@@ -554,7 +556,7 @@ class Pkcs11AESKey:
                 self._session.close()
             self._session = None
 
-    def __enter__(self) -> 'Pkcs11AESKey':
+    def __enter__(self) -> Self:
         """Context manager entry."""
         return self
 

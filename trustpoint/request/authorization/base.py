@@ -12,6 +12,7 @@ from trustpoint_core.oid import HashAlgorithm, NamedCurve
 from aoki.views import AokiServiceMixin
 from management.models import SecurityConfig
 from pki.models import IssuedCredentialModel
+from pki.models.cert_profile import CertificateProfileModel
 from request.profile_validator import ProfileValidator
 from request.request_context import BaseCertificateRequestContext, BaseRequestContext
 from trustpoint.logger import LoggerMixin
@@ -66,14 +67,24 @@ class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
 
         requested_profile = context.cert_profile_str
 
-        if not requested_profile:
-            error_message = 'Certificate profile is missing in the context. Authorization denied.'
-            self.logger.warning('Certificate profile authorization failed: Profile information is missing')
-            raise ValueError(error_message)
-
         if not context.domain:
             error_message = 'Domain information is missing in the context. Authorization denied.'
             self.logger.warning('Certificate profile authorization failed: Domain information is missing')
+            raise ValueError(error_message)
+
+        if not context.device:
+            error_message = 'Device information is missing in the context. Authorization denied.'
+            self.logger.warning('Certificate profile authorization failed: Device information is missing')
+            raise ValueError(error_message)
+
+        if not requested_profile and context.domain_str == '.aoki':
+            # For AOKI requests, if no profile is specified, default to the domain credential profile
+            requested_profile = context.domain.get_domain_credential_profile_name()
+            context.cert_profile_str = requested_profile
+
+        if not requested_profile:
+            error_message = 'Certificate profile is missing in the context. Authorization denied.'
+            self.logger.warning('Certificate profile authorization failed: Profile information is missing')
             raise ValueError(error_message)
 
         try:
@@ -87,6 +98,18 @@ class CertificateProfileAuthorization(AuthorizationComponent, LoggerMixin):
             )
             self.logger.warning(error_message)
             raise ValueError(error_message) from e
+
+        if (not context.device.onboarding_config
+            and context.certificate_profile_model.credential_type
+            == CertificateProfileModel.ProfileCredentialType.DOMAIN):
+            context.http_response_content = f'Not authorized for requested certificate profile "{requested_profile}".'
+            context.http_response_status = 403
+            error_message = (
+                f"No-Onboarding Device '{context.device.common_name}' "
+                f"is not allowed to request domain credential profiles."
+            )
+            self.logger.warning(error_message)
+            raise ValueError(error_message)
 
         ProfileValidator.validate(context)
 
