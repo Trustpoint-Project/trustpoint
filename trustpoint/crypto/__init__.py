@@ -11,6 +11,8 @@ from crypto.domain.policies import KeyPolicy, KeyUsage
 from crypto.domain.refs import ManagedKeyRef, ManagedKeyVerification, ManagedKeyVerificationStatus
 from crypto.domain.specs import EcKeySpec, RsaKeySpec, SignRequest
 
+TrustpointCryptoBackend = None
+
 __all__ = [
     'CryptoBackend',
     'EcKeySpec',

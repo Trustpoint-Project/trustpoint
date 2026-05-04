@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, cast
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
-import pkcs11  # type: ignore[import-untyped]
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding, Pkcs11ManagedKeyVerification
 from crypto.adapters.pkcs11.capability_probe import Pkcs11CapabilityProbe
 from crypto.adapters.pkcs11.error_map import map_pkcs11_error
@@ -29,7 +28,7 @@ from crypto.domain.errors import (
 )
 from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec, algorithm_for_key_spec
-from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, PKCS11Error
+from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, PKCS11Error, lib as pkcs11_lib
 from pkcs11.exceptions import UserAlreadyLoggedIn  # type: ignore[import-untyped]
 from pkcs11.util.ec import encode_ec_public_key, encode_ecdsa_signature  # type: ignore[import-untyped]
 from pkcs11.util.rsa import encode_rsa_public_key  # type: ignore[import-untyped]
@@ -55,7 +54,7 @@ class Pkcs11Backend(LoggerMixin):
         self,
         *,
         profile: Pkcs11ProviderProfile,
-        library_loader: LibraryLoader = pkcs11.lib,
+        library_loader: LibraryLoader = pkcs11_lib,
         capability_probe: Pkcs11CapabilityProbe | None = None,
         locator: Pkcs11ObjectLocator | None = None,
     ) -> None:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from crypto.adapters.pkcs11.mechanisms import key_type_for_algorithm
 from crypto.domain.errors import KeyNotFoundError
