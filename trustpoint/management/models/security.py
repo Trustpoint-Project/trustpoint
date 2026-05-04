@@ -48,7 +48,6 @@ class SecurityConfig(models.Model):
     * :attr:`allow_ca_issuance` — whether BasicConstraints ca=True is permitted in issued certs.
     * :attr:`allow_auto_gen_pki` — whether auto-generated PKI may be enabled.
     * :attr:`allow_self_signed_ca` — whether self-signed CAs with credentials are allowed.
-    * :attr:`require_physical_hsm` — whether the configured managed crypto backend must be PKCS#11-backed.
     * :attr:`permitted_no_onboarding_pki_protocols` — JSON list of allowed
       :class:`onboarding.models.NoOnboardingPkiProtocol` integer values.
     * :attr:`permitted_onboarding_protocols` — JSON list of allowed
@@ -321,7 +320,7 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
-            'require_physical_hsm': True,
+            'require_physical_hsm': False,
             'permitted_no_onboarding_pki_protocols': [1, 4],   # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
@@ -417,7 +416,6 @@ class SecurityConfig(models.Model):
         from devices.models import DeviceModel  # noqa: PLC0415
         from pki.models.ca import CaModel  # noqa: PLC0415
 
-        violations.extend(self._check_hsm(defaults, mode_label))
         violations.extend(self._check_auto_gen_pki(defaults, mode_label))
         violations.extend(self._check_self_signed_cas(defaults, mode_label, CaModel))
         violations.extend(self._check_rsa_key_size(defaults, mode_label, CaModel))
@@ -433,18 +431,8 @@ class SecurityConfig(models.Model):
     # ------------------------------------------------------------------
 
     def _check_hsm(self, defaults: _SecurityModeDefaults, mode_label: str) -> list[str]:
-        """Return violations for the require_physical_hsm constraint."""
-        if not defaults['require_physical_hsm']:
-            return []
-        from crypto.models import BackendKind  # noqa: PLC0415
-        from crypto.runtime import configured_backend_kind  # noqa: PLC0415
-
-        backend_kind = configured_backend_kind()
-        if backend_kind != BackendKind.PKCS11:
-            configured = backend_kind.value if backend_kind is not None else _('unconfigured')
-            return [str(_(
-                'The configured crypto backend is "%(backend)s" but %(mode)s requires the PKCS#11-managed HSM backend.'
-            ) % {'backend': configured, 'mode': mode_label})]
+        """Return violations for the removed physical-HSM policy constraint."""
+        _ = defaults, mode_label
         return []
 
     def _check_auto_gen_pki(self, defaults: _SecurityModeDefaults, mode_label: str) -> list[str]:

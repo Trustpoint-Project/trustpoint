@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -48,6 +49,7 @@ UPDATE_TLS_NGINX = STATE_FILE_DIR / 'update_tls_nginx.sh'
 INSTALL_PKCS11_ASSETS = STATE_FILE_DIR / 'install_pkcs11_assets.sh'
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
+FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-vendor.cfg'
 
 
 class OperationalBootstrapApplier:
@@ -224,14 +226,18 @@ class OperationalBootstrapApplier:
             4: 'Failed to install the PKCS#11 library into the protected HSM area.',
             5: 'Failed to create the protected PKCS#11 user PIN file.',
             6: 'Failed to persist the installed PKCS#11 module path for the instance.',
+            7: 'The staged PKCS#11 vendor config is missing or no longer belongs to this wizard session.',
+            8: 'Failed to install the PKCS#11 vendor config into the protected HSM area.',
         }
         return error_messages.get(return_code, 'An unknown error occurred while installing PKCS#11 assets.')
 
-    def _install_staged_pkcs11_assets(self) -> tuple[str, str]:
-        """Install staged PKCS#11 assets and return final module and PIN-file paths."""
+    def _install_staged_pkcs11_assets(self) -> tuple[str, str, str]:
+        """Install staged PKCS#11 assets and return final module, PIN-file, and vendor-config paths."""
         staged_module = existing_wizard_pkcs11_staged_file(self.fresh_install['pkcs11_module_path'])
         staged_pin = existing_wizard_pkcs11_staged_file(self.fresh_install['pkcs11_auth_source_ref'])
+        staged_config = existing_wizard_pkcs11_staged_file(self.fresh_install.get('pkcs11_config_path'))
         configured_module_value = (self.fresh_install['pkcs11_module_path'] or '').strip()
+        configured_config_value = (self.fresh_install.get('pkcs11_config_path') or '').strip()
         configured_module_path = Path(configured_module_value) if configured_module_value else Path()
         configured_module_exists = bool(configured_module_value and configured_module_path.is_file())
 
@@ -241,8 +247,8 @@ class OperationalBootstrapApplier:
             configured_module_path = local_dev_module
             configured_module_exists = configured_module_path.is_file()
 
-        if staged_module is None and staged_pin is None:
-            return configured_module_value, (self.fresh_install['pkcs11_auth_source_ref'] or '').strip()
+        if staged_module is None and staged_pin is None and staged_config is None:
+            return configured_module_value, (self.fresh_install['pkcs11_auth_source_ref'] or '').strip(), configured_config_value
 
         uses_builtin_local_proxy = (
             staged_pin is not None
@@ -266,6 +272,8 @@ class OperationalBootstrapApplier:
         try:
             if uses_builtin_local_proxy:
                 self.execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_pin))
+            elif staged_config is not None:
+                self.execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_module), str(staged_pin), str(staged_config))
             else:
                 self.execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_module), str(staged_pin))
         except subprocess.CalledProcessError as exc:
@@ -284,34 +292,42 @@ class OperationalBootstrapApplier:
         if staged_module is not None:
             cleanup_wizard_pkcs11_staged_path(staged_module)
             configured_module_value = str(FINAL_WIZARD_PKCS11_MODULE_PATH)
+        if staged_config is not None:
+            cleanup_wizard_pkcs11_staged_path(staged_config)
+            configured_config_value = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
 
-        return configured_module_value, str(FINAL_WIZARD_PKCS11_PIN_PATH)
+        return configured_module_value, str(FINAL_WIZARD_PKCS11_PIN_PATH), configured_config_value
 
     def _configure_pkcs11_backend(self) -> None:
         """Configure the PKCS#11 backend from bootstrap-staged values."""
-        module_path_value, auth_source_ref = self._install_staged_pkcs11_assets()
+        module_path_value, auth_source_ref, config_path_value = self._install_staged_pkcs11_assets()
         module_path = Path(module_path_value or str(FINAL_WIZARD_PKCS11_MODULE_PATH))
         fallback_module_path = Path(settings.HSM_DEFAULT_PKCS11_MODULE_PATH)
         if not module_path.exists() and fallback_module_path.exists():
             module_path = fallback_module_path
 
-        token_label = (self.fresh_install['pkcs11_token_label'] or '').strip() or getattr(
-            settings,
-            'HSM_DEFAULT_TOKEN_LABEL',
-            '',
-        )
+        slot_id = self.fresh_install.get('pkcs11_slot_id')
+        token_label = (self.fresh_install['pkcs11_token_label'] or '').strip() or None
+        if token_label is None and slot_id is None:
+            token_label = getattr(settings, 'HSM_DEFAULT_TOKEN_LABEL', '').strip() or None
         fallback_pin_path = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
         if auth_source_ref and not Path(auth_source_ref).exists() and fallback_pin_path.exists():
             auth_source_ref = str(fallback_pin_path)
 
         if not module_path.exists():
             raise DjangoValidationError(f'The PKCS#11 module path does not exist: {module_path}')
-        if not token_label:
-            raise DjangoValidationError('No PKCS#11 token label is configured for the setup wizard.')
+        if token_label is None and slot_id is None:
+            raise DjangoValidationError('No PKCS#11 token selector is configured for the setup wizard.')
         if not auth_source_ref:
             raise DjangoValidationError('No PKCS#11 user PIN source reference is configured for the setup wizard.')
         if not Path(auth_source_ref).exists():
             raise DjangoValidationError(f'The PKCS#11 user PIN file does not exist: {auth_source_ref}')
+
+        config_env_var = (self.fresh_install.get('pkcs11_config_env_var') or '').strip()
+        if config_env_var and config_path_value:
+            config_path = Path(config_path_value)
+            if config_path.exists():
+                os.environ[config_env_var] = str(config_path)
 
         profile = self._activate_profile(
             backend_kind=BackendKind.PKCS11,
@@ -321,7 +337,7 @@ class OperationalBootstrapApplier:
             'module_path': str(module_path),
             'token_label': token_label,
             'token_serial': self.fresh_install.get('pkcs11_token_serial') or None,
-            'slot_id': self.fresh_install.get('pkcs11_slot_id'),
+            'slot_id': slot_id,
             'auth_source': Pkcs11AuthSource.FILE,
             'auth_source_ref': auth_source_ref,
             'max_sessions': 8,

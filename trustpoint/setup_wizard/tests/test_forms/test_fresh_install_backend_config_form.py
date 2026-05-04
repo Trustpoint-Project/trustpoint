@@ -125,3 +125,34 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
             )
 
             self.assertTrue(form.is_valid(), form.errors)
+
+    def test_pkcs11_form_accepts_installed_assets_after_failed_apply(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            hsm_lib_dir = temp_root / 'hsm-lib'
+            hsm_config_dir = temp_root / 'hsm-config'
+            hsm_lib_dir.mkdir()
+            hsm_config_dir.mkdir()
+            final_module_path = hsm_lib_dir / 'uploaded-pkcs11-module.so'
+            final_pin_path = hsm_config_dir / 'user-pin.txt'
+            final_module_path.write_bytes(b'\x7fELFpkcs11-bytes')
+            final_pin_path.write_text('1234', encoding='utf-8')
+
+            with (
+                patch('setup_wizard.forms.FINAL_WIZARD_PKCS11_MODULE_PATH', final_module_path),
+                patch('setup_wizard.forms.FINAL_WIZARD_PKCS11_PIN_PATH', final_pin_path),
+            ):
+                config_model = SetupWizardConfigModel.get_singleton()
+                config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+                config_model.fresh_install_pkcs11_module_path = str(temp_root / 'deleted-staged-module.so')
+                config_model.fresh_install_pkcs11_auth_source_ref = str(temp_root / 'deleted-staged-pin.txt')
+
+                form = FreshInstallBackendConfigModelForm(
+                    data={
+                        'fresh_install_pkcs11_token_label': 'Trustpoint-SoftHSM',
+                        'pkcs11_user_pin': '',
+                    },
+                    instance=config_model,
+                )
+
+                self.assertTrue(form.is_valid(), form.errors)

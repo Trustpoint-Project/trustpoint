@@ -36,7 +36,7 @@ from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
 from onboarding.enums import NoOnboardingPkiProtocol, OnboardingProtocol
 from pki.models import CredentialModel
-from pki.util.keys import AutoGenPkiKeyAlgorithm
+from pki.util.keys import AutoGenPkiKeyAlgorithm, supported_auto_gen_pki_key_algorithms
 from pki.util.x509 import CertificateVerifier
 from trustpoint.logger import LoggerMixin
 
@@ -75,6 +75,11 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 
         if self.instance and self.instance.auto_gen_pki:
             self.fields['auto_gen_pki_key_algorithm'].widget.attrs['disabled'] = 'disabled'
+        elif 'auto_gen_pki_key_algorithm' in self.fields:
+            supported_algorithms = supported_auto_gen_pki_key_algorithms()
+            self.fields['auto_gen_pki_key_algorithm'].choices = [
+                (algorithm.value, algorithm.label) for algorithm in supported_algorithms
+            ]
 
         self.helper = FormHelper()
         self.helper.layout = Layout(
@@ -92,7 +97,6 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 Field('allow_ca_issuance', wrapper_class='form-check form-switch'),
                 Field('allow_auto_gen_pki', wrapper_class='form-check form-switch'),
                 Field('allow_self_signed_ca', wrapper_class='form-check form-switch'),
-                Field('require_physical_hsm', wrapper_class='form-check form-switch'),
                 'permitted_no_onboarding_pki_protocols',
                 'permitted_onboarding_protocols'
             ),
@@ -151,7 +155,7 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             'security_mode', 'auto_gen_pki', 'auto_gen_pki_key_algorithm',
             'rsa_minimum_key_size', 'max_cert_validity_days', 'max_crl_validity_days',
             'allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca',
-            'require_physical_hsm', 'permitted_no_onboarding_pki_protocols',
+            'permitted_no_onboarding_pki_protocols',
             'permitted_onboarding_protocols'
         ]
 
@@ -212,7 +216,10 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             if self.instance:
                 return AutoGenPkiKeyAlgorithm(self.instance.auto_gen_pki_key_algorithm)
             return AutoGenPkiKeyAlgorithm.RSA2048
-        return AutoGenPkiKeyAlgorithm(form_value)
+        selected_algorithm = AutoGenPkiKeyAlgorithm(form_value)
+        if selected_algorithm not in supported_auto_gen_pki_key_algorithms():
+            raise ValidationError(_('The selected auto-generated PKI algorithm is not supported by the active backend.'))
+        return selected_algorithm
 
     def _validate_mode_constraints(self, cleaned: dict[str, Any], mode: str) -> None:
         """Validate that submitted values comply with the given security mode defaults."""
@@ -235,9 +242,6 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
         for field in ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca']:
             if not defaults.get(field) and cleaned.get(field):
                 self.add_error(field, 'This feature cannot be enabled at this security level.')
-
-        if defaults.get('require_physical_hsm') and not cleaned.get('require_physical_hsm'):
-            self.add_error('require_physical_hsm', 'This feature cannot be disabled at this security level.')
 
         protocol_fields: list[tuple[str, list[int]]] = [
             ('permitted_no_onboarding_pki_protocols', defaults['permitted_no_onboarding_pki_protocols']),

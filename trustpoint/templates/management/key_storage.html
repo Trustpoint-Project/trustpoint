@@ -93,6 +93,53 @@
                             </dl>
                         </div>
                     </div>
+
+                    {% if pkcs11_capability_payload %}
+                        <div class="card mt-4">
+                            <div class="card-header">
+                                <h4 class="mb-0">{% trans 'PKCS#11 Capabilities' %}</h4>
+                            </div>
+                            <div class="card-body">
+                                <h5>{% trans 'Derived Features' %}</h5>
+                                <dl class="row">
+                                    {% for feature_name, feature_enabled in pkcs11_derived_features %}
+                                        <dt class="col-sm-5"><code>{{ feature_name }}</code></dt>
+                                        <dd class="col-sm-7">{{ feature_enabled|yesno:"yes,no" }}</dd>
+                                    {% empty %}
+                                        <dd class="col-12 text-muted">{% trans 'No derived features were recorded.' %}</dd>
+                                    {% endfor %}
+                                </dl>
+
+                                <h5>{% trans 'Mechanisms' %}</h5>
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle">
+                                        <thead>
+                                            <tr>
+                                                <th>{% trans 'Name' %}</th>
+                                                <th>{% trans 'Code' %}</th>
+                                                <th>{% trans 'Key Size' %}</th>
+                                                <th>{% trans 'Flags' %}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for mechanism in pkcs11_mechanisms %}
+                                                <tr>
+                                                    <td><code>{{ mechanism.name }}</code></td>
+                                                    <td>{{ mechanism.code|default:"-" }}</td>
+                                                    <td>{{ mechanism.min_key_size|default:"-" }} - {{ mechanism.max_key_size|default:"-" }}</td>
+                                                    <td>{{ mechanism.flags|join:", "|default:"-" }}</td>
+                                                </tr>
+                                            {% empty %}
+                                                <tr>
+                                                    <td colspan="4" class="text-muted">{% trans 'No mechanisms were recorded.' %}</td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
                 {% elif is_software_backend and software_config %}
                     <div class="card">
                         <div class="card-header">

@@ -12,8 +12,9 @@ from devices.models import DeviceModel
 from onboarding.models import OnboardingConfigModel, NoOnboardingConfigModel
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
-from crypto.runtime import configured_private_key_location
-from pki.models import CaModel, DevIdRegistration, DomainModel, CaModel, TruststoreModel
+from crypto.runtime import configured_private_key_location, is_hsm_backend_configured, require_active_pkcs11_config
+from management.pkcs11_util import Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
+from pki.models import CaModel, CertificateModel, CredentialModel, DevIdRegistration, DomainModel, PKCS11Key, TruststoreModel
 from pki.util.x509 import CertificateGenerator
 from onboarding.models import OnboardingPkiProtocol, NoOnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
 from signer.models import SignerModel
@@ -81,16 +82,38 @@ def create_signer_for_domain(
     issuing_ca: CaModel
 ) -> SignerModel:
     """Creates a signer certificate for a domain using the domain's issuing CA."""
-    issuing_ca_private_key = issuing_ca.credential.get_private_key_serializer().as_crypto()
+    issuing_ca_private_key = issuing_ca.credential.get_private_key()
     issuing_ca_cert = issuing_ca.credential.get_certificate_serializer().as_crypto()
 
 
     if isinstance(issuing_ca_private_key, rsa.RSAPrivateKey):
         key_size = issuing_ca_private_key.key_size
-        signer_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
+        if is_hsm_backend_configured():
+            pkcs11_config = require_active_pkcs11_config()
+            signer_key = Pkcs11RSAPrivateKey(
+                lib_path=pkcs11_config.module_path,
+                token_label=(pkcs11_config.token_label or '').strip(),
+                user_pin=pkcs11_config.build_provider_profile().require_user_pin(),
+                key_label=f'signer-{domain_name}',
+                slot_id=pkcs11_config.slot_id,
+            )
+            signer_key.generate_key(key_length=key_size)
+        else:
+            signer_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
     elif isinstance(issuing_ca_private_key, ec.EllipticCurvePrivateKey):
         curve = issuing_ca_private_key.curve
-        signer_key = ec.generate_private_key(curve=curve)
+        if is_hsm_backend_configured():
+            pkcs11_config = require_active_pkcs11_config()
+            signer_key = Pkcs11ECPrivateKey(
+                lib_path=pkcs11_config.module_path,
+                token_label=(pkcs11_config.token_label or '').strip(),
+                user_pin=pkcs11_config.build_provider_profile().require_user_pin(),
+                key_label=f'signer-{domain_name}',
+                slot_id=pkcs11_config.slot_id,
+            )
+            signer_key.generate_key(curve=curve)
+        else:
+            signer_key = ec.generate_private_key(curve=curve)
     else:
         raise ValueError('Unsupported issuing CA private key type.')
 
@@ -114,6 +137,24 @@ def create_signer_for_domain(
         extensions=[(digital_signature_extension, True)],
         validity_days=365,
     )
+
+    if isinstance(signer_key, (Pkcs11RSAPrivateKey, Pkcs11ECPrivateKey)):
+        key_type = PKCS11Key.KeyType.RSA if isinstance(signer_key, Pkcs11RSAPrivateKey) else PKCS11Key.KeyType.EC
+        pkcs11_key = PKCS11Key.objects.create(
+            token_label=signer_key._token_label,  # noqa: SLF001
+            key_label=signer_key._key_label,  # noqa: SLF001
+            key_type=key_type,
+        )
+        certificate_model = CertificateModel.save_certificate(signer_cert)
+        credential_model = CredentialModel._create_credential_model(  # noqa: SLF001
+            certificate_model,
+            CredentialModel.CredentialTypeChoice.SIGNER,
+            '',
+            pkcs11_key,
+        )
+        CredentialModel._save_additional_certificates(credential_model, [issuing_ca_cert])  # noqa: SLF001
+        signer_key.close()
+        return SignerModel.objects.create(unique_name=f'signer-{domain_name}', credential=credential_model)
 
     credential_serializer = CredentialSerializer(
         private_key=signer_key,

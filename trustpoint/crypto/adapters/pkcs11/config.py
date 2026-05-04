@@ -50,15 +50,22 @@ class Pkcs11TokenSelector:
             raise ProviderConfigurationError(msg)
 
     def matches(self, *, slot_id: int, token_label: str | bytes | None, token_serial: str | bytes | None) -> bool:
-        """Return whether a discovered slot/token matches this selector."""
+        """Return whether a discovered slot/token matches this selector.
+
+        Selector priority is explicit: slot id first, then serial, then label.
+        This keeps a stale vendor slot id from making a still-identifiable token
+        unreachable after a restart or proxy-layer change.
+        """
         normalized_label = _normalize_pkcs11_text(token_label)
         normalized_serial = _normalize_pkcs11_text(token_serial)
 
-        if self.slot_id is not None and self.slot_id != slot_id:
-            return False
-        if self.token_label is not None and self.token_label != normalized_label:
-            return False
-        return not (self.token_serial is not None and self.token_serial != normalized_serial)
+        if self.slot_id is not None and self.slot_id == slot_id:
+            return True
+        if self.token_serial is not None and self.token_serial == normalized_serial:
+            return True
+        if self.token_label is not None and self.token_label == normalized_label:
+            return True
+        return False
 
 
 @dataclass(frozen=True, slots=True)

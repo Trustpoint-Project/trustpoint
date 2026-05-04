@@ -21,7 +21,8 @@ from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation,
 
 from crypto.runtime import is_hsm_backend_configured
 from management.models import SecurityConfig
-from pki.models import CaModel
+from management.pkcs11_util import Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
+from pki.models import CaModel, CertificateModel, CredentialModel, PKCS11Key
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
@@ -304,6 +305,38 @@ class CertificateGenerator:
         Returns:
             CaModel: The created CA model.
         """
+        if isinstance(private_key, (Pkcs11RSAPrivateKey, Pkcs11ECPrivateKey)):
+            CaModel._validate_ca_certificate(issuing_ca_cert)  # noqa: SLF001
+            CaModel._validate_ca_type(ca_type)  # noqa: SLF001
+            key_type = (
+                PKCS11Key.KeyType.RSA if isinstance(private_key, Pkcs11RSAPrivateKey) else PKCS11Key.KeyType.EC
+            )
+            pkcs11_key = PKCS11Key.objects.create(
+                token_label=private_key._token_label,  # noqa: SLF001
+                key_label=private_key._key_label,  # noqa: SLF001
+                key_type=key_type,
+            )
+            certificate_model = CertificateModel.save_certificate(issuing_ca_cert)
+            credential_model = CredentialModel._create_credential_model(  # noqa: SLF001
+                certificate_model,
+                CredentialModel.CredentialTypeChoice.ISSUING_CA,
+                '',
+                pkcs11_key,
+            )
+            CredentialModel._save_additional_certificates(credential_model, list(reversed(chain)))  # noqa: SLF001
+            issuing_ca = CaModel(
+                unique_name=unique_name,
+                credential=credential_model,
+                ca_type=ca_type,
+                parent_ca=parent_ca,
+            )
+            issuing_ca.save()
+            truststore = CaModel._create_chain_truststore(issuing_ca)  # noqa: SLF001
+            issuing_ca.chain_truststore = truststore
+            issuing_ca.save(update_fields=['chain_truststore'])
+            private_key.close()
+            return issuing_ca
+
         issuing_ca_credential_serializer = CredentialSerializer(
             private_key=private_key,
             certificate=issuing_ca_cert,

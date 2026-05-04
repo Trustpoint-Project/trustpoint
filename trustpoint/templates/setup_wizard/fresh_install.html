@@ -321,13 +321,57 @@
                                         </div>
                                     {% endif %}
                                 </div>
+                                {% if form.staged_pkcs11_config_name %}
+                                    <div class="tp-backend-state-pill">
+                                        <span>Vendor config staged: {{ form.staged_pkcs11_config_name }}</span>
+                                        <button
+                                            type="submit"
+                                            name="wizard_action"
+                                            value="clear_pkcs11_config"
+                                            class="tp-backend-state-pill-dismiss"
+                                            formnovalidate
+                                            aria-label="Remove staged vendor config"
+                                            title="Remove staged vendor config"
+                                        >×</button>
+                                    </div>
+                                {% endif %}
+                                <div class="tp-backend-grid">
+                                    <div class="tp-backend-field">
+                                        <label class="tp-backend-field-label" for="{{ form.pkcs11_config_upload.id_for_label }}">
+                                            {{ form.pkcs11_config_upload.label }}
+                                        </label>
+                                        {{ form.pkcs11_config_upload }}
+                                        {% if form.pkcs11_config_upload.help_text %}
+                                            <div class="form-text">{{ form.pkcs11_config_upload.help_text }}</div>
+                                        {% endif %}
+                                        {% if form.pkcs11_config_upload.errors %}
+                                            <div class="text-danger mt-2">
+                                                {{ form.pkcs11_config_upload.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="tp-backend-field">
+                                        <label class="tp-backend-field-label" for="{{ form.pkcs11_config_env_var.id_for_label }}">
+                                            {{ form.pkcs11_config_env_var.label }}
+                                        </label>
+                                        {{ form.pkcs11_config_env_var }}
+                                        {% if form.pkcs11_config_env_var.help_text %}
+                                            <div class="form-text">{{ form.pkcs11_config_env_var.help_text }}</div>
+                                        {% endif %}
+                                        {% if form.pkcs11_config_env_var.errors %}
+                                            <div class="text-danger mt-2">
+                                                {{ form.pkcs11_config_env_var.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
                             </section>
 
                             <section class="tp-backend-section">
                                 <div class="tp-backend-section-kicker">Required</div>
                                 <h3 class="tp-backend-section-title">Token Access</h3>
                                 <p class="tp-backend-section-copy">
-                                    Trustpoint will use the token label to find the token and will create the PIN file for the configured backend automatically.
+                                    Trustpoint will use the token label or slot ID to find the token and will create the PIN file for the configured backend automatically.
                                 </p>
                                 <div class="tp-backend-grid">
                                     <div class="tp-backend-field">
@@ -341,6 +385,20 @@
                                         {% if form.fresh_install_pkcs11_token_label.errors %}
                                             <div class="text-danger mt-2">
                                                 {{ form.fresh_install_pkcs11_token_label.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="tp-backend-field">
+                                        <label class="tp-backend-field-label" for="{{ form.fresh_install_pkcs11_slot_id.id_for_label }}">
+                                            {{ form.fresh_install_pkcs11_slot_id.label }}
+                                        </label>
+                                        {{ form.fresh_install_pkcs11_slot_id }}
+                                        {% if form.fresh_install_pkcs11_slot_id.help_text %}
+                                            <div class="form-text">{{ form.fresh_install_pkcs11_slot_id.help_text }}</div>
+                                        {% endif %}
+                                        {% if form.fresh_install_pkcs11_slot_id.errors %}
+                                            <div class="text-danger mt-2">
+                                                {{ form.fresh_install_pkcs11_slot_id.errors }}
                                             </div>
                                         {% endif %}
                                     </div>

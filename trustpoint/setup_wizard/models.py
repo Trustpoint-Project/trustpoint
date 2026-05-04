@@ -302,6 +302,17 @@ class SetupWizardConfigModel(models.Model):
         default='',
         help_text='PIN file path or environment variable name staged during the fresh-install wizard.',
     )
+    fresh_install_pkcs11_config_path = models.TextField(
+        blank=True,
+        default='',
+        help_text='Optional vendor PKCS#11 configuration file staged during the fresh-install wizard.',
+    )
+    fresh_install_pkcs11_config_env_var = models.CharField(
+        max_length=128,
+        blank=True,
+        default='',
+        help_text='Environment variable that points the PKCS#11 library to the vendor configuration file.',
+    )
 
     inject_demo_data = models.BooleanField(null=False, blank=False, help_text='Inject demo data.', default=True)
 

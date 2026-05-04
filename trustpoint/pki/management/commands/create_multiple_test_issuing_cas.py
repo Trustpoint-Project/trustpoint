@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+import uuid
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from crypto.runtime import is_hsm_backend_configured, require_active_pkcs11_config
 from django.core.management.base import BaseCommand
 from management.models import SecurityConfig
-from pki.models import CaModel
+from management.models.audit_log import AuditLog
+from management.pkcs11_util import Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
+from pki.models import CaModel, CertificateModel, CredentialModel, PKCS11Key
 from pki.util.x509 import CertificateVerifier
 
 from trustpoint.logger import LoggerMixin
-from management.models.audit_log import AuditLog
 
 from .base_commands import CertificateCreationCommandMixin
 
@@ -48,6 +52,128 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
     def get_ca_type_from_storage_config(self) -> CaModel.CaTypeChoice:
         """Return the legacy local managed-CA type for generated demo CAs."""
         return CaModel.CaTypeChoice.LOCAL_PKCS11
+
+    @staticmethod
+    def _active_pkcs11_runtime() -> tuple[str, str, str, int | None]:
+        """Return the active PKCS#11 runtime for demo-data key generation."""
+        pkcs11_config = require_active_pkcs11_config()
+        token_label = (pkcs11_config.token_label or '').strip()
+        slot_id = pkcs11_config.slot_id
+        if not token_label and slot_id is None:
+            msg = 'The PKCS#11 backend must be probed before demo data can create HSM-backed keys.'
+            raise RuntimeError(msg)
+        user_pin = pkcs11_config.build_provider_profile().require_user_pin()
+        return pkcs11_config.module_path, token_label, user_pin, slot_id
+
+    def _generate_demo_rsa_issuing_key(self, *, unique_name: str, key_size: int) -> rsa.RSAPrivateKey:
+        """Generate a demo issuing-CA RSA key in the configured backend."""
+        if not is_hsm_backend_configured():
+            return rsa.generate_private_key(public_exponent=65537, key_size=key_size)
+
+        module_path, token_label, user_pin, slot_id = self._active_pkcs11_runtime()
+        key_label = f'{unique_name}-{uuid.uuid4().hex[:12]}'
+        key = Pkcs11RSAPrivateKey(
+            lib_path=module_path,
+            token_label=token_label,
+            user_pin=user_pin,
+            key_label=key_label,
+            slot_id=slot_id,
+        )
+        key.generate_key(key_length=key_size)
+        return key
+
+    def _generate_demo_ec_issuing_key(
+        self, *, unique_name: str, curve: ec.EllipticCurve
+    ) -> ec.EllipticCurvePrivateKey:
+        """Generate a demo issuing-CA EC key in the configured backend."""
+        if not is_hsm_backend_configured():
+            return ec.generate_private_key(curve=curve)
+
+        module_path, token_label, user_pin, slot_id = self._active_pkcs11_runtime()
+        key_label = f'{unique_name}-{uuid.uuid4().hex[:12]}'
+        key = Pkcs11ECPrivateKey(
+            lib_path=module_path,
+            token_label=token_label,
+            user_pin=user_pin,
+            key_label=key_label,
+            slot_id=slot_id,
+        )
+        key.generate_key(curve=curve)
+        return key
+
+    def _save_hsm_generated_issuing_ca(
+        self,
+        *,
+        issuing_ca_cert: x509.Certificate,
+        chain: list[x509.Certificate],
+        private_key: Pkcs11RSAPrivateKey | Pkcs11ECPrivateKey,
+        unique_name: str,
+        ca_type: CaModel.CaTypeChoice,
+        parent_ca: CaModel | None,
+    ) -> CaModel:
+        """Persist an issuing CA whose private key already exists in PKCS#11."""
+        CaModel._validate_ca_certificate(issuing_ca_cert)  # noqa: SLF001
+        CaModel._validate_ca_type(ca_type)  # noqa: SLF001
+        key_type = (
+            PKCS11Key.KeyType.RSA
+            if isinstance(private_key, Pkcs11RSAPrivateKey)
+            else PKCS11Key.KeyType.EC
+        )
+        pkcs11_key = PKCS11Key.objects.create(
+            token_label=private_key._token_label,  # noqa: SLF001
+            key_label=private_key._key_label,  # noqa: SLF001
+            key_type=key_type,
+        )
+        certificate_model = CertificateModel.save_certificate(issuing_ca_cert)
+        credential_model = CredentialModel._create_credential_model(  # noqa: SLF001
+            certificate_model,
+            CredentialModel.CredentialTypeChoice.ISSUING_CA,
+            '',
+            pkcs11_key,
+        )
+        CredentialModel._save_additional_certificates(credential_model, list(reversed(chain)))  # noqa: SLF001
+
+        issuing_ca = CaModel(
+            unique_name=unique_name,
+            credential=credential_model,
+            ca_type=ca_type,
+            parent_ca=parent_ca,
+        )
+        issuing_ca.save()
+        truststore = CaModel._create_chain_truststore(issuing_ca)  # noqa: SLF001
+        issuing_ca.chain_truststore = truststore
+        issuing_ca.save(update_fields=['chain_truststore'])
+        private_key.close()
+        return issuing_ca
+
+    def _save_demo_issuing_ca(
+        self,
+        *,
+        issuing_ca_cert: x509.Certificate,
+        private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey,
+        chain: list[x509.Certificate],
+        unique_name: str,
+        ca_type: CaModel.CaTypeChoice,
+        parent_ca: CaModel | None,
+    ) -> CaModel:
+        """Save a demo issuing CA without importing backend-generated keys back into PKCS#11."""
+        if isinstance(private_key, (Pkcs11RSAPrivateKey, Pkcs11ECPrivateKey)):
+            return self._save_hsm_generated_issuing_ca(
+                issuing_ca_cert=issuing_ca_cert,
+                chain=chain,
+                private_key=private_key,
+                unique_name=unique_name,
+                ca_type=ca_type,
+                parent_ca=parent_ca,
+            )
+        return self.save_issuing_ca(
+            issuing_ca_cert=issuing_ca_cert,
+            private_key=private_key,
+            chain=chain,
+            unique_name=unique_name,
+            ca_type=ca_type,
+            parent_ca=parent_ca,
+        )
 
     def generate_empty_crl(
         self,
@@ -151,8 +277,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         rsa2_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         rsa2_int_ca_key_1 = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         rsa2_int_ca_key_2 = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        rsa2_issuing_ca_key_1 = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        rsa2_issuing_ca_key_2 = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        rsa2_issuing_ca_key_1 = self._generate_demo_rsa_issuing_key(unique_name='issuing-ca-a-1', key_size=2048)
+        rsa2_issuing_ca_key_2 = self._generate_demo_rsa_issuing_key(unique_name='issuing-ca-a-2', key_size=2048)
         root_validity_days: int = 7300
         intermediate_validity_days: int = 5475
         issuing_validity_days: int = 3650
@@ -220,7 +346,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             hash_algorithm=hashes.SHA256(),
             validity_days=issuing_validity_days,
         )
-        rsa2_issuing_ca_model_1 = self.save_issuing_ca(
+        rsa2_issuing_ca_model_1 = self._save_demo_issuing_ca(
             issuing_ca_cert=rsa2_issuing_ca_1,
             private_key=rsa2_issuing_ca_key_1,
             chain=[rsa2_root, rsa2_int_ca_1],
@@ -239,7 +365,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             hash_algorithm=hashes.SHA256(),
             validity_days=issuing_validity_days,
         )
-        rsa2_issuing_ca_model_2 = self.save_issuing_ca(
+        rsa2_issuing_ca_model_2 = self._save_demo_issuing_ca(
             issuing_ca_cert=rsa2_issuing_ca_2,
             private_key=rsa2_issuing_ca_key_2,
             chain=[rsa2_root, rsa2_int_ca_2],
@@ -252,7 +378,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
 
         self.log_and_stdout('Creating RSA-3072 Root CA and Issuing CA B...')
         rsa3_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
-        rsa3_issuing_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
+        rsa3_issuing_ca_key = self._generate_demo_rsa_issuing_key(unique_name='issuing-ca-b', key_size=3072)
         rsa3_root, _ = self.create_root_ca(
             'Root-CA RSA-3072-SHA256', private_key=rsa3_root_ca_key, hash_algorithm=hashes.SHA256(), validity_days=root_validity_days
         )
@@ -273,7 +399,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             hash_algorithm=hashes.SHA256(),
             validity_days=issuing_validity_days,
         )
-        rsa3_issuing_ca_model = self.save_issuing_ca(
+        rsa3_issuing_ca_model = self._save_demo_issuing_ca(
             issuing_ca_cert=rsa3_issuing_ca,
             private_key=rsa3_issuing_ca_key,
             chain=[rsa3_root],
@@ -286,7 +412,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
 
         self.log_and_stdout('Creating RSA-4096 Root CA and Issuing CA C...')
         rsa4_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
-        rsa4_issuing_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+        rsa4_issuing_ca_key = self._generate_demo_rsa_issuing_key(unique_name='issuing-ca-c', key_size=4096)
         rsa4_root, _ = self.create_root_ca(
             'Root-CA RSA-4096-SHA256', private_key=rsa4_root_ca_key, hash_algorithm=hashes.SHA512(), validity_days=root_validity_days
         )
@@ -307,7 +433,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             hash_algorithm=hashes.SHA512(),
             validity_days=issuing_validity_days,
         )
-        rsa4_issuing_ca_model = self.save_issuing_ca(
+        rsa4_issuing_ca_model = self._save_demo_issuing_ca(
             issuing_ca_cert=rsa4_issuing_ca,
             private_key=rsa4_issuing_ca_key,
             chain=[rsa4_root],
@@ -320,7 +446,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
 
         self.log_and_stdout('Creating SECP256R1 Root CA and Issuing CA D...')
         ecc1_root_ca_key = ec.generate_private_key(curve=ec.SECP256R1())
-        ecc1_issuing_ca_key = ec.generate_private_key(curve=ec.SECP256R1())
+        ecc1_issuing_ca_key = self._generate_demo_ec_issuing_key(
+            unique_name='issuing-ca-d',
+            curve=ec.SECP256R1(),
+        )
         ecc1_root, _ = self.create_root_ca(
             'Root-CA SECP256R1-SHA256', private_key=ecc1_root_ca_key, hash_algorithm=hashes.SHA256(), validity_days=root_validity_days
         )
@@ -341,7 +470,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             hash_algorithm=hashes.SHA256(),
             validity_days=issuing_validity_days,
         )
-        ecc1_issuing_ca_model = self.save_issuing_ca(
+        ecc1_issuing_ca_model = self._save_demo_issuing_ca(
             issuing_ca_cert=ecc1_issuing_ca,
             private_key=ecc1_issuing_ca_key,
             chain=[ecc1_root],
@@ -354,7 +483,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
 
         self.log_and_stdout('Creating SECP384R1 Root CA and Issuing CA E...')
         ecc2_root_ca_key = ec.generate_private_key(curve=ec.SECP384R1())
-        ecc2_issuing_ca_key = ec.generate_private_key(curve=ec.SECP384R1())
+        ecc2_issuing_ca_key = self._generate_demo_ec_issuing_key(
+            unique_name='issuing-ca-e',
+            curve=ec.SECP384R1(),
+        )
         ecc2_root, _ = self.create_root_ca(
             'Root-CA SECP384R1-SHA256', private_key=ecc2_root_ca_key, hash_algorithm=hashes.SHA256(), validity_days=root_validity_days
         )
@@ -375,7 +507,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             hash_algorithm=hashes.SHA256(),
             validity_days=issuing_validity_days,
         )
-        ecc2_issuing_ca_model = self.save_issuing_ca(
+        ecc2_issuing_ca_model = self._save_demo_issuing_ca(
             issuing_ca_cert=ecc2_issuing_ca,
             private_key=ecc2_issuing_ca_key,
             chain=[ecc2_root],
@@ -388,7 +520,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
 
         self.log_and_stdout('Creating SECP521R1 Root CA and Issuing CA F...')
         ecc3_root_ca_key = ec.generate_private_key(curve=ec.SECP521R1())
-        ecc3_issuing_ca_key = ec.generate_private_key(curve=ec.SECP521R1())
+        ecc3_issuing_ca_key = self._generate_demo_ec_issuing_key(
+            unique_name='issuing-ca-f',
+            curve=ec.SECP521R1(),
+        )
         ecc3_root, _ = self.create_root_ca(
             'Root-CA SECP521R1-SHA256', private_key=ecc3_root_ca_key, hash_algorithm=hashes.SHA3_512(), validity_days=root_validity_days
         )
@@ -409,7 +544,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             hash_algorithm=hashes.SHA3_512(),
             validity_days=issuing_validity_days,
         )
-        ecc3_issuing_ca_model = self.save_issuing_ca(
+        ecc3_issuing_ca_model = self._save_demo_issuing_ca(
             issuing_ca_cert=ecc3_issuing_ca,
             private_key=ecc3_issuing_ca_key,
             chain=[ecc3_root],

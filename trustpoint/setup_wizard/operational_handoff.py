@@ -24,6 +24,7 @@ SWITCH_TO_OPERATIONAL_SCRIPT = Path('/etc/trustpoint/wizard/switch_to_operationa
 SUDO_EXECUTABLE = '/usr/bin/sudo'
 MAX_CAPTURED_OUTPUT_LENGTH = 4000
 PASSTHROUGH_OPERATIONAL_ENV_KEYS = (
+    'CS_PKCS11_R3_CFG',
     'PKCS11_PROXY_SOCKET',
     'TRUSTPOINT_HSM_ROOT',
     'TRUSTPOINT_HSM_CONFIG_DIR',
@@ -44,6 +45,7 @@ PASSTHROUGH_OPERATIONAL_ENV_KEYS = (
     'EMAIL_USE_SSL',
     'DEFAULT_FROM_EMAIL',
 )
+FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-vendor.cfg'
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +111,9 @@ def build_operational_environment(config_model: SetupWizardConfigModel) -> dict[
         value = os.getenv(key)
         if value is not None:
             env_values[key] = value
+    pkcs11_config_env_var = (config_model.fresh_install_pkcs11_config_env_var or '').strip()
+    if pkcs11_config_env_var and (config_model.fresh_install_pkcs11_config_path or '').strip():
+        env_values[pkcs11_config_env_var] = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
     return env_values
 
 
@@ -135,6 +140,8 @@ def build_apply_payload(config_model: SetupWizardConfigModel) -> dict[str, Any]:
             'pkcs11_slot_id': config_model.fresh_install_pkcs11_slot_id,
             'pkcs11_auth_source': config_model.fresh_install_pkcs11_auth_source,
             'pkcs11_auth_source_ref': config_model.fresh_install_pkcs11_auth_source_ref,
+            'pkcs11_config_path': config_model.fresh_install_pkcs11_config_path,
+            'pkcs11_config_env_var': config_model.fresh_install_pkcs11_config_env_var,
             'tls_mode': config_model.fresh_install_tls_mode,
         },
     }

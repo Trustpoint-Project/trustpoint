@@ -128,6 +128,33 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
         self.assertEqual(pkcs11_config.token_label, 'Trustpoint-SoftHSM')
         self.assertIsNone(pkcs11_config.token_serial)
 
+    def test_configure_instance_crypto_backend_accepts_slot_only_selector(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            module_path = temp_root / 'libpkcs11.so'
+            pin_file = temp_root / 'user-pin.txt'
+            module_path.write_text('', encoding='utf-8')
+            pin_file.write_text('1234', encoding='utf-8')
+
+            with override_settings(
+                HSM_DEFAULT_PKCS11_MODULE_PATH=module_path,
+                HSM_DEFAULT_USER_PIN_FILE=pin_file,
+                HSM_DEFAULT_TOKEN_LABEL='',
+            ):
+                config_model = SetupWizardConfigModel.get_singleton()
+                config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+                config_model.fresh_install_pkcs11_token_label = ''
+                config_model.fresh_install_pkcs11_slot_id = 1
+                config_model.save()
+
+                FreshInstallSummaryView._configure_instance_crypto_backend(config_model)
+
+        profile = CryptoProviderProfileModel.objects.get(active=True)
+        pkcs11_config = CryptoProviderPkcs11ConfigModel.objects.get(profile=profile)
+        self.assertEqual(profile.backend_kind, BackendKind.PKCS11)
+        self.assertIsNone(pkcs11_config.token_label)
+        self.assertEqual(pkcs11_config.slot_id, 1)
+
     def test_configure_app_secret_backend_creates_pkcs11_backend(self) -> None:
         with TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)

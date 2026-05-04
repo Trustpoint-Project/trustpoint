@@ -95,7 +95,7 @@ class PKCS11Key(models.Model):
         return f'{self.token_label}/{self.key_label} ({self.key_type})'
 
     def get_pkcs11_key_instance(
-        self, lib_path: str, user_pin: str
+        self, lib_path: str, user_pin: str, slot_id: int | None = None
     ) -> Pkcs11RSAPrivateKey | Pkcs11ECPrivateKey | Pkcs11AESKey:
         """Get the appropriate PKCS#11 key instance."""
         if self.key_type == self.KeyType.RSA:
@@ -103,14 +103,16 @@ class PKCS11Key(models.Model):
                 lib_path=lib_path,
                 token_label=self.token_label,
                 user_pin=user_pin,
-                key_label=self.key_label
+                key_label=self.key_label,
+                slot_id=slot_id,
             )
         if self.key_type == self.KeyType.EC:
             return Pkcs11ECPrivateKey(
                 lib_path=lib_path,
                 token_label=self.token_label,
                 user_pin=user_pin,
-                key_label=self.key_label
+                key_label=self.key_label,
+                slot_id=slot_id,
             )
         if self.key_type == self.KeyType.AES:
             return Pkcs11AESKey(
@@ -250,6 +252,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             token_label: str,
             user_pin: str,
             key_label: str,
+            slot_id: int | None = None,
     ) -> PKCS11Key:
         """Import a private key to HSM and create corresponding PKCS11Key model.
 
@@ -268,7 +271,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             ValueError: If unsupported key type
             NotImplementedError: If EC key import not yet supported
         """
-        if not module_path or not token_label or not user_pin:
+        if not module_path or not user_pin or (not token_label and slot_id is None):
             msg = 'Incomplete PKCS#11 runtime configuration'
             raise RuntimeError(msg)
 
@@ -286,6 +289,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                     token_label=token_label,
                     user_pin=user_pin,
                     key_label=key_label,
+                    slot_id=slot_id,
                 )
 
                 if not pkcs11_key_handler.import_private_key_from_crypto(crypto_private_key):
@@ -300,6 +304,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                     token_label=token_label,
                     user_pin=user_pin,
                     key_label=key_label,
+                    slot_id=slot_id,
                 )
 
                 if not pkcs11_key_handler.import_private_key_from_crypto(crypto_private_key):
@@ -331,6 +336,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             key_label: str,
             key_size: int | None = None,
             key_curve: ec.EllipticCurve | None = None,
+            slot_id: int | None = None,
     ) -> PKCS11Key:
         """Generate a new private key in HSM and create corresponding PKCS11Key model.
 
@@ -351,12 +357,12 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             ValueError: If unsupported key type or invalid parameters
             NotImplementedError: If EC key generation not yet supported
         """
-        cls._validate_hsm_inputs(module_path, token_label, user_pin, key_label, key_type, key_size, key_curve)
+        cls._validate_hsm_inputs(module_path, token_label, user_pin, key_label, key_type, key_size, key_curve, slot_id)
 
         pkcs11_key_handler = None
         try:
             pkcs11_key_handler, model_key_type = cls._initialize_key_handler(
-                key_type, module_path, token_label, user_pin, key_label, key_size, key_curve
+                key_type, module_path, token_label, user_pin, key_label, key_size, key_curve, slot_id
             )
 
             return PKCS11Key.objects.create(
@@ -379,9 +385,10 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         key_type: type[PrivateKey],
         key_size: int | None,
         key_curve: ec.EllipticCurve | None,
+        slot_id: int | None,
     ) -> None:
         """Validates the inputs for HSM key creation."""
-        if not module_path or not token_label or not user_pin:
+        if not module_path or not user_pin or (not token_label and slot_id is None):
             msg = 'Incomplete PKCS#11 runtime configuration'
             raise RuntimeError(msg)
 
@@ -422,6 +429,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         key_label: str,
         key_size: int | None,
         key_curve: ec.EllipticCurve | None,
+        slot_id: int | None,
     ) -> tuple[Pkcs11RSAPrivateKey | Pkcs11ECPrivateKey, str]:
         """Initializes the PKCS#11 key handler."""
         if key_type == rsa.RSAPrivateKey:
@@ -430,6 +438,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 token_label=token_label,
                 user_pin=user_pin,
                 key_label=key_label,
+                slot_id=slot_id,
             )
             if key_size is None:
                 msg = 'key_size must be provided for RSA keys.'
@@ -443,6 +452,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 token_label=token_label,
                 user_pin=user_pin,
                 key_label=key_label,
+                slot_id=slot_id,
             )
             ec_pkcs11_key_handler.generate_key(curve=key_curve)
             return ec_pkcs11_key_handler, PKCS11Key.KeyType.EC
@@ -517,7 +527,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     @classmethod
     def _handle_hsm_key(cls, normalized_credential_serializer: CredentialSerializer) -> PKCS11Key:
         """Handles the creation or import of a private key in an HSM (Hardware Security Module)."""
-        module_path, token_label, user_pin = cls._get_active_pkcs11_runtime()
+        module_path, token_label, user_pin, slot_id = cls._get_active_pkcs11_runtime()
         hsm_key_reference = normalized_credential_serializer.get_hsm_key_reference()
         if hsm_key_reference is None:
             msg = 'HSM key reference is required for HSM private key locations'
@@ -537,6 +547,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 module_path=module_path,
                 token_label=token_label,
                 user_pin=user_pin,
+                slot_id=slot_id,
             )
         if normalized_credential_serializer.private_key_reference.location == PrivateKeyLocation.HSM_PROVIDED:
             private_key_serializer = normalized_credential_serializer.get_private_key_serializer()
@@ -549,21 +560,23 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
                 module_path=module_path,
                 token_label=token_label,
                 user_pin=user_pin,
-                crypto_private_key=crypto_private_key
+                crypto_private_key=crypto_private_key,
+                slot_id=slot_id,
             )
         msg = f'Unsupported HSM location: {normalized_credential_serializer.private_key_reference.location}'
         raise ValueError(msg)
 
     @staticmethod
-    def _get_active_pkcs11_runtime() -> tuple[str, str, str]:
+    def _get_active_pkcs11_runtime() -> tuple[str, str, str, int | None]:
         """Resolve the active PKCS#11 runtime configuration for credential operations."""
         pkcs11_config = require_active_pkcs11_config()
         token_label = (pkcs11_config.token_label or '').strip()
-        if not token_label:
-            msg = 'The configured PKCS#11 backend must define a token label for credential operations.'
+        slot_id = pkcs11_config.slot_id
+        if not token_label and slot_id is None:
+            msg = 'The configured PKCS#11 backend must define a token label or slot ID for credential operations.'
             raise ValueError(msg)
         user_pin = pkcs11_config.build_provider_profile().require_user_pin()
-        return pkcs11_config.module_path, token_label, user_pin
+        return pkcs11_config.module_path, token_label, user_pin, slot_id
 
     @classmethod
     def _create_credential_model(
@@ -740,9 +753,9 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         """Gets the private key abstraction."""
         if self.pkcs11_private_key:
             try:
-                module_path, _configured_token_label, user_pin = self._get_active_pkcs11_runtime()
+                module_path, _configured_token_label, user_pin, slot_id = self._get_active_pkcs11_runtime()
 
-                pkcs11_key = self.pkcs11_private_key.get_pkcs11_key_instance(module_path, user_pin)
+                pkcs11_key = self.pkcs11_private_key.get_pkcs11_key_instance(module_path, user_pin, slot_id)
                 pkcs11_key.load_key()
             except (RuntimeError, ValueError) as e:
                 msg = f'PKCS#11 credential runtime is unavailable: {e}'

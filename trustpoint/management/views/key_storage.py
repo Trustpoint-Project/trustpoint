@@ -70,6 +70,22 @@ class KeyStorageConfigView(TemplateView):
         context['software_config'] = getattr(crypto_profile, 'software_config', None) if crypto_profile else None
         context['rest_config'] = getattr(crypto_profile, 'rest_config', None) if crypto_profile else None
         context['pkcs11_probe_detail'] = pkcs11_probe_detail
+        pkcs11_capability_payload = (
+            getattr(pkcs11_probe_detail, 'snapshot_payload', None)
+            if pkcs11_probe_detail is not None
+            else None
+        )
+        context['pkcs11_capability_payload'] = pkcs11_capability_payload
+        context['pkcs11_derived_features'] = (
+            sorted((pkcs11_capability_payload.get('derived_features') or {}).items())
+            if pkcs11_capability_payload
+            else []
+        )
+        context['pkcs11_mechanisms'] = (
+            sorted((pkcs11_capability_payload.get('mechanisms') or {}).values(), key=lambda item: item.get('name', ''))
+            if pkcs11_capability_payload
+            else []
+        )
         context['is_pkcs11_backend'] = bool(crypto_profile and crypto_profile.backend_kind == BackendKind.PKCS11)
         context['is_software_backend'] = bool(crypto_profile and crypto_profile.backend_kind == BackendKind.SOFTWARE)
         context['is_rest_backend'] = bool(crypto_profile and crypto_profile.backend_kind == BackendKind.REST)

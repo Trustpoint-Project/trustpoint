@@ -6,8 +6,10 @@ import secrets
 import threading
 from typing import cast
 
+from crypto.runtime import is_hsm_backend_configured, require_active_pkcs11_config
+from management.pkcs11_util import Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
 from pki.models import CaModel, CredentialModel, DomainModel, RevokedCertificateModel
-from pki.util.keys import AutoGenPkiKeyAlgorithm, KeyGenerator
+from pki.util.keys import AutoGenPkiKeyAlgorithm, KeyGenerator, supported_auto_gen_pki_key_algorithms
 from pki.util.x509 import CertificateGenerator
 from trustpoint.logger import LoggerMixin
 
@@ -21,18 +23,64 @@ class AutoGenPki(LoggerMixin):
 
     _lock: threading.Lock = threading.Lock()
 
+    @staticmethod
+    def _generate_private_key(key_alg: AutoGenPkiKeyAlgorithm, key_label: str):
+        """Generate an AutoGenPKI key in the active backend."""
+        if key_alg not in supported_auto_gen_pki_key_algorithms():
+            msg = f'The active crypto backend does not support AutoGenPKI algorithm {key_alg.label}.'
+            raise ValueError(msg)
+
+        public_key_info = key_alg.to_public_key_info()
+        if not is_hsm_backend_configured():
+            return KeyGenerator.generate_private_key_for_public_key_info(public_key_info)
+
+        pkcs11_config = require_active_pkcs11_config()
+        token_label = (pkcs11_config.token_label or '').strip()
+        slot_id = pkcs11_config.slot_id
+        if not token_label and slot_id is None:
+            msg = 'The configured PKCS#11 backend must define a token label or slot ID for AutoGenPKI.'
+            raise RuntimeError(msg)
+
+        user_pin = pkcs11_config.build_provider_profile().require_user_pin()
+        if public_key_info.named_curve:
+            curve = public_key_info.named_curve.curve
+            if curve is None:
+                msg = f'Unsupported AutoGenPKI curve {public_key_info.named_curve!r}.'
+                raise ValueError(msg)
+            key = Pkcs11ECPrivateKey(
+                lib_path=pkcs11_config.module_path,
+                token_label=token_label,
+                user_pin=user_pin,
+                key_label=key_label,
+                slot_id=slot_id,
+            )
+            key.generate_key(curve=curve())
+            return key
+
+        if public_key_info.key_size:
+            key = Pkcs11RSAPrivateKey(
+                lib_path=pkcs11_config.module_path,
+                token_label=token_label,
+                user_pin=user_pin,
+                key_label=key_label,
+                slot_id=slot_id,
+            )
+            key.generate_key(key_length=public_key_info.key_size)
+            return key
+
+        msg = f'Unsupported AutoGenPKI key algorithm {key_alg!r}.'
+        raise ValueError(msg)
+
     @classmethod
     def get_auto_gen_pki(cls, key_alg: AutoGenPkiKeyAlgorithm | None = None) -> CaModel | None:
         """Retrieves the auto-generated PKI Issuing CA, if it exists."""
         ca: CaModel | None
         if key_alg is not None:
-            unique_name = f'{UNIQUE_NAME_PREFIX}_{key_alg.name}'
-            try:
-                ca = CaModel.objects.get(unique_name=unique_name)
-            except CaModel.DoesNotExist:
-                return None
-            else:
-                return ca
+            return CaModel.objects.filter(
+                unique_name__startswith=f'{UNIQUE_NAME_PREFIX}_{key_alg.name}',
+                ca_type=CaModel.CaTypeChoice.AUTOGEN,
+                is_active=True,
+            ).first()
         else:
             try:
                 ca = CaModel.objects.filter(
@@ -65,9 +113,6 @@ class AutoGenPki(LoggerMixin):
                 return
 
             root_ca_name = f'AutoGenPKI_Root_CA_{key_alg.name}'
-            public_key_info = key_alg.to_public_key_info()
-            key_gen = KeyGenerator()
-
             # Re-use any existing root CA for the auto-generated PKI and current key type
             try:
                 root_ca = CaModel.objects.get(
@@ -80,7 +125,7 @@ class AutoGenPki(LoggerMixin):
                 cls.logger.info('Creating new Root CA: %s', root_ca_name)
                 root_cert, root_1_key = CertificateGenerator.create_root_ca(
                     root_ca_name,
-                    private_key=key_gen.generate_private_key_for_public_key_info(public_key_info)
+                    private_key=cls._generate_private_key(key_alg, f'{root_ca_name}_{unique_suffix}')
                 )
                 root_ca = CertificateGenerator.save_issuing_ca(
                     issuing_ca_cert=root_cert,
@@ -89,13 +134,14 @@ class AutoGenPki(LoggerMixin):
                     unique_name=root_ca_name,
                     ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
                 )
+                root_1_key = root_ca.credential.get_private_key()
 
             cls.logger.info('Creating new Issuing CA with unique name: %s', issuing_ca_unique_name)
             issuing_1, issuing_1_key = CertificateGenerator.create_issuing_ca(
                 root_1_key,
                 root_ca_name,
                 issuing_ca_unique_name,
-                private_key=key_gen.generate_private_key_for_public_key_info(public_key_info),
+                private_key=cls._generate_private_key(key_alg, issuing_ca_unique_name),
                 validity_days=50,
             )
 

@@ -8,6 +8,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    extra_hosts:
+      - "host.docker.internal:10.255.255.254"
     environment:
       TRUSTPOINT_PHASE: "${TRUSTPOINT_PHASE:-auto}"
       POSTGRES_DB: "trustpoint_db"

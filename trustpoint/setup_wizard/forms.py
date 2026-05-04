@@ -25,6 +25,10 @@ if TYPE_CHECKING:
 
     from django.utils.functional import Promise
 
+FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
+FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
+FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-vendor.cfg'
+
 CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
     str(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage): gettext_lazy(
         'Use the built-in software backend. Suitable for local development, automated testing, demos, and '
@@ -346,7 +350,22 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             }
         ),
     )
+    pkcs11_config_upload = forms.FileField(
+        required=False,
+        label=gettext_lazy('Vendor config file'),
+        help_text=gettext_lazy(
+            'Optional. Upload the vendor PKCS#11 config file when the library requires one, for example '
+            'cs_pkcs11_R3.cfg for Utimaco.'
+        ),
+    )
+    pkcs11_config_env_var = forms.CharField(
+        required=False,
+        label=gettext_lazy('Vendor config env var'),
+        initial='',
+        help_text=gettext_lazy('Environment variable used by the PKCS#11 library to find the vendor config file.'),
+    )
     MAX_PKCS11_LIBRARY_UPLOAD_BYTES = 32 * 1024 * 1024
+    MAX_PKCS11_CONFIG_UPLOAD_BYTES = 256 * 1024
 
     class Meta:
         """ModelForm configuration for the backend-config step."""
@@ -354,13 +373,19 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         model = SetupWizardConfigModel
         fields = (
             'fresh_install_pkcs11_token_label',
+            'fresh_install_pkcs11_slot_id',
         )
         labels: ClassVar[dict[str, str | Promise]] = {
             'fresh_install_pkcs11_token_label': gettext_lazy('Token label'),
+            'fresh_install_pkcs11_slot_id': gettext_lazy('Slot ID (optional)'),
         }
         help_texts: ClassVar[dict[str, str | Promise]] = {
             'fresh_install_pkcs11_token_label': gettext_lazy(
-                'Enter the token label that Trustpoint should use when selecting the PKCS#11 token.'
+                'Enter the token label that Trustpoint should use when selecting the PKCS#11 token. '
+                'Leave empty when selecting by slot ID only.'
+            ),
+            'fresh_install_pkcs11_slot_id': gettext_lazy(
+                'Optional PKCS#11 slot ID. Use this when the provider token label cannot be resolved reliably.'
             ),
         }
 
@@ -377,7 +402,10 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         if selected_backend != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             for field_name in (
                 'pkcs11_module_upload',
+                'pkcs11_config_upload',
+                'pkcs11_config_env_var',
                 'fresh_install_pkcs11_token_label',
+                'fresh_install_pkcs11_slot_id',
                 'pkcs11_user_pin',
             ):
                 self.fields[field_name].widget = forms.HiddenInput()
@@ -385,10 +413,23 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             return
 
         self.fields['pkcs11_module_upload'].widget.attrs.update({'class': 'form-control'})
+        self.fields['pkcs11_config_upload'].widget.attrs.update({'class': 'form-control'})
+        self.fields['pkcs11_config_env_var'].widget.attrs.update(
+            {
+                'class': 'form-control',
+                'placeholder': 'CS_PKCS11_R3_CFG',
+            }
+        )
         self.fields['fresh_install_pkcs11_token_label'].widget.attrs.update(
             {
                 'class': 'form-control',
                 'placeholder': 'Trustpoint-SoftHSM',
+            }
+        )
+        self.fields['fresh_install_pkcs11_slot_id'].widget.attrs.update(
+            {
+                'class': 'form-control',
+                'placeholder': '1',
             }
         )
         self.fields['pkcs11_user_pin'].widget.attrs.update({'class': 'form-control'})
@@ -399,8 +440,13 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         self.initial['fresh_install_pkcs11_token_label'] = (
             self.instance.fresh_install_pkcs11_token_label or getattr(settings, 'HSM_DEFAULT_TOKEN_LABEL', '')
         )
+        self.initial['fresh_install_pkcs11_slot_id'] = self.instance.fresh_install_pkcs11_slot_id
+        self.initial['pkcs11_config_env_var'] = (
+            self.instance.fresh_install_pkcs11_config_env_var or 'CS_PKCS11_R3_CFG'
+        )
         self.staged_pkcs11_module_name = self._staged_pkcs11_module_name()
         self.has_staged_pkcs11_pin = self._existing_pkcs11_pin_file() is not None
+        self.staged_pkcs11_config_name = self._staged_pkcs11_config_name()
 
     def _existing_pkcs11_module_file(self) -> Path | None:
         """Return the currently staged or installed PKCS#11 module file for this wizard state."""
@@ -417,15 +463,19 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
                 return local_dev_module
 
         module_path = (self.instance.fresh_install_pkcs11_module_path or '').strip()
-        if not module_path:
-            return None
-        candidate = Path(module_path)
-        try:
-            if not candidate.is_file():
+        if module_path:
+            candidate = Path(module_path)
+            try:
+                if candidate.is_file():
+                    return candidate
+            except OSError:
                 return None
+        try:
+            if FINAL_WIZARD_PKCS11_MODULE_PATH.is_file():
+                return FINAL_WIZARD_PKCS11_MODULE_PATH
         except OSError:
             return None
-        return candidate
+        return None
 
     def _existing_pkcs11_pin_file(self) -> Path | None:
         """Return the currently staged or installed PKCS#11 user PIN file for this wizard state."""
@@ -433,15 +483,39 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         if staged_pin is not None:
             return staged_pin
         pin_path = (self.instance.fresh_install_pkcs11_auth_source_ref or '').strip()
-        if not pin_path:
-            return None
-        candidate = Path(pin_path)
-        try:
-            if not candidate.is_file():
+        if pin_path:
+            candidate = Path(pin_path)
+            try:
+                if candidate.is_file():
+                    return candidate
+            except OSError:
                 return None
+        try:
+            if FINAL_WIZARD_PKCS11_PIN_PATH.is_file():
+                return FINAL_WIZARD_PKCS11_PIN_PATH
         except OSError:
             return None
-        return candidate
+        return None
+
+    def _existing_pkcs11_config_file(self) -> Path | None:
+        """Return the currently staged or installed PKCS#11 vendor config file for this wizard state."""
+        staged_config = existing_wizard_pkcs11_staged_file(self.instance.fresh_install_pkcs11_config_path)
+        if staged_config is not None:
+            return staged_config
+        config_path = (self.instance.fresh_install_pkcs11_config_path or '').strip()
+        if config_path:
+            candidate = Path(config_path)
+            try:
+                if candidate.is_file():
+                    return candidate
+            except OSError:
+                return None
+        try:
+            if FINAL_WIZARD_PKCS11_CONFIG_PATH.is_file():
+                return FINAL_WIZARD_PKCS11_CONFIG_PATH
+        except OSError:
+            return None
+        return None
 
     def _staged_pkcs11_module_name(self) -> str | None:
         """Return the staged PKCS#11 module filename when the wizard already has one."""
@@ -450,15 +524,30 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             return None
         return staged_module.name
 
+    def _staged_pkcs11_config_name(self) -> str | None:
+        """Return the staged PKCS#11 vendor config filename when the wizard already has one."""
+        config_file = self._existing_pkcs11_config_file()
+        if config_file is None:
+            return None
+        return config_file.name
+
     def clean_fresh_install_pkcs11_token_label(self) -> str:
-        """Require a token label for the simplified PKCS#11 wizard path."""
+        """Normalize the optional PKCS#11 token label."""
         if self.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             return ''
-        token_label = (self.cleaned_data.get('fresh_install_pkcs11_token_label') or '').strip()
-        if not token_label:
-            err_msg = gettext_lazy('Enter the PKCS#11 token label.')
+        return (self.cleaned_data.get('fresh_install_pkcs11_token_label') or '').strip()
+
+    def clean_fresh_install_pkcs11_slot_id(self) -> int | None:
+        """Normalize the optional PKCS#11 slot ID."""
+        if self.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            return None
+        slot_id = self.cleaned_data.get('fresh_install_pkcs11_slot_id')
+        if slot_id is None:
+            return None
+        if int(slot_id) < 0:
+            err_msg = gettext_lazy('Enter a non-negative PKCS#11 slot ID.')
             raise forms.ValidationError(err_msg)
-        return token_label
+        return int(slot_id)
 
     def _validate_pkcs11_module_upload(self, uploaded_module: Any) -> None:
         """Validate the uploaded PKCS#11 shared library."""
@@ -490,6 +579,24 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             err_msg = gettext_lazy('Upload a valid Linux ELF shared library.')
             raise forms.ValidationError(err_msg)
 
+    def _validate_pkcs11_config_upload(self, uploaded_config: Any) -> None:
+        """Validate an optional vendor PKCS#11 config upload."""
+        if uploaded_config is None:
+            return
+        if getattr(uploaded_config, 'size', 0) > self.MAX_PKCS11_CONFIG_UPLOAD_BYTES:
+            err_msg = gettext_lazy('The uploaded vendor config file is too large.')
+            raise forms.ValidationError(err_msg)
+
+    def clean_pkcs11_config_env_var(self) -> str:
+        """Normalize the optional vendor config env-var name."""
+        value = str(self.cleaned_data.get('pkcs11_config_env_var') or '').strip()
+        if not value:
+            return ''
+        if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', value):
+            err_msg = gettext_lazy('Enter a valid environment variable name.')
+            raise forms.ValidationError(err_msg)
+        return value
+
     def clean(self) -> dict[str, Any]:
         """Validate the staged backend configuration."""
         cleaned_data = super().clean()
@@ -497,14 +604,21 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             return cleaned_data
 
         module_upload = cleaned_data.get('pkcs11_module_upload')
+        config_upload = cleaned_data.get('pkcs11_config_upload')
         user_pin = cleaned_data.get('pkcs11_user_pin') or ''
         existing_module = self._existing_pkcs11_module_file()
         existing_pin = self._existing_pkcs11_pin_file()
+        token_label = cleaned_data.get('fresh_install_pkcs11_token_label') or ''
+        slot_id = cleaned_data.get('fresh_install_pkcs11_slot_id')
 
         try:
             self._validate_pkcs11_module_upload(module_upload)
         except forms.ValidationError as exception:
             self.add_error('pkcs11_module_upload', exception)
+        try:
+            self._validate_pkcs11_config_upload(config_upload)
+        except forms.ValidationError as exception:
+            self.add_error('pkcs11_config_upload', exception)
 
         if module_upload is None and existing_module is None and not self.local_dev_pkcs11_handoff_available:
             self.add_error(
@@ -515,6 +629,11 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             self.add_error(
                 'pkcs11_user_pin',
                 gettext_lazy('Enter the PKCS#11 user PIN.'),
+            )
+        if not token_label and slot_id is None:
+            self.add_error(
+                'fresh_install_pkcs11_token_label',
+                gettext_lazy('Enter a PKCS#11 token label or a slot ID.'),
             )
         return cleaned_data
 

@@ -245,9 +245,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
                 True,
             ),
             x509.AuthorityKeyIdentifier: (
-                x509.AuthorityKeyIdentifier.from_issuer_public_key(
-                    issuing_credential.get_private_key_serializer().public_key_serializer.as_crypto()
-                ),
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(issuing_credential.get_certificate().public_key()),
                 False,
             ),
             x509.SubjectKeyIdentifier: (x509.SubjectKeyIdentifier.from_public_key(public_key), False),
@@ -265,7 +263,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
                 certificate_builder = certificate_builder.add_extension(ext, critical)
 
         signed_cert = certificate_builder.sign(
-            private_key=issuing_credential.get_private_key_serializer().as_crypto(),
+            private_key=issuing_credential.get_private_key(),
             algorithm=hash_algorithm,
         )
         self._save_credential(context, signed_cert, issuing_credential)

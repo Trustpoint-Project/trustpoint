@@ -65,6 +65,14 @@ class Command(BaseCommand):
             output.write(output.error(error_msg))
             raise CommandError(error_msg) from exc
 
+        output.write('Refreshing crypto provider capability probe...')
+        try:
+            call_command('reprobe_crypto_provider', verbosity=0)
+        except CommandError as exc:
+            output.write(output.warning(f'Crypto provider capability probe failed: {exc}'))
+        else:
+            output.write('Crypto provider capability probe refreshed')
+
         output.write(output.success('=== Startup Sequence Completed Successfully ==='))
 
     @staticmethod

@@ -161,4 +161,3 @@ class AppSecretSoftwareConfigModel(models.Model):
         """Validate the software app-secret configuration."""
         if self.backend.backend_kind != AppSecretBackendKind.SOFTWARE:
             raise ValidationError({'backend': 'Software config requires the software app-secret backend.'})
-

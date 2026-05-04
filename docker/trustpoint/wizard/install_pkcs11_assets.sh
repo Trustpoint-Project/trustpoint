@@ -8,6 +8,7 @@ HSM_CONFIG_DIR="${TRUSTPOINT_HSM_CONFIG_DIR:-${HSM_ROOT}/config}"
 HSM_LIB_DIR="${TRUSTPOINT_HSM_LIB_DIR:-${HSM_ROOT}/lib}"
 FINAL_MODULE_PATH="${HSM_LIB_DIR}/uploaded-pkcs11-module.so"
 PIN_FILE_PATH="${HSM_CONFIG_DIR}/user-pin.txt"
+FINAL_CONFIG_PATH="${HSM_CONFIG_DIR}/uploaded-pkcs11-vendor.cfg"
 MODULE_PATH_FILE="${HSM_CONFIG_DIR}/pkcs11-module-path.txt"
 
 log() {
@@ -16,21 +17,28 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - install_pkcs11_assets.sh - ${level} - $*" | tee -a "$LOGFILE"
 }
 
-if [ "$#" -ne 1 ] && [ "$#" -ne 2 ]; then
-    log ERROR "Expected either a staged PIN path, or a staged module path plus a staged PIN path."
+if [ "$#" -ne 1 ] && [ "$#" -ne 2 ] && [ "$#" -ne 3 ]; then
+    log ERROR "Expected staged PIN, staged module plus PIN, or staged module plus PIN plus vendor config."
     exit 1
 fi
 
 staged_module=""
 staged_pin=""
+staged_config=""
 install_module=0
+install_config=0
 
-if [ "$#" -eq 2 ]; then
+if [ "$#" -ge 2 ]; then
     staged_module="$(readlink -f "$1" 2>/dev/null || true)"
     staged_pin="$(readlink -f "$2" 2>/dev/null || true)"
     install_module=1
 else
     staged_pin="$(readlink -f "$1" 2>/dev/null || true)"
+fi
+
+if [ "$#" -eq 3 ]; then
+    staged_config="$(readlink -f "$3" 2>/dev/null || true)"
+    install_config=1
 fi
 
 if [ "$install_module" -eq 1 ]; then
@@ -45,6 +53,21 @@ if [ "$install_module" -eq 1 ]; then
     if [ ! -f "$staged_module" ]; then
         log ERROR "Staged PKCS#11 module file is missing: $staged_module"
         exit 2
+    fi
+fi
+
+if [ "$install_config" -eq 1 ]; then
+    case "$staged_config" in
+        "${STAGING_ROOT}"/*) ;;
+        *)
+            log ERROR "Refusing to install non-staged PKCS#11 vendor config path."
+            exit 7
+            ;;
+    esac
+
+    if [ ! -f "$staged_config" ]; then
+        log ERROR "Staged PKCS#11 vendor config file is missing: $staged_config"
+        exit 7
     fi
 fi
 
@@ -77,6 +100,13 @@ if ! install -o root -g www-data -m 0640 "$staged_pin" "$PIN_FILE_PATH"; then
     exit 5
 fi
 
+if [ "$install_config" -eq 1 ]; then
+    if ! install -o root -g www-data -m 0640 "$staged_config" "$FINAL_CONFIG_PATH"; then
+        log ERROR "Failed to install PKCS#11 vendor config into $FINAL_CONFIG_PATH"
+        exit 8
+    fi
+fi
+
 if [ "$install_module" -eq 1 ]; then
     tmp_module_path_file="$(mktemp)"
     printf '%s\n' "$FINAL_MODULE_PATH" > "$tmp_module_path_file"
@@ -91,6 +121,9 @@ fi
 rm -f "$staged_pin"
 if [ "$install_module" -eq 1 ]; then
     rm -f "$staged_module"
+fi
+if [ "$install_config" -eq 1 ]; then
+    rm -f "$staged_config"
 fi
 
 log INFO "PKCS#11 assets installed successfully."
