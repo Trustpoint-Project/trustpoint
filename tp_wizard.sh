@@ -184,7 +184,7 @@ WF2_WORKER_SLEEP="$DEF_WF2_WORKER_SLEEP"
 
 # CLI target flags
 ONLY_APP=false; ONLY_DB=false; ONLY_MAIL=false; ONLY_SFTP=false; ONLY_WF2_WORKER=false; ONLY_HSM=false
-NOWAIT=false
+NOWAIT=false; ASK_HSM_ON_UP=false; NO_AUTO_HSM=false
 
 # -------------------------- Steps --------------------------------------------
 preflight(){ have docker || die "docker not found"; docker version >/dev/null || die "docker daemon not reachable"; }
@@ -287,7 +287,7 @@ step_workflows2_worker(){
 step_local_hsm(){
   $EN_APP || return 0
   EN_LOCAL_HSM=$(
-    ask_yes_no "Start a separate SoftHSM PKCS#11 proxy server container for local/dev testing? Trustpoint loads the proxy client library; the SoftHSM container keeps the real token store and serves PKCS#11 over the proxy." "y" && echo true || echo false
+    ask_yes_no "Start a separate SoftHSM PKCS#11 proxy server container? (Demo only)" "y" && echo true || echo false
   )
 }
 
@@ -435,6 +435,7 @@ configure_selected(){
     EN_WF2_WORKER=$(
       ask_yes_no "Delegate workflows2 tasks to a dedicated worker container?" "n" && echo true || echo false
     )
+    $ASK_HSM_ON_UP && step_local_hsm
   elif $ONLY_WF2_WORKER; then
     EN_WF2_WORKER=true
     configure_app_image_prompt
@@ -444,7 +445,7 @@ configure_selected(){
   # If the user starts only the app or worker but we already have a local/dev
   # HSM metadata file or a running SoftHSM container, carry the HSM mount/config
   # along automatically so the PKCS#11 provider profile does not become broken.
-  if { $ONLY_APP || $ONLY_WF2_WORKER; } && { [[ -f "$LOCAL_HSM_METADATA_FILE" ]] || exists "$SOFTHSM_NAME"; }; then
+  if ! $ASK_HSM_ON_UP && ! $NO_AUTO_HSM && { $ONLY_APP || $ONLY_WF2_WORKER; } && { [[ -f "$LOCAL_HSM_METADATA_FILE" ]] || exists "$SOFTHSM_NAME"; }; then
     EN_LOCAL_HSM=true
   fi
 
@@ -660,10 +661,15 @@ provision_local_hsm(){
 
   prepare_local_hsm_root
 
-  exists "$SOFTHSM_NAME" || die "SoftHSM container ${SOFTHSM_NAME} does not exist."
+  if ! exists "$SOFTHSM_NAME"; then
+    warn "SoftHSM container ${SOFTHSM_NAME} does not exist."
+    return 0
+  fi
+
   if ! running "$SOFTHSM_NAME"; then
     docker logs "$SOFTHSM_NAME" >&2 || true
-    die "SoftHSM container ${SOFTHSM_NAME} is not running."
+    warn "SoftHSM container ${SOFTHSM_NAME} is not running."
+    return 0
   fi
 
   if [[ ! -f "$LOCAL_HSM_METADATA_FILE" ]]; then
@@ -1171,7 +1177,7 @@ EOF2
 
 map_only_to_flags(){
   case "$1" in
-    demo)  ONLY_APP=true; ONLY_DB=true; ONLY_MAIL=true; ONLY_HSM=true; ONLY_SFTP=true ;;
+    demo)  ONLY_APP=true; ONLY_DB=true; ONLY_MAIL=true; ONLY_SFTP=true; NO_AUTO_HSM=true ;;
     trustpoint|app)  ONLY_APP=true ;;
     db)   ONLY_DB=true ;;
     mail) ONLY_MAIL=true ;;
@@ -1198,7 +1204,7 @@ set_targets_from_args(){
   if ! $any; then
     ONLY_APP=true
     ONLY_DB=true
-    ONLY_HSM=true
+    ASK_HSM_ON_UP=true
   fi
 }
 
@@ -1209,7 +1215,7 @@ start_selected(){
   resolve_softhsm_image
   $ONLY_DB   && { EN_PG=true; ensure_volumes; start_postgres; }
   $ONLY_MAIL && { EN_MAILPIT=true; start_mailpit; }
-  $ONLY_HSM  && start_softhsm
+  $EN_LOCAL_HSM && start_softhsm
   $ONLY_SFTP && { EN_SFTPGO=true; start_sftpgo; }
   $EN_WF2_WORKER || { $ONLY_APP && stop_one "$WF2_WORKER_NAME"; }
   $ONLY_APP  && start_app
