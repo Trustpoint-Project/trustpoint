@@ -696,7 +696,6 @@ provision_local_hsm(){
     ok "SoftHSM token '${LOCAL_HSM_TOKEN_LABEL}' is ready."
   fi
   ok "Trustpoint PKCS#11 proxy client is expected at /usr/lib/libpkcs11-proxy.so."
-  print_local_hsm_wizard_handoff
 }
 
 # -------------------------- Readiness & Provision -----------------------------
@@ -1067,64 +1066,170 @@ show_runtime_status(){
 }
 
 # -------------------------- Summary ------------------------------------------
+summary_line(){
+  local label="$1" value="${2:-}"
+  [[ -n "$value" ]] || value="-"
+  printf "  %-14s %s\n" "$label:" "$value"
+}
+
+summary_container_list(){
+  docker ps --format '{{.Names}}' \
+    | grep -E '^(trustpoint|postgres|mailpit|softhsm|sftpgo|trustpoint-worker)$' \
+    | awk 'BEGIN{first=1} { if (!first) printf ", "; printf "%s", $0; first=0 } END{ print "" }'
+}
+
+summary_bootstrap_login(){
+  local line username password
+  username="$(latest_bootstrap_log_value username || true)"
+  password="$(latest_bootstrap_log_value password || true)"
+
+  if [[ -z "$username" || -z "$password" ]]; then
+    line="$(latest_legacy_bootstrap_login_line || true)"
+    username="$(sed -nE 's/.*Username: ([^ ]+) Password: .*/\1/p' <<<"$line")"
+    password="$(sed -nE 's/.*Password: ([^[:space:]]+).*/\1/p' <<<"$line")"
+  fi
+
+  if [[ -n "$username" && -n "$password" ]]; then
+    echo "${username} / ${password}"
+  fi
+}
+
 final_summary(){
+  local containers bootstrap_login
+  local http_port https_port pg_port mailpit_ui mailpit_smtp
+  local sftpgo_web sftpgo_sftp token_serial profile_name token_label user_pin
+
+  containers="$(summary_container_list)"
+  bootstrap_login="$(summary_bootstrap_login || true)"
+
   echo
-  echo "========================= Runtime Summary (Actual) ======================="
-  printf "%-22s %s\n" "Network:" "$NET"
-  printf "%-22s %s\n" "Containers:" "$(docker ps --format '{{.Names}}' | grep -E '^(trustpoint|postgres|mailpit|softhsm|sftpgo|trustpoint-worker)$' || true)"
+  echo "============================== Summary =============================="
+  summary_line "Containers" "${containers:-none}"
+
   echo
+  echo "Access"
+  echo "---------------------------------------------------------------------"
+
   if $EN_APP; then
-    printf "%-22s %s\n" "trustpoint:" "http://localhost:80  |  https://localhost:443"
-    print_bootstrap_login_from_logs
-    printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings (default: auto)"
+    if exists trustpoint; then
+      http_port="$(container_host_port trustpoint 80/tcp)"
+      https_port="$(container_host_port trustpoint 443/tcp)"
+      summary_line "Trustpoint" "http://localhost:${http_port:-80} | https://localhost:${https_port:-443}"
+    else
+      summary_line "Trustpoint" "enabled, but container not found"
+    fi
   fi
+
   if $DB_INTERNAL; then
-    printf "%-22s %s\n" "PostgreSQL:" "tcp://localhost:${DB_PORT}  (container port 5432)"
-  fi
-  if $EN_APP; then
-    printf "%-22s %s\n" "DB connect:" "host=${APP_DB_HOST} port=${APP_DB_PORT} db=${APP_DB_NAME} user=${APP_DB_USER} pass=$(mask "$APP_DB_PASS")"
-  fi
-  $EN_MAILPIT && printf "%-22s %s\n" "Mailpit UI:" "http://localhost:${MAILPIT_UI_PORT}  (SMTP :${MAILPIT_SMTP_PORT})"
-
-  if exists "$SOFTHSM_NAME" || [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
-    printf "%-22s %s\n" "SoftHSM service:" "${SOFTHSM_NAME} (proxy at tcp://${SOFTHSM_NAME}:5657)"
-    printf "%-22s %s\n" "Token label:" "${LOCAL_HSM_TOKEN_LABEL}"
-    [[ -f "$LOCAL_HSM_METADATA_FILE" ]] && {
-      printf "%-22s %s\n" "Token serial:" "$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
-      printf "%-22s %s\n" "Profile name:" "$(local_hsm_value TRUSTPOINT_LOCAL_HSM_PROFILE_NAME)"
-      printf "%-22s %s\n" "Local proxy client:" "/usr/lib/libpkcs11-proxy.so"
-      printf "%-22s %s\n" "Wizard token label:" "$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL)"
-      [[ -n "$(local_hsm_user_pin)" ]] && printf "%-22s %s\n" "Wizard user PIN:" "$(local_hsm_user_pin)"
-    }
+    if exists postgres; then
+      pg_port="$(container_host_port postgres 5432/tcp)"
+      summary_line "PostgreSQL" "tcp://localhost:${pg_port:-$DB_PORT}"
+    else
+      summary_line "PostgreSQL" "enabled, but container not found"
+    fi
   fi
 
-  if $EN_WF2_WORKER; then
-    printf "%-22s %s\n" "workflows2 worker:" "${WF2_WORKER_NAME}"
+  if $EN_MAILPIT; then
+    if exists mailpit; then
+      mailpit_ui="$(container_host_port mailpit 8025/tcp)"
+      mailpit_smtp="$(container_host_port mailpit 1025/tcp)"
+      summary_line "Mailpit" "UI http://localhost:${mailpit_ui:-$MAILPIT_UI_PORT} | SMTP localhost:${mailpit_smtp:-$MAILPIT_SMTP_PORT}"
+    else
+      summary_line "Mailpit" "enabled, but container not found"
+    fi
   fi
 
   if $EN_SFTPGO; then
-    local PORT; PORT="$(sftpgo_web_port)"
-    printf "%-22s %s\n" "SFTPGo Web:" "http://localhost:${PORT}/web/admin"
-    printf "%-22s %s\n" "SFTPGo SFTP:" "sftp://localhost:${SFTPGO_SFTP_PORT}"
-    printf "%-22s %s\n" "SFTPGo admin:" "${SFTPGO_ADMIN_USER} / $(mask "$SFTPGO_ADMIN_PASS")"
-    printf "%-22s %s\n" "Backup user:" "${SFTPGO_BACKUP_USER} / $(mask "$SFTPGO_BACKUP_PASS")"
-    printf "%-22s %s\n" "Backup home:" "${SFTPGO_BACKUP_HOME}"
-    printf "%-22s %s\n" "Backup URL:" "sftp://${SFTPGO_BACKUP_USER}:***@127.0.0.1:${SFTPGO_SFTP_PORT}/"
-    printf "%-22s %s\n" "Data dir:" "${SFTPGO_ROOT}"
+    if exists sftpgo; then
+      sftpgo_web="$(container_host_port sftpgo 8080/tcp)"
+      sftpgo_sftp="$(container_host_port sftpgo 2022/tcp)"
+      summary_line "SFTPGo" "Web http://localhost:${sftpgo_web:-$SFTPGO_WEB_PORT}/web/admin | SFTP localhost:${sftpgo_sftp:-$SFTPGO_SFTP_PORT}"
+    else
+      summary_line "SFTPGo" "enabled, but container not found"
+    fi
+  fi
+
+  if $EN_LOCAL_HSM || exists "$SOFTHSM_NAME" || [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
+    if exists "$SOFTHSM_NAME"; then
+      summary_line "SoftHSM" "tcp://${SOFTHSM_NAME}:5657"
+    else
+      summary_line "SoftHSM" "enabled, but container not found"
+    fi
+  fi
+
+  if $EN_WF2_WORKER || exists "$WF2_WORKER_NAME"; then
+    if exists "$WF2_WORKER_NAME"; then
+      summary_line "Worker" "$WF2_WORKER_NAME"
+    else
+      summary_line "Worker" "enabled, but container not found"
+    fi
+  fi
+
+  echo
+  echo "Credentials"
+  echo "---------------------------------------------------------------------"
+
+  if $EN_APP; then
+    summary_line "Trustpoint" "${bootstrap_login:-not found in logs yet}"
+    summary_line "Database" "${APP_DB_USER} / ${APP_DB_PASS}"
+  elif $DB_INTERNAL; then
+    summary_line "Database" "${DB_USER} / ${DB_PASS}"
+  fi
+
+  if $EN_SFTPGO; then
+    summary_line "SFTPGo admin" "${SFTPGO_ADMIN_USER} / ${SFTPGO_ADMIN_PASS}"
+    summary_line "SFTP backup" "${SFTPGO_BACKUP_USER} / ${SFTPGO_BACKUP_PASS}"
+  fi
+
+  if $EN_APP || $EN_LOCAL_HSM || exists "$SOFTHSM_NAME" || [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
+    echo
+    echo "Setup values"
+    echo "---------------------------------------------------------------------"
+
+    if $EN_APP; then
+      summary_line "App DB" "${APP_DB_NAME} @ ${APP_DB_HOST}:${APP_DB_PORT}"
+    fi
+
+    if $EN_LOCAL_HSM || exists "$SOFTHSM_NAME" || [[ -f "$LOCAL_HSM_METADATA_FILE" ]]; then
+      token_label="$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL)"
+      token_label="${token_label:-$LOCAL_HSM_TOKEN_LABEL}"
+      token_serial="$(local_hsm_value TRUSTPOINT_LOCAL_HSM_TOKEN_SERIAL)"
+      profile_name="$(local_hsm_value TRUSTPOINT_LOCAL_HSM_PROFILE_NAME)"
+      profile_name="${profile_name:-$LOCAL_HSM_PROFILE_NAME}"
+      user_pin="$(local_hsm_user_pin)"
+
+      summary_line "PKCS#11" "/usr/lib/libpkcs11-proxy.so"
+      summary_line "HSM label" "$token_label"
+      [[ -n "$token_serial" ]] && summary_line "HSM serial" "$token_serial"
+      summary_line "HSM profile" "$profile_name"
+      [[ -n "$user_pin" ]] && summary_line "HSM PIN" "$user_pin"
+    fi
+  fi
+
+  if $EN_SFTPGO; then
+    echo
+    echo "Backup"
+    echo "---------------------------------------------------------------------"
+    summary_line "SFTP URL" "sftp://${SFTPGO_BACKUP_USER}:${SFTPGO_BACKUP_PASS}@127.0.0.1:${SFTPGO_SFTP_PORT}/"
+    [[ -n "$SFTPGO_BACKUP_HOME" ]] && summary_line "Home" "$SFTPGO_BACKUP_HOME"
   fi
 
   if $EN_APP; then
+    echo
+    echo "TLS"
+    echo "---------------------------------------------------------------------"
     if [[ -n "$TLS_FP_FOUND" ]]; then
-      printf "%-22s %s\n" "TLS fingerprint:" "$TLS_FP_FOUND"
+      summary_line "Fingerprint" "$TLS_FP_FOUND"
     else
       if $NOWAIT; then
-        printf "%-22s %s\n" "TLS fingerprint:" "skipped (NOWAIT)"
+        summary_line "Fingerprint" "skipped (--nowait)"
       else
-        printf "%-22s %s\n" "TLS fingerprint:" "not found yet (polled ${TLS_FP_ELAPSED}s; timeout ${TLS_FP_TIMEOUT}s)"
+        summary_line "Fingerprint" "not found yet"
       fi
     fi
   fi
-  echo "========================================================================="
+
+  echo "====================================================================="
 }
 
 # -------------------------- High-level orchestration -------------------------
