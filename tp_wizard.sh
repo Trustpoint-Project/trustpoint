@@ -86,8 +86,9 @@ have(){ command -v "$1" >/dev/null 2>&1; }
 exists(){ docker ps -a --format '{{.Names}}' | grep -Fxq "$1"; }
 running(){ docker ps --format '{{.Names}}' | grep -Fxq "$1"; }
 ensure_network(){ docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET" >/dev/null; }
-ensure_volumes(){ docker volume inspect "$VOL_DB" >/dev/null 2>&1 || docker volume create --label "tp.project=${PROJECT}" "$VOL_DB" >/dev/null; }
+ensure_volumes(){ docker volume inspect "$VOL_DB" >/dev/null 2>&1 || docker volume create "$VOL_DB" >/dev/null; }
 stop_one(){ local n="$1"; exists "$n" || return 0; running "$n" && docker stop "$n" >/dev/null || true; docker rm "$n" >/dev/null || true; }
+remove_one(){ local n="$1"; exists "$n" || return 0; docker rm -f "$n" >/dev/null 2>&1 || true; }
 container_state(){ local n="$1"; exists "$n" || { echo "absent"; return; }; docker inspect -f '{{.State.Status}}' "$n" 2>/dev/null || echo "unknown"; }
 container_health(){ local n="$1" h=""; exists "$n" || { echo "-"; return; }; h="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$n" 2>/dev/null || true)"; echo "${h:--}"; }
 container_image(){ local n="$1"; exists "$n" || { echo "-"; return; }; docker inspect -f '{{.Config.Image}}' "$n" 2>/dev/null || echo "-"; }
@@ -98,14 +99,54 @@ container_volume_names(){
   exists "$n" || return 0
   docker inspect -f '{{range .Mounts}}{{if eq .Type "volume"}}{{println .Name}}{{end}}{{end}}' "$n" 2>/dev/null | sed '/^$/d'
 }
+network_container_names(){
+  docker ps -a --filter "network=${NET}" --format '{{.Names}}' 2>/dev/null || true
+
+  if docker network inspect "$NET" >/dev/null 2>&1; then
+    docker network inspect -f '{{range .Containers}}{{println .Name}}{{end}}' "$NET" 2>/dev/null || true
+  fi
+}
+known_container_candidates(){
+  {
+    printf "%s\n" trustpoint postgres mailpit "$SOFTHSM_NAME" sftpgo "$WF2_WORKER_NAME"
+    docker ps -a --format '{{.Names}}' | grep -E '(^|[-_])(trustpoint-worker|tp-worker[0-9]*)([-_0-9]*|$)' || true
+    network_container_names
+  } | sed '/^$/d' | sort -u
+}
+compose_project_names(){
+  local c p
+  while IFS= read -r c; do
+    [[ -n "$c" ]] || continue
+    exists "$c" || continue
+    p="$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project"}}' "$c" 2>/dev/null || true)"
+    [[ -n "$p" && "$p" != "<no value>" ]] && echo "$p"
+  done < <(known_container_candidates)
+}
+project_container_names(){
+  local p
+  {
+    known_container_candidates
+
+    while IFS= read -r p; do
+      [[ -n "$p" ]] || continue
+      docker ps -a --filter "label=com.docker.compose.project=${p}" --format '{{.Names}}' 2>/dev/null || true
+    done < <(compose_project_names)
+  } | sed '/^$/d' | sort -u
+}
 collect_project_volumes(){
+  local c p
   {
     echo "$VOL_DB"
-    container_volume_names trustpoint
-    container_volume_names postgres
-    container_volume_names mailpit
-    container_volume_names sftpgo
-    container_volume_names "$WF2_WORKER_NAME"
+
+    while IFS= read -r c; do
+      [[ -n "$c" ]] || continue
+      container_volume_names "$c"
+    done < <(project_container_names)
+
+    while IFS= read -r p; do
+      [[ -n "$p" ]] || continue
+      docker volume ls --filter "label=com.docker.compose.project=${p}" --format '{{.Name}}' 2>/dev/null || true
+    done < <(compose_project_names)
   } | sed '/^$/d' | sort -u
 }
 print_container_status_row(){
@@ -129,6 +170,23 @@ purge_bind_mount_dir(){
     -v "${dir}:/target" \
     debian:trixie-slim \
     bash -lc 'rm -rf /target/* /target/.[!.]* /target/..?* 2>/dev/null || true'
+}
+
+remove_project_network(){
+  docker network inspect "$NET" >/dev/null 2>&1 || return 0
+
+  local endpoint
+  while IFS= read -r endpoint; do
+    [[ -n "$endpoint" ]] || continue
+    docker network disconnect -f "$NET" "$endpoint" >/dev/null 2>&1 || true
+  done < <(docker network inspect -f '{{range .Containers}}{{println .Name}}{{end}}' "$NET" 2>/dev/null || true)
+
+  if docker network rm "$NET" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  warn "Network ${NET} could not be removed. Remaining endpoints:"
+  docker network inspect -f '{{range .Containers}}{{println .Name}}{{end}}' "$NET" 2>/dev/null | sed 's/^/  - /' >&2 || true
 }
 
 # quick TCP connect test (true if something accepts on host:port)
@@ -993,6 +1051,10 @@ show_runtime_status(){
   print_container_status_row "$SOFTHSM_NAME"
   print_container_status_row sftpgo
   print_container_status_row "$WF2_WORKER_NAME"
+  docker ps -a --format '{{.Names}}' | grep -E '(^|[-_])(trustpoint-worker|tp-worker[0-9]*)([-_0-9]*|$)' | while read -r n; do
+    [[ "$n" == "$WF2_WORKER_NAME" ]] && continue
+    print_container_status_row "$n"
+  done || true
   echo
 
   if exists trustpoint; then
@@ -1073,9 +1135,10 @@ summary_line(){
 }
 
 summary_container_list(){
-  docker ps --format '{{.Names}}' \
-    | grep -E '^(trustpoint|postgres|mailpit|softhsm|sftpgo|trustpoint-worker)$' \
-    | awk 'BEGIN{first=1} { if (!first) printf ", "; printf "%s", $0; first=0 } END{ print "" }'
+  {
+    docker ps --format '{{.Names}}' \
+      | grep -E '^(trustpoint|postgres|mailpit|softhsm|sftpgo)$|(^|[-_])(trustpoint-worker|tp-worker[0-9]*)([-_0-9]*|$)' || true
+  } | awk 'BEGIN{first=1} { if (!first) printf ", "; printf "%s", $0; first=0 } END{ print "" }'
 }
 
 summary_bootstrap_login(){
@@ -1342,7 +1405,13 @@ down_selected(){
   $ONLY_HSM && stop_one "$SOFTHSM_NAME" && done=true
   $ONLY_SFTP && stop_one sftpgo && done=true
   $ONLY_WF2_WORKER && stop_one "$WF2_WORKER_NAME" && done=true
-  $done || { stop_one trustpoint; stop_one postgres; stop_one mailpit; stop_one "$SOFTHSM_NAME"; stop_one sftpgo; stop_one "$WF2_WORKER_NAME"; }
+  $done || {
+    local c
+    while IFS= read -r c; do
+      [[ -n "$c" ]] || continue
+      stop_one "$c"
+    done < <(project_container_names)
+  }
   ok "Stopped."
 }
 
@@ -1361,17 +1430,18 @@ nuke_cmd(){
   read -r -p "Remove ALL project containers, network, DB volume, ./var/hsm, and ./sftpgo-data? [y/N] " a; [[ "${a}" == "y" ]] || exit 0
   read -r -p "Are you sure? This is destructive. [y/N] " b; [[ "${b}" == "y" ]] || exit 0
 
+  mapfile -t project_containers < <(project_container_names)
   mapfile -t project_volumes < <(collect_project_volumes)
 
-  stop_one trustpoint
-  stop_one postgres
-  stop_one mailpit
-  stop_one "$SOFTHSM_NAME"
-  stop_one sftpgo
-  stop_one "$WF2_WORKER_NAME"
+  local c
+  for c in "${project_containers[@]}"; do
+    [[ -n "$c" ]] || continue
+    remove_one "$c"
+  done
 
-  docker network rm "$NET" >/dev/null 2>&1 || true
+  remove_project_network
 
+  local v
   for v in "${project_volumes[@]}"; do
     [[ -n "$v" ]] || continue
     docker volume rm "$v" >/dev/null 2>&1 || true
