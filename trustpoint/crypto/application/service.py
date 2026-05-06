@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from crypto.application.backend_factory import BackendAdapterFactory, DefaultBackendAdapterFactory
-from crypto.domain.errors import CryptoError, KeyNotFoundError, ProviderConfigurationError
+from crypto.application.capabilities import BackendCapabilityService
+from crypto.domain.errors import CryptoError, KeyNotFoundError, ProviderConfigurationError, UnsupportedKeySpecError
 from crypto.domain.refs import ManagedKeyRef, ManagedKeyVerification, ManagedKeyVerificationStatus
 from crypto.models import CryptoManagedKeyModel, CryptoProviderProfileModel
 from crypto.repositories import CryptoManagedKeyRepository, CryptoProviderProfileRepository
@@ -47,6 +48,15 @@ class TrustpointCryptoBackend(LoggerMixin):
     def generate_managed_key(self, *, alias: str, key_spec: KeySpec, policy: KeyPolicy) -> ManagedKeyRef:
         """Generate a managed key using the configured instance backend."""
         profile = self._get_configured_profile()
+        capability_report = BackendCapabilityService(
+            profile_repository=self._profile_repository,
+            adapter_factory=self._adapter_factory,
+        ).active_report()
+        if capability_report.capabilities_known and not capability_report.supports_key_spec(key_spec):
+            diagnostics = '; '.join(capability_report.diagnostics) or f'unsupported key spec {key_spec!r}'
+            msg = f'The configured crypto backend cannot generate key {alias!r}: {diagnostics}'
+            raise UnsupportedKeySpecError(msg)
+
         adapter = self._build_adapter(profile)
 
         try:

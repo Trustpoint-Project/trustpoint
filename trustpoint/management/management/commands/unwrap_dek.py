@@ -127,41 +127,17 @@ class Command(BaseCommand, LoggerMixin):
         """Test loading the KEK (Key Encryption Key)."""
         self.log_and_stdout('Testing KEK loading...')
 
-        from pki.models import PKCS11Key
-
         try:
-            # Get the KEK record
-            if token.kek:
-                kek_record = token.kek
-            else:
-                try:
-                    kek_record = PKCS11Key.objects.get(
-                        token_label=token.label,
-                        key_label=token.KEK_ENCRYPTION_KEY_LABEL,
-                        key_type=PKCS11Key.KeyType.AES
-                    )
-                except ObjectDoesNotExist:
-                    self.log_and_stdout(f'KEK "{token.KEK_ENCRYPTION_KEY_LABEL}" not found in database', level='error')
-                    return
-
-            # Get the AES key instance
-            aes_key = kek_record.get_pkcs11_key_instance(
-                lib_path=token.module_path,
-                user_pin=token.get_pin()
-            )
-
-            try:
-                aes_key.load_key()
+            if token.load_kek():
                 self.log_and_stdout(f'KEK "{token.KEK_ENCRYPTION_KEY_LABEL}" loaded successfully')
-            finally:
-                aes_key.close()
+                return
+            self.log_and_stdout(f'KEK "{token.KEK_ENCRYPTION_KEY_LABEL}" not found in HSM', level='error')
 
         except Exception as e:
             if 'no such key' in str(e).lower():
                 self.log_and_stdout(f'KEK "{token.KEK_ENCRYPTION_KEY_LABEL}" not found in HSM', level='error')
             else:
-                self.log_and_stdout('KEK loading failed', level='error')
-            raise
+                self.log_and_stdout(f'KEK loading failed: {e}', level='error')
 
     def _test_dek_unwrapping(self, token: 'PKCS11Token') -> None:
         """Test unwrapping the DEK."""

@@ -19,10 +19,11 @@ from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import NamedCurve
 from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
-from crypto.runtime import is_hsm_backend_configured
+from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey
+from crypto.models import BackendKind, CryptoManagedKeyModel
+from crypto.runtime import configured_backend_kind
 from management.models import SecurityConfig
-from management.pkcs11_util import Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
-from pki.models import CaModel, CertificateModel, CredentialModel, PKCS11Key
+from pki.models import CaModel, CredentialModel
 from pki.util.keys import CryptographyUtils
 
 if TYPE_CHECKING:
@@ -305,28 +306,18 @@ class CertificateGenerator:
         Returns:
             CaModel: The created CA model.
         """
-        if isinstance(private_key, (Pkcs11RSAPrivateKey, Pkcs11ECPrivateKey)):
+        if isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey)):
             CaModel._validate_ca_certificate(issuing_ca_cert)  # noqa: SLF001
             CaModel._validate_ca_type(ca_type)  # noqa: SLF001
-            key_type = (
-                PKCS11Key.KeyType.RSA if isinstance(private_key, Pkcs11RSAPrivateKey) else PKCS11Key.KeyType.EC
+            credential = CredentialModel.save_managed_key_credential(
+                certificate=issuing_ca_cert,
+                certificate_chain=chain,
+                credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+                managed_key=CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id),
             )
-            pkcs11_key = PKCS11Key.objects.create(
-                token_label=private_key._token_label,  # noqa: SLF001
-                key_label=private_key._key_label,  # noqa: SLF001
-                key_type=key_type,
-            )
-            certificate_model = CertificateModel.save_certificate(issuing_ca_cert)
-            credential_model = CredentialModel._create_credential_model(  # noqa: SLF001
-                certificate_model,
-                CredentialModel.CredentialTypeChoice.ISSUING_CA,
-                '',
-                pkcs11_key,
-            )
-            CredentialModel._save_additional_certificates(credential_model, list(reversed(chain)))  # noqa: SLF001
             issuing_ca = CaModel(
                 unique_name=unique_name,
-                credential=credential_model,
+                credential=credential,
                 ca_type=ca_type,
                 parent_ca=parent_ca,
             )
@@ -334,7 +325,6 @@ class CertificateGenerator:
             truststore = CaModel._create_chain_truststore(issuing_ca)  # noqa: SLF001
             issuing_ca.chain_truststore = truststore
             issuing_ca.save(update_fields=['chain_truststore'])
-            private_key.close()
             return issuing_ca
 
         issuing_ca_credential_serializer = CredentialSerializer(
@@ -345,9 +335,14 @@ class CertificateGenerator:
 
         # CA/business classification must not decide backend placement.
         # The configured Trustpoint backend determines where private keys live.
-        private_key_location = (
-            PrivateKeyLocation.HSM_PROVIDED if is_hsm_backend_configured() else PrivateKeyLocation.SOFTWARE
-        )
+        backend_kind = configured_backend_kind()
+        if backend_kind != BackendKind.SOFTWARE:
+            msg = (
+                'Raw software private keys cannot be saved while Trustpoint is configured for a managed '
+                'crypto backend. Generate or import the key through TrustpointCryptoBackend first.'
+            )
+            raise ValueError(msg)
+        private_key_location = PrivateKeyLocation.SOFTWARE
 
         if not issuing_ca_credential_serializer.private_key:
             err_msg = 'Issuing CA credential serializer must have a private key before saving.'

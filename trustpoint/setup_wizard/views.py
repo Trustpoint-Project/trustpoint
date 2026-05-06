@@ -1774,7 +1774,7 @@ class BackupPasswordRecoveryMixin(LoggerMixin):
         Returns:
             bool: True if KEK already existed, False if newly generated, None on error
         """
-        has_kek = bool(token.kek)
+        has_kek = token.load_kek()
 
         if not has_kek:
             self.logger.info('No KEK found on token %s - generating new KEK', token.label)

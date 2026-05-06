@@ -5,7 +5,7 @@ import hashlib
 import os
 import secrets
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NoReturn, cast
+from typing import Any, NoReturn
 
 import pkcs11
 from argon2.low_level import Type, hash_secret_raw
@@ -17,10 +17,6 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from trustpoint.logger import LoggerMixin
-
-if TYPE_CHECKING:
-    from management.pkcs11_util import Pkcs11AESKey
-
 
 class PKCS11Token(models.Model, LoggerMixin):
     """Model representing a PKCS#11 token (e.g., a SoftHSM slot/token pair).
@@ -70,15 +66,6 @@ class PKCS11Token(models.Model, LoggerMixin):
         blank=True,
         null=True
     )
-    kek = models.ForeignKey(
-        'pki.PKCS11Key',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        verbose_name=_('Key Encryption Key (KEK)'),
-        help_text=_('Associated key encryption key stored in this token')
-    )
-
     created_at = models.DateTimeField(
         verbose_name=_('Created'),
         auto_now_add=True
@@ -135,22 +122,15 @@ class PKCS11Token(models.Model, LoggerMixin):
         Raises:
             RuntimeError: If key generation fails
         """
-        from pki.models.credential import PKCS11Key  # noqa: PLC0415
+        from management.pkcs11_util import Pkcs11AESKey  # noqa: PLC0415
 
         try:
-            kek, _ = PKCS11Key.objects.get_or_create(
-                token_label=self.label,
-                key_label=self.KEK_ENCRYPTION_KEY_LABEL,
-                defaults={
-                    'key_type': PKCS11Key.KeyType.AES
-                }
-            )
-
-            aes_key = kek.get_pkcs11_key_instance(
+            aes_key = Pkcs11AESKey(
                 lib_path=self.module_path,
-                user_pin=self.get_pin()
+                token_label=self.label,
+                user_pin=self.get_pin(),
+                key_label=self.KEK_ENCRYPTION_KEY_LABEL,
             )
-            aes_key = cast('Pkcs11AESKey', aes_key)
 
             try:
                 try:
@@ -160,10 +140,6 @@ class PKCS11Token(models.Model, LoggerMixin):
                         self.KEK_ENCRYPTION_KEY_LABEL,
                         self.label
                     )
-
-                    if not self.kek:
-                        self.kek = kek
-                        self.save(update_fields=['kek'])
                 except pkcs11.NoSuchKey:
                     pass
                 except Exception:
@@ -177,12 +153,6 @@ class PKCS11Token(models.Model, LoggerMixin):
                     self.KEK_ENCRYPTION_KEY_LABEL,
                     self.label
                 )
-
-                if not self.kek:
-                    self.kek = kek
-                    self.save(update_fields=['kek'])
-                    self.logger.info("Linked KEK to token '%s'", self.label)
-
                 return True
 
             finally:
@@ -202,16 +172,15 @@ class PKCS11Token(models.Model, LoggerMixin):
         Returns:
             bool: True if KEK exists on HSM, False otherwise
         """
-        try:
-            if not self.kek:
-                self.logger.debug("No KEK reference in database for token '%s'", self.label)
-                return False
+        from management.pkcs11_util import Pkcs11AESKey  # noqa: PLC0415
 
-            aes_key = self.kek.get_pkcs11_key_instance(
+        try:
+            aes_key = Pkcs11AESKey(
                 lib_path=self.module_path,
-                user_pin=self.get_pin()
+                token_label=self.label,
+                user_pin=self.get_pin(),
+                key_label=self.KEK_ENCRYPTION_KEY_LABEL,
             )
-            aes_key = cast('Pkcs11AESKey', aes_key)
 
             try:
                 aes_key.load_key()

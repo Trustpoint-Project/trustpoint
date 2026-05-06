@@ -8,17 +8,30 @@ import string
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import rsa, ec
-from devices.models import DeviceModel
-from onboarding.models import OnboardingConfigModel, NoOnboardingConfigModel
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
-from crypto.runtime import configured_private_key_location, is_hsm_backend_configured, require_active_pkcs11_config
-from management.pkcs11_util import Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
-from pki.models import CaModel, CertificateModel, CredentialModel, DevIdRegistration, DomainModel, PKCS11Key, TruststoreModel
+
+from crypto.application.capabilities import normalize_curve_name
+from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey
+from crypto.application.service import TrustpointCryptoBackend
+from crypto.domain.algorithms import KeyAlgorithm
+from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.domain.specs import EcKeySpec, RsaKeySpec
+from crypto.models import CryptoManagedKeyModel
+from devices.models import DeviceModel
+from management.models.audit_log import AuditLog
+from onboarding.models import (
+    NoOnboardingConfigModel,
+    NoOnboardingPkiProtocol,
+    OnboardingConfigModel,
+    OnboardingPkiProtocol,
+    OnboardingProtocol,
+    OnboardingStatus,
+)
+from pki.models import CaModel, CredentialModel, DevIdRegistration, DomainModel, TruststoreModel
 from pki.util.x509 import CertificateGenerator
-from onboarding.models import OnboardingPkiProtocol, NoOnboardingPkiProtocol, OnboardingProtocol, OnboardingStatus
 from signer.models import SignerModel
-from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
+from trustpoint.logger import LoggerMixin
 
 
 ALLOWED_CHARS = allowed_chars = string.ascii_letters + string.digits
@@ -72,9 +85,46 @@ def get_random_onboarding_pki_protocols(
     return random_protocols
 
 
-def _get_private_key_location_from_config() -> PrivateKeyLocation:
-    """Determine the appropriate PrivateKeyLocation from the configured crypto backend."""
-    return configured_private_key_location()
+def _managed_key_model(private_key: ManagedRSAPrivateKey | ManagedECPrivateKey) -> CryptoManagedKeyModel:
+    """Resolve a generated managed key facade to its database model."""
+    return CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
+
+
+def _generate_managed_signer_key(
+    *,
+    alias: str,
+    issuing_ca_private_key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey,
+) -> ManagedRSAPrivateKey | ManagedECPrivateKey:
+    """Generate a signer key with the same key family as the issuing CA."""
+    if isinstance(issuing_ca_private_key, rsa.RSAPrivateKey):
+        key_ref = TrustpointCryptoBackend().generate_managed_key(
+            alias=alias,
+            key_spec=RsaKeySpec(key_size=issuing_ca_private_key.key_size),
+            policy=KeyPolicy.managed_signing_key(
+                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+            ),
+        )
+    elif isinstance(issuing_ca_private_key, ec.EllipticCurvePrivateKey):
+        curve_name = normalize_curve_name(issuing_ca_private_key.curve)
+        if curve_name is None:
+            msg = f'Unsupported signer EC curve {issuing_ca_private_key.curve.name!r}.'
+            raise ValueError(msg)
+        key_ref = TrustpointCryptoBackend().generate_managed_key(
+            alias=alias,
+            key_spec=EcKeySpec(curve=curve_name),
+            policy=KeyPolicy.managed_signing_key(
+                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+            ),
+        )
+    else:
+        raise ValueError('Unsupported issuing CA private key type.')
+
+    if key_ref.algorithm is KeyAlgorithm.RSA:
+        return ManagedRSAPrivateKey(key_ref=key_ref)
+    if key_ref.algorithm is KeyAlgorithm.EC:
+        return ManagedECPrivateKey(key_ref=key_ref)
+    msg = f'Unsupported managed signer key algorithm {key_ref.algorithm!r}.'
+    raise ValueError(msg)
 
 
 def create_signer_for_domain(
@@ -86,36 +136,10 @@ def create_signer_for_domain(
     issuing_ca_cert = issuing_ca.credential.get_certificate_serializer().as_crypto()
 
 
-    if isinstance(issuing_ca_private_key, rsa.RSAPrivateKey):
-        key_size = issuing_ca_private_key.key_size
-        if is_hsm_backend_configured():
-            pkcs11_config = require_active_pkcs11_config()
-            signer_key = Pkcs11RSAPrivateKey(
-                lib_path=pkcs11_config.module_path,
-                token_label=(pkcs11_config.token_label or '').strip(),
-                user_pin=pkcs11_config.build_provider_profile().require_user_pin(),
-                key_label=f'signer-{domain_name}',
-                slot_id=pkcs11_config.slot_id,
-            )
-            signer_key.generate_key(key_length=key_size)
-        else:
-            signer_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size)
-    elif isinstance(issuing_ca_private_key, ec.EllipticCurvePrivateKey):
-        curve = issuing_ca_private_key.curve
-        if is_hsm_backend_configured():
-            pkcs11_config = require_active_pkcs11_config()
-            signer_key = Pkcs11ECPrivateKey(
-                lib_path=pkcs11_config.module_path,
-                token_label=(pkcs11_config.token_label or '').strip(),
-                user_pin=pkcs11_config.build_provider_profile().require_user_pin(),
-                key_label=f'signer-{domain_name}',
-                slot_id=pkcs11_config.slot_id,
-            )
-            signer_key.generate_key(curve=curve)
-        else:
-            signer_key = ec.generate_private_key(curve=curve)
-    else:
-        raise ValueError('Unsupported issuing CA private key type.')
+    signer_key = _generate_managed_signer_key(
+        alias=f'signer-{domain_name}',
+        issuing_ca_private_key=issuing_ca_private_key,
+    )
 
     digital_signature_extension = x509.KeyUsage(
         digital_signature=True,
@@ -138,48 +162,13 @@ def create_signer_for_domain(
         validity_days=365,
     )
 
-    if isinstance(signer_key, (Pkcs11RSAPrivateKey, Pkcs11ECPrivateKey)):
-        key_type = PKCS11Key.KeyType.RSA if isinstance(signer_key, Pkcs11RSAPrivateKey) else PKCS11Key.KeyType.EC
-        pkcs11_key = PKCS11Key.objects.create(
-            token_label=signer_key._token_label,  # noqa: SLF001
-            key_label=signer_key._key_label,  # noqa: SLF001
-            key_type=key_type,
-        )
-        certificate_model = CertificateModel.save_certificate(signer_cert)
-        credential_model = CredentialModel._create_credential_model(  # noqa: SLF001
-            certificate_model,
-            CredentialModel.CredentialTypeChoice.SIGNER,
-            '',
-            pkcs11_key,
-        )
-        CredentialModel._save_additional_certificates(credential_model, [issuing_ca_cert])  # noqa: SLF001
-        signer_key.close()
-        return SignerModel.objects.create(unique_name=f'signer-{domain_name}', credential=credential_model)
-
-    credential_serializer = CredentialSerializer(
-        private_key=signer_key,
+    credential_model = CredentialModel.save_managed_key_credential(
         certificate=signer_cert,
-        additional_certificates=[issuing_ca_cert],
+        certificate_chain=[issuing_ca_cert],
+        credential_type=CredentialModel.CredentialTypeChoice.SIGNER,
+        managed_key=_managed_key_model(signer_key),
     )
-
-    private_key_location = _get_private_key_location_from_config()
-    credential_serializer.private_key_reference = PrivateKeyReference.from_private_key(
-        private_key=signer_key,
-        key_label=f'signer-{domain_name}',
-        location=private_key_location,
-    )
-
-    signer = SignerModel.create_new_signer(
-        unique_name=f'signer-{domain_name}',
-        credential_serializer=credential_serializer,
-    )
-
-    return signer
-
-
-from trustpoint.logger import LoggerMixin
-from management.models.audit_log import AuditLog
-
+    return SignerModel.objects.create(unique_name=f'signer-{domain_name}', credential=credential_model)
 
 class Command(BaseCommand, LoggerMixin):
     """Add domains and associated device names with random onboarding protocol and serial number."""

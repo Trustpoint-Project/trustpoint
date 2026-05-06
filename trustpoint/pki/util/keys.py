@@ -45,49 +45,24 @@ class AutoGenPkiKeyAlgorithm(models.TextChoices):
 
 def supported_auto_gen_pki_key_algorithms() -> tuple[AutoGenPkiKeyAlgorithm, ...]:
     """Return AutoGenPKI algorithms supported by the active crypto backend."""
-    from crypto.adapters.pkcs11.backend import Pkcs11Backend  # noqa: PLC0415
-    from crypto.runtime import is_hsm_backend_configured, require_active_pkcs11_config  # noqa: PLC0415
-    from pkcs11 import Mechanism  # noqa: PLC0415
+    from crypto.application.capabilities import get_active_backend_capability_report  # noqa: PLC0415
 
-    all_algorithms = (
-        AutoGenPkiKeyAlgorithm.RSA2048,
-        AutoGenPkiKeyAlgorithm.RSA4096,
-        AutoGenPkiKeyAlgorithm.SECP256R1,
-    )
-    if not is_hsm_backend_configured():
-        return all_algorithms
-
-    try:
-        pkcs11_config = require_active_pkcs11_config()
-        backend = Pkcs11Backend(profile=pkcs11_config.build_provider_profile())
-    except Exception as exc:  # noqa: BLE001
-        logger.warning('Could not load PKCS#11 backend config for AutoGenPKI capability filtering: %s', exc)
+    report = get_active_backend_capability_report()
+    if not report.available:
+        logger.warning(
+            'Could not determine supported AutoGenPKI algorithms for backend %r: %s',
+            report.backend_kind,
+            '; '.join(report.diagnostics) or 'backend unavailable',
+        )
         return ()
-
-    try:
-        capabilities = backend.refresh_capabilities()
-    except Exception as exc:  # noqa: BLE001
-        logger.warning('Could not probe PKCS#11 backend for AutoGenPKI capability filtering: %s', exc)
-        return ()
-    finally:
-        backend.close()
 
     supported: list[AutoGenPkiKeyAlgorithm] = []
-    rsa_generation = capabilities.mechanism(Mechanism.RSA_PKCS_KEY_PAIR_GEN)
-    if rsa_generation is not None:
-        min_rsa = rsa_generation.min_key_size or 0
-        max_rsa = rsa_generation.max_key_size or 100_000
-        if min_rsa <= 2048 <= max_rsa:
-            supported.append(AutoGenPkiKeyAlgorithm.RSA2048)
-        if min_rsa <= 4096 <= max_rsa:
-            supported.append(AutoGenPkiKeyAlgorithm.RSA4096)
-
-    ec_generation = capabilities.mechanism(Mechanism.EC_KEY_PAIR_GEN)
-    if ec_generation is not None:
-        min_ec = ec_generation.min_key_size or 0
-        max_ec = ec_generation.max_key_size or 100_000
-        if min_ec <= 256 <= max_ec:
-            supported.append(AutoGenPkiKeyAlgorithm.SECP256R1)
+    if report.supports_rsa_key_size(2048):
+        supported.append(AutoGenPkiKeyAlgorithm.RSA2048)
+    if report.supports_rsa_key_size(4096):
+        supported.append(AutoGenPkiKeyAlgorithm.RSA4096)
+    if report.supports_ec_curve(ec.SECP256R1()):
+        supported.append(AutoGenPkiKeyAlgorithm.SECP256R1)
 
     return tuple(supported)
 

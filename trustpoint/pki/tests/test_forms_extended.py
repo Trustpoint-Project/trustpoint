@@ -32,19 +32,28 @@ class TestGetPrivateKeyLocationFromConfig:
 
     def test_returns_hsm_provided_for_softhsm(self):
         """Test that HSM_PROVIDED is returned for a configured HSM backend."""
-        with patch('pki.forms.issuing_cas.is_hsm_backend_configured', return_value=True):
+        with patch(
+            'pki.forms.issuing_cas.configured_private_key_location',
+            return_value=PrivateKeyLocation.HSM_PROVIDED,
+        ):
             result = get_private_key_location_from_config()
             assert result == PrivateKeyLocation.HSM_PROVIDED
 
     def test_returns_hsm_provided_for_physical_hsm(self):
         """Test that HSM_PROVIDED is returned for any PKCS#11-backed runtime."""
-        with patch('pki.forms.issuing_cas.is_hsm_backend_configured', return_value=True):
+        with patch(
+            'pki.forms.issuing_cas.configured_private_key_location',
+            return_value=PrivateKeyLocation.HSM_PROVIDED,
+        ):
             result = get_private_key_location_from_config()
             assert result == PrivateKeyLocation.HSM_PROVIDED
 
     def test_returns_software_when_config_does_not_exist(self):
         """Test that SOFTWARE is returned when no HSM backend is configured."""
-        with patch('pki.forms.issuing_cas.is_hsm_backend_configured', return_value=False):
+        with patch(
+            'pki.forms.issuing_cas.configured_private_key_location',
+            return_value=PrivateKeyLocation.SOFTWARE,
+        ):
             result = get_private_key_location_from_config()
             assert result == PrivateKeyLocation.SOFTWARE
 

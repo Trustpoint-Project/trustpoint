@@ -9,7 +9,6 @@ from cryptography.hazmat.primitives import hashes
 from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from trustpoint_core.oid import KeyPairGenerator, NamedCurve, PublicKeyAlgorithmOid, PublicKeyInfo
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -19,7 +18,12 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from crypto.runtime import is_hsm_backend_configured
+from crypto.application.service import TrustpointCryptoBackend
+from crypto.domain.algorithms import EllipticCurveName
+from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.domain.specs import EcKeySpec, RsaKeySpec
+from crypto.models import CryptoManagedKeyModel
+from crypto.runtime import configured_private_key_location
 from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.authorization import PkiSecurityAuthorization
@@ -37,9 +41,7 @@ from util.validation import validate_remote_ca_connection
 
 def get_private_key_location_from_config() -> PrivateKeyLocation:
     """Determine the appropriate PrivateKeyLocation from the configured crypto backend."""
-    if is_hsm_backend_configured():
-        return PrivateKeyLocation.HSM_PROVIDED
-    return PrivateKeyLocation.SOFTWARE
+    return configured_private_key_location()
 
 
 def get_ca_type_from_config() -> CaModel.CaTypeChoice:
@@ -563,7 +565,6 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
             ('ECC-SECP256R1', 'ECC SECP256R1'),
             ('ECC-SECP384R1', 'ECC SECP384R1'),
             ('ECC-SECP521R1', 'ECC SECP521R1'),
-            ('ECC-SECP256K1', 'ECC SECP256K1'),
         ],
         initial='RSA-2048',
         required=True,
@@ -591,28 +592,21 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         key_type = self.cleaned_data['key_type']
         if key_type.startswith('RSA-'):
             rsa_key_size = int(key_type.split('-')[1])
-            public_key_info = PublicKeyInfo(
-                public_key_algorithm_oid=PublicKeyAlgorithmOid.RSA,
-                key_size=rsa_key_size
-            )
+            key_spec = RsaKeySpec(key_size=rsa_key_size)
         else:
             curve_name = key_type.split('-')[1]
-            named_curve = NamedCurve[curve_name.upper()]
-            public_key_info = PublicKeyInfo(
-                public_key_algorithm_oid=PublicKeyAlgorithmOid.ECC,
-                named_curve=named_curve
-            )
+            key_spec = EcKeySpec(curve=EllipticCurveName(curve_name.lower()))
 
-        private_key = KeyPairGenerator.generate_key_pair_for_public_key_info(public_key_info)
-
-
-        cred_serializer = CredentialSerializer(
-            private_key=private_key,
-            additional_certificates=[]
+        key_ref = TrustpointCryptoBackend().generate_managed_key(
+            alias=self.cleaned_data['unique_name'],
+            key_spec=key_spec,
+            policy=KeyPolicy.managed_signing_key(
+                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+            ),
         )
-
-        return CredentialModel.save_credential_serializer(
-            cred_serializer, CredentialModel.CredentialTypeChoice.ISSUING_CA
+        return CredentialModel.save_managed_private_key_credential(
+            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+            managed_key=CryptoManagedKeyModel.objects.get(pk=key_ref.id),
         )
 
     def save(self, *, commit: bool = True) -> CaModel:  # type: ignore[override]

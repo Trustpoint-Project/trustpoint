@@ -31,6 +31,10 @@ class Migration(migrations.Migration):
                 ('last_updated', models.DateTimeField(auto_now=True)),
             ],
         ),
+        migrations.RemoveField(
+            model_name='pkcs11token',
+            name='kek',
+        ),
         migrations.AddField(
             model_name='notificationconfig',
             name='crl_expiry_warning_days',

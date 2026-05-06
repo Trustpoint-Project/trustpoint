@@ -26,6 +26,7 @@ from appsecrets.models import (
     AppSecretSoftwareConfigModel,
 )
 from appsecrets.service import clear_app_secret_cache, get_app_secret_service
+from crypto.application.capabilities import BackendCapabilityService
 from crypto.models import (
     BackendKind,
     CryptoProviderPkcs11ConfigModel,
@@ -365,6 +366,14 @@ class OperationalBootstrapApplier:
             return
         raise DjangoValidationError(f'Unsupported crypto storage selection {crypto_storage!r}.')
 
+    @staticmethod
+    def _probe_and_record_crypto_capabilities() -> None:
+        """Persist the operational backend capability snapshot after explicit setup apply."""
+        report = BackendCapabilityService().refresh_and_record_active_report()
+        if not report.available:
+            diagnostics = '; '.join(report.diagnostics) or 'no usable capabilities reported'
+            raise DjangoValidationError(f'The configured crypto backend is not usable: {diagnostics}')
+
     def _configure_app_secret_backend(self) -> None:
         """Configure the operational app-secret backend."""
         crypto_storage = SetupWizardConfigModel.CryptoStorageType(self.fresh_install['crypto_storage'])
@@ -435,6 +444,7 @@ class OperationalBootstrapApplier:
     def apply(self) -> None:
         """Apply the full bootstrap payload to the operational runtime."""
         self._configure_instance_crypto_backend()
+        self._probe_and_record_crypto_capabilities()
         self._configure_app_secret_backend()
         call_command('create_default_cert_profiles')
         if self.fresh_install['inject_demo_data']:

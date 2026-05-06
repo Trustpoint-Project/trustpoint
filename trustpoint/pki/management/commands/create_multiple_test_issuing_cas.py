@@ -7,12 +7,21 @@ import uuid
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
-from crypto.runtime import is_hsm_backend_configured, require_active_pkcs11_config
-from django.core.management.base import BaseCommand
+from crypto.application.capabilities import (
+    BackendCapabilityReport,
+    get_active_backend_capability_report,
+    normalize_curve_name,
+)
+from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey
+from crypto.application.service import TrustpointCryptoBackend
+from crypto.domain.algorithms import KeyAlgorithm
+from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
+from crypto.models import CryptoManagedKeyModel
+from django.core.management.base import BaseCommand, CommandError
 from management.models import SecurityConfig
 from management.models.audit_log import AuditLog
-from management.pkcs11_util import Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
-from pki.models import CaModel, CertificateModel, CredentialModel, PKCS11Key
+from pki.models import CaModel, CredentialModel
 from pki.util.x509 import CertificateVerifier
 
 from trustpoint.logger import LoggerMixin
@@ -24,6 +33,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
     """Adds a Root CA, Intermediate CAs, and Issuing CAs to the database."""
 
     help = 'Adds a Root CA, Intermediate CAs, and Issuing CAs to the database.'
+    _capability_report: BackendCapabilityReport | None = None
 
     def log_and_stdout(self, message: str, level: str = 'info') -> None:
         """Log a message and write it to stdout.
@@ -53,85 +63,106 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         """Return the legacy local managed-CA type for generated demo CAs."""
         return CaModel.CaTypeChoice.LOCAL_PKCS11
 
+    def _active_capability_report(self) -> BackendCapabilityReport:
+        """Return the active backend capability report once for this command run."""
+        if self._capability_report is None:
+            self._capability_report = get_active_backend_capability_report()
+        return self._capability_report
+
+    def _require_rsa_demo_support(self, key_size: int) -> None:
+        """Fail clearly before trying to create unsupported backend-backed RSA demo keys."""
+        report = self._active_capability_report()
+        if report.supports_rsa_key_size(key_size):
+            return
+        diagnostics = '; '.join(report.diagnostics) or f'RSA-{key_size} key generation/signing was not reported'
+        raise CommandError(
+            f'The active crypto backend does not support RSA-{key_size} issuing-CA demo keys: {diagnostics}'
+        )
+
+    def _require_ec_demo_support(self, curve: ec.EllipticCurve) -> None:
+        """Fail clearly before trying to create unsupported backend-backed EC demo keys."""
+        report = self._active_capability_report()
+        if report.supports_ec_curve(curve):
+            return
+        diagnostics = '; '.join(report.diagnostics) or f'{curve.name} key generation/signing was not reported'
+        raise CommandError(
+            f'The active crypto backend does not support {curve.name} issuing-CA demo keys: {diagnostics}'
+        )
+
     @staticmethod
-    def _active_pkcs11_runtime() -> tuple[str, str, str, int | None]:
-        """Return the active PKCS#11 runtime for demo-data key generation."""
-        pkcs11_config = require_active_pkcs11_config()
-        token_label = (pkcs11_config.token_label or '').strip()
-        slot_id = pkcs11_config.slot_id
-        if not token_label and slot_id is None:
-            msg = 'The PKCS#11 backend must be probed before demo data can create HSM-backed keys.'
-            raise RuntimeError(msg)
-        user_pin = pkcs11_config.build_provider_profile().require_user_pin()
-        return pkcs11_config.module_path, token_label, user_pin, slot_id
+    def _managed_key_model(private_key: ManagedRSAPrivateKey | ManagedECPrivateKey) -> CryptoManagedKeyModel:
+        """Resolve a generated managed key facade to its database model."""
+        return CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
+
+    @staticmethod
+    def _generate_managed_private_key(
+        *,
+        alias: str,
+        key_spec: KeySpec,
+    ) -> ManagedRSAPrivateKey | ManagedECPrivateKey:
+        """Generate a demo private key through the configured crypto backend."""
+        key_ref = TrustpointCryptoBackend().generate_managed_key(
+            alias=alias,
+            key_spec=key_spec,
+            policy=KeyPolicy.managed_signing_key(
+                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+            ),
+        )
+        if key_ref.algorithm is KeyAlgorithm.RSA:
+            return ManagedRSAPrivateKey(key_ref=key_ref)
+        if key_ref.algorithm is KeyAlgorithm.EC:
+            return ManagedECPrivateKey(key_ref=key_ref)
+        msg = f'Unsupported managed demo key algorithm {key_ref.algorithm!r}.'
+        raise CommandError(msg)
 
     def _generate_demo_rsa_issuing_key(self, *, unique_name: str, key_size: int) -> rsa.RSAPrivateKey:
         """Generate a demo issuing-CA RSA key in the configured backend."""
-        if not is_hsm_backend_configured():
-            return rsa.generate_private_key(public_exponent=65537, key_size=key_size)
-
-        module_path, token_label, user_pin, slot_id = self._active_pkcs11_runtime()
+        self._require_rsa_demo_support(key_size)
         key_label = f'{unique_name}-{uuid.uuid4().hex[:12]}'
-        key = Pkcs11RSAPrivateKey(
-            lib_path=module_path,
-            token_label=token_label,
-            user_pin=user_pin,
-            key_label=key_label,
-            slot_id=slot_id,
-        )
-        key.generate_key(key_length=key_size)
-        return key
+        return self._generate_managed_private_key(alias=key_label, key_spec=RsaKeySpec(key_size=key_size))
 
     def _generate_demo_ec_issuing_key(
         self, *, unique_name: str, curve: ec.EllipticCurve
     ) -> ec.EllipticCurvePrivateKey:
         """Generate a demo issuing-CA EC key in the configured backend."""
-        if not is_hsm_backend_configured():
-            return ec.generate_private_key(curve=curve)
-
-        module_path, token_label, user_pin, slot_id = self._active_pkcs11_runtime()
+        self._require_ec_demo_support(curve)
+        curve_name = normalize_curve_name(curve)
+        if curve_name is None:
+            msg = f'Unsupported demo EC curve {curve.name!r}.'
+            raise CommandError(msg)
         key_label = f'{unique_name}-{uuid.uuid4().hex[:12]}'
-        key = Pkcs11ECPrivateKey(
-            lib_path=module_path,
-            token_label=token_label,
-            user_pin=user_pin,
-            key_label=key_label,
-            slot_id=slot_id,
+        key = self._generate_managed_private_key(
+            alias=key_label,
+            key_spec=EcKeySpec(curve=curve_name),
         )
-        key.generate_key(curve=curve)
+        try:
+            key.public_key()
+        except ValueError as exc:
+            raise CommandError(
+                f'The active crypto backend generated a {curve.name} key, but Trustpoint could not read the '
+                f'public point back from the provider: {exc}'
+            ) from exc
         return key
 
-    def _save_hsm_generated_issuing_ca(
+    def _save_managed_generated_issuing_ca(
         self,
         *,
         issuing_ca_cert: x509.Certificate,
         chain: list[x509.Certificate],
-        private_key: Pkcs11RSAPrivateKey | Pkcs11ECPrivateKey,
+        private_key: ManagedRSAPrivateKey | ManagedECPrivateKey,
         unique_name: str,
         ca_type: CaModel.CaTypeChoice,
         parent_ca: CaModel | None,
     ) -> CaModel:
-        """Persist an issuing CA whose private key already exists in PKCS#11."""
+        """Persist an issuing CA whose private key already exists in the configured backend."""
         CaModel._validate_ca_certificate(issuing_ca_cert)  # noqa: SLF001
         CaModel._validate_ca_type(ca_type)  # noqa: SLF001
-        key_type = (
-            PKCS11Key.KeyType.RSA
-            if isinstance(private_key, Pkcs11RSAPrivateKey)
-            else PKCS11Key.KeyType.EC
+        credential_model = CredentialModel.save_managed_key_credential(
+            certificate=issuing_ca_cert,
+            certificate_chain=chain,
+            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+            managed_key=self._managed_key_model(private_key),
         )
-        pkcs11_key = PKCS11Key.objects.create(
-            token_label=private_key._token_label,  # noqa: SLF001
-            key_label=private_key._key_label,  # noqa: SLF001
-            key_type=key_type,
-        )
-        certificate_model = CertificateModel.save_certificate(issuing_ca_cert)
-        credential_model = CredentialModel._create_credential_model(  # noqa: SLF001
-            certificate_model,
-            CredentialModel.CredentialTypeChoice.ISSUING_CA,
-            '',
-            pkcs11_key,
-        )
-        CredentialModel._save_additional_certificates(credential_model, list(reversed(chain)))  # noqa: SLF001
 
         issuing_ca = CaModel(
             unique_name=unique_name,
@@ -143,7 +174,6 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         truststore = CaModel._create_chain_truststore(issuing_ca)  # noqa: SLF001
         issuing_ca.chain_truststore = truststore
         issuing_ca.save(update_fields=['chain_truststore'])
-        private_key.close()
         return issuing_ca
 
     def _save_demo_issuing_ca(
@@ -156,9 +186,9 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         ca_type: CaModel.CaTypeChoice,
         parent_ca: CaModel | None,
     ) -> CaModel:
-        """Save a demo issuing CA without importing backend-generated keys back into PKCS#11."""
-        if isinstance(private_key, (Pkcs11RSAPrivateKey, Pkcs11ECPrivateKey)):
-            return self._save_hsm_generated_issuing_ca(
+        """Save a demo issuing CA without importing backend-generated keys back into software storage."""
+        if isinstance(private_key, (ManagedRSAPrivateKey, ManagedECPrivateKey)):
+            return self._save_managed_generated_issuing_ca(
                 issuing_ca_cert=issuing_ca_cert,
                 chain=chain,
                 private_key=private_key,

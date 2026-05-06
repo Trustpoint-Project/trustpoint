@@ -6,10 +6,15 @@ import secrets
 import threading
 from typing import cast
 
-from crypto.runtime import is_hsm_backend_configured, require_active_pkcs11_config
-from management.pkcs11_util import Pkcs11ECPrivateKey, Pkcs11RSAPrivateKey
+from cryptography import x509
+from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey
+from crypto.application.service import TrustpointCryptoBackend
+from crypto.domain.algorithms import EllipticCurveName, KeyAlgorithm
+from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
+from crypto.models import CryptoManagedKeyModel
 from pki.models import CaModel, CredentialModel, DomainModel, RevokedCertificateModel
-from pki.util.keys import AutoGenPkiKeyAlgorithm, KeyGenerator, supported_auto_gen_pki_key_algorithms
+from pki.util.keys import AutoGenPkiKeyAlgorithm, supported_auto_gen_pki_key_algorithms
 from pki.util.x509 import CertificateGenerator
 from trustpoint.logger import LoggerMixin
 
@@ -24,52 +29,74 @@ class AutoGenPki(LoggerMixin):
     _lock: threading.Lock = threading.Lock()
 
     @staticmethod
-    def _generate_private_key(key_alg: AutoGenPkiKeyAlgorithm, key_label: str):
+    def _key_spec_for_algorithm(key_alg: AutoGenPkiKeyAlgorithm) -> KeySpec:
+        """Map AutoGenPKI choices to the backend key-generation contract."""
+        if key_alg == AutoGenPkiKeyAlgorithm.RSA2048:
+            return RsaKeySpec(key_size=2048)
+        if key_alg == AutoGenPkiKeyAlgorithm.RSA4096:
+            return RsaKeySpec(key_size=4096)
+        if key_alg == AutoGenPkiKeyAlgorithm.SECP256R1:
+            return EcKeySpec(curve=EllipticCurveName.SECP256R1)
+        msg = f'Unsupported AutoGenPKI key algorithm {key_alg!r}.'
+        raise ValueError(msg)
+
+    @staticmethod
+    def _generate_private_key(
+        key_alg: AutoGenPkiKeyAlgorithm,
+        key_label: str,
+    ) -> ManagedRSAPrivateKey | ManagedECPrivateKey:
         """Generate an AutoGenPKI key in the active backend."""
         if key_alg not in supported_auto_gen_pki_key_algorithms():
             msg = f'The active crypto backend does not support AutoGenPKI algorithm {key_alg.label}.'
             raise ValueError(msg)
 
-        public_key_info = key_alg.to_public_key_info()
-        if not is_hsm_backend_configured():
-            return KeyGenerator.generate_private_key_for_public_key_info(public_key_info)
-
-        pkcs11_config = require_active_pkcs11_config()
-        token_label = (pkcs11_config.token_label or '').strip()
-        slot_id = pkcs11_config.slot_id
-        if not token_label and slot_id is None:
-            msg = 'The configured PKCS#11 backend must define a token label or slot ID for AutoGenPKI.'
-            raise RuntimeError(msg)
-
-        user_pin = pkcs11_config.build_provider_profile().require_user_pin()
-        if public_key_info.named_curve:
-            curve = public_key_info.named_curve.curve
-            if curve is None:
-                msg = f'Unsupported AutoGenPKI curve {public_key_info.named_curve!r}.'
-                raise ValueError(msg)
-            key = Pkcs11ECPrivateKey(
-                lib_path=pkcs11_config.module_path,
-                token_label=token_label,
-                user_pin=user_pin,
-                key_label=key_label,
-                slot_id=slot_id,
-            )
-            key.generate_key(curve=curve())
-            return key
-
-        if public_key_info.key_size:
-            key = Pkcs11RSAPrivateKey(
-                lib_path=pkcs11_config.module_path,
-                token_label=token_label,
-                user_pin=user_pin,
-                key_label=key_label,
-                slot_id=slot_id,
-            )
-            key.generate_key(key_length=public_key_info.key_size)
-            return key
+        key_ref = TrustpointCryptoBackend().generate_managed_key(
+            alias=key_label,
+            key_spec=AutoGenPki._key_spec_for_algorithm(key_alg),
+            policy=KeyPolicy.managed_signing_key(
+                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+            ),
+        )
+        if key_ref.algorithm is KeyAlgorithm.RSA:
+            return ManagedRSAPrivateKey(key_ref=key_ref)
+        if key_ref.algorithm is KeyAlgorithm.EC:
+            return ManagedECPrivateKey(key_ref=key_ref)
 
         msg = f'Unsupported AutoGenPKI key algorithm {key_alg!r}.'
         raise ValueError(msg)
+
+    @staticmethod
+    def _managed_key_model(private_key: ManagedRSAPrivateKey | ManagedECPrivateKey) -> CryptoManagedKeyModel:
+        """Resolve a generated managed private-key facade to its database model."""
+        return CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
+
+    @staticmethod
+    def _save_managed_issuing_ca(
+        *,
+        certificate: x509.Certificate,
+        certificate_chain: list[x509.Certificate],
+        private_key: ManagedRSAPrivateKey | ManagedECPrivateKey,
+        unique_name: str,
+        ca_type: CaModel.CaTypeChoice,
+        parent_ca: CaModel | None = None,
+    ) -> CaModel:
+        """Persist an issuing CA whose key is owned by the configured crypto backend."""
+        credential = CredentialModel.save_managed_key_credential(
+            certificate=certificate,
+            certificate_chain=list(certificate_chain),
+            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+            managed_key=AutoGenPki._managed_key_model(private_key),
+        )
+        ca = CaModel(
+            unique_name=unique_name,
+            credential=credential,
+            ca_type=ca_type,
+            parent_ca=parent_ca,
+        )
+        ca.save()
+        ca.chain_truststore = CaModel._create_chain_truststore(ca)  # noqa: SLF001
+        ca.save(update_fields=['chain_truststore'])
+        return ca
 
     @classmethod
     def get_auto_gen_pki(cls, key_alg: AutoGenPkiKeyAlgorithm | None = None) -> CaModel | None:
@@ -123,35 +150,38 @@ class AutoGenPki(LoggerMixin):
                 cls.logger.info('Reusing existing Root CA: %s', root_ca_name)
             except CaModel.DoesNotExist:
                 cls.logger.info('Creating new Root CA: %s', root_ca_name)
-                root_cert, root_1_key = CertificateGenerator.create_root_ca(
+                root_private_key = cls._generate_private_key(key_alg, f'{root_ca_name}_{unique_suffix}')
+                root_cert, _ = CertificateGenerator.create_root_ca(
                     root_ca_name,
-                    private_key=cls._generate_private_key(key_alg, f'{root_ca_name}_{unique_suffix}')
+                    private_key=root_private_key,
                 )
-                root_ca = CertificateGenerator.save_issuing_ca(
-                    issuing_ca_cert=root_cert,
-                    private_key=root_1_key,
-                    chain=[],
+                root_ca = cls._save_managed_issuing_ca(
+                    certificate=root_cert,
+                    certificate_chain=[],
+                    private_key=root_private_key,
                     unique_name=root_ca_name,
                     ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
                 )
                 root_1_key = root_ca.credential.get_private_key()
+                cls.logger.info('Created new Root CA: %s', root_ca_name)
 
             cls.logger.info('Creating new Issuing CA with unique name: %s', issuing_ca_unique_name)
-            issuing_1, issuing_1_key = CertificateGenerator.create_issuing_ca(
+            issuing_private_key = cls._generate_private_key(key_alg, issuing_ca_unique_name)
+            issuing_1, _ = CertificateGenerator.create_issuing_ca(
                 root_1_key,
                 root_ca_name,
                 issuing_ca_unique_name,
-                private_key=cls._generate_private_key(key_alg, issuing_ca_unique_name),
+                private_key=issuing_private_key,
                 validity_days=50,
             )
 
-            issuing_ca = CertificateGenerator.save_issuing_ca(
-                issuing_ca_cert=issuing_1,
-                private_key=issuing_1_key,
-                chain=[root_cert],
+            issuing_ca = cls._save_managed_issuing_ca(
+                certificate=issuing_1,
+                certificate_chain=[root_cert],
+                private_key=issuing_private_key,
                 unique_name=issuing_ca_unique_name,
                 ca_type=CaModel.CaTypeChoice.AUTOGEN,
-                parent_ca=root_ca
+                parent_ca=root_ca,
             )
             cls.logger.info('Saved new Issuing CA: %s', issuing_ca_unique_name)
 
@@ -173,7 +203,7 @@ class AutoGenPki(LoggerMixin):
         """Disables the auto-generated PKI.
 
         Note: This will disable the currently active auto-generated PKI (any key algorithm).
-        PKCS#11 keys are NOT destroyed - each Issuing CA has a unique name to avoid conflicts.
+        Managed backend keys are not destroyed - each Issuing CA has a unique name to avoid conflicts.
         """
         with cls._lock:
             issuing_ca = cls.get_auto_gen_pki(key_alg=None)
@@ -203,7 +233,7 @@ class AutoGenPki(LoggerMixin):
 
             issuing_ca.revoke_all_issued_certificates(reason=RevokedCertificateModel.ReasonCode.CESSATION)
 
-            cls.logger.info('PKCS#11 key for %s is kept in HSM (not destroyed)', issuing_ca.unique_name)
+            cls.logger.info('Managed key for %s is kept in the configured crypto backend', issuing_ca.unique_name)
 
             old_unique_name = issuing_ca.unique_name
             issuing_ca.unique_name = f'{old_unique_name}_DISABLED'
@@ -223,7 +253,7 @@ class AutoGenPki(LoggerMixin):
                 )
                 root_ca.revoke_all_issued_certificates(reason=RevokedCertificateModel.ReasonCode.CESSATION)
 
-                cls.logger.info('Keeping Root CA key for potential reuse: %s', root_ca.unique_name)
+                cls.logger.info('Keeping Root CA managed key for potential reuse: %s', root_ca.unique_name)
 
             except CaModel.DoesNotExist:
                 exc_msg = 'Root CA for auto-generated PKI Issuing CA not found - cannot revoke the CA certificate'

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from django.core.exceptions import ObjectDoesNotExist
 from trustpoint_core.serializer import PrivateKeyLocation
 
 from crypto.local_development import ensure_local_software_backends
-from crypto.models import BackendKind, CryptoProviderPkcs11ConfigModel, CryptoProviderProfileModel
+from crypto.models import BackendKind, CryptoProviderProfileModel
 
 
 def get_configured_profile() -> CryptoProviderProfileModel | None:
@@ -32,26 +31,13 @@ def configured_backend_kind() -> BackendKind | None:
     return BackendKind(profile.backend_kind)
 
 
-def is_hsm_backend_configured() -> bool:
-    """Return whether the configured instance backend is PKCS#11."""
-    return configured_backend_kind() == BackendKind.PKCS11
-
-
 def configured_private_key_location() -> PrivateKeyLocation:
     """Map the configured backend kind to the application-facing private-key location."""
-    if is_hsm_backend_configured():
+    backend_kind = configured_backend_kind()
+    if backend_kind == BackendKind.SOFTWARE:
+        return PrivateKeyLocation.SOFTWARE
+    if backend_kind in {BackendKind.PKCS11, BackendKind.REST}:
         return PrivateKeyLocation.HSM_PROVIDED
-    return PrivateKeyLocation.SOFTWARE
 
-
-def require_active_pkcs11_config() -> CryptoProviderPkcs11ConfigModel:
-    """Return the configured PKCS#11 backend config or raise."""
-    profile = require_configured_profile()
-    if profile.backend_kind != BackendKind.PKCS11:
-        msg = f'The configured crypto backend is {profile.backend_kind!r}, not PKCS#11.'
-        raise RuntimeError(msg)
-    try:
-        return profile.pkcs11_config
-    except ObjectDoesNotExist as exc:
-        msg = f'The configured PKCS#11 backend profile {profile.name!r} is missing its PKCS#11 config.'
-        raise RuntimeError(msg) from exc
+    msg = f'No supported private-key location exists for configured crypto backend {backend_kind!r}.'
+    raise RuntimeError(msg)
