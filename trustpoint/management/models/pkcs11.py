@@ -18,6 +18,7 @@ from django.utils.translation import gettext_lazy as _
 
 from trustpoint.logger import LoggerMixin
 
+
 class PKCS11Token(models.Model, LoggerMixin):
     """Model representing a PKCS#11 token (e.g., a SoftHSM slot/token pair).
 

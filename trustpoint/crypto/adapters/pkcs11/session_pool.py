@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from queue import Empty, LifoQueue
+from queue import Empty, Full, LifoQueue
 from threading import Lock
 from typing import TYPE_CHECKING
 
 from crypto.domain.errors import SessionUnavailableError
-from pkcs11 import PKCS11Error  # type: ignore[import-untyped]
-from pkcs11.exceptions import UserAlreadyLoggedIn  # type: ignore[import-untyped]
+from pkcs11 import PKCS11Error
+from pkcs11.exceptions import UserAlreadyLoggedIn
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -100,7 +100,7 @@ class Pkcs11SessionPool(LoggerMixin):
                 self._created_sessions += 1
                 try:
                     return self._open_session()
-                except Exception:
+                except PKCS11Error:
                     self._created_sessions = max(0, self._created_sessions - 1)
                     raise
 
@@ -135,7 +135,7 @@ class Pkcs11SessionPool(LoggerMixin):
 
         try:
             self._available_sessions.put_nowait(session)
-        except Exception:
+        except Full:
             try:
                 session.close()
             finally:

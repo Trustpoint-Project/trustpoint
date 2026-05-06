@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any
 from crypto.adapters.pkcs11.mechanisms import ecdsa_hash_mechanisms, rsa_pkcs1v15_hash_mechanisms
 from crypto.domain.errors import ProviderUnavailableError
 from pkcs11 import (
-    Mechanism,  # type: ignore[import-untyped]
-    PKCS11Error,  # type: ignore[import-untyped]
+    Mechanism,
+    PKCS11Error,
 )
 
 if TYPE_CHECKING:

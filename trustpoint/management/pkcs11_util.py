@@ -26,6 +26,12 @@ from trustpoint_core.oid import NamedCurve
 
 from trustpoint.logger import LoggerMixin
 
+ASN1_OCTET_STRING_TAG = 0x04
+ASN1_MIN_HEADER_LENGTH = 2
+ASN1_LONG_FORM_LENGTH_THRESHOLD = 0x80
+ASN1_LENGTH_SIZE_MASK = 0x7F
+EC_UNCOMPRESSED_POINT_PREFIX = 0x04
+
 
 class Pkcs11Utilities(LoggerMixin):
     """Utility class for general PKCS#11 operations not specific to private keys.
@@ -157,7 +163,7 @@ class Pkcs11Utilities(LoggerMixin):
 
         Args:
             token_label (str): Label of the token to open a session with.
-            user_pin (str): User PIN for authentication.
+            user_pin (str): User PIN for the token.
 
         Returns:
             pkcs11.Session: The opened session.
@@ -585,6 +591,7 @@ class Pkcs11AESKey:
     ) -> None:
         """Context manager exit."""
         self.close()
+
 
 class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
     """PKCS#11-backed RSA private key implementation.
@@ -1196,8 +1203,7 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             ec_point = self._unwrap_ec_point(bytes(public[Attribute.EC_POINT]))
             expected_point_length = 1 + (2 * coord_size)
 
-            ec_uncompressed_point_prefix = 0x04
-            if len(ec_point) != expected_point_length or ec_point[0] != ec_uncompressed_point_prefix:
+            if len(ec_point) != expected_point_length or ec_point[0] != EC_UNCOMPRESSED_POINT_PREFIX:
                 msg = 'EC public key point is missing or has invalid format.'
                 raise ValueError(msg)
 
@@ -1223,19 +1229,19 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
     @staticmethod
     def _unwrap_ec_point(ec_point: bytes) -> bytes:
         """Return a raw uncompressed EC point from common PKCS#11 encodings."""
-        if len(ec_point) < 2 or ec_point[0] != 0x04:
+        if len(ec_point) < ASN1_MIN_HEADER_LENGTH or ec_point[0] != ASN1_OCTET_STRING_TAG:
             return ec_point
 
         length_octet = ec_point[1]
-        if length_octet < 0x80:
-            header_length = 2
+        if length_octet < ASN1_LONG_FORM_LENGTH_THRESHOLD:
+            header_length = ASN1_MIN_HEADER_LENGTH
             payload_length = length_octet
         else:
-            length_size = length_octet & 0x7F
-            if length_size == 0 or len(ec_point) < 2 + length_size:
+            length_size = length_octet & ASN1_LENGTH_SIZE_MASK
+            if length_size == 0 or len(ec_point) < ASN1_MIN_HEADER_LENGTH + length_size:
                 return ec_point
-            header_length = 2 + length_size
-            payload_length = int.from_bytes(ec_point[2:header_length], 'big')
+            header_length = ASN1_MIN_HEADER_LENGTH + length_size
+            payload_length = int.from_bytes(ec_point[ASN1_MIN_HEADER_LENGTH:header_length], 'big')
 
         if payload_length == len(ec_point) - header_length:
             return ec_point[header_length:]
@@ -1290,7 +1296,9 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
 
         # Encode public key point as uncompressed format (0x04 + x + y)
         public_point = (
-            b'\x04' + int_to_bytes(public_numbers.x, coord_size) + int_to_bytes(public_numbers.y, coord_size)
+            bytes([EC_UNCOMPRESSED_POINT_PREFIX])
+            + int_to_bytes(public_numbers.x, coord_size)
+            + int_to_bytes(public_numbers.y, coord_size)
         )
 
         private_template = {

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, ClassVar, cast
 
 from cryptography import x509
 from django.core.exceptions import ValidationError
 from django.db import models, transaction
 from django.utils.translation import gettext_lazy as _
+from trustpoint_core import oid
 from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
@@ -550,7 +551,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         return self.signature_suite.public_key_info
 
     @property
-    def hash_algorithm(self) -> hashes.HashAlgorithm  | None:
+    def hash_algorithm(self) -> hashes.HashAlgorithm | None:
         """Returns the hash algorithm used by the current credential."""
         return self.get_certificate().signature_hash_algorithm
 
@@ -629,10 +630,13 @@ class CertificateChainOrderModel(models.Model):
         Restricts entries such that the tuple (credential, order) is unique.
         """
 
-        ordering: ClassVar = ['order']
-        constraints: ClassVar = [models.UniqueConstraint(
-            fields=['credential', 'primary_certificate', 'order'], name='unique_group_order'
-        )]
+        ordering: ClassVar[list[str]] = ['order']
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=['credential', 'primary_certificate', 'order'],
+                name='unique_group_order',
+            )
+        ]
 
     def __repr__(self) -> str:
         """Returns a string representation of this CertificateChainOrderModel entry."""
@@ -796,7 +800,6 @@ class IDevIDReferenceModel(models.Model):
             return self.idevid_ref.removeprefix('dev-owner:cert:').split('_')[1]
         except IndexError:
             return ''
-
 
 
 class OwnerCredentialModel(LoggerMixin, CustomDeleteActionModel):

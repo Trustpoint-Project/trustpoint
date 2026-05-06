@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from crypto.adapters.pkcs11.mechanisms import key_type_for_algorithm
 from crypto.domain.errors import KeyNotFoundError
-from pkcs11 import Attribute, NoSuchKey, ObjectClass, Session  # type: ignore[import-untyped]
+from pkcs11 import Attribute, NoSuchKey, ObjectClass, PKCS11Error, Session
 
 if TYPE_CHECKING:
     from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
@@ -57,7 +57,7 @@ class Pkcs11ObjectLocator:
         """Verify that the resolved PKCS#11 object still exposes the expected CKA_ID."""
         try:
             actual_id = cast('Any', obj)[Attribute.ID]
-        except Exception:
+        except (AttributeError, KeyError, TypeError, PKCS11Error):
             return
 
         if bytes(actual_id) != bytes(key.key_id):

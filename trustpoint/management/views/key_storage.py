@@ -21,7 +21,7 @@ class KeyStorageConfigView(TemplateView):
     template_name = 'management/key_storage.html'
     extra_context: dict[str, str] = {'page_category': 'management', 'page_name': 'key_storage'}  # noqa: RUF012
 
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Manually refresh the provider capability snapshot for the active backend."""
         action = request.POST.get('action')
         if action != 'reprobe':

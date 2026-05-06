@@ -5,7 +5,8 @@ from __future__ import annotations
 import base64
 import os
 import threading
-from typing import Final
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Final, Protocol, cast
 
 import pkcs11
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -18,6 +19,9 @@ from appsecrets.models import (
     AppSecretSoftwareConfigModel,
 )
 from crypto.local_development import ensure_local_software_backends
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 DEK_LENGTH_BYTES: Final[int] = 32
 AES_GCM_NONCE_BYTES: Final[int] = 12
@@ -34,17 +38,39 @@ class AppSecretConfigurationError(AppSecretError):
     """Raised when the app-secret subsystem is not configured correctly."""
 
 
+class _Pkcs11Kek(Protocol):
+    def encrypt(self, plaintext: bytes, *, mechanism: object) -> bytes | bytearray | memoryview: ...
+
+    def decrypt(self, ciphertext: bytes, *, mechanism: object) -> bytes | bytearray | memoryview: ...
+
+
+class _Pkcs11Slot(Protocol):
+    slot_id: int
+
+    def get_token(self) -> pkcs11.Token: ...
+
+
+class _Pkcs11Library(Protocol):
+    def get_slots(self, *, token_present: bool = False) -> Iterable[_Pkcs11Slot]: ...
+
+
+@dataclass(slots=True)
+class _DekCache:
+    """Process-local DEK cache state."""
+
+    signature: tuple[object, ...] | None = None
+    value: bytes | None = None
+
+
 _DEK_CACHE_LOCK = threading.Lock()
-_DEK_CACHE_SIGNATURE: tuple[object, ...] | None = None
-_DEK_CACHE_VALUE: bytes | None = None
+_DEK_CACHE = _DekCache()
 
 
 def clear_app_secret_cache() -> None:
     """Clear the process-local DEK cache."""
-    global _DEK_CACHE_SIGNATURE, _DEK_CACHE_VALUE
     with _DEK_CACHE_LOCK:
-        _DEK_CACHE_SIGNATURE = None
-        _DEK_CACHE_VALUE = None
+        _DEK_CACHE.signature = None
+        _DEK_CACHE.value = None
 
 
 class BaseAppSecretService:
@@ -72,15 +98,15 @@ class BaseAppSecretService:
             msg = 'Value is not in the Trustpoint application-secret ciphertext format.'
             raise AppSecretConfigurationError(msg)
 
-        payload_b64 = ciphertext[len(CIPHERTEXT_PREFIX):]
+        payload_b64 = ciphertext[len(CIPHERTEXT_PREFIX) :]
         payload = base64.b64decode(payload_b64.encode('ascii'))
         if len(payload) < AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES:
             msg = 'Stored ciphertext payload is truncated.'
             raise AppSecretConfigurationError(msg)
 
         nonce = payload[:AES_GCM_NONCE_BYTES]
-        tag = payload[AES_GCM_NONCE_BYTES:AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES]
-        encrypted = payload[AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES:]
+        tag = payload[AES_GCM_NONCE_BYTES : AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES]
+        encrypted = payload[AES_GCM_NONCE_BYTES + AES_GCM_TAG_BYTES :]
 
         dek = self.require_dek()
         cipher = Cipher(algorithms.AES(dek), modes.GCM(nonce, tag))
@@ -101,6 +127,7 @@ class SoftwareAppSecretService(BaseAppSecretService):
     """Development-only software implementation for app secrets."""
 
     def __init__(self, config: AppSecretSoftwareConfigModel) -> None:
+        """Initialize the software app-secret service."""
         self._config = config
 
     def _signature(self) -> tuple[object, ...]:
@@ -124,21 +151,20 @@ class SoftwareAppSecretService(BaseAppSecretService):
 
     def require_dek(self) -> bytes:
         """Return the development DEK."""
-        global _DEK_CACHE_SIGNATURE, _DEK_CACHE_VALUE
-
         self.ensure_backend_ready()
         signature = self._signature()
+
         with _DEK_CACHE_LOCK:
-            if signature == _DEK_CACHE_SIGNATURE and _DEK_CACHE_VALUE is not None:
-                return _DEK_CACHE_VALUE
+            if signature == _DEK_CACHE.signature and _DEK_CACHE.value is not None:
+                return _DEK_CACHE.value
 
             dek = bytes(self._config.raw_dek or b'')
             if len(dek) != DEK_LENGTH_BYTES:
                 msg = 'Software app-secret backend DEK is missing or invalid.'
                 raise AppSecretConfigurationError(msg)
 
-            _DEK_CACHE_SIGNATURE = signature
-            _DEK_CACHE_VALUE = dek
+            _DEK_CACHE.signature = signature
+            _DEK_CACHE.value = dek
             return dek
 
 
@@ -146,6 +172,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
     """PKCS#11-backed DEK/KEK implementation for app secrets."""
 
     def __init__(self, config: AppSecretPkcs11ConfigModel) -> None:
+        """Initialize the PKCS#11 app-secret service."""
         self._config = config
 
     def _signature(self) -> tuple[object, ...]:
@@ -179,13 +206,12 @@ class Pkcs11AppSecretService(BaseAppSecretService):
 
     def require_dek(self) -> bytes:
         """Return the unwrapped DEK from the active PKCS#11 configuration."""
-        global _DEK_CACHE_SIGNATURE, _DEK_CACHE_VALUE
-
         self.ensure_backend_ready()
         signature = self._signature()
+
         with _DEK_CACHE_LOCK:
-            if signature == _DEK_CACHE_SIGNATURE and _DEK_CACHE_VALUE is not None:
-                return _DEK_CACHE_VALUE
+            if signature == _DEK_CACHE.signature and _DEK_CACHE.value is not None:
+                return _DEK_CACHE.value
 
             wrapped_dek = bytes(self._config.wrapped_dek or b'')
             if not wrapped_dek:
@@ -200,23 +226,26 @@ class Pkcs11AppSecretService(BaseAppSecretService):
                 msg = f'Invalid unwrapped DEK length: {len(dek)} bytes.'
                 raise AppSecretConfigurationError(msg)
 
-            _DEK_CACHE_SIGNATURE = signature
-            _DEK_CACHE_VALUE = dek
+            _DEK_CACHE.signature = signature
+            _DEK_CACHE.value = dek
             return dek
 
-    def _load_or_create_kek(self, session: pkcs11.Session) -> pkcs11.Key:
+    def _load_or_create_kek(self, session: pkcs11.Session) -> _Pkcs11Kek:
         """Load the persistent HSM KEK or create it once."""
         try:
-            return session.get_key(label=self._config.kek_label, key_type=pkcs11.KeyType.AES)
+            return cast('_Pkcs11Kek', session.get_key(label=self._config.kek_label, key_type=pkcs11.KeyType.AES))
         except pkcs11.NoSuchKey:
-            return session.generate_key(
-                pkcs11.KeyType.AES,
-                key_length=256,
-                label=self._config.kek_label,
-                store=True,
+            return cast(
+                '_Pkcs11Kek',
+                session.generate_key(
+                    pkcs11.KeyType.AES,
+                    key_length=256,
+                    label=self._config.kek_label,
+                    store=True,
+                ),
             )
 
-    def _resolve_token(self, library: pkcs11.lib) -> pkcs11.Token:
+    def _resolve_token(self, library: _Pkcs11Library) -> pkcs11.Token:
         """Resolve the configured token from the PKCS#11 library."""
         profile = self._config.build_provider_profile()
         matches: list[pkcs11.Token] = []
@@ -243,7 +272,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
     def _open_session(self) -> pkcs11.Session:
         """Open a read-write authenticated PKCS#11 session."""
         profile = self._config.build_provider_profile()
-        library = pkcs11.lib(profile.module_path)
+        library = cast('_Pkcs11Library', pkcs11.lib(profile.module_path))
         token = self._resolve_token(library)
         try:
             return token.open(user_pin=profile.require_user_pin(), rw=True)

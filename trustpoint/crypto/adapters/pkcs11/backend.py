@@ -28,10 +28,11 @@ from crypto.domain.errors import (
 )
 from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec, algorithm_for_key_spec
-from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, PKCS11Error, lib as pkcs11_lib
-from pkcs11.exceptions import UserAlreadyLoggedIn  # type: ignore[import-untyped]
-from pkcs11.util.ec import encode_ec_public_key, encode_ecdsa_signature  # type: ignore[import-untyped]
-from pkcs11.util.rsa import encode_rsa_public_key  # type: ignore[import-untyped]
+from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, PKCS11Error
+from pkcs11 import lib as pkcs11_lib
+from pkcs11.exceptions import UserAlreadyLoggedIn
+from pkcs11.util.ec import encode_ec_public_key, encode_ecdsa_signature
+from pkcs11.util.rsa import encode_rsa_public_key
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -236,7 +237,7 @@ class Pkcs11Backend(LoggerMixin):
             raise map_pkcs11_error(exc, operation='signing') from exc
 
         if key.algorithm is KeyAlgorithm.EC:
-            return cast('bytes', encode_ecdsa_signature(signature))
+            return encode_ecdsa_signature(signature)
         return bytes(signature)
 
     def destroy_managed_key(self, key: Pkcs11ManagedKeyBinding) -> None:
@@ -422,8 +423,8 @@ class Pkcs11Backend(LoggerMixin):
     def _encode_public_key_der(self, public_key_object: Any, algorithm: KeyAlgorithm) -> bytes:
         """Encode a PKCS#11 public key into DER for cryptography loading."""
         if algorithm is KeyAlgorithm.RSA:
-            return cast('bytes', encode_rsa_public_key(public_key_object))
+            return encode_rsa_public_key(public_key_object)
         if algorithm is KeyAlgorithm.EC:
-            return cast('bytes', encode_ec_public_key(public_key_object))
+            return encode_ec_public_key(public_key_object)
         msg = f'Unsupported key algorithm for DER encoding: {algorithm!r}'
         raise ProviderUnavailableError(msg)

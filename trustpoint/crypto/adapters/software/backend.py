@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
@@ -25,13 +25,12 @@ from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec, algorithm_for_key_spec
 
 if TYPE_CHECKING:
-
     from crypto.adapters.software.config import SoftwareProviderProfile
     from crypto.domain.algorithms import HashAlgorithmName, SupportedPublicKey
     from crypto.domain.policies import KeyPolicy
     from crypto.domain.specs import SignRequest
 
-SupportedPrivateKey = 'RSAPrivateKey | EllipticCurvePrivateKey'
+type SupportedPrivateKey = rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
 
 
 class SoftwareBackend:
@@ -143,10 +142,12 @@ class SoftwareBackend:
             if request.signature_algorithm is not SignatureAlgorithm.RSA_PKCS1V15:
                 msg = f'Unsupported RSA signature algorithm {request.signature_algorithm.value!r}.'
                 raise MechanismUnsupportedError(msg)
-            return private_key.sign(
-                data,
-                padding.PKCS1v15(),
-                algorithm,
+            return bytes(
+                private_key.sign(
+                    data,
+                    padding.PKCS1v15(),
+                    algorithm,
+                )
             )
 
         if key.algorithm is KeyAlgorithm.EC and isinstance(private_key, ec.EllipticCurvePrivateKey):
@@ -154,15 +155,15 @@ class SoftwareBackend:
                 msg = f'Unsupported EC signature algorithm {request.signature_algorithm.value!r}.'
                 raise MechanismUnsupportedError(msg)
             algorithm = utils.Prehashed(hash_algorithm) if request.prehashed else hash_algorithm
-            return private_key.sign(data, ec.ECDSA(algorithm))
+            return bytes(private_key.sign(data, ec.ECDSA(algorithm)))
 
         msg = 'Software key algorithm and private-key type are inconsistent.'
         raise ProviderUnavailableError(msg)
 
     def destroy_managed_key(self, key: SoftwareManagedKeyBinding) -> None:
         """Best-effort cleanup for an orphaned software-generated binding."""
+        del key
         # No persisted provider-side state exists yet. Nothing to destroy.
-        return
 
     def _generate_private_key(self, key_spec: KeySpec) -> SupportedPrivateKey:
         """Generate a supported private key."""
@@ -189,7 +190,7 @@ class SoftwareBackend:
             raise KeyNotFoundError(msg) from exc
 
         if isinstance(private_key, (rsa.RSAPrivateKey, ec.EllipticCurvePrivateKey)):
-            return cast('SupportedPrivateKey', private_key)
+            return private_key
 
         msg = f'Unsupported software-managed private-key type {type(private_key).__name__}.'
         raise ProviderUnavailableError(msg)
@@ -224,7 +225,8 @@ class SoftwareBackend:
         msg = f'Unsupported hash algorithm {value!r} for the software backend.'
         raise MechanismUnsupportedError(msg)
 
-    def _fingerprint_public_key(self, public_key: SupportedPublicKey) -> str:
+    @staticmethod
+    def _fingerprint_public_key(public_key: SupportedPublicKey) -> str:
         """Return the SHA-256 fingerprint of a public key SPKI DER encoding."""
         der = public_key.public_bytes(
             encoding=serialization.Encoding.DER,

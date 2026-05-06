@@ -77,7 +77,11 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             self.fields['auto_gen_pki_key_algorithm'].widget.attrs['disabled'] = 'disabled'
         elif 'auto_gen_pki_key_algorithm' in self.fields:
             supported_algorithms = supported_auto_gen_pki_key_algorithms()
-            self.fields['auto_gen_pki_key_algorithm'].choices = [
+            auto_gen_pki_key_algorithm_field = cast(
+                'forms.ChoiceField',
+                self.fields['auto_gen_pki_key_algorithm'],
+            )
+            auto_gen_pki_key_algorithm_field.choices = [
                 (algorithm.value, algorithm.label) for algorithm in supported_algorithms
             ]
 
@@ -218,7 +222,8 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
             return AutoGenPkiKeyAlgorithm.RSA2048
         selected_algorithm = AutoGenPkiKeyAlgorithm(form_value)
         if selected_algorithm not in supported_auto_gen_pki_key_algorithms():
-            raise ValidationError(_('The selected auto-generated PKI algorithm is not supported by the active backend.'))
+            msg = _('The selected auto-generated PKI algorithm is not supported by the active backend.')
+            raise ValidationError(msg)
         return selected_algorithm
 
     def _validate_mode_constraints(self, cleaned: dict[str, Any], mode: str) -> None:

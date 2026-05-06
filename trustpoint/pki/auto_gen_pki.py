@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import secrets
 import threading
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
-from cryptography import x509
 from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.algorithms import EllipticCurveName, KeyAlgorithm
@@ -17,6 +16,9 @@ from pki.models import CaModel, CredentialModel, DomainModel, RevokedCertificate
 from pki.util.keys import AutoGenPkiKeyAlgorithm, supported_auto_gen_pki_key_algorithms
 from pki.util.x509 import CertificateGenerator
 from trustpoint.logger import LoggerMixin
+
+if TYPE_CHECKING:
+    from cryptography import x509
 
 UNIQUE_NAME_PREFIX = 'AutoGenPKI_Issuing_CA'
 DOMAIN_NAME_PREFIX = 'AutoGenPKI'
@@ -71,7 +73,7 @@ class AutoGenPki(LoggerMixin):
         return CryptoManagedKeyModel.objects.get(pk=private_key.managed_key_ref.id)
 
     @staticmethod
-    def _save_managed_issuing_ca(
+    def _save_managed_issuing_ca(  # noqa: PLR0913
         *,
         certificate: x509.Certificate,
         certificate_chain: list[x509.Certificate],
@@ -101,24 +103,17 @@ class AutoGenPki(LoggerMixin):
     @classmethod
     def get_auto_gen_pki(cls, key_alg: AutoGenPkiKeyAlgorithm | None = None) -> CaModel | None:
         """Retrieves the auto-generated PKI Issuing CA, if it exists."""
-        ca: CaModel | None
         if key_alg is not None:
             return CaModel.objects.filter(
                 unique_name__startswith=f'{UNIQUE_NAME_PREFIX}_{key_alg.name}',
                 ca_type=CaModel.CaTypeChoice.AUTOGEN,
                 is_active=True,
             ).first()
-        else:
-            try:
-                ca = CaModel.objects.filter(
-                    unique_name__startswith=UNIQUE_NAME_PREFIX,
-                    ca_type=CaModel.CaTypeChoice.AUTOGEN,
-                    is_active=True
-                ).first()
-            except CaModel.DoesNotExist:
-                return None
-            else:
-                return ca or None
+        return CaModel.objects.filter(
+            unique_name__startswith=UNIQUE_NAME_PREFIX,
+            ca_type=CaModel.CaTypeChoice.AUTOGEN,
+            is_active=True,
+        ).first()
 
     @classmethod
     def enable_auto_gen_pki(cls, key_alg: AutoGenPkiKeyAlgorithm) -> None:
@@ -162,7 +157,7 @@ class AutoGenPki(LoggerMixin):
                     unique_name=root_ca_name,
                     ca_type=CaModel.CaTypeChoice.AUTOGEN_ROOT,
                 )
-                root_1_key = root_ca.credential.get_private_key()
+                root_1_key = cast('CredentialModel', root_ca.credential).get_private_key()
                 cls.logger.info('Created new Root CA: %s', root_ca_name)
 
             cls.logger.info('Creating new Issuing CA with unique name: %s', issuing_ca_unique_name)

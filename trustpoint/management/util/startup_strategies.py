@@ -273,6 +273,7 @@ class CompletedRuntimeStartupStrategy(StartupStrategy):
         tls_strategy: TlsMaterialStrategy | None = None,
         runtime_initialization: RuntimeInitialization | None = None,
     ) -> None:
+        """Initialize the completed-runtime startup strategy dependencies."""
         self.tls_strategy = tls_strategy or ActiveDatabaseTlsMaterialStrategy()
         self.runtime_initialization = runtime_initialization or RuntimeInitialization()
 
@@ -288,20 +289,25 @@ class CompletedRuntimeStartupStrategy(StartupStrategy):
         return 'Completed runtime startup (setup wizard completed)'
 
     @staticmethod
-    def _ensure_appsecrets_ready(context: StartupContext) -> None:
-        """Require that the application-secret subsystem is configured and usable."""
-        context.output.write('Checking application-secret readiness...')
-        if context.backend_kind is None:
-            msg = 'The setup wizard is complete, but no managed crypto backend profile is configured.'
-            raise RuntimeError(msg)
-        if not context.appsecrets_configured:
-            msg = 'The setup wizard is complete, but the application-secret backend is not configured.'
-            raise RuntimeError(msg)
-
+    def _get_appsecret_backend() -> AppSecretBackendModel:
+        """Return the configured app-secret backend row."""
         backend = AppSecretBackendModel.objects.first()
         if backend is None:
             msg = 'The setup wizard is complete, but the application-secret backend row is missing.'
             raise RuntimeError(msg)
+        return backend
+
+    @staticmethod
+    def _validate_appsecret_backend_selection(context: StartupContext, backend: AppSecretBackendModel) -> None:
+        """Validate that crypto and app-secret backend selections are compatible."""
+        if context.backend_kind is None:
+            msg = 'The setup wizard is complete, but no managed crypto backend profile is configured.'
+            raise RuntimeError(msg)
+
+        if not context.appsecrets_configured:
+            msg = 'The setup wizard is complete, but the application-secret backend is not configured.'
+            raise RuntimeError(msg)
+
         if backend.backend_kind != context.backend_kind.value:
             msg = (
                 'The setup wizard is complete, but the managed crypto backend '
@@ -309,20 +315,39 @@ class CompletedRuntimeStartupStrategy(StartupStrategy):
             )
             raise RuntimeError(msg)
 
-        if backend.backend_kind == AppSecretBackendKind.PKCS11:
-            wrapped_dek = bytes(backend.pkcs11_config.wrapped_dek or b'')
-            if not wrapped_dek:
-                msg = 'The setup wizard is complete, but the PKCS#11 app-secret backend has no wrapped DEK.'
-                raise RuntimeError(msg)
-        elif backend.backend_kind == AppSecretBackendKind.SOFTWARE:
-            raw_dek = bytes(backend.software_config.raw_dek or b'')
-            if len(raw_dek) != DEK_LENGTH_BYTES:
-                msg = 'The setup wizard is complete, but the software app-secret backend has no valid DEK.'
-                raise RuntimeError(msg)
-        else:
-            msg = f'Unsupported application-secret backend kind {backend.backend_kind!r}.'
+    @staticmethod
+    def _ensure_pkcs11_appsecret_dek(backend: AppSecretBackendModel) -> None:
+        """Require a wrapped DEK for the PKCS#11 app-secret backend."""
+        wrapped_dek = bytes(backend.pkcs11_config.wrapped_dek or b'')
+        if not wrapped_dek:
+            msg = 'The setup wizard is complete, but the PKCS#11 app-secret backend has no wrapped DEK.'
             raise RuntimeError(msg)
 
+    @staticmethod
+    def _ensure_software_appsecret_dek(backend: AppSecretBackendModel) -> None:
+        """Require a valid raw DEK for the software app-secret backend."""
+        raw_dek = bytes(backend.software_config.raw_dek or b'')
+        if len(raw_dek) != DEK_LENGTH_BYTES:
+            msg = 'The setup wizard is complete, but the software app-secret backend has no valid DEK.'
+            raise RuntimeError(msg)
+
+    @classmethod
+    def _ensure_appsecret_dek(cls, backend: AppSecretBackendModel) -> None:
+        """Require backend-specific DEK material before runtime initialization."""
+        if backend.backend_kind == AppSecretBackendKind.PKCS11:
+            cls._ensure_pkcs11_appsecret_dek(backend)
+            return
+
+        if backend.backend_kind == AppSecretBackendKind.SOFTWARE:
+            cls._ensure_software_appsecret_dek(backend)
+            return
+
+        msg = f'Unsupported application-secret backend kind {backend.backend_kind!r}.'
+        raise RuntimeError(msg)
+
+    @staticmethod
+    def _ensure_appsecret_service_ready() -> None:
+        """Require that the application-secret service can load its DEK."""
         try:
             get_app_secret_service().require_dek()
         except AppSecretConfigurationError as exc:
@@ -332,4 +357,12 @@ class CompletedRuntimeStartupStrategy(StartupStrategy):
             msg = f'Failed to initialize the application-secret backend: {exc}'
             raise RuntimeError(msg) from exc
 
+    @classmethod
+    def _ensure_appsecrets_ready(cls, context: StartupContext) -> None:
+        """Require that the application-secret subsystem is configured and usable."""
+        context.output.write('Checking application-secret readiness...')
+        backend = cls._get_appsecret_backend()
+        cls._validate_appsecret_backend_selection(context, backend)
+        cls._ensure_appsecret_dek(backend)
+        cls._ensure_appsecret_service_ready()
         context.output.write(context.output.success('Application-secret backend is ready.'))

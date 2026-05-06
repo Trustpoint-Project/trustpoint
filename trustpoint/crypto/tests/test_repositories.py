@@ -119,7 +119,7 @@ def test_record_probe_success_sets_current_snapshot() -> None:
     assert result.profile_id == profile.pk
     assert snapshot is not None
     assert profile.last_probe_status == ProbeStatus.SUCCESS
-    assert profile.last_probe_error is None
+    assert profile.last_probe_error == ''
     assert snapshot.software_detail.snapshot_payload == capabilities.to_json_dict()
 
 

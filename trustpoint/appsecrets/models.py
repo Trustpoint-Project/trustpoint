@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Final
+from typing import Any, ClassVar
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -27,7 +27,7 @@ class AppSecretPkcs11AuthSource(models.TextChoices):
 class AppSecretBackendModel(models.Model):
     """Singleton configuration row for the active application-secret backend."""
 
-    SINGLETON_ID: ClassVar[Final[int]] = 1
+    SINGLETON_ID: ClassVar[int] = 1
 
     singleton_id = models.PositiveSmallIntegerField(
         primary_key=True,
@@ -38,7 +38,19 @@ class AppSecretBackendModel(models.Model):
     backend_kind = models.CharField(max_length=16, choices=AppSecretBackendKind.choices)
 
     class Meta:
+        """Database options for the app-secret backend singleton."""
+
         db_table = 'app_secret_backend'
+
+    def __str__(self) -> str:
+        """Return the configured app-secret backend kind."""
+        return f'Application secrets backend: {self.backend_kind}'
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Persist after validation while keeping singleton semantics."""
+        self.full_clean()
+        self.singleton_id = self.SINGLETON_ID
+        super().save(*args, **kwargs)
 
     @classmethod
     def get_singleton(cls) -> AppSecretBackendModel:
@@ -54,17 +66,11 @@ class AppSecretBackendModel(models.Model):
         if self.backend_kind not in allowed_kinds:
             raise ValidationError({'backend_kind': f'Unsupported app-secret backend kind {self.backend_kind!r}.'})
 
-    def save(self, *args: object, **kwargs: object) -> None:
-        """Persist after validation while keeping singleton semantics."""
-        self.full_clean()
-        self.singleton_id = self.SINGLETON_ID
-        super().save(*args, **kwargs)
-
 
 class AppSecretPkcs11ConfigModel(models.Model):
     """PKCS#11 configuration for the application-secret backend."""
 
-    DEFAULT_KEK_LABEL = 'trustpoint-app-secret-kek'
+    DEFAULT_KEK_LABEL: ClassVar[str] = 'trustpoint-app-secret-kek'
 
     backend = models.OneToOneField(
         AppSecretBackendModel,
@@ -74,8 +80,8 @@ class AppSecretPkcs11ConfigModel(models.Model):
     )
 
     module_path = models.TextField()
-    token_label = models.CharField(max_length=128, null=True, blank=True)
-    token_serial = models.CharField(max_length=128, null=True, blank=True)
+    token_label = models.CharField(max_length=128, blank=True, default='')
+    token_serial = models.CharField(max_length=128, blank=True, default='')
     slot_id = models.PositiveIntegerField(null=True, blank=True)
 
     auth_source = models.CharField(max_length=16, choices=AppSecretPkcs11AuthSource.choices)
@@ -96,7 +102,13 @@ class AppSecretPkcs11ConfigModel(models.Model):
     )
 
     class Meta:
+        """Database options for PKCS#11 app-secret configuration."""
+
         db_table = 'app_secret_pkcs11_config'
+
+    def __str__(self) -> str:
+        """Return a readable PKCS#11 app-secret config label."""
+        return 'Application secrets PKCS#11 config'
 
     def clean(self) -> None:
         """Validate the PKCS#11 app-secret configuration."""
@@ -155,7 +167,13 @@ class AppSecretSoftwareConfigModel(models.Model):
     )
 
     class Meta:
+        """Database options for software app-secret configuration."""
+
         db_table = 'app_secret_software_config'
+
+    def __str__(self) -> str:
+        """Return a readable software app-secret config label."""
+        return 'Application secrets software config'
 
     def clean(self) -> None:
         """Validate the software app-secret configuration."""

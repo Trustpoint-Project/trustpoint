@@ -21,7 +21,7 @@ from trustpoint_core.serializer import (
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
-from crypto.domain.specs import EcKeySpec, RsaKeySpec
+from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
 from crypto.runtime import configured_private_key_location
 from onboarding.authorization import PermittedProtocolsAuthorization
@@ -590,6 +590,7 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     def _create_credential(self) -> CredentialModel:
         """Create and return a temporary credential for the CA."""
         key_type = self.cleaned_data['key_type']
+        key_spec: KeySpec
         if key_type.startswith('RSA-'):
             rsa_key_size = int(key_type.split('-')[1])
             key_spec = RsaKeySpec(key_size=rsa_key_size)

@@ -115,6 +115,11 @@ def _path_exists(path: Path) -> bool:
         return False
 
 
+def _save_untyped_model(instance: Any) -> None:
+    """Save a Django model whose save method is not typed for mypy."""
+    instance.save()
+
+
 # TODO(AlexHx8472): no transitions anymore  # noqa: FIX002
 SCRIPT_WIZARD_BACKUP_PASSWORD = STATE_FILE_DIR / Path('transition/wizard_backup_password.sh')
 SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS = STATE_FILE_DIR / Path('transition/wizard_auto_restore_success.sh')
@@ -653,7 +658,9 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
             update_fields.append('fresh_install_pkcs11_token_serial')
         form.instance.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
         form.instance.save(update_fields=update_fields)
-        form._apply_pkcs11_defaults()
+
+        # The defaults are owned by the form until a public form API exists for this normalization step.
+        form._apply_pkcs11_defaults()  # noqa: SLF001
 
     @staticmethod
     def _build_pkcs11_test_profile(form: FreshInstallBackendConfigModelForm) -> Pkcs11ProviderProfile:
@@ -991,7 +998,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             # Remove chain file if it exists but chain is empty
             NGINX_CERT_CHAIN_PATH.unlink()
 
-    def _apply_staged_tls_credential(self, config_model: SetupWizardConfigModel) -> None:
+    def _apply_staged_tls_credential(self) -> None:
         """Promote the staged TLS credential to active and apply it for nginx."""
         staged_tls_serializer = load_staged_tls_credential()
         if staged_tls_serializer is None:
@@ -1015,56 +1022,82 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         clear_staged_tls_credential()
 
     @classmethod
-    def _probe_pkcs11_config(cls, config_model: SetupWizardConfigModel, *, profile_name: str) -> None:
-        """Authenticate against the staged PKCS#11 backend and refresh discovered selector details."""
+    def _apply_pkcs11_probe_fallbacks(cls, config_model: SetupWizardConfigModel) -> tuple[str, str, list[str]]:
+        """Apply runtime fallback PKCS#11 paths before probing the backend."""
         module_path = (config_model.fresh_install_pkcs11_module_path or '').strip()
         pin_file = (config_model.fresh_install_pkcs11_auth_source_ref or '').strip()
         config_file = (config_model.fresh_install_pkcs11_config_path or '').strip()
         config_env_var = (config_model.fresh_install_pkcs11_config_env_var or '').strip()
         fallback_update_fields: list[str] = []
+
         if (not module_path or not _path_exists(Path(module_path))) and _path_exists(FINAL_WIZARD_PKCS11_MODULE_PATH):
             module_path = str(FINAL_WIZARD_PKCS11_MODULE_PATH)
             config_model.fresh_install_pkcs11_module_path = module_path
             fallback_update_fields.append('fresh_install_pkcs11_module_path')
+
         if (not pin_file or not _path_exists(Path(pin_file))) and _path_exists(FINAL_WIZARD_PKCS11_PIN_PATH):
             pin_file = str(FINAL_WIZARD_PKCS11_PIN_PATH)
             config_model.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
             config_model.fresh_install_pkcs11_auth_source_ref = pin_file
             fallback_update_fields.extend(['fresh_install_pkcs11_auth_source', 'fresh_install_pkcs11_auth_source_ref'])
+
         if (not config_file or not _path_exists(Path(config_file))) and _path_exists(FINAL_WIZARD_PKCS11_CONFIG_PATH):
             config_file = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
             config_model.fresh_install_pkcs11_config_path = config_file
             fallback_update_fields.append('fresh_install_pkcs11_config_path')
+
         if config_file and config_env_var:
             os.environ[config_env_var] = config_file
-        slot_id = config_model.fresh_install_pkcs11_slot_id
-        token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or None
-        token_serial = (config_model.fresh_install_pkcs11_token_serial or '').strip() or None
 
+        return module_path, pin_file, fallback_update_fields
+
+    @staticmethod
+    def _validate_pkcs11_probe_inputs(
+        *,
+        module_path: str,
+        pin_file: str,
+        token_label: str | None,
+        slot_id: int | None,
+    ) -> None:
+        """Validate the minimum PKCS#11 settings needed for a probe."""
         if not module_path:
             err_msg = 'No PKCS#11 module path is configured for the setup wizard.'
             raise DjangoValidationError(err_msg)
+
         if not pin_file:
             err_msg = 'No PKCS#11 user PIN file is configured for the setup wizard.'
             raise DjangoValidationError(err_msg)
+
         if token_label is None and slot_id is None:
             err_msg = 'No PKCS#11 token selector is configured. Enter a token label or slot ID.'
             raise DjangoValidationError(err_msg)
 
-        backend = Pkcs11Backend(
-            profile=Pkcs11ProviderProfile(
-                name=profile_name,
-                module_path=module_path,
-                token=Pkcs11TokenSelector(token_label=token_label, token_serial=token_serial, slot_id=slot_id),
-                user_pin_file=pin_file,
-                max_sessions=2,
-                borrow_timeout_seconds=5.0,
-                rw_sessions=True,
-            )
+    @staticmethod
+    def _build_pkcs11_probe_profile(
+        *,
+        profile_name: str,
+        module_path: str,
+        pin_file: str,
+        token_selector: Pkcs11TokenSelector,
+    ) -> Pkcs11ProviderProfile:
+        """Build a PKCS#11 profile for pre-apply probing."""
+        return Pkcs11ProviderProfile(
+            name=profile_name,
+            module_path=module_path,
+            token=token_selector,
+            user_pin_file=pin_file,
+            max_sessions=2,
+            borrow_timeout_seconds=5.0,
+            rw_sessions=True,
         )
+
+    @staticmethod
+    def _refresh_pkcs11_probe_capabilities(profile: Pkcs11ProviderProfile) -> Any:
+        """Authenticate and refresh PKCS#11 capabilities for the given profile."""
+        backend = Pkcs11Backend(profile=profile)
         try:
             backend.verify_authentication()
-            capabilities = backend.refresh_capabilities()
+            return backend.refresh_capabilities()
         except Exception as exception:
             error_detail = str(exception).strip() or type(exception).__name__
             err_msg = f'PKCS#11 pre-apply probe failed: {error_detail}'
@@ -1072,18 +1105,51 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         finally:
             backend.close()
 
-        update_fields: list[str] = fallback_update_fields
+    @staticmethod
+    def _persist_pkcs11_probe_capabilities(
+        config_model: SetupWizardConfigModel,
+        capabilities: Any,
+        update_fields: list[str],
+    ) -> None:
+        """Persist selector details discovered during the PKCS#11 probe."""
         if capabilities.token.label and capabilities.token.label != config_model.fresh_install_pkcs11_token_label:
             config_model.fresh_install_pkcs11_token_label = capabilities.token.label
             update_fields.append('fresh_install_pkcs11_token_label')
+
         if capabilities.token.serial and capabilities.token.serial != config_model.fresh_install_pkcs11_token_serial:
             config_model.fresh_install_pkcs11_token_serial = capabilities.token.serial
             update_fields.append('fresh_install_pkcs11_token_serial')
+
         if capabilities.token.slot_id != config_model.fresh_install_pkcs11_slot_id:
             config_model.fresh_install_pkcs11_slot_id = capabilities.token.slot_id
             update_fields.append('fresh_install_pkcs11_slot_id')
+
         if update_fields:
             config_model.save(update_fields=update_fields)
+
+    @classmethod
+    def _probe_pkcs11_config(cls, config_model: SetupWizardConfigModel, *, profile_name: str) -> None:
+        """Authenticate against the staged PKCS#11 backend and refresh discovered selector details."""
+        module_path, pin_file, update_fields = cls._apply_pkcs11_probe_fallbacks(config_model)
+        slot_id = config_model.fresh_install_pkcs11_slot_id
+        token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or None
+        token_serial = (config_model.fresh_install_pkcs11_token_serial or '').strip() or None
+
+        cls._validate_pkcs11_probe_inputs(
+            module_path=module_path,
+            pin_file=pin_file,
+            token_label=token_label,
+            slot_id=slot_id,
+        )
+        token_selector = Pkcs11TokenSelector(token_label=token_label, token_serial=token_serial, slot_id=slot_id)
+        profile = cls._build_pkcs11_probe_profile(
+            profile_name=profile_name,
+            module_path=module_path,
+            pin_file=pin_file,
+            token_selector=token_selector,
+        )
+        capabilities = cls._refresh_pkcs11_probe_capabilities(profile)
+        cls._persist_pkcs11_probe_capabilities(config_model, capabilities, update_fields)
 
     @staticmethod
     def _load_existing_backend_profile(backend_kind: BackendKind) -> CryptoProviderProfileModel | None:
@@ -1119,7 +1185,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         if existing_profile is not None:
             CryptoProviderProfileModel.objects.filter(active=True).exclude(pk=existing_profile.pk).update(active=False)
             existing_profile.active = True
-            existing_profile.save()
+            _save_untyped_model(existing_profile)
             return existing_profile
 
         CryptoProviderProfileModel.objects.filter(active=True).update(active=False)
@@ -1128,7 +1194,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             backend_kind=backend_kind,
             active=True,
         )
-        profile.save()
+        _save_untyped_model(profile)
         return profile
 
     @classmethod
@@ -1158,7 +1224,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             for field_name, value in defaults.items():
                 setattr(config, field_name, value)
         config.full_clean()
-        config.save()
+        _save_untyped_model(config)
 
     @staticmethod
     def _configure_software_app_secret_backend() -> None:
@@ -1172,12 +1238,12 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
         backend = AppSecretBackendModel.get_singleton()
         backend.backend_kind = AppSecretBackendKind.SOFTWARE
-        backend.save()
+        _save_untyped_model(backend)
 
         AppSecretPkcs11ConfigModel.objects.filter(backend=backend).delete()
         software_config, _ = AppSecretSoftwareConfigModel.objects.get_or_create(backend=backend)
         software_config.full_clean()
-        software_config.save()
+        _save_untyped_model(software_config)
 
         clear_app_secret_cache()
         get_app_secret_service().ensure_backend_ready()
@@ -1190,7 +1256,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
         backend = AppSecretBackendModel.get_singleton()
         backend.backend_kind = AppSecretBackendKind.PKCS11
-        backend.save()
+        _save_untyped_model(backend)
 
         AppSecretSoftwareConfigModel.objects.filter(backend=backend).delete()
         secret_config, created = AppSecretPkcs11ConfigModel.objects.get_or_create(
@@ -1224,7 +1290,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
                 secret_config.backup_encrypted_dek = None
 
         secret_config.full_clean()
-        secret_config.save()
+        _save_untyped_model(secret_config)
 
         clear_app_secret_cache()
         get_app_secret_service().ensure_backend_ready()
@@ -1244,23 +1310,27 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         }
         return error_messages.get(return_code, 'An unknown error occurred while installing PKCS#11 assets.')
 
-    @classmethod
-    def _install_staged_pkcs11_assets(cls, config_model: SetupWizardConfigModel) -> None:
-        """Install staged PKCS#11 assets into the protected HSM area through the wizard helper script."""
-        staged_module = existing_wizard_pkcs11_staged_file(config_model.fresh_install_pkcs11_module_path)
-        staged_pin = existing_wizard_pkcs11_staged_file(config_model.fresh_install_pkcs11_auth_source_ref)
-        staged_config = existing_wizard_pkcs11_staged_file(config_model.fresh_install_pkcs11_config_path)
+    @staticmethod
+    def _ensure_local_dev_pkcs11_module(config_model: SetupWizardConfigModel) -> Path:
+        """Use the local development PKCS#11 handoff module when available and needed."""
         local_dev_module = local_dev_pkcs11_module_path()
         configured_module_value = (config_model.fresh_install_pkcs11_module_path or '').strip()
         configured_module_exists = bool(configured_module_value and Path(configured_module_value).is_file())
+
         if (not configured_module_value or not configured_module_exists) and local_dev_pkcs11_handoff_available():
             config_model.fresh_install_pkcs11_module_path = str(local_dev_module)
-        configured_module_path = Path((config_model.fresh_install_pkcs11_module_path or '').strip())
 
-        if staged_module is None and staged_pin is None and staged_config is None:
-            return
+        return local_dev_module
 
-        uses_builtin_local_proxy = (
+    @staticmethod
+    def _uses_builtin_local_pkcs11_proxy(
+        *,
+        staged_pin: Path | None,
+        local_dev_module: Path,
+        configured_module_path: Path,
+    ) -> bool:
+        """Return whether the built-in local PKCS#11 proxy can be used."""
+        return (
             staged_pin is not None
             and local_dev_pkcs11_handoff_available()
             and local_dev_module.is_file()
@@ -1268,43 +1338,118 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             and configured_module_path.is_file()
         )
 
+    @staticmethod
+    def _discard_redundant_local_proxy_module(
+        staged_module: Path | None,
+        *,
+        uses_builtin_local_proxy: bool,
+    ) -> Path | None:
+        """Discard an uploaded module when the local proxy module is already available."""
         if uses_builtin_local_proxy and staged_module is not None:
             cleanup_wizard_pkcs11_staged_path(staged_module)
-            staged_module = None
+            return None
+        return staged_module
 
+    @staticmethod
+    def _validate_staged_pkcs11_assets(
+        *,
+        staged_module: Path | None,
+        staged_pin: Path | None,
+        uses_builtin_local_proxy: bool,
+    ) -> None:
+        """Validate the staged PKCS#11 assets before installing them."""
         if staged_pin is None:
             err_msg = 'The staged PKCS#11 setup files are incomplete. Enter the PIN again.'
             raise DjangoValidationError(err_msg)
+
         if staged_module is None and not uses_builtin_local_proxy:
             err_msg = 'The staged PKCS#11 setup files are incomplete. Upload the library and enter the PIN again.'
             raise DjangoValidationError(err_msg)
 
-        try:
-            if uses_builtin_local_proxy:
-                execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_pin))
-            elif staged_config is not None:
-                execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_module), str(staged_pin), str(staged_config))
-            else:
-                execute_shell_script(INSTALL_PKCS11_ASSETS, str(staged_module), str(staged_pin))
-        except subprocess.CalledProcessError as exc:
-            script_error_detail = (exc.stderr or exc.stdout or '').strip()
-            err_msg = cls._map_pkcs11_install_exit_code_to_message(exc.returncode)
-            if uses_builtin_local_proxy and exc.returncode == 1:
-                err_msg = (
-                    'The running Trustpoint container still appears to use the older PKCS#11 install helper. '
-                    'Rebuild and recreate the Trustpoint container, then try the setup wizard again.'
-                )
-            if script_error_detail:
-                logger.exception('PKCS#11 install script failed: %s', script_error_detail)
-            raise DjangoValidationError(err_msg) from exc
+    @staticmethod
+    def _build_pkcs11_install_args(
+        *,
+        staged_module: Path | None,
+        staged_pin: Path,
+        staged_config: Path | None,
+        uses_builtin_local_proxy: bool,
+    ) -> tuple[str, ...]:
+        """Build arguments for the PKCS#11 asset install helper."""
+        if uses_builtin_local_proxy:
+            return (str(staged_pin),)
 
+        if staged_module is None:
+            err_msg = 'The staged PKCS#11 setup files are incomplete. Upload the library and enter the PIN again.'
+            raise DjangoValidationError(err_msg)
+
+        if staged_config is not None:
+            return (str(staged_module), str(staged_pin), str(staged_config))
+
+        return (str(staged_module), str(staged_pin))
+
+    @classmethod
+    def _raise_pkcs11_install_script_error(
+        cls,
+        exc: subprocess.CalledProcessError,
+        *,
+        uses_builtin_local_proxy: bool,
+    ) -> None:
+        """Raise a user-facing validation error for a failed PKCS#11 install helper run."""
+        script_error_detail = (exc.stderr or exc.stdout or '').strip()
+        err_msg = cls._map_pkcs11_install_exit_code_to_message(exc.returncode)
+
+        if uses_builtin_local_proxy and exc.returncode == 1:
+            err_msg = (
+                'The running Trustpoint container still appears to use the older PKCS#11 install helper. '
+                'Rebuild and recreate the Trustpoint container, then try the setup wizard again.'
+            )
+
+        if script_error_detail:
+            logger.exception('PKCS#11 install script failed: %s', script_error_detail)
+
+        raise DjangoValidationError(err_msg) from exc
+
+    @classmethod
+    def _run_pkcs11_asset_install_script(
+        cls,
+        *,
+        staged_module: Path | None,
+        staged_pin: Path,
+        staged_config: Path | None,
+        uses_builtin_local_proxy: bool,
+    ) -> None:
+        """Run the PKCS#11 asset install helper script."""
+        install_args = cls._build_pkcs11_install_args(
+            staged_module=staged_module,
+            staged_pin=staged_pin,
+            staged_config=staged_config,
+            uses_builtin_local_proxy=uses_builtin_local_proxy,
+        )
+
+        try:
+            execute_shell_script(INSTALL_PKCS11_ASSETS, *install_args)
+        except subprocess.CalledProcessError as exc:
+            cls._raise_pkcs11_install_script_error(exc, uses_builtin_local_proxy=uses_builtin_local_proxy)
+
+    @staticmethod
+    def _persist_installed_pkcs11_assets(
+        *,
+        config_model: SetupWizardConfigModel,
+        staged_module: Path | None,
+        staged_pin: Path,
+        staged_config: Path | None,
+    ) -> None:
+        """Persist final PKCS#11 asset locations after successful installation."""
         cleanup_wizard_pkcs11_staged_path(staged_pin)
+
         if staged_module is not None:
             cleanup_wizard_pkcs11_staged_path(staged_module)
             config_model.fresh_install_pkcs11_module_path = str(FINAL_WIZARD_PKCS11_MODULE_PATH)
+
         if staged_config is not None:
             cleanup_wizard_pkcs11_staged_path(staged_config)
             config_model.fresh_install_pkcs11_config_path = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
+
         config_model.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
         config_model.fresh_install_pkcs11_auth_source_ref = str(FINAL_WIZARD_PKCS11_PIN_PATH)
         config_model.save(
@@ -1314,6 +1459,49 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
                 'fresh_install_pkcs11_auth_source_ref',
                 'fresh_install_pkcs11_config_path',
             ]
+        )
+
+    @classmethod
+    def _install_staged_pkcs11_assets(cls, config_model: SetupWizardConfigModel) -> None:
+        """Install staged PKCS#11 assets into the protected HSM area through the wizard helper script."""
+        staged_module = existing_wizard_pkcs11_staged_file(config_model.fresh_install_pkcs11_module_path)
+        staged_pin = existing_wizard_pkcs11_staged_file(config_model.fresh_install_pkcs11_auth_source_ref)
+        staged_config = existing_wizard_pkcs11_staged_file(config_model.fresh_install_pkcs11_config_path)
+
+        if staged_module is None and staged_pin is None and staged_config is None:
+            return
+
+        local_dev_module = cls._ensure_local_dev_pkcs11_module(config_model)
+        configured_module_path = Path((config_model.fresh_install_pkcs11_module_path or '').strip())
+        uses_builtin_local_proxy = cls._uses_builtin_local_pkcs11_proxy(
+            staged_pin=staged_pin,
+            local_dev_module=local_dev_module,
+            configured_module_path=configured_module_path,
+        )
+        staged_module = cls._discard_redundant_local_proxy_module(
+            staged_module,
+            uses_builtin_local_proxy=uses_builtin_local_proxy,
+        )
+
+        cls._validate_staged_pkcs11_assets(
+            staged_module=staged_module,
+            staged_pin=staged_pin,
+            uses_builtin_local_proxy=uses_builtin_local_proxy,
+        )
+        if staged_pin is None:
+            return
+
+        cls._run_pkcs11_asset_install_script(
+            staged_module=staged_module,
+            staged_pin=staged_pin,
+            staged_config=staged_config,
+            uses_builtin_local_proxy=uses_builtin_local_proxy,
+        )
+        cls._persist_installed_pkcs11_assets(
+            config_model=config_model,
+            staged_module=staged_module,
+            staged_pin=staged_pin,
+            staged_config=staged_config,
         )
 
     @classmethod
@@ -1411,68 +1599,127 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         err_msg = f'Unsupported crypto storage selection {config_model.crypto_storage!r}.'
         raise DjangoValidationError(err_msg)
 
-    def form_valid(self, form: FreshInstallSummaryModelForm) -> HttpResponse:
-        """Apply the first summary step actions before continuing the setup flow."""
-        if getattr(settings, 'TRUSTPOINT_IS_BOOTSTRAP', False):
-            try:
-                config_model = SetupWizardConfigModel.get_singleton()
-                result = None
-                if config_model.operational_config_applied:
-                    result = refresh_pending_operational_env(config_model)
-                    switch_result = run_operational_runtime_switch(result.pending_env_file)
-                else:
-                    if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-                        self._probe_pkcs11_config(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
-                    result = run_operational_handoff(config_model)
-                    config_model.mark_step_submitted(self.step_state)
-                    config_model.operational_config_applied = True
-                    config_model.save(update_fields=['fresh_install_summary_submitted', 'operational_config_applied'])
-                    switch_result = run_operational_runtime_switch(result.pending_env_file)
-            except DjangoValidationError as exception:
-                for error_message in exception.messages:
-                    form.add_error(None, error_message)
-                self.logger.exception('Error applying bootstrap configuration to operational runtime.')
-                return self.form_invalid(form)
+    @staticmethod
+    def _add_form_validation_errors(
+        form: FreshInstallSummaryModelForm,
+        exception: DjangoValidationError,
+    ) -> None:
+        """Attach validation error messages to the summary form."""
+        for error_message in exception.messages:
+            form.add_error(None, error_message)
 
-            if switch_result.switched:
-                return redirect('/users/login/', permanent=False)
+    def _handle_summary_validation_error(
+        self,
+        form: FreshInstallSummaryModelForm,
+        exception: DjangoValidationError,
+        *,
+        log_message: str,
+    ) -> HttpResponse:
+        """Handle validation errors raised while applying the summary step."""
+        self._add_form_validation_errors(form, exception)
+        self.logger.exception(log_message)
+        return self.form_invalid(form)
 
-            handoff_marker_message = ''
-            if result is not None:
-                handoff_marker_message = f'The handoff marker was written to {result.env_file}. '
-            messages.success(
-                self.request,
-                (
-                    'Operational configuration was applied successfully. '
-                    f'{handoff_marker_message}{switch_result.detail}'
-                ),
-            )
-            return redirect('setup_wizard:fresh_install_summary')
+    def _handle_summary_exception(
+        self,
+        form: FreshInstallSummaryModelForm,
+        exception: Exception,
+    ) -> HttpResponse:
+        """Handle non-validation errors raised while applying the summary step."""
+        error_message = str(exception) or 'Error applying fresh-install summary configuration.'
+        form.add_error(None, error_message)
+        self.logger.exception('Error applying fresh-install summary configuration.')
+        return self.form_invalid(form)
 
+    def _handle_tls_apply_error(
+        self,
+        form: FreshInstallSummaryModelForm,
+        exception: subprocess.CalledProcessError,
+    ) -> HttpResponse:
+        """Handle TLS apply script failures."""
+        error_message = self._map_tls_apply_exit_code_to_message(exception.returncode)
+        form.add_error(None, f'Error applying TLS Server Credential: {error_message}')
+        self.logger.exception('Error applying fresh-install TLS server credential.')
+        return self.form_invalid(form)
+
+    def _apply_bootstrap_summary_configuration(self) -> tuple[Any | None, Any]:
+        """Apply bootstrap configuration and attempt the runtime switch."""
+        config_model = SetupWizardConfigModel.get_singleton()
+
+        if config_model.operational_config_applied:
+            result = refresh_pending_operational_env(config_model)
+            switch_result = run_operational_runtime_switch(result.pending_env_file)
+            return result, switch_result
+
+        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            self._probe_pkcs11_config(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
+
+        result = run_operational_handoff(config_model)
+        config_model.mark_step_submitted(self.step_state)
+        config_model.operational_config_applied = True
+        config_model.save(update_fields=['fresh_install_summary_submitted', 'operational_config_applied'])
+        switch_result = run_operational_runtime_switch(result.pending_env_file)
+        return result, switch_result
+
+    def _handle_bootstrap_switch_result(self, result: Any | None, switch_result: Any) -> HttpResponse:
+        """Return the response for a completed bootstrap runtime switch attempt."""
+        if switch_result.switched:
+            return redirect('/users/login/', permanent=False)
+
+        handoff_marker_message = ''
+        if result is not None:
+            handoff_marker_message = f'The handoff marker was written to {result.env_file}. '
+
+        messages.success(
+            self.request,
+            (
+                'Operational configuration was applied successfully. '
+                f'{handoff_marker_message}{switch_result.detail}'
+            ),
+        )
+        return redirect('setup_wizard:fresh_install_summary')
+
+    def _handle_bootstrap_summary_submission(self, form: FreshInstallSummaryModelForm) -> HttpResponse:
+        """Apply the summary step while running in bootstrap mode."""
         try:
-            with transaction.atomic():
-                config_model = SetupWizardConfigModel.get_singleton()
-                if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-                    self._probe_pkcs11_config(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
-                self._configure_instance_crypto_backend(config_model)
-                self._configure_app_secret_backend(config_model)
-                call_command('create_default_cert_profiles')
-                if config_model.inject_demo_data:
-                    call_command('add_domains_and_devices')
-                call_command('execute_all_notifications')
-                self._apply_staged_tls_credential(config_model)
-                SetupWizardCompletedModel.mark_setup_complete_once()
-                return super().form_valid(form)
-        except subprocess.CalledProcessError as exception:
-            error_message = self._map_tls_apply_exit_code_to_message(exception.returncode)
-            form.add_error(None, f'Error applying TLS Server Credential: {error_message}')
-            self.logger.exception('Error applying fresh-install TLS server credential.')
-            return self.form_invalid(form)
+            result, switch_result = self._apply_bootstrap_summary_configuration()
         except DjangoValidationError as exception:
-            for error_message in exception.messages:
-                form.add_error(None, error_message)
-            self.logger.exception('Error applying fresh-install summary configuration.')
-            return self.form_invalid(form)
+            return self._handle_summary_validation_error(
+                form,
+                exception,
+                log_message='Error applying bootstrap configuration to operational runtime.',
+            )
+
+        return self._handle_bootstrap_switch_result(result, switch_result)
+
+    def _apply_direct_summary_configuration(self, form: FreshInstallSummaryModelForm) -> HttpResponse:
+        """Apply the summary step directly in the current runtime."""
+        with transaction.atomic():
+            config_model = SetupWizardConfigModel.get_singleton()
+            if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+                self._probe_pkcs11_config(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
+            self._configure_instance_crypto_backend(config_model)
+            self._configure_app_secret_backend(config_model)
+            call_command('create_default_cert_profiles')
+            if config_model.inject_demo_data:
+                call_command('add_domains_and_devices')
+            call_command('execute_all_notifications')
+            self._apply_staged_tls_credential()
+            SetupWizardCompletedModel.mark_setup_complete_once()
+            return super().form_valid(form)
+
+    def _handle_direct_summary_submission(self, form: FreshInstallSummaryModelForm) -> HttpResponse:
+        """Apply the summary step while running in the current runtime."""
+        try:
+            return self._apply_direct_summary_configuration(form)
+        except subprocess.CalledProcessError as exception:
+            return self._handle_tls_apply_error(form, exception)
+        except DjangoValidationError as exception:
+            return self._handle_summary_validation_error(
+                form,
+                exception,
+                log_message='Error applying fresh-install summary configuration.',
+            )
         except (
             CommandError,
             DatabaseError,
@@ -1483,10 +1730,14 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             TypeError,
             ValueError,
         ) as exception:
-            error_message = str(exception) or 'Error applying fresh-install summary configuration.'
-            form.add_error(None, error_message)
-            self.logger.exception('Error applying fresh-install summary configuration.')
-            return self.form_invalid(form)
+            return self._handle_summary_exception(form, exception)
+
+    def form_valid(self, form: FreshInstallSummaryModelForm) -> HttpResponse:
+        """Apply the first summary step actions before continuing the setup flow."""
+        if getattr(settings, 'TRUSTPOINT_IS_BOOTSTRAP', False):
+            return self._handle_bootstrap_summary_submission(form)
+
+        return self._handle_direct_summary_submission(form)
 
 
 class FreshInstallSummaryTruststoreDownloadView(LoginRequiredMixin, LoggerMixin, View):
@@ -1631,67 +1882,90 @@ class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
         ]
         return context
 
+    def _set_backup_password_from_form(self, form: BackupPasswordForm) -> PKCS11Token:
+        """Validate the submitted password and persist it on the token."""
+        password = form.cleaned_data.get('password')
+        token = PKCS11Token.objects.first()
+
+        if not token:
+            err_msg = 'No PKCS#11 token found. This should not happen in the backup password step.'
+            raise TrustpointWizardError(err_msg)
+
+        if not isinstance(password, str):
+            self.logger.error('Invalid password type provided in backup password step')
+            err_msg = 'Invalid password provided.'
+            raise TypeError(err_msg)
+
+        token.set_backup_password(password)
+        execute_shell_script(SCRIPT_WIZARD_BACKUP_PASSWORD)
+        return token
+
+    def _get_backup_password_redirect_error_message(self, exc: Exception) -> str | None:
+        """Return a redirect-level backup password error message, if applicable."""
+        if isinstance(exc, subprocess.CalledProcessError):
+            return f'Backup password script failed: {self._map_exit_code_to_message(exc.returncode)}'
+
+        if isinstance(exc, FileNotFoundError):
+            return 'Backup password script not found: '
+
+        if isinstance(exc, PKCS11Token.DoesNotExist):
+            return str(exc)
+
+        return None
+
+    @staticmethod
+    def _get_backup_password_form_error_message(exc: Exception) -> str:
+        """Return a form-level backup password error message."""
+        if isinstance(exc, TypeError):
+            return str(exc) or 'Invalid password provided.'
+
+        if isinstance(exc, ValueError):
+            return f'Invalid input: {exc!s}'
+
+        if isinstance(exc, RuntimeError):
+            return f'Failed to set backup password: {exc!s}'
+
+        return f'An unexpected error occurred: {exc!s}'
+
+    def _handle_backup_password_exception(self, form: BackupPasswordForm, exc: Exception) -> HttpResponse:
+        """Handle errors raised while setting the backup password."""
+        if isinstance(exc, TrustpointWizardError):
+            messages.add_message(self.request, messages.ERROR, str(exc))
+            self.logger.error('%s', exc)
+            return redirect('setup_wizard:demo_data', permanent=False)
+
+        redirect_error_message = self._get_backup_password_redirect_error_message(exc)
+        if redirect_error_message is not None:
+            messages.add_message(self.request, messages.ERROR, redirect_error_message)
+            self.logger.exception(redirect_error_message)
+            return redirect('setup_wizard:backup_password', permanent=False)
+
+        form_error_message = self._get_backup_password_form_error_message(exc)
+        messages.add_message(self.request, messages.ERROR, form_error_message)
+        self.logger.exception(form_error_message)
+        return self.form_invalid(form)
+
     def form_valid(
         self,
         form: BackupPasswordForm,
     ) -> HttpResponse:
         """Handle valid form submission."""
-        password = form.cleaned_data.get('password')
-
         try:
-            token = PKCS11Token.objects.first()
-            if not token:
-                messages.add_message(
-                    self.request,
-                    messages.ERROR,
-                    'No PKCS#11 token found. This should not happen in the backup password step.',
-                )
-                self.logger.error('No PKCS11Token found in backup password step')
-                return redirect('setup_wizard:demo_data', permanent=False)
+            token = self._set_backup_password_from_form(form)
+        except (
+            TrustpointWizardError,
+            subprocess.CalledProcessError,
+            FileNotFoundError,
+            PKCS11Token.DoesNotExist,
+            TypeError,
+            ValueError,
+            RuntimeError,
+        ) as exc:
+            return self._handle_backup_password_exception(form, exc)
 
-            if not isinstance(password, str):
-                messages.add_message(self.request, messages.ERROR, 'Invalid password provided.')
-                self.logger.error('Invalid password type provided in backup password step')
-                return self.form_invalid(form)
-
-            token.set_backup_password(password)
-            execute_shell_script(SCRIPT_WIZARD_BACKUP_PASSWORD)
-
-            messages.add_message(self.request, messages.SUCCESS, 'Backup password set successfully.')
-            self.logger.info('Backup password set for token: %s', token.label)
-            return super().form_valid(form)
-
-        except subprocess.CalledProcessError as exc:
-            err_msg = f'Backup password script failed: {self._map_exit_code_to_message(exc.returncode)}'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('setup_wizard:backup_password', permanent=False)
-        except FileNotFoundError:
-            err_msg = 'Backup password script not found: '
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('setup_wizard:backup_password', permanent=False)
-        except PKCS11Token.DoesNotExist as exc:
-            err_msg = str(exc)
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('setup_wizard:backup_password', permanent=False)
-        except ValueError as exc:
-            err_msg = f'Invalid input: {exc!s}'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return self.form_invalid(form)
-        except RuntimeError as exc:
-            err_msg = f'Failed to set backup password: {exc!s}'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return self.form_invalid(form)
-        except Exception as exc:
-            # General exception handling with specific messages
-            err_msg = f'An unexpected error occurred: {exc!s}'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return self.form_invalid(form)
+        messages.add_message(self.request, messages.SUCCESS, 'Backup password set successfully.')
+        self.logger.info('Backup password set for token: %s', token.label)
+        return super().form_valid(form)
 
     def form_invalid(self, form: BackupPasswordForm) -> HttpResponse:
         """Handle invalid form submission."""

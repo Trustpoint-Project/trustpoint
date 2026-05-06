@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from cryptography.hazmat.primitives import serialization
 from django.db import transaction
@@ -55,6 +55,25 @@ class ProbeRefreshResult:
     changed: bool
 
 
+def _save_untyped_model(instance: Any, *, update_fields: list[str] | None = None) -> None:
+    """Save a Django model whose save method is not typed for mypy."""
+    if update_fields is None:
+        instance.save()
+        return
+
+    instance.save(update_fields=update_fields)
+
+
+def _optional_db_text(value: str | None) -> str:
+    """Normalize optional string values for Django string fields."""
+    return value or ''
+
+
+def _optional_domain_text(value: str) -> str | None:
+    """Restore optional domain string values from Django string fields."""
+    return value or None
+
+
 class CryptoProviderProfileRepository:
     """Persistence helpers for provider profiles and capability snapshots."""
 
@@ -89,7 +108,7 @@ class CryptoProviderProfileRepository:
             profile=profile,
             status=ProbeStatus.SUCCESS,
             probe_hash=probe_hash,
-            error_summary=None,
+            error_summary='',
         )
 
         if profile.backend_kind == BackendKind.PKCS11:
@@ -98,10 +117,10 @@ class CryptoProviderProfileRepository:
                 raise InternalConsistencyError(msg)
             CryptoProviderCapabilityPkcs11DetailModel.objects.create(
                 snapshot=snapshot,
-                token_label=capabilities.token.label,
-                token_serial=capabilities.token.serial,
-                token_model=capabilities.token.model,
-                token_manufacturer=capabilities.token.manufacturer,
+                token_label=_optional_db_text(capabilities.token.label),
+                token_serial=_optional_db_text(capabilities.token.serial),
+                token_model=_optional_db_text(capabilities.token.model),
+                token_manufacturer=_optional_db_text(capabilities.token.manufacturer),
                 slot_id=capabilities.token.slot_id,
                 snapshot_payload=capabilities.to_json_dict(),
             )
@@ -131,15 +150,16 @@ class CryptoProviderProfileRepository:
         profile.current_capability_snapshot = snapshot
         profile.last_probe_status = ProbeStatus.SUCCESS
         profile.last_probe_at = timezone.now()
-        profile.last_probe_error = None
-        profile.save(
+        profile.last_probe_error = ''
+        _save_untyped_model(
+            profile,
             update_fields=[
                 'current_capability_snapshot',
                 'last_probe_status',
                 'last_probe_at',
                 'last_probe_error',
                 'updated_at',
-            ]
+            ],
         )
 
         return ProbeRefreshResult(
@@ -168,14 +188,15 @@ class CryptoProviderProfileRepository:
         profile.last_probe_status = ProbeStatus.FAILURE
         profile.last_probe_at = timezone.now()
         profile.last_probe_error = error_summary
-        profile.save(
+        _save_untyped_model(
+            profile,
             update_fields=[
                 'current_capability_snapshot',
                 'last_probe_status',
                 'last_probe_at',
                 'last_probe_error',
                 'updated_at',
-            ]
+            ],
         )
         return snapshot
 
@@ -221,7 +242,7 @@ class CryptoManagedKeyRepository:
         )
 
     @transaction.atomic
-    def create_managed_key(
+    def create_managed_key(  # noqa: PLR0913
         self,
         *,
         profile: CryptoProviderProfileModel,
@@ -242,7 +263,7 @@ class CryptoManagedKeyRepository:
 
         managed_key = CryptoManagedKeyModel(
             alias=alias,
-            provider_label=provider_label,
+            provider_label=_optional_db_text(provider_label),
             provider_profile=profile,
             algorithm=binding.algorithm.value,
             public_key_fingerprint_sha256=public_key_fingerprint,
@@ -250,10 +271,10 @@ class CryptoManagedKeyRepository:
             policy_snapshot=self.policy_snapshot(policy),
             status=ManagedKeyStatus.ACTIVE,
             last_verified_at=timezone.now(),
-            last_verification_error=None,
+            last_verification_error='',
         )
         managed_key.full_clean()
-        managed_key.save()
+        _save_untyped_model(managed_key)
 
         self._persist_backend_binding(profile=profile, managed_key=managed_key, binding=binding)
         return managed_key
@@ -267,8 +288,11 @@ class CryptoManagedKeyRepository:
         """Mark a managed key as successfully verified against the provider."""
         managed_key.status = ManagedKeyStatus.ACTIVE
         managed_key.last_verified_at = timezone.now()
-        managed_key.last_verification_error = None
-        managed_key.save(update_fields=['status', 'last_verified_at', 'last_verification_error', 'updated_at'])
+        managed_key.last_verification_error = ''
+        _save_untyped_model(
+            managed_key,
+            update_fields=['status', 'last_verified_at', 'last_verification_error', 'updated_at'],
+        )
         return managed_key
 
     @transaction.atomic
@@ -282,7 +306,10 @@ class CryptoManagedKeyRepository:
         managed_key.status = ManagedKeyStatus.MISSING
         managed_key.last_verified_at = timezone.now()
         managed_key.last_verification_error = error_summary
-        managed_key.save(update_fields=['status', 'last_verified_at', 'last_verification_error', 'updated_at'])
+        _save_untyped_model(
+            managed_key,
+            update_fields=['status', 'last_verified_at', 'last_verification_error', 'updated_at'],
+        )
         return managed_key
 
     @transaction.atomic
@@ -296,7 +323,10 @@ class CryptoManagedKeyRepository:
         managed_key.status = ManagedKeyStatus.MISMATCH
         managed_key.last_verified_at = timezone.now()
         managed_key.last_verification_error = error_summary
-        managed_key.save(update_fields=['status', 'last_verified_at', 'last_verification_error', 'updated_at'])
+        _save_untyped_model(
+            managed_key,
+            update_fields=['status', 'last_verified_at', 'last_verification_error', 'updated_at'],
+        )
         return managed_key
 
     @transaction.atomic
@@ -310,7 +340,10 @@ class CryptoManagedKeyRepository:
         managed_key.status = ManagedKeyStatus.ERROR
         managed_key.last_verified_at = timezone.now()
         managed_key.last_verification_error = error_summary
-        managed_key.save(update_fields=['status', 'last_verified_at', 'last_verification_error', 'updated_at'])
+        _save_untyped_model(
+            managed_key,
+            update_fields=['status', 'last_verified_at', 'last_verification_error', 'updated_at'],
+        )
         return managed_key
 
     @staticmethod
@@ -325,36 +358,36 @@ class CryptoManagedKeyRepository:
         signing_execution_mode = SigningExecutionMode(managed_key.signing_execution_mode)
 
         if managed_key.provider_profile.backend_kind == BackendKind.PKCS11:
-            binding = managed_key.pkcs11_binding
+            pkcs11_binding = managed_key.pkcs11_binding
             return Pkcs11ManagedKeyBinding(
-                key_id=bytes.fromhex(binding.key_id_hex),
+                key_id=bytes.fromhex(pkcs11_binding.key_id_hex),
                 algorithm=algorithm,
                 public_key_fingerprint_sha256=managed_key.public_key_fingerprint_sha256,
                 signing_execution_mode=signing_execution_mode,
-                provider_label=managed_key.provider_label,
+                provider_label=_optional_domain_text(managed_key.provider_label),
             )
 
         if managed_key.provider_profile.backend_kind == BackendKind.SOFTWARE:
-            binding = managed_key.software_binding
+            software_binding = managed_key.software_binding
             return SoftwareManagedKeyBinding(
-                key_handle=binding.key_handle,
+                key_handle=software_binding.key_handle,
                 algorithm=algorithm,
-                encrypted_private_key_pkcs8_der=bytes(binding.encrypted_private_key_pkcs8_der),
-                encryption_metadata=binding.encryption_metadata,
+                encrypted_private_key_pkcs8_der=bytes(software_binding.encrypted_private_key_pkcs8_der),
+                encryption_metadata=software_binding.encryption_metadata,
                 public_key_fingerprint_sha256=managed_key.public_key_fingerprint_sha256,
                 signing_execution_mode=signing_execution_mode,
-                provider_label=managed_key.provider_label,
+                provider_label=_optional_domain_text(managed_key.provider_label),
             )
 
         if managed_key.provider_profile.backend_kind == BackendKind.REST:
-            binding = managed_key.rest_binding
+            rest_binding = managed_key.rest_binding
             return RestManagedKeyBinding(
-                remote_key_id=binding.remote_key_id,
+                remote_key_id=rest_binding.remote_key_id,
                 algorithm=algorithm,
-                remote_key_version=binding.remote_key_version,
+                remote_key_version=_optional_domain_text(rest_binding.remote_key_version),
                 public_key_fingerprint_sha256=managed_key.public_key_fingerprint_sha256,
                 signing_execution_mode=signing_execution_mode,
-                provider_label=managed_key.provider_label,
+                provider_label=_optional_domain_text(managed_key.provider_label),
             )
 
         msg = f'Unsupported backend kind {managed_key.provider_profile.backend_kind!r}.'
@@ -407,36 +440,36 @@ class CryptoManagedKeyRepository:
     ) -> None:
         """Persist the backend-specific binding record."""
         if profile.backend_kind == BackendKind.PKCS11 and isinstance(binding, Pkcs11ManagedKeyBinding):
-            model = CryptoManagedKeyPkcs11BindingModel(
+            pkcs11_model = CryptoManagedKeyPkcs11BindingModel(
                 managed_key=managed_key,
                 provider_profile=profile,
                 key_id_hex=binding.key_id_hex,
             )
-            model.full_clean()
-            model.save()
+            pkcs11_model.full_clean()
+            _save_untyped_model(pkcs11_model)
             return
 
         if profile.backend_kind == BackendKind.SOFTWARE and isinstance(binding, SoftwareManagedKeyBinding):
-            model = CryptoManagedKeySoftwareBindingModel(
+            software_model = CryptoManagedKeySoftwareBindingModel(
                 managed_key=managed_key,
                 provider_profile=profile,
                 key_handle=binding.key_handle,
                 encrypted_private_key_pkcs8_der=binding.encrypted_private_key_pkcs8_der,
                 encryption_metadata=binding.encryption_metadata,
             )
-            model.full_clean()
-            model.save()
+            software_model.full_clean()
+            _save_untyped_model(software_model)
             return
 
         if profile.backend_kind == BackendKind.REST and isinstance(binding, RestManagedKeyBinding):
-            model = CryptoManagedKeyRestBindingModel(
+            rest_model = CryptoManagedKeyRestBindingModel(
                 managed_key=managed_key,
                 provider_profile=profile,
                 remote_key_id=binding.remote_key_id,
-                remote_key_version=binding.remote_key_version,
+                remote_key_version=_optional_db_text(binding.remote_key_version),
             )
-            model.full_clean()
-            model.save()
+            rest_model.full_clean()
+            _save_untyped_model(rest_model)
             return
 
         msg = (

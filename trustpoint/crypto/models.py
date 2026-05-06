@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any, ClassVar
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -14,6 +15,8 @@ from crypto.adapters.software.config import SoftwareProviderProfile
 from crypto.domain.algorithms import KeyAlgorithm
 from crypto.domain.policies import SigningExecutionMode
 from crypto.domain.refs import ManagedKeyRef
+
+SHA256_HEX_LENGTH = 64
 
 
 class BackendKind(models.TextChoices):
@@ -78,7 +81,7 @@ class CryptoProviderProfileModel(models.Model):
         default=ProbeStatus.NEVER,
     )
     last_probe_at = models.DateTimeField(null=True, blank=True)
-    last_probe_error = models.TextField(null=True, blank=True)
+    last_probe_error = models.TextField(blank=True, default='')
 
     current_capability_snapshot = models.ForeignKey(
         'CryptoProviderCapabilitySnapshotModel',
@@ -92,19 +95,30 @@ class CryptoProviderProfileModel(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        """Database options for provider profiles."""
+
         db_table = 'crypto_provider_profile'
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['active']),
             models.Index(fields=['backend_kind']),
             models.Index(fields=['name']),
         ]
-        constraints = [
+        constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=['active'],
                 condition=models.Q(active=True),
                 name='crypto_single_active_provider_profile',
             ),
         ]
+
+    def __str__(self) -> str:
+        """Return the provider profile name."""
+        return self.name
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Persist the profile after enforcing single-backend validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def clean(self) -> None:
         """Validate the generic provider profile shape."""
@@ -128,14 +142,6 @@ class CryptoProviderProfileModel(models.Model):
                 }
             )
 
-    def __str__(self) -> str:
-        return self.name
-
-    def save(self, *args, **kwargs):
-        """Persist the profile after enforcing single-backend validation."""
-        self.full_clean()
-        return super().save(*args, **kwargs)
-
 
 class CryptoProviderPkcs11ConfigModel(models.Model):
     """PKCS#11-specific provider configuration."""
@@ -148,8 +154,8 @@ class CryptoProviderPkcs11ConfigModel(models.Model):
     )
 
     module_path = models.TextField()
-    token_label = models.CharField(max_length=128, null=True, blank=True)
-    token_serial = models.CharField(max_length=128, null=True, blank=True)
+    token_label = models.CharField(max_length=128, blank=True, default='')
+    token_serial = models.CharField(max_length=128, blank=True, default='')
     slot_id = models.PositiveIntegerField(null=True, blank=True)
 
     auth_source = models.CharField(max_length=16, choices=Pkcs11AuthSource.choices)
@@ -162,11 +168,17 @@ class CryptoProviderPkcs11ConfigModel(models.Model):
     rw_sessions = models.BooleanField(default=True)
 
     class Meta:
+        """Database options for PKCS#11 provider configs."""
+
         db_table = 'crypto_provider_pkcs11_config'
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['token_serial']),
             models.Index(fields=['token_label']),
         ]
+
+    def __str__(self) -> str:
+        """Return a readable PKCS#11 provider config label."""
+        return f'{self.profile.name} PKCS#11 config'
 
     def clean(self) -> None:
         """Validate the PKCS#11 config shape."""
@@ -233,14 +245,20 @@ class CryptoProviderSoftwareConfigModel(models.Model):
         default=SoftwareKeyEncryptionSource.ENV,
     )
     encryption_source_ref = models.TextField(
-        null=True,
         blank=True,
+        default='',
         help_text='Environment variable name or file path containing the encryption secret.',
     )
     allow_exportable_private_keys = models.BooleanField(default=False)
 
     class Meta:
+        """Database options for software provider configs."""
+
         db_table = 'crypto_provider_software_config'
+
+    def __str__(self) -> str:
+        """Return a readable software provider config label."""
+        return f'{self.profile.name} software config'
 
     def clean(self) -> None:
         """Validate the software backend config shape."""
@@ -249,7 +267,7 @@ class CryptoProviderSoftwareConfigModel(models.Model):
         if self.encryption_source in {
             SoftwareKeyEncryptionSource.ENV,
             SoftwareKeyEncryptionSource.FILE,
-        } and not (self.encryption_source_ref or '').strip():
+        } and not self.encryption_source_ref.strip():
             raise ValidationError(
                 {'encryption_source_ref': 'encryption_source_ref is required for env and file encryption sources.'}
             )
@@ -276,12 +294,18 @@ class CryptoProviderRestConfigModel(models.Model):
 
     base_url = models.URLField()
     auth_type = models.CharField(max_length=24, choices=RestAuthType.choices)
-    auth_ref = models.TextField(null=True, blank=True)
+    auth_ref = models.TextField(blank=True, default='')
     timeout_seconds = models.FloatField(default=5.0)
     verify_tls = models.BooleanField(default=True)
 
     class Meta:
+        """Database options for REST provider configs."""
+
         db_table = 'crypto_provider_rest_config'
+
+    def __str__(self) -> str:
+        """Return a readable REST provider config label."""
+        return f'{self.profile.name} REST config'
 
     def clean(self) -> None:
         """Validate the REST backend config shape."""
@@ -290,9 +314,11 @@ class CryptoProviderRestConfigModel(models.Model):
         if self.timeout_seconds <= 0:
             raise ValidationError({'timeout_seconds': 'timeout_seconds must be greater than zero.'})
 
-        if self.auth_type in {RestAuthType.BEARER_ENV, RestAuthType.API_KEY_ENV, RestAuthType.MTLS}:
-            if not (self.auth_ref or '').strip():
-                raise ValidationError({'auth_ref': 'auth_ref is required for the selected auth_type.'})
+        if (
+            self.auth_type in {RestAuthType.BEARER_ENV, RestAuthType.API_KEY_ENV, RestAuthType.MTLS}
+            and not self.auth_ref.strip()
+        ):
+            raise ValidationError({'auth_ref': 'auth_ref is required for the selected auth_type.'})
 
     def build_provider_profile(self) -> RestProviderProfile:
         """Convert the Django model into the adapter-level REST provider profile."""
@@ -318,8 +344,8 @@ class CryptoManagedKeyModel(models.Model):
     )
     provider_label = models.CharField(
         max_length=255,
-        null=True,
         blank=True,
+        default='',
         help_text='Optional provider-side diagnostic label.',
     )
 
@@ -331,7 +357,7 @@ class CryptoManagedKeyModel(models.Model):
 
     algorithm = models.CharField(max_length=16)
     public_key_fingerprint_sha256 = models.CharField(
-        max_length=64,
+        max_length=SHA256_HEX_LENGTH,
         help_text='SHA-256 fingerprint of SubjectPublicKeyInfo DER, hex encoded.',
     )
     signing_execution_mode = models.CharField(
@@ -352,15 +378,21 @@ class CryptoManagedKeyModel(models.Model):
     )
     created_at = models.DateTimeField(default=timezone.now, editable=False)
     last_verified_at = models.DateTimeField(null=True, blank=True)
-    last_verification_error = models.TextField(null=True, blank=True)
+    last_verification_error = models.TextField(blank=True, default='')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        """Database options for managed keys."""
+
         db_table = 'crypto_managed_key'
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['provider_profile', 'status']),
             models.Index(fields=['alias']),
         ]
+
+    def __str__(self) -> str:
+        """Return the managed-key alias."""
+        return self.alias
 
     def clean(self) -> None:
         """Validate the managed-key record shape."""
@@ -377,7 +409,7 @@ class CryptoManagedKeyModel(models.Model):
                 {'signing_execution_mode': f'Unsupported signing execution mode {self.signing_execution_mode!r}.'}
             )
 
-        if len(self.public_key_fingerprint_sha256) != 64:
+        if len(self.public_key_fingerprint_sha256) != SHA256_HEX_LENGTH:
             raise ValidationError(
                 {'public_key_fingerprint_sha256': 'Public-key SHA-256 fingerprint must be 64 hex characters.'}
             )
@@ -397,9 +429,6 @@ class CryptoManagedKeyModel(models.Model):
             public_key_fingerprint_sha256=self.public_key_fingerprint_sha256,
             signing_execution_mode=SigningExecutionMode(self.signing_execution_mode),
         )
-
-    def __str__(self) -> str:
-        return self.alias
 
 
 class CryptoManagedKeyPkcs11BindingModel(models.Model):
@@ -422,23 +451,31 @@ class CryptoManagedKeyPkcs11BindingModel(models.Model):
     )
 
     class Meta:
+        """Database options for PKCS#11 managed-key bindings."""
+
         db_table = 'crypto_managed_key_pkcs11_binding'
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['provider_profile', 'key_id_hex']),
         ]
-        constraints = [
+        constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=['provider_profile', 'key_id_hex'],
                 name='crypto_pkcs11_binding_unique_profile_key_id',
             ),
         ]
 
+    def __str__(self) -> str:
+        """Return a readable PKCS#11 managed-key binding label."""
+        return f'{self.managed_key.alias} PKCS#11 binding'
+
     def clean(self) -> None:
         """Validate the PKCS#11 binding shape."""
         if self.provider_profile.backend_kind != BackendKind.PKCS11:
             raise ValidationError({'provider_profile': 'PKCS#11 binding requires a pkcs11 provider profile.'})
         if self.managed_key.provider_profile_id != self.provider_profile_id:
-            raise ValidationError({'provider_profile': 'Binding provider_profile must match managed_key.provider_profile.'})
+            raise ValidationError(
+                {'provider_profile': 'Binding provider_profile must match managed_key.provider_profile.'}
+            )
         if not self.key_id_hex.strip():
             raise ValidationError({'key_id_hex': 'Managed key CKA_ID hex must not be empty.'})
         try:
@@ -466,23 +503,31 @@ class CryptoManagedKeySoftwareBindingModel(models.Model):
     encryption_metadata = models.JSONField(default=dict)
 
     class Meta:
+        """Database options for software managed-key bindings."""
+
         db_table = 'crypto_managed_key_software_binding'
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['provider_profile', 'key_handle']),
         ]
-        constraints = [
+        constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=['provider_profile', 'key_handle'],
                 name='crypto_software_binding_unique_profile_key_handle',
             ),
         ]
 
+    def __str__(self) -> str:
+        """Return a readable software managed-key binding label."""
+        return f'{self.managed_key.alias} software binding'
+
     def clean(self) -> None:
         """Validate the software binding shape."""
         if self.provider_profile.backend_kind != BackendKind.SOFTWARE:
             raise ValidationError({'provider_profile': 'Software binding requires a software provider profile.'})
         if self.managed_key.provider_profile_id != self.provider_profile_id:
-            raise ValidationError({'provider_profile': 'Binding provider_profile must match managed_key.provider_profile.'})
+            raise ValidationError(
+                {'provider_profile': 'Binding provider_profile must match managed_key.provider_profile.'}
+            )
         if not self.key_handle.strip():
             raise ValidationError({'key_handle': 'Software key_handle must not be empty.'})
         if not self.encrypted_private_key_pkcs8_der:
@@ -506,26 +551,34 @@ class CryptoManagedKeyRestBindingModel(models.Model):
         related_name='rest_key_bindings',
     )
     remote_key_id = models.CharField(max_length=255)
-    remote_key_version = models.CharField(max_length=128, null=True, blank=True)
+    remote_key_version = models.CharField(max_length=128, blank=True, default='')
 
     class Meta:
+        """Database options for REST managed-key bindings."""
+
         db_table = 'crypto_managed_key_rest_binding'
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['provider_profile', 'remote_key_id']),
         ]
-        constraints = [
+        constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 fields=['provider_profile', 'remote_key_id', 'remote_key_version'],
                 name='crypto_rest_binding_unique_remote_key',
             ),
         ]
 
+    def __str__(self) -> str:
+        """Return a readable REST managed-key binding label."""
+        return f'{self.managed_key.alias} REST binding'
+
     def clean(self) -> None:
         """Validate the REST binding shape."""
         if self.provider_profile.backend_kind != BackendKind.REST:
             raise ValidationError({'provider_profile': 'REST binding requires a rest provider profile.'})
         if self.managed_key.provider_profile_id != self.provider_profile_id:
-            raise ValidationError({'provider_profile': 'Binding provider_profile must match managed_key.provider_profile.'})
+            raise ValidationError(
+                {'provider_profile': 'Binding provider_profile must match managed_key.provider_profile.'}
+            )
         if not self.remote_key_id.strip():
             raise ValidationError({'remote_key_id': 'REST remote_key_id must not be empty.'})
 
@@ -540,18 +593,21 @@ class CryptoProviderCapabilitySnapshotModel(models.Model):
     )
     status = models.CharField(max_length=16, choices=ProbeStatus.choices)
     probed_at = models.DateTimeField(default=timezone.now, editable=False)
-    probe_hash = models.CharField(max_length=64, db_index=True)
-    error_summary = models.TextField(null=True, blank=True)
+    probe_hash = models.CharField(max_length=SHA256_HEX_LENGTH, db_index=True)
+    error_summary = models.TextField(blank=True, default='')
 
     class Meta:
+        """Database options for capability snapshots."""
+
         db_table = 'crypto_provider_capability_snapshot'
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['profile', 'probed_at']),
             models.Index(fields=['profile', 'status']),
         ]
-        ordering = ['-probed_at', '-id']
+        ordering: ClassVar[list[str]] = ['-probed_at', '-id']
 
     def __str__(self) -> str:
+        """Return a readable capability snapshot label."""
         return f'{self.profile.name} @ {self.probed_at.isoformat()} [{self.status}]'
 
 
@@ -564,18 +620,24 @@ class CryptoProviderCapabilityPkcs11DetailModel(models.Model):
         on_delete=models.CASCADE,
         related_name='pkcs11_detail',
     )
-    token_label = models.CharField(max_length=128, null=True, blank=True)
-    token_serial = models.CharField(max_length=128, null=True, blank=True)
-    token_model = models.CharField(max_length=128, null=True, blank=True)
-    token_manufacturer = models.CharField(max_length=128, null=True, blank=True)
+    token_label = models.CharField(max_length=128, blank=True, default='')
+    token_serial = models.CharField(max_length=128, blank=True, default='')
+    token_model = models.CharField(max_length=128, blank=True, default='')
+    token_manufacturer = models.CharField(max_length=128, blank=True, default='')
     slot_id = models.PositiveIntegerField(null=True, blank=True)
     snapshot_payload = models.JSONField(default=dict)
 
     class Meta:
+        """Database options for PKCS#11 capability details."""
+
         db_table = 'crypto_provider_capability_pkcs11_detail'
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=['token_serial']),
         ]
+
+    def __str__(self) -> str:
+        """Return a readable PKCS#11 capability detail label."""
+        return f'{self.snapshot} PKCS#11 detail'
 
     def clean(self) -> None:
         """Validate the PKCS#11 detail shape."""
@@ -595,7 +657,13 @@ class CryptoProviderCapabilitySoftwareDetailModel(models.Model):
     snapshot_payload = models.JSONField(default=dict)
 
     class Meta:
+        """Database options for software capability details."""
+
         db_table = 'crypto_provider_capability_software_detail'
+
+    def __str__(self) -> str:
+        """Return a readable software capability detail label."""
+        return f'{self.snapshot} software detail'
 
     def clean(self) -> None:
         """Validate the software capability detail shape."""
@@ -615,7 +683,13 @@ class CryptoProviderCapabilityRestDetailModel(models.Model):
     snapshot_payload = models.JSONField(default=dict)
 
     class Meta:
+        """Database options for REST capability details."""
+
         db_table = 'crypto_provider_capability_rest_detail'
+
+    def __str__(self) -> str:
+        """Return a readable REST capability detail label."""
+        return f'{self.snapshot} REST detail'
 
     def clean(self) -> None:
         """Validate the REST capability detail shape."""

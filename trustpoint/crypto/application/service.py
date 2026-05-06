@@ -2,14 +2,20 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import DatabaseError
+
+from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
+from crypto.adapters.rest.bindings import RestManagedKeyBinding
+from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
 from crypto.application.backend_factory import BackendAdapterFactory, DefaultBackendAdapterFactory
 from crypto.application.capabilities import BackendCapabilityService
 from crypto.domain.errors import CryptoError, KeyNotFoundError, ProviderConfigurationError, UnsupportedKeySpecError
 from crypto.domain.refs import ManagedKeyRef, ManagedKeyVerification, ManagedKeyVerificationStatus
 from crypto.models import CryptoManagedKeyModel, CryptoProviderProfileModel
-from crypto.repositories import CryptoManagedKeyRepository, CryptoProviderProfileRepository
+from crypto.repositories import CryptoManagedKeyRepository, CryptoProviderProfileRepository, ManagedKeyBinding
 from trustpoint.logger import LoggerMixin
 
 if TYPE_CHECKING:
@@ -32,9 +38,13 @@ class TrustpointCryptoBackend(LoggerMixin):
         adapter_factory: BackendAdapterFactory | None = None,
     ) -> None:
         """Initialize the application-facing crypto backend."""
-        self._profile_repository = profile_repository or CryptoProviderProfileRepository()
-        self._managed_key_repository = managed_key_repository or CryptoManagedKeyRepository()
-        self._adapter_factory = adapter_factory or DefaultBackendAdapterFactory()
+        self._profile_repository: CryptoProviderProfileRepository = (
+            profile_repository or CryptoProviderProfileRepository()
+        )
+        self._managed_key_repository: CryptoManagedKeyRepository = (
+            managed_key_repository or CryptoManagedKeyRepository()
+        )
+        self._adapter_factory: BackendAdapterFactory = adapter_factory or DefaultBackendAdapterFactory()
 
     def verify_provider(self) -> None:
         """Validate that the configured instance backend can be loaded and used."""
@@ -58,9 +68,11 @@ class TrustpointCryptoBackend(LoggerMixin):
             raise UnsupportedKeySpecError(msg)
 
         adapter = self._build_adapter(profile)
+        binding: ManagedKeyBinding | None = None
 
         try:
-            binding = adapter.generate_managed_key(alias=alias, key_spec=key_spec, policy=policy)
+            raw_binding = adapter.generate_managed_key(alias=alias, key_spec=key_spec, policy=policy)
+            binding = self._managed_key_binding_or_error(raw_binding)
             public_key = adapter.get_public_key(binding)
             managed_key = self._managed_key_repository.create_managed_key(
                 profile=profile,
@@ -70,8 +82,8 @@ class TrustpointCryptoBackend(LoggerMixin):
                 public_key=public_key,
                 policy=policy,
             )
-        except Exception:
-            if 'binding' in locals():
+        except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError):
+            if binding is not None:
                 self._cleanup_orphaned_binding(adapter=adapter, alias=alias, binding=binding)
             raise
         finally:
@@ -153,14 +165,23 @@ class TrustpointCryptoBackend(LoggerMixin):
 
     def _build_adapter(self, profile_model: CryptoProviderProfileModel) -> ManagedKeyBackendAdapter:
         """Build a backend-kind-specific adapter for a persisted provider profile."""
-        return self._adapter_factory.build(profile_model)
+        return cast('ManagedKeyBackendAdapter', self._adapter_factory.build(profile_model))
+
+    @staticmethod
+    def _managed_key_binding_or_error(binding: object) -> ManagedKeyBinding:
+        """Return a concrete managed-key binding or raise a configuration error."""
+        if isinstance(binding, (Pkcs11ManagedKeyBinding, SoftwareManagedKeyBinding, RestManagedKeyBinding)):
+            return binding
+
+        msg = f'Backend adapter returned unsupported managed-key binding type {type(binding).__name__}.'
+        raise ProviderConfigurationError(msg)
 
     def _cleanup_orphaned_binding(
         self,
         *,
         adapter: ManagedKeyBackendAdapter,
         alias: str,
-        binding: object,
+        binding: ManagedKeyBinding,
     ) -> None:
         """Best-effort cleanup of a generated key if DB persistence fails."""
         try:

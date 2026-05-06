@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol, cast
 
-from cryptography.hazmat.primitives.asymmetric import ec
-from pkcs11 import Mechanism  # type: ignore[import-untyped]
+from pkcs11 import Mechanism
 
 from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
 from crypto.adapters.rest.capabilities import RestCapabilities
@@ -17,6 +16,8 @@ from crypto.models import BackendKind, CryptoProviderProfileModel
 from crypto.repositories import CryptoProviderProfileRepository
 
 if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric import ec
+
     from crypto.domain.specs import KeySpec
     from crypto.repositories import ProviderCapabilities
 
@@ -27,6 +28,16 @@ SOFTWARE_EC_CURVES = (
     EllipticCurveName.SECP384R1,
     EllipticCurveName.SECP521R1,
 )
+
+
+class CapabilityRefreshingBackendAdapter(Protocol):
+    """Backend adapter subset required for live capability refreshes."""
+
+    def refresh_capabilities(self) -> ProviderCapabilities:
+        """Refresh and return provider capabilities."""
+
+    def close(self) -> None:
+        """Release backend resources."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,7 +142,7 @@ class BackendCapabilityService:
     def refresh_and_record_active_report(self) -> BackendCapabilityReport:
         """Probe the active backend live, persist the snapshot, and return the normalized report."""
         profile = self._profile_repository.get_configured_profile()
-        backend = self._adapter_factory.build(profile)
+        backend = self._build_refreshing_backend(profile)
         try:
             capabilities = backend.refresh_capabilities()
             self._profile_repository.record_probe_success(profile=profile, capabilities=capabilities)
@@ -151,7 +162,7 @@ class BackendCapabilityService:
     ) -> ProviderCapabilities | None:
         """Load persisted capabilities, or explicitly refresh them when requested."""
         if refresh:
-            backend = self._adapter_factory.build(profile)
+            backend = self._build_refreshing_backend(profile)
             try:
                 return backend.refresh_capabilities()
             finally:
@@ -165,6 +176,10 @@ class BackendCapabilityService:
             )
 
         return self._profile_repository.load_current_capabilities(profile=profile)
+
+    def _build_refreshing_backend(self, profile: CryptoProviderProfileModel) -> CapabilityRefreshingBackendAdapter:
+        """Build a backend adapter with the live capability-refresh interface."""
+        return cast('CapabilityRefreshingBackendAdapter', self._adapter_factory.build(profile))
 
     def _normalize_capabilities(
         self,

@@ -6,7 +6,7 @@ import contextlib
 import ipaddress
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast, override
 
 from django import forms
 from django.conf import settings
@@ -28,6 +28,10 @@ if TYPE_CHECKING:
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
 FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-vendor.cfg'
+
+MIN_TCP_PORT = 1
+MAX_TCP_PORT = 65535
+ELF_MAGIC = b'\x7fELF'
 
 CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
     str(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage): gettext_lazy(
@@ -67,6 +71,24 @@ TLS_CONFIG_TYPE_CHOICES = tuple(
 MAX_DNS_NAME_LENGTH = 253
 
 
+def _safe_existing_file(path: Path) -> Path | None:
+    """Return the path when it exists as a file without leaking OS errors."""
+    try:
+        if path.is_file():
+            return path
+    except OSError:
+        return None
+    return None
+
+
+def _safe_existing_file_from_value(path_value: object) -> Path | None:
+    """Return an existing file from a string-like path value."""
+    normalized_path = str(path_value or '').strip()
+    if not normalized_path:
+        return None
+    return _safe_existing_file(Path(normalized_path))
+
+
 class EmptyForm(forms.Form):
     """A form without any fields."""
 
@@ -94,7 +116,8 @@ class WizardCardRadioSelect(forms.RadioSelect):
         self.disabled_values = {str(value) for value in disabled_values or set()}
         super().__init__(attrs=attrs, choices=choices)
 
-    def create_option(  # noqa: PLR0913
+    @override
+    def create_option(
         self,
         name: str,
         value: object,
@@ -198,7 +221,7 @@ class FreshInstallAdminUserModelForm(FreshInstallModelBaseForm):
 
     def clean(self) -> dict[str, Any]:
         """Validate the staged operational admin password."""
-        cleaned_data = super().clean()
+        cleaned_data = super().clean() or {}
         password1 = cleaned_data.get('password1')
         password2 = cleaned_data.get('password2')
         if password1 and password2 and password1 != password2:
@@ -210,6 +233,7 @@ class FreshInstallAdminUserModelForm(FreshInstallModelBaseForm):
                 self.add_error('password1', exc)
         return cleaned_data
 
+    @override
     def save(self, commit: bool = True) -> SetupWizardConfigModel:
         """Persist the staged admin fields and password hash."""
         instance = super().save(commit=False)
@@ -268,7 +292,9 @@ class FreshInstallDatabaseModelForm(FreshInstallModelBaseForm):
     def clean_operational_db_port(self) -> int:
         """Validate the PostgreSQL TCP port."""
         value = self.cleaned_data['operational_db_port']
-        if value < 1 or value > 65535:
+        if not isinstance(value, int):
+            raise forms.ValidationError(gettext_lazy('Enter a valid TCP port.'))
+        if value < MIN_TCP_PORT or value > MAX_TCP_PORT:
             raise forms.ValidationError(gettext_lazy('Enter a TCP port between 1 and 65535.'))
         return value
 
@@ -297,8 +323,11 @@ class FreshInstallCryptoStorageModelForm(FreshInstallModelBaseForm):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Disable backend choices that are not available in the current environment."""
         super().__init__(*args, **kwargs)
-        self.fields['crypto_storage'].choices = CRYPTO_BACKEND_TYPE_CHOICES
-        widget = cast('WizardCardRadioSelect', self.fields['crypto_storage'].widget)
+        self.is_crypto_storage_config = True
+        crypto_storage_field = cast('forms.ChoiceField', self.fields['crypto_storage'])
+        crypto_storage_field.choices = CRYPTO_BACKEND_TYPE_CHOICES
+
+        widget = cast('WizardCardRadioSelect', crypto_storage_field.widget)
         disabled_values: set[str] = set()
         if not _software_backend_available_in_wizard():
             disabled_values.add(str(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage))
@@ -309,7 +338,6 @@ class FreshInstallCryptoStorageModelForm(FreshInstallModelBaseForm):
 
     def clean_crypto_storage(self) -> SetupWizardConfigModel.CryptoStorageType:
         """Reject backend choices that are currently unavailable in the wizard."""
-        # noinspection PyUnnecessaryCast
         crypto_storage = cast('SetupWizardConfigModel.CryptoStorageType', self.cleaned_data['crypto_storage'])
         if int(crypto_storage) == SetupWizardConfigModel.CryptoStorageType.SoftwareStorage:
             if not _software_backend_available_in_wizard():
@@ -448,74 +476,56 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         self.has_staged_pkcs11_pin = self._existing_pkcs11_pin_file() is not None
         self.staged_pkcs11_config_name = self._staged_pkcs11_config_name()
 
+    def _existing_local_dev_pkcs11_module_file(self) -> Path | None:
+        """Return the local development PKCS#11 module file when this wizard uses it."""
+        if not self.local_dev_pkcs11_handoff_available:
+            return None
+
+        local_dev_module = local_dev_pkcs11_module_path()
+        if str(self.instance.fresh_install_pkcs11_module_path).strip() != str(local_dev_module):
+            return None
+
+        return _safe_existing_file(local_dev_module)
+
     def _existing_pkcs11_module_file(self) -> Path | None:
         """Return the currently staged or installed PKCS#11 module file for this wizard state."""
         staged_module = existing_wizard_pkcs11_staged_file(self.instance.fresh_install_pkcs11_module_path)
         if staged_module is not None:
             return staged_module
 
-        if self.local_dev_pkcs11_handoff_available:
-            local_dev_module = local_dev_pkcs11_module_path()
-            if (
-                str(self.instance.fresh_install_pkcs11_module_path).strip() == str(local_dev_module)
-                and local_dev_module.is_file()
-            ):
-                return local_dev_module
+        local_dev_module = self._existing_local_dev_pkcs11_module_file()
+        if local_dev_module is not None:
+            return local_dev_module
 
-        module_path = (self.instance.fresh_install_pkcs11_module_path or '').strip()
-        if module_path:
-            candidate = Path(module_path)
-            try:
-                if candidate.is_file():
-                    return candidate
-            except OSError:
-                return None
-        try:
-            if FINAL_WIZARD_PKCS11_MODULE_PATH.is_file():
-                return FINAL_WIZARD_PKCS11_MODULE_PATH
-        except OSError:
-            return None
-        return None
+        configured_module = _safe_existing_file_from_value(self.instance.fresh_install_pkcs11_module_path)
+        if configured_module is not None:
+            return configured_module
+
+        return _safe_existing_file(FINAL_WIZARD_PKCS11_MODULE_PATH)
 
     def _existing_pkcs11_pin_file(self) -> Path | None:
         """Return the currently staged or installed PKCS#11 user PIN file for this wizard state."""
         staged_pin = existing_wizard_pkcs11_staged_file(self.instance.fresh_install_pkcs11_auth_source_ref)
         if staged_pin is not None:
             return staged_pin
-        pin_path = (self.instance.fresh_install_pkcs11_auth_source_ref or '').strip()
-        if pin_path:
-            candidate = Path(pin_path)
-            try:
-                if candidate.is_file():
-                    return candidate
-            except OSError:
-                return None
-        try:
-            if FINAL_WIZARD_PKCS11_PIN_PATH.is_file():
-                return FINAL_WIZARD_PKCS11_PIN_PATH
-        except OSError:
-            return None
-        return None
+
+        configured_pin = _safe_existing_file_from_value(self.instance.fresh_install_pkcs11_auth_source_ref)
+        if configured_pin is not None:
+            return configured_pin
+
+        return _safe_existing_file(FINAL_WIZARD_PKCS11_PIN_PATH)
 
     def _existing_pkcs11_config_file(self) -> Path | None:
         """Return the currently staged or installed PKCS#11 vendor config file for this wizard state."""
         staged_config = existing_wizard_pkcs11_staged_file(self.instance.fresh_install_pkcs11_config_path)
         if staged_config is not None:
             return staged_config
-        config_path = (self.instance.fresh_install_pkcs11_config_path or '').strip()
-        if config_path:
-            candidate = Path(config_path)
-            try:
-                if candidate.is_file():
-                    return candidate
-            except OSError:
-                return None
-        try:
-            if FINAL_WIZARD_PKCS11_CONFIG_PATH.is_file():
-                return FINAL_WIZARD_PKCS11_CONFIG_PATH
-        except OSError:
-            return None
-        return None
+
+        configured_config = _safe_existing_file_from_value(self.instance.fresh_install_pkcs11_config_path)
+        if configured_config is not None:
+            return configured_config
+
+        return _safe_existing_file(FINAL_WIZARD_PKCS11_CONFIG_PATH)
 
     def _staged_pkcs11_module_name(self) -> str | None:
         """Return the staged PKCS#11 module filename when the wizard already has one."""
@@ -568,14 +578,14 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             raise forms.ValidationError(err_msg)
 
         try:
-            header = uploaded_module.read(4)
+            header = uploaded_module.read(len(ELF_MAGIC))
         except (AttributeError, OSError):
             header = b''
         finally:
             with contextlib.suppress(AttributeError, OSError):
                 uploaded_module.seek(0)
 
-        if header and header != b'\x7fELF':
+        if header and header != ELF_MAGIC:
             err_msg = gettext_lazy('Upload a valid Linux ELF shared library.')
             raise forms.ValidationError(err_msg)
 
@@ -599,7 +609,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
 
     def clean(self) -> dict[str, Any]:
         """Validate the staged backend configuration."""
-        cleaned_data = super().clean()
+        cleaned_data = super().clean() or {}
         if self.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             return cleaned_data
 
@@ -720,13 +730,15 @@ class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
 
         instance = self.instance
         ipv4_addresses, ipv6_addresses, dns_names = extract_staged_tls_sans()
+        storage_choice = cast('SetupWizardConfigModel.CryptoStorageType', instance.crypto_storage)
+
         self.fields['operational_admin'].initial = instance.operational_admin_username or '-'
         self.fields['operational_database'].initial = (
             f'{instance.operational_db_user}@{instance.operational_db_host}:'
             f'{instance.operational_db_port}/{instance.operational_db_name}'
         )
         self.fields['storage_selection'].initial = dict(CRYPTO_BACKEND_TYPE_CHOICES).get(
-            instance.crypto_storage,
+            storage_choice,
             instance.get_crypto_storage_display(),
         )
         self.fields['inject_demo_data_selection'].initial = (
@@ -887,7 +899,7 @@ class FreshInstallTlsConfigForm(forms.Form):
 
     def clean(self) -> dict[str, Any]:
         """Validate the field set required for the selected TLS mode."""
-        cleaned_data = cast('dict[str, Any]', super().clean())
+        cleaned_data = super().clean() or {}
 
         tls_mode = cleaned_data.get('tls_mode')
 
@@ -988,13 +1000,7 @@ class StartupWizardTlsCertificateForm(forms.Form):
         Raises:
             ValidationError: If no SAN entry is set.
         """
-        cleaned_data = super().clean()
-        if cleaned_data is None:
-            err_msg = (
-                'Unexpected error occurred. Failed to get the cleaned_data '
-                'of the StartupWizardTlsCertificateForm instance.'
-            )
-            raise forms.ValidationError(err_msg)
+        cleaned_data = super().clean() or {}
         ipv4_addresses = cleaned_data.get('ipv4_addresses')
         ipv6_addresses = cleaned_data.get('ipv6_addresses')
         domain_names = cleaned_data.get('domain_names')
@@ -1061,11 +1067,7 @@ class HsmSetupForm(forms.Form):
 
     def clean(self) -> dict[str, Any]:
         """Custom validation for the form."""
-        cleaned_data = super().clean()
-        if cleaned_data is None:
-            err_msg = 'Unexpected error occurred. Failed to get the cleaned_data of the HsmSetupForm instance.'
-            raise forms.ValidationError(err_msg)
-
+        cleaned_data = super().clean() or {}
         hsm_type = cleaned_data.get('hsm_type')
 
         if hsm_type == 'softhsm':
@@ -1170,7 +1172,10 @@ class BackupPasswordForm(forms.Form):
         """
         cleaned_data = super().clean()
         if cleaned_data is None:
-            err_msg = 'Unexpected error occurred. Failed to get the cleaned_data of the BackupPasswordForm instance.'
+            err_msg = (
+                'Unexpected error occurred. Failed to get the cleaned_data '
+                'of the BackupPasswordForm instance.'
+            )
             raise forms.ValidationError(err_msg)
         password = cleaned_data.get('password')
         confirm_password = cleaned_data.get('confirm_password')

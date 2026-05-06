@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 
@@ -12,21 +12,20 @@ from crypto.adapters.software.backend import SoftwareBackend
 from crypto.domain.errors import ProviderConfigurationError, UnsupportedBackendKindError
 from crypto.models import BackendKind, CryptoProviderProfileModel
 
-if TYPE_CHECKING:
-    from crypto.application.provider_backend import ManagedKeyBackendAdapter
+type BackendAdapter = Pkcs11Backend | SoftwareBackend | RestBackend
 
 
 class BackendAdapterFactory(Protocol):
     """Factory protocol for constructing backend-kind-specific adapters."""
 
-    def build(self, profile_model: CryptoProviderProfileModel) -> ManagedKeyBackendAdapter:
+    def build(self, profile_model: CryptoProviderProfileModel) -> BackendAdapter:
         """Build an adapter for the given provider profile."""
 
 
 class DefaultBackendAdapterFactory:
     """Default backend-adapter factory for the configured instance backend."""
 
-    def build(self, profile_model: CryptoProviderProfileModel) -> ManagedKeyBackendAdapter:
+    def build(self, profile_model: CryptoProviderProfileModel) -> BackendAdapter:
         """Construct the configured backend adapter."""
         try:
             if profile_model.backend_kind == BackendKind.PKCS11:

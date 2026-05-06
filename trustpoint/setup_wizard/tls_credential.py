@@ -26,10 +26,26 @@ if TYPE_CHECKING:
 
 ONE_DAY = datetime.timedelta(days=1)
 MIN_CERTIFICATE_CHAIN_LENGTH = 2
-TLS_STAGING_ROOT = Path('/tmp/trustpoint-wizard/tls')
+IPV4_VERSION = 4
+
+TLS_STAGING_DIRECTORY_MODE = 0o700
+TLS_STAGING_FILE_MODE = 0o600
+TLS_STAGING_ROOT = Path('/tmp/trustpoint-wizard/tls')  # noqa: S108
 TLS_PRIVATE_KEY_FILE = TLS_STAGING_ROOT / 'tls-private-key.pem'
 TLS_CERTIFICATE_FILE = TLS_STAGING_ROOT / 'tls-certificate.pem'
 TLS_CHAIN_FILE = TLS_STAGING_ROOT / 'tls-chain.pem'
+
+
+def _ensure_tls_staging_root() -> None:
+    """Create the TLS staging directory with private permissions."""
+    TLS_STAGING_ROOT.mkdir(mode=TLS_STAGING_DIRECTORY_MODE, parents=True, exist_ok=True)
+    TLS_STAGING_ROOT.chmod(TLS_STAGING_DIRECTORY_MODE)
+
+
+def _write_staged_tls_file(path: Path, content: bytes) -> None:
+    """Write a staged TLS file with private permissions."""
+    path.write_bytes(content)
+    path.chmod(TLS_STAGING_FILE_MODE)
 
 
 def clear_staged_tls_credential() -> None:
@@ -46,13 +62,13 @@ def stage_tls_credential(credential_serializer: CredentialSerializer) -> None:
         err_msg = 'The staged TLS credential is missing the private key or certificate.'
         raise ValueError(err_msg)
 
-    TLS_STAGING_ROOT.mkdir(parents=True, exist_ok=True)
-    TLS_PRIVATE_KEY_FILE.write_bytes(private_key_serializer.as_pkcs8_pem())
-    TLS_CERTIFICATE_FILE.write_bytes(certificate_serializer.as_pem())
+    _ensure_tls_staging_root()
+    _write_staged_tls_file(TLS_PRIVATE_KEY_FILE, private_key_serializer.as_pkcs8_pem())
+    _write_staged_tls_file(TLS_CERTIFICATE_FILE, certificate_serializer.as_pem())
 
     additional_certificates = list(credential_serializer.additional_certificates or [])
     if additional_certificates:
-        TLS_CHAIN_FILE.write_bytes(CertificateCollectionSerializer(additional_certificates).as_pem())
+        _write_staged_tls_file(TLS_CHAIN_FILE, CertificateCollectionSerializer(additional_certificates).as_pem())
     elif TLS_CHAIN_FILE.exists():
         TLS_CHAIN_FILE.unlink()
 
@@ -86,7 +102,11 @@ def staged_tls_common_name() -> str | None:
     attributes = credential.certificate.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
     if not attributes:
         return None
-    return attributes[0].value
+
+    common_name = attributes[0].value
+    if isinstance(common_name, bytes):
+        return common_name.decode('utf-8')
+    return common_name
 
 
 def extract_staged_tls_sans() -> tuple[list[str], list[str], list[str]]:
@@ -106,7 +126,7 @@ def extract_staged_tls_sans() -> tuple[list[str], list[str], list[str]]:
 
     for name in san_extension:
         if isinstance(name, x509.IPAddress):
-            if name.value.version == 4:
+            if name.value.version == IPV4_VERSION:
                 ipv4_addresses.append(str(name.value))
             else:
                 ipv6_addresses.append(str(name.value))

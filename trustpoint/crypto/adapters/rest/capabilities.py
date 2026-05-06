@@ -7,6 +7,20 @@ import json
 from dataclasses import dataclass
 
 
+def _string_tuple(payload: dict[str, object], key: str) -> tuple[str, ...]:
+    """Return a tuple of strings from a serialized capability-list field."""
+    value = payload.get(key, [])
+    if not isinstance(value, list):
+        msg = f'Capability field {key!r} must be a list of strings.'
+        raise TypeError(msg)
+
+    if not all(isinstance(item, str) for item in value):
+        msg = f'Capability field {key!r} must only contain strings.'
+        raise ValueError(msg)
+
+    return tuple(value)
+
+
 @dataclass(frozen=True, slots=True)
 class RestCapabilities:
     """Serializable REST backend capability snapshot."""
@@ -29,10 +43,10 @@ class RestCapabilities:
     def from_json_dict(cls, payload: dict[str, object]) -> RestCapabilities:
         """Deserialize the capability snapshot."""
         return cls(
-            supported_key_algorithms=tuple(payload.get('supported_key_algorithms', [])),
-            supported_signature_algorithms=tuple(payload.get('supported_signature_algorithms', [])),
-            supported_signing_execution_modes=tuple(payload.get('supported_signing_execution_modes', [])),
-            implemented_operations=tuple(payload.get('implemented_operations', [])),
+            supported_key_algorithms=_string_tuple(payload, 'supported_key_algorithms'),
+            supported_signature_algorithms=_string_tuple(payload, 'supported_signature_algorithms'),
+            supported_signing_execution_modes=_string_tuple(payload, 'supported_signing_execution_modes'),
+            implemented_operations=_string_tuple(payload, 'implemented_operations'),
         )
 
     def fingerprint(self) -> str:

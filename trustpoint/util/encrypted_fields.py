@@ -15,8 +15,6 @@ from appsecrets.service import CIPHERTEXT_PREFIX, decrypt_app_secret, encrypt_ap
 class _EncryptedFieldMixin:
     """Shared encryption/decryption helpers for encrypted Django model fields."""
 
-    description = _('Encrypted field using Trustpoint application secrets')
-
     def raise_validation_error(self, msg: str) -> Never:
         """Raise a ValidationError with the given message."""
         raise ValidationError(msg)
@@ -27,7 +25,7 @@ class _EncryptedFieldMixin:
 
     def encrypt_value(self, value: str | None) -> str | None:
         """Encrypt a string value for database storage."""
-        if value in (None, ''):
+        if value is None or value == '':
             return value
         if not self.should_encrypt():
             return value
@@ -39,7 +37,7 @@ class _EncryptedFieldMixin:
 
     def decrypt_value(self, encrypted_value: str | None) -> str | None:
         """Decrypt a stored string value."""
-        if encrypted_value in (None, ''):
+        if encrypted_value is None or encrypted_value == '':
             return encrypted_value
         if not self.should_encrypt():
             return encrypted_value
@@ -71,11 +69,13 @@ class _EncryptedFieldMixin:
 class EncryptedTextField(_EncryptedFieldMixin, models.TextField[str, str]):
     """Text field whose value is encrypted via the app-secret subsystem."""
 
+    description = 'Encrypted text field using Trustpoint application secrets'
+
 
 class EncryptedCharField(_EncryptedFieldMixin, models.CharField[str, str]):
     """Char field whose value is encrypted via the app-secret subsystem."""
 
-    description = _('Encrypted char field using Trustpoint application secrets')
+    description = 'Encrypted char field using Trustpoint application secrets'
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Store the plaintext max length while keeping the DB column large enough for ciphertext."""

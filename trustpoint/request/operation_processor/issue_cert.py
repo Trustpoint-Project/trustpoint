@@ -4,6 +4,7 @@ import contextlib
 from typing import TYPE_CHECKING, cast, get_args
 
 from cryptography import x509
+from cryptography.hazmat.primitives.asymmetric import dsa, ec, ed448, ed25519, rsa
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import SignatureSuite
 from trustpoint_core.serializer import CredentialSerializer
@@ -31,6 +32,31 @@ if TYPE_CHECKING:
 
     from devices.models import DeviceModel
     from pki.models.domain import DomainModel
+
+
+def _as_authority_key_identifier_public_key(
+    public_key: object,
+) -> (
+    dsa.DSAPublicKey
+    | rsa.RSAPublicKey
+    | ec.EllipticCurvePublicKey
+    | ed25519.Ed25519PublicKey
+    | ed448.Ed448PublicKey
+):
+    if isinstance(
+        public_key,
+        (
+            dsa.DSAPublicKey,
+            rsa.RSAPublicKey,
+            ec.EllipticCurvePublicKey,
+            ed25519.Ed25519PublicKey,
+            ed448.Ed448PublicKey,
+        ),
+    ):
+        return public_key
+
+    err_msg = f'Unsupported issuer public key type for AuthorityKeyIdentifier: {type(public_key)}.'
+    raise TypeError(err_msg)
 
 
 class CertificateIssueProcessor(AbstractOperationProcessor):
@@ -228,6 +254,10 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
         certificate_builder = certificate_builder.serial_number(x509.random_serial_number())
         certificate_builder = certificate_builder.public_key(public_key)
 
+        issuer_public_key = _as_authority_key_identifier_public_key(
+            issuing_credential.get_certificate().public_key()
+        )
+
         default_extensions = {
             x509.BasicConstraints: (x509.BasicConstraints(ca=False, path_length=None), False),
             x509.KeyUsage: (
@@ -245,7 +275,7 @@ class LocalCaCertificateIssueProcessor(CertificateIssueProcessor):
                 True,
             ),
             x509.AuthorityKeyIdentifier: (
-                x509.AuthorityKeyIdentifier.from_issuer_public_key(issuing_credential.get_certificate().public_key()),
+                x509.AuthorityKeyIdentifier.from_issuer_public_key(issuer_public_key),
                 False,
             ),
             x509.SubjectKeyIdentifier: (x509.SubjectKeyIdentifier.from_public_key(public_key), False),

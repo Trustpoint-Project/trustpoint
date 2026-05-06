@@ -2,25 +2,28 @@
 
 from __future__ import annotations
 
-from typing import Any, Never
+from typing import TYPE_CHECKING, Any, Never, cast, override
 
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
-from cryptography.hazmat.primitives.hashes import HashAlgorithm
-from cryptography.hazmat.primitives.serialization import (
-    Encoding,
-    KeySerializationEncryption,
-    PrivateFormat,
-)
 
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm, SignatureAlgorithm
-from crypto.domain.refs import ManagedKeyRef
 from crypto.domain.specs import SignRequest
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.hashes import HashAlgorithm
+    from cryptography.hazmat.primitives.serialization import (
+        Encoding,
+        KeySerializationEncryption,
+        PrivateFormat,
+    )
+
+    from crypto.domain.refs import ManagedKeyRef
 
 
 def _hash_algorithm_name(algorithm: HashAlgorithm | utils.Prehashed) -> HashAlgorithmName:
     """Map cryptography hash algorithm objects to the backend contract."""
-    hash_algorithm = getattr(algorithm, '_algorithm', algorithm)
+    hash_algorithm = cast('HashAlgorithm', getattr(algorithm, '_algorithm', algorithm))
     name = hash_algorithm.name.lower()
     if name == 'sha224':
         return HashAlgorithmName.SHA224
@@ -101,6 +104,7 @@ class ManagedRSAPrivateKey(rsa.RSAPrivateKey):
         msg = 'Managed Trustpoint private key numbers are not accessible.'
         raise NotImplementedError(msg)
 
+    @override
     def private_bytes(
         self,
         encoding: Encoding,
@@ -188,6 +192,7 @@ class ManagedECPrivateKey(ec.EllipticCurvePrivateKey):
         msg = 'Managed Trustpoint private key numbers are not accessible.'
         raise NotImplementedError(msg)
 
+    @override
     def private_bytes(
         self,
         encoding: Encoding,

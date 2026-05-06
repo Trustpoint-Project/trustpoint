@@ -166,7 +166,6 @@ ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = DEBUG
 
 
-
 # Basic SMTP backend
 if DEBUG:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
@@ -356,32 +355,33 @@ if TRUSTPOINT_IS_BOOTSTRAP:
         if middleware != 'trustpoint.middleware.Workflow2InlineDrainMiddleware'
     ]
 
+TEMPLATE_CONTEXT_PROCESSORS = [
+    'django.template.context_processors.debug',
+    'django.template.context_processors.request',
+    'django.contrib.auth.context_processors.auth',
+    'django.contrib.messages.context_processors.messages',
+    'trustpoint.settings.app_version',
+    'trustpoint.views.context_processors.trustpoint_runtime_banner',
+    'management.context_processors.notification_alerts',
+]
 
-TEMPLATES = [
+if TRUSTPOINT_IS_BOOTSTRAP:
+    TEMPLATE_CONTEXT_PROCESSORS = [
+        context_processor
+        for context_processor in TEMPLATE_CONTEXT_PROCESSORS
+        if context_processor != 'management.context_processors.notification_alerts'
+    ]
+
+TEMPLATES: list[dict[str, Any]] = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [BASE_DIR / Path('templates')],
         'APP_DIRS': True,
         'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
-                'trustpoint.settings.app_version',
-                'trustpoint.views.context_processors.trustpoint_runtime_banner',
-                'management.context_processors.notification_alerts',
-            ],
+            'context_processors': TEMPLATE_CONTEXT_PROCESSORS,
         },
     },
 ]
-
-if TRUSTPOINT_IS_BOOTSTRAP:
-    TEMPLATES[0]['OPTIONS']['context_processors'] = [
-        context_processor
-        for context_processor in TEMPLATES[0]['OPTIONS']['context_processors']
-        if context_processor != 'management.context_processors.notification_alerts'
-    ]
 
 
 # Password validation
@@ -551,7 +551,6 @@ Q_CLUSTER = {
     'bulk': 10,
     'orm': 'default',
 }
-
 
 
 # HSM storage root:
