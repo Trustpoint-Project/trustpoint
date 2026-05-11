@@ -35,6 +35,10 @@ class Migration(migrations.Migration):
             model_name='pkcs11token',
             name='kek',
         ),
+        migrations.RemoveField(
+            model_name='securityconfig',
+            name='require_physical_hsm',
+        ),
         migrations.AddField(
             model_name='notificationconfig',
             name='crl_expiry_warning_days',
@@ -57,11 +61,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AlterField(
             model_name='securityconfig',
-            name='require_physical_hsm',
-            field=models.BooleanField(default=False, help_text='Require the Trustpoint instance to use the PKCS#11-backed managed crypto backend.'),
-        ),
-        migrations.AlterField(
-            model_name='securityconfig',
             name='security_mode',
             field=models.CharField(choices=[('0', 'Lab / Custom'), ('1', 'Brownfield Compatible'), ('2', 'Industrial Standard'), ('3', 'Hardened Production'), ('4', 'Critical Infrastructure')], default='1', max_length=6),
         ),
@@ -80,7 +79,16 @@ class Migration(migrations.Migration):
                 'verbose_name': 'Audit Log Entry',
                 'verbose_name_plural': 'Audit Log Entries',
                 'ordering': ['-timestamp'],
-                'indexes': [models.Index(fields=['target_content_type', 'target_object_id'], name='audit_log_target_idx')],
             },
+        ),
+        migrations.DeleteModel(
+            name='KeyStorageConfig',
+        ),
+        migrations.DeleteModel(
+            name='PKCS11Token',
+        ),
+        migrations.AddIndex(
+            model_name='auditlog',
+            index=models.Index(fields=['target_content_type', 'target_object_id'], name='audit_log_target_idx'),
         ),
     ]

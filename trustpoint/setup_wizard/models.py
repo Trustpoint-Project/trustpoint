@@ -146,6 +146,27 @@ class SetupWizardConfigModel(models.Model):
         TLS_CONFIG = 5, gettext_lazy('TLS-Config')
         SUMMARY = 6, gettext_lazy('Summary')
 
+    class BootstrapFlow(models.TextChoices):
+        """Enumerate the bootstrap flow currently being worked on."""
+
+        FRESH_INSTALL = 'fresh_install', gettext_lazy('Fresh Install')
+        RESTORE_BACKUP = 'restore_backup', gettext_lazy('Restore Backup')
+        CONNECT_EXISTING = 'connect_existing', gettext_lazy('Connect Existing')
+
+    bootstrap_active_flow = models.CharField(
+        max_length=32,
+        choices=BootstrapFlow,
+        blank=True,
+        default='',
+        help_text='Bootstrap flow currently being worked on.',
+    )
+    bootstrap_current_step = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        help_text='Current step name within the active bootstrap flow.',
+    )
+
     fresh_install_current_step = models.PositiveSmallIntegerField(
         choices=FreshInstallCurrentStep,
         null=False,
@@ -185,6 +206,32 @@ class SetupWizardConfigModel(models.Model):
 
     fresh_install_summary_submitted = models.BooleanField(
         default=False, help_text='Whether the summary step was submitted.'
+    )
+
+    restore_backup_archive_path = models.TextField(
+        blank=True,
+        default='',
+        help_text='Bootstrap-staged restore archive path.',
+    )
+    restore_backup_archive_original_name = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Original uploaded backup archive filename.',
+    )
+    restore_backup_import_submitted = models.BooleanField(
+        default=False,
+        help_text='Whether the restore backup import step was submitted.',
+    )
+    restore_backup_restored_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Timestamp when the staged backup archive was restored into the target database.',
+    )
+    restore_backup_restore_error = models.TextField(
+        blank=True,
+        default='',
+        help_text='Last restore error captured while importing the staged backup archive.',
     )
 
     class FreshInstallTlsConfigType(models.TextChoices):

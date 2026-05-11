@@ -16,6 +16,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.translation import gettext_lazy
 
 from .models import SetupWizardConfigModel
+from .operational_attach import OperationalAttachMode
 from .pkcs11_local_dev import local_dev_pkcs11_handoff_available, local_dev_pkcs11_module_path
 from .pkcs11_staging import existing_wizard_pkcs11_staged_file
 from .tls_credential import extract_staged_tls_sans, staged_tls_common_name
@@ -470,11 +471,15 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         )
         self.initial['fresh_install_pkcs11_slot_id'] = self.instance.fresh_install_pkcs11_slot_id
         self.initial['pkcs11_config_env_var'] = (
-            self.instance.fresh_install_pkcs11_config_env_var or 'CS_PKCS11_R3_CFG'
+            self.instance.fresh_install_pkcs11_config_env_var or ''
         )
         self.staged_pkcs11_module_name = self._staged_pkcs11_module_name()
         self.has_staged_pkcs11_pin = self._existing_pkcs11_pin_file() is not None
         self.staged_pkcs11_config_name = self._staged_pkcs11_config_name()
+
+    def refresh_pkcs11_state(self) -> None:
+        """Refresh public PKCS#11 helper attributes after staging files changed."""
+        self._apply_pkcs11_defaults()
 
     def _existing_local_dev_pkcs11_module_file(self) -> Path | None:
         """Return the local development PKCS#11 module file when this wizard uses it."""
@@ -630,10 +635,14 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         except forms.ValidationError as exception:
             self.add_error('pkcs11_config_upload', exception)
 
-        if module_upload is None and existing_module is None and not self.local_dev_pkcs11_handoff_available:
+        if (
+            module_upload is None
+            and existing_module is None
+            and not self.local_dev_pkcs11_handoff_available
+        ):
             self.add_error(
                 'pkcs11_module_upload',
-                gettext_lazy('Upload the PKCS#11 library that Trustpoint should install.'),
+                gettext_lazy('Upload a PKCS#11 library.'),
             )
         if not user_pin and existing_pin is None:
             self.add_error(
@@ -646,6 +655,189 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
                 gettext_lazy('Enter a PKCS#11 token label or a slot ID.'),
             )
         return cleaned_data
+
+
+class OperationalAttachConfigForm(FreshInstallBackendConfigModelForm):
+    """Shared staged configuration form for restore/connect operational attach flows."""
+
+    backup_archive = forms.FileField(
+        required=False,
+        label=gettext_lazy('Backup archive'),
+        help_text=gettext_lazy('Reserved for the restore flow. Backup import will run in the explicit apply step.'),
+    )
+
+    class Meta:
+        """ModelForm configuration for operational attach staging."""
+
+        model = SetupWizardConfigModel
+        fields = (
+            'operational_db_host',
+            'operational_db_port',
+            'operational_db_name',
+            'operational_db_user',
+            'operational_db_password',
+            'crypto_storage',
+            'fresh_install_pkcs11_token_label',
+            'fresh_install_pkcs11_slot_id',
+        )
+        labels: ClassVar[dict[str, str | Promise]] = {
+            'operational_db_host': gettext_lazy('PostgreSQL host'),
+            'operational_db_port': gettext_lazy('PostgreSQL port'),
+            'operational_db_name': gettext_lazy('Database name'),
+            'operational_db_user': gettext_lazy('Database user'),
+            'operational_db_password': gettext_lazy('Database password'),
+            'crypto_storage': gettext_lazy('Backend type'),
+            'fresh_install_pkcs11_token_label': gettext_lazy('Token label'),
+            'fresh_install_pkcs11_slot_id': gettext_lazy('Slot ID (optional)'),
+        }
+        help_texts: ClassVar[dict[str, str | Promise]] = {
+            'fresh_install_pkcs11_token_label': FreshInstallBackendConfigModelForm.Meta.help_texts[
+                'fresh_install_pkcs11_token_label'
+            ],
+            'fresh_install_pkcs11_slot_id': FreshInstallBackendConfigModelForm.Meta.help_texts[
+                'fresh_install_pkcs11_slot_id'
+            ],
+        }
+        widgets: ClassVar[dict[str, forms.Widget]] = {
+            'operational_db_password': forms.PasswordInput(render_value=True),
+            'crypto_storage': WizardCardRadioSelect(descriptions=CRYPTO_STORAGE_OPTION_DESCRIPTIONS),
+        }
+
+    def __init__(
+        self,
+        *args: Any,
+        attach_mode: OperationalAttachMode = OperationalAttachMode.CONNECT_EXISTING,
+        validate_backend: bool = True,
+        **kwargs: Any,
+    ) -> None:
+        """Initialize the shared attach form and reveal backend fields for posted backend choices."""
+        instance = kwargs.get('instance')
+        data = args[0] if args else kwargs.get('data')
+        if instance is not None and data is not None:
+            raw_storage = data.get('crypto_storage')
+            with contextlib.suppress(TypeError, ValueError):
+                instance.crypto_storage = int(raw_storage)
+
+        self.attach_mode = attach_mode
+        self.validate_backend = validate_backend
+        super().__init__(*args, **kwargs)
+        self.is_operational_attach_config = True
+        self.is_restore_attach_config = attach_mode == OperationalAttachMode.RESTORE_BACKUP
+        self.is_connect_existing_config = attach_mode == OperationalAttachMode.CONNECT_EXISTING
+
+        crypto_storage_field = cast('forms.ChoiceField', self.fields['crypto_storage'])
+        crypto_storage_field.choices = CRYPTO_BACKEND_TYPE_CHOICES
+        widget = cast('WizardCardRadioSelect', crypto_storage_field.widget)
+        widget.disabled_values = {str(SetupWizardConfigModel.CryptoStorageType.RestBackend)}
+
+        self.fields['backup_archive'].widget.attrs.setdefault('class', 'form-control')
+        if attach_mode != OperationalAttachMode.RESTORE_BACKUP:
+            self.fields['backup_archive'].widget = forms.HiddenInput()
+            self.fields['backup_archive'].required = False
+
+        for field_name in (
+            'operational_db_host',
+            'operational_db_port',
+            'operational_db_name',
+            'operational_db_user',
+            'operational_db_password',
+        ):
+            self.fields[field_name].widget.attrs.setdefault('class', 'form-control')
+
+    def clean_operational_db_host(self) -> str:
+        """Normalize and require the PostgreSQL host."""
+        value = (self.cleaned_data.get('operational_db_host') or '').strip()
+        if not value:
+            raise forms.ValidationError(gettext_lazy('Enter the PostgreSQL host name or IP address.'))
+        return value
+
+    def clean_operational_db_name(self) -> str:
+        """Normalize and require the PostgreSQL database name."""
+        value = (self.cleaned_data.get('operational_db_name') or '').strip()
+        if not value:
+            raise forms.ValidationError(gettext_lazy('Enter the PostgreSQL database name.'))
+        return value
+
+    def clean_operational_db_port(self) -> int:
+        """Validate the PostgreSQL TCP port."""
+        value = self.cleaned_data['operational_db_port']
+        if not isinstance(value, int):
+            raise forms.ValidationError(gettext_lazy('Enter a valid TCP port.'))
+        if value < MIN_TCP_PORT or value > MAX_TCP_PORT:
+            raise forms.ValidationError(gettext_lazy('Enter a TCP port between 1 and 65535.'))
+        return value
+
+    def clean_operational_db_user(self) -> str:
+        """Normalize and require the PostgreSQL user."""
+        value = (self.cleaned_data.get('operational_db_user') or '').strip()
+        if not value:
+            raise forms.ValidationError(gettext_lazy('Enter the PostgreSQL user name.'))
+        return value
+
+    def clean_crypto_storage(self) -> SetupWizardConfigModel.CryptoStorageType:
+        """Validate the backend type staged for attach."""
+        crypto_storage = cast('SetupWizardConfigModel.CryptoStorageType', self.cleaned_data['crypto_storage'])
+        if int(crypto_storage) == SetupWizardConfigModel.CryptoStorageType.SoftwareStorage:
+            return crypto_storage
+        if int(crypto_storage) == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            return crypto_storage
+        if int(crypto_storage) == SetupWizardConfigModel.CryptoStorageType.RestBackend:
+            err_msg = gettext_lazy('The REST crypto backend is not implemented yet.')
+            raise forms.ValidationError(err_msg)
+        err_msg = gettext_lazy('Unsupported crypto backend selection.')
+        raise forms.ValidationError(err_msg)
+
+    def clean(self) -> dict[str, Any]:
+        """Validate backend-specific fields unless the current action only tests the database."""
+        if self.validate_backend:
+            return super().clean()
+        return forms.ModelForm.clean(self) or {}
+
+
+class RestoreBackupImportForm(forms.Form):
+    """Lightweight restore-wizard form for staging a backup archive."""
+
+    backup_archive = forms.FileField(
+        required=False,
+        label=gettext_lazy('Backup archive'),
+        help_text=gettext_lazy(
+            'Upload a Trustpoint PostgreSQL backup archive as .dump, .dump.gz, or a GPG-encrypted variant.'
+        ),
+    )
+    backup_archive_password = forms.CharField(
+        required=False,
+        label=gettext_lazy('Backup password'),
+        help_text=gettext_lazy('Optional. Required only for password-encrypted GPG backup archives.'),
+        widget=forms.PasswordInput(render_value=True),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize upload styling and remember any already staged archive."""
+        self.config_model = kwargs.pop('config_model', None)
+        super().__init__(*args, **kwargs)
+        self.fields['backup_archive'].widget.attrs.setdefault('class', 'form-control')
+        self.fields['backup_archive_password'].widget.attrs.setdefault('class', 'form-control')
+        self.staged_backup_name = ''
+        if self.config_model is not None:
+            original_name = getattr(self.config_model, 'restore_backup_archive_original_name', '')
+            archive_path = getattr(self.config_model, 'restore_backup_archive_path', '')
+            self.staged_backup_name = original_name or (Path(archive_path).name if archive_path else '')
+
+    def clean_backup_archive(self) -> Any:
+        """Require a first archive upload and only accept supported PostgreSQL backup suffixes."""
+        backup_archive = self.cleaned_data.get('backup_archive')
+        if backup_archive is None:
+            if self.staged_backup_name:
+                return None
+            raise forms.ValidationError(gettext_lazy('Upload a Trustpoint backup archive.'))
+
+        filename = str(getattr(backup_archive, 'name', '')).lower()
+        valid_suffixes = ('.dump', '.dump.gz', '.dump.gpg', '.dump.gz.gpg', '.gpg')
+        if not filename.endswith(valid_suffixes):
+            raise forms.ValidationError(
+                gettext_lazy('Upload a .dump, .dump.gz, .dump.gpg, or .dump.gz.gpg backup archive.')
+            )
+        return backup_archive
 
 
 class FreshInstallDemoDataModelForm(FreshInstallModelBaseForm):
@@ -1008,274 +1200,3 @@ class StartupWizardTlsCertificateForm(forms.Form):
             err_msg = 'At least one SAN entry is required.'
             raise forms.ValidationError(err_msg)
         return cleaned_data
-
-
-class HsmSetupForm(forms.Form):
-    """Form for HSM setup configuration."""
-
-    module_path = forms.CharField(
-        max_length=255,
-        label=gettext_lazy('PKCS#11 Module Path'),
-        help_text=gettext_lazy('Path to the PKCS#11 module library.'),
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
-        required=True,
-    )
-
-    slot = forms.IntegerField(
-        initial=0,
-        min_value=0,
-        max_value=255,
-        label=gettext_lazy('Slot Number'),
-        help_text=gettext_lazy('HSM slot number to use.'),
-        widget=forms.NumberInput(attrs={'class': 'form-control'}),
-        required=True,
-    )
-
-    label = forms.CharField(
-        max_length=32,
-        label=gettext_lazy('Token Label'),
-        help_text=gettext_lazy('Label for the HSM token.'),
-        widget=forms.TextInput(attrs={'class': 'form-control'}),
-        required=True,
-    )
-
-    # Hidden field to store the HSM type (will be set by the view)
-    hsm_type = forms.CharField(widget=forms.HiddenInput())
-
-    def __init__(self, hsm_type: str = 'softhsm', *args: Any, **kwargs: Any) -> None:
-        """Initialize the form with HSM type-specific defaults."""
-        super().__init__(*args, **kwargs)
-
-        self.fields['hsm_type'].initial = hsm_type
-
-        if hsm_type == 'softhsm':
-            self.fields['module_path'].initial = '/usr/lib/libpkcs11-proxy.so'
-            self.fields['slot'].initial = 0
-            self.fields['label'].initial = 'Trustpoint-SoftHSM'
-
-            self.fields['module_path'].widget.attrs.update({'readonly': True, 'class': 'form-control'})
-            self.fields['slot'].widget.attrs.update({'readonly': True, 'class': 'form-control'})
-            self.fields['label'].widget.attrs.update({'readonly': True, 'class': 'form-control'})
-
-        elif hsm_type == 'physical':
-            self.fields['module_path'].initial = ''
-            self.fields['slot'].initial = 0
-            self.fields['label'].initial = 'Trustpoint-Physical-HSM'
-
-            self.fields['module_path'].widget.attrs.update({'placeholder': '/usr/lib/vendor/libpkcs11.so'})
-            self.fields['label'].widget.attrs.update({'placeholder': 'Enter token label'})
-
-    def clean(self) -> dict[str, Any]:
-        """Custom validation for the form."""
-        cleaned_data = super().clean() or {}
-        hsm_type = cleaned_data.get('hsm_type')
-
-        if hsm_type == 'softhsm':
-            cleaned_data['label'] = 'Trustpoint-SoftHSM'
-            cleaned_data['slot'] = 0
-            cleaned_data['module_path'] = '/usr/lib/libpkcs11-proxy.so'
-        if hsm_type == 'physical':
-            raise forms.ValidationError(gettext_lazy('Physical HSM is not yet supported.'))
-        if hsm_type != 'softhsm':
-            self.add_error('hsm_type', gettext_lazy('Unsupported HSM type: %(hsm_type)s') % {'hsm_type': hsm_type})
-
-        return cleaned_data
-
-    def clean_label(self) -> str:
-        """Clean token label field."""
-        hsm_type = self.data.get('hsm_type')
-        if hsm_type == 'softhsm':
-            return 'Trustpoint-SoftHSM'
-        value = self.cleaned_data.get('label')
-        if isinstance(value, str):
-            return value
-        return ''
-
-    def clean_slot(self) -> int:
-        """Clean slot number field."""
-        hsm_type = self.data.get('hsm_type')
-        if hsm_type == 'softhsm':
-            return 0
-        value = self.cleaned_data.get('slot')
-        if isinstance(value, int):
-            return value
-        return 0
-
-    def clean_module_path(self) -> str:
-        """Clean module path field."""
-        hsm_type = self.data.get('hsm_type')
-        if hsm_type == 'softhsm':
-            return '/usr/lib/libpkcs11-proxy.so'
-        value = self.cleaned_data.get('module_path')
-        if isinstance(value, str):
-            return value
-        return ''
-
-
-class BackupPasswordForm(forms.Form):
-    """Form for setting up backup password for PKCS#11 token."""
-
-    password = forms.CharField(
-        widget=forms.PasswordInput(
-            attrs={
-                'class': 'form-control',
-                'placeholder': gettext_lazy('Enter backup password'),
-                'autocomplete': 'new-password',
-            }
-        ),
-        label=gettext_lazy('Backup Password'),
-        help_text=gettext_lazy('Enter a strong password to secure your backup encryption key.'),
-        required=True,
-    )
-
-    confirm_password = forms.CharField(
-        widget=forms.PasswordInput(
-            attrs={
-                'class': 'form-control',
-                'placeholder': gettext_lazy('Confirm backup password'),
-                'autocomplete': 'new-password',
-            }
-        ),
-        label=gettext_lazy('Confirm Password'),
-        required=True,
-    )
-
-    def clean_password(self) -> str:
-        """Clean and validate the password field using Django's password validators.
-
-        Returns:
-            The cleaned password.
-
-        Raises:
-            ValidationError: If password validation fails.
-        """
-        password = self.cleaned_data.get('password')
-
-        if not isinstance(password, str) or not password:
-            raise forms.ValidationError(gettext_lazy('Password is required.'))
-
-        try:
-            validate_password(password)
-        except DjangoValidationError as e:
-            raise forms.ValidationError(e.messages) from e
-
-        return password
-
-    def clean(self) -> dict[str, Any]:
-        """Validate the form data.
-
-        Returns:
-            The cleaned data.
-
-        Raises:
-            ValidationError: If validation fails.
-        """
-        cleaned_data = super().clean()
-        if cleaned_data is None:
-            err_msg = (
-                'Unexpected error occurred. Failed to get the cleaned_data '
-                'of the BackupPasswordForm instance.'
-            )
-            raise forms.ValidationError(err_msg)
-        password = cleaned_data.get('password')
-        confirm_password = cleaned_data.get('confirm_password')
-
-        if password and confirm_password and password != confirm_password:
-            raise forms.ValidationError(gettext_lazy('Passwords do not match.'))
-
-        return cleaned_data
-
-
-class BackupRestoreForm(forms.Form):
-    """Form for restoring from backup with optional backup password."""
-
-    MAX_PASSWORD_LENGTH = 128
-
-    backup_file = forms.FileField(
-        label=gettext_lazy('Backup File'),
-        help_text=gettext_lazy('Select the backup file to restore from.'),
-        widget=forms.FileInput(attrs={'class': 'form-control', 'accept': '.dump,.gz,.sql,.zip'}),
-    )
-
-    backup_password = forms.CharField(
-        widget=forms.PasswordInput(
-            attrs={
-                'class': 'form-control',
-                'placeholder': gettext_lazy('Enter backup password (optional)'),
-                'autocomplete': 'current-password',
-            }
-        ),
-        label=gettext_lazy('Backup Password'),
-        help_text=gettext_lazy(
-            'Enter the backup password if the backup was created with DEK encryption. '
-            'Leave empty if no password was set.'
-        ),
-        required=False,
-    )
-
-    def clean_backup_file(self) -> Any:
-        """Validate the backup file."""
-        backup_file = self.cleaned_data.get('backup_file')
-
-        if not backup_file:
-            raise forms.ValidationError(gettext_lazy('No backup file provided.'))
-
-        if not hasattr(backup_file, 'name') or not isinstance(backup_file.name, str):
-            raise forms.ValidationError(gettext_lazy('Invalid backup file name.'))
-
-        # Check file extension
-        allowed_extensions = ['.dump', '.gz', '.sql', '.zip']
-        if not any(backup_file.name.lower().endswith(ext) for ext in allowed_extensions):
-            raise forms.ValidationError(
-                gettext_lazy('Invalid file type. Allowed types: %(extensions)s')
-                % {'extensions': ', '.join(allowed_extensions)}
-            )
-
-        # Check file size (e.g., max 100MB)
-        if backup_file.size > 100 * 1024 * 1024:
-            raise forms.ValidationError(gettext_lazy('File too large. Maximum size is 100MB.'))
-
-        return backup_file
-
-    def clean_backup_password(self) -> str:
-        """Clean the backup password field."""
-        password = self.cleaned_data.get('backup_password')
-
-        # If password is provided, do basic validation
-        if password and len(password) > self.MAX_PASSWORD_LENGTH:
-            msg = f'Password is too long (maximum {self.MAX_PASSWORD_LENGTH} characters).'
-            raise forms.ValidationError(msg)
-
-        return password or ''
-
-
-class PasswordAutoRestoreForm(forms.Form):
-    """Form for filling the password for auto-restore."""
-
-    password = forms.CharField(
-        widget=forms.PasswordInput(
-            attrs={
-                'class': 'form-control',
-                'placeholder': gettext_lazy('Enter backup password'),
-                'autocomplete': 'new-password',
-            }
-        ),
-        label=gettext_lazy('Backup Password'),
-        required=True,
-    )
-
-    def clean_password(self) -> str:
-        """Clean and validate the password field using Django's password validators.
-
-        Returns:
-            The cleaned password.
-
-        Raises:
-            ValidationError: If password validation fails.
-        """
-        password = self.cleaned_data.get('password')
-
-        if not isinstance(password, str) or not password:
-            raise forms.ValidationError(gettext_lazy('Password is required.'))
-
-        return password

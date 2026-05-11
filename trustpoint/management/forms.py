@@ -22,7 +22,6 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
-from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel
 from crypto.models import BackendKind, CryptoProviderProfileModel
 from management.models import (
     BackupOptions,
@@ -838,40 +837,6 @@ class TlsAddFileImportSeparateFilesForm(LoggerMixin, forms.Form):
     def get_saved_credential(self) -> CredentialModel:
         """Return the saved credential."""
         return self.saved_credential
-
-class KeyStorageConfigForm(forms.Form):
-    """Read-only summary form for the configured managed-crypto and app-secret backends."""
-
-    managed_crypto_backend = forms.ChoiceField(
-        choices=BackendKind.choices,
-        required=False,
-        disabled=True,
-        label=_('Managed Crypto Backend'),
-    )
-    app_secret_backend = forms.ChoiceField(
-        choices=AppSecretBackendKind.choices,
-        required=False,
-        disabled=True,
-        label=_('Application-Secret Backend'),
-    )
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the read-only backend summary."""
-        super().__init__(*args, **kwargs)
-        profile = CryptoProviderProfileModel.objects.filter(active=True).first()
-        backend = AppSecretBackendModel.objects.first()
-        self.fields['managed_crypto_backend'].initial = profile.backend_kind if profile else None
-        self.fields['app_secret_backend'].initial = backend.backend_kind if backend else None
-
-    def save_with_commit(self) -> NoReturn:
-        """Reject legacy post-setup backend mutation through the management UI."""
-        msg = _('Trustpoint backend configuration is managed by the setup wizard and cannot be changed here.')
-        raise ValidationError(msg)
-
-    def save_without_commit(self) -> NoReturn:
-        """Reject legacy post-setup backend mutation through the management UI."""
-        msg = _('Trustpoint backend configuration is managed by the setup wizard and cannot be changed here.')
-        raise ValidationError(msg)
 
 
 class PKCS11ConfigForm(forms.Form):

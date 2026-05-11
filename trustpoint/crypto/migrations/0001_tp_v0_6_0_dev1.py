@@ -19,7 +19,7 @@ class Migration(migrations.Migration):
                 ('status', models.CharField(choices=[('never', 'Never probed'), ('success', 'Success'), ('failure', 'Failure')], max_length=16)),
                 ('probed_at', models.DateTimeField(default=django.utils.timezone.now, editable=False)),
                 ('probe_hash', models.CharField(db_index=True, max_length=64)),
-                ('error_summary', models.TextField(blank=True, null=True)),
+                ('error_summary', models.TextField(blank=True, default='')),
             ],
             options={
                 'db_table': 'crypto_provider_capability_snapshot',
@@ -35,7 +35,7 @@ class Migration(migrations.Migration):
                 ('active', models.BooleanField(default=False)),
                 ('last_probe_status', models.CharField(choices=[('never', 'Never probed'), ('success', 'Success'), ('failure', 'Failure')], default='never', max_length=16)),
                 ('last_probe_at', models.DateTimeField(blank=True, null=True)),
-                ('last_probe_error', models.TextField(blank=True, null=True)),
+                ('last_probe_error', models.TextField(blank=True, default='')),
                 ('created_at', models.DateTimeField(default=django.utils.timezone.now, editable=False)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('current_capability_snapshot', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='crypto.cryptoprovidercapabilitysnapshotmodel')),
@@ -70,7 +70,7 @@ class Migration(migrations.Migration):
                 ('profile', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='rest_config', serialize=False, to='crypto.cryptoproviderprofilemodel')),
                 ('base_url', models.URLField()),
                 ('auth_type', models.CharField(choices=[('none', 'None'), ('bearer_env', 'Bearer token from environment'), ('api_key_env', 'API key from environment'), ('mtls', 'Mutual TLS')], max_length=24)),
-                ('auth_ref', models.TextField(blank=True, null=True)),
+                ('auth_ref', models.TextField(blank=True, default='')),
                 ('timeout_seconds', models.FloatField(default=5.0)),
                 ('verify_tls', models.BooleanField(default=True)),
             ],
@@ -83,7 +83,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('profile', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='software_config', serialize=False, to='crypto.cryptoproviderprofilemodel')),
                 ('encryption_source', models.CharField(choices=[('env', 'Environment variable'), ('file', 'File path'), ('dev_plaintext', 'Dev plaintext only')], default='env', max_length=24)),
-                ('encryption_source_ref', models.TextField(blank=True, help_text='Environment variable name or file path containing the encryption secret.', null=True)),
+                ('encryption_source_ref', models.TextField(blank=True, default='', help_text='Environment variable name or file path containing the encryption secret.')),
                 ('allow_exportable_private_keys', models.BooleanField(default=False)),
             ],
             options={
@@ -100,7 +100,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('alias', models.CharField(help_text='Stable application-unique key alias.', max_length=255, unique=True)),
-                ('provider_label', models.CharField(blank=True, help_text='Optional provider-side diagnostic label.', max_length=255, null=True)),
+                ('provider_label', models.CharField(blank=True, default='', help_text='Optional provider-side diagnostic label.', max_length=255)),
                 ('algorithm', models.CharField(max_length=16)),
                 ('public_key_fingerprint_sha256', models.CharField(help_text='SHA-256 fingerprint of SubjectPublicKeyInfo DER, hex encoded.', max_length=64)),
                 ('signing_execution_mode', models.CharField(default='complete_backend', help_text='How Trustpoint is allowed to execute managed-key signing.', max_length=32)),
@@ -108,7 +108,7 @@ class Migration(migrations.Migration):
                 ('status', models.CharField(choices=[('active', 'Active'), ('missing', 'Missing from provider'), ('mismatch', 'Public key mismatch'), ('error', 'Verification error')], default='active', max_length=16)),
                 ('created_at', models.DateTimeField(default=django.utils.timezone.now, editable=False)),
                 ('last_verified_at', models.DateTimeField(blank=True, null=True)),
-                ('last_verification_error', models.TextField(blank=True, null=True)),
+                ('last_verification_error', models.TextField(blank=True, default='')),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('provider_profile', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='managed_keys', to='crypto.cryptoproviderprofilemodel')),
             ],
@@ -132,7 +132,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('managed_key', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='rest_binding', serialize=False, to='crypto.cryptomanagedkeymodel')),
                 ('remote_key_id', models.CharField(max_length=255)),
-                ('remote_key_version', models.CharField(blank=True, max_length=128, null=True)),
+                ('remote_key_version', models.CharField(blank=True, default='', max_length=128)),
                 ('provider_profile', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name='rest_key_bindings', to='crypto.cryptoproviderprofilemodel')),
             ],
             options={
@@ -156,10 +156,10 @@ class Migration(migrations.Migration):
             name='CryptoProviderCapabilityPkcs11DetailModel',
             fields=[
                 ('snapshot', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='pkcs11_detail', serialize=False, to='crypto.cryptoprovidercapabilitysnapshotmodel')),
-                ('token_label', models.CharField(blank=True, max_length=128, null=True)),
-                ('token_serial', models.CharField(blank=True, max_length=128, null=True)),
-                ('token_model', models.CharField(blank=True, max_length=128, null=True)),
-                ('token_manufacturer', models.CharField(blank=True, max_length=128, null=True)),
+                ('token_label', models.CharField(blank=True, default='', max_length=128)),
+                ('token_serial', models.CharField(blank=True, default='', max_length=128)),
+                ('token_model', models.CharField(blank=True, default='', max_length=128)),
+                ('token_manufacturer', models.CharField(blank=True, default='', max_length=128)),
                 ('slot_id', models.PositiveIntegerField(blank=True, null=True)),
                 ('snapshot_payload', models.JSONField(default=dict)),
             ],
@@ -173,8 +173,8 @@ class Migration(migrations.Migration):
             fields=[
                 ('profile', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='pkcs11_config', serialize=False, to='crypto.cryptoproviderprofilemodel')),
                 ('module_path', models.TextField()),
-                ('token_label', models.CharField(blank=True, max_length=128, null=True)),
-                ('token_serial', models.CharField(blank=True, max_length=128, null=True)),
+                ('token_label', models.CharField(blank=True, default='', max_length=128)),
+                ('token_serial', models.CharField(blank=True, default='', max_length=128)),
                 ('slot_id', models.PositiveIntegerField(blank=True, null=True)),
                 ('auth_source', models.CharField(choices=[('env', 'Environment variable'), ('file', 'File path')], max_length=16)),
                 ('auth_source_ref', models.TextField(help_text='Environment variable name or PIN file path depending on auth_source.')),

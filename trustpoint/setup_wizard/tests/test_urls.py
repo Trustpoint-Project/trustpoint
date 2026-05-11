@@ -14,6 +14,7 @@ from setup_wizard.views import (
     FreshInstallSummaryTruststoreDownloadView,
     FreshInstallSummaryView,
     FreshInstallTlsConfigView,
+    SetupWizardConnectExistingView,
     SetupWizardIndexView,
     SetupWizardRestoreBackupView,
 )
@@ -37,6 +38,12 @@ class SetupWizardUrlsTestCase(TestCase):
         self.assertEqual(url, '/setup-wizard/restore-backup/')
         resolver = resolve(url)
         self.assertEqual(resolver.func.view_class, SetupWizardRestoreBackupView)
+
+    def test_connect_existing_url(self) -> None:
+        url = reverse('setup_wizard:connect_existing')
+        self.assertEqual(url, '/setup-wizard/connect-existing/')
+        resolver = resolve(url)
+        self.assertEqual(resolver.func.view_class, SetupWizardConnectExistingView)
 
     def test_fresh_install_urls(self) -> None:
         cases = [

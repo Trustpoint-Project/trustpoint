@@ -137,7 +137,7 @@ def _ensure_software_profile_config(profile: CryptoProviderProfileModel) -> None
     """Ensure the software crypto profile has usable local encryption material."""
     defaults = {
         'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
-        'encryption_source_ref': None,
+        'encryption_source_ref': '',
         'allow_exportable_private_keys': False,
     }
     config, created = CryptoProviderSoftwareConfigModel.objects.get_or_create(

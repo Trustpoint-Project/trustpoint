@@ -23,7 +23,6 @@ from devices.models import (
 from django.http import HttpRequest
 from django.test import SimpleTestCase, TransactionTestCase
 from django.test.client import RequestFactory
-from management.models import KeyStorageConfig
 from pki.models import CertificateModel, CredentialModel, IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
@@ -144,9 +143,6 @@ DOMAIN_UNIQUE_NAME = 'domain_test_instance'
 @pytest.fixture
 def issuing_ca_instance() -> dict[str, Any]:
     """Fixture for a testing CaModel instance."""
-    # Ensure crypto storage config exists for encrypted fields
-    KeyStorageConfig.get_or_create_default()
-
     cert, priv_key = CertificateGenerator.create_root_ca(cn=CA_COMMON_NAME)
     issuing_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=cert, private_key=priv_key, chain=[], unique_name=UNIQUE_NAME, ca_type=CA_TYPE

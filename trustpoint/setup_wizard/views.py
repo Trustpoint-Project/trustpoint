@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import contextlib
 import enum
+import gzip
 import ipaddress
 import logging
 import os
 import subprocess
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import psycopg
 from cryptography.hazmat.primitives import hashes
@@ -22,9 +24,10 @@ from django.core.management import CommandError, call_command
 from django.db import DatabaseError, transaction
 from django.db.models import ProtectedError
 from django.forms import BaseForm
-from django.http import HttpRequest, HttpResponse, HttpResponseBase
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.utils.translation import gettext_lazy
 from django.views.generic import FormView, TemplateView, View
 
@@ -46,17 +49,27 @@ from crypto.models import (
     Pkcs11AuthSource,
     SoftwareKeyEncryptionSource,
 )
-from management.models import PKCS11Token
 from management.nginx_paths import (
     NGINX_CERT_CHAIN_PATH,
     NGINX_CERT_PATH,
     NGINX_KEY_PATH,
 )
-from pki.models import CaModel, CredentialModel
+from pki.models import CredentialModel
 from pki.models.truststore import ActiveTrustpointTlsServerCredentialModel
-from setup_wizard import SetupWizardState
+from setup_wizard.operational_attach import (
+    CompatibilityCheck,
+    CompatibilitySeverity,
+    OperationalAttachmentValidator,
+    OperationalAttachMode,
+    OperationalBackendBinding,
+    OperationalCompatibilityReport,
+    OperationalDatabaseConfig,
+    OperationalTargetConfig,
+    OperationalTargetInspector,
+)
 from setup_wizard.operational_handoff import (
     refresh_pending_operational_env,
+    run_operational_attach_handoff,
     run_operational_handoff,
     run_operational_runtime_switch,
 )
@@ -78,8 +91,7 @@ from setup_wizard.tls_credential import (
 from trustpoint.logger import LoggerMixin
 
 from .forms import (
-    BackupPasswordForm,
-    BackupRestoreForm,
+    EmptyForm,
     FreshInstallAdminUserModelForm,
     FreshInstallBackendConfigModelForm,
     FreshInstallCryptoStorageModelForm,
@@ -88,7 +100,8 @@ from .forms import (
     FreshInstallModelBaseForm,
     FreshInstallSummaryModelForm,
     FreshInstallTlsConfigForm,
-    PasswordAutoRestoreForm,
+    OperationalAttachConfigForm,
+    RestoreBackupImportForm,
 )
 from .models import SetupWizardCompletedModel, SetupWizardConfigModel
 
@@ -105,6 +118,482 @@ INSTALL_PKCS11_ASSETS = STATE_FILE_DIR / Path('install_pkcs11_assets.sh')
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
 FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-vendor.cfg'
+MAX_RESTORE_OUTPUT_LENGTH = 4000
+
+
+def restore_backup_staging_root() -> Path:
+    """Return the bootstrap-private directory for staged restore archives."""
+    bootstrap_db_path = Path(settings.DATABASES['default']['NAME'])
+    return bootstrap_db_path.parent / 'restore'
+
+
+def staged_restore_archive(config_model: SetupWizardConfigModel) -> Path | None:
+    """Return the staged restore archive path when it still exists."""
+    configured_path = (config_model.restore_backup_archive_path or '').strip()
+    if not configured_path:
+        return None
+
+    try:
+        archive_path = Path(configured_path).resolve(strict=False)
+    except (OSError, TypeError, ValueError):
+        return None
+
+    staging_root = restore_backup_staging_root().resolve(strict=False)
+    if not archive_path.is_relative_to(staging_root) or not archive_path.is_file():
+        return None
+    return archive_path
+
+
+def cleanup_staged_restore_archive(config_model: SetupWizardConfigModel) -> None:
+    """Remove an obsolete staged restore archive."""
+    archive_path = staged_restore_archive(config_model)
+    if archive_path is None:
+        return
+    with contextlib.suppress(OSError):
+        archive_path.unlink()
+
+
+def stage_restore_backup_archive(uploaded_archive: Any) -> str:
+    """Persist an uploaded restore archive in bootstrap-private storage."""
+    original_name = str(getattr(uploaded_archive, 'name', '')).lower()
+    suffixes = ('.dump.gz.gpg', '.dump.gpg', '.dump.gz', '.dump', '.gpg')
+    suffix = next((value for value in suffixes if original_name.endswith(value)), '.dump')
+    staging_root = restore_backup_staging_root()
+    staging_root.mkdir(parents=True, exist_ok=True)
+    staging_root.chmod(0o700)
+    archive_path = staging_root / f'restore-{uuid.uuid4().hex}{suffix}'
+    with archive_path.open('wb') as destination:
+        for chunk in uploaded_archive.chunks():
+            destination.write(chunk)
+    archive_path.chmod(0o600)
+    return str(archive_path)
+
+
+def _looks_like_gzip(path: Path) -> bool:
+    """Return whether the file starts with the gzip magic bytes."""
+    with path.open('rb') as file:
+        return file.read(2) == b'\x1f\x8b'
+
+
+def _looks_like_gpg(path: Path) -> bool:
+    """Return whether the file looks like an OpenPGP encrypted payload."""
+    with path.open('rb') as file:
+        prefix = file.read(64)
+    return prefix.startswith(b'-----BEGIN PGP MESSAGE-----') or prefix[:1] in {b'\x85', b'\x8c', b'\x8d'}
+
+
+def _open_restore_archive(archive_path: Path) -> Any:
+    """Open a staged restore archive, transparently decompressing gzip files."""
+    if _looks_like_gzip(archive_path):
+        return gzip.open(archive_path, 'rb')
+    return archive_path.open('rb')
+
+
+def _restore_archive_is_custom_pg_dump(archive_path: Path) -> bool:
+    """Return whether the staged archive is a PostgreSQL custom-format dump."""
+    with _open_restore_archive(archive_path) as archive_file:
+        return archive_file.read(5) == b'PGDMP'
+
+
+def _format_restore_process_output(completed_process: subprocess.CompletedProcess[bytes]) -> str:
+    """Return bounded restore command output for the wizard."""
+    output = '\n'.join(
+        payload.decode('utf-8', errors='replace').strip()
+        for payload in (completed_process.stdout, completed_process.stderr)
+        if payload and payload.strip()
+    )
+    if len(output) > MAX_RESTORE_OUTPUT_LENGTH:
+        return output[-MAX_RESTORE_OUTPUT_LENGTH:]
+    return output
+
+
+def _decrypt_restore_archive_if_needed(archive_path: Path, backup_password: str) -> Path | None:
+    """Decrypt a GPG-encrypted restore archive and return the temporary decrypted file path."""
+    if not backup_password:
+        return None
+    if not _looks_like_gpg(archive_path):
+        return None
+
+    decrypted_suffix = '.dump.gz' if archive_path.name.lower().endswith('.gz.gpg') else '.dump'
+    decrypted_path = restore_backup_staging_root() / f'decrypted-{uuid.uuid4().hex}{decrypted_suffix}'
+    completed_process = subprocess.run(  # noqa: S603,S607
+        [
+            'gpg',
+            '--batch',
+            '--yes',
+            '--pinentry-mode',
+            'loopback',
+            '--passphrase-fd',
+            '0',
+            '--output',
+            str(decrypted_path),
+            '--decrypt',
+            str(archive_path),
+        ],
+        input=backup_password.encode('utf-8'),
+        capture_output=True,
+        check=False,
+    )
+    if completed_process.returncode == 0:
+        decrypted_path.chmod(0o600)
+        return decrypted_path
+
+    output = _format_restore_process_output(completed_process)
+    with contextlib.suppress(OSError):
+        decrypted_path.unlink()
+    raise DjangoValidationError(f'Backup archive decryption failed: {output or "gpg failed without output"}')
+
+
+def restore_operational_database_from_backup(
+    config_model: SetupWizardConfigModel,
+    *,
+    backup_password: str = '',
+) -> None:
+    """Restore the staged backup archive into the configured operational PostgreSQL database."""
+    archive_path = staged_restore_archive(config_model)
+    if archive_path is None:
+        raise DjangoValidationError('No staged restore archive is available.')
+    if _looks_like_gpg(archive_path) and not backup_password:
+        raise DjangoValidationError('This backup archive is encrypted. Enter the backup password.')
+    decrypted_path = _decrypt_restore_archive_if_needed(archive_path, backup_password)
+    restore_source_path = decrypted_path or archive_path
+
+    env = os.environ.copy()
+    env['PGPASSWORD'] = config_model.operational_db_password
+    common_args = [
+        '--host',
+        config_model.operational_db_host,
+        '--port',
+        str(config_model.operational_db_port),
+        '--username',
+        config_model.operational_db_user,
+        '--dbname',
+        config_model.operational_db_name,
+    ]
+    if _restore_archive_is_custom_pg_dump(restore_source_path):
+        command = [
+            'pg_restore',
+            '--exit-on-error',
+            '--clean',
+            '--if-exists',
+            '--no-owner',
+            '--no-privileges',
+            *common_args,
+        ]
+    else:
+        command = ['psql', '--set', 'ON_ERROR_STOP=1', *common_args]
+
+    try:
+        with _open_restore_archive(restore_source_path) as archive_file:
+            completed_process = subprocess.run(  # noqa: S603,S607
+                command,
+                stdin=archive_file,
+                env=env,
+                capture_output=True,
+                check=False,
+            )
+    except FileNotFoundError as exception:
+        error_message = f'Restore tool not available in this container: {exception.filename}.'
+        raise DjangoValidationError(error_message) from exception
+    finally:
+        if decrypted_path is not None:
+            with contextlib.suppress(OSError):
+                decrypted_path.unlink()
+
+    if completed_process.returncode == 0:
+        return
+
+    output = _format_restore_process_output(completed_process)
+    raise DjangoValidationError(f'Database restore failed: {output or "restore command failed without output"}')
+
+
+def record_bootstrap_progress(
+    config_model: SetupWizardConfigModel,
+    *,
+    flow: SetupWizardConfigModel.BootstrapFlow | OperationalAttachMode,
+    step_name: str,
+) -> None:
+    """Persist the currently visible bootstrap flow and step in SQLite."""
+    config_model.bootstrap_active_flow = str(getattr(flow, 'value', flow))
+    config_model.bootstrap_current_step = step_name
+    config_model.save(update_fields=['bootstrap_active_flow', 'bootstrap_current_step'])
+
+
+def is_pkcs11_test_connection_submission(request: HttpRequest) -> bool:
+    """Return whether the current POST requests a PKCS#11 connection test."""
+    return request.POST.get('wizard_action') == 'test_connection'
+
+
+def is_clear_pkcs11_module_submission(request: HttpRequest) -> bool:
+    """Return whether the current POST requests staged library removal."""
+    return request.POST.get('wizard_action') == 'clear_module'
+
+
+def is_clear_pkcs11_pin_submission(request: HttpRequest) -> bool:
+    """Return whether the current POST requests staged PIN removal."""
+    return request.POST.get('wizard_action') == 'clear_pin'
+
+
+def is_clear_pkcs11_config_submission(request: HttpRequest) -> bool:
+    """Return whether the current POST requests staged vendor config removal."""
+    return request.POST.get('wizard_action') == 'clear_pkcs11_config'
+
+
+def is_clear_restore_backup_submission(request: HttpRequest) -> bool:
+    """Return whether the current POST requests staged restore archive removal."""
+    return request.POST.get('wizard_action') == 'clear_restore_backup'
+
+
+def clear_staged_pkcs11_module(config_model: SetupWizardConfigModel) -> None:
+    """Remove the currently staged PKCS#11 library for this wizard session."""
+    cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_module_path)
+    config_model.fresh_install_pkcs11_module_path = ''
+    config_model.save(update_fields=['fresh_install_pkcs11_module_path'])
+
+
+def clear_staged_pkcs11_pin(config_model: SetupWizardConfigModel) -> None:
+    """Remove the currently staged PKCS#11 user PIN for this wizard session."""
+    cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_auth_source_ref)
+    config_model.fresh_install_pkcs11_auth_source_ref = ''
+    config_model.save(update_fields=['fresh_install_pkcs11_auth_source_ref'])
+
+
+def clear_staged_pkcs11_config(config_model: SetupWizardConfigModel) -> None:
+    """Remove the currently staged PKCS#11 vendor config for this wizard session."""
+    cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_config_path)
+    config_model.fresh_install_pkcs11_config_path = ''
+    config_model.fresh_install_pkcs11_config_env_var = ''
+    config_model.save(update_fields=['fresh_install_pkcs11_config_path', 'fresh_install_pkcs11_config_env_var'])
+
+
+def stage_uploaded_pkcs11_module(uploaded_module: Any) -> str:
+    """Write an uploaded PKCS#11 library to private one-time wizard staging."""
+    staging_root = wizard_pkcs11_staging_root()
+    staging_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    staging_root.chmod(0o700)
+    suffix = '.so' if '.so' in str(getattr(uploaded_module, 'name', '')).lower() else '.bin'
+    staged_path = staging_root / f'pkcs11-module-{uuid.uuid4().hex}{suffix}'
+    with staged_path.open('wb') as destination_file:
+        for chunk in uploaded_module.chunks():
+            destination_file.write(chunk)
+    staged_path.chmod(0o600)
+    return str(staged_path)
+
+
+def stage_pkcs11_user_pin(user_pin: str) -> str:
+    """Write the entered PKCS#11 user PIN to private one-time wizard staging."""
+    staging_root = wizard_pkcs11_staging_root()
+    staging_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    staging_root.chmod(0o700)
+    staged_path = staging_root / f'pkcs11-user-pin-{uuid.uuid4().hex}.txt'
+    staged_path.write_text(user_pin, encoding='utf-8')
+    staged_path.chmod(0o600)
+    return str(staged_path)
+
+
+def stage_uploaded_pkcs11_config(uploaded_config: Any) -> str:
+    """Write an optional vendor PKCS#11 config to private one-time wizard staging."""
+    staging_root = wizard_pkcs11_staging_root()
+    staging_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    staging_root.chmod(0o700)
+    suffix = Path(str(getattr(uploaded_config, 'name', 'vendor.cfg'))).suffix or '.cfg'
+    staged_path = staging_root / f'pkcs11-vendor-config-{uuid.uuid4().hex}{suffix}'
+    with staged_path.open('wb') as destination_file:
+        for chunk in uploaded_config.chunks():
+            destination_file.write(chunk)
+    staged_path.chmod(0o600)
+    return str(staged_path)
+
+
+def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelForm) -> None:
+    """Persist staged PKCS#11 wizard inputs without advancing the wizard."""
+    if form.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+        return
+
+    update_fields = [
+        'fresh_install_pkcs11_token_label',
+        'fresh_install_pkcs11_token_serial',
+        'fresh_install_pkcs11_slot_id',
+        'fresh_install_pkcs11_auth_source',
+        'fresh_install_pkcs11_config_env_var',
+    ]
+
+    previous_token_label = form.instance.fresh_install_pkcs11_token_label
+    previous_slot_id = form.instance.fresh_install_pkcs11_slot_id
+    form.instance.fresh_install_pkcs11_token_label = form.cleaned_data['fresh_install_pkcs11_token_label']
+    form.instance.fresh_install_pkcs11_slot_id = form.cleaned_data.get('fresh_install_pkcs11_slot_id')
+    form.instance.fresh_install_pkcs11_config_env_var = form.cleaned_data.get('pkcs11_config_env_var') or ''
+
+    uploaded_module = form.cleaned_data.get('pkcs11_module_upload')
+    current_staged_module = existing_wizard_pkcs11_staged_file(form.instance.fresh_install_pkcs11_module_path)
+    current_module_path = (form.instance.fresh_install_pkcs11_module_path or '').strip()
+    current_module_exists = bool(current_module_path and Path(current_module_path).is_file())
+    if uploaded_module is not None:
+        cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
+        form.instance.fresh_install_pkcs11_module_path = stage_uploaded_pkcs11_module(uploaded_module)
+        update_fields.append('fresh_install_pkcs11_module_path')
+    elif current_staged_module is None and local_dev_pkcs11_handoff_available():
+        local_dev_module = str(local_dev_pkcs11_module_path())
+        if not current_module_path or current_module_path == local_dev_module or not current_module_exists:
+            cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
+            form.instance.fresh_install_pkcs11_module_path = local_dev_module
+            update_fields.append('fresh_install_pkcs11_module_path')
+
+    user_pin = form.cleaned_data.get('pkcs11_user_pin') or ''
+    if user_pin:
+        cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_auth_source_ref)
+        form.instance.fresh_install_pkcs11_auth_source_ref = stage_pkcs11_user_pin(user_pin)
+        update_fields.append('fresh_install_pkcs11_auth_source_ref')
+
+    uploaded_config = form.cleaned_data.get('pkcs11_config_upload')
+    if uploaded_config is not None:
+        cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
+        form.instance.fresh_install_pkcs11_config_path = stage_uploaded_pkcs11_config(uploaded_config)
+        update_fields.append('fresh_install_pkcs11_config_path')
+
+    if (
+        form.instance.fresh_install_pkcs11_token_label != previous_token_label
+        or form.instance.fresh_install_pkcs11_slot_id != previous_slot_id
+    ):
+        form.instance.fresh_install_pkcs11_token_serial = ''
+        update_fields.append('fresh_install_pkcs11_token_serial')
+    form.instance.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
+    form.instance.save(update_fields=update_fields)
+
+    form.refresh_pkcs11_state()
+
+
+def persist_valid_pkcs11_fields_from_invalid_form(form: FreshInstallBackendConfigModelForm) -> None:
+    """Preserve valid PKCS#11 inputs even when the submitted form has other errors."""
+    if form.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+        return
+
+    update_fields: list[str] = []
+
+    uploaded_module = form.files.get('pkcs11_module_upload')
+    if uploaded_module is not None and 'pkcs11_module_upload' not in form.errors:
+        cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
+        form.instance.fresh_install_pkcs11_module_path = stage_uploaded_pkcs11_module(uploaded_module)
+        form.staged_pkcs11_module_name = Path(form.instance.fresh_install_pkcs11_module_path).name
+        update_fields.append('fresh_install_pkcs11_module_path')
+
+    uploaded_config = form.files.get('pkcs11_config_upload')
+    if uploaded_config is not None and 'pkcs11_config_upload' not in form.errors:
+        cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
+        form.instance.fresh_install_pkcs11_config_path = stage_uploaded_pkcs11_config(uploaded_config)
+        form.staged_pkcs11_config_name = Path(form.instance.fresh_install_pkcs11_config_path).name
+        update_fields.append('fresh_install_pkcs11_config_path')
+
+    config_env_var = form.data.get('pkcs11_config_env_var', '').strip()
+    if config_env_var and 'pkcs11_config_env_var' not in form.errors:
+        form.instance.fresh_install_pkcs11_config_env_var = config_env_var
+        update_fields.append('fresh_install_pkcs11_config_env_var')
+
+    user_pin = form.data.get('pkcs11_user_pin', '')
+    if user_pin and 'pkcs11_user_pin' not in form.errors:
+        cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_auth_source_ref)
+        form.instance.fresh_install_pkcs11_auth_source_ref = stage_pkcs11_user_pin(str(user_pin))
+        form.instance.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
+        form.has_staged_pkcs11_pin = True
+        update_fields.extend(
+            [
+                'fresh_install_pkcs11_auth_source_ref',
+                'fresh_install_pkcs11_auth_source',
+            ]
+        )
+
+    token_label = form.data.get('fresh_install_pkcs11_token_label', '').strip()
+    if token_label and 'fresh_install_pkcs11_token_label' not in form.errors:
+        form.instance.fresh_install_pkcs11_token_label = token_label
+        update_fields.append('fresh_install_pkcs11_token_label')
+    raw_slot_id = form.data.get('fresh_install_pkcs11_slot_id', '').strip()
+    if raw_slot_id and 'fresh_install_pkcs11_slot_id' not in form.errors:
+        form.instance.fresh_install_pkcs11_slot_id = int(raw_slot_id)
+        update_fields.append('fresh_install_pkcs11_slot_id')
+
+    if update_fields:
+        form.instance.save(update_fields=update_fields)
+
+
+def build_staged_pkcs11_test_profile(form: FreshInstallBackendConfigModelForm) -> Pkcs11ProviderProfile:
+    """Build a temporary PKCS#11 provider profile from staged wizard inputs."""
+    module_path = (form.instance.fresh_install_pkcs11_module_path or '').strip()
+    pin_file = (form.instance.fresh_install_pkcs11_auth_source_ref or '').strip()
+    config_file = (form.instance.fresh_install_pkcs11_config_path or '').strip()
+    config_env_var = (form.instance.fresh_install_pkcs11_config_env_var or '').strip()
+    if (not module_path or not _path_exists(Path(module_path))) and _path_exists(FINAL_WIZARD_PKCS11_MODULE_PATH):
+        module_path = str(FINAL_WIZARD_PKCS11_MODULE_PATH)
+        form.instance.fresh_install_pkcs11_module_path = module_path
+    if (not pin_file or not _path_exists(Path(pin_file))) and _path_exists(FINAL_WIZARD_PKCS11_PIN_PATH):
+        pin_file = str(FINAL_WIZARD_PKCS11_PIN_PATH)
+        form.instance.fresh_install_pkcs11_auth_source_ref = pin_file
+        form.instance.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
+    if (not config_file or not _path_exists(Path(config_file))) and _path_exists(FINAL_WIZARD_PKCS11_CONFIG_PATH):
+        config_file = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
+        form.instance.fresh_install_pkcs11_config_path = config_file
+    if config_file and config_env_var:
+        os.environ[config_env_var] = config_file
+    slot_id = form.instance.fresh_install_pkcs11_slot_id
+    token_label = (form.instance.fresh_install_pkcs11_token_label or '').strip() or None
+    token_serial = (form.instance.fresh_install_pkcs11_token_serial or '').strip() or None
+
+    return Pkcs11ProviderProfile(
+        name='setup-wizard-pkcs11-test',
+        module_path=module_path,
+        token=Pkcs11TokenSelector(token_label=token_label, token_serial=token_serial, slot_id=slot_id),
+        user_pin_file=pin_file,
+        max_sessions=2,
+        borrow_timeout_seconds=5.0,
+        rw_sessions=True,
+    )
+
+
+def run_staged_pkcs11_connection_test(
+    view: Any,
+    form: FreshInstallBackendConfigModelForm,
+    *,
+    success_redirect_name: str,
+) -> HttpResponse:
+    """Probe the staged PKCS#11 configuration and keep the user on this step."""
+    try:
+        backend = Pkcs11Backend(profile=build_staged_pkcs11_test_profile(form))
+        backend.verify_authentication()
+        capabilities = backend.probe_capabilities()
+    except Exception as exception:
+        view.logger.exception('PKCS#11 setup-wizard connection test failed.')
+        error_detail = str(exception).strip() or type(exception).__name__
+        form.add_error(None, f'Could not connect to the configured PKCS#11 backend: {error_detail}')
+        return view.render_to_response(view.get_context_data(form=form))
+    finally:
+        if 'backend' in locals():
+            backend.close()
+
+    update_fields: list[str] = []
+    if form.instance.fresh_install_pkcs11_module_path == str(FINAL_WIZARD_PKCS11_MODULE_PATH):
+        update_fields.append('fresh_install_pkcs11_module_path')
+    if form.instance.fresh_install_pkcs11_auth_source_ref == str(FINAL_WIZARD_PKCS11_PIN_PATH):
+        update_fields.extend(['fresh_install_pkcs11_auth_source', 'fresh_install_pkcs11_auth_source_ref'])
+    if form.instance.fresh_install_pkcs11_config_path == str(FINAL_WIZARD_PKCS11_CONFIG_PATH):
+        update_fields.append('fresh_install_pkcs11_config_path')
+    token_label = capabilities.token.label or form.instance.fresh_install_pkcs11_token_label
+    if capabilities.token.label and capabilities.token.label != form.instance.fresh_install_pkcs11_token_label:
+        form.instance.fresh_install_pkcs11_token_label = capabilities.token.label
+        update_fields.append('fresh_install_pkcs11_token_label')
+    if capabilities.token.serial and capabilities.token.serial != form.instance.fresh_install_pkcs11_token_serial:
+        form.instance.fresh_install_pkcs11_token_serial = capabilities.token.serial
+        update_fields.append('fresh_install_pkcs11_token_serial')
+    if capabilities.token.slot_id != form.instance.fresh_install_pkcs11_slot_id:
+        form.instance.fresh_install_pkcs11_slot_id = capabilities.token.slot_id
+        update_fields.append('fresh_install_pkcs11_slot_id')
+    if update_fields:
+        form.instance.save(update_fields=update_fields)
+    token_serial = capabilities.token.serial or 'unknown serial'
+    messages.success(
+        view.request,
+        f'PKCS#11 connection successful. Reached token {token_label!r} ({token_serial}) in slot '
+        f'{capabilities.token.slot_id}.',
+    )
+    return redirect(success_redirect_name)
 
 
 def _path_exists(path: Path) -> bool:
@@ -118,11 +607,6 @@ def _path_exists(path: Path) -> bool:
 def _save_untyped_model(instance: Any) -> None:
     """Save a Django model whose save method is not typed for mypy."""
     instance.save()
-
-
-# TODO(AlexHx8472): no transitions anymore  # noqa: FIX002
-SCRIPT_WIZARD_BACKUP_PASSWORD = STATE_FILE_DIR / Path('transition/wizard_backup_password.sh')
-SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS = STATE_FILE_DIR / Path('transition/wizard_auto_restore_success.sh')
 
 
 class TrustpointWizardError(Exception):
@@ -185,6 +669,48 @@ class SetupWizardIndexView(LoggerMixin, TemplateView):
 
     http_method_names = ('get',)
     template_name = 'setup_wizard/index.html'
+
+    @staticmethod
+    def _continue_url(config_model: SetupWizardConfigModel) -> str | None:
+        """Return a URL for the last recorded bootstrap step, if available."""
+        active_flow = config_model.bootstrap_active_flow
+        current_step = config_model.bootstrap_current_step
+        if not active_flow or not current_step:
+            return None
+
+        fresh_install_steps = {
+            'admin_user': 'fresh_install_admin_user',
+            'database': 'fresh_install_database',
+            'crypto_storage': 'fresh_install_crypto_storage',
+            'backend_config': 'fresh_install_backend_config',
+            'demo_data': 'fresh_install_demo_data',
+            'tls_config': 'fresh_install_tls_config',
+            'summary': 'fresh_install_summary',
+        }
+        attach_steps = {
+            OperationalAttachMode.CONNECT_EXISTING: {
+                'database': 'connect_existing_database',
+                'crypto-storage': 'connect_existing_crypto_storage',
+                'backend-config': 'connect_existing_backend_config',
+                'summary': 'connect_existing_summary',
+            },
+            OperationalAttachMode.RESTORE_BACKUP: RESTORE_BACKUP_STEP_URL_NAMES,
+        }
+        url_name: str | None = None
+        if active_flow == SetupWizardConfigModel.BootstrapFlow.FRESH_INSTALL.value:
+            url_name = fresh_install_steps.get(current_step)
+        else:
+            with contextlib.suppress(ValueError):
+                url_name = attach_steps.get(OperationalAttachMode(active_flow), {}).get(current_step)
+        return reverse(f'setup_wizard:{url_name}') if url_name else None
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Render the setup mode chooser with an optional resume link."""
+        context = super().get_context_data(**kwargs)
+        config_model = SetupWizardConfigModel.get_singleton()
+        context['continue_url'] = self._continue_url(config_model)
+        context['continue_flow'] = config_model.get_bootstrap_active_flow_display()
+        return context
 
     def get(self, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests for the setup mode wizard page.
@@ -362,9 +888,13 @@ class FreshInstallFormBaseView[FormT: BaseForm](LoginRequiredMixin, LoggerMixin,
     def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle GET requests and update the unlocked wizard step."""
         config_model = SetupWizardConfigModel.get_singleton()
+        config_model.bootstrap_active_flow = SetupWizardConfigModel.BootstrapFlow.FRESH_INSTALL
+        config_model.bootstrap_current_step = self.step_state.name.lower()
         if config_model.fresh_install_current_step < self.step_state:
             config_model.fresh_install_current_step = self.step_state
             config_model.save()
+        else:
+            config_model.save(update_fields=['bootstrap_active_flow', 'bootstrap_current_step'])
         return super().get(request, *args, **kwargs)
 
 
@@ -400,6 +930,8 @@ class FreshInstallModelFormBaseView[FormT: FreshInstallModelBaseForm](FreshInsta
         form.save()
         config_model = SetupWizardConfigModel.get_singleton()
         config_model.mark_step_submitted(self.step_state)
+        config_model.bootstrap_active_flow = SetupWizardConfigModel.BootstrapFlow.FRESH_INSTALL
+        config_model.bootstrap_current_step = self.step_state.name.lower()
         config_model.save()
         return super().form_valid(form)
 
@@ -508,44 +1040,37 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
     @staticmethod
     def _is_test_connection_submission(request: HttpRequest) -> bool:
         """Return whether the current POST requests a PKCS#11 connection test."""
-        return request.POST.get('wizard_action') == 'test_connection'
+        return is_pkcs11_test_connection_submission(request)
 
     @staticmethod
     def _is_clear_module_submission(request: HttpRequest) -> bool:
         """Return whether the current POST requests staged library removal."""
-        return request.POST.get('wizard_action') == 'clear_module'
+        return is_clear_pkcs11_module_submission(request)
 
     @staticmethod
     def _is_clear_pin_submission(request: HttpRequest) -> bool:
         """Return whether the current POST requests staged PIN removal."""
-        return request.POST.get('wizard_action') == 'clear_pin'
+        return is_clear_pkcs11_pin_submission(request)
 
     @staticmethod
     def _is_clear_config_submission(request: HttpRequest) -> bool:
         """Return whether the current POST requests staged vendor config removal."""
-        return request.POST.get('wizard_action') == 'clear_pkcs11_config'
+        return is_clear_pkcs11_config_submission(request)
 
     @staticmethod
     def _clear_staged_pkcs11_module(config_model: SetupWizardConfigModel) -> None:
         """Remove the currently staged PKCS#11 library for this wizard session."""
-        cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_module_path)
-        config_model.fresh_install_pkcs11_module_path = ''
-        config_model.save(update_fields=['fresh_install_pkcs11_module_path'])
+        clear_staged_pkcs11_module(config_model)
 
     @staticmethod
     def _clear_staged_pkcs11_pin(config_model: SetupWizardConfigModel) -> None:
         """Remove the currently staged PKCS#11 user PIN for this wizard session."""
-        cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_auth_source_ref)
-        config_model.fresh_install_pkcs11_auth_source_ref = ''
-        config_model.save(update_fields=['fresh_install_pkcs11_auth_source_ref'])
+        clear_staged_pkcs11_pin(config_model)
 
     @staticmethod
     def _clear_staged_pkcs11_config(config_model: SetupWizardConfigModel) -> None:
         """Remove the currently staged PKCS#11 vendor config for this wizard session."""
-        cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_config_path)
-        config_model.fresh_install_pkcs11_config_path = ''
-        config_model.fresh_install_pkcs11_config_env_var = ''
-        config_model.save(update_fields=['fresh_install_pkcs11_config_path', 'fresh_install_pkcs11_config_env_var'])
+        clear_staged_pkcs11_config(config_model)
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Handle staged PKCS#11 asset removal before running normal form validation."""
@@ -568,174 +1093,51 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
     @staticmethod
     def _stage_uploaded_pkcs11_module(uploaded_module: Any) -> str:
         """Write an uploaded PKCS#11 library to private one-time wizard staging."""
-        staging_root = wizard_pkcs11_staging_root()
-        staging_root.mkdir(mode=0o700, parents=True, exist_ok=True)
-        staging_root.chmod(0o700)
-        suffix = '.so' if '.so' in str(getattr(uploaded_module, 'name', '')).lower() else '.bin'
-        staged_path = staging_root / f'pkcs11-module-{uuid.uuid4().hex}{suffix}'
-        with staged_path.open('wb') as destination_file:
-            for chunk in uploaded_module.chunks():
-                destination_file.write(chunk)
-        staged_path.chmod(0o600)
-        return str(staged_path)
+        return stage_uploaded_pkcs11_module(uploaded_module)
 
     @staticmethod
     def _stage_pkcs11_user_pin(user_pin: str) -> str:
         """Write the entered PKCS#11 user PIN to private one-time wizard staging."""
-        staging_root = wizard_pkcs11_staging_root()
-        staging_root.mkdir(mode=0o700, parents=True, exist_ok=True)
-        staging_root.chmod(0o700)
-        staged_path = staging_root / f'pkcs11-user-pin-{uuid.uuid4().hex}.txt'
-        staged_path.write_text(user_pin, encoding='utf-8')
-        staged_path.chmod(0o600)
-        return str(staged_path)
+        return stage_pkcs11_user_pin(user_pin)
 
     @staticmethod
     def _stage_uploaded_pkcs11_config(uploaded_config: Any) -> str:
         """Write an optional vendor PKCS#11 config to private one-time wizard staging."""
-        staging_root = wizard_pkcs11_staging_root()
-        staging_root.mkdir(mode=0o700, parents=True, exist_ok=True)
-        staging_root.chmod(0o700)
-        suffix = Path(str(getattr(uploaded_config, 'name', 'vendor.cfg'))).suffix or '.cfg'
-        staged_path = staging_root / f'pkcs11-vendor-config-{uuid.uuid4().hex}{suffix}'
-        with staged_path.open('wb') as destination_file:
-            for chunk in uploaded_config.chunks():
-                destination_file.write(chunk)
-        staged_path.chmod(0o600)
-        return str(staged_path)
+        return stage_uploaded_pkcs11_config(uploaded_config)
 
     def _persist_pkcs11_backend_config(self, form: FreshInstallBackendConfigModelForm) -> None:
         """Persist staged PKCS#11 wizard inputs without advancing the wizard."""
-        if form.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-            return
-
-        update_fields = [
-            'fresh_install_pkcs11_token_label',
-            'fresh_install_pkcs11_token_serial',
-            'fresh_install_pkcs11_slot_id',
-            'fresh_install_pkcs11_auth_source',
-            'fresh_install_pkcs11_config_env_var',
-        ]
-
-        previous_token_label = form.instance.fresh_install_pkcs11_token_label
-        previous_slot_id = form.instance.fresh_install_pkcs11_slot_id
-        form.instance.fresh_install_pkcs11_token_label = form.cleaned_data['fresh_install_pkcs11_token_label']
-        form.instance.fresh_install_pkcs11_slot_id = form.cleaned_data.get('fresh_install_pkcs11_slot_id')
-        form.instance.fresh_install_pkcs11_config_env_var = form.cleaned_data.get('pkcs11_config_env_var') or ''
-
-        uploaded_module = form.cleaned_data.get('pkcs11_module_upload')
-        current_staged_module = existing_wizard_pkcs11_staged_file(form.instance.fresh_install_pkcs11_module_path)
-        current_module_path = (form.instance.fresh_install_pkcs11_module_path or '').strip()
-        current_module_exists = bool(current_module_path and Path(current_module_path).is_file())
-        if uploaded_module is not None:
-            cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
-            form.instance.fresh_install_pkcs11_module_path = self._stage_uploaded_pkcs11_module(uploaded_module)
-            update_fields.append('fresh_install_pkcs11_module_path')
-        elif current_staged_module is None and local_dev_pkcs11_handoff_available():
-            local_dev_module = str(local_dev_pkcs11_module_path())
-            if not current_module_path or current_module_path == local_dev_module or not current_module_exists:
-                cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
-                form.instance.fresh_install_pkcs11_module_path = local_dev_module
-                update_fields.append('fresh_install_pkcs11_module_path')
-
-        user_pin = form.cleaned_data.get('pkcs11_user_pin') or ''
-        if user_pin:
-            cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_auth_source_ref)
-            form.instance.fresh_install_pkcs11_auth_source_ref = self._stage_pkcs11_user_pin(user_pin)
-            update_fields.append('fresh_install_pkcs11_auth_source_ref')
-
-        uploaded_config = form.cleaned_data.get('pkcs11_config_upload')
-        if uploaded_config is not None:
-            cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
-            form.instance.fresh_install_pkcs11_config_path = self._stage_uploaded_pkcs11_config(uploaded_config)
-            update_fields.append('fresh_install_pkcs11_config_path')
-
-        if (
-            form.instance.fresh_install_pkcs11_token_label != previous_token_label
-            or form.instance.fresh_install_pkcs11_slot_id != previous_slot_id
-        ):
-            form.instance.fresh_install_pkcs11_token_serial = ''
-            update_fields.append('fresh_install_pkcs11_token_serial')
-        form.instance.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
-        form.instance.save(update_fields=update_fields)
-
-        # The defaults are owned by the form until a public form API exists for this normalization step.
-        form._apply_pkcs11_defaults()  # noqa: SLF001
+        persist_staged_pkcs11_backend_config(form)
 
     @staticmethod
     def _build_pkcs11_test_profile(form: FreshInstallBackendConfigModelForm) -> Pkcs11ProviderProfile:
         """Build a temporary PKCS#11 provider profile from staged wizard inputs."""
-        module_path = (form.instance.fresh_install_pkcs11_module_path or '').strip()
-        pin_file = (form.instance.fresh_install_pkcs11_auth_source_ref or '').strip()
-        config_file = (form.instance.fresh_install_pkcs11_config_path or '').strip()
-        config_env_var = (form.instance.fresh_install_pkcs11_config_env_var or '').strip()
-        if (not module_path or not _path_exists(Path(module_path))) and _path_exists(FINAL_WIZARD_PKCS11_MODULE_PATH):
-            module_path = str(FINAL_WIZARD_PKCS11_MODULE_PATH)
-            form.instance.fresh_install_pkcs11_module_path = module_path
-        if (not pin_file or not _path_exists(Path(pin_file))) and _path_exists(FINAL_WIZARD_PKCS11_PIN_PATH):
-            pin_file = str(FINAL_WIZARD_PKCS11_PIN_PATH)
-            form.instance.fresh_install_pkcs11_auth_source_ref = pin_file
-            form.instance.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
-        if (not config_file or not _path_exists(Path(config_file))) and _path_exists(FINAL_WIZARD_PKCS11_CONFIG_PATH):
-            config_file = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
-            form.instance.fresh_install_pkcs11_config_path = config_file
-        if config_file and config_env_var:
-            os.environ[config_env_var] = config_file
-        slot_id = form.instance.fresh_install_pkcs11_slot_id
-        token_label = (form.instance.fresh_install_pkcs11_token_label or '').strip() or None
-        token_serial = (form.instance.fresh_install_pkcs11_token_serial or '').strip() or None
-
-        return Pkcs11ProviderProfile(
-            name='setup-wizard-pkcs11-test',
-            module_path=module_path,
-            token=Pkcs11TokenSelector(token_label=token_label, token_serial=token_serial, slot_id=slot_id),
-            user_pin_file=pin_file,
-            max_sessions=2,
-            borrow_timeout_seconds=5.0,
-            rw_sessions=True,
-        )
+        return build_staged_pkcs11_test_profile(form)
 
     def _test_pkcs11_connection(self, form: FreshInstallBackendConfigModelForm) -> HttpResponse:
         """Probe the staged PKCS#11 configuration and keep the user on this step."""
-        try:
-            backend = Pkcs11Backend(profile=self._build_pkcs11_test_profile(form))
-            backend.verify_authentication()
-            capabilities = backend.probe_capabilities()
-        except Exception as exception:
-            self.logger.exception('PKCS#11 setup-wizard connection test failed.')
-            error_detail = str(exception).strip() or type(exception).__name__
-            form.add_error(None, f'Could not connect to the configured PKCS#11 backend: {error_detail}')
-            return self.render_to_response(self.get_context_data(form=form))
-        finally:
-            if 'backend' in locals():
-                backend.close()
-
-        update_fields: list[str] = []
-        if form.instance.fresh_install_pkcs11_module_path == str(FINAL_WIZARD_PKCS11_MODULE_PATH):
-            update_fields.append('fresh_install_pkcs11_module_path')
-        if form.instance.fresh_install_pkcs11_auth_source_ref == str(FINAL_WIZARD_PKCS11_PIN_PATH):
-            update_fields.extend(['fresh_install_pkcs11_auth_source', 'fresh_install_pkcs11_auth_source_ref'])
-        if form.instance.fresh_install_pkcs11_config_path == str(FINAL_WIZARD_PKCS11_CONFIG_PATH):
-            update_fields.append('fresh_install_pkcs11_config_path')
-        token_label = capabilities.token.label or form.instance.fresh_install_pkcs11_token_label
-        if capabilities.token.label and capabilities.token.label != form.instance.fresh_install_pkcs11_token_label:
-            form.instance.fresh_install_pkcs11_token_label = capabilities.token.label
-            update_fields.append('fresh_install_pkcs11_token_label')
-        if capabilities.token.serial and capabilities.token.serial != form.instance.fresh_install_pkcs11_token_serial:
-            form.instance.fresh_install_pkcs11_token_serial = capabilities.token.serial
-            update_fields.append('fresh_install_pkcs11_token_serial')
-        if capabilities.token.slot_id != form.instance.fresh_install_pkcs11_slot_id:
-            form.instance.fresh_install_pkcs11_slot_id = capabilities.token.slot_id
-            update_fields.append('fresh_install_pkcs11_slot_id')
-        if update_fields:
-            form.instance.save(update_fields=update_fields)
-        token_serial = capabilities.token.serial or 'unknown serial'
-        messages.success(
-            self.request,
-            f'PKCS#11 connection successful. Reached token {token_label!r} ({token_serial}) in slot '
-            f'{capabilities.token.slot_id}.',
+        return run_staged_pkcs11_connection_test(
+            self,
+            form,
+            success_redirect_name='setup_wizard:fresh_install_backend_config',
         )
-        return redirect('setup_wizard:fresh_install_backend_config')
+
+    def persist_pkcs11_backend_config(self, form: FreshInstallBackendConfigModelForm) -> None:
+        """Persist staged PKCS#11 wizard inputs."""
+        self._persist_pkcs11_backend_config(form)
+
+    def test_pkcs11_connection(self, form: FreshInstallBackendConfigModelForm) -> HttpResponse:
+        """Probe the staged PKCS#11 configuration."""
+        return run_staged_pkcs11_connection_test(
+            self,
+            form,
+            success_redirect_name='setup_wizard:fresh_install_backend_config',
+        )
+
+    @staticmethod
+    def build_pkcs11_test_profile(form: FreshInstallBackendConfigModelForm) -> Pkcs11ProviderProfile:
+        """Build a temporary PKCS#11 provider profile from staged wizard inputs."""
+        return build_staged_pkcs11_test_profile(form)
 
     def form_valid(self, form: FreshInstallBackendConfigModelForm) -> HttpResponse:
         """Persist wizard backend configuration using one-time PKCS#11 staging files."""
@@ -748,55 +1150,7 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
 
     def form_invalid(self, form: FreshInstallBackendConfigModelForm) -> HttpResponse:
         """Persist already supplied PKCS#11 assets for this wizard session even when other validation fails."""
-        if form.instance.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-            update_fields: list[str] = []
-
-            uploaded_module = form.files.get('pkcs11_module_upload')
-            if uploaded_module is not None and 'pkcs11_module_upload' not in form.errors:
-                cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
-                form.instance.fresh_install_pkcs11_module_path = self._stage_uploaded_pkcs11_module(uploaded_module)
-                form.staged_pkcs11_module_name = Path(form.instance.fresh_install_pkcs11_module_path).name
-                update_fields.append('fresh_install_pkcs11_module_path')
-
-            uploaded_config = form.files.get('pkcs11_config_upload')
-            if uploaded_config is not None and 'pkcs11_config_upload' not in form.errors:
-                cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
-                form.instance.fresh_install_pkcs11_config_path = self._stage_uploaded_pkcs11_config(uploaded_config)
-                form.staged_pkcs11_config_name = Path(form.instance.fresh_install_pkcs11_config_path).name
-                update_fields.append('fresh_install_pkcs11_config_path')
-
-            config_env_var = form.data.get('pkcs11_config_env_var', '').strip()
-            if config_env_var and 'pkcs11_config_env_var' not in form.errors:
-                form.instance.fresh_install_pkcs11_config_env_var = config_env_var
-                update_fields.append('fresh_install_pkcs11_config_env_var')
-
-            user_pin = form.data.get('pkcs11_user_pin', '')
-            if user_pin and 'pkcs11_user_pin' not in form.errors:
-                cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_auth_source_ref)
-                form.instance.fresh_install_pkcs11_auth_source_ref = self._stage_pkcs11_user_pin(str(user_pin))
-                form.instance.fresh_install_pkcs11_auth_source = (
-                    SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
-                )
-                form.has_staged_pkcs11_pin = True
-                update_fields.extend(
-                    [
-                        'fresh_install_pkcs11_auth_source_ref',
-                        'fresh_install_pkcs11_auth_source',
-                    ]
-                )
-
-            token_label = form.data.get('fresh_install_pkcs11_token_label', '').strip()
-            if token_label and 'fresh_install_pkcs11_token_label' not in form.errors:
-                form.instance.fresh_install_pkcs11_token_label = token_label
-                update_fields.append('fresh_install_pkcs11_token_label')
-            raw_slot_id = form.data.get('fresh_install_pkcs11_slot_id', '').strip()
-            if raw_slot_id and 'fresh_install_pkcs11_slot_id' not in form.errors:
-                form.instance.fresh_install_pkcs11_slot_id = int(raw_slot_id)
-                update_fields.append('fresh_install_pkcs11_slot_id')
-
-            if update_fields:
-                form.instance.save(update_fields=update_fields)
-
+        persist_valid_pkcs11_fields_from_invalid_form(form)
         return super().form_invalid(form)
 
 
@@ -1213,7 +1567,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         )
         defaults = {
             'encryption_source': SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
-            'encryption_source_ref': None,
+            'encryption_source_ref': '',
             'allow_exportable_private_keys': False,
         }
         config, created = CryptoProviderSoftwareConfigModel.objects.get_or_create(
@@ -1339,6 +1693,16 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         )
 
     @staticmethod
+    def _uses_existing_installed_pkcs11_module(
+        *,
+        staged_module: Path | None,
+        staged_pin: Path | None,
+        configured_module_path: Path,
+    ) -> bool:
+        """Return whether the wizard should keep an already installed module in place."""
+        return staged_module is None and staged_pin is not None and configured_module_path.is_file()
+
+    @staticmethod
     def _discard_redundant_local_proxy_module(
         staged_module: Path | None,
         *,
@@ -1355,14 +1719,14 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         *,
         staged_module: Path | None,
         staged_pin: Path | None,
-        uses_builtin_local_proxy: bool,
+        uses_existing_installed_module: bool,
     ) -> None:
         """Validate the staged PKCS#11 assets before installing them."""
         if staged_pin is None:
             err_msg = 'The staged PKCS#11 setup files are incomplete. Enter the PIN again.'
             raise DjangoValidationError(err_msg)
 
-        if staged_module is None and not uses_builtin_local_proxy:
+        if staged_module is None and not uses_existing_installed_module:
             err_msg = 'The staged PKCS#11 setup files are incomplete. Upload the library and enter the PIN again.'
             raise DjangoValidationError(err_msg)
 
@@ -1372,10 +1736,10 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         staged_module: Path | None,
         staged_pin: Path,
         staged_config: Path | None,
-        uses_builtin_local_proxy: bool,
+        uses_existing_installed_module: bool,
     ) -> tuple[str, ...]:
         """Build arguments for the PKCS#11 asset install helper."""
-        if uses_builtin_local_proxy:
+        if uses_existing_installed_module:
             return (str(staged_pin),)
 
         if staged_module is None:
@@ -1392,13 +1756,13 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         cls,
         exc: subprocess.CalledProcessError,
         *,
-        uses_builtin_local_proxy: bool,
+        uses_existing_installed_module: bool,
     ) -> None:
         """Raise a user-facing validation error for a failed PKCS#11 install helper run."""
         script_error_detail = (exc.stderr or exc.stdout or '').strip()
         err_msg = cls._map_pkcs11_install_exit_code_to_message(exc.returncode)
 
-        if uses_builtin_local_proxy and exc.returncode == 1:
+        if uses_existing_installed_module and exc.returncode == 1:
             err_msg = (
                 'The running Trustpoint container still appears to use the older PKCS#11 install helper. '
                 'Rebuild and recreate the Trustpoint container, then try the setup wizard again.'
@@ -1416,20 +1780,23 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         staged_module: Path | None,
         staged_pin: Path,
         staged_config: Path | None,
-        uses_builtin_local_proxy: bool,
+        uses_existing_installed_module: bool,
     ) -> None:
         """Run the PKCS#11 asset install helper script."""
         install_args = cls._build_pkcs11_install_args(
             staged_module=staged_module,
             staged_pin=staged_pin,
             staged_config=staged_config,
-            uses_builtin_local_proxy=uses_builtin_local_proxy,
+            uses_existing_installed_module=uses_existing_installed_module,
         )
 
         try:
             execute_shell_script(INSTALL_PKCS11_ASSETS, *install_args)
         except subprocess.CalledProcessError as exc:
-            cls._raise_pkcs11_install_script_error(exc, uses_builtin_local_proxy=uses_builtin_local_proxy)
+            cls._raise_pkcs11_install_script_error(
+                exc,
+                uses_existing_installed_module=uses_existing_installed_module,
+            )
 
     @staticmethod
     def _persist_installed_pkcs11_assets(
@@ -1482,11 +1849,16 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             staged_module,
             uses_builtin_local_proxy=uses_builtin_local_proxy,
         )
+        uses_existing_installed_module = uses_builtin_local_proxy or cls._uses_existing_installed_pkcs11_module(
+            staged_module=staged_module,
+            staged_pin=staged_pin,
+            configured_module_path=configured_module_path,
+        )
 
         cls._validate_staged_pkcs11_assets(
             staged_module=staged_module,
             staged_pin=staged_pin,
-            uses_builtin_local_proxy=uses_builtin_local_proxy,
+            uses_existing_installed_module=uses_existing_installed_module,
         )
         if staged_pin is None:
             return
@@ -1495,7 +1867,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             staged_module=staged_module,
             staged_pin=staged_pin,
             staged_config=staged_config,
-            uses_builtin_local_proxy=uses_builtin_local_proxy,
+            uses_existing_installed_module=uses_existing_installed_module,
         )
         cls._persist_installed_pkcs11_assets(
             config_model=config_model,
@@ -1503,6 +1875,11 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             staged_pin=staged_pin,
             staged_config=staged_config,
         )
+
+    @classmethod
+    def install_staged_pkcs11_assets(cls, config_model: SetupWizardConfigModel) -> None:
+        """Install staged PKCS#11 assets into the protected HSM area."""
+        cls._install_staged_pkcs11_assets(config_model)
 
     @classmethod
     def _configure_pkcs11_backend(cls, config_model: SetupWizardConfigModel) -> None:
@@ -1831,540 +2208,675 @@ class FreshInstallCancelView(LoginRequiredMixin, LoggerMixin, View):
         return redirect('setup_wizard:index', permanent=False)
 
 
-# Backup Stuff ---------------------------------------------------------------------------------------------------------
+# Operational Attach Flows -------------------------------------------------------------------------------------------
 
 
-class SetupWizardRestoreBackupView(TemplateView):
-    """View for the restore option during initialization.
+class ConnectExistingWizardMixin[FormT: BaseForm](LoginRequiredMixin, LoggerMixin, FormView[FormT]):
+    """Small-step wizard shell for connecting to existing operational state."""
 
-    Attributes:
-        http_method_names (ClassVar[list[str]]): List of HTTP methods allowed for this view.
-        template_name (str): Path to the template used for rendering the initial page.
-    """
+    template_name = 'setup_wizard/operational_attach_wizard.html'
+    attach_mode = OperationalAttachMode.CONNECT_EXISTING
+    page_title = 'Connect Existing Instance'
+    step_name: str
+    body_heading: str = ''
+    back_url: str | Promise | None = None
+    step_url_names: ClassVar[dict[str, str]] = {
+        'database': 'connect_existing_database',
+        'crypto-storage': 'connect_existing_crypto_storage',
+        'backend-config': 'connect_existing_backend_config',
+        'summary': 'connect_existing_summary',
+    }
+    step_labels: ClassVar[dict[str, str]] = {
+        'database': 'Database',
+        'crypto-storage': 'Crypto Backend',
+        'backend-config': 'Backend Config',
+        'summary': 'Inspect & Apply',
+    }
 
-    http_method_names = ('get',) # BackupRestoreView handles submitted POST form
-    template_name = 'setup_wizard/restore_backup.html'
+    class StepState(enum.StrEnum):
+        """Display state for connect-existing progress."""
 
+        ACTIVE = 'active'
+        DONE = 'done'
+        AVAILABLE = 'available'
 
-class SetupWizardBackupPasswordView(LoggerMixin, FormView[BackupPasswordForm]):
-    """View for setting up backup password for PKCS#11 token during the setup wizard.
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Bind connect-existing step forms to the bootstrap singleton."""
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = SetupWizardConfigModel.get_singleton()
+        return kwargs
 
-    This view allows users to set a backup password that can be used to recover
-    the DEK (Data Encryption Key) in case the HSM becomes unavailable. The password
-    is used to derive a BEK (Backup Encryption Key) using Argon2.
-    """
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Remember the current attach step before rendering it."""
+        config_model = SetupWizardConfigModel.get_singleton()
+        record_bootstrap_progress(config_model, flow=self.attach_mode, step_name=self.step_name)
+        return super().get(request, *args, **kwargs)
 
-    http_method_names = ('get', 'post')
-    template_name = 'setup_wizard/backup_password.html'
-    success_url = reverse_lazy('setup_wizard:demo_data')
-    form_class = BackupPasswordForm
+    def _step_state(self, step_name: str) -> StepState:
+        """Return the UI state for a connect-existing step."""
+        if step_name == self.step_name:
+            return self.StepState.ACTIVE
+        config_model = SetupWizardConfigModel.get_singleton()
+        submitted_by_step = {
+            'database': config_model.fresh_install_database_submitted,
+            'crypto-storage': config_model.fresh_install_crypto_storage_submitted,
+            'backend-config': config_model.fresh_install_backend_config_submitted,
+            'backup-import': config_model.restore_backup_import_submitted,
+            'summary': config_model.fresh_install_summary_submitted,
+        }
+        return self.StepState.DONE if submitted_by_step.get(step_name, False) else self.StepState.AVAILABLE
 
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Handle request dispatch and wizard state validation."""
-        wizard_state = SetupWizardState.get_current_state()
-        if wizard_state != SetupWizardState.WIZARD_BACKUP_PASSWORD:
-            self.logger.warning(
-                "Unexpected wizard state '%s', expected '%s'. Redirecting to appropriate state.",
-                wizard_state,
-                SetupWizardState.WIZARD_BACKUP_PASSWORD,
-            )
-
-        return super().dispatch(request, *args, **kwargs)
+    def _step_redirect(self, step_name: str) -> HttpResponse:
+        """Redirect to a named step in this attach wizard."""
+        return redirect(f'setup_wizard:{self.step_url_names[step_name]}')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add password requirements to the context."""
+        """Render shared connect-existing wizard metadata."""
         context = super().get_context_data(**kwargs)
-        context['password_requirements'] = [
-            gettext_lazy('Your password can’t be too similar to your other personal information.'),  # noqa: RUF001
-            gettext_lazy('Your password must contain at least 8 characters.'),
-            gettext_lazy('Your password can’t be a commonly used password.'),  # noqa: RUF001
-            gettext_lazy('Your password can’t be entirely numeric.'),  # noqa: RUF001
-        ]
+        context['page_title'] = self.page_title
+        context['body_heading'] = self.body_heading
+        context['back_url'] = self.back_url
+        context['steps'] = []
+        for step_name, url_name in self.step_url_names.items():
+            step_state = self._step_state(step_name)
+            context['steps'].append(
+                {
+                    'label': self.step_labels[step_name],
+                    'url': reverse(f'setup_wizard:{url_name}'),
+                    'state': str(step_state),
+                    'submitted': step_state == self.StepState.DONE,
+                }
+            )
         return context
 
-    def _set_backup_password_from_form(self, form: BackupPasswordForm) -> PKCS11Token:
-        """Validate the submitted password and persist it on the token."""
-        password = form.cleaned_data.get('password')
-        token = PKCS11Token.objects.first()
 
-        if not token:
-            err_msg = 'No PKCS#11 token found. This should not happen in the backup password step.'
-            raise TrustpointWizardError(err_msg)
+class ConnectExistingDatabaseView(ConnectExistingWizardMixin[FreshInstallDatabaseModelForm]):
+    """Connect-existing step for staging the operational database."""
 
-        if not isinstance(password, str):
-            self.logger.error('Invalid password type provided in backup password step')
-            err_msg = 'Invalid password provided.'
-            raise TypeError(err_msg)
+    form_class = FreshInstallDatabaseModelForm
+    success_url = reverse_lazy('setup_wizard:connect_existing_crypto_storage')
+    step_name = 'database'
+    back_url = reverse_lazy('setup_wizard:index')
+    body_heading = 'Configure Operational Database'
 
-        token.set_backup_password(password)
-        execute_shell_script(SCRIPT_WIZARD_BACKUP_PASSWORD)
-        return token
+    def form_valid(self, form: FreshInstallDatabaseModelForm) -> HttpResponse:
+        """Persist or test the operational database settings."""
+        form.save()
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.mark_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.DATABASE)
+        config_model.save()
 
-    def _get_backup_password_redirect_error_message(self, exc: Exception) -> str | None:
-        """Return a redirect-level backup password error message, if applicable."""
-        if isinstance(exc, subprocess.CalledProcessError):
-            return f'Backup password script failed: {self._map_exit_code_to_message(exc.returncode)}'
+        if self.request.POST.get('wizard_action') == 'test_database':
+            try:
+                FreshInstallDatabaseView._test_database_connection(form)
+            except Exception as exception:
+                self.logger.exception('Connect-existing PostgreSQL connection test failed.')
+                error_detail = str(exception).strip() or type(exception).__name__
+                form.add_error(None, f'Could not connect to PostgreSQL: {error_detail}')
+                return self.render_to_response(self.get_context_data(form=form))
+            messages.success(self.request, 'PostgreSQL connection successful.')
+            return self._step_redirect('database')
 
-        if isinstance(exc, FileNotFoundError):
-            return 'Backup password script not found: '
-
-        if isinstance(exc, PKCS11Token.DoesNotExist):
-            return str(exc)
-
-        return None
-
-    @staticmethod
-    def _get_backup_password_form_error_message(exc: Exception) -> str:
-        """Return a form-level backup password error message."""
-        if isinstance(exc, TypeError):
-            return str(exc) or 'Invalid password provided.'
-
-        if isinstance(exc, ValueError):
-            return f'Invalid input: {exc!s}'
-
-        if isinstance(exc, RuntimeError):
-            return f'Failed to set backup password: {exc!s}'
-
-        return f'An unexpected error occurred: {exc!s}'
-
-    def _handle_backup_password_exception(self, form: BackupPasswordForm, exc: Exception) -> HttpResponse:
-        """Handle errors raised while setting the backup password."""
-        if isinstance(exc, TrustpointWizardError):
-            messages.add_message(self.request, messages.ERROR, str(exc))
-            self.logger.error('%s', exc)
-            return redirect('setup_wizard:demo_data', permanent=False)
-
-        redirect_error_message = self._get_backup_password_redirect_error_message(exc)
-        if redirect_error_message is not None:
-            messages.add_message(self.request, messages.ERROR, redirect_error_message)
-            self.logger.exception(redirect_error_message)
-            return redirect('setup_wizard:backup_password', permanent=False)
-
-        form_error_message = self._get_backup_password_form_error_message(exc)
-        messages.add_message(self.request, messages.ERROR, form_error_message)
-        self.logger.exception(form_error_message)
-        return self.form_invalid(form)
-
-    def form_valid(
-        self,
-        form: BackupPasswordForm,
-    ) -> HttpResponse:
-        """Handle valid form submission."""
-        try:
-            token = self._set_backup_password_from_form(form)
-        except (
-            TrustpointWizardError,
-            subprocess.CalledProcessError,
-            FileNotFoundError,
-            PKCS11Token.DoesNotExist,
-            TypeError,
-            ValueError,
-            RuntimeError,
-        ) as exc:
-            return self._handle_backup_password_exception(form, exc)
-
-        messages.add_message(self.request, messages.SUCCESS, 'Backup password set successfully.')
-        self.logger.info('Backup password set for token: %s', token.label)
         return super().form_valid(form)
 
-    def form_invalid(self, form: BackupPasswordForm) -> HttpResponse:
-        """Handle invalid form submission."""
-        messages.add_message(self.request, messages.ERROR, 'Please correct the errors below and try again.')
+
+class ConnectExistingCryptoStorageView(ConnectExistingWizardMixin[FreshInstallCryptoStorageModelForm]):
+    """Connect-existing step for selecting the backend kind."""
+
+    form_class = FreshInstallCryptoStorageModelForm
+    success_url = reverse_lazy('setup_wizard:connect_existing_backend_config')
+    step_name = 'crypto-storage'
+    back_url = reverse_lazy('setup_wizard:connect_existing_database')
+    body_heading = 'Select Crypto Backend'
+
+    def form_valid(self, form: FreshInstallCryptoStorageModelForm) -> HttpResponse:
+        """Persist the backend kind and clear stale PKCS#11 staging when needed."""
+        if form.cleaned_data['crypto_storage'] != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            FreshInstallCryptoStorageView._reset_staged_pkcs11_backend(form)
+        form.save()
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.mark_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE)
+        config_model.save()
+        return super().form_valid(form)
+
+
+class ConnectExistingBackendConfigView(ConnectExistingWizardMixin[FreshInstallBackendConfigModelForm]):
+    """Connect-existing step for backend-specific connection details."""
+
+    form_class = FreshInstallBackendConfigModelForm
+    success_url = reverse_lazy('setup_wizard:connect_existing_summary')
+    step_name = 'backend-config'
+    back_url = reverse_lazy('setup_wizard:connect_existing_crypto_storage')
+    body_heading = 'Configure Backend'
+
+    @staticmethod
+    def _stage_uploaded_pkcs11_module(uploaded_module: Any) -> str:
+        """Write an uploaded PKCS#11 library to private one-time wizard staging."""
+        return stage_uploaded_pkcs11_module(uploaded_module)
+
+    @staticmethod
+    def _stage_pkcs11_user_pin(user_pin: str) -> str:
+        """Write the entered PKCS#11 user PIN to private one-time wizard staging."""
+        return stage_pkcs11_user_pin(user_pin)
+
+    @staticmethod
+    def _stage_uploaded_pkcs11_config(uploaded_config: Any) -> str:
+        """Write an optional vendor PKCS#11 config to private one-time wizard staging."""
+        return stage_uploaded_pkcs11_config(uploaded_config)
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle staged PKCS#11 asset removal before normal form validation."""
+        config_model = SetupWizardConfigModel.get_singleton()
+        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            if is_clear_pkcs11_module_submission(request):
+                clear_staged_pkcs11_module(config_model)
+                messages.success(request, 'The staged PKCS#11 library was removed for this wizard session.')
+                return self._step_redirect('backend-config')
+            if is_clear_pkcs11_pin_submission(request):
+                clear_staged_pkcs11_pin(config_model)
+                messages.success(request, 'The staged PKCS#11 user PIN was removed for this wizard session.')
+                return self._step_redirect('backend-config')
+            if is_clear_pkcs11_config_submission(request):
+                clear_staged_pkcs11_config(config_model)
+                messages.success(request, 'The staged PKCS#11 vendor config was removed for this wizard session.')
+                return self._step_redirect('backend-config')
+        return super().post(request, *args, **kwargs)
+
+    def _persist_pkcs11_backend_config(self, form: FreshInstallBackendConfigModelForm) -> None:
+        """Persist PKCS#11 attach details using the fresh-install staging helper."""
+        persist_staged_pkcs11_backend_config(form)
+
+    def _test_pkcs11_connection(self, form: FreshInstallBackendConfigModelForm) -> HttpResponse:
+        """Test PKCS#11 connectivity without advancing."""
+        response = run_staged_pkcs11_connection_test(
+            self,
+            form,
+            success_redirect_name=f"setup_wizard:{self.step_url_names['backend-config']}",
+        )
+        if response.status_code in {301, 302}:
+            return self._step_redirect('backend-config')
+        return response
+
+    def form_valid(self, form: FreshInstallBackendConfigModelForm) -> HttpResponse:
+        """Persist backend configuration or keep the user on this step for tests."""
+        if form.instance.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            self._persist_pkcs11_backend_config(form)
+            if is_pkcs11_test_connection_submission(self.request):
+                return self._test_pkcs11_connection(form)
+
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.mark_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.BACKEND_CONFIG)
+        config_model.save()
+        return super().form_valid(form)
+
+    def form_invalid(self, form: FreshInstallBackendConfigModelForm) -> HttpResponse:
+        """Use the fresh-install invalid handler so uploaded PKCS#11 files are preserved."""
+        persist_valid_pkcs11_fields_from_invalid_form(form)
         return super().form_invalid(form)
 
-    @staticmethod
-    def _map_exit_code_to_message(return_code: int) -> str:
-        """Map script exit codes to meaningful error messages."""
-        error_messages = {
-            1: 'Invalid arguments provided to backup password script.',
-            2: 'Trustpoint is not in the WIZARD_BACKUP_PASSWORD state.',
-            3: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
-            4: 'Failed to remove the WIZARD_BACKUP_PASSWORD state file.',
-            5: 'Failed to create the WIZARD_TLS_SERVER_CREDENTIAL_APPLY state file.',
-        }
-        return error_messages.get(return_code, 'An unknown error occurred during backup password setup.')
 
+class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
+    """Connect-existing summary step for inspection and explicit attach."""
 
-class BackupPasswordRecoveryMixin(LoggerMixin):
-    """Mixin that provides backup password recovery functionality."""
+    form_class = EmptyForm
+    step_name = 'summary'
+    back_url = reverse_lazy('setup_wizard:connect_existing_backend_config')
+    body_heading = 'Inspect and Attach'
 
-    request: HttpRequest
-
-    def handle_backup_password_recovery(self, backup_password: str) -> bool:
-        """Handle DEK recovery using backup password.
-
-        This method handles two scenarios:
-        1. Standard recovery: KEK exists, use it to wrap the recovered DEK
-        2. New KEK scenario: No KEK or KEK doesn't match, generate new KEK first
-
-        Args:
-            backup_password: The backup password provided by user
-
-        Returns:
-            bool: True if recovery was successful, False otherwise
-        """
-        try:
-            token = self._get_token_for_recovery()
-            if not token:
-                return False
-
-            has_kek = self._ensure_kek_exists(token)
-            if has_kek is None:
-                return False
-
-            dek_bytes = self._recover_dek_with_password(token, backup_password)
-            if not dek_bytes:
-                return False
-
-            if not self._wrap_and_save_dek(token, dek_bytes, had_kek=has_kek):
-                return False
-
-            self._cache_dek(token)
-            self._log_success(token, had_kek=has_kek)
-
-        except Exception:
-            self.logger.exception('Unexpected error during backup password recovery')
-            messages.add_message(self.request, messages.ERROR, 'Unexpected error during backup password recovery')
-            return False
-        else:
-            return True
-
-    def _get_token_for_recovery(self) -> PKCS11Token | None:
-        """Get the PKCS11Token for recovery."""
-        token = PKCS11Token.objects.first()
-        if not token:
-            self.logger.warning('No PKCS11Token found after restore for backup password recovery')
-            return None
-
-        if not token.has_backup_encryption():
-            self.logger.warning('No backup encryption found for token %s, skipping password recovery', token.label)
-            return None
-
-        return token
-
-    def _ensure_kek_exists(self, token: PKCS11Token) -> bool | None:
-        """Ensure KEK exists on the token, generate if needed.
-
-        Returns:
-            bool: True if KEK already existed, False if newly generated, None on error
-        """
-        has_kek = token.load_kek()
-
-        if not has_kek:
-            self.logger.info('No KEK found on token %s - generating new KEK', token.label)
-            try:
-                token.generate_kek(key_length=256)
-                self.logger.info('New KEK generated successfully for token %s', token.label)
-            except (subprocess.CalledProcessError, ValueError, RuntimeError) as e:
-                self.logger.exception('Failed to generate new KEK for token %s', token.label)
-                messages.add_message(self.request, messages.ERROR, f'Failed to generate new KEK: {e}')
-                return None
-
-        return has_kek
-
-    def _recover_dek_with_password(self, token: PKCS11Token, backup_password: str) -> bytes | None:
-        """Recover DEK using backup password."""
-        try:
-            return token.get_dek_with_backup_password(backup_password)
-        except (RuntimeError, ValueError):
-            self.logger.exception('Invalid backup password provided for token %s', token.label)
-            self.logger.exception('The restore process needs to be redone with the correct backup password.')
-            messages.add_message(
-                self.request, messages.ERROR, 'Invalid backup password provided. DEK recovery failed. '
-            )
-            messages.add_message(
-                self.request, messages.ERROR, 'The restore process needs to be redone with the correct backup password.'
-            )
-            return None
-
-    def _wrap_and_save_dek(self, token: PKCS11Token, dek_bytes: bytes, *, had_kek: bool) -> bool:
-        """Wrap recovered DEK with KEK and save."""
-        try:
-            wrapped_dek = token.wrap_dek(dek_bytes)
-            token.encrypted_dek = wrapped_dek
-            token.save(update_fields=['encrypted_dek'])
-
-            kek_status = 'newly generated' if not had_kek else 'existing'
-            self.logger.info('Successfully wrapped recovered DEK with %s KEK for token %s', kek_status, token.label)
-        except RuntimeError as e:
-            self.logger.exception('Failed to wrap recovered DEK for token %s', token.label)
-            messages.add_message(self.request, messages.ERROR, f'Failed to wrap recovered DEK with KEK: {e}')
-            return False
-        else:
-            return True
-
-    def _cache_dek(self, token: PKCS11Token) -> None:
-        """Cache the DEK for immediate use."""
-        try:
-            cached_dek = token.get_dek()
-            if cached_dek:
-                self.logger.info('DEK successfully cached for token %s after backup recovery', token.label)
-            else:
-                self.logger.warning('Failed to cache DEK for token %s after backup recovery', token.label)
-        except Exception as e:  # noqa: BLE001
-            self.logger.warning('Failed to cache DEK for token %s: %s', token.label, e)
-
-    def _log_success(self, token: PKCS11Token, *, had_kek: bool) -> None:
-        """Log successful recovery."""
-        recovery_type = 'with new KEK generation' if not had_kek else 'with existing KEK'
-        self.logger.info('Successfully completed backup password recovery for token %s %s', token.label, recovery_type)
-        messages.add_message(
-            self.request,
-            messages.SUCCESS,
-            'DEK successfully recovered using backup password and re-secured with HSM key.',
-        )
-
-
-class BackupRestoreView(BackupPasswordRecoveryMixin, LoggerMixin, View):
-    """Upload a dump file and restore the database from it with optional backup password."""
-
-    def post(self, request: HttpRequest) -> HttpResponse:
-        """Handle POST requests to upload a backup file and restore the database."""
-        form = BackupRestoreForm(request.POST, request.FILES)
-
-        if not form.is_valid():
-            return self._handle_invalid_form()
-
-        backup_file = form.cleaned_data['backup_file']
-        backup_password = form.cleaned_data.get('backup_password')
-
-        try:
-            return self._process_backup_file(backup_file, backup_password)
-        except subprocess.CalledProcessError as exception:
-            err_msg = f'Restore script failed: {self._map_exit_code_to_message(exception.returncode)}'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('users:login')
-        except FileNotFoundError:
-            err_msg = 'Restore script not found.'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('users:login')
-        except Exception:
-            err_msg = 'An unexpected error occurred during the restore process.'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return redirect('users:login')
-
-    def _handle_invalid_form(self) -> HttpResponse:
-        """Handle invalid form submission."""
-        messages.add_message(self.request, messages.ERROR, 'Please correct the errors below and try again.')
-        return redirect('users:login')
-
-    def _process_backup_file(self, backup_file: Any, backup_password: str | None) -> HttpResponse:
-        """Process the uploaded backup file."""
-        temp_dir = settings.BACKUP_FILE_PATH
-        temp_path = temp_dir / backup_file.name
-
-        try:
-            self._save_backup_file(backup_file, temp_path)
-            self._restore_database(backup_file, backup_password)
-        finally:
-            self._cleanup_temp_file(temp_path)
-
-        return redirect('users:login')
-
-    def _save_backup_file(self, backup_file: Any, temp_path: Path) -> None:
-        """Save the uploaded backup file to a temporary location."""
-        with temp_path.open('wb+') as f:
-            for chunk in backup_file.chunks():
-                f.write(chunk)
-
-        call_command('dbrestore', '-z', '--noinput', '-I', str(temp_path))
-
-    def _restore_database(self, backup_file: Any, backup_password: str | None) -> None:
-        """Restore the database from the backup file."""
-        if backup_password:
-            success = self.handle_backup_password_recovery(backup_password)
-            if not success:
-                messages.add_message(
-                    self.request, messages.ERROR, 'Database restored successfully, but backup password recovery failed.'
-                )
-        else:
-            self.logger.warning(
-                'No backup password provided, skipping DEK recovery. Encrypted fields may not be accessible.'
-            )
-        call_command('trustpointrestore')
-
-        messages.add_message(
-            self.request, messages.SUCCESS, f'Trustpoint restored successfully from {backup_file.name}'
-        )
-
-    def _cleanup_temp_file(self, temp_path: Path) -> None:
-        """Clean up the temporary backup file."""
-        try:
-            if temp_path.exists():
-                temp_path.unlink()
-        except Exception as e:  # noqa: BLE001
-            self.logger.warning('Failed to clean up temporary file %s: %s', temp_path, e)
-
-    @staticmethod
-    def _map_exit_code_to_message(return_code: int) -> str:
-        """Map script exit codes to meaningful error messages."""
-        error_messages = {
-            1: 'State file WIZARD_SETUP_MODE not found.',
-            3: 'Failed to remove the WIZARD_SETUP_MODE state file.',
-            4: 'Failed to create the WIZARD_COMPLETED state file.',
-        }
-        return error_messages.get(return_code, 'An unknown error occurred during the restore process.')
-
-
-class BackupAutoRestorePasswordView(BackupPasswordRecoveryMixin, LoggerMixin, FormView[PasswordAutoRestoreForm]):
-    """View for handling backup password entry during auto restore process.
-
-    This view allows users to enter the backup password needed to recover
-    the DEK (Data Encryption Key) during the auto restore process. It validates
-    the current wizard state and processes the password recovery.
-    """
-
-    http_method_names = ('get', 'post')
-    template_name = 'setup_wizard/auto_restore_password.html'
-    success_url = reverse_lazy('users:login')
-    form_class = PasswordAutoRestoreForm
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """The summary uses a plain confirmation form, not the setup singleton model form."""
+        return FormView.get_form_kwargs(self)
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Add additional context data."""
+        """Inspect the target on the summary page."""
         context = super().get_context_data(**kwargs)
-        context['page_title'] = gettext_lazy('Auto Restore - Enter Backup Password')
-        context['page_description'] = gettext_lazy('Enter the backup password to complete the auto restore process.')
+        context['compatibility_report'] = kwargs.get('compatibility_report') or self._build_report()
+        context['is_attach_summary'] = True
+        context['summary_submit_label'] = (
+            'Apply Restore' if self.attach_mode == OperationalAttachMode.RESTORE_BACKUP else 'Apply Attach'
+        )
         return context
 
-    def form_valid(self, form: PasswordAutoRestoreForm) -> HttpResponse:
-        """Handle valid form submission."""
-        backup_password = form.cleaned_data.get('password')
+    def _build_target(self, config_model: SetupWizardConfigModel) -> OperationalTargetConfig:
+        """Build the immutable attach target from staged bootstrap state."""
+        backend_kind = OperationalAttachEntryView._backend_kind_for_config(config_model)
+        return OperationalTargetConfig(
+            mode=self.attach_mode,
+            database=OperationalDatabaseConfig(
+                host=config_model.operational_db_host,
+                port=config_model.operational_db_port,
+                name=config_model.operational_db_name,
+                user=config_model.operational_db_user,
+                password=config_model.operational_db_password,
+            ),
+            crypto_backend=OperationalBackendBinding(backend_kind=backend_kind),
+            app_secret_backend=OperationalBackendBinding(backend_kind=backend_kind),
+            backup_file_name=config_model.restore_backup_archive_original_name or None,
+        )
 
+    def _build_report(self) -> OperationalCompatibilityReport:
+        """Build the current compatibility report for the staged target."""
+        config_model = SetupWizardConfigModel.get_singleton()
+        target = self._build_target(config_model)
         try:
-            success = self.handle_backup_password_recovery(cast('str', backup_password))
-
-            if not success:
-                return self.form_invalid(form)
-
-            self.logger.info('Extracting Trustpoint TLS certificates from database')
-            try:
-                self._extract_tls_certificates()
-            except Exception as e:
-                err_msg = f'Failed to extract TLS certificates: {e}'
-                self.logger.exception(err_msg)
-                messages.add_message(self.request, messages.ERROR, err_msg)
-                return self.form_invalid(form)
-
-            execute_shell_script(SCRIPT_WIZARD_AUTO_RESTORE_SUCCESS)
-
-            self._deactivate_all_issuing_cas()
-
-            messages.add_message(
-                self.request, messages.SUCCESS, 'Auto restore completed successfully. You can now log in.'
+            snapshot = OperationalTargetInspector().inspect_database(target.database)
+        except Exception as exception:
+            self.logger.exception('Connect-existing database inspection failed.')
+            return OperationalAttachEntryView._database_error_report(
+                mode=self.attach_mode,
+                target=target,
+                exception=exception,
             )
-            messages.add_message(
-                self.request,
-                messages.WARNING,
-                'All Certificate Authorities have been deactivated because their private keys are no longer '
-                'available after HSM change.',
+        return OperationalAttachmentValidator(current_version=settings.APP_VERSION).build_report(
+            mode=self.attach_mode,
+            target=target,
+            snapshot=snapshot,
+        )
+
+    def form_valid(self, form: EmptyForm) -> HttpResponse:
+        """Explicitly attach this container to the inspected operational target."""
+        _ = form
+        config_model = SetupWizardConfigModel.get_singleton()
+        report = self._build_report()
+        if not report.can_apply:
+            return self.render_to_response(self.get_context_data(compatibility_report=report))
+
+        try:
+            if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+                FreshInstallSummaryView.install_staged_pkcs11_assets(config_model)
+            handoff_result = run_operational_attach_handoff(config_model)
+            runtime_result = run_operational_runtime_switch(handoff_result.pending_env_file)
+        except DjangoValidationError as exception:
+            form.add_error(None, str(exception))
+            return self.render_to_response(self.get_context_data(form=form, compatibility_report=report))
+
+        config_model.operational_config_applied = True
+        config_model.mark_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.SUMMARY)
+        config_model.save()
+        SetupWizardCompletedModel.mark_setup_complete_once()
+        if runtime_result.switched:
+            success_message = (
+                'Operational runtime restored and attached successfully.'
+                if self.attach_mode == OperationalAttachMode.RESTORE_BACKUP
+                else 'Operational runtime attached successfully.'
             )
-            self.logger.info('Auto restore completed successfully with backup password recovery')
-            return super().form_valid(form)
+            messages.success(self.request, success_message)
+        else:
+            pending_message = (
+                'Operational restore configuration saved. Restart the runtime to attach.'
+                if self.attach_mode == OperationalAttachMode.RESTORE_BACKUP
+                else 'Operational configuration saved. Restart the runtime to attach.'
+            )
+            messages.success(self.request, pending_message)
+        return redirect('/')
 
-        except subprocess.CalledProcessError as exc:
-            err_msg = f'Auto restore script failed: {self._map_exit_code_to_message(exc.returncode)}'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return self.form_invalid(form)
 
-        except FileNotFoundError:
-            err_msg = 'Auto restore script not found: '
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception(err_msg)
-            return self.form_invalid(form)
+RESTORE_BACKUP_STEP_URL_NAMES = {
+    'database': 'restore_backup_database',
+    'crypto-storage': 'restore_backup_crypto_storage',
+    'backend-config': 'restore_backup_backend_config',
+    'backup-import': 'restore_backup_import',
+    'summary': 'restore_backup_summary',
+}
+RESTORE_BACKUP_STEP_LABELS = {
+    'database': 'Database',
+    'crypto-storage': 'Crypto Backend',
+    'backend-config': 'Backend Config',
+    'backup-import': 'Backup Import',
+    'summary': 'Inspect & Apply',
+}
 
-        except Exception:
-            err_msg = 'An unexpected error occurred during auto restore password recovery.'
-            messages.add_message(self.request, messages.ERROR, err_msg)
-            self.logger.exception('Unexpected error during auto restore')
-            return self.form_invalid(form)
 
-    def form_invalid(self, form: PasswordAutoRestoreForm) -> HttpResponse:
-        """Handle invalid form submission."""
-        messages.add_message(self.request, messages.ERROR, 'Please correct the errors below and try again.')
-        return super().form_invalid(form)
+class RestoreBackupDatabaseView(ConnectExistingDatabaseView):
+    """Restore step for staging the operational database."""
 
-    def _raise_runtime_error(self, message: str) -> None:
-        """Helper method to raise RuntimeError with logging."""
-        self.logger.error(message)
-        raise RuntimeError(message)
+    attach_mode = OperationalAttachMode.RESTORE_BACKUP
+    page_title = 'Restore from Backup'
+    step_url_names = RESTORE_BACKUP_STEP_URL_NAMES
+    step_labels = RESTORE_BACKUP_STEP_LABELS
+    success_url = reverse_lazy('setup_wizard:restore_backup_crypto_storage')
+    back_url = reverse_lazy('setup_wizard:index')
 
-    def _deactivate_all_issuing_cas(self) -> None:
-        """Deactivate all Issuing CAs after HSM change.
 
-        When restoring to a new HSM, the private keys from the old HSM are no longer
-        available. This method deactivates all CAs to prevent operations that would
-        require the missing private keys.
-        """
+class RestoreBackupCryptoStorageView(ConnectExistingCryptoStorageView):
+    """Restore step for selecting the backend kind."""
+
+    attach_mode = OperationalAttachMode.RESTORE_BACKUP
+    page_title = 'Restore from Backup'
+    step_url_names = RESTORE_BACKUP_STEP_URL_NAMES
+    step_labels = RESTORE_BACKUP_STEP_LABELS
+    success_url = reverse_lazy('setup_wizard:restore_backup_backend_config')
+    back_url = reverse_lazy('setup_wizard:restore_backup_database')
+
+
+class RestoreBackupBackendConfigView(ConnectExistingBackendConfigView):
+    """Restore step for backend-specific connection details."""
+
+    attach_mode = OperationalAttachMode.RESTORE_BACKUP
+    page_title = 'Restore from Backup'
+    step_url_names = RESTORE_BACKUP_STEP_URL_NAMES
+    step_labels = RESTORE_BACKUP_STEP_LABELS
+    success_url = reverse_lazy('setup_wizard:restore_backup_import')
+    back_url = reverse_lazy('setup_wizard:restore_backup_crypto_storage')
+
+
+class RestoreBackupImportView(ConnectExistingWizardMixin[RestoreBackupImportForm]):
+    """Restore step for selecting the backup archive."""
+
+    form_class = RestoreBackupImportForm
+    attach_mode = OperationalAttachMode.RESTORE_BACKUP
+    page_title = 'Restore from Backup'
+    step_url_names = RESTORE_BACKUP_STEP_URL_NAMES
+    step_labels = RESTORE_BACKUP_STEP_LABELS
+    success_url = reverse_lazy('setup_wizard:restore_backup_summary')
+    step_name = 'backup-import'
+    back_url = reverse_lazy('setup_wizard:restore_backup_backend_config')
+    body_heading = 'Select Backup Archive'
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle staged backup archive removal before normal validation."""
+        if is_clear_restore_backup_submission(request):
+            config_model = SetupWizardConfigModel.get_singleton()
+            cleanup_staged_restore_archive(config_model)
+            config_model.restore_backup_archive_path = ''
+            config_model.restore_backup_archive_original_name = ''
+            config_model.restore_backup_import_submitted = False
+            config_model.restore_backup_restored_at = None
+            config_model.restore_backup_restore_error = ''
+            config_model.save(update_fields=[
+                'restore_backup_archive_path',
+                'restore_backup_archive_original_name',
+                'restore_backup_import_submitted',
+                'restore_backup_restored_at',
+                'restore_backup_restore_error',
+            ])
+            messages.success(request, 'The staged backup archive was removed for this wizard session.')
+            return self._step_redirect('backup-import')
+        return super().post(request, *args, **kwargs)
+
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Bind the backup import form to the bootstrap singleton state."""
+        kwargs = FormView.get_form_kwargs(self)
+        kwargs['config_model'] = SetupWizardConfigModel.get_singleton()
+        return kwargs
+
+    def form_valid(self, form: RestoreBackupImportForm) -> HttpResponse:
+        """Stage the backup archive and restore it before target inspection."""
+        config_model = SetupWizardConfigModel.get_singleton()
+        uploaded_archive = form.cleaned_data.get('backup_archive')
+        if uploaded_archive is not None:
+            cleanup_staged_restore_archive(config_model)
+            config_model.restore_backup_archive_path = stage_restore_backup_archive(uploaded_archive)
+            config_model.restore_backup_archive_original_name = str(getattr(uploaded_archive, 'name', 'backup.dump'))
+            config_model.restore_backup_restored_at = None
+            config_model.restore_backup_restore_error = ''
+            config_model.restore_backup_import_submitted = True
+            config_model.save()
+
         try:
-            active_cas = CaModel.objects.filter(is_active=True)
-            count = active_cas.count()
+            restore_operational_database_from_backup(
+                config_model,
+                backup_password=form.cleaned_data.get('backup_archive_password') or '',
+            )
+        except DjangoValidationError as exception:
+            config_model.restore_backup_restore_error = str(exception)
+            config_model.restore_backup_restored_at = None
+            config_model.restore_backup_import_submitted = True
+            config_model.save(update_fields=[
+                'restore_backup_restore_error',
+                'restore_backup_restored_at',
+                'restore_backup_import_submitted',
+            ])
+            form.add_error('backup_archive', exception)
+            return self.render_to_response(self.get_context_data(form=form))
 
-            if count > 0:
-                active_cas.update(is_active=False)
-                self.logger.info(
-                    'Deactivated %d Certificate Authority(ies) due to HSM change - private keys no longer available',
-                    count,
-                )
-            else:
-                self.logger.info('No active Certificate Authorities found to deactivate')
+        config_model.restore_backup_restored_at = timezone.now()
+        config_model.restore_backup_restore_error = ''
+        config_model.restore_backup_import_submitted = True
+        config_model.save(update_fields=[
+            'restore_backup_restored_at',
+            'restore_backup_restore_error',
+            'restore_backup_import_submitted',
+        ])
+        messages.success(self.request, 'Backup restored into the configured PostgreSQL database.')
+        return super().form_valid(form)
 
-        except Exception:
-            self.logger.exception('Failed to deactivate Certificate Authorities')
-            # Don't raise - this is not critical enough to fail the restore process
 
-    def _extract_tls_certificates(self) -> None:
-        """Extract TLS certificates from database and write to files for Nginx configuration.
+class RestoreBackupSummaryView(ConnectExistingSummaryView):
+    """Restore summary step for inspection and explicit attach."""
 
-        This is called during auto restore to prepare TLS files before Nginx configuration.
+    attach_mode = OperationalAttachMode.RESTORE_BACKUP
+    page_title = 'Restore from Backup'
+    step_url_names = RESTORE_BACKUP_STEP_URL_NAMES
+    step_labels = RESTORE_BACKUP_STEP_LABELS
+    back_url = reverse_lazy('setup_wizard:restore_backup_import')
+    body_heading = 'Inspect and Restore'
 
-        Raises:
-            RuntimeError: If TLS credential extraction fails.
-        """
-        try:
-            active_tls = ActiveTrustpointTlsServerCredentialModel.objects.get(id=1)
-            tls_server_credential_model = active_tls.credential
 
-            if not tls_server_credential_model:
-                self._raise_runtime_error('TLS credential not found in database')
+class OperationalAttachEntryView(LoggerMixin, FormView):
+    """Shared bootstrap flow for restoring or connecting to operational state."""
 
-            tls_server_credential_model = cast('CredentialModel', tls_server_credential_model)
+    http_method_names = ('get', 'post')
+    template_name = 'setup_wizard/operational_attach.html'
+    form_class = OperationalAttachConfigForm
+    attach_mode: OperationalAttachMode
+    page_title: str
 
-            private_key_pem = tls_server_credential_model.get_private_key_serializer().as_pkcs8_pem().decode()
-            certificate_pem = tls_server_credential_model.get_certificate_serializer().as_pem().decode()
-            trust_store_pem = tls_server_credential_model.get_certificate_chain_serializer().as_pem().decode()
+    _stage_uploaded_pkcs11_module = staticmethod(stage_uploaded_pkcs11_module)
+    _stage_pkcs11_user_pin = staticmethod(stage_pkcs11_user_pin)
+    _stage_uploaded_pkcs11_config = staticmethod(stage_uploaded_pkcs11_config)
 
-            NGINX_KEY_PATH.parent.mkdir(parents=True, exist_ok=True)
-            NGINX_KEY_PATH.write_text(private_key_pem)
-            NGINX_CERT_PATH.write_text(certificate_pem)
-
-            if trust_store_pem.strip():
-                NGINX_CERT_CHAIN_PATH.write_text(trust_store_pem)
-            elif NGINX_CERT_CHAIN_PATH.exists():
-                NGINX_CERT_CHAIN_PATH.unlink()
-
-            self.logger.info('TLS certificates extracted successfully')
-
-        except ActiveTrustpointTlsServerCredentialModel.DoesNotExist as e:
-            error_msg = 'Active TLS credential not found in database'
-            self.logger.exception(error_msg)
-            raise RuntimeError(error_msg) from e
-        except Exception as e:
-            error_msg = f'Failed to extract TLS certificates: {e}'
-            self.logger.exception(error_msg)
-            raise RuntimeError(error_msg) from e
+    def get_form_kwargs(self) -> dict[str, Any]:
+        """Bind the attach form to the bootstrap singleton."""
+        kwargs = super().get_form_kwargs()
+        kwargs['instance'] = SetupWizardConfigModel.get_singleton()
+        kwargs['attach_mode'] = self.attach_mode
+        kwargs['validate_backend'] = self.request.POST.get('wizard_action') != 'test_database'
+        return kwargs
 
     @staticmethod
-    def _map_exit_code_to_message(return_code: int) -> str:
-        """Map script exit codes to meaningful error messages."""
-        error_messages = {
-            1: 'Trustpoint is not in the WIZARD_AUTO_RESTORE_PASSWORD state.',
-            2: 'Found multiple wizard state files. The wizard state seems to be corrupted.',
-            3: 'Failed to remove the WIZARD_AUTO_RESTORE_PASSWORD state file.',
-            4: 'Failed to create the WIZARD_COMPLETED state file.',
-            5: 'Failed to execute post-restore operations.',
-        }
-        return error_messages.get(return_code, 'An unknown error occurred during auto restore password processing.')
+    def _is_clear_module_submission(request: HttpRequest) -> bool:
+        """Return whether the current POST requests staged library removal."""
+        return request.POST.get('wizard_action') == 'clear_module'
+
+    @staticmethod
+    def _is_clear_pin_submission(request: HttpRequest) -> bool:
+        """Return whether the current POST requests staged PIN removal."""
+        return request.POST.get('wizard_action') == 'clear_pin'
+
+    @staticmethod
+    def _is_clear_config_submission(request: HttpRequest) -> bool:
+        """Return whether the current POST requests staged vendor config removal."""
+        return request.POST.get('wizard_action') == 'clear_pkcs11_config'
+
+    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Handle staged PKCS#11 asset removal for attach flows."""
+        config_model = SetupWizardConfigModel.get_singleton()
+        if self._is_clear_module_submission(request):
+            clear_staged_pkcs11_module(config_model)
+            messages.success(request, 'The staged PKCS#11 library was removed for this wizard session.')
+            return redirect(request.path)
+        if self._is_clear_pin_submission(request):
+            clear_staged_pkcs11_pin(config_model)
+            messages.success(request, 'The staged PKCS#11 user PIN was removed for this wizard session.')
+            return redirect(request.path)
+        if self._is_clear_config_submission(request):
+            clear_staged_pkcs11_config(config_model)
+            messages.success(request, 'The staged PKCS#11 vendor config was removed for this wizard session.')
+            return redirect(request.path)
+        return super().post(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
+        """Render the flow shell and the latest compatibility report."""
+        context = super().get_context_data(**kwargs)
+        context['attach_mode'] = self.attach_mode
+        context['page_title'] = self.page_title
+        context['compatibility_report'] = kwargs.get('compatibility_report')
+        return context
+
+    @staticmethod
+    def _backend_kind_for_config(config_model: SetupWizardConfigModel) -> str:
+        """Map the staged wizard backend selection to the normalized backend kind."""
+        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.SoftwareStorage:
+            return BackendKind.SOFTWARE.value
+        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            return BackendKind.PKCS11.value
+        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.RestBackend:
+            return BackendKind.REST.value
+        return str(config_model.crypto_storage)
+
+    def _build_target(self, config_model: SetupWizardConfigModel) -> OperationalTargetConfig:
+        """Build the immutable attach target from staged bootstrap state."""
+        backend_kind = self._backend_kind_for_config(config_model)
+        return OperationalTargetConfig(
+            mode=self.attach_mode,
+            database=OperationalDatabaseConfig(
+                host=config_model.operational_db_host,
+                port=config_model.operational_db_port,
+                name=config_model.operational_db_name,
+                user=config_model.operational_db_user,
+                password=config_model.operational_db_password,
+            ),
+            crypto_backend=OperationalBackendBinding(backend_kind=backend_kind),
+            app_secret_backend=OperationalBackendBinding(backend_kind=backend_kind),
+        )
+
+    @staticmethod
+    def _database_error_report(
+        *,
+        mode: OperationalAttachMode,
+        target: OperationalTargetConfig,
+        exception: Exception,
+    ) -> OperationalCompatibilityReport:
+        """Build a blocking report for a failed target database inspection."""
+        error_detail = str(exception).strip() or type(exception).__name__
+        return OperationalCompatibilityReport(
+            mode=mode,
+            target=target,
+            snapshot=None,
+            checks=(
+                CompatibilityCheck(
+                    code='database.unreachable',
+                    label='Operational Database',
+                    severity=CompatibilitySeverity.ERROR,
+                    message=f'Could not inspect the operational database: {error_detail}',
+                ),
+            ),
+        )
+
+    def _persist_pkcs11_backend_config(self, form: OperationalAttachConfigForm) -> None:
+        """Persist staged PKCS#11 wizard inputs without advancing any fresh-install step."""
+        persist_staged_pkcs11_backend_config(form)
+
+    def _test_pkcs11_connection(self, form: OperationalAttachConfigForm) -> None:
+        """Probe the staged PKCS#11 configuration for an attach flow."""
+        backend = Pkcs11Backend(profile=build_staged_pkcs11_test_profile(form))
+        try:
+            backend.verify_authentication()
+            capabilities = backend.probe_capabilities()
+        finally:
+            backend.close()
+
+        update_fields: list[str] = []
+        if capabilities.token.label and capabilities.token.label != form.instance.fresh_install_pkcs11_token_label:
+            form.instance.fresh_install_pkcs11_token_label = capabilities.token.label
+            update_fields.append('fresh_install_pkcs11_token_label')
+        if capabilities.token.serial and capabilities.token.serial != form.instance.fresh_install_pkcs11_token_serial:
+            form.instance.fresh_install_pkcs11_token_serial = capabilities.token.serial
+            update_fields.append('fresh_install_pkcs11_token_serial')
+        if capabilities.token.slot_id != form.instance.fresh_install_pkcs11_slot_id:
+            form.instance.fresh_install_pkcs11_slot_id = capabilities.token.slot_id
+            update_fields.append('fresh_install_pkcs11_slot_id')
+        if update_fields:
+            form.instance.save(update_fields=update_fields)
+
+    def _persist_attach_config(self, form: OperationalAttachConfigForm) -> SetupWizardConfigModel:
+        """Persist the staged attach target in bootstrap SQLite."""
+        config_model = form.save(commit=False)
+        config_model.crypto_storage = int(form.cleaned_data['crypto_storage'])
+        config_model.save()
+        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            self._persist_pkcs11_backend_config(form)
+            config_model.refresh_from_db()
+        return config_model
+
+    def form_valid(self, form: OperationalAttachConfigForm) -> HttpResponse:
+        """Persist, probe, and inspect a restore/connect attach target."""
+        config_model = self._persist_attach_config(form)
+        target = self._build_target(config_model)
+        action = self.request.POST.get('wizard_action')
+
+        should_test_hsm = (
+            config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage
+            and action != 'test_database'
+        )
+        if should_test_hsm:
+            try:
+                self._test_pkcs11_connection(form)
+            except Exception as exception:
+                self.logger.exception('PKCS#11 attach connection test failed.')
+                error_detail = str(exception).strip() or type(exception).__name__
+                form.add_error(None, f'Could not connect to the configured PKCS#11 backend: {error_detail}')
+                return self.render_to_response(self.get_context_data(form=form))
+
+        if action == 'test_backend':
+            messages.success(self.request, 'Backend connection successful.')
+            return redirect(self.request.path)
+
+        try:
+            snapshot = OperationalTargetInspector().inspect_database(target.database)
+        except Exception as exception:
+            self.logger.exception('Operational attach database inspection failed.')
+            report = self._database_error_report(mode=self.attach_mode, target=target, exception=exception)
+            return self.render_to_response(self.get_context_data(form=form, compatibility_report=report))
+
+        if action == 'test_database':
+            messages.success(self.request, 'Operational database connection successful.')
+            return redirect(self.request.path)
+
+        report = OperationalAttachmentValidator(current_version=settings.APP_VERSION).build_report(
+            mode=self.attach_mode,
+            target=target,
+            snapshot=snapshot,
+        )
+        if action == 'apply_attach':
+            if not report.can_apply:
+                return self.render_to_response(self.get_context_data(form=form, compatibility_report=report))
+
+            try:
+                if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+                    FreshInstallSummaryView.install_staged_pkcs11_assets(config_model)
+                handoff_result = run_operational_attach_handoff(config_model)
+                runtime_result = run_operational_runtime_switch(handoff_result.pending_env_file)
+            except DjangoValidationError as exception:
+                form.add_error(None, str(exception))
+                return self.render_to_response(self.get_context_data(form=form, compatibility_report=report))
+
+            config_model.operational_config_applied = True
+            config_model.save(update_fields=['operational_config_applied'])
+            SetupWizardCompletedModel.mark_setup_complete_once()
+            if runtime_result.switched:
+                messages.success(self.request, 'Operational runtime attached successfully.')
+            else:
+                messages.success(self.request, 'Operational configuration saved. Restart the runtime to attach.')
+            return redirect('/')
+
+        return self.render_to_response(self.get_context_data(form=form, compatibility_report=report))
+
+
+class SetupWizardRestoreBackupView(LoginRequiredMixin, View):
+    """Bootstrap entry for restoring a database backup, then attaching explicitly."""
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Start restore at the first lightweight wizard step."""
+        _ = request, args, kwargs
+        return redirect('setup_wizard:restore_backup_database')
+
+
+class SetupWizardConnectExistingView(LoginRequiredMixin, View):
+    """Bootstrap entry for connecting this container to an existing instance."""
+
+    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+        """Start connect-existing at the first lightweight wizard step."""
+        _ = args, kwargs
+        return redirect('setup_wizard:connect_existing_database')

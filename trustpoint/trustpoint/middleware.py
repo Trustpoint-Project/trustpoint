@@ -221,7 +221,7 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
     def _get_authenticated_redirect_path(self, path: str) -> str | None:
         """Return the redirect path for authenticated users while setup is incomplete."""
         if not path.startswith(self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS):
-            return self._get_first_unsubmitted_redirect_path()
+            return self.SETUP_WIZARD_INDEX_REVERSE
 
         return self._get_fresh_install_redirect_path(path)
 

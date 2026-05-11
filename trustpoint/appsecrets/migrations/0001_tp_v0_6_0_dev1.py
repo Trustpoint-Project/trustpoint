@@ -25,8 +25,8 @@ class Migration(migrations.Migration):
             fields=[
                 ('backend', models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, primary_key=True, related_name='pkcs11_config', serialize=False, to='appsecrets.appsecretbackendmodel')),
                 ('module_path', models.TextField()),
-                ('token_label', models.CharField(blank=True, max_length=128, null=True)),
-                ('token_serial', models.CharField(blank=True, max_length=128, null=True)),
+                ('token_label', models.CharField(blank=True, default='', max_length=128)),
+                ('token_serial', models.CharField(blank=True, default='', max_length=128)),
                 ('slot_id', models.PositiveIntegerField(blank=True, null=True)),
                 ('auth_source', models.CharField(choices=[('file', 'PIN file'), ('env', 'Environment variable')], max_length=16)),
                 ('auth_source_ref', models.TextField(help_text='Environment variable name or PIN file path depending on auth_source.')),

@@ -122,11 +122,6 @@ def test_issuing_ca_delete(issuing_ca_instance: dict[str, Any], domain_instance:
 def test_chain_truststore_creation_on_new_issuing_ca() -> None:
     """Test that a chain truststore is automatically created when creating a new issuing CA."""
     from trustpoint_core.serializer import CredentialSerializer
-    from management.models import KeyStorageConfig
-
-    # Ensure crypto storage config exists
-    KeyStorageConfig.get_or_create_default()
-
     # Create a root CA first
     root_cert, root_priv_key = CertificateGenerator.create_root_ca(cn='Root CA')
     root_ca = CertificateGenerator.save_issuing_ca(
@@ -180,11 +175,6 @@ def test_chain_truststore_creation_on_new_issuing_ca() -> None:
 def test_chain_truststore_single_ca() -> None:
     """Test that a chain truststore is created even for a single root CA."""
     from trustpoint_core.serializer import CredentialSerializer
-    from management.models import KeyStorageConfig
-
-    # Ensure crypto storage config exists
-    KeyStorageConfig.get_or_create_default()
-
     # Create a root CA
     root_cert, root_priv_key = CertificateGenerator.create_root_ca(cn='Single Root CA')
     credential_serializer = CredentialSerializer(
@@ -217,11 +207,6 @@ def test_chain_truststore_single_ca() -> None:
 def test_chain_truststore_three_level_hierarchy() -> None:
     """Test that chain truststore contains all certificates in a three-level hierarchy."""
     from trustpoint_core.serializer import CredentialSerializer
-    from management.models import KeyStorageConfig
-
-    # Ensure crypto storage config exists
-    KeyStorageConfig.get_or_create_default()
-
     # Create root CA
     root_cert, root_priv_key = CertificateGenerator.create_root_ca(cn='Root CA')
     root_ca = CertificateGenerator.save_issuing_ca(
@@ -285,10 +270,6 @@ def test_chain_truststore_three_level_hierarchy() -> None:
 def test_chain_truststore_ordering() -> None:
     """Test that certificates in chain truststore are ordered correctly (root to leaf)."""
     from trustpoint_core.serializer import CredentialSerializer
-    from management.models import KeyStorageConfig
-
-    KeyStorageConfig.get_or_create_default()
-
     # Create two-level hierarchy
     root_cert, root_priv_key = CertificateGenerator.create_root_ca(cn='Root CA')
     root_ca = CertificateGenerator.save_issuing_ca(

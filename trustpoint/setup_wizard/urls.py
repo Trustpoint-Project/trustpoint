@@ -13,6 +13,56 @@ urlpatterns = [
         name='restore_backup',
     ),
     path(
+        'restore-backup/database/',
+        views.RestoreBackupDatabaseView.as_view(),
+        name='restore_backup_database',
+    ),
+    path(
+        'restore-backup/crypto-storage/',
+        views.RestoreBackupCryptoStorageView.as_view(),
+        name='restore_backup_crypto_storage',
+    ),
+    path(
+        'restore-backup/backend-config/',
+        views.RestoreBackupBackendConfigView.as_view(),
+        name='restore_backup_backend_config',
+    ),
+    path(
+        'restore-backup/import/',
+        views.RestoreBackupImportView.as_view(),
+        name='restore_backup_import',
+    ),
+    path(
+        'restore-backup/summary/',
+        views.RestoreBackupSummaryView.as_view(),
+        name='restore_backup_summary',
+    ),
+    path(
+        'connect-existing/',
+        views.SetupWizardConnectExistingView.as_view(),
+        name='connect_existing',
+    ),
+    path(
+        'connect-existing/database/',
+        views.ConnectExistingDatabaseView.as_view(),
+        name='connect_existing_database',
+    ),
+    path(
+        'connect-existing/crypto-storage/',
+        views.ConnectExistingCryptoStorageView.as_view(),
+        name='connect_existing_crypto_storage',
+    ),
+    path(
+        'connect-existing/backend-config/',
+        views.ConnectExistingBackendConfigView.as_view(),
+        name='connect_existing_backend_config',
+    ),
+    path(
+        'connect-existing/summary/',
+        views.ConnectExistingSummaryView.as_view(),
+        name='connect_existing_summary',
+    ),
+    path(
         'fresh-install/admin-user/',
         views.FreshInstallAdminUserView.as_view(),
         name='fresh_install_admin_user',
@@ -53,12 +103,4 @@ urlpatterns = [
         views.FreshInstallCancelView.as_view(),
         name='fresh_install_cancel',
     ),
-    # path(
-    #     'backup-password/', # noqa: ERA001
-    #     SetupWizardBackupPasswordView.as_view(), # noqa: ERA001
-    #     name='backup_password', # noqa: ERA001
-    # ),
-    path('restore/', views.BackupRestoreView.as_view(), name='restore'),
-    # path('auto_restore_password/', BackupAutoRestorePasswordView.as_view(),
-    # name='auto_restore_password'),
 ]

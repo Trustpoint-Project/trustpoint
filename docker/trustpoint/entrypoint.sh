@@ -61,9 +61,67 @@ echo "=== Django settings: ${DJANGO_SETTINGS_MODULE} ==="
 mkdir -p /var/log/trustpoint
 BOOTSTRAP_STATE_DIR="$(dirname "$OPERATIONAL_ENV_FILE")"
 BOOTSTRAP_READY_DIR="$(dirname "$OPERATIONAL_READY_FILE")"
+BOOTSTRAP_DB_PATH="${TRUSTPOINT_BOOTSTRAP_DB_PATH:-/var/lib/trustpoint/bootstrap/bootstrap.sqlite3}"
+BOOTSTRAP_DB_DIR="$(dirname "$BOOTSTRAP_DB_PATH")"
+BOOTSTRAP_RUNTIME_ROOT="$(dirname "$BOOTSTRAP_DB_DIR")"
+
+bootstrap_sqlite_write_probe() {
+  su -s /bin/bash www-data -c "python -c \"import sqlite3; p='${BOOTSTRAP_DB_PATH}'; con=sqlite3.connect(p); con.execute('CREATE TABLE IF NOT EXISTS trustpoint_bootstrap_write_probe (id integer primary key)'); con.execute('DROP TABLE trustpoint_bootstrap_write_probe'); con.commit(); con.close()\""
+}
+
+repair_bootstrap_sqlite_file() {
+  [ -e "$BOOTSTRAP_DB_PATH" ] || return 0
+
+  local repaired_path="${BOOTSTRAP_DB_PATH}.repair"
+  local stale_path="${BOOTSTRAP_DB_PATH}.readonly.$(date +%s)"
+
+  cp "$BOOTSTRAP_DB_PATH" "$repaired_path"
+  chown www-data:www-data "$repaired_path"
+  chmod 660 "$repaired_path"
+  mv "$BOOTSTRAP_DB_PATH" "$stale_path"
+  mv "$repaired_path" "$BOOTSTRAP_DB_PATH"
+}
+
+prepare_bootstrap_sqlite_storage() {
+  mkdir -p "$BOOTSTRAP_STATE_DIR" "$BOOTSTRAP_READY_DIR" "$BOOTSTRAP_DB_DIR"
+
+  if [ "$(id -u)" != "0" ]; then
+    return 0
+  fi
+
+  chown www-data:www-data /var/log/trustpoint
+  chown www-data:www-data "$BOOTSTRAP_RUNTIME_ROOT" 2>/dev/null || true
+  chown -R www-data:www-data "$BOOTSTRAP_STATE_DIR" "$BOOTSTRAP_READY_DIR" "$BOOTSTRAP_DB_DIR"
+  chmod 750 "$BOOTSTRAP_STATE_DIR" "$BOOTSTRAP_READY_DIR" "$BOOTSTRAP_DB_DIR"
+
+  if [ -e "$BOOTSTRAP_DB_PATH" ]; then
+    chown www-data:www-data "$BOOTSTRAP_DB_PATH"
+    chmod 660 "$BOOTSTRAP_DB_PATH"
+  fi
+
+  find "$BOOTSTRAP_DB_DIR" -maxdepth 1 \( -name '*.sqlite3-journal' -o -name '*.sqlite3-wal' -o -name '*.sqlite3-shm' \) \
+    -exec chown www-data:www-data {} \; \
+    -exec chmod 660 {} \; 2>/dev/null || true
+
+  su -s /bin/bash www-data -c "test -w '$BOOTSTRAP_DB_DIR' && touch '$BOOTSTRAP_DB_DIR/.trustpoint-write-test' && rm -f '$BOOTSTRAP_DB_DIR/.trustpoint-write-test'"
+
+  if [ "$PHASE" != "bootstrap" ]; then
+    return 0
+  fi
+
+  if ! bootstrap_sqlite_write_probe; then
+    echo "WARNING: Bootstrap SQLite write probe failed; repairing database file permissions."
+    repair_bootstrap_sqlite_file
+    find "$BOOTSTRAP_DB_DIR" -maxdepth 1 \( -name '*.sqlite3-journal' -o -name '*.sqlite3-wal' -o -name '*.sqlite3-shm' \) \
+      -exec rm -f {} \; 2>/dev/null || true
+    bootstrap_sqlite_write_probe
+  fi
+}
+
 mkdir -p "$BOOTSTRAP_STATE_DIR" "$BOOTSTRAP_READY_DIR"
+mkdir -p "$BOOTSTRAP_DB_DIR"
 if [ "$(id -u)" = "0" ]; then
-  chown www-data:www-data /var/log/trustpoint "$BOOTSTRAP_STATE_DIR" "$BOOTSTRAP_READY_DIR"
+  prepare_bootstrap_sqlite_storage
 fi
 
 wait_for_postgres() {

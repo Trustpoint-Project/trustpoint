@@ -15,17 +15,20 @@ from appsecrets.models import AppSecretBackendModel
 from crypto.models import BackendKind, CryptoProviderProfileModel
 
 
-class KeyStorageConfigView(TemplateView):
+class BackendConfigurationView(TemplateView):
     """Display the configured managed-crypto and application-secret backends."""
 
-    template_name = 'management/key_storage.html'
-    extra_context: dict[str, str] = {'page_category': 'management', 'page_name': 'key_storage'}  # noqa: RUF012
+    template_name = 'management/backend_configuration.html'
+    extra_context: dict[str, str] = {  # noqa: RUF012
+        'page_category': 'management',
+        'page_name': 'backend_configuration',
+    }
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
         """Manually refresh the provider capability snapshot for the active backend."""
         action = request.POST.get('action')
         if action != 'reprobe':
-            return redirect('management:key_storage')
+            return redirect('management:backend_configuration')
 
         command_output = io.StringIO()
         try:
@@ -37,7 +40,7 @@ class KeyStorageConfigView(TemplateView):
             success_detail = command_output.getvalue().strip() or _('Crypto provider reprobe completed successfully.')
             messages.success(request, success_detail)
 
-        return redirect('management:key_storage')
+        return redirect('management:backend_configuration')
 
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Add backend summary context for the management UI."""

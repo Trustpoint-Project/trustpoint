@@ -13,7 +13,7 @@ from signer.models import SignedMessageModel, SignerModel
 
 
 @pytest.fixture
-def key_storage_config():
+def app_secret_config():
     """Create a development app-secret backend for signer model tests."""
     backend = AppSecretBackendModel.get_singleton()
     backend.backend_kind = AppSecretBackendKind.SOFTWARE
@@ -25,7 +25,7 @@ def key_storage_config():
 
 
 @pytest.fixture
-def sample_rsa_credential_serializer(key_storage_config):
+def sample_rsa_credential_serializer(app_secret_config):
     """Create a sample RSA credential serializer for testing."""
     from datetime import datetime, timedelta, timezone as dt_timezone
     
@@ -64,7 +64,7 @@ def sample_rsa_credential_serializer(key_storage_config):
 
 
 @pytest.fixture
-def sample_ec_credential_serializer(key_storage_config):
+def sample_ec_credential_serializer(app_secret_config):
     """Create a sample EC credential serializer for testing."""
     from datetime import datetime, timedelta, timezone as dt_timezone
     

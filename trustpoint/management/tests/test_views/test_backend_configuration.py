@@ -1,4 +1,4 @@
-"""Test suite for key_storage views."""
+"""Test suite for backend configuration views."""
 
 from django.contrib.messages import get_messages
 from django.test import RequestFactory, TestCase
@@ -11,16 +11,16 @@ from crypto.models import (
     Pkcs11AuthSource,
     SoftwareKeyEncryptionSource,
 )
-from management.views.key_storage import KeyStorageConfigView
+from management.views.backend_configuration import BackendConfigurationView
 
 
-class KeyStorageConfigViewTest(TestCase):
-    """Test suite for KeyStorageConfigView."""
+class BackendConfigurationViewTest(TestCase):
+    """Test suite for BackendConfigurationView."""
 
     def setUp(self):
         """Set up test fixtures."""
         self.factory = RequestFactory()
-        self.view = KeyStorageConfigView()
+        self.view = BackendConfigurationView()
         self.view.request = self.factory.get('/key-storage/')
         
         # Enable message storage for the request
@@ -31,7 +31,7 @@ class KeyStorageConfigViewTest(TestCase):
 
     def test_template_name(self):
         """Test that the correct template is used."""
-        self.assertEqual(self.view.template_name, 'management/key_storage.html')
+        self.assertEqual(self.view.template_name, 'management/backend_configuration.html')
 
     def test_extra_context_has_page_category(self):
         """Test extra_context has correct page_category."""
@@ -39,7 +39,7 @@ class KeyStorageConfigViewTest(TestCase):
 
     def test_extra_context_has_page_name(self):
         """Test extra_context has correct page_name."""
-        self.assertEqual(self.view.extra_context['page_name'], 'key_storage')
+        self.assertEqual(self.view.extra_context['page_name'], 'backend_configuration')
 
     def test_get_context_data_with_software_config(self):
         """Test get_context_data with an active software backend profile."""
@@ -143,7 +143,7 @@ class KeyStorageConfigViewTest(TestCase):
         self.assertIn('custom_key', context)
         self.assertEqual(context['custom_key'], 'custom_value')
 
-    def test_key_storage_config_view_inherits_from_template_view(self):
-        """Test KeyStorageConfigView is a TemplateView."""
+    def test_backend_configuration_view_inherits_from_template_view(self):
+        """Test BackendConfigurationView is a TemplateView."""
         from django.views.generic import TemplateView
-        self.assertTrue(issubclass(KeyStorageConfigView, TemplateView))
+        self.assertTrue(issubclass(BackendConfigurationView, TemplateView))

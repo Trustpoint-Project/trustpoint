@@ -32,7 +32,7 @@ def authenticated_client(api_client):
 
 
 @pytest.fixture
-def key_storage_config():
+def app_secret_config():
     """Create a development app-secret backend for signer API tests."""
     backend = AppSecretBackendModel.get_singleton()
     backend.backend_kind = AppSecretBackendKind.SOFTWARE
@@ -44,7 +44,7 @@ def key_storage_config():
 
 
 @pytest.fixture
-def sample_signer(key_storage_config):
+def sample_signer(app_secret_config):
     """Create a sample signer with RSA key for testing."""
     from trustpoint_core.serializer import (
         CredentialSerializer,
@@ -102,7 +102,7 @@ def sample_signer(key_storage_config):
 
 
 @pytest.fixture
-def sample_ec_signer(key_storage_config):
+def sample_ec_signer(app_secret_config):
     """Create a sample signer with EC key for testing."""
     from trustpoint_core.serializer import (
         CredentialSerializer,

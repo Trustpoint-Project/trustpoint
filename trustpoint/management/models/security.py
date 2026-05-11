@@ -27,7 +27,6 @@ class _SecurityModeDefaults(TypedDict):
     allow_ca_issuance: bool
     allow_auto_gen_pki: bool
     allow_self_signed_ca: bool
-    require_physical_hsm: bool
     permitted_no_onboarding_pki_protocols: list[int]
     permitted_onboarding_protocols: list[int]
 
@@ -178,13 +177,6 @@ class SecurityConfig(models.Model):
         help_text=_('Allow self-signed CAs to be imported with credentials.'),
     )
 
-    # -- Infrastructure constraints ----------------------------------------
-
-    require_physical_hsm = models.BooleanField(
-        default=False,
-        help_text=_('Require the Trustpoint instance to use the PKCS#11-backed managed crypto backend.'),
-    )
-
     # -- Protocol allow-lists (stored as JSON lists of integer values) -----
 
     permitted_no_onboarding_pki_protocols = models.JSONField(
@@ -228,7 +220,6 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': True,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
-            'require_physical_hsm': False,
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -245,7 +236,6 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
-            'require_physical_hsm': False,
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -268,7 +258,6 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
-            'require_physical_hsm': False,
             # CMP_SHARED_SECRET=1, EST_USERNAME_PASSWORD=4, MANUAL=16, REST_USERNAME_PASSWORD=32
             'permitted_no_onboarding_pki_protocols': [1, 4, 16, 32],
             'permitted_onboarding_protocols': _ALL_ONBOARDING_PROTOCOLS,
@@ -293,7 +282,6 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
-            'require_physical_hsm': False,
             'permitted_no_onboarding_pki_protocols': [1, 4],   # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
@@ -320,7 +308,6 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
-            'require_physical_hsm': False,
             'permitted_no_onboarding_pki_protocols': [1, 4],   # CMP_SHARED_SECRET, EST_USERNAME_PASSWORD only
             'permitted_onboarding_protocols': _ONBOARDING_PROTOCOLS_NO_MANUAL,
         },
@@ -348,7 +335,6 @@ class SecurityConfig(models.Model):
         self.allow_ca_issuance = defaults['allow_ca_issuance']
         self.allow_auto_gen_pki = defaults['allow_auto_gen_pki']
         self.allow_self_signed_ca = defaults['allow_self_signed_ca']
-        self.require_physical_hsm = defaults['require_physical_hsm']
         self.permitted_no_onboarding_pki_protocols = list(defaults['permitted_no_onboarding_pki_protocols'])
         self.permitted_onboarding_protocols = list(defaults['permitted_onboarding_protocols'])
         self.save(update_fields=[
@@ -360,7 +346,6 @@ class SecurityConfig(models.Model):
             'allow_ca_issuance',
             'allow_auto_gen_pki',
             'allow_self_signed_ca',
-            'require_physical_hsm',
             'permitted_no_onboarding_pki_protocols',
             'permitted_onboarding_protocols',
         ])
@@ -389,7 +374,6 @@ class SecurityConfig(models.Model):
                 'allow_ca_issuance': defaults['allow_ca_issuance'],
                 'allow_auto_gen_pki': defaults['allow_auto_gen_pki'],
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],
-                'require_physical_hsm': defaults['require_physical_hsm'],
                 'permitted_no_onboarding_pki_protocols': [
                     no_onboarding_labels.get(v, v)
                     for v in defaults['permitted_no_onboarding_pki_protocols']
@@ -429,11 +413,6 @@ class SecurityConfig(models.Model):
     # ------------------------------------------------------------------
     # Private helpers — one method per check group
     # ------------------------------------------------------------------
-
-    def _check_hsm(self, defaults: _SecurityModeDefaults, mode_label: str) -> list[str]:
-        """Return violations for the removed physical-HSM policy constraint."""
-        _ = defaults, mode_label
-        return []
 
     def _check_auto_gen_pki(self, defaults: _SecurityModeDefaults, mode_label: str) -> list[str]:
         """Return a violation if auto-generated PKI is enabled but not permitted in the target mode."""

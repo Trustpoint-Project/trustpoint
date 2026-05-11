@@ -8,7 +8,7 @@ from django.core.management.base import CommandError
 from django.test import TestCase
 from packaging.version import Version
 
-from management.models import AppVersion, PKCS11Token, KeyStorageConfig
+from management.models import AppVersion
 
 
 class CompileMsgCommandTest(TestCase):
@@ -114,9 +114,6 @@ class InitTrustpointCommandTest(TestCase):
         calls = [call[0][0] for call in mock_call_command.call_args_list]
         self.assertIn('tls_cred', calls)
         
-        # Should create KeyStorageConfig
-        self.assertTrue(KeyStorageConfig.objects.filter(pk=1).exists())
-
     @patch('management.management.commands.inittrustpoint.Path.open')
     @patch('management.management.commands.inittrustpoint.call_command')
     def test_inittrustpoint_container_id_not_found(
@@ -234,13 +231,6 @@ class StartupManagerCommandTest(TestCase):
 
 class TlsCredCommandTest(TestCase):
     """Test suite for tls_cred command."""
-
-    def setUp(self) -> None:
-        """Set up test fixtures."""
-        KeyStorageConfig.objects.create(
-            pk=1,
-            storage_type=KeyStorageConfig.StorageType.SOFTWARE
-        )
 
     @patch('management.management.commands.tls_cred.TlsServerCredentialGenerator')
     @patch('management.management.commands.tls_cred.CredentialModel')
@@ -377,93 +367,6 @@ class TrustpointBackupCommandTest(TestCase):
             call_command('trustpointbackup', stdout=out)
         
         self.assertIn('--filename', str(cm.exception))
-
-
-class TrustpointRestoreCommandTest(TestCase):
-    """Test suite for trustpointrestore command."""
-
-    @patch('management.management.commands.trustpointrestore.subprocess.run')
-    @patch('management.management.commands.trustpointrestore.call_command')
-    @patch('management.management.commands.trustpointrestore.ActiveTrustpointTlsServerCredentialModel')
-    @patch('management.management.commands.trustpointrestore.AppVersion')
-    def test_trustpointrestore_without_filepath(
-        self,
-        mock_app_version: MagicMock,
-        mock_active_tls: MagicMock,
-        mock_call_command: MagicMock,
-        mock_subprocess: MagicMock
-    ) -> None:
-        """Test trustpointrestore command without filepath option."""
-        # Setup mocks
-        mock_version = Mock()
-        mock_version.version = '1.0.0'
-        mock_app_version.objects.first.return_value = mock_version
-        
-        mock_tls = Mock()
-        mock_tls.credential.get_private_key_serializer().as_pkcs8_pem.return_value = b'key'
-        mock_tls.credential.get_certificate_serializer().as_pem.return_value = b'cert'
-        mock_tls.credential.get_certificate_chain_serializer().as_pem.return_value = b'chain'
-        mock_active_tls.objects.get.return_value = mock_tls
-        
-        mock_subprocess.return_value = Mock(returncode=0)
-        
-        out = StringIO()
-        call_command('trustpointrestore', stdout=out)
-        
-        # Should restore and show version mismatch message
-        output = out.getvalue()
-        self.assertIn('restoration', output.lower())
-
-    @patch('management.management.commands.trustpointrestore.Path')
-    def test_trustpointrestore_with_invalid_filepath(self, mock_path_class: MagicMock) -> None:
-        """Test trustpointrestore when filepath doesn't exist."""
-        mock_path = Mock()
-        mock_path.exists.return_value = False
-        mock_path_class.return_value = mock_path
-        
-        with self.assertRaises(CommandError):
-            call_command('trustpointrestore', '--filepath=/nonexistent/file.dump.gz')
-
-
-class UnwrapDekCommandTest(TestCase):
-    """Test suite for unwrap_dek command."""
-
-    def setUp(self) -> None:
-        """Set up test fixtures."""
-        # kek is optional (nullable) - no need to create it for basic tests
-        self.token = PKCS11Token.objects.create(
-            label='test-token',
-            slot=0,
-            module_path='/usr/lib/softhsm/libsofthsm2.so',
-        )
-
-    def test_unwrap_dek_default_token(self) -> None:
-        """Test unwrap_dek command with default token label."""
-        out = StringIO()
-        call_command('unwrap_dek', stdout=out)
-        
-        output = out.getvalue()
-        # Should access the token we created in setUp
-        self.assertIn('test-token', output)
-
-    def test_unwrap_dek_custom_token(self) -> None:
-        """Test unwrap_dek command with custom token label."""
-        out = StringIO()
-        call_command('unwrap_dek', '--token-label=test-token', stdout=out)
-        
-        output = out.getvalue()
-        self.assertIn('test-token', output)
-
-    def test_unwrap_dek_token_not_found(self) -> None:
-        """Test unwrap_dek when token doesn't exist."""
-        PKCS11Token.objects.all().delete()
-        
-        out = StringIO()
-        # Command returns early without error when token not found
-        call_command('unwrap_dek', '--token-label=nonexistent', stdout=out)
-        
-        output = out.getvalue()
-        self.assertIn('not found', output.lower())
 
 
 class UpdateTlsCommandTest(TestCase):

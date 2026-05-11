@@ -27,7 +27,7 @@ from signer.views import (
 
 
 @pytest.fixture
-def key_storage_config():
+def app_secret_config():
     """Create a development app-secret backend for signer view tests."""
     backend = AppSecretBackendModel.get_singleton()
     backend.backend_kind = AppSecretBackendKind.SOFTWARE
@@ -39,7 +39,7 @@ def key_storage_config():
 
 
 @pytest.fixture
-def sample_signer(key_storage_config):
+def sample_signer(app_secret_config):
     """Create a sample signer for testing."""
     from datetime import datetime, timedelta, timezone as dt_timezone
     

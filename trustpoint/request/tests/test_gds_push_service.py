@@ -21,10 +21,6 @@ from request.gds_push.gds_push_service import GdsPushError, GdsPushService
 @pytest.fixture
 def mock_ca_with_crl():
     """Create a mock CA with CRL."""
-    # Ensure crypto storage config exists for encrypted fields
-    from management.models import KeyStorageConfig
-    KeyStorageConfig.get_or_create_default()
-    
     root_ca, root_key = CertificateGenerator.create_root_ca('Test Root CA')
     issuing_ca, issuing_key = CertificateGenerator.create_issuing_ca(root_key, 'Test Root CA', 'Test Issuing CA')
 
@@ -1108,4 +1104,3 @@ class TestGdsPushServiceAdditionalCoverage:
 
         with pytest.raises(GdsPushError, match='has no onboarding config'):
             service._get_server_truststore()
-

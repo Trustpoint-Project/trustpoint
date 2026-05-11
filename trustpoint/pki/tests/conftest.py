@@ -9,7 +9,6 @@ from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 
 from pki.models.domain import DomainModel
 from pki.models import CaModel
-from management.models import KeyStorageConfig
 from pki.util.x509 import CertificateGenerator
 
 
@@ -57,9 +56,6 @@ DOMAIN_UNIQUE_NAME = 'domain_name'
 @pytest.fixture
 def issuing_ca_instance() -> dict[str, Any]:
     """Fixture for a testing CaModel instance."""
-    # Ensure crypto storage config exists for encrypted fields
-    KeyStorageConfig.get_or_create_default()
-    
     cert, priv_key = CertificateGenerator.create_root_ca(cn=CA_COMMON_NAME)
     issuing_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=cert, private_key=priv_key, chain=[], unique_name=UNIQUE_NAME, ca_type=CA_TYPE

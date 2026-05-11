@@ -28,7 +28,7 @@ from signer.models import SignerModel
 
 
 @pytest.fixture
-def key_storage_config():
+def app_secret_config():
     """Create a development app-secret backend for local signer tests."""
     backend = AppSecretBackendModel.get_singleton()
     backend.backend_kind = AppSecretBackendKind.SOFTWARE
@@ -112,7 +112,7 @@ class TestGetPrivateKeyLocationFromConfig:
             location = get_private_key_location_from_config()
         assert location == PrivateKeyLocation.SOFTWARE
 
-    def test_returns_software_for_software_storage(self, key_storage_config):
+    def test_returns_software_for_software_storage(self, app_secret_config):
         """Test returns SOFTWARE for software storage type."""
         from trustpoint_core.serializer import PrivateKeyLocation
 
@@ -191,7 +191,7 @@ class TestSignerAddFileImportPkcs12Form:
         assert 'pkcs12_file' in form.fields
         assert 'pkcs12_password' in form.fields
 
-    def test_clean_unique_name_with_existing_name(self, key_storage_config, sample_pkcs12_data):
+    def test_clean_unique_name_with_existing_name(self, app_secret_config, sample_pkcs12_data):
         """Test clean_unique_name raises error for duplicate name."""
         from trustpoint_core.serializer import CredentialSerializer, CertificateSerializer, PrivateKeySerializer
         
@@ -213,7 +213,7 @@ class TestSignerAddFileImportPkcs12Form:
 
     @patch('signer.forms.CredentialSerializer.from_pkcs12_bytes')
     @patch('signer.forms.SignerModel.create_new_signer')
-    def test_form_valid_submission(self, mock_create, mock_from_pkcs12, key_storage_config, sample_pkcs12_data):
+    def test_form_valid_submission(self, mock_create, mock_from_pkcs12, app_secret_config, sample_pkcs12_data):
         """Test successful form submission."""
         # Mock the credential serializer
         mock_cred = Mock()
@@ -235,7 +235,7 @@ class TestSignerAddFileImportPkcs12Form:
         
         assert form.is_valid()
 
-    def test_form_missing_pkcs12_file(self, key_storage_config):
+    def test_form_missing_pkcs12_file(self, app_secret_config):
         """Test form validation fails without PKCS#12 file."""
         form = SignerAddFileImportPkcs12Form(
             data={'unique_name': 'test', 'pkcs12_password': ''}
@@ -245,7 +245,7 @@ class TestSignerAddFileImportPkcs12Form:
         assert 'pkcs12_file' in form.errors
 
     @patch('signer.forms.CredentialSerializer.from_pkcs12_bytes')
-    def test_form_invalid_pkcs12_file(self, mock_from_pkcs12, key_storage_config):
+    def test_form_invalid_pkcs12_file(self, mock_from_pkcs12, app_secret_config):
         """Test form validation fails with invalid PKCS#12 file."""
         mock_from_pkcs12.side_effect = Exception('Invalid PKCS#12')
         
@@ -327,7 +327,7 @@ class TestSignHashForm:
         assert 'signer' in form.fields
         assert 'hash_value' in form.fields
 
-    def test_form_queryset_filters_active_signers(self, key_storage_config, sample_pkcs12_data):
+    def test_form_queryset_filters_active_signers(self, app_secret_config, sample_pkcs12_data):
         """Test form queryset only includes active signers."""
         from trustpoint_core.serializer import CredentialSerializer, CertificateSerializer, PrivateKeySerializer
         
@@ -348,7 +348,7 @@ class TestSignHashForm:
         
         assert active_signer in queryset
 
-    def test_clean_empty_hash_value(self, key_storage_config, sample_pkcs12_data):
+    def test_clean_empty_hash_value(self, app_secret_config, sample_pkcs12_data):
         """Test clean raises error for empty hash value."""
         from trustpoint_core.serializer import CredentialSerializer, CertificateSerializer, PrivateKeySerializer
         
@@ -368,7 +368,7 @@ class TestSignHashForm:
         assert not form.is_valid()
         assert 'hash_value' in form.errors
 
-    def test_clean_invalid_hex_format(self, key_storage_config, sample_pkcs12_data):
+    def test_clean_invalid_hex_format(self, app_secret_config, sample_pkcs12_data):
         """Test clean raises error for invalid hex format."""
         from trustpoint_core.serializer import CredentialSerializer, CertificateSerializer, PrivateKeySerializer
         
@@ -388,7 +388,7 @@ class TestSignHashForm:
         assert not form.is_valid()
         assert 'hash_value' in form.errors
 
-    def test_clean_wrong_length_for_algorithm(self, key_storage_config, sample_pkcs12_data):
+    def test_clean_wrong_length_for_algorithm(self, app_secret_config, sample_pkcs12_data):
         """Test clean validates hash length matches the signer's algorithm."""
         from trustpoint_core.serializer import CredentialSerializer, CertificateSerializer, PrivateKeySerializer
 
@@ -426,7 +426,7 @@ class TestSignHashForm:
             # This is acceptable behavior per the form implementation
             pass
 
-    def test_clean_valid_sha256_hash(self, key_storage_config, sample_pkcs12_data):
+    def test_clean_valid_sha256_hash(self, app_secret_config, sample_pkcs12_data):
         """Test clean accepts valid SHA256 hash."""
         from trustpoint_core.serializer import CredentialSerializer, CertificateSerializer, PrivateKeySerializer
         
@@ -449,7 +449,7 @@ class TestSignHashForm:
         assert form.is_valid()
         assert form.cleaned_data['hash_value'] == valid_hash.lower()
 
-    def test_clean_removes_whitespace_and_delimiters(self, key_storage_config, sample_pkcs12_data):
+    def test_clean_removes_whitespace_and_delimiters(self, app_secret_config, sample_pkcs12_data):
         """Test clean removes whitespace and common delimiters."""
         from trustpoint_core.serializer import CredentialSerializer, CertificateSerializer, PrivateKeySerializer
         
@@ -480,12 +480,12 @@ class TestSignHashForm:
 class TestSignerAddFileImportPkcs12FormAdvanced:
     """Advanced test cases for PKCS#12 form covering edge cases."""
 
-    def test_clean_with_no_data(self, key_storage_config):
+    def test_clean_with_no_data(self, app_secret_config):
         """Test clean raises error when no data provided."""
         form = SignerAddFileImportPkcs12Form(data={}, files={})
         assert not form.is_valid()
 
-    def test_clean_with_missing_certificate_in_pkcs12(self, key_storage_config):
+    def test_clean_with_missing_certificate_in_pkcs12(self, app_secret_config):
         """Test clean raises error when PKCS#12 has no certificate."""
         with patch('signer.forms.CredentialSerializer.from_pkcs12_bytes') as mock_from_pkcs12:
             mock_cred = Mock()
@@ -501,7 +501,7 @@ class TestSignerAddFileImportPkcs12FormAdvanced:
             
             assert not form.is_valid()
 
-    def test_clean_with_missing_private_key_in_credential(self, key_storage_config):
+    def test_clean_with_missing_private_key_in_credential(self, app_secret_config):
         """Test clean raises error when credential has no private key."""
         with patch('signer.forms.CredentialSerializer.from_pkcs12_bytes') as mock_from_pkcs12:
             mock_cred = Mock()
@@ -517,7 +517,7 @@ class TestSignerAddFileImportPkcs12FormAdvanced:
             
             assert not form.is_valid()
 
-    def test_clean_with_certificate_missing_key_usage(self, key_storage_config):
+    def test_clean_with_certificate_missing_key_usage(self, app_secret_config):
         """Test clean raises error when certificate lacks KeyUsage extension."""
         from cryptography.hazmat.primitives.hashes import SHA256
         
@@ -552,7 +552,7 @@ class TestSignerAddFileImportPkcs12FormAdvanced:
             
             assert not form.is_valid()
 
-    def test_clean_with_certificate_without_digital_signature(self, key_storage_config):
+    def test_clean_with_certificate_without_digital_signature(self, app_secret_config):
         """Test clean raises error when certificate lacks digital_signature in KeyUsage."""
         from cryptography.hazmat.primitives.hashes import SHA256
         
@@ -606,7 +606,7 @@ class TestSignerAddFileImportPkcs12FormAdvanced:
 class TestSignerAddFileImportSeparateFilesFormAdvanced:
     """Advanced test cases for separate files form."""
 
-    def test_clean_with_valid_certificate_chain(self, key_storage_config, sample_pkcs12_data):
+    def test_clean_with_valid_certificate_chain(self, app_secret_config, sample_pkcs12_data):
         """Test clean_signer_certificate_chain with valid chain file."""
         from trustpoint_core.serializer import CertificateSerializer
         
@@ -620,7 +620,7 @@ class TestSignerAddFileImportSeparateFilesFormAdvanced:
         result = form.clean_signer_certificate_chain()
         assert result is not None
 
-    def test_clean_with_invalid_certificate_chain(self, key_storage_config):
+    def test_clean_with_invalid_certificate_chain(self, app_secret_config):
         """Test clean_signer_certificate_chain with corrupted chain file."""
         chain_file = SimpleUploadedFile('chain.pem', b'invalid certificate data')
         
@@ -630,7 +630,7 @@ class TestSignerAddFileImportSeparateFilesFormAdvanced:
         with pytest.raises(ValidationError):
             form.clean_signer_certificate_chain()
 
-    def test_clean_with_no_certificate_chain(self, key_storage_config):
+    def test_clean_with_no_certificate_chain(self, app_secret_config):
         """Test clean_signer_certificate_chain returns None when no chain provided."""
         form = SignerAddFileImportSeparateFilesForm()
         form.cleaned_data = {'signer_certificate_chain': None}
@@ -638,7 +638,7 @@ class TestSignerAddFileImportSeparateFilesFormAdvanced:
         result = form.clean_signer_certificate_chain()
         assert result is None
 
-    def test_clean_with_duplicate_certificate(self, key_storage_config, sample_pkcs12_data):
+    def test_clean_with_duplicate_certificate(self, app_secret_config, sample_pkcs12_data):
         """Test clean_signer_certificate rejects duplicate certificate."""
         from trustpoint_core.serializer import CredentialSerializer, CertificateSerializer, PrivateKeySerializer
         
@@ -661,7 +661,7 @@ class TestSignerAddFileImportSeparateFilesFormAdvanced:
         with pytest.raises(ValidationError, match='already configured'):
             form.clean_signer_certificate()
 
-    def test_clean_with_mismatched_private_key(self, key_storage_config, sample_pkcs12_data):
+    def test_clean_with_mismatched_private_key(self, app_secret_config, sample_pkcs12_data):
         """Test clean validates private key matches certificate."""
         from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, NoEncryption
         from trustpoint_core.serializer import CertificateSerializer
@@ -691,7 +691,7 @@ class TestSignerAddFileImportSeparateFilesFormAdvanced:
         assert not form.is_valid()
         assert any('does not match' in str(e).lower() for e in form.non_field_errors())
 
-    def test_clean_with_password_encoding_error(self, key_storage_config):
+    def test_clean_with_password_encoding_error(self, app_secret_config):
         """Test clean_private_key_file handles password encoding errors."""
         pk_file = SimpleUploadedFile('key.pem', b'fake key data')
         
@@ -703,7 +703,7 @@ class TestSignerAddFileImportSeparateFilesFormAdvanced:
         with pytest.raises(ValidationError):
             form.clean_private_key_file()
 
-    def test_clean_with_corrupted_private_key(self, key_storage_config):
+    def test_clean_with_corrupted_private_key(self, app_secret_config):
         """Test clean_private_key_file handles corrupted key file."""
         pk_file = SimpleUploadedFile('key.pem', b'-----BEGIN PRIVATE KEY-----\ninvalid data\n-----END PRIVATE KEY-----')
         
@@ -714,7 +714,7 @@ class TestSignerAddFileImportSeparateFilesFormAdvanced:
         with pytest.raises(ValidationError, match='Failed to parse'):
             form.clean_private_key_file()
 
-    def test_clean_with_corrupted_certificate(self, key_storage_config):
+    def test_clean_with_corrupted_certificate(self, app_secret_config):
         """Test clean_signer_certificate handles corrupted certificate file."""
         cert_file = SimpleUploadedFile('cert.pem', b'-----BEGIN CERTIFICATE-----\ninvalid\n-----END CERTIFICATE-----')
         
@@ -724,7 +724,7 @@ class TestSignerAddFileImportSeparateFilesFormAdvanced:
         with pytest.raises(ValidationError, match='corrupted'):
             form.clean_signer_certificate()
 
-    def test_clean_with_certificate_no_keyusage_extension(self, key_storage_config):
+    def test_clean_with_certificate_no_keyusage_extension(self, app_secret_config):
         """Test clean_signer_certificate rejects certificate without KeyUsage."""
         from cryptography.hazmat.primitives.hashes import SHA256
         from trustpoint_core.serializer import CertificateSerializer
@@ -752,7 +752,7 @@ class TestSignerAddFileImportSeparateFilesFormAdvanced:
         with pytest.raises(ValidationError, match='KeyUsage'):
             form.clean_signer_certificate()
 
-    def test_clean_with_certificate_no_digital_signature(self, key_storage_config):
+    def test_clean_with_certificate_no_digital_signature(self, app_secret_config):
         """Test clean_signer_certificate rejects certificate without digitalSignature."""
         from cryptography.hazmat.primitives.hashes import SHA256
         from trustpoint_core.serializer import CertificateSerializer

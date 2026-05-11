@@ -67,7 +67,7 @@ Feature: Docker Setup Wizard
     When the user navigates to "/management/backups/"
     Then the page should load without errors
 
-    When the user navigates to "/management/key_storage/"
+    When the user navigates to "/management/backend-configuration/"
     Then the page should load without errors
 
     When the user navigates to "/management/help/"
