@@ -3,8 +3,8 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, generate_private_key
 from cryptography.x509.ocsp import OCSPCertStatus, OCSPRequest, OCSPResponseBuilder
 from django.utils import timezone
-from trustpoint.pki.models.ca import CaModel
 from trustpoint.pki.models.certificate import CertificateModel, RevokedCertificateModel
+from trustpoint.pki.models.ca import CaModel
 
 def build_ocsp_response(ocsp_req: OCSPRequest) -> bytes:
     """Build a DER-encoded OCSP response for the given OCSPRequest."""
