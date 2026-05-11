@@ -201,6 +201,8 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
     def _get_completed_wizard_redirect_path(cls, path: str) -> str | None:
         """Return the redirect path when the setup wizard is completed."""
         if path.startswith(cls.SETUP_WIZARD_INDEX_REVERSE):
+            if getattr(settings, 'TRUSTPOINT_IS_BOOTSTRAP', False):
+                return cls.USERS_LOGIN_REVERSE
             return cls.WIZARD_COMPLETED_HOME_REVERSE
         return None
 
@@ -221,7 +223,13 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
     def _get_authenticated_redirect_path(self, path: str) -> str | None:
         """Return the redirect path for authenticated users while setup is incomplete."""
         if not path.startswith(self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS):
-            return self.SETUP_WIZARD_INDEX_REVERSE
+            config_model = SetupWizardConfigModel.get_singleton()
+            if config_model.bootstrap_active_flow in {
+                SetupWizardConfigModel.BootstrapFlow.CONNECT_EXISTING,
+                SetupWizardConfigModel.BootstrapFlow.RESTORE_BACKUP,
+            }:
+                return self.SETUP_WIZARD_INDEX_REVERSE
+            return self._get_first_unsubmitted_redirect_path()
 
         return self._get_fresh_install_redirect_path(path)
 

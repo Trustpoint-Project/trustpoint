@@ -30,7 +30,7 @@ def _create_software_profile(*, name: str, active: bool = True) -> CryptoProvide
     CryptoProviderSoftwareConfigModel.objects.create(
         profile=profile,
         encryption_source=SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
-        encryption_source_ref=None,
+        encryption_source_ref='',
         allow_exportable_private_keys=False,
     )
     return profile
@@ -47,7 +47,7 @@ def _create_pkcs11_profile(*, name: str, active: bool = True) -> CryptoProviderP
         profile=profile,
         module_path='/usr/lib/test-pkcs11.so',
         token_serial='1234',
-        token_label=None,
+        token_label='',
         slot_id=None,
         auth_source=Pkcs11AuthSource.FILE,
         auth_source_ref='/tmp/user-pin.txt',
@@ -66,7 +66,7 @@ def test_record_probe_failure_clears_current_snapshot() -> None:
         profile=profile,
         status=ProbeStatus.SUCCESS,
         probe_hash='abc123',
-        error_summary=None,
+        error_summary='',
     )
     CryptoProviderCapabilitySoftwareDetailModel.objects.create(
         snapshot=success_snapshot,

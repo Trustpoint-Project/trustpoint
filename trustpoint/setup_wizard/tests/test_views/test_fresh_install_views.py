@@ -126,7 +126,7 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
         pkcs11_config = CryptoProviderPkcs11ConfigModel.objects.get(profile=profile)
         self.assertEqual(profile.backend_kind, BackendKind.PKCS11)
         self.assertEqual(pkcs11_config.token_label, 'Trustpoint-SoftHSM')
-        self.assertIsNone(pkcs11_config.token_serial)
+        self.assertEqual(pkcs11_config.token_serial, '')
 
     def test_configure_instance_crypto_backend_accepts_slot_only_selector(self) -> None:
         with TemporaryDirectory() as temp_dir:
@@ -152,7 +152,7 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
         profile = CryptoProviderProfileModel.objects.get(active=True)
         pkcs11_config = CryptoProviderPkcs11ConfigModel.objects.get(profile=profile)
         self.assertEqual(profile.backend_kind, BackendKind.PKCS11)
-        self.assertIsNone(pkcs11_config.token_label)
+        self.assertEqual(pkcs11_config.token_label, '')
         self.assertEqual(pkcs11_config.slot_id, 1)
 
     def test_configure_app_secret_backend_creates_pkcs11_backend(self) -> None:
@@ -172,7 +172,7 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
                 profile=profile,
                 module_path=str(module_path),
                 token_label='Trustpoint-SoftHSM',
-                token_serial=None,
+                token_serial='',
                 slot_id=None,
                 auth_source='file',
                 auth_source_ref=str(pin_file),

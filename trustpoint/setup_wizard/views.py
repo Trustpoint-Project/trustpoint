@@ -11,7 +11,7 @@ import os
 import subprocess
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import psycopg
 from cryptography.hazmat.primitives import hashes
@@ -28,7 +28,6 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
 from django.utils import timezone
-from django.utils.translation import gettext_lazy
 from django.views.generic import FormView, TemplateView, View
 
 from appsecrets.models import (
@@ -100,7 +99,6 @@ from .forms import (
     FreshInstallModelBaseForm,
     FreshInstallSummaryModelForm,
     FreshInstallTlsConfigForm,
-    OperationalAttachConfigForm,
     RestoreBackupImportForm,
 )
 from .models import SetupWizardCompletedModel, SetupWizardConfigModel
@@ -216,7 +214,7 @@ def _decrypt_restore_archive_if_needed(archive_path: Path, backup_password: str)
 
     decrypted_suffix = '.dump.gz' if archive_path.name.lower().endswith('.gz.gpg') else '.dump'
     decrypted_path = restore_backup_staging_root() / f'decrypted-{uuid.uuid4().hex}{decrypted_suffix}'
-    completed_process = subprocess.run(  # noqa: S603,S607
+    completed_process = subprocess.run(  # noqa: S603
         [
             'gpg',
             '--batch',
@@ -241,7 +239,8 @@ def _decrypt_restore_archive_if_needed(archive_path: Path, backup_password: str)
     output = _format_restore_process_output(completed_process)
     with contextlib.suppress(OSError):
         decrypted_path.unlink()
-    raise DjangoValidationError(f'Backup archive decryption failed: {output or "gpg failed without output"}')
+    msg = f'Backup archive decryption failed: {output or "gpg failed without output"}'
+    raise DjangoValidationError(msg)
 
 
 def restore_operational_database_from_backup(
@@ -252,9 +251,11 @@ def restore_operational_database_from_backup(
     """Restore the staged backup archive into the configured operational PostgreSQL database."""
     archive_path = staged_restore_archive(config_model)
     if archive_path is None:
-        raise DjangoValidationError('No staged restore archive is available.')
+        msg = 'No staged restore archive is available.'
+        raise DjangoValidationError(msg)
     if _looks_like_gpg(archive_path) and not backup_password:
-        raise DjangoValidationError('This backup archive is encrypted. Enter the backup password.')
+        msg_0 = 'This backup archive is encrypted. Enter the backup password.'
+        raise DjangoValidationError(msg_0)
     decrypted_path = _decrypt_restore_archive_if_needed(archive_path, backup_password)
     restore_source_path = decrypted_path or archive_path
 
@@ -285,7 +286,7 @@ def restore_operational_database_from_backup(
 
     try:
         with _open_restore_archive(restore_source_path) as archive_file:
-            completed_process = subprocess.run(  # noqa: S603,S607
+            completed_process = subprocess.run(  # noqa: S603
                 command,
                 stdin=archive_file,
                 env=env,
@@ -304,7 +305,8 @@ def restore_operational_database_from_backup(
         return
 
     output = _format_restore_process_output(completed_process)
-    raise DjangoValidationError(f'Database restore failed: {output or "restore command failed without output"}')
+    msg = f'Database restore failed: {output or "restore command failed without output"}'
+    raise DjangoValidationError(msg)
 
 
 def record_bootstrap_progress(
@@ -594,6 +596,136 @@ def run_staged_pkcs11_connection_test(
         f'{capabilities.token.slot_id}.',
     )
     return redirect(success_redirect_name)
+
+
+def apply_pkcs11_probe_fallbacks(config_model: SetupWizardConfigModel) -> tuple[str, str, list[str]]:
+    """Apply runtime fallback PKCS#11 paths before probing a staged backend."""
+    module_path = (config_model.fresh_install_pkcs11_module_path or '').strip()
+    pin_file = (config_model.fresh_install_pkcs11_auth_source_ref or '').strip()
+    config_file = (config_model.fresh_install_pkcs11_config_path or '').strip()
+    config_env_var = (config_model.fresh_install_pkcs11_config_env_var or '').strip()
+    fallback_update_fields: list[str] = []
+
+    if (not module_path or not _path_exists(Path(module_path))) and _path_exists(FINAL_WIZARD_PKCS11_MODULE_PATH):
+        module_path = str(FINAL_WIZARD_PKCS11_MODULE_PATH)
+        config_model.fresh_install_pkcs11_module_path = module_path
+        fallback_update_fields.append('fresh_install_pkcs11_module_path')
+
+    if (not pin_file or not _path_exists(Path(pin_file))) and _path_exists(FINAL_WIZARD_PKCS11_PIN_PATH):
+        pin_file = str(FINAL_WIZARD_PKCS11_PIN_PATH)
+        config_model.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
+        config_model.fresh_install_pkcs11_auth_source_ref = pin_file
+        fallback_update_fields.extend(['fresh_install_pkcs11_auth_source', 'fresh_install_pkcs11_auth_source_ref'])
+
+    if (not config_file or not _path_exists(Path(config_file))) and _path_exists(FINAL_WIZARD_PKCS11_CONFIG_PATH):
+        config_file = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
+        config_model.fresh_install_pkcs11_config_path = config_file
+        fallback_update_fields.append('fresh_install_pkcs11_config_path')
+
+    if config_file and config_env_var:
+        os.environ[config_env_var] = config_file
+
+    return module_path, pin_file, fallback_update_fields
+
+
+def validate_pkcs11_probe_inputs(
+    *,
+    module_path: str,
+    pin_file: str,
+    token_label: str | None,
+    slot_id: int | None,
+) -> None:
+    """Validate the minimum PKCS#11 settings needed for a probe."""
+    if not module_path:
+        err_msg = 'No PKCS#11 module path is configured for the setup wizard.'
+        raise DjangoValidationError(err_msg)
+
+    if not pin_file:
+        err_msg = 'No PKCS#11 user PIN file is configured for the setup wizard.'
+        raise DjangoValidationError(err_msg)
+
+    if token_label is None and slot_id is None:
+        err_msg = 'No PKCS#11 token selector is configured. Enter a token label or slot ID.'
+        raise DjangoValidationError(err_msg)
+
+
+def build_pkcs11_probe_profile(
+    *,
+    profile_name: str,
+    module_path: str,
+    pin_file: str,
+    token_selector: Pkcs11TokenSelector,
+) -> Pkcs11ProviderProfile:
+    """Build a PKCS#11 profile for a staged wizard probe."""
+    return Pkcs11ProviderProfile(
+        name=profile_name,
+        module_path=module_path,
+        token=token_selector,
+        user_pin_file=pin_file,
+        max_sessions=2,
+        borrow_timeout_seconds=5.0,
+        rw_sessions=True,
+    )
+
+
+def refresh_pkcs11_probe_capabilities(profile: Pkcs11ProviderProfile) -> Any:
+    """Authenticate and refresh PKCS#11 capabilities for the given staged profile."""
+    backend = Pkcs11Backend(profile=profile)
+    try:
+        backend.verify_authentication()
+        return backend.refresh_capabilities()
+    except Exception as exception:
+        error_detail = str(exception).strip() or type(exception).__name__
+        err_msg = f'PKCS#11 probe failed: {error_detail}'
+        raise DjangoValidationError(err_msg) from exception
+    finally:
+        backend.close()
+
+
+def persist_pkcs11_probe_capabilities(
+    config_model: SetupWizardConfigModel,
+    capabilities: Any,
+    update_fields: list[str],
+) -> None:
+    """Persist selector details discovered during a staged PKCS#11 probe."""
+    if capabilities.token.label and capabilities.token.label != config_model.fresh_install_pkcs11_token_label:
+        config_model.fresh_install_pkcs11_token_label = capabilities.token.label
+        update_fields.append('fresh_install_pkcs11_token_label')
+
+    if capabilities.token.serial and capabilities.token.serial != config_model.fresh_install_pkcs11_token_serial:
+        config_model.fresh_install_pkcs11_token_serial = capabilities.token.serial
+        update_fields.append('fresh_install_pkcs11_token_serial')
+
+    if capabilities.token.slot_id != config_model.fresh_install_pkcs11_slot_id:
+        config_model.fresh_install_pkcs11_slot_id = capabilities.token.slot_id
+        update_fields.append('fresh_install_pkcs11_slot_id')
+
+    if update_fields:
+        config_model.save(update_fields=update_fields)
+
+
+def probe_staged_pkcs11_config(config_model: SetupWizardConfigModel, *, profile_name: str) -> Any:
+    """Authenticate against the staged PKCS#11 backend and persist discovered selector details."""
+    module_path, pin_file, update_fields = apply_pkcs11_probe_fallbacks(config_model)
+    slot_id = config_model.fresh_install_pkcs11_slot_id
+    token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or None
+    token_serial = (config_model.fresh_install_pkcs11_token_serial or '').strip() or None
+
+    validate_pkcs11_probe_inputs(
+        module_path=module_path,
+        pin_file=pin_file,
+        token_label=token_label,
+        slot_id=slot_id,
+    )
+    profile = build_pkcs11_probe_profile(
+        profile_name=profile_name,
+        module_path=module_path,
+        pin_file=pin_file,
+        token_selector=Pkcs11TokenSelector(token_label=token_label, token_serial=token_serial, slot_id=slot_id),
+    )
+    capabilities = refresh_pkcs11_probe_capabilities(profile)
+    persist_pkcs11_probe_capabilities(config_model, capabilities, update_fields)
+    return capabilities
 
 
 def _path_exists(path: Path) -> bool:
@@ -1375,136 +1507,6 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         self.logger.info('TLS SHA256 fingerprint: %s', formatted_fingerprint)
         clear_staged_tls_credential()
 
-    @classmethod
-    def _apply_pkcs11_probe_fallbacks(cls, config_model: SetupWizardConfigModel) -> tuple[str, str, list[str]]:
-        """Apply runtime fallback PKCS#11 paths before probing the backend."""
-        module_path = (config_model.fresh_install_pkcs11_module_path or '').strip()
-        pin_file = (config_model.fresh_install_pkcs11_auth_source_ref or '').strip()
-        config_file = (config_model.fresh_install_pkcs11_config_path or '').strip()
-        config_env_var = (config_model.fresh_install_pkcs11_config_env_var or '').strip()
-        fallback_update_fields: list[str] = []
-
-        if (not module_path or not _path_exists(Path(module_path))) and _path_exists(FINAL_WIZARD_PKCS11_MODULE_PATH):
-            module_path = str(FINAL_WIZARD_PKCS11_MODULE_PATH)
-            config_model.fresh_install_pkcs11_module_path = module_path
-            fallback_update_fields.append('fresh_install_pkcs11_module_path')
-
-        if (not pin_file or not _path_exists(Path(pin_file))) and _path_exists(FINAL_WIZARD_PKCS11_PIN_PATH):
-            pin_file = str(FINAL_WIZARD_PKCS11_PIN_PATH)
-            config_model.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
-            config_model.fresh_install_pkcs11_auth_source_ref = pin_file
-            fallback_update_fields.extend(['fresh_install_pkcs11_auth_source', 'fresh_install_pkcs11_auth_source_ref'])
-
-        if (not config_file or not _path_exists(Path(config_file))) and _path_exists(FINAL_WIZARD_PKCS11_CONFIG_PATH):
-            config_file = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
-            config_model.fresh_install_pkcs11_config_path = config_file
-            fallback_update_fields.append('fresh_install_pkcs11_config_path')
-
-        if config_file and config_env_var:
-            os.environ[config_env_var] = config_file
-
-        return module_path, pin_file, fallback_update_fields
-
-    @staticmethod
-    def _validate_pkcs11_probe_inputs(
-        *,
-        module_path: str,
-        pin_file: str,
-        token_label: str | None,
-        slot_id: int | None,
-    ) -> None:
-        """Validate the minimum PKCS#11 settings needed for a probe."""
-        if not module_path:
-            err_msg = 'No PKCS#11 module path is configured for the setup wizard.'
-            raise DjangoValidationError(err_msg)
-
-        if not pin_file:
-            err_msg = 'No PKCS#11 user PIN file is configured for the setup wizard.'
-            raise DjangoValidationError(err_msg)
-
-        if token_label is None and slot_id is None:
-            err_msg = 'No PKCS#11 token selector is configured. Enter a token label or slot ID.'
-            raise DjangoValidationError(err_msg)
-
-    @staticmethod
-    def _build_pkcs11_probe_profile(
-        *,
-        profile_name: str,
-        module_path: str,
-        pin_file: str,
-        token_selector: Pkcs11TokenSelector,
-    ) -> Pkcs11ProviderProfile:
-        """Build a PKCS#11 profile for pre-apply probing."""
-        return Pkcs11ProviderProfile(
-            name=profile_name,
-            module_path=module_path,
-            token=token_selector,
-            user_pin_file=pin_file,
-            max_sessions=2,
-            borrow_timeout_seconds=5.0,
-            rw_sessions=True,
-        )
-
-    @staticmethod
-    def _refresh_pkcs11_probe_capabilities(profile: Pkcs11ProviderProfile) -> Any:
-        """Authenticate and refresh PKCS#11 capabilities for the given profile."""
-        backend = Pkcs11Backend(profile=profile)
-        try:
-            backend.verify_authentication()
-            return backend.refresh_capabilities()
-        except Exception as exception:
-            error_detail = str(exception).strip() or type(exception).__name__
-            err_msg = f'PKCS#11 pre-apply probe failed: {error_detail}'
-            raise DjangoValidationError(err_msg) from exception
-        finally:
-            backend.close()
-
-    @staticmethod
-    def _persist_pkcs11_probe_capabilities(
-        config_model: SetupWizardConfigModel,
-        capabilities: Any,
-        update_fields: list[str],
-    ) -> None:
-        """Persist selector details discovered during the PKCS#11 probe."""
-        if capabilities.token.label and capabilities.token.label != config_model.fresh_install_pkcs11_token_label:
-            config_model.fresh_install_pkcs11_token_label = capabilities.token.label
-            update_fields.append('fresh_install_pkcs11_token_label')
-
-        if capabilities.token.serial and capabilities.token.serial != config_model.fresh_install_pkcs11_token_serial:
-            config_model.fresh_install_pkcs11_token_serial = capabilities.token.serial
-            update_fields.append('fresh_install_pkcs11_token_serial')
-
-        if capabilities.token.slot_id != config_model.fresh_install_pkcs11_slot_id:
-            config_model.fresh_install_pkcs11_slot_id = capabilities.token.slot_id
-            update_fields.append('fresh_install_pkcs11_slot_id')
-
-        if update_fields:
-            config_model.save(update_fields=update_fields)
-
-    @classmethod
-    def _probe_pkcs11_config(cls, config_model: SetupWizardConfigModel, *, profile_name: str) -> None:
-        """Authenticate against the staged PKCS#11 backend and refresh discovered selector details."""
-        module_path, pin_file, update_fields = cls._apply_pkcs11_probe_fallbacks(config_model)
-        slot_id = config_model.fresh_install_pkcs11_slot_id
-        token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or None
-        token_serial = (config_model.fresh_install_pkcs11_token_serial or '').strip() or None
-
-        cls._validate_pkcs11_probe_inputs(
-            module_path=module_path,
-            pin_file=pin_file,
-            token_label=token_label,
-            slot_id=slot_id,
-        )
-        token_selector = Pkcs11TokenSelector(token_label=token_label, token_serial=token_serial, slot_id=slot_id)
-        profile = cls._build_pkcs11_probe_profile(
-            profile_name=profile_name,
-            module_path=module_path,
-            pin_file=pin_file,
-            token_selector=token_selector,
-        )
-        capabilities = cls._refresh_pkcs11_probe_capabilities(profile)
-        cls._persist_pkcs11_probe_capabilities(config_model, capabilities, update_fields)
-
     @staticmethod
     def _load_existing_backend_profile(backend_kind: BackendKind) -> CryptoProviderProfileModel | None:
         """Return an existing profile for the given backend kind when one already exists."""
@@ -1925,8 +1927,8 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         )
         defaults = {
             'module_path': str(module_path),
-            'token_label': token_label,
-            'token_serial': (config_model.fresh_install_pkcs11_token_serial or '').strip() or None,
+            'token_label': token_label or '',
+            'token_serial': (config_model.fresh_install_pkcs11_token_serial or '').strip(),
             'slot_id': slot_id,
             'auth_source': Pkcs11AuthSource.FILE,
             'auth_source_ref': auth_source_ref,
@@ -2029,7 +2031,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             return result, switch_result
 
         if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-            self._probe_pkcs11_config(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
+            probe_staged_pkcs11_config(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
 
         result = run_operational_handoff(config_model)
         config_model.mark_step_submitted(self.step_state)
@@ -2074,7 +2076,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         with transaction.atomic():
             config_model = SetupWizardConfigModel.get_singleton()
             if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-                self._probe_pkcs11_config(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
+                probe_staged_pkcs11_config(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
             self._configure_instance_crypto_backend(config_model)
             self._configure_app_secret_backend(config_model)
             call_command('create_default_cert_profiles')
@@ -2415,6 +2417,104 @@ class ConnectExistingBackendConfigView(ConnectExistingWizardMixin[FreshInstallBa
         return super().form_invalid(form)
 
 
+def backend_kind_for_config(config_model: SetupWizardConfigModel) -> str:
+    """Map the staged wizard backend selection to the normalized backend kind."""
+    if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.SoftwareStorage:
+        return BackendKind.SOFTWARE.value
+    if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+        return BackendKind.PKCS11.value
+    if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.RestBackend:
+        return BackendKind.REST.value
+    return str(config_model.crypto_storage)
+
+
+def database_error_report(
+    *,
+    mode: OperationalAttachMode,
+    target: OperationalTargetConfig,
+    exception: Exception,
+) -> OperationalCompatibilityReport:
+    """Build a blocking report for a failed target database inspection."""
+    error_detail = str(exception).strip() or type(exception).__name__
+    return OperationalCompatibilityReport(
+        mode=mode,
+        target=target,
+        snapshot=None,
+        checks=(
+            CompatibilityCheck(
+                code='database.unreachable',
+                label='Operational Database',
+                severity=CompatibilitySeverity.ERROR,
+                message=f'Could not inspect the operational database: {error_detail}',
+            ),
+        ),
+    )
+
+
+def attach_backend_readiness_checks(config_model: SetupWizardConfigModel) -> tuple[CompatibilityCheck, ...]:
+    """Validate that the staged backend can be reached by this bootstrap container."""
+    backend_kind = backend_kind_for_config(config_model)
+    if backend_kind == BackendKind.SOFTWARE.value:
+        return (
+            CompatibilityCheck(
+                code='backend.runtime_software',
+                label='Backend Runtime',
+                severity=CompatibilitySeverity.INFO,
+                message='The software crypto backend is selected for this container.',
+            ),
+        )
+
+    if backend_kind == BackendKind.REST.value:
+        return (
+            CompatibilityCheck(
+                code='backend.runtime_rest_unavailable',
+                label='Backend Runtime',
+                severity=CompatibilitySeverity.ERROR,
+                message='The REST crypto backend is scaffolded but is not implemented for attach/restore yet.',
+            ),
+        )
+
+    if backend_kind != BackendKind.PKCS11.value:
+        return (
+            CompatibilityCheck(
+                code='backend.runtime_unknown',
+                label='Backend Runtime',
+                severity=CompatibilitySeverity.ERROR,
+                message=f'Unsupported staged backend kind {backend_kind!r}.',
+            ),
+        )
+
+    try:
+        capabilities = probe_staged_pkcs11_config(
+            config_model,
+            profile_name='setup-wizard-pkcs11-attach-readiness',
+        )
+    except DjangoValidationError as exception:
+        error_detail = '; '.join(exception.messages) if hasattr(exception, 'messages') else str(exception)
+        return (
+            CompatibilityCheck(
+                code='backend.runtime_pkcs11_unavailable',
+                label='Backend Runtime',
+                severity=CompatibilitySeverity.ERROR,
+                message=f'Could not authenticate to the staged PKCS#11 backend: {error_detail}',
+            ),
+        )
+
+    token_label = capabilities.token.label or 'unlabeled token'
+    token_serial = capabilities.token.serial or 'unknown serial'
+    return (
+        CompatibilityCheck(
+            code='backend.runtime_pkcs11_ok',
+            label='Backend Runtime',
+            severity=CompatibilitySeverity.INFO,
+            message=(
+                f'This container can authenticate to PKCS#11 token {token_label!r} '
+                f'({token_serial}) in slot {capabilities.token.slot_id}.'
+            ),
+        ),
+    )
+
+
 class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
     """Connect-existing summary step for inspection and explicit attach."""
 
@@ -2439,7 +2539,7 @@ class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
 
     def _build_target(self, config_model: SetupWizardConfigModel) -> OperationalTargetConfig:
         """Build the immutable attach target from staged bootstrap state."""
-        backend_kind = OperationalAttachEntryView._backend_kind_for_config(config_model)
+        backend_kind = backend_kind_for_config(config_model)
         return OperationalTargetConfig(
             mode=self.attach_mode,
             database=OperationalDatabaseConfig(
@@ -2462,16 +2562,18 @@ class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
             snapshot = OperationalTargetInspector().inspect_database(target.database)
         except Exception as exception:
             self.logger.exception('Connect-existing database inspection failed.')
-            return OperationalAttachEntryView._database_error_report(
+            report = database_error_report(
                 mode=self.attach_mode,
                 target=target,
                 exception=exception,
             )
-        return OperationalAttachmentValidator(current_version=settings.APP_VERSION).build_report(
+            return report.with_checks(attach_backend_readiness_checks(config_model))
+        report = OperationalAttachmentValidator(current_version=settings.APP_VERSION).build_report(
             mode=self.attach_mode,
             target=target,
             snapshot=snapshot,
         )
+        return report.with_checks(attach_backend_readiness_checks(config_model))
 
     def form_valid(self, form: EmptyForm) -> HttpResponse:
         """Explicitly attach this container to the inspected operational target."""
@@ -2508,7 +2610,7 @@ class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
                 else 'Operational configuration saved. Restart the runtime to attach.'
             )
             messages.success(self.request, pending_message)
-        return redirect('/')
+        return redirect('/users/login/', permanent=False)
 
 
 RESTORE_BACKUP_STEP_URL_NAMES = {
@@ -2653,217 +2755,6 @@ class RestoreBackupSummaryView(ConnectExistingSummaryView):
     body_heading = 'Inspect and Restore'
 
 
-class OperationalAttachEntryView(LoggerMixin, FormView):
-    """Shared bootstrap flow for restoring or connecting to operational state."""
-
-    http_method_names = ('get', 'post')
-    template_name = 'setup_wizard/operational_attach.html'
-    form_class = OperationalAttachConfigForm
-    attach_mode: OperationalAttachMode
-    page_title: str
-
-    _stage_uploaded_pkcs11_module = staticmethod(stage_uploaded_pkcs11_module)
-    _stage_pkcs11_user_pin = staticmethod(stage_pkcs11_user_pin)
-    _stage_uploaded_pkcs11_config = staticmethod(stage_uploaded_pkcs11_config)
-
-    def get_form_kwargs(self) -> dict[str, Any]:
-        """Bind the attach form to the bootstrap singleton."""
-        kwargs = super().get_form_kwargs()
-        kwargs['instance'] = SetupWizardConfigModel.get_singleton()
-        kwargs['attach_mode'] = self.attach_mode
-        kwargs['validate_backend'] = self.request.POST.get('wizard_action') != 'test_database'
-        return kwargs
-
-    @staticmethod
-    def _is_clear_module_submission(request: HttpRequest) -> bool:
-        """Return whether the current POST requests staged library removal."""
-        return request.POST.get('wizard_action') == 'clear_module'
-
-    @staticmethod
-    def _is_clear_pin_submission(request: HttpRequest) -> bool:
-        """Return whether the current POST requests staged PIN removal."""
-        return request.POST.get('wizard_action') == 'clear_pin'
-
-    @staticmethod
-    def _is_clear_config_submission(request: HttpRequest) -> bool:
-        """Return whether the current POST requests staged vendor config removal."""
-        return request.POST.get('wizard_action') == 'clear_pkcs11_config'
-
-    def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Handle staged PKCS#11 asset removal for attach flows."""
-        config_model = SetupWizardConfigModel.get_singleton()
-        if self._is_clear_module_submission(request):
-            clear_staged_pkcs11_module(config_model)
-            messages.success(request, 'The staged PKCS#11 library was removed for this wizard session.')
-            return redirect(request.path)
-        if self._is_clear_pin_submission(request):
-            clear_staged_pkcs11_pin(config_model)
-            messages.success(request, 'The staged PKCS#11 user PIN was removed for this wizard session.')
-            return redirect(request.path)
-        if self._is_clear_config_submission(request):
-            clear_staged_pkcs11_config(config_model)
-            messages.success(request, 'The staged PKCS#11 vendor config was removed for this wizard session.')
-            return redirect(request.path)
-        return super().post(request, *args, **kwargs)
-
-    def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
-        """Render the flow shell and the latest compatibility report."""
-        context = super().get_context_data(**kwargs)
-        context['attach_mode'] = self.attach_mode
-        context['page_title'] = self.page_title
-        context['compatibility_report'] = kwargs.get('compatibility_report')
-        return context
-
-    @staticmethod
-    def _backend_kind_for_config(config_model: SetupWizardConfigModel) -> str:
-        """Map the staged wizard backend selection to the normalized backend kind."""
-        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.SoftwareStorage:
-            return BackendKind.SOFTWARE.value
-        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-            return BackendKind.PKCS11.value
-        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.RestBackend:
-            return BackendKind.REST.value
-        return str(config_model.crypto_storage)
-
-    def _build_target(self, config_model: SetupWizardConfigModel) -> OperationalTargetConfig:
-        """Build the immutable attach target from staged bootstrap state."""
-        backend_kind = self._backend_kind_for_config(config_model)
-        return OperationalTargetConfig(
-            mode=self.attach_mode,
-            database=OperationalDatabaseConfig(
-                host=config_model.operational_db_host,
-                port=config_model.operational_db_port,
-                name=config_model.operational_db_name,
-                user=config_model.operational_db_user,
-                password=config_model.operational_db_password,
-            ),
-            crypto_backend=OperationalBackendBinding(backend_kind=backend_kind),
-            app_secret_backend=OperationalBackendBinding(backend_kind=backend_kind),
-        )
-
-    @staticmethod
-    def _database_error_report(
-        *,
-        mode: OperationalAttachMode,
-        target: OperationalTargetConfig,
-        exception: Exception,
-    ) -> OperationalCompatibilityReport:
-        """Build a blocking report for a failed target database inspection."""
-        error_detail = str(exception).strip() or type(exception).__name__
-        return OperationalCompatibilityReport(
-            mode=mode,
-            target=target,
-            snapshot=None,
-            checks=(
-                CompatibilityCheck(
-                    code='database.unreachable',
-                    label='Operational Database',
-                    severity=CompatibilitySeverity.ERROR,
-                    message=f'Could not inspect the operational database: {error_detail}',
-                ),
-            ),
-        )
-
-    def _persist_pkcs11_backend_config(self, form: OperationalAttachConfigForm) -> None:
-        """Persist staged PKCS#11 wizard inputs without advancing any fresh-install step."""
-        persist_staged_pkcs11_backend_config(form)
-
-    def _test_pkcs11_connection(self, form: OperationalAttachConfigForm) -> None:
-        """Probe the staged PKCS#11 configuration for an attach flow."""
-        backend = Pkcs11Backend(profile=build_staged_pkcs11_test_profile(form))
-        try:
-            backend.verify_authentication()
-            capabilities = backend.probe_capabilities()
-        finally:
-            backend.close()
-
-        update_fields: list[str] = []
-        if capabilities.token.label and capabilities.token.label != form.instance.fresh_install_pkcs11_token_label:
-            form.instance.fresh_install_pkcs11_token_label = capabilities.token.label
-            update_fields.append('fresh_install_pkcs11_token_label')
-        if capabilities.token.serial and capabilities.token.serial != form.instance.fresh_install_pkcs11_token_serial:
-            form.instance.fresh_install_pkcs11_token_serial = capabilities.token.serial
-            update_fields.append('fresh_install_pkcs11_token_serial')
-        if capabilities.token.slot_id != form.instance.fresh_install_pkcs11_slot_id:
-            form.instance.fresh_install_pkcs11_slot_id = capabilities.token.slot_id
-            update_fields.append('fresh_install_pkcs11_slot_id')
-        if update_fields:
-            form.instance.save(update_fields=update_fields)
-
-    def _persist_attach_config(self, form: OperationalAttachConfigForm) -> SetupWizardConfigModel:
-        """Persist the staged attach target in bootstrap SQLite."""
-        config_model = form.save(commit=False)
-        config_model.crypto_storage = int(form.cleaned_data['crypto_storage'])
-        config_model.save()
-        if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-            self._persist_pkcs11_backend_config(form)
-            config_model.refresh_from_db()
-        return config_model
-
-    def form_valid(self, form: OperationalAttachConfigForm) -> HttpResponse:
-        """Persist, probe, and inspect a restore/connect attach target."""
-        config_model = self._persist_attach_config(form)
-        target = self._build_target(config_model)
-        action = self.request.POST.get('wizard_action')
-
-        should_test_hsm = (
-            config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage
-            and action != 'test_database'
-        )
-        if should_test_hsm:
-            try:
-                self._test_pkcs11_connection(form)
-            except Exception as exception:
-                self.logger.exception('PKCS#11 attach connection test failed.')
-                error_detail = str(exception).strip() or type(exception).__name__
-                form.add_error(None, f'Could not connect to the configured PKCS#11 backend: {error_detail}')
-                return self.render_to_response(self.get_context_data(form=form))
-
-        if action == 'test_backend':
-            messages.success(self.request, 'Backend connection successful.')
-            return redirect(self.request.path)
-
-        try:
-            snapshot = OperationalTargetInspector().inspect_database(target.database)
-        except Exception as exception:
-            self.logger.exception('Operational attach database inspection failed.')
-            report = self._database_error_report(mode=self.attach_mode, target=target, exception=exception)
-            return self.render_to_response(self.get_context_data(form=form, compatibility_report=report))
-
-        if action == 'test_database':
-            messages.success(self.request, 'Operational database connection successful.')
-            return redirect(self.request.path)
-
-        report = OperationalAttachmentValidator(current_version=settings.APP_VERSION).build_report(
-            mode=self.attach_mode,
-            target=target,
-            snapshot=snapshot,
-        )
-        if action == 'apply_attach':
-            if not report.can_apply:
-                return self.render_to_response(self.get_context_data(form=form, compatibility_report=report))
-
-            try:
-                if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-                    FreshInstallSummaryView.install_staged_pkcs11_assets(config_model)
-                handoff_result = run_operational_attach_handoff(config_model)
-                runtime_result = run_operational_runtime_switch(handoff_result.pending_env_file)
-            except DjangoValidationError as exception:
-                form.add_error(None, str(exception))
-                return self.render_to_response(self.get_context_data(form=form, compatibility_report=report))
-
-            config_model.operational_config_applied = True
-            config_model.save(update_fields=['operational_config_applied'])
-            SetupWizardCompletedModel.mark_setup_complete_once()
-            if runtime_result.switched:
-                messages.success(self.request, 'Operational runtime attached successfully.')
-            else:
-                messages.success(self.request, 'Operational configuration saved. Restart the runtime to attach.')
-            return redirect('/')
-
-        return self.render_to_response(self.get_context_data(form=form, compatibility_report=report))
-
-
 class SetupWizardRestoreBackupView(LoginRequiredMixin, View):
     """Bootstrap entry for restoring a database backup, then attaching explicitly."""
 
@@ -2876,7 +2767,7 @@ class SetupWizardRestoreBackupView(LoginRequiredMixin, View):
 class SetupWizardConnectExistingView(LoginRequiredMixin, View):
     """Bootstrap entry for connecting this container to an existing instance."""
 
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
+    def get(self, _request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
         """Start connect-existing at the first lightweight wizard step."""
         _ = args, kwargs
         return redirect('setup_wizard:connect_existing_database')

@@ -133,8 +133,8 @@ def test_local_dev_auto_config_does_not_mix_software_with_existing_pkcs11(settin
     CryptoProviderPkcs11ConfigModel.objects.create(
         profile=profile,
         module_path='/usr/lib/test-pkcs11.so',
-        token_label=None,
-        token_serial=None,
+        token_label='',
+        token_serial='',
         slot_id=1,
         auth_source=Pkcs11AuthSource.FILE,
         auth_source_ref='/var/lib/trustpoint/user-pin.txt',

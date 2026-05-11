@@ -133,8 +133,8 @@ class TestSetupWizardRedirectMiddleware:
 
         assert response.status_code == 200
 
-    def test_completed_wizard_redirects_index_to_home(self, middleware, settings):
-        """Once setup is complete, the wizard index should redirect to home."""
+    def test_completed_wizard_redirects_index_to_login_in_bootstrap(self, middleware, settings):
+        """Once setup is complete, bootstrap should not redirect to operational-only pages."""
         settings.DOCKER_CONTAINER = True
         SetupWizardCompletedModel.mark_setup_complete_once()
         request = self._request('/setup-wizard/', AnonymousUser())
@@ -142,7 +142,7 @@ class TestSetupWizardRedirectMiddleware:
         response = middleware(request)
 
         assert response.status_code == 302
-        assert response['Location'] == '/home/'
+        assert response['Location'] == '/users/login/'
 
     def test_missing_user_redirects_to_wizard_index(self, middleware, settings):
         """With no existing users, non-allowed paths should go to the wizard index."""

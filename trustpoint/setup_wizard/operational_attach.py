@@ -15,6 +15,9 @@ from typing import Any
 import psycopg
 from packaging.version import InvalidVersion, Version
 
+TRUSTPOINT_BACKUP_MANIFEST_PATH = 'trustpoint-backup-manifest.json'
+SUPPORTED_BACKUP_MANIFEST_VERSION = 1
+
 
 class OperationalAttachMode(enum.StrEnum):
     """Bootstrap flows that attach this container to operational state."""
@@ -72,6 +75,11 @@ class OperationalStateSnapshot:
     app_secret_backend_kind: str | None
     managed_key_count: int = 0
     managed_key_binding_count: int = 0
+    managed_key_missing_binding_count: int = 0
+    managed_key_binding_issue_count: int = 0
+    managed_key_binding_profile_mismatch_count: int = 0
+    managed_key_orphan_binding_count: int = 0
+    active_crypto_profile_count: int = 1
     encrypted_secret_count: int = 0
     app_secret_material_present: bool = False
 
@@ -105,6 +113,15 @@ class OperationalCompatibilityReport:
         """Return whether bootstrap may proceed with explicit handoff."""
         return not self.has_errors and self.target is not None and self.snapshot is not None
 
+    def with_checks(self, extra_checks: tuple[CompatibilityCheck, ...]) -> OperationalCompatibilityReport:
+        """Return a copy with additional compatibility checks appended."""
+        return OperationalCompatibilityReport(
+            mode=self.mode,
+            target=self.target,
+            snapshot=self.snapshot,
+            checks=(*self.checks, *extra_checks),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class TrustpointBackupManifest:
@@ -115,9 +132,13 @@ class TrustpointBackupManifest:
     database_engine: str
     crypto_backend_kind: str
     app_secret_backend_kind: str
+    backup_format: str = 'postgres_custom'
+    encrypted: bool = False
+    encryption: str = 'none'
+    payload_sha256: str | None = None
     created_at: str | None = None
 
-    SUPPORTED_MANIFEST_VERSION = 1
+    SUPPORTED_MANIFEST_VERSION = SUPPORTED_BACKUP_MANIFEST_VERSION
 
     @classmethod
     def from_json_bytes(cls, payload: bytes) -> TrustpointBackupManifest:
@@ -129,8 +150,31 @@ class TrustpointBackupManifest:
             database_engine=str(data.get('database_engine', 'postgresql')),
             crypto_backend_kind=str(data['crypto_backend_kind']),
             app_secret_backend_kind=str(data['app_secret_backend_kind']),
+            backup_format=str(data.get('backup_format', 'postgres_custom')),
+            encrypted=bool(data.get('encrypted', False)),
+            encryption=str(data.get('encryption', 'gpg' if data.get('encrypted') else 'none')),
+            payload_sha256=str(data['payload_sha256']) if data.get('payload_sha256') else None,
             created_at=str(data['created_at']) if data.get('created_at') else None,
         )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize the manifest into the public backup-manifest contract."""
+        return {
+            'manifest_version': self.manifest_version,
+            'trustpoint_version': self.trustpoint_version,
+            'database_engine': self.database_engine,
+            'crypto_backend_kind': self.crypto_backend_kind,
+            'app_secret_backend_kind': self.app_secret_backend_kind,
+            'backup_format': self.backup_format,
+            'encrypted': self.encrypted,
+            'encryption': self.encryption,
+            'payload_sha256': self.payload_sha256,
+            'created_at': self.created_at,
+        }
+
+    def to_json_bytes(self) -> bytes:
+        """Serialize the manifest as stable UTF-8 JSON bytes."""
+        return json.dumps(self.to_dict(), sort_keys=True, separators=(',', ':')).encode('utf-8')
 
     def version_check(self, *, current_version: str) -> CompatibilityCheck:
         """Validate manifest and Trustpoint version compatibility."""
@@ -143,6 +187,13 @@ class TrustpointBackupManifest:
                     f'Unsupported backup manifest version {self.manifest_version}; '
                     f'this container supports version {self.SUPPORTED_MANIFEST_VERSION}.'
                 ),
+            )
+        if self.database_engine != 'postgresql':
+            return CompatibilityCheck(
+                code='backup_manifest.database_unsupported',
+                label='Backup Manifest',
+                severity=CompatibilitySeverity.ERROR,
+                message=f'Unsupported backup database engine {self.database_engine!r}; expected postgresql.',
             )
         return VersionCompatibilityPolicy(current_version=current_version).check(
             database_version=self.trustpoint_version,
@@ -271,6 +322,19 @@ class OperationalAttachmentValidator:
     ) -> tuple[CompatibilityCheck, ...]:
         """Validate configured runtime bindings against the inspected database metadata."""
         checks: list[CompatibilityCheck] = []
+        if snapshot.active_crypto_profile_count != 1:
+            checks.append(
+                CompatibilityCheck(
+                    code='crypto.active_profile_count',
+                    label='Crypto Backend',
+                    severity=CompatibilitySeverity.ERROR,
+                    message=(
+                        f'The target database has {snapshot.active_crypto_profile_count} active crypto provider '
+                        'profiles; exactly one active profile is expected.'
+                    ),
+                )
+            )
+
         if not snapshot.crypto_backend_kind:
             checks.append(
                 CompatibilityCheck(
@@ -349,15 +413,26 @@ class OperationalAttachmentValidator:
                 )
             )
         else:
+            severity = (
+                CompatibilitySeverity.ERROR
+                if snapshot.encrypted_secret_count
+                else CompatibilitySeverity.WARNING
+            )
+            message = (
+                'The target database does not contain persisted application-secret material. '
+                'Existing encrypted data may be unreadable.'
+                if snapshot.encrypted_secret_count
+                else (
+                    'The target database does not contain persisted application-secret material. '
+                    'This is acceptable only for empty or not-yet-initialized databases.'
+                )
+            )
             checks.append(
                 CompatibilityCheck(
                     code='appsecret.material_missing',
                     label='Application Secrets',
-                    severity=CompatibilitySeverity.ERROR,
-                    message=(
-                        'The target database does not contain persisted application-secret material. '
-                        'Attaching could create a new secret root and make existing encrypted data unreadable.'
-                    ),
+                    severity=severity,
+                    message=message,
                 )
             )
 
@@ -375,14 +450,66 @@ class OperationalAttachmentValidator:
                 )
             )
         elif snapshot.managed_key_binding_count == snapshot.managed_key_count:
-            checks.append(
-                CompatibilityCheck(
-                    code='managed_keys.bindings_ok',
-                    label='Managed Keys',
-                    severity=CompatibilitySeverity.INFO,
-                    message='Managed-key records have matching backend binding records.',
+            if snapshot.managed_key_missing_binding_count:
+                checks.append(
+                    CompatibilityCheck(
+                        code='managed_keys.bindings_missing',
+                        label='Managed Keys',
+                        severity=CompatibilitySeverity.ERROR,
+                        message=(
+                            f'{snapshot.managed_key_missing_binding_count} managed-key records do not have a '
+                            'backend binding row for the configured backend.'
+                        ),
+                    )
                 )
-            )
+            elif snapshot.managed_key_binding_profile_mismatch_count:
+                checks.append(
+                    CompatibilityCheck(
+                        code='managed_keys.binding_profile_mismatch',
+                        label='Managed Keys',
+                        severity=CompatibilitySeverity.ERROR,
+                        message=(
+                            f'{snapshot.managed_key_binding_profile_mismatch_count} managed-key bindings point to '
+                            'a different provider profile than their managed-key record.'
+                        ),
+                    )
+                )
+            elif snapshot.managed_key_binding_issue_count:
+                checks.append(
+                    CompatibilityCheck(
+                        code='managed_keys.binding_payload_invalid',
+                        label='Managed Keys',
+                        severity=CompatibilitySeverity.ERROR,
+                        message=(
+                            f'{snapshot.managed_key_binding_issue_count} managed-key binding records are missing '
+                            'backend identity material.'
+                        ),
+                    )
+                )
+            elif snapshot.managed_key_orphan_binding_count:
+                checks.append(
+                    CompatibilityCheck(
+                        code='managed_keys.orphan_bindings',
+                        label='Managed Keys',
+                        severity=CompatibilitySeverity.ERROR,
+                        message=(
+                            f'{snapshot.managed_key_orphan_binding_count} backend binding records do not map to a '
+                            'managed-key record.'
+                        ),
+                    )
+                )
+            else:
+                checks.append(
+                    CompatibilityCheck(
+                        code='managed_keys.bindings_ok',
+                        label='Managed Keys',
+                        severity=CompatibilitySeverity.INFO,
+                        message=(
+                            'Managed-key records have matching backend binding records. Live backend-object '
+                            'availability is checked separately from database metadata.'
+                        ),
+                    )
+                )
         elif snapshot.managed_key_binding_count < snapshot.managed_key_count:
             checks.append(
                 CompatibilityCheck(
@@ -423,20 +550,38 @@ class OperationalTargetInspector:
             host=database.host,
             port=database.port,
             connect_timeout=5,
-        ) as connection:
-            with connection.cursor() as cursor:
-                app_version = self._read_app_version(cursor)
-                crypto_backend_kind = self._read_active_crypto_backend_kind(cursor)
-                app_secret_backend_kind = self._read_app_secret_backend_kind(cursor)
-                managed_key_count = self._read_count(cursor, table_name='crypto_managed_key')
-                managed_key_binding_count = self._read_managed_key_binding_count(
+        ) as connection, connection.cursor() as cursor:
+            app_version = self._read_app_version(cursor)
+            active_crypto_profile_count = self._read_active_crypto_profile_count(cursor)
+            crypto_backend_kind = self._read_active_crypto_backend_kind(cursor)
+            app_secret_backend_kind = self._read_app_secret_backend_kind(cursor)
+            managed_key_count = self._read_count(cursor, table_name='crypto_managed_key')
+            managed_key_binding_count = self._read_managed_key_binding_count(
+                cursor,
+                crypto_backend_kind=crypto_backend_kind,
+            )
+            managed_key_missing_binding_count = self._read_managed_key_missing_binding_count(
+                cursor,
+                crypto_backend_kind=crypto_backend_kind,
+            )
+            managed_key_binding_issue_count = self._read_managed_key_binding_issue_count(
+                cursor,
+                crypto_backend_kind=crypto_backend_kind,
+            )
+            managed_key_binding_profile_mismatch_count = (
+                self._read_managed_key_binding_profile_mismatch_count(
                     cursor,
                     crypto_backend_kind=crypto_backend_kind,
                 )
-                app_secret_material_present = self._read_app_secret_material_present(
-                    cursor,
-                    app_secret_backend_kind=app_secret_backend_kind,
-                )
+            )
+            managed_key_orphan_binding_count = self._read_managed_key_orphan_binding_count(
+                cursor,
+                crypto_backend_kind=crypto_backend_kind,
+            )
+            app_secret_material_present = self._read_app_secret_material_present(
+                cursor,
+                app_secret_backend_kind=app_secret_backend_kind,
+            )
 
         setup_completed = bool(app_version and crypto_backend_kind and app_secret_backend_kind)
         return OperationalStateSnapshot(
@@ -446,6 +591,11 @@ class OperationalTargetInspector:
             app_secret_backend_kind=app_secret_backend_kind,
             managed_key_count=managed_key_count,
             managed_key_binding_count=managed_key_binding_count,
+            managed_key_missing_binding_count=managed_key_missing_binding_count,
+            managed_key_binding_issue_count=managed_key_binding_issue_count,
+            managed_key_binding_profile_mismatch_count=managed_key_binding_profile_mismatch_count,
+            managed_key_orphan_binding_count=managed_key_orphan_binding_count,
+            active_crypto_profile_count=active_crypto_profile_count,
             encrypted_secret_count=0,
             app_secret_material_present=app_secret_material_present,
         )
@@ -494,6 +644,15 @@ class OperationalTargetInspector:
         return str(row[0]) if row and row[0] else None
 
     @classmethod
+    def _read_active_crypto_profile_count(cls, cursor: Any) -> int:
+        """Read how many active crypto provider profiles exist in the target DB."""
+        if not cls._table_exists(cursor, table_name='crypto_provider_profile'):
+            return 0
+        cursor.execute('SELECT COUNT(*) FROM crypto_provider_profile WHERE active = TRUE')
+        row = cursor.fetchone()
+        return int(row[0]) if row else 0
+
+    @classmethod
     def _read_app_secret_backend_kind(cls, cursor: Any) -> str | None:
         """Read the configured application-secret backend kind from the target database."""
         if not cls._table_exists(cursor, table_name='app_secret_backend'):
@@ -525,9 +684,111 @@ class OperationalTargetInspector:
         return cls._read_count(cursor, table_name=table_name)
 
     @classmethod
+    def _managed_key_binding_table(cls, *, crypto_backend_kind: str | None) -> str | None:
+        """Return the backend-specific managed-key binding table name."""
+        table_by_backend = {
+            'pkcs11': 'crypto_managed_key_pkcs11_binding',
+            'software': 'crypto_managed_key_software_binding',
+            'rest': 'crypto_managed_key_rest_binding',
+        }
+        return table_by_backend.get(crypto_backend_kind or '')
+
+    @classmethod
+    def _read_managed_key_missing_binding_count(cls, cursor: Any, *, crypto_backend_kind: str | None) -> int:
+        """Read managed keys without a backend-specific binding row."""
+        table_name = cls._managed_key_binding_table(crypto_backend_kind=crypto_backend_kind)
+        if table_name is None or not cls._table_exists(cursor, table_name='crypto_managed_key'):
+            return 0
+        if not cls._table_exists(cursor, table_name=table_name):
+            return cls._read_count(cursor, table_name='crypto_managed_key')
+        cursor.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM crypto_managed_key managed_key
+            LEFT JOIN {table_name} binding
+              ON binding.managed_key_id = managed_key.id
+            WHERE binding.managed_key_id IS NULL
+            """  # noqa: S608 - table name is selected from fixed literals above.
+        )
+        row = cursor.fetchone()
+        return int(row[0]) if row else 0
+
+    @classmethod
+    def _read_managed_key_binding_profile_mismatch_count(
+        cls,
+        cursor: Any,
+        *,
+        crypto_backend_kind: str | None,
+    ) -> int:
+        """Read bindings whose provider profile disagrees with the owning managed key."""
+        table_name = cls._managed_key_binding_table(crypto_backend_kind=crypto_backend_kind)
+        if (
+            table_name is None
+            or not cls._table_exists(cursor, table_name='crypto_managed_key')
+            or not cls._table_exists(cursor, table_name=table_name)
+        ):
+            return 0
+        cursor.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM {table_name} binding
+            JOIN crypto_managed_key managed_key
+              ON managed_key.id = binding.managed_key_id
+            WHERE binding.provider_profile_id <> managed_key.provider_profile_id
+            """  # noqa: S608 - table name is selected from fixed literals above.
+        )
+        row = cursor.fetchone()
+        return int(row[0]) if row else 0
+
+    @classmethod
+    def _read_managed_key_orphan_binding_count(cls, cursor: Any, *, crypto_backend_kind: str | None) -> int:
+        """Read backend binding rows without an owning managed-key record."""
+        table_name = cls._managed_key_binding_table(crypto_backend_kind=crypto_backend_kind)
+        if (
+            table_name is None
+            or not cls._table_exists(cursor, table_name='crypto_managed_key')
+            or not cls._table_exists(cursor, table_name=table_name)
+        ):
+            return 0
+        cursor.execute(
+            f"""
+            SELECT COUNT(*)
+            FROM {table_name} binding
+            LEFT JOIN crypto_managed_key managed_key
+              ON managed_key.id = binding.managed_key_id
+            WHERE managed_key.id IS NULL
+            """  # noqa: S608 - table name is selected from fixed literals above.
+        )
+        row = cursor.fetchone()
+        return int(row[0]) if row else 0
+
+    @classmethod
+    def _read_managed_key_binding_issue_count(cls, cursor: Any, *, crypto_backend_kind: str | None) -> int:
+        """Read backend-specific binding rows that lack provider identity material."""
+        table_by_backend = {
+            'pkcs11': ('crypto_managed_key_pkcs11_binding', "key_id_hex IS NULL OR key_id_hex = ''"),
+            'software': (
+                'crypto_managed_key_software_binding',
+                "key_handle IS NULL OR key_handle = '' OR encrypted_private_key_pkcs8_der IS NULL",
+            ),
+            'rest': ('crypto_managed_key_rest_binding', "remote_key_id IS NULL OR remote_key_id = ''"),
+        }
+        table_config = table_by_backend.get(crypto_backend_kind or '')
+        if table_config is None:
+            return 0
+        table_name, issue_predicate = table_config
+        if not cls._table_exists(cursor, table_name=table_name):
+            return 0
+        cursor.execute(
+            f'SELECT COUNT(*) FROM {table_name} WHERE {issue_predicate}'  # noqa: S608 - fixed literals above.
+        )
+        row = cursor.fetchone()
+        return int(row[0]) if row else 0
+
+    @classmethod
     def _read_app_secret_material_present(cls, cursor: Any, *, app_secret_backend_kind: str | None) -> bool:
         """Return whether the target DB has persisted material for its app-secret backend."""
-        if app_secret_backend_kind == 'software':
+        if app_secret_backend_kind == 'software':  # noqa: S105 - backend kind value, not a secret.
             if not cls._table_exists(cursor, table_name='app_secret_software_config'):
                 return False
             cursor.execute(
@@ -541,7 +802,7 @@ class OperationalTargetInspector:
             row = cursor.fetchone()
             return bool(row and row[0])
 
-        if app_secret_backend_kind == 'pkcs11':
+        if app_secret_backend_kind == 'pkcs11':  # noqa: S105 - backend kind value, not a secret.
             if not cls._table_exists(cursor, table_name='app_secret_pkcs11_config'):
                 return False
             cursor.execute(

@@ -82,6 +82,11 @@ run_startup_manager() {
     run_as_www_data "uv run trustpoint/manage.py startup_manager"
 }
 
+apply_operational_tls_files() {
+    log INFO "Applying operational TLS files to nginx"
+    /etc/trustpoint/wizard/update_tls.sh
+}
+
 start_qcluster() {
     if pid_file_alive "$OPERATIONAL_QCLUSTER_PID_FILE"; then
         log INFO "Operational qcluster is already running with PID $(cat "$OPERATIONAL_QCLUSTER_PID_FILE")"
@@ -178,6 +183,7 @@ schedule_bootstrap_gunicorn_shutdown() {
 
 wait_for_postgres
 run_startup_manager
+apply_operational_tls_files
 start_qcluster
 start_operational_gunicorn
 switch_nginx_proxy
