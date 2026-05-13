@@ -11,7 +11,7 @@ import os
 import subprocess
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import psycopg
 from cryptography.hazmat.primitives import hashes
@@ -37,7 +37,13 @@ from appsecrets.models import (
     AppSecretPkcs11ConfigModel,
     AppSecretSoftwareConfigModel,
 )
-from appsecrets.service import clear_app_secret_cache, get_app_secret_service
+from appsecrets.service import (
+    DEK_LENGTH_BYTES,
+    AppSecretConfigurationError,
+    Pkcs11AppSecretService,
+    clear_app_secret_cache,
+    get_app_secret_service,
+)
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSelector
 from crypto.models import (
@@ -63,6 +69,7 @@ from setup_wizard.operational_attach import (
     OperationalBackendBinding,
     OperationalCompatibilityReport,
     OperationalDatabaseConfig,
+    OperationalStateSnapshot,
     OperationalTargetConfig,
     OperationalTargetInspector,
 )
@@ -117,11 +124,12 @@ FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
 FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-vendor.cfg'
 MAX_RESTORE_OUTPUT_LENGTH = 4000
+GPG_EXECUTABLE = '/usr/bin/gpg'
 
 
 def restore_backup_staging_root() -> Path:
     """Return the bootstrap-private directory for staged restore archives."""
-    bootstrap_db_path = Path(settings.DATABASES['default']['NAME'])
+    bootstrap_db_path = Path(str(settings.DATABASES['default']['NAME']))
     return bootstrap_db_path.parent / 'restore'
 
 
@@ -190,7 +198,7 @@ def _open_restore_archive(archive_path: Path) -> Any:
 def _restore_archive_is_custom_pg_dump(archive_path: Path) -> bool:
     """Return whether the staged archive is a PostgreSQL custom-format dump."""
     with _open_restore_archive(archive_path) as archive_file:
-        return archive_file.read(5) == b'PGDMP'
+        return bool(archive_file.read(5) == b'PGDMP')
 
 
 def _format_restore_process_output(completed_process: subprocess.CompletedProcess[bytes]) -> str:
@@ -216,7 +224,7 @@ def _decrypt_restore_archive_if_needed(archive_path: Path, backup_password: str)
     decrypted_path = restore_backup_staging_root() / f'decrypted-{uuid.uuid4().hex}{decrypted_suffix}'
     completed_process = subprocess.run(  # noqa: S603
         [
-            'gpg',
+            GPG_EXECUTABLE,
             '--batch',
             '--yes',
             '--pinentry-mode',
@@ -565,7 +573,7 @@ def run_staged_pkcs11_connection_test(
         view.logger.exception('PKCS#11 setup-wizard connection test failed.')
         error_detail = str(exception).strip() or type(exception).__name__
         form.add_error(None, f'Could not connect to the configured PKCS#11 backend: {error_detail}')
-        return view.render_to_response(view.get_context_data(form=form))
+        return cast('HttpResponse', view.render_to_response(view.get_context_data(form=form)))
     finally:
         if 'backend' in locals():
             backend.close()
@@ -2310,7 +2318,7 @@ class ConnectExistingDatabaseView(ConnectExistingWizardMixin[FreshInstallDatabas
 
         if self.request.POST.get('wizard_action') == 'test_database':
             try:
-                FreshInstallDatabaseView._test_database_connection(form)
+                FreshInstallDatabaseView._test_database_connection(form)  # noqa: SLF001 - shared wizard helper.
             except Exception as exception:
                 self.logger.exception('Connect-existing PostgreSQL connection test failed.')
                 error_detail = str(exception).strip() or type(exception).__name__
@@ -2334,7 +2342,7 @@ class ConnectExistingCryptoStorageView(ConnectExistingWizardMixin[FreshInstallCr
     def form_valid(self, form: FreshInstallCryptoStorageModelForm) -> HttpResponse:
         """Persist the backend kind and clear stale PKCS#11 staging when needed."""
         if form.cleaned_data['crypto_storage'] != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-            FreshInstallCryptoStorageView._reset_staged_pkcs11_backend(form)
+            FreshInstallCryptoStorageView._reset_staged_pkcs11_backend(form)  # noqa: SLF001 - shared wizard helper.
         form.save()
         config_model = SetupWizardConfigModel.get_singleton()
         config_model.mark_step_submitted(SetupWizardConfigModel.FreshInstallCurrentStep.CRYPTO_STORAGE)
@@ -2515,6 +2523,159 @@ def attach_backend_readiness_checks(config_model: SetupWizardConfigModel) -> tup
     )
 
 
+def _build_staged_pkcs11_app_secret_config(
+    config_model: SetupWizardConfigModel,
+    *,
+    wrapped_dek: bytes,
+    kek_label: str,
+) -> AppSecretPkcs11ConfigModel:
+    """Build an unsaved app-secret PKCS#11 config for attach validation."""
+    module_path, pin_file, _update_fields = apply_pkcs11_probe_fallbacks(config_model)
+    token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or None
+    token_serial = (config_model.fresh_install_pkcs11_token_serial or '').strip() or None
+    slot_id = config_model.fresh_install_pkcs11_slot_id
+
+    validate_pkcs11_probe_inputs(
+        module_path=module_path,
+        pin_file=pin_file,
+        token_label=token_label,
+        slot_id=slot_id,
+    )
+
+    backend = AppSecretBackendModel(
+        singleton_id=AppSecretBackendModel.SINGLETON_ID,
+        backend_kind=AppSecretBackendKind.PKCS11,
+    )
+    return AppSecretPkcs11ConfigModel(
+        backend=backend,
+        module_path=module_path,
+        token_label=token_label or '',
+        token_serial=token_serial or '',
+        slot_id=slot_id,
+        auth_source=AppSecretPkcs11AuthSource.FILE,
+        auth_source_ref=pin_file,
+        kek_label=kek_label,
+        wrapped_dek=wrapped_dek,
+    )
+
+
+def app_secret_decryptability_checks(  # noqa: PLR0911
+    *,
+    config_model: SetupWizardConfigModel,
+    target: OperationalTargetConfig,
+    snapshot: OperationalStateSnapshot,
+) -> tuple[CompatibilityCheck, ...]:
+    """Validate that the staged backend can recover the target app-secret DEK."""
+    if not snapshot.app_secret_backend_kind:
+        return (
+            CompatibilityCheck(
+                code='appsecret.decryptability_skipped',
+                label='Application Secrets',
+                severity=CompatibilitySeverity.WARNING,
+                message='App-secret decryptability could not be checked because the target backend kind is unknown.',
+            ),
+        )
+
+    if target.app_secret_backend.backend_kind != snapshot.app_secret_backend_kind:
+        return (
+            CompatibilityCheck(
+                code='appsecret.decryptability_skipped',
+                label='Application Secrets',
+                severity=CompatibilitySeverity.WARNING,
+                message='App-secret decryptability was skipped because the staged backend kind does not match.',
+            ),
+        )
+
+    try:
+        material = OperationalTargetInspector().inspect_app_secret_material(target.database)
+    except (OSError, RuntimeError, TypeError, ValueError, psycopg.Error) as exception:
+        error_detail = str(exception).strip() or type(exception).__name__
+        return (
+            CompatibilityCheck(
+                code='appsecret.decryptability_inspection_failed',
+                label='Application Secrets',
+                severity=CompatibilitySeverity.ERROR,
+                message=f'Could not read target app-secret material for validation: {error_detail}',
+            ),
+        )
+
+    if material.backend_kind == BackendKind.SOFTWARE.value:
+        if len(material.raw_dek) == DEK_LENGTH_BYTES:
+            return (
+                CompatibilityCheck(
+                    code='appsecret.decryptability_ok',
+                    label='Application Secrets',
+                    severity=CompatibilitySeverity.INFO,
+                    message='The target software app-secret DEK is present and has the expected length.',
+                ),
+            )
+        return (
+            CompatibilityCheck(
+                code='appsecret.decryptability_failed',
+                label='Application Secrets',
+                severity=CompatibilitySeverity.ERROR,
+                message='The target software app-secret DEK is missing or has an invalid length.',
+            ),
+        )
+
+    if material.backend_kind != BackendKind.PKCS11.value:
+        return (
+            CompatibilityCheck(
+                code='appsecret.decryptability_skipped',
+                label='Application Secrets',
+                severity=CompatibilitySeverity.WARNING,
+                message=f'No app-secret decryptability check is implemented for {material.backend_kind!r}.',
+            ),
+        )
+
+    if not material.wrapped_dek:
+        return (
+            CompatibilityCheck(
+                code='appsecret.decryptability_failed',
+                label='Application Secrets',
+                severity=CompatibilitySeverity.ERROR,
+                message='The target database has no wrapped app-secret DEK to validate.',
+            ),
+        )
+
+    if config_model.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+        return (
+            CompatibilityCheck(
+                code='appsecret.decryptability_failed',
+                label='Application Secrets',
+                severity=CompatibilitySeverity.ERROR,
+                message='The target app-secret backend is PKCS#11, but the staged backend is not an HSM backend.',
+            ),
+        )
+
+    try:
+        secret_config = _build_staged_pkcs11_app_secret_config(
+            config_model,
+            wrapped_dek=material.wrapped_dek,
+            kek_label=material.kek_label,
+        )
+        Pkcs11AppSecretService(secret_config).unwrap_existing_dek()
+    except (AppSecretConfigurationError, DjangoValidationError, OSError, RuntimeError, ValueError) as exception:
+        error_detail = str(exception).strip() or type(exception).__name__
+        return (
+            CompatibilityCheck(
+                code='appsecret.decryptability_failed',
+                label='Application Secrets',
+                severity=CompatibilitySeverity.ERROR,
+                message=f'The staged PKCS#11 backend could not unwrap the target app-secret DEK: {error_detail}',
+            ),
+        )
+
+    return (
+        CompatibilityCheck(
+            code='appsecret.decryptability_ok',
+            label='Application Secrets',
+            severity=CompatibilitySeverity.INFO,
+            message='The staged PKCS#11 backend can unwrap the target app-secret DEK.',
+        ),
+    )
+
+
 class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
     """Connect-existing summary step for inspection and explicit attach."""
 
@@ -2573,7 +2734,16 @@ class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
             target=target,
             snapshot=snapshot,
         )
-        return report.with_checks(attach_backend_readiness_checks(config_model))
+        return report.with_checks(
+            (
+                *attach_backend_readiness_checks(config_model),
+                *app_secret_decryptability_checks(
+                    config_model=config_model,
+                    target=target,
+                    snapshot=snapshot,
+                ),
+            )
+        )
 
     def form_valid(self, form: EmptyForm) -> HttpResponse:
         """Explicitly attach this container to the inspected operational target."""

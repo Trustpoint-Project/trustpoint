@@ -230,6 +230,22 @@ class Pkcs11AppSecretService(BaseAppSecretService):
             _DEK_CACHE.value = dek
             return dek
 
+    def unwrap_existing_dek(self) -> bytes:
+        """Return the configured DEK without creating missing backend material."""
+        wrapped_dek = bytes(self._config.wrapped_dek or b'')
+        if not wrapped_dek:
+            msg = 'No wrapped DEK is configured for the PKCS#11 app-secret backend.'
+            raise AppSecretConfigurationError(msg)
+
+        with self._open_session(rw=False) as session:
+            kek = self._load_existing_kek(session)
+            dek = bytes(kek.decrypt(wrapped_dek, mechanism=pkcs11.Mechanism.AES_ECB))
+
+        if len(dek) != DEK_LENGTH_BYTES:
+            msg = f'Invalid unwrapped DEK length: {len(dek)} bytes.'
+            raise AppSecretConfigurationError(msg)
+        return dek
+
     def _load_or_create_kek(self, session: pkcs11.Session) -> _Pkcs11Kek:
         """Load the persistent HSM KEK or create it once."""
         try:
@@ -244,6 +260,14 @@ class Pkcs11AppSecretService(BaseAppSecretService):
                     store=True,
                 ),
             )
+
+    def _load_existing_kek(self, session: pkcs11.Session) -> _Pkcs11Kek:
+        """Load the persistent HSM KEK without creating missing material."""
+        try:
+            return cast('_Pkcs11Kek', session.get_key(label=self._config.kek_label, key_type=pkcs11.KeyType.AES))
+        except pkcs11.NoSuchKey as exception:
+            msg = f'PKCS#11 app-secret KEK {self._config.kek_label!r} was not found on the configured token.'
+            raise AppSecretConfigurationError(msg) from exception
 
     def _resolve_token(self, library: _Pkcs11Library) -> pkcs11.Token:
         """Resolve the configured token from the PKCS#11 library."""
@@ -269,15 +293,15 @@ class Pkcs11AppSecretService(BaseAppSecretService):
             raise AppSecretConfigurationError(msg)
         return matches[0]
 
-    def _open_session(self) -> pkcs11.Session:
+    def _open_session(self, *, rw: bool = True) -> pkcs11.Session:
         """Open a read-write authenticated PKCS#11 session."""
         profile = self._config.build_provider_profile()
         library = cast('_Pkcs11Library', pkcs11.lib(profile.module_path))
         token = self._resolve_token(library)
         try:
-            return token.open(user_pin=profile.require_user_pin(), rw=True)
+            return token.open(user_pin=profile.require_user_pin(), rw=rw)
         except pkcs11.exceptions.UserAlreadyLoggedIn:
-            return token.open(rw=True)
+            return token.open(rw=rw)
 
 
 def get_app_secret_service() -> BaseAppSecretService:

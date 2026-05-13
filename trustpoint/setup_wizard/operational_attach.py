@@ -85,6 +85,16 @@ class OperationalStateSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class OperationalAppSecretMaterial:
+    """Raw app-secret material read from the target database for validation only."""
+
+    backend_kind: str | None
+    raw_dek: bytes = b''
+    wrapped_dek: bytes = b''
+    kek_label: str = 'trustpoint-app-secret-kek'
+
+
+@dataclass(frozen=True, slots=True)
 class CompatibilityCheck:
     """One line in the operator-facing compatibility report."""
 
@@ -415,13 +425,13 @@ class OperationalAttachmentValidator:
         else:
             severity = (
                 CompatibilitySeverity.ERROR
-                if snapshot.encrypted_secret_count
+                if snapshot.setup_completed or snapshot.encrypted_secret_count
                 else CompatibilitySeverity.WARNING
             )
             message = (
                 'The target database does not contain persisted application-secret material. '
                 'Existing encrypted data may be unreadable.'
-                if snapshot.encrypted_secret_count
+                if snapshot.setup_completed or snapshot.encrypted_secret_count
                 else (
                     'The target database does not contain persisted application-secret material. '
                     'This is acceptable only for empty or not-yet-initialized databases.'
@@ -449,67 +459,66 @@ class OperationalAttachmentValidator:
                     ),
                 )
             )
+        elif snapshot.managed_key_missing_binding_count:
+            checks.append(
+                CompatibilityCheck(
+                    code='managed_keys.bindings_missing',
+                    label='Managed Keys',
+                    severity=CompatibilitySeverity.ERROR,
+                    message=(
+                        f'{snapshot.managed_key_missing_binding_count} managed-key records do not have a '
+                        'backend binding row for the configured backend.'
+                    ),
+                )
+            )
+        elif snapshot.managed_key_binding_profile_mismatch_count:
+            checks.append(
+                CompatibilityCheck(
+                    code='managed_keys.binding_profile_mismatch',
+                    label='Managed Keys',
+                    severity=CompatibilitySeverity.ERROR,
+                    message=(
+                        f'{snapshot.managed_key_binding_profile_mismatch_count} managed-key bindings point to '
+                        'a different provider profile than their managed-key record.'
+                    ),
+                )
+            )
+        elif snapshot.managed_key_binding_issue_count:
+            checks.append(
+                CompatibilityCheck(
+                    code='managed_keys.binding_payload_invalid',
+                    label='Managed Keys',
+                    severity=CompatibilitySeverity.ERROR,
+                    message=(
+                        f'{snapshot.managed_key_binding_issue_count} managed-key binding records are missing '
+                        'backend identity material.'
+                    ),
+                )
+            )
+        elif snapshot.managed_key_orphan_binding_count:
+            checks.append(
+                CompatibilityCheck(
+                    code='managed_keys.orphan_bindings',
+                    label='Managed Keys',
+                    severity=CompatibilitySeverity.ERROR,
+                    message=(
+                        f'{snapshot.managed_key_orphan_binding_count} backend binding records do not map to a '
+                        'managed-key record.'
+                    ),
+                )
+            )
         elif snapshot.managed_key_binding_count == snapshot.managed_key_count:
-            if snapshot.managed_key_missing_binding_count:
-                checks.append(
-                    CompatibilityCheck(
-                        code='managed_keys.bindings_missing',
-                        label='Managed Keys',
-                        severity=CompatibilitySeverity.ERROR,
-                        message=(
-                            f'{snapshot.managed_key_missing_binding_count} managed-key records do not have a '
-                            'backend binding row for the configured backend.'
-                        ),
-                    )
+            checks.append(
+                CompatibilityCheck(
+                    code='managed_keys.bindings_ok',
+                    label='Managed Keys',
+                    severity=CompatibilitySeverity.INFO,
+                    message=(
+                        'Managed-key records have matching backend binding records. Live backend-object '
+                        'availability is checked separately from database metadata.'
+                    ),
                 )
-            elif snapshot.managed_key_binding_profile_mismatch_count:
-                checks.append(
-                    CompatibilityCheck(
-                        code='managed_keys.binding_profile_mismatch',
-                        label='Managed Keys',
-                        severity=CompatibilitySeverity.ERROR,
-                        message=(
-                            f'{snapshot.managed_key_binding_profile_mismatch_count} managed-key bindings point to '
-                            'a different provider profile than their managed-key record.'
-                        ),
-                    )
-                )
-            elif snapshot.managed_key_binding_issue_count:
-                checks.append(
-                    CompatibilityCheck(
-                        code='managed_keys.binding_payload_invalid',
-                        label='Managed Keys',
-                        severity=CompatibilitySeverity.ERROR,
-                        message=(
-                            f'{snapshot.managed_key_binding_issue_count} managed-key binding records are missing '
-                            'backend identity material.'
-                        ),
-                    )
-                )
-            elif snapshot.managed_key_orphan_binding_count:
-                checks.append(
-                    CompatibilityCheck(
-                        code='managed_keys.orphan_bindings',
-                        label='Managed Keys',
-                        severity=CompatibilitySeverity.ERROR,
-                        message=(
-                            f'{snapshot.managed_key_orphan_binding_count} backend binding records do not map to a '
-                            'managed-key record.'
-                        ),
-                    )
-                )
-            else:
-                checks.append(
-                    CompatibilityCheck(
-                        code='managed_keys.bindings_ok',
-                        label='Managed Keys',
-                        severity=CompatibilitySeverity.INFO,
-                        message=(
-                            'Managed-key records have matching backend binding records. Live backend-object '
-                            'availability is checked separately from database metadata.'
-                        ),
-                    )
-                )
+            )
         elif snapshot.managed_key_binding_count < snapshot.managed_key_count:
             checks.append(
                 CompatibilityCheck(
@@ -540,6 +549,31 @@ class OperationalAttachmentValidator:
 
 class OperationalTargetInspector:
     """Read metadata from an operational PostgreSQL target without mutating it."""
+
+    def inspect_app_secret_material(self, database: OperationalDatabaseConfig) -> OperationalAppSecretMaterial:
+        """Read app-secret material needed for pre-attach decryptability validation."""
+        with psycopg.connect(
+            dbname=database.name,
+            user=database.user,
+            password=database.password,
+            host=database.host,
+            port=database.port,
+            connect_timeout=5,
+        ) as connection, connection.cursor() as cursor:
+            app_secret_backend_kind = self._read_app_secret_backend_kind(cursor)
+            if app_secret_backend_kind == 'software':  # noqa: S105 - backend kind value, not a secret.
+                return OperationalAppSecretMaterial(
+                    backend_kind=app_secret_backend_kind,
+                    raw_dek=self._read_software_app_secret_dek(cursor),
+                )
+            if app_secret_backend_kind == 'pkcs11':  # noqa: S105 - backend kind value, not a secret.
+                wrapped_dek, kek_label = self._read_pkcs11_app_secret_material(cursor)
+                return OperationalAppSecretMaterial(
+                    backend_kind=app_secret_backend_kind,
+                    wrapped_dek=wrapped_dek,
+                    kek_label=kek_label,
+                )
+            return OperationalAppSecretMaterial(backend_kind=app_secret_backend_kind)
 
     def inspect_database(self, database: OperationalDatabaseConfig) -> OperationalStateSnapshot:
         """Connect to the target database and return the operational metadata snapshot."""
@@ -793,7 +827,7 @@ class OperationalTargetInspector:
                 return False
             cursor.execute(
                 """
-                SELECT raw_dek IS NOT NULL
+                SELECT raw_dek IS NOT NULL AND OCTET_LENGTH(raw_dek) = 32
                 FROM app_secret_software_config
                 WHERE backend_id = 1
                 LIMIT 1
@@ -807,7 +841,7 @@ class OperationalTargetInspector:
                 return False
             cursor.execute(
                 """
-                SELECT wrapped_dek IS NOT NULL
+                SELECT wrapped_dek IS NOT NULL AND OCTET_LENGTH(wrapped_dek) > 0
                 FROM app_secret_pkcs11_config
                 WHERE backend_id = 1
                 LIMIT 1
@@ -817,3 +851,37 @@ class OperationalTargetInspector:
             return bool(row and row[0])
 
         return False
+
+    @classmethod
+    def _read_software_app_secret_dek(cls, cursor: Any) -> bytes:
+        """Read the software app-secret DEK from the target database."""
+        if not cls._table_exists(cursor, table_name='app_secret_software_config'):
+            return b''
+        cursor.execute(
+            """
+            SELECT raw_dek
+            FROM app_secret_software_config
+            WHERE backend_id = 1
+            LIMIT 1
+            """
+        )
+        row = cursor.fetchone()
+        return bytes(row[0] or b'') if row else b''
+
+    @classmethod
+    def _read_pkcs11_app_secret_material(cls, cursor: Any) -> tuple[bytes, str]:
+        """Read the wrapped DEK and KEK label from the target database."""
+        if not cls._table_exists(cursor, table_name='app_secret_pkcs11_config'):
+            return b'', 'trustpoint-app-secret-kek'
+        cursor.execute(
+            """
+            SELECT wrapped_dek, kek_label
+            FROM app_secret_pkcs11_config
+            WHERE backend_id = 1
+            LIMIT 1
+            """
+        )
+        row = cursor.fetchone()
+        if not row:
+            return b'', 'trustpoint-app-secret-kek'
+        return bytes(row[0] or b''), str(row[1] or 'trustpoint-app-secret-kek')
