@@ -12,7 +12,51 @@ from django.utils.translation import gettext_lazy as _
 from django.views.generic import TemplateView
 
 from appsecrets.models import AppSecretBackendModel
+from crypto.application.capabilities import BackendCapabilityReport, get_active_backend_capability_report
 from crypto.models import BackendKind, CryptoProviderProfileModel
+from pki.util.keys import supported_auto_gen_pki_key_algorithms
+
+
+def _capability_status(report: BackendCapabilityReport | None) -> tuple[str, Any, Any]:
+    """Return Bootstrap badge class, label, and user-facing message for a capability report."""
+    if report is None:
+        return 'secondary', _('Not configured'), _('No active backend profile is configured.')
+    if not report.capabilities_known:
+        return (
+            'warning',
+            _('Probe required'),
+            _('Trustpoint has no successful capability snapshot for this backend yet.'),
+        )
+    if not report.available:
+        return (
+            'danger',
+            _('Unavailable'),
+            _('The backend is configured, but no usable key-generation/signing capabilities were reported.'),
+        )
+    return 'success', _('Ready'), _('The backend reports usable key-generation and signing capabilities.')
+
+
+def _supported_key_capabilities(report: BackendCapabilityReport | None) -> list[dict[str, str]]:
+    """Build human-readable supported key capability rows."""
+    if report is None or not report.available:
+        return []
+
+    rows: list[dict[str, str]] = []
+    if report.rsa_key_sizes:
+        rows.append(
+            {
+                'family': 'RSA',
+                'values': ', '.join(str(key_size) for key_size in report.rsa_key_sizes),
+            }
+        )
+    if report.ec_curves:
+        rows.append(
+            {
+                'family': 'Elliptic Curve',
+                'values': ', '.join(curve.value.upper() for curve in report.ec_curves),
+            }
+        )
+    return rows
 
 
 class BackendConfigurationView(TemplateView):
@@ -54,10 +98,14 @@ class BackendConfigurationView(TemplateView):
                 'software_config',
                 'rest_config',
                 'current_capability_snapshot__pkcs11_detail',
+                'current_capability_snapshot__software_detail',
+                'current_capability_snapshot__rest_detail',
             )
             .first()
         )
         app_secret_backend = AppSecretBackendModel.objects.first()
+        capability_report = get_active_backend_capability_report() if crypto_profile is not None else None
+        capability_badge, capability_label, capability_message = _capability_status(capability_report)
         pkcs11_probe_detail = None
         if crypto_profile is not None and crypto_profile.backend_kind == BackendKind.PKCS11:
             current_snapshot = crypto_profile.current_capability_snapshot
@@ -73,6 +121,13 @@ class BackendConfigurationView(TemplateView):
         context['software_config'] = getattr(crypto_profile, 'software_config', None) if crypto_profile else None
         context['rest_config'] = getattr(crypto_profile, 'rest_config', None) if crypto_profile else None
         context['pkcs11_probe_detail'] = pkcs11_probe_detail
+        context['capability_report'] = capability_report
+        context['capability_badge'] = capability_badge
+        context['capability_label'] = capability_label
+        context['capability_message'] = capability_message
+        context['capability_diagnostics'] = capability_report.diagnostics if capability_report is not None else ()
+        context['supported_key_capabilities'] = _supported_key_capabilities(capability_report)
+        context['supported_auto_gen_pki_algorithms'] = supported_auto_gen_pki_key_algorithms()
         pkcs11_capability_payload = (
             getattr(pkcs11_probe_detail, 'snapshot_payload', None)
             if pkcs11_probe_detail is not None

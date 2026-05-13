@@ -72,17 +72,25 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 if field_name in self.fields:
                     self.fields[field_name].widget.attrs['disabled'] = 'disabled'
 
+        supported_algorithms = supported_auto_gen_pki_key_algorithms()
+        self.supported_auto_gen_pki_key_algorithms = supported_algorithms
+
         if self.instance and self.instance.auto_gen_pki:
             self.fields['auto_gen_pki_key_algorithm'].widget.attrs['disabled'] = 'disabled'
         elif 'auto_gen_pki_key_algorithm' in self.fields:
-            supported_algorithms = supported_auto_gen_pki_key_algorithms()
             auto_gen_pki_key_algorithm_field = cast(
                 'forms.ChoiceField',
                 self.fields['auto_gen_pki_key_algorithm'],
             )
-            auto_gen_pki_key_algorithm_field.choices = [
-                (algorithm.value, algorithm.label) for algorithm in supported_algorithms
-            ]
+            if supported_algorithms:
+                auto_gen_pki_key_algorithm_field.choices = [
+                    (algorithm.value, algorithm.label) for algorithm in supported_algorithms
+                ]
+            else:
+                auto_gen_pki_key_algorithm_field.choices = [
+                    ('', _('No supported backend algorithms available')),
+                ]
+                auto_gen_pki_key_algorithm_field.widget.attrs['disabled'] = 'disabled'
 
         self.helper = FormHelper()
         self.helper.layout = Layout(
@@ -220,7 +228,12 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
                 return AutoGenPkiKeyAlgorithm(self.instance.auto_gen_pki_key_algorithm)
             return AutoGenPkiKeyAlgorithm.RSA2048
         selected_algorithm = AutoGenPkiKeyAlgorithm(form_value)
-        if selected_algorithm not in supported_auto_gen_pki_key_algorithms():
+        supported_algorithms = getattr(
+            self,
+            'supported_auto_gen_pki_key_algorithms',
+            supported_auto_gen_pki_key_algorithms(),
+        )
+        if selected_algorithm not in supported_algorithms:
             msg = _('The selected auto-generated PKI algorithm is not supported by the active backend.')
             raise ValidationError(msg)
         return selected_algorithm
@@ -268,6 +281,20 @@ class SecurityConfigForm(forms.ModelForm[SecurityConfig]):
 
         if cleaned.get('auto_gen_pki') and not cleaned.get('allow_auto_gen_pki'):
             self.add_error('auto_gen_pki', 'Cannot enable auto-generated PKI when it is not permitted.')
+
+        supported_algorithms = getattr(
+            self,
+            'supported_auto_gen_pki_key_algorithms',
+            supported_auto_gen_pki_key_algorithms(),
+        )
+        selected_algorithm = cleaned.get('auto_gen_pki_key_algorithm')
+        if cleaned.get('auto_gen_pki') and not supported_algorithms:
+            self.add_error('auto_gen_pki', _('No auto-generated PKI algorithm is supported by the active backend.'))
+        elif cleaned.get('auto_gen_pki') and selected_algorithm not in supported_algorithms:
+            self.add_error(
+                'auto_gen_pki_key_algorithm',
+                _('The selected auto-generated PKI algorithm is not supported by the active backend.'),
+            )
 
         return cleaned
 

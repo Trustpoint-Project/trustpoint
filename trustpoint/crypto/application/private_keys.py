@@ -8,6 +8,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
 
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm, SignatureAlgorithm
+from crypto.domain.policies import KeyPolicy, SigningExecutionMode
 from crypto.domain.specs import SignRequest
 
 if TYPE_CHECKING:
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
     )
 
     from crypto.domain.refs import ManagedKeyRef
+    from crypto.domain.specs import KeySpec
 
 
 def _hash_algorithm_name(algorithm: HashAlgorithm | utils.Prehashed) -> HashAlgorithmName:
@@ -216,3 +218,21 @@ def managed_private_key_for_ref(key_ref: ManagedKeyRef) -> ManagedRSAPrivateKey 
         return ManagedECPrivateKey(key_ref=key_ref)
     msg = f'Unsupported managed key algorithm {key_ref.algorithm!r}.'
     raise TypeError(msg)
+
+
+def generate_managed_signing_private_key(
+    *,
+    alias: str,
+    key_spec: KeySpec,
+    crypto_backend: TrustpointCryptoBackend | None = None,
+) -> ManagedRSAPrivateKey | ManagedECPrivateKey:
+    """Generate a non-exportable signing key through the active crypto backend."""
+    backend = crypto_backend or TrustpointCryptoBackend()
+    key_ref = backend.generate_managed_key(
+        alias=alias,
+        key_spec=key_spec,
+        policy=KeyPolicy.managed_signing_key(
+            signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+        ),
+    )
+    return managed_private_key_for_ref(key_ref)

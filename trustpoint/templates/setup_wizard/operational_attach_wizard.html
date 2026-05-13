@@ -54,7 +54,7 @@
             <h1 class="tp-setup-form-heading">{{ page_title }}</h1>
         </div>
 
-        <form method="post" enctype="multipart/form-data" class="text-start">
+        <form method="post" enctype="multipart/form-data" class="text-start"{% if is_attach_summary %} data-summary-submit-form{% endif %}>
             {% csrf_token %}
             <div class="card tp-card-setup-wizard tp-card-setup-steps text-center">
                 <div class="card-header">
@@ -94,7 +94,7 @@
                 </div>
             </div>
 
-            <div class="card tp-card-setup-wizard tp-card-setup-content text-center">
+            <div class="card tp-card-setup-wizard tp-card-setup-content text-center"{% if is_attach_summary %} data-summary-submit-card{% endif %}>
                 <div class="card-body tp-wizard-body">
                     <h2 class="tp-wizard-heading">{{ body_heading }}</h2>
 
@@ -383,7 +383,45 @@
                     </div>
                 </div>
             </div>
+            {% if is_attach_summary %}
+                <div class="tp-summary-loading-state" data-summary-loading-state hidden aria-live="polite" aria-busy="true">
+                    <div class="card tp-card-setup-wizard tp-summary-loading-card">
+                        <div class="card-body">
+                            <div class="tp-summary-loading-visual" aria-hidden="true">
+                                <div class="spinner-border tp-summary-loading-spinner" aria-hidden="true"></div>
+                            </div>
+                            <h2 class="tp-summary-loading-title">{% trans 'Just a Moment!' %}</h2>
+                            <p class="tp-summary-loading-copy">
+                                {% if summary_submit_label == 'Apply Restore' %}
+                                    {% trans 'We are restoring the instance for you!' %}
+                                {% else %}
+                                    {% trans 'We are connecting the instance for you!' %}
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
         </form>
     </section>
+
+    {% if is_attach_summary %}
+        <script>
+            (() => {
+                const form = document.querySelector('[data-summary-submit-form]');
+                const card = document.querySelector('[data-summary-submit-card]');
+                const loadingState = document.querySelector('[data-summary-loading-state]');
+
+                if (!form || !card || !loadingState) {
+                    return;
+                }
+
+                form.addEventListener('submit', () => {
+                    card.hidden = true;
+                    loadingState.hidden = false;
+                });
+            })();
+        </script>
+    {% endif %}
 
 {% endblock content %}

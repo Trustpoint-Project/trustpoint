@@ -7,15 +7,16 @@ import secrets
 import string
 
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import rsa, ec
+from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from django.core.management import call_command
 from django.core.management.base import BaseCommand
 
 from crypto.application.capabilities import normalize_curve_name
-from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey
-from crypto.application.service import TrustpointCryptoBackend
-from crypto.domain.algorithms import KeyAlgorithm
-from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.application.private_keys import (
+    ManagedECPrivateKey,
+    ManagedRSAPrivateKey,
+    generate_managed_signing_private_key,
+)
 from crypto.domain.specs import EcKeySpec, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
 from devices.models import DeviceModel
@@ -32,7 +33,6 @@ from pki.models import CaModel, CredentialModel, DevIdRegistration, DomainModel,
 from pki.util.x509 import CertificateGenerator
 from signer.models import SignerModel
 from trustpoint.logger import LoggerMixin
-
 
 ALLOWED_CHARS = allowed_chars = string.ascii_letters + string.digits
 
@@ -97,34 +97,24 @@ def _generate_managed_signer_key(
 ) -> ManagedRSAPrivateKey | ManagedECPrivateKey:
     """Generate a signer key with the same key family as the issuing CA."""
     if isinstance(issuing_ca_private_key, rsa.RSAPrivateKey):
-        key_ref = TrustpointCryptoBackend().generate_managed_key(
+        signer_key = generate_managed_signing_private_key(
             alias=alias,
             key_spec=RsaKeySpec(key_size=issuing_ca_private_key.key_size),
-            policy=KeyPolicy.managed_signing_key(
-                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
-            ),
         )
     elif isinstance(issuing_ca_private_key, ec.EllipticCurvePrivateKey):
         curve_name = normalize_curve_name(issuing_ca_private_key.curve)
         if curve_name is None:
             msg = f'Unsupported signer EC curve {issuing_ca_private_key.curve.name!r}.'
             raise ValueError(msg)
-        key_ref = TrustpointCryptoBackend().generate_managed_key(
+        signer_key = generate_managed_signing_private_key(
             alias=alias,
             key_spec=EcKeySpec(curve=curve_name),
-            policy=KeyPolicy.managed_signing_key(
-                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
-            ),
         )
     else:
-        raise ValueError('Unsupported issuing CA private key type.')
+        msg = 'Unsupported issuing CA private key type.'
+        raise TypeError(msg)
 
-    if key_ref.algorithm is KeyAlgorithm.RSA:
-        return ManagedRSAPrivateKey(key_ref=key_ref)
-    if key_ref.algorithm is KeyAlgorithm.EC:
-        return ManagedECPrivateKey(key_ref=key_ref)
-    msg = f'Unsupported managed signer key algorithm {key_ref.algorithm!r}.'
-    raise ValueError(msg)
+    return signer_key
 
 
 def create_signer_for_domain(

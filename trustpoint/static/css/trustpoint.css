@@ -1081,6 +1081,144 @@ input[readonly].readonly-field {
     display: block;
 }
 
+/* ----- Backend configuration page ----- */
+
+.tp-backend-configuration {
+    max-width: 86rem;
+}
+
+.tp-backend-configuration .tp-backend-page-header {
+    align-items: center !important;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--bs-border-color);
+}
+
+.tp-backend-configuration .tp-backend-page-header h2 {
+    font-size: 1.25rem;
+}
+
+.tp-backend-configuration .tp-backend-page-header p {
+    max-width: 46rem;
+}
+
+.tp-backend-configuration .card {
+    border-color: var(--bs-border-color);
+    border-radius: 0.375rem;
+    box-shadow: none;
+}
+
+.tp-backend-configuration .card-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 2.75rem;
+    padding: 0.625rem 0.875rem;
+    background-color: var(--bs-tertiary-bg);
+    border-bottom-color: var(--bs-border-color);
+}
+
+.tp-backend-configuration .card-header h5,
+.tp-backend-configuration .card-body h5 {
+    font-size: 1rem;
+    font-weight: var(--tp-font-weight-h);
+}
+
+.tp-backend-configuration .card-body {
+    padding: 1rem;
+}
+
+.tp-backend-configuration .badge {
+    border-radius: 0.25rem;
+    font-weight: var(--tp-font-weight);
+}
+
+.tp-backend-configuration .badge.text-bg-light,
+.tp-backend-configuration .badge.text-bg-light.text-body {
+    color: var(--bs-emphasis-color) !important;
+    background-color: var(--bs-secondary-bg) !important;
+    border-color: var(--bs-border-color) !important;
+}
+
+html[data-bs-theme="dark"] .tp-backend-configuration .badge.text-bg-light,
+html[data-bs-theme="dark"] .tp-backend-configuration .badge.text-bg-light.text-body {
+    color: #f8f9fa !important;
+    background-color: #30363d !important;
+    border-color: #59636f !important;
+}
+
+.tp-backend-configuration code {
+    padding: 0.075rem 0.25rem !important;
+    color: var(--bs-emphasis-color);
+    background-color: var(--bs-tertiary-bg);
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.25rem;
+    word-break: break-word;
+}
+
+.tp-backend-configuration .tp-kvp-list {
+    grid-template-columns: minmax(8rem, 0.8fr) minmax(12rem, 2fr);
+    max-width: none;
+    margin: 0;
+    row-gap: 0.45rem;
+}
+
+.tp-backend-configuration .tp-kvp-list > li > div:nth-child(1) {
+    color: var(--bs-secondary-color);
+    font-weight: var(--tp-font-weight-h);
+}
+
+.tp-backend-configuration .accordion {
+    border-color: var(--bs-border-color) !important;
+    border-radius: 0.375rem !important;
+}
+
+.tp-backend-configuration .accordion-button {
+    min-height: 2.75rem;
+    padding: 0.625rem 0.875rem !important;
+    color: var(--bs-emphasis-color);
+    background-color: var(--bs-tertiary-bg) !important;
+    box-shadow: none;
+}
+
+.tp-backend-configuration .accordion-button:not(.collapsed) {
+    color: var(--bs-emphasis-color);
+    background-color: var(--bs-secondary-bg) !important;
+}
+
+.tp-backend-configuration .accordion-body {
+    padding: 0.875rem !important;
+}
+
+.tp-backend-configuration .table {
+    --bs-table-hover-bg: var(--bs-tertiary-bg);
+    font-size: 0.92rem;
+}
+
+.tp-backend-configuration .table thead th {
+    color: var(--bs-secondary-color);
+    font-weight: var(--tp-font-weight-h);
+    background-color: var(--bs-tertiary-bg);
+    border-bottom-color: var(--bs-border-color);
+}
+
+.tp-backend-configuration .table td,
+.tp-backend-configuration .table th {
+    padding: 0.55rem 0.75rem;
+}
+
+.tp-backend-configuration .alert {
+    border-radius: 0.375rem;
+}
+
+.tp-backend-configuration .row.g-4 {
+    --bs-gutter-x: 1rem;
+    --bs-gutter-y: 1rem;
+}
+
+.tp-backend-configuration .rounded-pill {
+    border-radius: 0.25rem !important;
+}
+
 /* ----- Testing ----- */
 
 /* ----- Onboarding Progress Indicator ----- */

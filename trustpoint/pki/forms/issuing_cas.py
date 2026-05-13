@@ -18,6 +18,7 @@ from trustpoint_core.serializer import (
     PrivateKeySerializer,
 )
 
+from crypto.application.capabilities import get_active_backend_capability_report
 from crypto.application.service import TrustpointCryptoBackend
 from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
@@ -549,6 +550,15 @@ class IssuingCaAddFileImportSeparateFilesForm(IssuingCaImportMixin, LoggerMixin,
 class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     """Mixin for forms requesting an Issuing CA certificate from remote servers."""
 
+    KEY_TYPE_CHOICES: ClassVar[list[tuple[str, str]]] = [
+        ('RSA-2048', 'RSA 2048'),
+        ('RSA-3072', 'RSA 3072'),
+        ('RSA-4096', 'RSA 4096'),
+        ('ECC-SECP256R1', 'ECC SECP256R1'),
+        ('ECC-SECP384R1', 'ECC SECP384R1'),
+        ('ECC-SECP521R1', 'ECC SECP521R1'),
+    ]
+
     class Meta:
         """Meta class for IssuingCaAddRequestMixin."""
         model = CaModel
@@ -558,18 +568,42 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
 
     key_type = forms.ChoiceField(
         label=_('Key Type'),
-        choices=[
-            ('RSA-2048', 'RSA 2048'),
-            ('RSA-3072', 'RSA 3072'),
-            ('RSA-4096', 'RSA 4096'),
-            ('ECC-SECP256R1', 'ECC SECP256R1'),
-            ('ECC-SECP384R1', 'ECC SECP384R1'),
-            ('ECC-SECP521R1', 'ECC SECP521R1'),
-        ],
+        choices=KEY_TYPE_CHOICES,
         initial='RSA-2048',
         required=True,
         help_text=_('Select the cryptographic key type and parameters'),
     )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize backend-capability-aware key choices."""
+        super().__init__(*args, **kwargs)
+        supported_choices = self._supported_key_type_choices()
+        key_type_field = cast('forms.ChoiceField', self.fields['key_type'])
+        if supported_choices:
+            key_type_field.choices = supported_choices
+            if key_type_field.initial not in {choice[0] for choice in supported_choices}:
+                key_type_field.initial = supported_choices[0][0]
+        else:
+            key_type_field.choices = [('', _('No supported backend algorithms available'))]
+            key_type_field.widget.attrs['disabled'] = 'disabled'
+
+    @classmethod
+    def _key_spec_for_key_type(cls, key_type: str) -> KeySpec:
+        """Map the form key type to a backend key spec."""
+        if key_type.startswith('RSA-'):
+            return RsaKeySpec(key_size=int(key_type.split('-')[1]))
+        curve_name = key_type.split('-')[1]
+        return EcKeySpec(curve=EllipticCurveName(curve_name.lower()))
+
+    @classmethod
+    def _supported_key_type_choices(cls) -> list[tuple[str, str]]:
+        """Return key type choices supported by the active backend."""
+        report = get_active_backend_capability_report()
+        return [
+            (value, label)
+            for value, label in cls.KEY_TYPE_CHOICES
+            if report.supports_key_spec(cls._key_spec_for_key_type(value))
+        ]
 
     def clean(self) -> dict[str, Any]:
         """Validate the form data."""
@@ -577,6 +611,13 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
         remote_host = cleaned_data.get('remote_host')
         remote_port = cleaned_data.get('remote_port')
         remote_path = cleaned_data.get('remote_path')
+        key_type = cleaned_data.get('key_type')
+
+        supported_key_types = {value for value, _label in self._supported_key_type_choices()}
+        if not supported_key_types:
+            self.add_error('key_type', _('The active crypto backend cannot generate any supported issuing-CA key.'))
+        elif key_type not in supported_key_types:
+            self.add_error('key_type', _('The active crypto backend does not support this issuing-CA key type.'))
 
         if remote_host and remote_path:
             try:
@@ -590,13 +631,7 @@ class IssuingCaAddRequestMixin(LoggerMixin, forms.ModelForm[CaModel]):
     def _create_credential(self) -> CredentialModel:
         """Create and return a temporary credential for the CA."""
         key_type = self.cleaned_data['key_type']
-        key_spec: KeySpec
-        if key_type.startswith('RSA-'):
-            rsa_key_size = int(key_type.split('-')[1])
-            key_spec = RsaKeySpec(key_size=rsa_key_size)
-        else:
-            curve_name = key_type.split('-')[1]
-            key_spec = EcKeySpec(curve=EllipticCurveName(curve_name.lower()))
+        key_spec = self._key_spec_for_key_type(key_type)
 
         key_ref = TrustpointCryptoBackend().generate_managed_key(
             alias=self.cleaned_data['unique_name'],

@@ -3,30 +3,34 @@
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING
 
-from cryptography import x509
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from django.core.management.base import BaseCommand, CommandError
+
 from crypto.application.capabilities import (
     BackendCapabilityReport,
     get_active_backend_capability_report,
     normalize_curve_name,
 )
-from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey
-from crypto.application.service import TrustpointCryptoBackend
-from crypto.domain.algorithms import KeyAlgorithm
-from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.application.private_keys import (
+    ManagedECPrivateKey,
+    ManagedRSAPrivateKey,
+    generate_managed_signing_private_key,
+)
 from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
-from django.core.management.base import BaseCommand, CommandError
 from management.models import SecurityConfig
 from management.models.audit_log import AuditLog
 from pki.models import CaModel, CredentialModel
 from pki.util.x509 import CertificateVerifier
-
 from trustpoint.logger import LoggerMixin
 
 from .base_commands import CertificateCreationCommandMixin
+
+if TYPE_CHECKING:
+    from cryptography import x509
 
 
 class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
@@ -75,9 +79,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         if report.supports_rsa_key_size(key_size):
             return
         diagnostics = '; '.join(report.diagnostics) or f'RSA-{key_size} key generation/signing was not reported'
-        raise CommandError(
-            f'The active crypto backend does not support RSA-{key_size} issuing-CA demo keys: {diagnostics}'
-        )
+        msg = f'The active crypto backend does not support RSA-{key_size} issuing-CA demo keys: {diagnostics}'
+        raise CommandError(msg)
 
     def _require_ec_demo_support(self, curve: ec.EllipticCurve) -> None:
         """Fail clearly before trying to create unsupported backend-backed EC demo keys."""
@@ -85,9 +88,8 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         if report.supports_ec_curve(curve):
             return
         diagnostics = '; '.join(report.diagnostics) or f'{curve.name} key generation/signing was not reported'
-        raise CommandError(
-            f'The active crypto backend does not support {curve.name} issuing-CA demo keys: {diagnostics}'
-        )
+        msg = f'The active crypto backend does not support {curve.name} issuing-CA demo keys: {diagnostics}'
+        raise CommandError(msg)
 
     @staticmethod
     def _managed_key_model(private_key: ManagedRSAPrivateKey | ManagedECPrivateKey) -> CryptoManagedKeyModel:
@@ -101,19 +103,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         key_spec: KeySpec,
     ) -> ManagedRSAPrivateKey | ManagedECPrivateKey:
         """Generate a demo private key through the configured crypto backend."""
-        key_ref = TrustpointCryptoBackend().generate_managed_key(
+        return generate_managed_signing_private_key(
             alias=alias,
             key_spec=key_spec,
-            policy=KeyPolicy.managed_signing_key(
-                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
-            ),
         )
-        if key_ref.algorithm is KeyAlgorithm.RSA:
-            return ManagedRSAPrivateKey(key_ref=key_ref)
-        if key_ref.algorithm is KeyAlgorithm.EC:
-            return ManagedECPrivateKey(key_ref=key_ref)
-        msg = f'Unsupported managed demo key algorithm {key_ref.algorithm!r}.'
-        raise CommandError(msg)
 
     def _generate_demo_rsa_issuing_key(self, *, unique_name: str, key_size: int) -> rsa.RSAPrivateKey:
         """Generate a demo issuing-CA RSA key in the configured backend."""
@@ -138,10 +131,11 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         try:
             key.public_key()
         except ValueError as exc:
-            raise CommandError(
+            msg = (
                 f'The active crypto backend generated a {curve.name} key, but Trustpoint could not read the '
                 f'public point back from the provider: {exc}'
-            ) from exc
+            )
+            raise CommandError(msg) from exc
         return key
 
     def _save_managed_generated_issuing_ca(
@@ -275,7 +269,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             )
             return False
 
-    def _audit_ca_created(self, ca: 'CaModel', label: str) -> None:
+    def _audit_ca_created(self, ca: CaModel, label: str) -> None:
         """Log a CA_CREATED audit entry for a CA created by this management command."""
         AuditLog.create_entry(
             operation_type=AuditLog.OperationType.CA_CREATED,
@@ -304,9 +298,9 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         self.log_and_stdout(f'Using CA type: {ca_type}')
 
         self.log_and_stdout('Creating RSA-2048 Root CA, Intermediate CA, and Issuing CA A...')
-        rsa2_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        rsa2_int_ca_key_1 = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-        rsa2_int_ca_key_2 = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        rsa2_root_ca_key = self._generate_demo_rsa_issuing_key(unique_name='root-ca-rsa-2048-sha256', key_size=2048)
+        rsa2_int_ca_key_1 = self._generate_demo_rsa_issuing_key(unique_name='intermediate-ca-a-1', key_size=2048)
+        rsa2_int_ca_key_2 = self._generate_demo_rsa_issuing_key(unique_name='intermediate-ca-a-2', key_size=2048)
         rsa2_issuing_ca_key_1 = self._generate_demo_rsa_issuing_key(unique_name='issuing-ca-a-1', key_size=2048)
         rsa2_issuing_ca_key_2 = self._generate_demo_rsa_issuing_key(unique_name='issuing-ca-a-2', key_size=2048)
         root_validity_days: int = 7300
@@ -355,7 +349,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
             subject_cn='Intermediate CA A-2',
             hash_algorithm=hashes.SHA256(),
             validity_days=intermediate_validity_days,
-            path_length=1, 
+            path_length=1,
         )
         rsa2_int_ca_crl_2 = self.generate_empty_crl(rsa2_int_ca_2, rsa2_int_ca_key_2, hashes.SHA256(), crl_validity_hours=intermediate_validity_days * 24)
         rsa2_int_ca_model_2 = self.save_keyless_ca(
@@ -407,7 +401,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         self.verify_ca_certificate(rsa2_issuing_ca_2, issuer_cert=rsa2_int_ca_2, ca_name='Issuing CA A-2')
 
         self.log_and_stdout('Creating RSA-3072 Root CA and Issuing CA B...')
-        rsa3_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
+        rsa3_root_ca_key = self._generate_demo_rsa_issuing_key(unique_name='root-ca-rsa-3072-sha256', key_size=3072)
         rsa3_issuing_ca_key = self._generate_demo_rsa_issuing_key(unique_name='issuing-ca-b', key_size=3072)
         rsa3_root, _ = self.create_root_ca(
             'Root-CA RSA-3072-SHA256', private_key=rsa3_root_ca_key, hash_algorithm=hashes.SHA256(), validity_days=root_validity_days
@@ -441,7 +435,7 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         self.verify_ca_certificate(rsa3_issuing_ca, issuer_cert=rsa3_root, ca_name='Issuing CA B')
 
         self.log_and_stdout('Creating RSA-4096 Root CA and Issuing CA C...')
-        rsa4_root_ca_key = rsa.generate_private_key(public_exponent=65537, key_size=4096)
+        rsa4_root_ca_key = self._generate_demo_rsa_issuing_key(unique_name='root-ca-rsa-4096-sha256', key_size=4096)
         rsa4_issuing_ca_key = self._generate_demo_rsa_issuing_key(unique_name='issuing-ca-c', key_size=4096)
         rsa4_root, _ = self.create_root_ca(
             'Root-CA RSA-4096-SHA256', private_key=rsa4_root_ca_key, hash_algorithm=hashes.SHA512(), validity_days=root_validity_days
@@ -475,7 +469,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         self.verify_ca_certificate(rsa4_issuing_ca, issuer_cert=rsa4_root, ca_name='Issuing CA C')
 
         self.log_and_stdout('Creating SECP256R1 Root CA and Issuing CA D...')
-        ecc1_root_ca_key = ec.generate_private_key(curve=ec.SECP256R1())
+        ecc1_root_ca_key = self._generate_demo_ec_issuing_key(
+            unique_name='root-ca-secp256r1-sha256',
+            curve=ec.SECP256R1(),
+        )
         ecc1_issuing_ca_key = self._generate_demo_ec_issuing_key(
             unique_name='issuing-ca-d',
             curve=ec.SECP256R1(),
@@ -512,7 +509,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         self.verify_ca_certificate(ecc1_issuing_ca, issuer_cert=ecc1_root, ca_name='Issuing CA D')
 
         self.log_and_stdout('Creating SECP384R1 Root CA and Issuing CA E...')
-        ecc2_root_ca_key = ec.generate_private_key(curve=ec.SECP384R1())
+        ecc2_root_ca_key = self._generate_demo_ec_issuing_key(
+            unique_name='root-ca-secp384r1-sha256',
+            curve=ec.SECP384R1(),
+        )
         ecc2_issuing_ca_key = self._generate_demo_ec_issuing_key(
             unique_name='issuing-ca-e',
             curve=ec.SECP384R1(),
@@ -549,7 +549,10 @@ class Command(CertificateCreationCommandMixin, BaseCommand, LoggerMixin):
         self.verify_ca_certificate(ecc2_issuing_ca, issuer_cert=ecc2_root, ca_name='Issuing CA E')
 
         self.log_and_stdout('Creating SECP521R1 Root CA and Issuing CA F...')
-        ecc3_root_ca_key = ec.generate_private_key(curve=ec.SECP521R1())
+        ecc3_root_ca_key = self._generate_demo_ec_issuing_key(
+            unique_name='root-ca-secp521r1-sha256',
+            curve=ec.SECP521R1(),
+        )
         ecc3_issuing_ca_key = self._generate_demo_ec_issuing_key(
             unique_name='issuing-ca-f',
             curve=ec.SECP521R1(),

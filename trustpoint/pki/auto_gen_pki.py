@@ -6,10 +6,12 @@ import secrets
 import threading
 from typing import TYPE_CHECKING, cast
 
-from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey
-from crypto.application.service import TrustpointCryptoBackend
-from crypto.domain.algorithms import EllipticCurveName, KeyAlgorithm
-from crypto.domain.policies import KeyPolicy, SigningExecutionMode
+from crypto.application.private_keys import (
+    ManagedECPrivateKey,
+    ManagedRSAPrivateKey,
+    generate_managed_signing_private_key,
+)
+from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
 from pki.models import CaModel, CredentialModel, DomainModel, RevokedCertificateModel
@@ -52,20 +54,10 @@ class AutoGenPki(LoggerMixin):
             msg = f'The active crypto backend does not support AutoGenPKI algorithm {key_alg.label}.'
             raise ValueError(msg)
 
-        key_ref = TrustpointCryptoBackend().generate_managed_key(
+        return generate_managed_signing_private_key(
             alias=key_label,
             key_spec=AutoGenPki._key_spec_for_algorithm(key_alg),
-            policy=KeyPolicy.managed_signing_key(
-                signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
-            ),
         )
-        if key_ref.algorithm is KeyAlgorithm.RSA:
-            return ManagedRSAPrivateKey(key_ref=key_ref)
-        if key_ref.algorithm is KeyAlgorithm.EC:
-            return ManagedECPrivateKey(key_ref=key_ref)
-
-        msg = f'Unsupported AutoGenPKI key algorithm {key_alg!r}.'
-        raise ValueError(msg)
 
     @staticmethod
     def _managed_key_model(private_key: ManagedRSAPrivateKey | ManagedECPrivateKey) -> CryptoManagedKeyModel:
