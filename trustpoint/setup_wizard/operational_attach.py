@@ -95,6 +95,28 @@ class OperationalAppSecretMaterial:
 
 
 @dataclass(frozen=True, slots=True)
+class OperationalManagedKeyMaterial:
+    """Managed-key binding metadata read from the target database for validation only."""
+
+    backend_kind: str
+    alias: str
+    provider_label: str
+    algorithm: str
+    public_key_fingerprint_sha256: str
+    signing_execution_mode: str
+    binding: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class OperationalSoftwareBackendMaterial:
+    """Software backend config read from the target database for validation only."""
+
+    encryption_source: str
+    encryption_source_ref: str
+    allow_exportable_private_keys: bool
+
+
+@dataclass(frozen=True, slots=True)
 class CompatibilityCheck:
     """One line in the operator-facing compatibility report."""
 
@@ -550,6 +572,39 @@ class OperationalAttachmentValidator:
 class OperationalTargetInspector:
     """Read metadata from an operational PostgreSQL target without mutating it."""
 
+    def inspect_managed_key_material(
+        self,
+        database: OperationalDatabaseConfig,
+    ) -> tuple[OperationalManagedKeyMaterial, ...]:
+        """Read managed-key binding material needed for live backend reconciliation."""
+        with psycopg.connect(
+            dbname=database.name,
+            user=database.user,
+            password=database.password,
+            host=database.host,
+            port=database.port,
+            connect_timeout=5,
+        ) as connection, connection.cursor() as cursor:
+            crypto_backend_kind = self._read_active_crypto_backend_kind(cursor)
+            if crypto_backend_kind is None:
+                return ()
+            return self._read_managed_key_material(cursor, crypto_backend_kind=crypto_backend_kind)
+
+    def inspect_software_backend_material(
+        self,
+        database: OperationalDatabaseConfig,
+    ) -> OperationalSoftwareBackendMaterial | None:
+        """Read active software backend config needed for software-key reconciliation."""
+        with psycopg.connect(
+            dbname=database.name,
+            user=database.user,
+            password=database.password,
+            host=database.host,
+            port=database.port,
+            connect_timeout=5,
+        ) as connection, connection.cursor() as cursor:
+            return self._read_software_backend_material(cursor)
+
     def inspect_app_secret_material(self, database: OperationalDatabaseConfig) -> OperationalAppSecretMaterial:
         """Read app-secret material needed for pre-attach decryptability validation."""
         with psycopg.connect(
@@ -703,6 +758,165 @@ class OperationalTargetInspector:
         cursor.execute(f'SELECT COUNT(*) FROM {table_name}')  # noqa: S608 - table name is a fixed caller literal.
         row = cursor.fetchone()
         return int(row[0]) if row else 0
+
+    @classmethod
+    def _read_managed_key_material(
+        cls,
+        cursor: Any,
+        *,
+        crypto_backend_kind: str,
+    ) -> tuple[OperationalManagedKeyMaterial, ...]:
+        """Read backend-specific managed-key binding rows for live reconciliation."""
+        if not cls._table_exists(cursor, table_name='crypto_managed_key'):
+            return ()
+
+        if crypto_backend_kind == 'pkcs11':
+            return cls._read_pkcs11_managed_key_material(cursor)
+        if crypto_backend_kind == 'software':
+            return cls._read_software_managed_key_material(cursor)
+        if crypto_backend_kind == 'rest':
+            return cls._read_rest_managed_key_material(cursor)
+        return ()
+
+    @classmethod
+    def _read_pkcs11_managed_key_material(cls, cursor: Any) -> tuple[OperationalManagedKeyMaterial, ...]:
+        """Read PKCS#11 managed-key bindings from the target database."""
+        if not cls._table_exists(cursor, table_name='crypto_managed_key_pkcs11_binding'):
+            return ()
+        cursor.execute(
+            """
+            SELECT
+                managed_key.alias,
+                managed_key.provider_label,
+                managed_key.algorithm,
+                managed_key.public_key_fingerprint_sha256,
+                managed_key.signing_execution_mode,
+                binding.key_id_hex
+            FROM crypto_managed_key managed_key
+            JOIN crypto_managed_key_pkcs11_binding binding
+              ON binding.managed_key_id = managed_key.id
+            ORDER BY managed_key.alias ASC
+            """
+        )
+        return tuple(
+            OperationalManagedKeyMaterial(
+                backend_kind='pkcs11',
+                alias=str(row[0]),
+                provider_label=str(row[1] or ''),
+                algorithm=str(row[2]),
+                public_key_fingerprint_sha256=str(row[3]),
+                signing_execution_mode=str(row[4]),
+                binding={'key_id_hex': str(row[5])},
+            )
+            for row in cursor.fetchall()
+        )
+
+    @classmethod
+    def _read_software_managed_key_material(cls, cursor: Any) -> tuple[OperationalManagedKeyMaterial, ...]:
+        """Read software managed-key bindings from the target database."""
+        if not cls._table_exists(cursor, table_name='crypto_managed_key_software_binding'):
+            return ()
+        cursor.execute(
+            """
+            SELECT
+                managed_key.alias,
+                managed_key.provider_label,
+                managed_key.algorithm,
+                managed_key.public_key_fingerprint_sha256,
+                managed_key.signing_execution_mode,
+                binding.key_handle,
+                binding.encrypted_private_key_pkcs8_der,
+                binding.encryption_metadata
+            FROM crypto_managed_key managed_key
+            JOIN crypto_managed_key_software_binding binding
+              ON binding.managed_key_id = managed_key.id
+            ORDER BY managed_key.alias ASC
+            """
+        )
+        return tuple(
+            OperationalManagedKeyMaterial(
+                backend_kind='software',
+                alias=str(row[0]),
+                provider_label=str(row[1] or ''),
+                algorithm=str(row[2]),
+                public_key_fingerprint_sha256=str(row[3]),
+                signing_execution_mode=str(row[4]),
+                binding={
+                    'key_handle': str(row[5]),
+                    'encrypted_private_key_pkcs8_der': bytes(row[6] or b''),
+                    'encryption_metadata': dict(row[7] or {}),
+                },
+            )
+            for row in cursor.fetchall()
+        )
+
+    @classmethod
+    def _read_rest_managed_key_material(cls, cursor: Any) -> tuple[OperationalManagedKeyMaterial, ...]:
+        """Read REST managed-key bindings from the target database."""
+        if not cls._table_exists(cursor, table_name='crypto_managed_key_rest_binding'):
+            return ()
+        cursor.execute(
+            """
+            SELECT
+                managed_key.alias,
+                managed_key.provider_label,
+                managed_key.algorithm,
+                managed_key.public_key_fingerprint_sha256,
+                managed_key.signing_execution_mode,
+                binding.remote_key_id,
+                binding.remote_key_version
+            FROM crypto_managed_key managed_key
+            JOIN crypto_managed_key_rest_binding binding
+              ON binding.managed_key_id = managed_key.id
+            ORDER BY managed_key.alias ASC
+            """
+        )
+        return tuple(
+            OperationalManagedKeyMaterial(
+                backend_kind='rest',
+                alias=str(row[0]),
+                provider_label=str(row[1] or ''),
+                algorithm=str(row[2]),
+                public_key_fingerprint_sha256=str(row[3]),
+                signing_execution_mode=str(row[4]),
+                binding={
+                    'remote_key_id': str(row[5]),
+                    'remote_key_version': str(row[6] or ''),
+                },
+            )
+            for row in cursor.fetchall()
+        )
+
+    @classmethod
+    def _read_software_backend_material(cls, cursor: Any) -> OperationalSoftwareBackendMaterial | None:
+        """Read active software backend configuration from the target database."""
+        if (
+            not cls._table_exists(cursor, table_name='crypto_provider_profile')
+            or not cls._table_exists(cursor, table_name='crypto_provider_software_config')
+        ):
+            return None
+        cursor.execute(
+            """
+            SELECT
+                software_config.encryption_source,
+                software_config.encryption_source_ref,
+                software_config.allow_exportable_private_keys
+            FROM crypto_provider_profile profile
+            JOIN crypto_provider_software_config software_config
+              ON software_config.profile_id = profile.id
+            WHERE profile.active = TRUE
+            ORDER BY profile.id ASC
+            LIMIT 1
+            """
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return OperationalSoftwareBackendMaterial(
+            encryption_source=str(row[0]),
+            encryption_source_ref=str(row[1] or ''),
+            allow_exportable_private_keys=bool(row[2]),
+        )
 
     @classmethod
     def _read_managed_key_binding_count(cls, cursor: Any, *, crypto_backend_kind: str | None) -> int:

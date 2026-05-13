@@ -45,7 +45,15 @@ from appsecrets.service import (
     get_app_secret_service,
 )
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
+from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSelector
+from crypto.adapters.software.backend import SoftwareBackend
+from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
+from crypto.adapters.software.config import SoftwareProviderProfile
+from crypto.domain.algorithms import KeyAlgorithm
+from crypto.domain.errors import CryptoError
+from crypto.domain.policies import SigningExecutionMode
+from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.models import (
     BackendKind,
     CryptoProviderPkcs11ConfigModel,
@@ -113,6 +121,8 @@ from .models import SetupWizardCompletedModel, SetupWizardConfigModel
 if TYPE_CHECKING:
     from django.utils.functional import Promise
     from trustpoint_core.serializer import CertificateSerializer
+
+    from crypto.application.provider_backend import ManagedKeyBackendAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -2676,6 +2686,216 @@ def app_secret_decryptability_checks(  # noqa: PLR0911
     )
 
 
+def _build_staged_pkcs11_managed_key_backend(config_model: SetupWizardConfigModel) -> Pkcs11Backend:
+    """Build a PKCS#11 backend from the staged wizard config for read-only key verification."""
+    module_path, pin_file, _update_fields = apply_pkcs11_probe_fallbacks(config_model)
+    token_label = (config_model.fresh_install_pkcs11_token_label or '').strip() or None
+    token_serial = (config_model.fresh_install_pkcs11_token_serial or '').strip() or None
+    slot_id = config_model.fresh_install_pkcs11_slot_id
+
+    validate_pkcs11_probe_inputs(
+        module_path=module_path,
+        pin_file=pin_file,
+        token_label=token_label,
+        slot_id=slot_id,
+    )
+    profile = build_pkcs11_probe_profile(
+        profile_name='setup-wizard-pkcs11-managed-key-reconciliation',
+        module_path=module_path,
+        pin_file=pin_file,
+        token_selector=Pkcs11TokenSelector(token_label=token_label, token_serial=token_serial, slot_id=slot_id),
+    )
+    return Pkcs11Backend(profile=profile)
+
+
+def _managed_key_binding_from_material(material: Any) -> object:
+    """Build an adapter binding from target DB material."""
+    algorithm = KeyAlgorithm(material.algorithm)
+    signing_execution_mode = SigningExecutionMode(material.signing_execution_mode)
+    provider_label = material.provider_label or None
+
+    if material.backend_kind == BackendKind.PKCS11.value:
+        return Pkcs11ManagedKeyBinding(
+            key_id=bytes.fromhex(str(material.binding['key_id_hex'])),
+            algorithm=algorithm,
+            public_key_fingerprint_sha256=material.public_key_fingerprint_sha256,
+            signing_execution_mode=signing_execution_mode,
+            provider_label=provider_label,
+        )
+
+    if material.backend_kind == BackendKind.SOFTWARE.value:
+        return SoftwareManagedKeyBinding(
+            key_handle=str(material.binding['key_handle']),
+            algorithm=algorithm,
+            encrypted_private_key_pkcs8_der=bytes(material.binding['encrypted_private_key_pkcs8_der']),
+            encryption_metadata=dict(material.binding.get('encryption_metadata') or {}),
+            public_key_fingerprint_sha256=material.public_key_fingerprint_sha256,
+            signing_execution_mode=signing_execution_mode,
+            provider_label=provider_label,
+        )
+
+    err_msg = f'No live managed-key binding adapter exists for backend {material.backend_kind!r}.'
+    raise DjangoValidationError(err_msg)
+
+
+def _software_backend_for_target(target: OperationalTargetConfig) -> SoftwareBackend:
+    """Build a software backend from target DB configuration for key verification."""
+    software_material = OperationalTargetInspector().inspect_software_backend_material(target.database)
+    if software_material is None:
+        err_msg = 'The target database does not contain active software backend configuration.'
+        raise DjangoValidationError(err_msg)
+    return SoftwareBackend(
+        profile=SoftwareProviderProfile(
+            name='setup-wizard-software-managed-key-reconciliation',
+            encryption_source=software_material.encryption_source,
+            encryption_source_ref=software_material.encryption_source_ref or None,
+            allow_exportable_private_keys=software_material.allow_exportable_private_keys,
+        )
+    )
+
+
+def _managed_key_reconciliation_backend(
+    *,
+    config_model: SetupWizardConfigModel,
+    target: OperationalTargetConfig,
+    backend_kind: str,
+) -> Pkcs11Backend | SoftwareBackend:
+    """Build the staged backend used for live managed-key reconciliation."""
+    if backend_kind == BackendKind.PKCS11.value:
+        if config_model.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            err_msg = 'The target managed keys are PKCS#11-backed, but the staged backend is not HSM storage.'
+            raise DjangoValidationError(err_msg)
+        return _build_staged_pkcs11_managed_key_backend(config_model)
+
+    if backend_kind == BackendKind.SOFTWARE.value:
+        return _software_backend_for_target(target)
+
+    err_msg = f'Live managed-key reconciliation is not implemented for backend {backend_kind!r}.'
+    raise DjangoValidationError(err_msg)
+
+
+def managed_key_backend_reconciliation_checks(  # noqa: C901, PLR0911, PLR0912
+    *,
+    config_model: SetupWizardConfigModel,
+    target: OperationalTargetConfig,
+    snapshot: OperationalStateSnapshot,
+) -> tuple[CompatibilityCheck, ...]:
+    """Validate that DB managed-key bindings resolve to matching live backend objects."""
+    if snapshot.managed_key_count == 0:
+        return (
+            CompatibilityCheck(
+                code='managed_keys.backend_reconciliation_skipped',
+                label='Managed Keys',
+                severity=CompatibilitySeverity.INFO,
+                message='No managed keys exist in the target database, so live backend reconciliation was skipped.',
+            ),
+        )
+
+    if not snapshot.crypto_backend_kind:
+        return (
+            CompatibilityCheck(
+                code='managed_keys.backend_reconciliation_skipped',
+                label='Managed Keys',
+                severity=CompatibilitySeverity.WARNING,
+                message='Managed-key reconciliation could not run because the target backend kind is unknown.',
+            ),
+        )
+
+    if target.crypto_backend.backend_kind != snapshot.crypto_backend_kind:
+        return (
+            CompatibilityCheck(
+                code='managed_keys.backend_reconciliation_skipped',
+                label='Managed Keys',
+                severity=CompatibilitySeverity.WARNING,
+                message='Managed-key reconciliation was skipped because the staged backend kind does not match.',
+            ),
+        )
+
+    try:
+        materials = OperationalTargetInspector().inspect_managed_key_material(target.database)
+    except (OSError, RuntimeError, TypeError, ValueError, psycopg.Error) as exception:
+        error_detail = str(exception).strip() or type(exception).__name__
+        return (
+            CompatibilityCheck(
+                code='managed_keys.backend_reconciliation_failed',
+                label='Managed Keys',
+                severity=CompatibilitySeverity.ERROR,
+                message=f'Could not read managed-key binding material from the target database: {error_detail}',
+            ),
+        )
+
+    if not materials:
+        return (
+            CompatibilityCheck(
+                code='managed_keys.backend_reconciliation_failed',
+                label='Managed Keys',
+                severity=CompatibilitySeverity.ERROR,
+                message='The target database has managed keys, but no backend binding material could be read.',
+            ),
+        )
+
+    try:
+        backend = _managed_key_reconciliation_backend(
+            config_model=config_model,
+            target=target,
+            backend_kind=snapshot.crypto_backend_kind,
+        )
+    except DjangoValidationError as exception:
+        error_detail = '; '.join(exception.messages) if hasattr(exception, 'messages') else str(exception)
+        return (
+            CompatibilityCheck(
+                code='managed_keys.backend_reconciliation_failed',
+                label='Managed Keys',
+                severity=CompatibilitySeverity.ERROR,
+                message=f'Could not initialize live backend reconciliation: {error_detail}',
+            ),
+        )
+
+    missing_count = 0
+    mismatch_count = 0
+    error_count = 0
+    verification_backend = cast('ManagedKeyBackendAdapter', backend)
+    try:
+        for material in materials:
+            try:
+                binding = _managed_key_binding_from_material(material)
+                verification = verification_backend.verify_managed_key(binding)
+            except (CryptoError, DjangoValidationError, KeyError, TypeError, ValueError):
+                error_count += 1
+                continue
+
+            if verification.status == ManagedKeyVerificationStatus.MISSING:
+                missing_count += 1
+            elif verification.status == ManagedKeyVerificationStatus.MISMATCH:
+                mismatch_count += 1
+            elif verification.status != ManagedKeyVerificationStatus.PRESENT:
+                error_count += 1
+    finally:
+        backend.close()
+
+    if missing_count or mismatch_count or error_count:
+        return (
+            CompatibilityCheck(
+                code='managed_keys.backend_reconciliation_failed',
+                label='Managed Keys',
+                severity=CompatibilitySeverity.ERROR,
+                message=(
+                    f'Live backend reconciliation failed for {missing_count} missing, '
+                    f'{mismatch_count} mismatched, and {error_count} unreadable managed keys.'
+                ),
+            ),
+        )
+
+    return (
+        CompatibilityCheck(
+            code='managed_keys.backend_reconciliation_ok',
+            label='Managed Keys',
+            severity=CompatibilitySeverity.INFO,
+            message=f'All {len(materials)} managed-key bindings resolve to matching live backend public keys.',
+        ),
+    )
+
+
 class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
     """Connect-existing summary step for inspection and explicit attach."""
 
@@ -2738,6 +2958,11 @@ class ConnectExistingSummaryView(ConnectExistingWizardMixin[EmptyForm]):
             (
                 *attach_backend_readiness_checks(config_model),
                 *app_secret_decryptability_checks(
+                    config_model=config_model,
+                    target=target,
+                    snapshot=snapshot,
+                ),
+                *managed_key_backend_reconciliation_checks(
                     config_model=config_model,
                     target=target,
                     snapshot=snapshot,

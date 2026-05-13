@@ -5,6 +5,7 @@
 from unittest.mock import patch
 
 from appsecrets.service import AppSecretConfigurationError
+from crypto.domain.refs import ManagedKeyVerificationStatus
 from setup_wizard.models import SetupWizardConfigModel
 from setup_wizard.operational_attach import (
     CompatibilitySeverity,
@@ -13,10 +14,11 @@ from setup_wizard.operational_attach import (
     OperationalAttachMode,
     OperationalBackendBinding,
     OperationalDatabaseConfig,
+    OperationalManagedKeyMaterial,
     OperationalStateSnapshot,
     OperationalTargetConfig,
 )
-from setup_wizard.views import app_secret_decryptability_checks
+from setup_wizard.views import app_secret_decryptability_checks, managed_key_backend_reconciliation_checks
 
 
 def _target(
@@ -302,4 +304,98 @@ def test_pkcs11_app_secret_decryptability_blocks_when_unwrap_fails() -> None:
         )
 
     assert checks[0].code == 'appsecret.decryptability_failed'
+    assert checks[0].severity == CompatibilitySeverity.ERROR
+
+
+def _pkcs11_key_material(alias: str = 'ca/root') -> OperationalManagedKeyMaterial:
+    return OperationalManagedKeyMaterial(
+        backend_kind='pkcs11',
+        alias=alias,
+        provider_label=alias,
+        algorithm='rsa',
+        public_key_fingerprint_sha256='a' * 64,
+        signing_execution_mode='complete_backend',
+        binding={'key_id_hex': '01020304'},
+    )
+
+
+def _pkcs11_snapshot() -> OperationalStateSnapshot:
+    return OperationalStateSnapshot(
+        app_version='1.0.0',
+        setup_completed=True,
+        crypto_backend_kind='pkcs11',
+        app_secret_backend_kind='pkcs11',
+        managed_key_count=1,
+        managed_key_binding_count=1,
+        app_secret_material_present=True,
+    )
+
+
+def test_managed_key_reconciliation_accepts_matching_backend_key() -> None:
+    config_model = SetupWizardConfigModel(
+        crypto_storage=SetupWizardConfigModel.CryptoStorageType.HsmStorage,
+        fresh_install_pkcs11_token_label='Trustpoint-SoftHSM',
+    )
+
+    with patch(
+        'setup_wizard.views.OperationalTargetInspector.inspect_managed_key_material',
+        return_value=(_pkcs11_key_material(),),
+    ), patch(
+        'setup_wizard.views.apply_pkcs11_probe_fallbacks',
+        return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
+    ), patch('setup_wizard.views.Pkcs11Backend') as backend_class:
+        backend_class.return_value.verify_managed_key.return_value.status = ManagedKeyVerificationStatus.PRESENT
+        checks = managed_key_backend_reconciliation_checks(
+            config_model=config_model,
+            target=_target(crypto_backend_kind='pkcs11', app_secret_backend_kind='pkcs11'),
+            snapshot=_pkcs11_snapshot(),
+        )
+
+    assert checks[0].code == 'managed_keys.backend_reconciliation_ok'
+    assert checks[0].severity == CompatibilitySeverity.INFO
+    backend_class.return_value.verify_managed_key.assert_called_once()
+    backend_class.return_value.close.assert_called_once_with()
+
+
+def test_managed_key_reconciliation_blocks_missing_backend_key() -> None:
+    config_model = SetupWizardConfigModel(
+        crypto_storage=SetupWizardConfigModel.CryptoStorageType.HsmStorage,
+        fresh_install_pkcs11_token_label='Trustpoint-SoftHSM',
+    )
+
+    with patch(
+        'setup_wizard.views.OperationalTargetInspector.inspect_managed_key_material',
+        return_value=(_pkcs11_key_material(),),
+    ), patch(
+        'setup_wizard.views.apply_pkcs11_probe_fallbacks',
+        return_value=('/usr/lib/pkcs11.so', '/run/pin.txt', []),
+    ), patch('setup_wizard.views.Pkcs11Backend') as backend_class:
+        backend_class.return_value.verify_managed_key.return_value.status = ManagedKeyVerificationStatus.MISSING
+        checks = managed_key_backend_reconciliation_checks(
+            config_model=config_model,
+            target=_target(crypto_backend_kind='pkcs11', app_secret_backend_kind='pkcs11'),
+            snapshot=_pkcs11_snapshot(),
+        )
+
+    assert checks[0].code == 'managed_keys.backend_reconciliation_failed'
+    assert checks[0].severity == CompatibilitySeverity.ERROR
+
+
+def test_managed_key_reconciliation_blocks_when_binding_material_is_missing() -> None:
+    config_model = SetupWizardConfigModel(
+        crypto_storage=SetupWizardConfigModel.CryptoStorageType.HsmStorage,
+        fresh_install_pkcs11_token_label='Trustpoint-SoftHSM',
+    )
+
+    with patch(
+        'setup_wizard.views.OperationalTargetInspector.inspect_managed_key_material',
+        return_value=(),
+    ):
+        checks = managed_key_backend_reconciliation_checks(
+            config_model=config_model,
+            target=_target(crypto_backend_kind='pkcs11', app_secret_backend_kind='pkcs11'),
+            snapshot=_pkcs11_snapshot(),
+        )
+
+    assert checks[0].code == 'managed_keys.backend_reconciliation_failed'
     assert checks[0].severity == CompatibilitySeverity.ERROR
