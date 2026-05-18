@@ -13,8 +13,6 @@ from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
-    PrivateKeyLocation,
-    PrivateKeyReference,
     PrivateKeySerializer,
 )
 
@@ -24,7 +22,6 @@ from crypto.domain.algorithms import EllipticCurveName
 from crypto.domain.policies import KeyPolicy, SigningExecutionMode
 from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec
 from crypto.models import CryptoManagedKeyModel
-from crypto.runtime import configured_private_key_location
 from onboarding.authorization import PermittedProtocolsAuthorization
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
 from pki.authorization import PkiSecurityAuthorization
@@ -38,11 +35,6 @@ from trustpoint.logger import LoggerMixin
 from util.field import UniqueNameValidator, get_certificate_name
 from util.validation import ValidationError as UtilValidationError
 from util.validation import validate_remote_ca_connection
-
-
-def get_private_key_location_from_config() -> PrivateKeyLocation:
-    """Determine the appropriate PrivateKeyLocation from the configured crypto backend."""
-    return configured_private_key_location()
 
 
 def get_ca_type_from_config() -> CaModel.CaTypeChoice:
@@ -188,18 +180,16 @@ class IssuingCaImportMixin:
         return cert, pk
 
     def _prepare_credential_serializer(
-        self, credential_serializer: CredentialSerializer, unique_name: str | None, pk: Any
+        self, credential_serializer: CredentialSerializer, _unique_name: str | None, _pk: Any
     ) -> None:
-        """Prepares the credential serializer with private key reference."""
+        """Reject legacy serializer-level private-key placement."""
         if credential_serializer.private_key is None:
             self._raise_validation_error('Private key is missing from credential serializer.')
 
-        private_key_location = get_private_key_location_from_config()
-        credential_serializer.private_key_reference = (
-            PrivateKeyReference.from_private_key(
-                private_key=pk,
-                key_label=unique_name,
-                location=private_key_location
+        raise ValidationError(
+            _(
+                'Importing private-key-backed issuing CAs is disabled. '
+                'Generate the CA key through the configured crypto backend instead.'
             )
         )
 
@@ -310,26 +300,25 @@ class IssuingCaAddFileImportPkcs12Form(IssuingCaImportMixin, LoggerMixin, forms.
         return pkcs12_raw, pkcs12_password
 
     def _parse_and_prepare_credential(
-        self, pkcs12_raw: bytes, pkcs12_password: bytes | None, unique_name: str | None
+        self, pkcs12_raw: bytes, pkcs12_password: bytes | None, _unique_name: str | None
     ) -> CredentialSerializer:
         """Parses the PKCS#12 file and prepares the credential serializer."""
         try:
             credential_serializer = CredentialSerializer.from_pkcs12_bytes(pkcs12_raw, pkcs12_password)
             if credential_serializer.private_key is None:
                 self._raise_validation_error('Private key is missing from credential serializer.')
-            private_key_location = get_private_key_location_from_config()
-            credential_serializer.private_key_reference = (
-                PrivateKeyReference.from_private_key(
-                    private_key=credential_serializer.private_key,
-                    key_label=unique_name,
-                    location=private_key_location
-                )
-            )
+        except ValidationError:
+            raise
         except Exception as exception:
             err_msg = _('Failed to parse and load the uploaded file. Either wrong password or corrupted file.')
             raise ValidationError(err_msg) from exception
 
-        return credential_serializer
+        raise ValidationError(
+            _(
+                'Importing private-key-backed issuing CAs is disabled. '
+                'Generate the CA key through the configured crypto backend instead.'
+            )
+        )
 
     def _validate_ca_certificate_from_serializer(self, credential_serializer: CredentialSerializer) -> x509.Certificate:
         """Validates that the certificate is a CA certificate."""

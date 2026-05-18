@@ -135,6 +135,8 @@ class TestGetPrivateKeyLocationFromConfig:
         with patch('signer.forms.configured_private_key_location', return_value=PrivateKeyLocation.HSM_PROVIDED):
             location = get_private_key_location_from_config()
         assert location == PrivateKeyLocation.HSM_PROVIDED
+
+
 @pytest.mark.django_db
 class TestSignerAddMethodSelectForm:
     """Test cases for SignerAddMethodSelectForm."""

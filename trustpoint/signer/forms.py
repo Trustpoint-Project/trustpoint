@@ -24,7 +24,7 @@ from util.field import UniqueNameValidator, get_certificate_name
 
 
 def get_private_key_location_from_config() -> PrivateKeyLocation:
-    """Determine the appropriate PrivateKeyLocation from the configured crypto backend."""
+    """Determine the private-key location used by legacy signer imports."""
     return configured_private_key_location()
 
 

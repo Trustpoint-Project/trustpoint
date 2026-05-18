@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from pki.models.credential import (
     CertificateChainOrderModel,
     CredentialAlreadyExistsError,
+    CredentialModel,
     IDevIDReferenceModel,
 )
 
@@ -24,12 +25,26 @@ class TestCredentialAlreadyExistsError:
     def test_error_can_be_raised(self) -> None:
         """Test that the error can be raised and caught."""
         with pytest.raises(CredentialAlreadyExistsError):
-            raise CredentialAlreadyExistsError()
+            raise CredentialAlreadyExistsError
 
     def test_error_message(self) -> None:
         """Test that error has the correct message."""
         error = CredentialAlreadyExistsError()
         assert error.messages[0] == 'Credential already exists.'
+
+
+class TestCredentialModelBackendManagedKeys:
+    """Tests for the managed-key-only credential boundary."""
+
+    def test_signing_credentials_reject_raw_private_key_storage(self) -> None:
+        """Trustpoint signing credentials must be backed by the crypto backend."""
+        credential = CredentialModel(
+            credential_type=CredentialModel.CredentialTypeChoice.ISSUING_CA,
+            private_key='-----BEGIN PRIVATE KEY-----\nlegacy\n-----END PRIVATE KEY-----',
+        )
+
+        with pytest.raises(ValidationError, match='configured crypto backend'):
+            credential.clean()
 
 
 @pytest.mark.django_db

@@ -13,7 +13,6 @@ from trustpoint_core.serializer import (
     CertificateCollectionSerializer,
     CertificateSerializer,
     CredentialSerializer,
-    PrivateKeyLocation,
     PrivateKeySerializer,
 )
 
@@ -73,6 +72,13 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         DEV_OWNER_ID = 4, _('DevOwnerID')
         SIGNER = 5, _('Signer')
 
+    BACKEND_MANAGED_SIGNING_TYPES: ClassVar[frozenset[CredentialTypeChoice]] = frozenset(
+        {
+            CredentialTypeChoice.ROOT_CA,
+            CredentialTypeChoice.ISSUING_CA,
+        }
+    )
+
     credential_type = models.IntegerField(verbose_name=_('Credential Type'), choices=CredentialTypeChoice)
     private_key = EncryptedCharField(verbose_name=_('Private key (PEM)'), max_length=9500, default='', blank=True)
     managed_private_key = models.ForeignKey(
@@ -114,6 +120,17 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
 
     def clean(self) -> None:
         """Validates the CredentialModel instance."""
+        if self.private_key and self.managed_private_key_id is not None:
+            exc_msg = 'A credential cannot store both raw private-key PEM and a managed backend private key.'
+            raise ValidationError(exc_msg)
+
+        if self.private_key and self.credential_type in self.BACKEND_MANAGED_SIGNING_TYPES:
+            exc_msg = (
+                'Trustpoint signing credentials must use the configured crypto backend. '
+                'Raw private-key PEM storage is only allowed for exported end-entity/TLS material.'
+            )
+            raise ValidationError(exc_msg)
+
         qs = self.primarycredentialcertificate_set.filter(is_primary=True)
         if qs.count() > 1:
             exc_msg = 'A credential can only have one primary certificate.'
@@ -181,7 +198,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
             credential_type
         )
         certificate = cls._validate_and_save_certificate(normalized_credential_serializer)
-        private_key_pem = cls._process_private_key(normalized_credential_serializer)
+        private_key_pem = cls._process_private_key(normalized_credential_serializer, credential_type)
         credential_model = cls._create_credential_model(certificate, credential_type, private_key_pem)
         additional_certificates = list(reversed(normalized_credential_serializer.additional_certificates))
         cls._save_additional_certificates(
@@ -213,6 +230,7 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
     @staticmethod
     def _process_private_key(
         normalized_credential_serializer: CredentialSerializer,
+        credential_type: CredentialModel.CredentialTypeChoice,
     ) -> str:
         """Extract a software private key from a normalized serializer.
 
@@ -221,15 +239,21 @@ class CredentialModel(LoggerMixin, CustomDeleteActionModel):
         imports or generates keys through backend-specific paths.
         """
         private_key_reference = normalized_credential_serializer.private_key_reference
-        if private_key_reference is not None and private_key_reference.location != PrivateKeyLocation.SOFTWARE:
+        if private_key_reference is not None and credential_type in CredentialModel.BACKEND_MANAGED_SIGNING_TYPES:
             msg = (
-                'Serializer-level non-software private-key references are no longer supported. '
+                'Serializer-level private-key references are no longer supported for Trustpoint signing credentials. '
                 'Use CryptoManagedKeyModel-backed credentials instead.'
             )
             raise ValueError(msg)
 
         private_key_serializer = normalized_credential_serializer.get_private_key_serializer()
         if private_key_serializer:
+            if credential_type in CredentialModel.BACKEND_MANAGED_SIGNING_TYPES:
+                msg = (
+                    'Trustpoint signing credentials must be generated or imported through the configured '
+                    'crypto backend before being linked to a CredentialModel.'
+                )
+                raise ValueError(msg)
             return private_key_serializer.as_pkcs8_pem().decode()
         return ''
 

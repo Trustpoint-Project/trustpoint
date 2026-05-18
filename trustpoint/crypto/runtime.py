@@ -32,7 +32,7 @@ def configured_backend_kind() -> BackendKind | None:
 
 
 def configured_private_key_location() -> PrivateKeyLocation:
-    """Map the configured backend kind to the application-facing private-key location."""
+    """Map the configured backend kind for legacy signer import forms."""
     backend_kind = configured_backend_kind()
     if backend_kind == BackendKind.SOFTWARE:
         return PrivateKeyLocation.SOFTWARE

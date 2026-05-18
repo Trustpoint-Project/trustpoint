@@ -17,11 +17,9 @@ from cryptography.x509.oid import NameOID
 from cryptography.x509.verification import PolicyBuilder, Store
 from trustpoint_core.crypto_types import AllowedCertSignHashAlgos
 from trustpoint_core.oid import NamedCurve
-from trustpoint_core.serializer import CredentialSerializer, PrivateKeyLocation, PrivateKeyReference
 
 from crypto.application.private_keys import ManagedECPrivateKey, ManagedRSAPrivateKey
-from crypto.models import BackendKind, CryptoManagedKeyModel
-from crypto.runtime import configured_backend_kind
+from crypto.models import CryptoManagedKeyModel
 from management.models import SecurityConfig
 from pki.models import CaModel, CredentialModel
 from pki.util.keys import CryptographyUtils
@@ -327,44 +325,11 @@ class CertificateGenerator:
             issuing_ca.save(update_fields=['chain_truststore'])
             return issuing_ca
 
-        issuing_ca_credential_serializer = CredentialSerializer(
-            private_key=private_key,
-            certificate=issuing_ca_cert,
-            additional_certificates=chain
+        msg = (
+            'Issuing CA private keys must be managed by the configured Trustpoint crypto backend. '
+            'Use generate_managed_signing_private_key() or TrustpointCryptoBackend.generate_managed_key() first.'
         )
-
-        # CA/business classification must not decide backend placement.
-        # The configured Trustpoint backend determines where private keys live.
-        backend_kind = configured_backend_kind()
-        if backend_kind != BackendKind.SOFTWARE:
-            msg = (
-                'Raw software private keys cannot be saved while Trustpoint is configured for a managed '
-                'crypto backend. Generate or import the key through TrustpointCryptoBackend first.'
-            )
-            raise ValueError(msg)
-        private_key_location = PrivateKeyLocation.SOFTWARE
-
-        if not issuing_ca_credential_serializer.private_key:
-            err_msg = 'Issuing CA credential serializer must have a private key before saving.'
-            raise ValueError(err_msg)
-        issuing_ca_credential_serializer.private_key_reference = (
-            PrivateKeyReference.from_private_key(
-                private_key=issuing_ca_credential_serializer.private_key,
-                key_label=unique_name,
-                location=private_key_location
-            )
-        )
-
-        issuing_ca = CaModel.create_new_issuing_ca(
-            credential_serializer=issuing_ca_credential_serializer,
-            ca_type=ca_type,
-            unique_name=unique_name,
-            parent_ca=parent_ca
-        )
-
-        logger.info("Issuing CA '%s' saved successfully.", unique_name)
-
-        return issuing_ca
+        raise ValueError(msg)
 
     @staticmethod
     def save_keyless_ca(

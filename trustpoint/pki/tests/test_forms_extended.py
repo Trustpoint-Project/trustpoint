@@ -7,7 +7,6 @@ from unittest.mock import Mock, patch
 import pytest
 from django import forms
 from django.core.files.uploadedfile import SimpleUploadedFile
-from trustpoint_core.serializer import PrivateKeyLocation
 
 from pki.forms import (
     CertProfileConfigForm,
@@ -20,42 +19,10 @@ from pki.forms import (
     ProfileBasedFormFieldBuilder,
     TruststoreAddForm,
     TruststoreDownloadForm,
-    get_private_key_location_from_config,
 )
 from pki.models import DevIdRegistration
 from pki.models.domain import DomainModel
 from pki.models.truststore import TruststoreModel
-
-
-class TestGetPrivateKeyLocationFromConfig:
-    """Test the get_private_key_location_from_config function."""
-
-    def test_returns_hsm_provided_for_softhsm(self):
-        """Test that HSM_PROVIDED is returned for a configured HSM backend."""
-        with patch(
-            'pki.forms.issuing_cas.configured_private_key_location',
-            return_value=PrivateKeyLocation.HSM_PROVIDED,
-        ):
-            result = get_private_key_location_from_config()
-            assert result == PrivateKeyLocation.HSM_PROVIDED
-
-    def test_returns_hsm_provided_for_physical_hsm(self):
-        """Test that HSM_PROVIDED is returned for any PKCS#11-backed runtime."""
-        with patch(
-            'pki.forms.issuing_cas.configured_private_key_location',
-            return_value=PrivateKeyLocation.HSM_PROVIDED,
-        ):
-            result = get_private_key_location_from_config()
-            assert result == PrivateKeyLocation.HSM_PROVIDED
-
-    def test_returns_software_when_config_does_not_exist(self):
-        """Test that SOFTWARE is returned when no HSM backend is configured."""
-        with patch(
-            'pki.forms.issuing_cas.configured_private_key_location',
-            return_value=PrivateKeyLocation.SOFTWARE,
-        ):
-            result = get_private_key_location_from_config()
-            assert result == PrivateKeyLocation.SOFTWARE
 
 
 class TestDevIdAddMethodSelectForm:
