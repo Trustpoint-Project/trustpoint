@@ -34,7 +34,7 @@ __all__ = [
 
 
 def __getattr__(name: str) -> object:
-    """Lazily expose service-level crypto APIs without importing them at package import time."""
+    """Lazily expose service-level crypto APIs without importing Django models at package import time."""
     if name == 'TrustpointCryptoBackend':
         return getattr(import_module('crypto.application.service'), name)
 

@@ -39,19 +39,27 @@ class AppSecretConfigurationError(AppSecretError):
 
 
 class _Pkcs11Kek(Protocol):
-    def encrypt(self, plaintext: bytes, *, mechanism: object) -> bytes | bytearray | memoryview: ...
+    def encrypt(self, plaintext: bytes, *, mechanism: object) -> bytes | bytearray | memoryview:
+        """Wrap plaintext with the PKCS#11 key."""
+        raise NotImplementedError
 
-    def decrypt(self, ciphertext: bytes, *, mechanism: object) -> bytes | bytearray | memoryview: ...
+    def decrypt(self, ciphertext: bytes, *, mechanism: object) -> bytes | bytearray | memoryview:
+        """Unwrap ciphertext with the PKCS#11 key."""
+        raise NotImplementedError
 
 
 class _Pkcs11Slot(Protocol):
     slot_id: int
 
-    def get_token(self) -> pkcs11.Token: ...
+    def get_token(self) -> pkcs11.Token:
+        """Return the token present in this slot."""
+        raise NotImplementedError
 
 
 class _Pkcs11Library(Protocol):
-    def get_slots(self, *, token_present: bool = False) -> Iterable[_Pkcs11Slot]: ...
+    def get_slots(self, *, token_present: bool = False) -> Iterable[_Pkcs11Slot]:
+        """Return library slots, optionally filtered to slots with present tokens."""
+        raise NotImplementedError
 
 
 @dataclass(slots=True)

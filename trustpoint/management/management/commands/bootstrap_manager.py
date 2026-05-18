@@ -191,4 +191,4 @@ class Command(BaseCommand):
         """Compile translation messages."""
         output.write('Compiling translation messages...')
         with io.StringIO() as fake_out:
-            call_command('compilemessages', '-l', 'de', '-l', 'en', stdout=fake_out)
+            call_command('compilemessages', '-l', 'de', '-l', 'en', '--ignore', '.venv', stdout=fake_out)

@@ -1,6 +1,6 @@
 """Test suite for Django management commands."""
 from io import StringIO
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from django.conf import settings
 from django.core.management import call_command
@@ -21,6 +21,26 @@ class CompileMsgCommandTest(TestCase):
         
         # Verify it inherits from the right class
         self.assertTrue(issubclass(Command, CompileMessagesCommand))
+
+
+class BootstrapManagerCommandTest(TestCase):
+    """Test suite for bootstrap_manager command helpers."""
+
+    @patch('management.management.commands.bootstrap_manager.call_command')
+    def test_compile_messages_ignores_virtualenv_locales(self, mock_call_command: MagicMock) -> None:
+        """Test bootstrap message compilation ignores dependency locale files."""
+        from management.management.commands.bootstrap_manager import Command  # noqa: PLC0415
+
+        output = Mock()
+
+        Command._compile_messages(output)  # noqa: SLF001
+
+        mock_call_command.assert_called_once()
+        call_args = mock_call_command.call_args.args
+        assert call_args[:5] == ('compilemessages', '-l', 'de', '-l', 'en')
+        assert '--ignore' in call_args
+        assert '.venv' in call_args
+        output.write.assert_called_once_with('Compiling translation messages...')
 
 
 class MakeMsgCommandTest(TestCase):

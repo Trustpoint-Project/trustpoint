@@ -6,12 +6,19 @@ import pytest
 
 from crypto.adapters.rest.backend import RestBackend
 from crypto.adapters.rest.config import RestProviderProfile
-from crypto.adapters.software.backend import SoftwareBackend
-from crypto.adapters.software.config import SoftwareProviderProfile
-from crypto.domain.errors import DevelopmentOnlyBackendError, ProviderOperationNotImplementedError
+from crypto.domain.errors import ProviderOperationNotImplementedError
+
+
+def test_crypto_package_exports_trustpoint_crypto_backend() -> None:
+    """Package-level service export resolves lazily when explicitly requested."""
+    from crypto import TrustpointCryptoBackend  # noqa: PLC0415
+    from crypto.application.service import TrustpointCryptoBackend as ServiceBackend  # noqa: PLC0415
+
+    assert TrustpointCryptoBackend is ServiceBackend
 
 
 def test_rest_backend_scaffold_is_not_operational() -> None:
+    """REST backend scaffold rejects operational verification."""
     backend = RestBackend(
         profile=RestProviderProfile(
             name='rest-placeholder',
