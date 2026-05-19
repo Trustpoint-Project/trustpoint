@@ -114,6 +114,46 @@ def test_resolves_rsa_raw_pkcs_for_ALLOW_APPLICATION_HASH_mode() -> None:
     assert operation.payload.endswith(hashlib.sha256(payload).digest())
 
 
+def test_resolves_prehashed_rsa_raw_pkcs_for_ALLOW_APPLICATION_HASH_mode() -> None:
+    request = FakeSignRequest(
+        signature_algorithm=SignatureAlgorithm.RSA_PKCS1V15,
+        hash_algorithm=HashAlgorithmName.SHA256,
+        prehashed=True,
+    )
+    digest = hashlib.sha256(b'hello world').digest()
+    capabilities = _capabilities(Mechanism.RSA_PKCS)
+
+    operation = resolve_signing_operation(
+        key_algorithm=KeyAlgorithm.RSA,
+        data=digest,
+        request=request,
+        capabilities=capabilities,
+        signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+    )
+
+    assert operation.mechanism is Mechanism.RSA_PKCS
+    assert operation.payload.startswith(bytes.fromhex('3031300d060960864801650304020105000420'))
+    assert operation.payload.endswith(digest)
+
+
+def test_rejects_prehashed_rsa_without_raw_pkcs_for_ALLOW_APPLICATION_HASH_mode() -> None:
+    request = FakeSignRequest(
+        signature_algorithm=SignatureAlgorithm.RSA_PKCS1V15,
+        hash_algorithm=HashAlgorithmName.SHA256,
+        prehashed=True,
+    )
+    capabilities = _capabilities(Mechanism.SHA256_RSA_PKCS)
+
+    with pytest.raises(MechanismUnsupportedError, match='prehashed RSA payloads'):
+        resolve_signing_operation(
+            key_algorithm=KeyAlgorithm.RSA,
+            data=hashlib.sha256(b'hello world').digest(),
+            request=request,
+            capabilities=capabilities,
+            signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+        )
+
+
 def test_resolves_exact_ecdsa_sha256_mechanism_for_COMPLETE_BACKEND_mode() -> None:
     request = FakeSignRequest(
         signature_algorithm=SignatureAlgorithm.ECDSA,
@@ -174,7 +214,28 @@ def test_resolves_raw_ecdsa_for_ALLOW_APPLICATION_HASH_mode() -> None:
     assert operation.payload == hashlib.sha256(payload).digest()
 
 
-def test_rejects_prehashed_managed_signing_requests() -> None:
+def test_resolves_prehashed_raw_ecdsa_for_ALLOW_APPLICATION_HASH_mode() -> None:
+    request = FakeSignRequest(
+        signature_algorithm=SignatureAlgorithm.ECDSA,
+        hash_algorithm=HashAlgorithmName.SHA256,
+        prehashed=True,
+    )
+    digest = hashlib.sha256(b'hello world').digest()
+    capabilities = _capabilities(Mechanism.ECDSA)
+
+    operation = resolve_signing_operation(
+        key_algorithm=KeyAlgorithm.EC,
+        data=digest,
+        request=request,
+        capabilities=capabilities,
+        signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+    )
+
+    assert operation.mechanism is Mechanism.ECDSA
+    assert operation.payload == digest
+
+
+def test_rejects_prehashed_managed_signing_requests_in_COMPLETE_BACKEND_mode() -> None:
     request = FakeSignRequest(
         signature_algorithm=SignatureAlgorithm.RSA_PKCS1V15,
         hash_algorithm=HashAlgorithmName.SHA256,

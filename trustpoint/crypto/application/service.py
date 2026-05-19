@@ -147,6 +147,17 @@ class TrustpointCryptoBackend(LoggerMixin):
         finally:
             adapter.close()
 
+    def destroy_managed_key(self, key: ManagedKeyRef) -> None:
+        """Destroy an unreferenced managed key in the backend and remove its binding record."""
+        managed_key = self._load_managed_key(key)
+        adapter = self._build_adapter(managed_key.provider_profile)
+        try:
+            adapter.destroy_managed_key(self._managed_key_repository.build_backend_binding(managed_key))
+        finally:
+            adapter.close()
+
+        managed_key.delete()
+
     def _get_configured_profile(self) -> CryptoProviderProfileModel:
         """Return the configured instance backend profile or raise a configuration error."""
         try:

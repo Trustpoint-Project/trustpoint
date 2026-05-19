@@ -154,7 +154,7 @@ class TestSignerAddMethodSelectForm:
     def test_form_initial_value(self):
         """Test form has correct initial value."""
         form = SignerAddMethodSelectForm()
-        assert form.fields['method_select'].initial == 'local_file_import'
+        assert form.fields['method_select'].initial == 'generate'
 
 
 @pytest.mark.django_db

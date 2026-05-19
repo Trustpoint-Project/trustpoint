@@ -22,6 +22,7 @@ from signer.forms import (
     SignerAddFileImportSeparateFilesForm,
     SignerAddFileTypeSelectForm,
     SignerAddMethodSelectForm,
+    SignerGenerateForm,
     SignHashForm,
 )
 from signer.models import SignedMessageModel, SignerModel
@@ -58,8 +59,36 @@ class SignerAddMethodSelectView(SignerContextMixin, FormView[SignerAddMethodSele
 
         if method_select and method_select == 'local_file_import':
             return HttpResponseRedirect(reverse_lazy('signer:signer-add-file_import-file_type_select'))
+        if method_select and method_select == 'generate':
+            return HttpResponseRedirect(reverse_lazy('signer:signer-add-generate'))
 
         return HttpResponseRedirect(reverse_lazy('signer:signer-add-method_select'))
+
+
+class SignerGenerateView(SignerContextMixin, FormView[SignerGenerateForm]):
+    """View to generate a Signer with the configured crypto backend."""
+
+    template_name = 'signer/add/generate.html'
+    form_class = SignerGenerateForm
+    success_url = reverse_lazy('signer:signer_list')
+
+    def form_valid(self, form: SignerGenerateForm) -> HttpResponse:
+        """Generate the signer and create an audit-log entry."""
+        signer = form.save()
+        user = getattr(self.request, 'user', None)
+        actor = user if user is not None and user.is_authenticated else None
+
+        AuditLog.create_entry(
+            operation_type=AuditLog.OperationType.SIGNER_ADDED,
+            target=signer,
+            target_display=f'Signer: {signer.unique_name}',
+            actor=actor,
+        )
+        messages.success(
+            self.request,
+            _('Successfully generated Signer {name}.').format(name=signer.unique_name),
+        )
+        return super().form_valid(form)
 
 
 class SignerAddFileImportFileTypeSelectView(SignerContextMixin, FormView[SignerAddFileTypeSelectForm]):
@@ -338,4 +367,3 @@ class SignHashSuccessView(SignerContextMixin, View):
         context = super().get_context_data() if hasattr(super(), 'get_context_data') else {}
         context['context_page_category'] = 'signer'
         return context
-

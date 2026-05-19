@@ -23,6 +23,8 @@ from devices.models import (
 from django.http import HttpRequest
 from django.test import SimpleTestCase, TransactionTestCase
 from django.test.client import RequestFactory
+from crypto.application.private_keys import generate_managed_signing_private_key
+from crypto.domain.specs import RsaKeySpec
 from pki.models import CertificateModel, CredentialModel, IssuedCredentialModel
 from pki.models.cert_profile import CertificateProfileModel
 from pki.models.domain import DomainAllowedCertificateProfileModel, DomainModel
@@ -135,15 +137,23 @@ def ec_private_key() -> ec.EllipticCurvePrivateKey:
 
 CA_COMMON_NAME = 'Root CA'
 UNIQUE_NAME = CA_COMMON_NAME.replace(' ', '_').lower()
-CA_TYPE = CaModel.CaTypeChoice.LOCAL_UNPROTECTED
+CA_TYPE = CaModel.CaTypeChoice.LOCAL_PKCS11
 
 DOMAIN_UNIQUE_NAME = 'domain_test_instance'
 
 
 @pytest.fixture
-def issuing_ca_instance() -> dict[str, Any]:
+def issuing_ca_instance(settings: Any) -> dict[str, Any]:
     """Fixture for a testing CaModel instance."""
-    cert, priv_key = CertificateGenerator.create_root_ca(cn=CA_COMMON_NAME)
+    settings.DEVELOPMENT_ENV = True
+    settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = True
+    settings.TRUSTPOINT_IS_OPERATIONAL = True
+    settings.DOCKER_CONTAINER = False
+    priv_key = generate_managed_signing_private_key(
+        alias=f'{UNIQUE_NAME}-fixture',
+        key_spec=RsaKeySpec(key_size=2048),
+    )
+    cert, priv_key = CertificateGenerator.create_root_ca(cn=CA_COMMON_NAME, private_key=priv_key)
     issuing_ca = CertificateGenerator.save_issuing_ca(
         issuing_ca_cert=cert, private_key=priv_key, chain=[], unique_name=UNIQUE_NAME, ca_type=CA_TYPE
     )

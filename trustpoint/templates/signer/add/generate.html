@@ -3,7 +3,7 @@
 {% load crispy_forms_filters %}
 
 {% block content %}
-    <form method="POST">
+    <form method="POST" autocomplete="off">
         {% csrf_token %}
         <div class="card">
             <div class="card-header">
@@ -13,15 +13,17 @@
             </div>
             <div class="card-body">
                 <div class="tp-card-centered-content">
-                    <h2>{% trans 'Create Signer' %}</h2>
-                    <hr class="mb-4">
-                    <a href="{% url 'signer:signer-add-generate' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Generate With Crypto Backend' %}</a>
-                    <a href="{% url 'signer:signer-add-file_import-file_type_select' %}" class="btn btn-primary min-width-30 mb-3">{% trans 'Import From File' %}</a>
+                    <h2>{% trans 'Generate With Crypto Backend' %}</h2>
+                    <hr>
+
+                    {{ form|crispy }}
                 </div>
             </div>
             <div class="card-footer d-flex">
                 <div class="tp-card-btn-footer m-1">
+                    <a href="{% url 'signer:signer-add-method_select' %}" class="btn btn-secondary">{% trans 'Back' %}</a>
                     <a href="{% url 'signer:signer_list' %}" class="btn btn-secondary">{% trans 'Cancel' %}</a>
+                    <button type="submit" class="btn btn-primary">{% trans 'Generate Signer' %}</button>
                 </div>
             </div>
         </div>

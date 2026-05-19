@@ -52,13 +52,6 @@ def resolve_signing_operation(
 
     No implicit legacy behavior is applied.
     """
-    if request.prehashed:
-        msg = (
-            'Managed PKCS#11 signing does not accept prehashed payloads. '
-            'Trustpoint requires the backend to control hashing/sign preparation.'
-        )
-        raise MechanismUnsupportedError(msg)
-
     if key_algorithm is KeyAlgorithm.RSA:
         return _resolve_rsa_signing_operation(
             data=data,
@@ -95,6 +88,9 @@ def _resolve_rsa_signing_operation(
     raw_mechanism = Mechanism.RSA_PKCS
 
     if signing_execution_mode is SigningExecutionMode.COMPLETE_BACKEND:
+        if request.prehashed:
+            msg = 'Complete-backend RSA signing cannot accept prehashed payloads.'
+            raise MechanismUnsupportedError(msg)
         if not capabilities.supports(exact_mechanism):
             msg = (
                 f'Token does not support the complete in-HSM PKCS#11 mechanism {exact_mechanism.name} '
@@ -106,9 +102,16 @@ def _resolve_rsa_signing_operation(
 
     if signing_execution_mode is SigningExecutionMode.ALLOW_APPLICATION_HASH:
         if capabilities.supports(raw_mechanism):
-            digest = _hash_bytes(data=data, algorithm=request.hash_algorithm)
+            digest = _prehashed_or_hash_bytes(data=data, request=request)
             payload = _RSA_DIGEST_INFO_PREFIX[request.hash_algorithm] + digest
             return Pkcs11SignOperation(mechanism=raw_mechanism, payload=payload)
+
+        if request.prehashed:
+            msg = (
+                f'Token does not support raw PKCS#11 RSA signing ({raw_mechanism.name}); '
+                'prehashed RSA payloads cannot be safely signed with complete hash-and-sign mechanisms.'
+            )
+            raise MechanismUnsupportedError(msg)
 
         if capabilities.supports(exact_mechanism):
             return Pkcs11SignOperation(mechanism=exact_mechanism, payload=data)
@@ -140,6 +143,9 @@ def _resolve_ec_signing_operation(
     raw_mechanism = Mechanism.ECDSA
 
     if signing_execution_mode is SigningExecutionMode.COMPLETE_BACKEND:
+        if request.prehashed:
+            msg = 'Complete-backend EC signing cannot accept prehashed payloads.'
+            raise MechanismUnsupportedError(msg)
         if not capabilities.supports(exact_mechanism):
             msg = (
                 f'Token does not support the complete in-HSM PKCS#11 mechanism {exact_mechanism.name} '
@@ -151,8 +157,15 @@ def _resolve_ec_signing_operation(
 
     if signing_execution_mode is SigningExecutionMode.ALLOW_APPLICATION_HASH:
         if capabilities.supports(raw_mechanism):
-            digest = _hash_bytes(data=data, algorithm=request.hash_algorithm)
+            digest = _prehashed_or_hash_bytes(data=data, request=request)
             return Pkcs11SignOperation(mechanism=raw_mechanism, payload=digest)
+
+        if request.prehashed:
+            msg = (
+                f'Token does not support raw PKCS#11 EC signing ({raw_mechanism.name}); '
+                'prehashed EC payloads cannot be safely signed with complete hash-and-sign mechanisms.'
+            )
+            raise MechanismUnsupportedError(msg)
 
         if capabilities.supports(exact_mechanism):
             return Pkcs11SignOperation(mechanism=exact_mechanism, payload=data)
@@ -178,5 +191,34 @@ def _hash_bytes(*, data: bytes, algorithm: HashAlgorithmName) -> bytes:
         return hashlib.sha384(data).digest()
     if algorithm is HashAlgorithmName.SHA512:
         return hashlib.sha512(data).digest()
+    msg = f'Unsupported hash algorithm: {algorithm!r}'
+    raise MechanismUnsupportedError(msg)
+
+
+def _prehashed_or_hash_bytes(*, data: bytes, request: SignRequest) -> bytes:
+    """Return an already-computed digest or hash the payload for raw mechanisms."""
+    if not request.prehashed:
+        return _hash_bytes(data=data, algorithm=request.hash_algorithm)
+
+    expected_size = _digest_size(request.hash_algorithm)
+    if len(data) != expected_size:
+        msg = (
+            f'Prehashed payload length {len(data)} does not match '
+            f'{request.hash_algorithm.value} digest length {expected_size}.'
+        )
+        raise MechanismUnsupportedError(msg)
+    return data
+
+
+def _digest_size(algorithm: HashAlgorithmName) -> int:
+    """Return the digest size for a supported hash algorithm."""
+    if algorithm is HashAlgorithmName.SHA224:
+        return hashlib.sha224().digest_size
+    if algorithm is HashAlgorithmName.SHA256:
+        return hashlib.sha256().digest_size
+    if algorithm is HashAlgorithmName.SHA384:
+        return hashlib.sha384().digest_size
+    if algorithm is HashAlgorithmName.SHA512:
+        return hashlib.sha512().digest_size
     msg = f'Unsupported hash algorithm: {algorithm!r}'
     raise MechanismUnsupportedError(msg)

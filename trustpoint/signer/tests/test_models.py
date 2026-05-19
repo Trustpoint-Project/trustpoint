@@ -2,12 +2,20 @@
 
 import pytest
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import ec, rsa
+from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
 from cryptography.hazmat.primitives.hashes import SHA256
 from django.db import IntegrityError
 from trustpoint_core.serializer import CredentialSerializer, CertificateSerializer, PrivateKeySerializer
 
 from appsecrets.models import AppSecretBackendKind, AppSecretBackendModel, AppSecretSoftwareConfigModel
+from crypto.models import (
+    BackendKind,
+    CryptoManagedKeyModel,
+    CryptoProviderProfileModel,
+    CryptoProviderSoftwareConfigModel,
+    SoftwareKeyEncryptionSource,
+)
+from crypto.domain.specs import RsaKeySpec
 from pki.models.credential import CredentialModel
 from signer.models import SignedMessageModel, SignerModel
 
@@ -22,6 +30,24 @@ def app_secret_config():
     config.raw_dek = b'a' * 32
     config.save()
     return config
+
+
+@pytest.fixture
+def software_crypto_backend(settings):
+    """Create an active software crypto backend for managed signer tests."""
+    settings.DEVELOPMENT_ENV = True
+    profile = CryptoProviderProfileModel.objects.create(
+        name='signer-test-software',
+        backend_kind=BackendKind.SOFTWARE,
+        active=True,
+    )
+    CryptoProviderSoftwareConfigModel.objects.create(
+        profile=profile,
+        encryption_source=SoftwareKeyEncryptionSource.DEV_PLAINTEXT,
+        encryption_source_ref='',
+        allow_exportable_private_keys=False,
+    )
+    return profile
 
 
 @pytest.fixture
@@ -264,6 +290,46 @@ class TestSignerModel:
         
         assert signer.unique_name == 'ec-signer'
         assert signer.common_name == 'Test EC Signer'
+
+    def test_create_backend_managed_signer(self, software_crypto_backend):
+        """Test creating a signer through the configured crypto backend."""
+        signer = SignerModel.create_backend_managed_signer(
+            unique_name='managed-signer',
+            key_spec=RsaKeySpec(key_size=2048),
+        )
+
+        assert signer.unique_name == 'managed-signer'
+        assert signer.credential.credential_type == CredentialModel.CredentialTypeChoice.SIGNER
+        assert signer.credential.private_key == ''
+        assert signer.credential.managed_private_key is not None
+        assert signer.common_name == 'managed-signer'
+
+        private_key = signer.credential.get_private_key()
+        digest = bytes.fromhex('ab' * 32)
+        signature = private_key.sign(digest, padding.PKCS1v15(), utils.Prehashed(SHA256()))
+        private_key.public_key().verify(signature, digest, padding.PKCS1v15(), utils.Prehashed(SHA256()))
+
+    def test_create_backend_managed_signer_cleans_up_key_on_persistence_failure(
+        self,
+        software_crypto_backend,
+        monkeypatch,
+    ):
+        """Test failed signer persistence removes the generated managed-key record."""
+        del software_crypto_backend
+
+        def fail_to_save_credential(*args, **kwargs):
+            del args, kwargs
+            raise RuntimeError('credential persistence failed')
+
+        monkeypatch.setattr(CredentialModel, 'save_managed_key_credential', fail_to_save_credential)
+
+        with pytest.raises(RuntimeError, match='credential persistence failed'):
+            SignerModel.create_backend_managed_signer(
+                unique_name='failing-managed-signer',
+                key_spec=RsaKeySpec(key_size=2048),
+            )
+
+        assert not CryptoManagedKeyModel.objects.filter(alias='failing-managed-signer').exists()
 
     def test_signer_is_active_default(self, sample_rsa_credential_serializer):
         """Test that is_active defaults to True."""
