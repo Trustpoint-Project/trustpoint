@@ -1194,6 +1194,27 @@ html[data-bs-theme="dark"] .tp-backend-configuration .badge.text-bg-light.text-b
     font-size: 0.92rem;
 }
 
+.tp-backend-configuration .tp-mechanism-table {
+    table-layout: fixed;
+    min-width: 54rem;
+}
+
+.tp-backend-configuration .tp-mechanism-col-name {
+    width: 34%;
+}
+
+.tp-backend-configuration .tp-mechanism-col-code {
+    width: 7rem;
+}
+
+.tp-backend-configuration .tp-mechanism-col-size {
+    width: 10rem;
+}
+
+.tp-backend-configuration .tp-mechanism-col-flags {
+    width: auto;
+}
+
 .tp-backend-configuration .table thead th {
     color: var(--bs-secondary-color);
     font-weight: var(--tp-font-weight-h);
@@ -1204,6 +1225,18 @@ html[data-bs-theme="dark"] .tp-backend-configuration .badge.text-bg-light.text-b
 .tp-backend-configuration .table td,
 .tp-backend-configuration .table th {
     padding: 0.55rem 0.75rem;
+}
+
+.tp-backend-configuration .tp-mechanism-table th:first-child,
+.tp-backend-configuration .tp-mechanism-table td:first-child {
+    padding-left: 1rem;
+}
+
+.tp-backend-configuration .tp-mechanism-table code {
+    display: inline-block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    vertical-align: middle;
 }
 
 .tp-backend-configuration .alert {

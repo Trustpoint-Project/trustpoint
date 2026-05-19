@@ -282,11 +282,17 @@
 
                                     <div id="pkcs11-mechanisms-rsa" class="accordion-collapse collapse show">
                                         <div class="table-responsive border-top">
-                                            <table class="table table-sm table-hover align-middle mb-0">
+                                            <table class="table table-sm table-hover align-middle mb-0 tp-mechanism-table">
+                                                <colgroup>
+                                                    <col class="tp-mechanism-col-name">
+                                                    <col class="tp-mechanism-col-code">
+                                                    <col class="tp-mechanism-col-size">
+                                                    <col class="tp-mechanism-col-flags">
+                                                </colgroup>
                                                 <thead>
                                                     <tr>
-                                                        <th class="ps-4 min-width-20">{% trans 'Name' %}</th>
-                                                        <th>{% trans 'Code' %}</th>
+                                                        <th>{% trans 'Name' %}</th>
+                                                        <th class="text-end">{% trans 'Code' %}</th>
                                                         <th>{% trans 'Key Size' %}</th>
                                                         <th>{% trans 'Flags' %}</th>
                                                     </tr>
@@ -295,8 +301,8 @@
                                                     {% for mechanism in pkcs11_mechanisms %}
                                                         {% if "RSA" in mechanism.name %}
                                                             <tr>
-                                                                <td class="ps-4"><code class="p-0">{{ mechanism.name }}</code></td>
-                                                                <td class="text-nowrap">{{ mechanism.code|default:"-" }}</td>
+                                                                <td><code class="p-0">{{ mechanism.name }}</code></td>
+                                                                <td class="text-end text-nowrap">{{ mechanism.code|default:"-" }}</td>
                                                                 <td class="text-nowrap">{{ mechanism.min_key_size|default:"-" }} - {{ mechanism.max_key_size|default:"-" }}</td>
                                                                 <td>
                                                                     {% if mechanism.flags %}
@@ -334,11 +340,17 @@
 
                                     <div id="pkcs11-mechanisms-ec" class="accordion-collapse collapse">
                                         <div class="table-responsive border-top">
-                                            <table class="table table-sm table-hover align-middle mb-0">
+                                            <table class="table table-sm table-hover align-middle mb-0 tp-mechanism-table">
+                                                <colgroup>
+                                                    <col class="tp-mechanism-col-name">
+                                                    <col class="tp-mechanism-col-code">
+                                                    <col class="tp-mechanism-col-size">
+                                                    <col class="tp-mechanism-col-flags">
+                                                </colgroup>
                                                 <thead>
                                                     <tr>
-                                                        <th class="ps-4 min-width-20">{% trans 'Name' %}</th>
-                                                        <th>{% trans 'Code' %}</th>
+                                                        <th>{% trans 'Name' %}</th>
+                                                        <th class="text-end">{% trans 'Code' %}</th>
                                                         <th>{% trans 'Key Size' %}</th>
                                                         <th>{% trans 'Flags' %}</th>
                                                     </tr>
@@ -347,8 +359,8 @@
                                                     {% for mechanism in pkcs11_mechanisms %}
                                                         {% if "ECDSA" in mechanism.name or "ECDH" in mechanism.name or "EC_" in mechanism.name %}
                                                             <tr>
-                                                                <td class="ps-4"><code class="p-0">{{ mechanism.name }}</code></td>
-                                                                <td class="text-nowrap">{{ mechanism.code|default:"-" }}</td>
+                                                                <td><code class="p-0">{{ mechanism.name }}</code></td>
+                                                                <td class="text-end text-nowrap">{{ mechanism.code|default:"-" }}</td>
                                                                 <td class="text-nowrap">{{ mechanism.min_key_size|default:"-" }} - {{ mechanism.max_key_size|default:"-" }}</td>
                                                                 <td>
                                                                     {% if mechanism.flags %}
@@ -386,11 +398,17 @@
 
                                     <div id="pkcs11-mechanisms-aes" class="accordion-collapse collapse">
                                         <div class="table-responsive border-top">
-                                            <table class="table table-sm table-hover align-middle mb-0">
+                                            <table class="table table-sm table-hover align-middle mb-0 tp-mechanism-table">
+                                                <colgroup>
+                                                    <col class="tp-mechanism-col-name">
+                                                    <col class="tp-mechanism-col-code">
+                                                    <col class="tp-mechanism-col-size">
+                                                    <col class="tp-mechanism-col-flags">
+                                                </colgroup>
                                                 <thead>
                                                     <tr>
-                                                        <th class="ps-4 min-width-20">{% trans 'Name' %}</th>
-                                                        <th>{% trans 'Code' %}</th>
+                                                        <th>{% trans 'Name' %}</th>
+                                                        <th class="text-end">{% trans 'Code' %}</th>
                                                         <th>{% trans 'Key Size' %}</th>
                                                         <th>{% trans 'Flags' %}</th>
                                                     </tr>
@@ -399,8 +417,8 @@
                                                     {% for mechanism in pkcs11_mechanisms %}
                                                         {% if "AES" in mechanism.name %}
                                                             <tr>
-                                                                <td class="ps-4"><code class="p-0">{{ mechanism.name }}</code></td>
-                                                                <td class="text-nowrap">{{ mechanism.code|default:"-" }}</td>
+                                                                <td><code class="p-0">{{ mechanism.name }}</code></td>
+                                                                <td class="text-end text-nowrap">{{ mechanism.code|default:"-" }}</td>
                                                                 <td class="text-nowrap">{{ mechanism.min_key_size|default:"-" }} - {{ mechanism.max_key_size|default:"-" }}</td>
                                                                 <td>
                                                                     {% if mechanism.flags %}
@@ -438,11 +456,17 @@
 
                                     <div id="pkcs11-mechanisms-hash" class="accordion-collapse collapse">
                                         <div class="table-responsive border-top">
-                                            <table class="table table-sm table-hover align-middle mb-0">
+                                            <table class="table table-sm table-hover align-middle mb-0 tp-mechanism-table">
+                                                <colgroup>
+                                                    <col class="tp-mechanism-col-name">
+                                                    <col class="tp-mechanism-col-code">
+                                                    <col class="tp-mechanism-col-size">
+                                                    <col class="tp-mechanism-col-flags">
+                                                </colgroup>
                                                 <thead>
                                                     <tr>
-                                                        <th class="ps-4 min-width-20">{% trans 'Name' %}</th>
-                                                        <th>{% trans 'Code' %}</th>
+                                                        <th>{% trans 'Name' %}</th>
+                                                        <th class="text-end">{% trans 'Code' %}</th>
                                                         <th>{% trans 'Key Size' %}</th>
                                                         <th>{% trans 'Flags' %}</th>
                                                     </tr>
@@ -451,8 +475,8 @@
                                                     {% for mechanism in pkcs11_mechanisms %}
                                                         {% if "RSA" not in mechanism.name and "ECDSA" not in mechanism.name and "ECDH" not in mechanism.name and "EC_" not in mechanism.name and "AES" not in mechanism.name and "SHA" in mechanism.name or "HMAC" in mechanism.name or "MD5" in mechanism.name %}
                                                             <tr>
-                                                                <td class="ps-4"><code class="p-0">{{ mechanism.name }}</code></td>
-                                                                <td class="text-nowrap">{{ mechanism.code|default:"-" }}</td>
+                                                                <td><code class="p-0">{{ mechanism.name }}</code></td>
+                                                                <td class="text-end text-nowrap">{{ mechanism.code|default:"-" }}</td>
                                                                 <td class="text-nowrap">{{ mechanism.min_key_size|default:"-" }} - {{ mechanism.max_key_size|default:"-" }}</td>
                                                                 <td>
                                                                     {% if mechanism.flags %}
@@ -490,11 +514,17 @@
 
                                     <div id="pkcs11-mechanisms-other" class="accordion-collapse collapse">
                                         <div class="table-responsive border-top">
-                                            <table class="table table-sm table-hover align-middle mb-0">
+                                            <table class="table table-sm table-hover align-middle mb-0 tp-mechanism-table">
+                                                <colgroup>
+                                                    <col class="tp-mechanism-col-name">
+                                                    <col class="tp-mechanism-col-code">
+                                                    <col class="tp-mechanism-col-size">
+                                                    <col class="tp-mechanism-col-flags">
+                                                </colgroup>
                                                 <thead>
                                                     <tr>
-                                                        <th class="ps-4 min-width-20">{% trans 'Name' %}</th>
-                                                        <th>{% trans 'Code' %}</th>
+                                                        <th>{% trans 'Name' %}</th>
+                                                        <th class="text-end">{% trans 'Code' %}</th>
                                                         <th>{% trans 'Key Size' %}</th>
                                                         <th>{% trans 'Flags' %}</th>
                                                     </tr>
@@ -503,8 +533,8 @@
                                                     {% for mechanism in pkcs11_mechanisms %}
                                                         {% if "RSA" not in mechanism.name and "ECDSA" not in mechanism.name and "ECDH" not in mechanism.name and "EC_" not in mechanism.name and "AES" not in mechanism.name and "SHA" not in mechanism.name and "HMAC" not in mechanism.name and "MD5" not in mechanism.name %}
                                                             <tr>
-                                                                <td class="ps-4"><code class="p-0">{{ mechanism.name }}</code></td>
-                                                                <td class="text-nowrap">{{ mechanism.code|default:"-" }}</td>
+                                                                <td><code class="p-0">{{ mechanism.name }}</code></td>
+                                                                <td class="text-end text-nowrap">{{ mechanism.code|default:"-" }}</td>
                                                                 <td class="text-nowrap">{{ mechanism.min_key_size|default:"-" }} - {{ mechanism.max_key_size|default:"-" }}</td>
                                                                 <td>
                                                                     {% if mechanism.flags %}
