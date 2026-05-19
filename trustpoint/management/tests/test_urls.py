@@ -1,6 +1,6 @@
 """Tests for settings app URL configuration."""
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import resolve, reverse
 
@@ -8,6 +8,7 @@ from management.views import IndexView, backup, logging, tls, key_storage
 from management.views.user_management import UserTableView, UserCreateView, UserDeleteView, UserChangeRoleView
 from management.views.role_management import RoleTableView, RoleCreateView, RoleEditView, RoleDeleteView
 
+User = get_user_model()
 
 class SettingsUrlsTestCase(TestCase):
     def setUp(self):

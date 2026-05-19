@@ -84,7 +84,7 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
             admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN.value)
             extra_fields['role'] = admin_group
         return super().create_superuser(username, email, password, **extra_fields)
-    
+
     def create_user(
         self,
         username: str,
