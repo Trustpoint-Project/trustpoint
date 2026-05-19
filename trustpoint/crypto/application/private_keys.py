@@ -27,16 +27,11 @@ def _hash_algorithm_name(algorithm: HashAlgorithm | utils.Prehashed) -> HashAlgo
     """Map cryptography hash algorithm objects to the backend contract."""
     hash_algorithm = cast('HashAlgorithm', getattr(algorithm, '_algorithm', algorithm))
     name = hash_algorithm.name.lower()
-    if name == 'sha224':
-        return HashAlgorithmName.SHA224
-    if name == 'sha256':
-        return HashAlgorithmName.SHA256
-    if name == 'sha384':
-        return HashAlgorithmName.SHA384
-    if name == 'sha512':
-        return HashAlgorithmName.SHA512
-    msg = f'Unsupported managed-key hash algorithm {name!r}.'
-    raise ValueError(msg)
+    try:
+        return HashAlgorithmName(name)
+    except ValueError as exc:
+        msg = f'Unsupported managed-key hash algorithm {name!r}.'
+        raise ValueError(msg) from exc
 
 
 class ManagedRSAPrivateKey(rsa.RSAPrivateKey):

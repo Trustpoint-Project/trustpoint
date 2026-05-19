@@ -643,7 +643,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
                 'pkcs11_module_upload',
                 gettext_lazy('Upload a PKCS#11 library.'),
             )
-        if not user_pin and existing_pin is None:
+        if not user_pin and (existing_pin is None or existing_module is None):
             self.add_error(
                 'pkcs11_user_pin',
                 gettext_lazy('Enter the PKCS#11 user PIN.'),

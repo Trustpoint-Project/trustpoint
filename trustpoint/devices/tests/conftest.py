@@ -3,17 +3,27 @@
 from typing import Any
 
 import pytest
-from pki.models import DomainModel, CaModel
-from pki.util.x509 import CertificateGenerator
 
 from devices.issuer import LocalDomainCredentialIssuer
 from devices.models import DeviceModel, RemoteDeviceCredentialDownloadModel
 from onboarding.models import NoOnboardingConfigModel, NoOnboardingPkiProtocol
+from pki.models import CaModel, DomainModel
+from pki.tests.managed_ca_helpers import create_managed_issuing_ca, create_managed_root_ca
+from pki.util.x509 import CertificateGenerator
 
 
 @pytest.fixture(autouse=True)
 def enable_db_access_for_all_tests(db: None) -> None:
     """Fixture to enable database access for all tests."""
+
+
+@pytest.fixture(autouse=True)
+def configure_local_crypto_backend_for_device_tests(settings: Any) -> None:
+    """Provide a local software crypto backend for tests that create managed CAs."""
+    settings.DEVELOPMENT_ENV = True
+    settings.TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND = True
+    settings.TRUSTPOINT_IS_OPERATIONAL = True
+    settings.DOCKER_CONTAINER = False
 
 
 @pytest.fixture
@@ -24,11 +34,19 @@ def mock_models() -> dict[str, Any]:
 
 def create_mock_models() -> dict[str, Any]:
     """Fixture to create mock CA, domain, device, and credential models for testing."""
-    root_1, root_1_key = CertificateGenerator.create_root_ca('Test Root CA')
-    issuing_1, issuing_1_key = CertificateGenerator.create_issuing_ca(root_1_key, 'Root CA', 'Issuing CA A')
+    root_1, root_1_key = create_managed_root_ca('Test Root CA')
+    issuing_1, issuing_1_key = create_managed_issuing_ca(
+        issuer_private_key=root_1_key,
+        issuer_cn='Test Root CA',
+        subject_cn='Issuing CA A',
+    )
 
     CertificateGenerator.save_issuing_ca(
-        issuing_ca_cert=issuing_1, private_key=issuing_1_key, chain=[root_1], unique_name='test_local_ca'
+        issuing_ca_cert=issuing_1,
+        private_key=issuing_1_key,
+        chain=[root_1],
+        unique_name='test_local_ca',
+        ca_type=CaModel.CaTypeChoice.LOCAL_PKCS11,
     )
 
     mock_ca = CaModel.objects.get(unique_name='test_local_ca')

@@ -25,6 +25,10 @@ _RSA_PKCS1_V15_MECHANISMS = _build_hash_mechanism_map(
         HashAlgorithmName.SHA256: 'SHA256_RSA_PKCS',
         HashAlgorithmName.SHA384: 'SHA384_RSA_PKCS',
         HashAlgorithmName.SHA512: 'SHA512_RSA_PKCS',
+        HashAlgorithmName.SHA3_224: 'SHA3_224_RSA_PKCS',
+        HashAlgorithmName.SHA3_256: 'SHA3_256_RSA_PKCS',
+        HashAlgorithmName.SHA3_384: 'SHA3_384_RSA_PKCS',
+        HashAlgorithmName.SHA3_512: 'SHA3_512_RSA_PKCS',
     }
 )
 
@@ -34,6 +38,10 @@ _ECDSA_MECHANISMS = _build_hash_mechanism_map(
         HashAlgorithmName.SHA256: 'ECDSA_SHA256',
         HashAlgorithmName.SHA384: 'ECDSA_SHA384',
         HashAlgorithmName.SHA512: 'ECDSA_SHA512',
+        HashAlgorithmName.SHA3_224: 'ECDSA_SHA3_224',
+        HashAlgorithmName.SHA3_256: 'ECDSA_SHA3_256',
+        HashAlgorithmName.SHA3_384: 'ECDSA_SHA3_384',
+        HashAlgorithmName.SHA3_512: 'ECDSA_SHA3_512',
     }
 )
 

@@ -235,6 +235,27 @@ def test_resolves_prehashed_raw_ecdsa_for_ALLOW_APPLICATION_HASH_mode() -> None:
     assert operation.payload == digest
 
 
+def test_resolves_sha3_prehashed_raw_ecdsa_for_ALLOW_APPLICATION_HASH_mode() -> None:
+    request = FakeSignRequest(
+        signature_algorithm=SignatureAlgorithm.ECDSA,
+        hash_algorithm=HashAlgorithmName.SHA3_512,
+        prehashed=True,
+    )
+    digest = hashlib.sha3_512(b'hello world').digest()
+    capabilities = _capabilities(Mechanism.ECDSA)
+
+    operation = resolve_signing_operation(
+        key_algorithm=KeyAlgorithm.EC,
+        data=digest,
+        request=request,
+        capabilities=capabilities,
+        signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+    )
+
+    assert operation.mechanism is Mechanism.ECDSA
+    assert operation.payload == digest
+
+
 def test_rejects_prehashed_managed_signing_requests_in_COMPLETE_BACKEND_mode() -> None:
     request = FakeSignRequest(
         signature_algorithm=SignatureAlgorithm.RSA_PKCS1V15,

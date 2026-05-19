@@ -12,7 +12,7 @@ from django.conf import settings
 
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding, SoftwareManagedKeyVerification
 from crypto.adapters.software.capabilities import SoftwareCapabilities
-from crypto.domain.algorithms import KeyAlgorithm, SignatureAlgorithm
+from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm, SignatureAlgorithm
 from crypto.domain.errors import (
     DevelopmentOnlyBackendError,
     KeyNotFoundError,
@@ -26,7 +26,7 @@ from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec, algorithm_for_ke
 
 if TYPE_CHECKING:
     from crypto.adapters.software.config import SoftwareProviderProfile
-    from crypto.domain.algorithms import HashAlgorithmName, SupportedPublicKey
+    from crypto.domain.algorithms import SupportedPublicKey
     from crypto.domain.policies import KeyPolicy
     from crypto.domain.specs import SignRequest
 
@@ -214,16 +214,11 @@ class SoftwareBackend:
         """Resolve a domain hash enum value to a cryptography hash algorithm."""
         value = getattr(hash_name, 'value', hash_name)
         normalized = str(value).strip().lower()
-
-        if normalized == 'sha256':
-            return hashes.SHA256()
-        if normalized == 'sha384':
-            return hashes.SHA384()
-        if normalized == 'sha512':
-            return hashes.SHA512()
-
-        msg = f'Unsupported hash algorithm {value!r} for the software backend.'
-        raise MechanismUnsupportedError(msg)
+        try:
+            return HashAlgorithmName(normalized).to_cryptography_hash()
+        except ValueError as exc:
+            msg = f'Unsupported hash algorithm {value!r} for the software backend.'
+            raise MechanismUnsupportedError(msg) from exc
 
     @staticmethod
     def _fingerprint_public_key(public_key: SupportedPublicKey) -> str:

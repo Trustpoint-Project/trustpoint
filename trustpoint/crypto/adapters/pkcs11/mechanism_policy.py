@@ -16,6 +16,9 @@ from crypto.domain.policies import SigningExecutionMode
 from pkcs11 import Mechanism
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+    from typing import Any
+
     from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
     from crypto.domain.specs import SignRequest
 
@@ -25,6 +28,21 @@ _RSA_DIGEST_INFO_PREFIX = {
     HashAlgorithmName.SHA256: bytes.fromhex('3031300d060960864801650304020105000420'),
     HashAlgorithmName.SHA384: bytes.fromhex('3041300d060960864801650304020205000430'),
     HashAlgorithmName.SHA512: bytes.fromhex('3051300d060960864801650304020305000440'),
+    HashAlgorithmName.SHA3_224: bytes.fromhex('302b300b0609608648016503040207041c'),
+    HashAlgorithmName.SHA3_256: bytes.fromhex('302f300b06096086480165030402080420'),
+    HashAlgorithmName.SHA3_384: bytes.fromhex('303f300b06096086480165030402090430'),
+    HashAlgorithmName.SHA3_512: bytes.fromhex('304f300b060960864801650304020a0440'),
+}
+
+_HASHLIB_HASHES = {
+    HashAlgorithmName.SHA224: hashlib.sha224,
+    HashAlgorithmName.SHA256: hashlib.sha256,
+    HashAlgorithmName.SHA384: hashlib.sha384,
+    HashAlgorithmName.SHA512: hashlib.sha512,
+    HashAlgorithmName.SHA3_224: hashlib.sha3_224,
+    HashAlgorithmName.SHA3_256: hashlib.sha3_256,
+    HashAlgorithmName.SHA3_384: hashlib.sha3_384,
+    HashAlgorithmName.SHA3_512: hashlib.sha3_512,
 }
 
 
@@ -84,13 +102,13 @@ def _resolve_rsa_signing_operation(
         msg = f'Unsupported RSA signature algorithm: {request.signature_algorithm.value}'
         raise MechanismUnsupportedError(msg)
 
-    exact_mechanism = rsa_pkcs1v15_mechanism_for_hash(request.hash_algorithm)
     raw_mechanism = Mechanism.RSA_PKCS
 
     if signing_execution_mode is SigningExecutionMode.COMPLETE_BACKEND:
         if request.prehashed:
             msg = 'Complete-backend RSA signing cannot accept prehashed payloads.'
             raise MechanismUnsupportedError(msg)
+        exact_mechanism = rsa_pkcs1v15_mechanism_for_hash(request.hash_algorithm)
         if not capabilities.supports(exact_mechanism):
             msg = (
                 f'Token does not support the complete in-HSM PKCS#11 mechanism {exact_mechanism.name} '
@@ -113,6 +131,7 @@ def _resolve_rsa_signing_operation(
             )
             raise MechanismUnsupportedError(msg)
 
+        exact_mechanism = rsa_pkcs1v15_mechanism_for_hash(request.hash_algorithm)
         if capabilities.supports(exact_mechanism):
             return Pkcs11SignOperation(mechanism=exact_mechanism, payload=data)
 
@@ -139,13 +158,13 @@ def _resolve_ec_signing_operation(
         msg = f'Unsupported EC signature algorithm: {request.signature_algorithm.value}'
         raise MechanismUnsupportedError(msg)
 
-    exact_mechanism = ecdsa_mechanism_for_hash(request.hash_algorithm)
     raw_mechanism = Mechanism.ECDSA
 
     if signing_execution_mode is SigningExecutionMode.COMPLETE_BACKEND:
         if request.prehashed:
             msg = 'Complete-backend EC signing cannot accept prehashed payloads.'
             raise MechanismUnsupportedError(msg)
+        exact_mechanism = ecdsa_mechanism_for_hash(request.hash_algorithm)
         if not capabilities.supports(exact_mechanism):
             msg = (
                 f'Token does not support the complete in-HSM PKCS#11 mechanism {exact_mechanism.name} '
@@ -167,6 +186,7 @@ def _resolve_ec_signing_operation(
             )
             raise MechanismUnsupportedError(msg)
 
+        exact_mechanism = ecdsa_mechanism_for_hash(request.hash_algorithm)
         if capabilities.supports(exact_mechanism):
             return Pkcs11SignOperation(mechanism=exact_mechanism, payload=data)
 
@@ -183,16 +203,7 @@ def _resolve_ec_signing_operation(
 
 def _hash_bytes(*, data: bytes, algorithm: HashAlgorithmName) -> bytes:
     """Hash bytes for ALLOW_APPLICATION_HASH mode."""
-    if algorithm is HashAlgorithmName.SHA224:
-        return hashlib.sha224(data).digest()
-    if algorithm is HashAlgorithmName.SHA256:
-        return hashlib.sha256(data).digest()
-    if algorithm is HashAlgorithmName.SHA384:
-        return hashlib.sha384(data).digest()
-    if algorithm is HashAlgorithmName.SHA512:
-        return hashlib.sha512(data).digest()
-    msg = f'Unsupported hash algorithm: {algorithm!r}'
-    raise MechanismUnsupportedError(msg)
+    return bytes(_hash_factory(algorithm)(data).digest())
 
 
 def _prehashed_or_hash_bytes(*, data: bytes, request: SignRequest) -> bytes:
@@ -212,13 +223,13 @@ def _prehashed_or_hash_bytes(*, data: bytes, request: SignRequest) -> bytes:
 
 def _digest_size(algorithm: HashAlgorithmName) -> int:
     """Return the digest size for a supported hash algorithm."""
-    if algorithm is HashAlgorithmName.SHA224:
-        return hashlib.sha224().digest_size
-    if algorithm is HashAlgorithmName.SHA256:
-        return hashlib.sha256().digest_size
-    if algorithm is HashAlgorithmName.SHA384:
-        return hashlib.sha384().digest_size
-    if algorithm is HashAlgorithmName.SHA512:
-        return hashlib.sha512().digest_size
-    msg = f'Unsupported hash algorithm: {algorithm!r}'
-    raise MechanismUnsupportedError(msg)
+    return int(_hash_factory(algorithm)().digest_size)
+
+
+def _hash_factory(algorithm: HashAlgorithmName) -> Callable[..., Any]:
+    """Return the hashlib constructor for a supported hash algorithm."""
+    try:
+        return _HASHLIB_HASHES[algorithm]
+    except KeyError as exc:
+        msg = f'Unsupported hash algorithm: {algorithm!r}'
+        raise MechanismUnsupportedError(msg) from exc
