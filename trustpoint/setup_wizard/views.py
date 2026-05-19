@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import logout
+from django.contrib.auth import get_user_model, logout
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import User
@@ -175,11 +175,11 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
             password = form.cleaned_data['password1']
             call_command('createsuperuser', interactive=False, username=username, email='')
 
-            user = User.objects.get(username=username)
+            user = get_user_model().objects.get(username=username)
             user.set_password(password)
             user.save()
 
-        except User.DoesNotExist as e:
+        except get_user_model().DoesNotExist as e:
             messages.add_message(self.request, messages.ERROR, f'User not found error: {e}')
             return redirect('setup_wizard:create_super_user', permanent=False)
         except Exception:
@@ -670,7 +670,7 @@ class FreshInstallCancelView(LoginRequiredMixin, LoggerMixin, View):
                 credential.force_delete()
 
             SetupWizardConfigModel.objects.filter(pk=SetupWizardConfigModel.SINGLETON_ID).delete()
-            User.objects.filter(pk=user_pk).delete()
+            get_user_model().objects.filter(pk=user_pk).delete()
 
         logout(request)
         return redirect('setup_wizard:index', permanent=False)

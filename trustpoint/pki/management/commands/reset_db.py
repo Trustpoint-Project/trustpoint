@@ -74,7 +74,7 @@ class Command(BaseCommand):
             if options.get('initial_migrations'):
                 migration_name = 'initial'
             self.stdout.write('Running makemigrations...')
-            call_command('makemigrations', '--no-header', name=migration_name, interactive=False)
+            call_command('makemigrations', '--no-header', name=migration_name)
         self.stdout.write('Running migrate...')
         call_command('migrate')
         call_command('create_admin_group')
