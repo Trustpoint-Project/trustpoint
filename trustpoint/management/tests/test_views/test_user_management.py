@@ -29,7 +29,7 @@ class UserManagementAccessTest(TestCase):
     def setUp(self) -> None:
         self.client = Client()
         self.url = reverse('management:user_management')
-        admin_group = _create_admin_group()
+        _create_admin_group()
         plain_group = _create_plain_group()
         self.plain_user = User.objects.create_user(username='plain', password='pass', role=plain_group)
 

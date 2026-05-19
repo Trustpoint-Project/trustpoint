@@ -12,9 +12,8 @@ from typing import TYPE_CHECKING, Any, cast
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, logout
-from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.management import CommandError, call_command
 from django.db import DatabaseError, transaction
@@ -41,6 +40,8 @@ from setup_wizard.tls_credential import (
     extract_staged_tls_sans,
 )
 from trustpoint.logger import LoggerMixin
+from users.form import TrustpointSuperUserCreationForm
+from users.models import Role
 
 from .forms import (
     BackupPasswordForm,
@@ -147,7 +148,7 @@ class SetupWizardIndexView(LoggerMixin, TemplateView):
         return super().get(*args, **kwargs)
 
 
-class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User]]):
+class SetupWizardCreateSuperUserView(LoggerMixin, FormView[TrustpointSuperUserCreationForm]):
     """View for handling the creation of a superuser during the setup wizard.
 
     This view is part of the setup wizard process. It allows an admin to create a
@@ -157,11 +158,11 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
     """
 
     http_method_names = ('get', 'post')
-    form_class: type[UserCreationForm[User]] = UserCreationForm
+    form_class: type[TrustpointSuperUserCreationForm] = TrustpointSuperUserCreationForm
     template_name = 'setup_wizard/create_super_user.html'
     success_url = reverse_lazy('users:login')
 
-    def form_valid(self, form: UserCreationForm[User]) -> HttpResponse:
+    def form_valid(self, form: TrustpointSuperUserCreationForm) -> HttpResponse:
         """Handle form submission for creating a superuser.
 
         Args:
@@ -173,10 +174,14 @@ class SetupWizardCreateSuperUserView(LoggerMixin, FormView[UserCreationForm[User
         try:
             username = form.cleaned_data['username']
             password = form.cleaned_data['password1']
+            call_command('create_admin_group')
             call_command('createsuperuser', interactive=False, username=username, email='')
 
             user = get_user_model().objects.get(username=username)
             user.set_password(password)
+            if hasattr(user, 'role'):
+                admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN.value)
+                user.role = admin_group
             user.save()
 
         except get_user_model().DoesNotExist as e:

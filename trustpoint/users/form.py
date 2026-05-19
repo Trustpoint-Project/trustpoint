@@ -10,6 +10,24 @@ from django.utils.translation import gettext_lazy as _
 from .models import GroupProfile, TrustpointUser
 
 
+class TrustpointSuperUserCreationForm(UserCreationForm[TrustpointUser]):
+    """Form for creating the initial superuser during setup.
+
+    This form is used in the setup wizard to create the first superuser.
+    """
+
+    class Meta(UserCreationForm.Meta):
+        """Metaclass extending the standard UserCreationForm with the TrustpointUser model."""
+        model = TrustpointUser
+        fields = UserCreationForm.Meta.fields
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Apply Bootstrap form-control class to every field widget."""
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs['class'] = 'form-control'
+
+
 class TrustpointUserCreationForm(UserCreationForm[TrustpointUser]):
     """Form for creating a new TrustpointUser with an explicit role selection.
 
