@@ -20,7 +20,7 @@ class Role(models.TextChoices):
     """
 
     ADMIN = 'Admin', _('Admin')
-
+    DEFAULT = 'Default', _('Default')
 
 class GroupProfile(models.Model):
     """Extended attributes for a Django ``Group`` used as a role.
@@ -84,6 +84,29 @@ class TrustpointUserManager(UserManager['TrustpointUser']):
             admin_group, _ = Group.objects.get_or_create(name=Role.ADMIN.value)
             extra_fields['role'] = admin_group
         return super().create_superuser(username, email, password, **extra_fields)
+    
+    def create_user(
+        self,
+        username: str,
+        email: str | None = None,
+        password: str | None = None,
+        **extra_fields: Any,
+    ) -> 'TrustpointUser':
+        """Create a user and assign the default role automatically.
+
+        Args:
+            username: The username for the new user.
+            email: Optional email address.
+            password: The password for the new user.
+            **extra_fields: Additional fields passed to the model.
+
+        Returns:
+            The newly created TrustpointUser instance.
+        """
+        if 'role' not in extra_fields and 'role_id' not in extra_fields:
+            default_group, _ = Group.objects.get_or_create(name=Role.DEFAULT.value)
+            extra_fields['role'] = default_group
+        return super().create_user(username, email, password, **extra_fields)
 
 
 class TrustpointUser(AbstractUser):
