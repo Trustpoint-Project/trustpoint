@@ -20,6 +20,7 @@ class Triggers:
     CERTIFICATE_REVOKED: ClassVar[str] = 'certificate.revoked'
     CMP_INITIALIZATION: ClassVar[str] = 'cmp.initialization'
     CMP_CERTIFICATION: ClassVar[str] = 'cmp.certification'
+    CMP_CERTCONF: ClassVar[str] = 'cmp.certconf'
     EST_SIMPLEENROLL: ClassVar[str] = 'est.simpleenroll'
     EST_SIMPLEREENROLL: ClassVar[str] = 'est.simplereenroll'
     REST_ENROLL: ClassVar[str] = 'rest.enroll'

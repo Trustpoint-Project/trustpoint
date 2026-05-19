@@ -216,7 +216,6 @@ class TestCmpInitializationRequestView:
             operation='certification',
         )
 
-        assert mock_request_context.event == Events.cmp_certification
         mock_workflow2_cls.return_value.handle.assert_called_once_with(mock_request_context)
         mock_processor_cls.return_value.process_operation.assert_called_once_with(mock_request_context)
         assert response.status_code == 200

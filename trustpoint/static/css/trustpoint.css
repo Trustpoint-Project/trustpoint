@@ -30,7 +30,10 @@ body {
 }
 
 .body-users {
+    max-width: 100%;
     overflow-y: auto;
+    scrollbar-gutter: stable;
+    width: 100%;
 }
 
 a {
@@ -409,6 +412,7 @@ hr.hr-m {
 
 #bs-override .btn {
     font-weight: var(--tp-font-weight-h);
+    border-radius: 0.55rem;
 }
 
 #bs-override .form-select, #bs-override .form-control {
@@ -1145,4 +1149,14 @@ input[readonly].readonly-field {
 }
 .tp-status-badge.tp-status-active .tp-status-dot {
     background-color: #198754;
+}
+
+/* unconfigured — warning amber */
+.tp-status-badge.tp-status-unconfigured {
+    color: #856404;
+    border-color: #ffc107;
+    background-color: #fff8e1;
+}
+.tp-status-badge.tp-status-unconfigured .tp-status-dot {
+    background-color: #ffc107;
 }

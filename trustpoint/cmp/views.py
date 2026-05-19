@@ -26,7 +26,6 @@ from request.request_validator.http_req import CmpHttpRequestValidator
 from request.workflow2_issuance import release_delivered_workflow2_request
 from request.workflows2_handler import Workflow2Handler
 from trustpoint.logger import LoggerMixin
-from workflows2.events.request_events import Events
 
 if TYPE_CHECKING:
     from typing import Any
@@ -110,10 +109,6 @@ class CmpRequestView(LoggerMixin, View):
 
             parser = CmpMessageParser()
             ctx = cast('CmpBaseRequestContext', parser.parse(ctx))
-            if ctx.cmp_body_type == 'ir' and ctx.operation == 'initialization':
-                ctx.event = Events.cmp_initialization
-            elif ctx.cmp_body_type == 'cr' and ctx.operation == 'certification':
-                ctx.event = Events.cmp_certification
 
             authenticator = CmpAuthentication()
             authenticator.authenticate(ctx)

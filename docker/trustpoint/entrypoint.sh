@@ -39,10 +39,10 @@ fi
 run_as_www_data "uv run trustpoint/manage.py startup_manager"
 
 # Configure TLS (always needed - will gracefully handle missing files)
-/etc/trustpoint/wizard/transition/update_tls.sh
+/etc/trustpoint/wizard/update_tls.sh
 
 # Configure nginx
-/etc/trustpoint/wizard/transition/configure_nginx.sh
+/etc/trustpoint/wizard/configure_nginx.sh
 
 echo "Starting cron service..."
 cron

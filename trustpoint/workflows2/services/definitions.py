@@ -111,8 +111,8 @@ class WorkflowDefinitionService:
     def create_definition(
         self,
         *,
-        name: str,
-        enabled: bool,
+        name: str | None,
+        enabled: bool | None,
         yaml_text: str,
     ) -> tuple[Workflow2Definition | None, CompileResult]:
         """Create a new definition from validated YAML text."""
@@ -138,8 +138,8 @@ class WorkflowDefinitionService:
         self,
         *,
         definition: Workflow2Definition,
-        name: str,
-        enabled: bool,
+        name: str | None,
+        enabled: bool | None,
         yaml_text: str,
     ) -> tuple[Workflow2Definition | None, CompileResult]:
         """Update an existing definition from validated YAML text."""

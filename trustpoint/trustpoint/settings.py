@@ -75,13 +75,16 @@ LOG_FILE_PATH = LOG_DIR_PATH / Path('trustpoint.log')
 
 BACKUP_FILE_PATH = MEDIA_ROOT / Path('backups')
 
+# Allows all paths that start with:
 PUBLIC_PATHS = [
-    '/setup-wizard',
     '/.well-known/cmp',
     '/.well-known/est',
     '/rest',
+    '/api',
     '/aoki',
     '/crl',
+    '/setup-wizard',
+    '/devices/browser',
 ]
 
 
@@ -298,6 +301,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'trustpoint.middleware.SetupWizardRedirectMiddleware',
     'trustpoint.middleware.Workflow2InlineDrainMiddleware',
     'trustpoint.middleware.TrustpointLoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
