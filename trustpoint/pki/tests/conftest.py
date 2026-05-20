@@ -83,3 +83,36 @@ def domain_instance(issuing_ca_instance: dict[str, Any]) -> dict[str, Any]:
     domain = DomainModel.objects.create(unique_name=DOMAIN_UNIQUE_NAME, issuing_ca=issuing_ca, is_active=True)
     issuing_ca_instance.update({'domain': domain})
     return issuing_ca_instance
+
+
+# ----------------------------
+# CA Rollover Test Fixtures
+# ----------------------------
+
+
+@pytest.fixture
+def issuing_ca_model() -> CaModel:
+    """Create a standalone CaModel instance for rollover tests."""
+    KeyStorageConfig.get_or_create_default()
+    cert, priv_key = CertificateGenerator.create_root_ca(cn='Old Issuing CA')
+    return CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=cert,
+        private_key=priv_key,
+        chain=[],
+        unique_name='old_issuing_ca',
+        ca_type=CA_TYPE,
+    )
+
+
+@pytest.fixture
+def second_issuing_ca_model() -> CaModel:
+    """Create a second CaModel instance for rollover tests (the new CA)."""
+    KeyStorageConfig.get_or_create_default()
+    cert, priv_key = CertificateGenerator.create_root_ca(cn='New Issuing CA')
+    return CertificateGenerator.save_issuing_ca(
+        issuing_ca_cert=cert,
+        private_key=priv_key,
+        chain=[],
+        unique_name='new_issuing_ca',
+        ca_type=CA_TYPE,
+    )

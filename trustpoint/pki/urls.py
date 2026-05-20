@@ -5,6 +5,7 @@ from django.urls import path, re_path
 from devices.views import owner_credentials
 from help_pages import pki_help_views
 from pki.views import ca, cert_profiles, certificates, crls, domains, issuing_cas, truststores
+from pki.views.ca_rollover import CancelRolloverView, CompleteRolloverView, PlanRolloverView, StartRolloverView
 from pki.views.domains import DevIdMethodSelectView, DevIdRegistrationCreateView, DevIdRegistrationDeleteView
 from pki.views.issuing_cas import IssuedCertificatesListView
 
@@ -156,6 +157,27 @@ urlpatterns = [
     ),
     path('issuing-cas/detail/<int:pk>/', issuing_cas.IssuingCaDetailView.as_view(), name='issuing_cas-detail'),
     path('issuing-cas/config/<int:pk>/', issuing_cas.IssuingCaConfigView.as_view(), name='issuing_cas-config'),
+    # CA Rollover management
+    path(
+        'issuing-cas/config/<int:pk>/rollover/plan/',
+        PlanRolloverView.as_view(),
+        name='issuing_cas-rollover-plan',
+    ),
+    path(
+        'issuing-cas/config/<int:pk>/rollover/<int:rollover_pk>/start/',
+        StartRolloverView.as_view(),
+        name='issuing_cas-rollover-start',
+    ),
+    path(
+        'issuing-cas/config/<int:pk>/rollover/<int:rollover_pk>/complete/',
+        CompleteRolloverView.as_view(),
+        name='issuing_cas-rollover-complete',
+    ),
+    path(
+        'issuing-cas/config/<int:pk>/rollover/<int:rollover_pk>/cancel/',
+        CancelRolloverView.as_view(),
+        name='issuing_cas-rollover-cancel',
+    ),
     path(
         'issuing-cas/define-cert-content-est/<int:pk>/',
         issuing_cas.IssuingCaDefineCertContentEstView.as_view(),

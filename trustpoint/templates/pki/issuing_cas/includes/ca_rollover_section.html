@@ -1,0 +1,193 @@
+{% load i18n %}
+{% load internationalization_tags %}
+
+<div class="md-6 mt-4">
+    <div class="card tp-card-centered h-100">
+        <div class="card-header">
+            <h2>{% trans 'CA Rollover Management' %}</h2>
+        </div>
+        <div class="card-body">
+
+            {# ── Active Rollover ── #}
+            {% if active_rollover %}
+            <h3>
+                {% if active_rollover.state == 'planned' %}
+                    {% trans 'Planned Rollover' %}
+                {% elif active_rollover.state == 'awaiting_new_ca' %}
+                    {% trans 'Awaiting New CA' %}
+                {% else %}
+                    {% trans 'Rollover In Progress' %}
+                {% endif %}
+            </h3>
+            <hr class="hr-m">
+            <div class="tp-kvp-list">
+                <div>
+                    <div>{% trans 'Current (Old) CA' %}</div>
+                    <div>{{ active_rollover.old_issuing_ca.unique_name }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'New CA' %}</div>
+                    <div>
+                        {% if active_rollover.new_issuing_ca %}
+                            {{ active_rollover.new_issuing_ca.unique_name }}
+                        {% else %}
+                            <span class="text-muted">{% trans '(pending)' %}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div>
+                    <div>{% trans 'Strategy' %}</div>
+                    <div>{{ active_rollover.get_strategy_type_display }}</div>
+                </div>
+                <div>
+                    <div>{% trans 'State' %}</div>
+                    <div>
+                        {% if active_rollover.state == 'planned' %}
+                            <span class="badge bg-info">{{ active_rollover.get_state_display }}</span>
+                        {% elif active_rollover.state == 'awaiting_new_ca' %}
+                            <span class="badge bg-secondary">{{ active_rollover.get_state_display }}</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark">{{ active_rollover.get_state_display }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div>
+                    <div>{% trans 'Planned At' %}</div>
+                    <div>{{ active_rollover.planned_at|local_datetime }}</div>
+                </div>
+                {% if active_rollover.started_at %}
+                <div>
+                    <div>{% trans 'Started At' %}</div>
+                    <div>{{ active_rollover.started_at|local_datetime }}</div>
+                </div>
+                {% endif %}
+                {% if active_rollover.overlap_end %}
+                <div>
+                    <div>{% trans 'Overlap Ends' %}</div>
+                    <div>{{ active_rollover.overlap_end|local_datetime }}</div>
+                </div>
+                {% endif %}
+                {% if active_rollover.initiated_by %}
+                <div>
+                    <div>{% trans 'Initiated By' %}</div>
+                    <div>{{ active_rollover.initiated_by.username }}</div>
+                </div>
+                {% endif %}
+                {% if active_rollover.notes %}
+                <div>
+                    <div>{% trans 'Notes' %}</div>
+                    <div>{{ active_rollover.notes }}</div>
+                </div>
+                {% endif %}
+            </div>
+
+            {# ── Action Buttons ── #}
+            <div class="mt-3">
+                {% if active_rollover.state == 'planned' %}
+                <a href="{% url 'pki:issuing_cas-rollover-start' pk=issuing_ca.pk rollover_pk=active_rollover.pk %}"
+                   class="btn btn-primary btn-sm me-2">
+                    {% trans 'Start Rollover' %}
+                </a>
+                {% endif %}
+                {% if active_rollover.state == 'in_progress' %}
+                <a href="{% url 'pki:issuing_cas-rollover-complete' pk=issuing_ca.pk rollover_pk=active_rollover.pk %}"
+                   class="btn btn-primary btn-sm me-2">
+                    {% trans 'Complete Rollover' %}
+                </a>
+                {% endif %}
+                <a href="{% url 'pki:issuing_cas-rollover-cancel' pk=issuing_ca.pk rollover_pk=active_rollover.pk %}"
+                   class="btn btn-danger btn-sm">
+                    {% trans 'Cancel Rollover' %}
+                </a>
+            </div>
+            {% endif %}
+
+            {# ── Plan New Rollover Form ── #}
+            {% if rollover_form %}
+            <h3>{% trans 'Plan New Rollover' %}</h3>
+            <hr class="hr-m">
+            <form method="post"
+                  action="{% url 'pki:issuing_cas-rollover-plan' pk=issuing_ca.pk %}"
+                  enctype="multipart/form-data">
+                {% csrf_token %}
+                <input type="hidden" name="strategy_type" value="import_ca">
+
+                {% for field in rollover_form %}
+                <div class="mb-3">
+                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}
+                    <small class="form-text text-muted d-block">{{ field.help_text|safe }}</small>
+                    {% endif %}
+                    {% if field.errors %}
+                    <div class="invalid-feedback d-block">
+                        {% for error in field.errors %}{{ error }}{% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                {% endfor %}
+
+                <button type="submit" class="btn btn-primary">
+                    {% trans 'Plan Rollover' %}
+                </button>
+            </form>
+            {% elif not active_rollover and rollover_completed %}
+            <p class="text-muted">
+                {% trans 'This Issuing CA has already been rolled over. A second rollover is not permitted.' %}
+            </p>
+            {% elif not active_rollover %}
+            <p class="text-muted">{% trans 'No rollover is currently active or planned.' %}</p>
+            {% endif %}
+
+            {# ── Rollover History ── #}
+            {% if rollover_history %}
+            <h3 class="mt-4">{% trans 'Rollover History' %}</h3>
+            <hr class="hr-m">
+            <div class="table-responsive">
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr>
+                            <th>{% trans 'Date' %}</th>
+                            <th>{% trans 'Old CA → New CA' %}</th>
+                            <th>{% trans 'Strategy' %}</th>
+                            <th>{% trans 'State' %}</th>
+                            <th>{% trans 'Initiated By' %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in rollover_history %}
+                        <tr>
+                            <td>{{ entry.planned_at|local_datetime }}</td>
+                            <td>
+                                {{ entry.old_issuing_ca.unique_name }} →
+                                {% if entry.new_issuing_ca %}
+                                    {{ entry.new_issuing_ca.unique_name }}
+                                {% else %}
+                                    <span class="text-muted">{% trans '(none)' %}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ entry.get_strategy_type_display }}</td>
+                            <td>
+                                {% if entry.state == 'completed' %}
+                                    <span class="badge bg-success">{{ entry.get_state_display }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ entry.get_state_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if entry.initiated_by %}
+                                    {{ entry.initiated_by.username }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+
+        </div>
+    </div>
+</div>

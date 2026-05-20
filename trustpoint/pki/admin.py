@@ -6,6 +6,7 @@ from django.http import HttpRequest
 from pki.models.issued_credential import IssuedCredentialModel, RemoteIssuedCredentialModel
 
 from .models import CaModel
+from .models.ca_rollover import CaRolloverModel
 from .models.certificate import CertificateModel
 from .models.credential import CertificateChainOrderModel, CredentialModel
 from .models.devid_registration import DevIdRegistration
@@ -101,3 +102,13 @@ admin.site.register(CaModel, CaModelAdmin)
 admin.site.register(DevIdRegistration, DevIdRegistrationAdmin)
 admin.site.register(IssuedCredentialModel, IssuedCredentialModelAdmin)
 admin.site.register(RemoteIssuedCredentialModel, RemoteIssuedCredentialModelAdmin)
+
+
+@admin.register(CaRolloverModel)
+class CaRolloverAdmin(admin.ModelAdmin[CaRolloverModel]):
+    """Admin configuration for the CaRolloverModel."""
+
+    list_display = ('old_issuing_ca', 'new_issuing_ca', 'state', 'strategy_type', 'planned_at', 'initiated_by')
+    list_filter = ('state', 'strategy_type')
+    readonly_fields = ('planned_at', 'started_at', 'completed_at')
+    search_fields = ('old_issuing_ca__unique_name', 'new_issuing_ca__unique_name', 'notes')
