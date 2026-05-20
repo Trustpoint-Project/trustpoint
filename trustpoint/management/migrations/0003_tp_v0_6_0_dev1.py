@@ -31,6 +31,14 @@ class Migration(migrations.Migration):
                 ('last_updated', models.DateTimeField(auto_now=True)),
             ],
         ),
+        migrations.RemoveField(
+            model_name='pkcs11token',
+            name='kek',
+        ),
+        migrations.RemoveField(
+            model_name='securityconfig',
+            name='require_physical_hsm',
+        ),
         migrations.AddField(
             model_name='notificationconfig',
             name='crl_expiry_warning_days',
@@ -71,7 +79,16 @@ class Migration(migrations.Migration):
                 'verbose_name': 'Audit Log Entry',
                 'verbose_name_plural': 'Audit Log Entries',
                 'ordering': ['-timestamp'],
-                'indexes': [models.Index(fields=['target_content_type', 'target_object_id'], name='audit_log_target_idx')],
             },
+        ),
+        migrations.DeleteModel(
+            name='KeyStorageConfig',
+        ),
+        migrations.DeleteModel(
+            name='PKCS11Token',
+        ),
+        migrations.AddIndex(
+            model_name='auditlog',
+            index=models.Index(fields=['target_content_type', 'target_object_id'], name='audit_log_target_idx'),
         ),
     ]

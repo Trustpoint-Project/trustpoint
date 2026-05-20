@@ -63,20 +63,20 @@ class TrustpointLoginRequiredMiddleware(LoggerMixin):
 class SetupWizardRedirectMiddleware(LoggerMixin):
     """Redirect requests based on whether the global setup wizard has completed."""
 
-    USERS_LOGIN_REVERSE = reverse('users:login')
+    USERS_LOGIN_REVERSE = '/users/login/'
 
     SETUP_WIZARD_PATH = '/setup-wizard'
-    SETUP_WIZARD_INDEX_REVERSE = reverse('setup_wizard:index')
+    SETUP_WIZARD_INDEX_REVERSE = '/setup-wizard/'
 
-    WIZARD_COMPLETED_HOME_REVERSE = reverse('home:index')
+    WIZARD_COMPLETED_HOME_REVERSE = '/home/'
 
     ALLOWED_NO_USER_CREATED = (
         '/setup-wizard',
         '/setup-wizard/',
-        '/setup-wizard/create-super-user',
-        '/setup-wizard/create-super-user/',
         '/setup-wizard/restore-backup',
         '/setup-wizard/restore-backup/',
+        '/users/login',
+        '/users/login/',
         '/setup-wizard/restore',
         '/setup-wizard/restore/',
     )
@@ -85,10 +85,10 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         '/users/login',
         '/users/login/',
     )
-    ALLOWED_NON_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH = reverse('users:login')
+    ALLOWED_NON_AUTH_WIZARD_NOT_COMPLETED_REDIRECT_PATH = '/users/login/'
 
     ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS = (
-        '/setup-wizard/fresh-install',
+        '/setup-wizard',
         '/users/logout',
     )
 
@@ -106,23 +106,38 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
         config_model = SetupWizardConfigModel.get_singleton()
         return (
             (
+                '/setup-wizard/fresh-install/admin-user/',
+                '/setup-wizard/fresh-install/admin-user/',
+                config_model.fresh_install_admin_user_submitted,
+            ),
+            (
+                '/setup-wizard/fresh-install/database/',
+                '/setup-wizard/fresh-install/database/',
+                config_model.fresh_install_database_submitted,
+            ),
+            (
                 '/setup-wizard/fresh-install/crypto-storage/',
-                reverse('setup_wizard:fresh_install_crypto_storage'),
+                '/setup-wizard/fresh-install/crypto-storage/',
                 config_model.fresh_install_crypto_storage_submitted,
             ),
             (
+                '/setup-wizard/fresh-install/backend-config/',
+                '/setup-wizard/fresh-install/backend-config/',
+                config_model.fresh_install_backend_config_submitted,
+            ),
+            (
                 '/setup-wizard/fresh-install/demo-data/',
-                reverse('setup_wizard:fresh_install_demo_data'),
+                '/setup-wizard/fresh-install/demo-data/',
                 config_model.fresh_install_demo_data_submitted,
             ),
             (
                 '/setup-wizard/fresh-install/tls-config/',
-                reverse('setup_wizard:fresh_install_tls_config'),
+                '/setup-wizard/fresh-install/tls-config/',
                 config_model.fresh_install_tls_config_submitted,
             ),
             (
                 '/setup-wizard/fresh-install/summary/',
-                reverse('setup_wizard:fresh_install_summary'),
+                '/setup-wizard/fresh-install/summary/',
                 config_model.fresh_install_summary_submitted,
             ),
         )
@@ -170,7 +185,101 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
 
         return step_paths[first_unsubmitted_index][1]
 
-    def __call__(self, request: HttpRequest) -> HttpResponse:
+    @classmethod
+    def _is_non_bootstrap_dev_environment(cls) -> bool:
+        """Return whether the app runs in local development mode without bootstrap."""
+        return not settings.DOCKER_CONTAINER and not getattr(settings, 'TRUSTPOINT_IS_BOOTSTRAP', False)
+
+    @classmethod
+    def _get_dev_environment_redirect_path(cls, path: str) -> str | None:
+        """Return the redirect path for local development mode, if required."""
+        if path.startswith(cls.SETUP_WIZARD_PATH):
+            return cls.USERS_LOGIN_REVERSE
+        return None
+
+    @classmethod
+    def _get_completed_wizard_redirect_path(cls, path: str) -> str | None:
+        """Return the redirect path when the setup wizard is completed."""
+        if path.startswith(cls.SETUP_WIZARD_INDEX_REVERSE):
+            if getattr(settings, 'TRUSTPOINT_IS_BOOTSTRAP', False):
+                return cls.USERS_LOGIN_REVERSE
+            return cls.WIZARD_COMPLETED_HOME_REVERSE
+        return None
+
+    def _get_no_user_redirect_path(self, path: str) -> str | None:
+        """Return the redirect path when no user exists yet, if required."""
+        if path in self.ALLOWED_NO_USER_CREATED:
+            return None
+
+        self.logger.debug('redirecting to wizard index')
+        return self.SETUP_WIZARD_INDEX_REVERSE
+
+    def _get_unauthenticated_redirect_path(self, path: str) -> str | None:
+        """Return the redirect path for unauthenticated users, if required."""
+        if path in self.ALLOWED_NON_AUTH_PATHS:
+            return None
+        return self.USERS_LOGIN_REVERSE
+
+    def _get_authenticated_redirect_path(self, path: str) -> str | None:
+        """Return the redirect path for authenticated users while setup is incomplete."""
+        if not path.startswith(self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS):
+            config_model = SetupWizardConfigModel.get_singleton()
+            if config_model.bootstrap_active_flow in {
+                SetupWizardConfigModel.BootstrapFlow.CONNECT_EXISTING,
+                SetupWizardConfigModel.BootstrapFlow.RESTORE_BACKUP,
+            }:
+                return self.SETUP_WIZARD_INDEX_REVERSE
+            return self._get_first_unsubmitted_redirect_path()
+
+        return self._get_fresh_install_redirect_path(path)
+
+    def _get_incomplete_wizard_redirect_path(
+        self,
+        path: str,
+        *,
+        authenticated: bool,
+        users_exists: bool,
+    ) -> str | None:
+        """Return the redirect path while the setup wizard is incomplete."""
+        if not users_exists:
+            return self._get_no_user_redirect_path(path)
+
+        if not authenticated:
+            return self._get_unauthenticated_redirect_path(path)
+
+        return self._get_authenticated_redirect_path(path)
+
+    def _get_redirect_path(self, request: HttpRequest) -> str | None:
+        """Return the redirect path for the request, if required."""
+        path = request.path_info
+
+        if getattr(settings, 'TRUSTPOINT_IS_OPERATIONAL', False):
+            return None
+
+        # handle dev environment
+        if self._is_non_bootstrap_dev_environment():
+            return self._get_dev_environment_redirect_path(path)
+
+        setup_wizard_completed = SetupWizardCompletedModel.setup_wizard_completed()
+        self.logger.debug('setup_wizard_completed: %s', setup_wizard_completed)
+
+        # handle wizard completed cases
+        if setup_wizard_completed:
+            return self._get_completed_wizard_redirect_path(path)
+
+        users_exists = get_user_model().objects.exists()
+        self.logger.debug('user_exists: %s', users_exists)
+
+        authenticated = request.user.is_authenticated
+        self.logger.debug('authenticated: %s', authenticated)
+
+        return self._get_incomplete_wizard_redirect_path(
+            path,
+            authenticated=authenticated,
+            users_exists=users_exists,
+        )
+
+    def __call__(self, request: HttpRequest) -> HttpResponseBase:
         """Handle an incoming request and apply redirects.
 
         Depends on wizard status, request path and if the user is authenticated.
@@ -182,52 +291,10 @@ class SetupWizardRedirectMiddleware(LoggerMixin):
             A redirect response when access is not allowed, otherwise the normal
             downstream response.
         """
-        redirect_dest: str | None = None
-
         self.logger.debug('\n\npath_info: %s', request.path_info)
 
-        # handle dev environment
-        if not settings.DOCKER_CONTAINER:
-            if request.path_info.startswith(self.SETUP_WIZARD_PATH):
-                return redirect(self.USERS_LOGIN_REVERSE, permanent=False)
-            return self.get_response(request)
-
-        setup_wizard_completed = SetupWizardCompletedModel.setup_wizard_completed()
-        self.logger.debug('setup_wizard_completed: %s', setup_wizard_completed)
-
-        # handle wizard completed cases
-        if setup_wizard_completed:
-            if request.path_info.startswith(self.SETUP_WIZARD_INDEX_REVERSE):
-                return redirect(self.WIZARD_COMPLETED_HOME_REVERSE, permanent=False)
-            return self.get_response(request)
-
-        users_exists = get_user_model().objects.exists()
-        self.logger.debug('user_exists: %s', users_exists)
-
-        # if no user exists, only allow the views before creating a user
-        if not users_exists and request.path_info not in self.ALLOWED_NO_USER_CREATED:
-            self.logger.debug('redirecting to wizard index')
-            redirect_dest = self.SETUP_WIZARD_INDEX_REVERSE
-
-        authenticated = request.user.is_authenticated
-        self.logger.debug('authenticated: %s', authenticated)
-
-        # if a user exists but is not authenticated, redirect to login page
-        if not authenticated and users_exists and request.path_info not in self.ALLOWED_NON_AUTH_PATHS:
-            redirect_dest = self.USERS_LOGIN_REVERSE
-
-        # if user is authenticated (wizard not completed), only allow views to finish up the wizard
-        if (
-            authenticated
-            and users_exists
-            and not request.path_info.startswith(self.ALLOWED_AUTH_WIZARD_NOT_COMPLETED_PATHS)
-        ):
-            redirect_dest = self._get_first_unsubmitted_redirect_path()
-
-        if authenticated and users_exists and redirect_dest is None:
-            redirect_dest = self._get_fresh_install_redirect_path(request.path_info)
-
-        if redirect_dest:
+        redirect_dest = self._get_redirect_path(request)
+        if redirect_dest is not None:
             self.logger.debug('redirecting dest: %s', redirect_dest)
             return redirect(redirect_dest, permanent=False)
 

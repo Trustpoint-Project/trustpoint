@@ -17,13 +17,20 @@ from cryptography.hazmat.primitives.asymmetric import (
     padding as asym_padding,
 )
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
-from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
+from cryptography.hazmat.primitives.asymmetric.utils import Prehashed, encode_dss_signature
 from cryptography.hazmat.primitives.serialization import Encoding, KeySerializationEncryption, PrivateFormat
 from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, lib
 from pkcs11.exceptions import NoSuchKey, PKCS11Error
+from pkcs11.util.ec import encode_named_curve_parameters
 from trustpoint_core.oid import NamedCurve
 
 from trustpoint.logger import LoggerMixin
+
+ASN1_OCTET_STRING_TAG = 0x04
+ASN1_MIN_HEADER_LENGTH = 2
+ASN1_LONG_FORM_LENGTH_THRESHOLD = 0x80
+ASN1_LENGTH_SIZE_MASK = 0x7F
+EC_UNCOMPRESSED_POINT_PREFIX = 0x04
 
 
 class Pkcs11Utilities(LoggerMixin):
@@ -156,7 +163,7 @@ class Pkcs11Utilities(LoggerMixin):
 
         Args:
             token_label (str): Label of the token to open a session with.
-            user_pin (str): User PIN for authentication.
+            user_pin (str): User PIN for the token.
 
         Returns:
             pkcs11.Session: The opened session.
@@ -269,14 +276,33 @@ class Pkcs11PrivateKey(ABC, LoggerMixin):
             self._lib = pkcs11.lib(self._lib_path)
             if self._lib is None:
                 self._raise_runtime_error('PKCS#11 library is not initialized.')
-            self._token = self._lib.get_token(token_label=self._token_label)
+            if self._slot_id is not None:
+                matching_slots = [
+                    slot
+                    for slot in self._lib.get_slots(token_present=True)
+                    if getattr(slot, 'slot_id', None) == self._slot_id
+                ]
+                if matching_slots:
+                    self._token = matching_slots[0].get_token()
+                elif self._token_label:
+                    self.logger.warning(
+                        'PKCS#11 slot %s was not found; falling back to token label %r.',
+                        self._slot_id,
+                        self._token_label,
+                    )
+                    self._token = self._lib.get_token(token_label=self._token_label)
+                else:
+                    self._raise_runtime_error(f'PKCS#11 slot {self._slot_id} with a present token was not found.')
+            else:
+                self._token = self._lib.get_token(token_label=self._token_label)
 
             self._session = self._token.open(user_pin=self._user_pin, rw=True)
         except pkcs11.exceptions.UserAlreadyLoggedIn:
             if self._token is not None:
                 self._session = self._token.open(rw=True)
         except Exception as e:
-            msg = f'Failed to initialize PKCS#11 session: {e}; lib_path: {self._lib_path} token: {self._token_label} '
+            selector = f'slot: {self._slot_id}' if self._slot_id is not None else f'token: {self._token_label}'
+            msg = f'Failed to initialize PKCS#11 session: {e}; lib_path: {self._lib_path} {selector} '
             raise RuntimeError(msg) from e
 
     def copy_key(
@@ -566,6 +592,7 @@ class Pkcs11AESKey:
         """Context manager exit."""
         self.close()
 
+
 class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
     """PKCS#11-backed RSA private key implementation.
 
@@ -573,6 +600,13 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
     It implements the cryptography RSAPrivateKey interface and supports signing, encryption,
     and key management operations.
     """
+
+    DIGEST_INFO_PREFIXES: ClassVar[dict[type[hashes.HashAlgorithm], bytes]] = {
+        hashes.SHA224: bytes.fromhex('302d300d06096086480165030402040500041c'),
+        hashes.SHA256: bytes.fromhex('3031300d060960864801650304020105000420'),
+        hashes.SHA384: bytes.fromhex('3041300d060960864801650304020205000430'),
+        hashes.SHA512: bytes.fromhex('3051300d060960864801650304020305000440'),
+    }
 
     DEFAULT_PUBLIC_TEMPLATE: ClassVar[dict[Attribute, Any]] = {
         Attribute.CLASS: ObjectClass.PUBLIC_KEY,
@@ -795,16 +829,23 @@ class Pkcs11RSAPrivateKey(Pkcs11PrivateKey, rsa.RSAPrivateKey):
         if not isinstance(padding, asym_padding.PKCS1v15):
             _raise_unsupported_padding()
 
+        hash_algorithm = getattr(algorithm, '_algorithm', algorithm)
+
         if isinstance(algorithm, Prehashed):
             # Data is already hashed, sign directly
             digest_bytes = bytes(data)
         else:
             # Hash the data first
-            digest = hashes.Hash(algorithm)
+            digest = hashes.Hash(hash_algorithm)
             digest.update(data)
             digest_bytes = digest.finalize()
 
-        return self._key.sign(digest_bytes, mechanism=Mechanism.RSA_PKCS)
+        digest_info_prefix = self.DIGEST_INFO_PREFIXES.get(type(hash_algorithm))
+        if digest_info_prefix is None:
+            msg = f'Unsupported RSA PKCS#1 v1.5 hash algorithm: {hash_algorithm.name}'
+            raise ValueError(msg)
+
+        return self._key.sign(digest_info_prefix + digest_bytes, mechanism=Mechanism.RSA_PKCS)
 
     def public_key(self) -> RSAPublicKey:
         """Return the cached or retrieved RSA public key.
@@ -1039,8 +1080,12 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             raise ValueError(msg)
 
         named_curve = NamedCurve.from_curve(type(curve))
-        key_length = self.CURVE_KEY_LENGTHS.get(named_curve)
-        if key_length is None:
+        curve_oid = {
+            NamedCurve.SECP256R1: '1.2.840.10045.3.1.7',
+            NamedCurve.SECP384R1: '1.3.132.0.34',
+            NamedCurve.SECP521R1: '1.3.132.0.35',
+        }.get(named_curve)
+        if curve_oid is None:
             msg = f'Unsupported curve: {curve.name}'
             raise ValueError(msg)
 
@@ -1061,9 +1106,12 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             msg = 'PKCS#11 session is not initialized.'
             self._raise_value_error(msg)
 
-        _, priv = self._session.generate_keypair(
+        parameters = self._session.create_domain_parameters(
             KeyType.EC,
-            key_length,
+            {Attribute.EC_PARAMS: encode_named_curve_parameters(curve_oid)},
+            local=True,
+        )
+        _, priv = parameters.generate_keypair(
             public_template=final_public_template,
             private_template=final_private_template,
             store=True,
@@ -1110,7 +1158,18 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             msg = 'EC private key is not loaded.'
             self._raise_value_error(msg)
 
-        return self._key.sign(hashed, mechanism=Mechanism.ECDSA)
+        signature = bytes(self._key.sign(hashed, mechanism=Mechanism.ECDSA))
+        if signature.startswith(b'\x30'):
+            return signature
+
+        coord_size = (self.curve.key_size + 7) // 8
+        if len(signature) != 2 * coord_size:
+            msg = f'Unexpected raw ECDSA signature length: {len(signature)}.'
+            raise ValueError(msg)
+
+        r = int.from_bytes(signature[:coord_size], 'big')
+        s = int.from_bytes(signature[coord_size:], 'big')
+        return encode_dss_signature(r, s)
 
     def public_key(self) -> ec.EllipticCurvePublicKey:
         """Return the cached or retrieved EC public key.
@@ -1139,15 +1198,14 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
             raise ValueError(msg) from e
 
         try:
-            ec_point = public[Attribute.EC_POINT]
-
-            ec_uncompressed_point_prefix = 0x04
-            ec_point_min_length = 3
-            if not ec_point or len(ec_point) < ec_point_min_length or ec_point[0] != ec_uncompressed_point_prefix:
-                msg = 'EC public key point is missing or has invalid format.'
-                raise ValueError(msg)
             curve = self.curve
             coord_size = (curve.key_size + 7) // 8
+            ec_point = self._unwrap_ec_point(bytes(public[Attribute.EC_POINT]))
+            expected_point_length = 1 + (2 * coord_size)
+
+            if len(ec_point) != expected_point_length or ec_point[0] != EC_UNCOMPRESSED_POINT_PREFIX:
+                msg = 'EC public key point is missing or has invalid format.'
+                raise ValueError(msg)
 
             point_data = ec_point[1:]  # Skip the 0x04 prefix
             if len(point_data) != 2 * coord_size:
@@ -1167,6 +1225,27 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
         pub_numbers = ec.EllipticCurvePublicNumbers(x, y, curve)
         self._public_key = pub_numbers.public_key()
         return self._public_key
+
+    @staticmethod
+    def _unwrap_ec_point(ec_point: bytes) -> bytes:
+        """Return a raw uncompressed EC point from common PKCS#11 encodings."""
+        if len(ec_point) < ASN1_MIN_HEADER_LENGTH or ec_point[0] != ASN1_OCTET_STRING_TAG:
+            return ec_point
+
+        length_octet = ec_point[1]
+        if length_octet < ASN1_LONG_FORM_LENGTH_THRESHOLD:
+            header_length = ASN1_MIN_HEADER_LENGTH
+            payload_length = length_octet
+        else:
+            length_size = length_octet & ASN1_LENGTH_SIZE_MASK
+            if length_size == 0 or len(ec_point) < ASN1_MIN_HEADER_LENGTH + length_size:
+                return ec_point
+            header_length = ASN1_MIN_HEADER_LENGTH + length_size
+            payload_length = int.from_bytes(ec_point[ASN1_MIN_HEADER_LENGTH:header_length], 'big')
+
+        if payload_length == len(ec_point) - header_length:
+            return ec_point[header_length:]
+        return ec_point
 
     def _get_curve_params(self, curve: ec.EllipticCurve) -> bytes:
         """Get the OID parameters for a given EC curve.
@@ -1217,7 +1296,9 @@ class Pkcs11ECPrivateKey(Pkcs11PrivateKey, ec.EllipticCurvePrivateKey):
 
         # Encode public key point as uncompressed format (0x04 + x + y)
         public_point = (
-            b'\x04' + int_to_bytes(public_numbers.x, coord_size) + int_to_bytes(public_numbers.y, coord_size)
+            bytes([EC_UNCOMPRESSED_POINT_PREFIX])
+            + int_to_bytes(public_numbers.x, coord_size)
+            + int_to_bytes(public_numbers.y, coord_size)
         )
 
         private_template = {

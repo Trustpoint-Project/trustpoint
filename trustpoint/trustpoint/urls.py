@@ -66,7 +66,6 @@ else:
 urlpatterns += [
     path('users/', include('users.urls')),
     path('signer/', include('signer.urls')),
-    path('setup-wizard/', include('setup_wizard.urls')),
     path('pki/', include('pki.urls')),
     path('crl/<int:pk>/', CrlDownloadView.as_view(), name='crl-download'),
     path('.well-known/cmp/', include('cmp.urls')),

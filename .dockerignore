@@ -15,6 +15,12 @@
 **/md-report.md
 docs/build/
 workflow2Folder/
+var/
+temp.txt
+*.so
+*.so.*
+*.sqlite3
+*.db
 # Exclude sensitive files
 **/hsm_so_pin.txt
 **/hsm_pin.txt

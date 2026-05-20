@@ -1,6 +1,5 @@
-from unittest import mock
-
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from django.test import TestCase
 
 from management.forms import PKCS11ConfigForm
@@ -24,38 +23,27 @@ class PKCS11ConfigFormTestCase(TestCase):
         form = PKCS11ConfigForm(data=self.valid_data)
         self.assertTrue(form.is_valid())
 
-    def test_form_invalid_data(self):
-        """Test that the form is invalid with invalid data."""
-        invalid_data = self.valid_data.copy()
-        invalid_data['slot'] = -1
-        form = PKCS11ConfigForm(data=invalid_data)
-        self.assertFalse(form.is_valid())
-        self.assertIn('slot', form.errors)
-
-    @mock.patch('management.forms.PKCS11Token.objects.get_or_create')
-    def test_save_token_config(self, mock_get_or_create):
-        """Test that save_token_config saves the token configuration."""
-        mock_token = mock.Mock()
-        mock_get_or_create.return_value = (mock_token, True)
+    def test_form_ignores_posted_mutations(self):
+        """Test that posted values do not mutate the disabled summary fields."""
         form = PKCS11ConfigForm(data=self.valid_data)
         self.assertTrue(form.is_valid())
-        token = form.save_token_config()
-        self.assertEqual(token, mock_token)
-        mock_get_or_create.assert_called_once_with(
-            label='Trustpoint-SoftHSM',  # Cleaned data for softhsm
-            defaults={
-                'hsm_type': 'softhsm',
-                'slot': 0,
-                'module_path': '/usr/lib/libpkcs11-proxy.so',
-            }
-        )
+        self.assertEqual(form.cleaned_data['token_label'], '')
+        self.assertIsNone(form.cleaned_data['slot_id'])
+        self.assertEqual(form.cleaned_data['module_path'], '')
 
-    def test_clean_sets_defaults_for_softhsm(self):
-        """Test that clean sets defaults for softhsm."""
-        data = {'hsm_type': 'softhsm'}
-        form = PKCS11ConfigForm(data=data)
+    def test_save_token_config(self):
+        """Test that save_token_config rejects post-setup mutation."""
+        form = PKCS11ConfigForm(data=self.valid_data)
         self.assertTrue(form.is_valid())
-        cleaned_data = form.cleaned_data
-        self.assertEqual(cleaned_data['label'], 'Trustpoint-SoftHSM')
-        self.assertEqual(cleaned_data['slot'], 0)
-        self.assertEqual(cleaned_data['module_path'], '/usr/lib/libpkcs11-proxy.so')
+
+        with self.assertRaises(ValidationError):
+            form.save_token_config()
+
+    def test_read_only_fields_exist(self):
+        """Test that the form exposes the configured backend summary fields."""
+        form = PKCS11ConfigForm(data={})
+
+        self.assertIn('token_label', form.fields)
+        self.assertIn('slot_id', form.fields)
+        self.assertIn('module_path', form.fields)
+        self.assertIn('auth_source_ref', form.fields)

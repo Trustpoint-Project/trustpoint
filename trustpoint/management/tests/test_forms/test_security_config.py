@@ -68,7 +68,6 @@ class SecurityConfigFormTest(TestCase):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': False,
             'allow_self_signed_ca': False,
-            'require_physical_hsm': False,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -90,7 +89,6 @@ class SecurityConfigFormTest(TestCase):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
-            'require_physical_hsm': False,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -110,7 +108,6 @@ class SecurityConfigFormTest(TestCase):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
-            'require_physical_hsm': False,
         }
         form = SecurityConfigForm(data=form_data)
         self.assertTrue(form.is_valid())
@@ -130,7 +127,6 @@ class SecurityConfigFormTest(TestCase):
             'allow_ca_issuance': False,
             'allow_auto_gen_pki': True,
             'allow_self_signed_ca': True,
-            'require_physical_hsm': False,
         }
         form = SecurityConfigForm(data=form_data, instance=self.config)
         self.assertTrue(form.is_valid())
@@ -178,7 +174,6 @@ class SecurityConfigFormTest(TestCase):
                 'allow_ca_issuance': defaults['allow_ca_issuance'],
                 'allow_auto_gen_pki': defaults['allow_auto_gen_pki'],
                 'allow_self_signed_ca': defaults['allow_self_signed_ca'],
-                'require_physical_hsm': defaults['require_physical_hsm'],
             }
             form = SecurityConfigForm(data=form_data, instance=instance)
             self.assertTrue(form.is_valid(), f"Form should be valid for mode {mode}")

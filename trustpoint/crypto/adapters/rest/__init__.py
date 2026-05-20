@@ -1,0 +1,1 @@
+"""REST crypto backend adapter."""

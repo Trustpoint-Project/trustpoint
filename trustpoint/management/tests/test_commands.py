@@ -1,6 +1,6 @@
 """Test suite for Django management commands."""
 from io import StringIO
-from unittest.mock import Mock, MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from django.conf import settings
 from django.core.management import call_command
@@ -8,7 +8,7 @@ from django.core.management.base import CommandError
 from django.test import TestCase
 from packaging.version import Version
 
-from management.models import AppVersion, PKCS11Token, KeyStorageConfig
+from management.models import AppVersion
 
 
 class CompileMsgCommandTest(TestCase):
@@ -21,6 +21,26 @@ class CompileMsgCommandTest(TestCase):
         
         # Verify it inherits from the right class
         self.assertTrue(issubclass(Command, CompileMessagesCommand))
+
+
+class BootstrapManagerCommandTest(TestCase):
+    """Test suite for bootstrap_manager command helpers."""
+
+    @patch('management.management.commands.bootstrap_manager.call_command')
+    def test_compile_messages_ignores_virtualenv_locales(self, mock_call_command: MagicMock) -> None:
+        """Test bootstrap message compilation ignores dependency locale files."""
+        from management.management.commands.bootstrap_manager import Command  # noqa: PLC0415
+
+        output = Mock()
+
+        Command._compile_messages(output)  # noqa: SLF001
+
+        mock_call_command.assert_called_once()
+        call_args = mock_call_command.call_args.args
+        assert call_args[:5] == ('compilemessages', '-l', 'de', '-l', 'en')
+        assert '--ignore' in call_args
+        assert '.venv' in call_args
+        output.write.assert_called_once_with('Compiling translation messages...')
 
 
 class MakeMsgCommandTest(TestCase):
@@ -114,9 +134,6 @@ class InitTrustpointCommandTest(TestCase):
         calls = [call[0][0] for call in mock_call_command.call_args_list]
         self.assertIn('tls_cred', calls)
         
-        # Should create KeyStorageConfig
-        self.assertTrue(KeyStorageConfig.objects.filter(pk=1).exists())
-
     @patch('management.management.commands.inittrustpoint.Path.open')
     @patch('management.management.commands.inittrustpoint.call_command')
     def test_inittrustpoint_container_id_not_found(
@@ -156,62 +173,70 @@ class InitTrustpointCommandTest(TestCase):
 class StartupManagerCommandTest(TestCase):
     """Test suite for startup_manager command."""
 
-    @patch('management.management.commands.startup_manager.StartupStrategySelector')
+    @patch('management.management.commands.startup_manager.call_command')
+    @patch('management.management.commands.startup_manager.CompletedRuntimeStartupStrategy')
     @patch('management.management.commands.startup_manager.StartupContextBuilder')
-    def test_startup_manager_db_not_initialized(
+    def test_startup_manager_operational_startup(
         self,
         mock_builder: MagicMock,
-        mock_selector: MagicMock
+        mock_strategy_class: MagicMock,
+        mock_call_command: MagicMock,
     ) -> None:
-        """Test startup_manager when database is not initialized."""
-        # Simulate ProgrammingError when querying AppVersion
-        with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
-            from django.db.utils import ProgrammingError
-            mock_first.side_effect = ProgrammingError('relation does not exist')
-            
-            mock_context = Mock()
-            mock_builder_instance = Mock()
-            mock_builder_instance.build_for_db_init.return_value = mock_context
-            mock_builder.return_value = mock_builder_instance
-            
-            mock_strategy = Mock()
-            mock_selector.select_startup_strategy.return_value = mock_strategy
-            
-            out = StringIO()
-            call_command('startup_manager', stdout=out)
-            
-            mock_selector.select_startup_strategy.assert_called_once_with(
-                db_initialized=False,
-                has_version=False
-            )
-            mock_strategy.execute.assert_called_once_with(mock_context)
-
-    @patch('management.management.commands.startup_manager.StartupStrategySelector')
-    @patch('management.management.commands.startup_manager.StartupContextBuilder')
-    def test_startup_manager_db_initialized_no_version(
-        self,
-        mock_builder: MagicMock,
-        mock_selector: MagicMock
-    ) -> None:
-        """Test startup_manager when database is initialized but no version record."""
+        """Test startup_manager executes the operational startup path."""
         with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
             mock_first.return_value = None
-            
+
             mock_context = Mock()
+            mock_context.is_wizard_completed = True
             mock_builder_instance = Mock()
-            mock_builder_instance.build_for_db_init.return_value = mock_context
+            mock_builder_instance.with_db_version.return_value = mock_builder_instance
+            mock_builder_instance.collect_backend_state.return_value = mock_builder_instance
+            mock_builder_instance.collect_appsecret_state.return_value = mock_builder_instance
+            mock_builder_instance.collect_tls_staging_state.return_value = mock_builder_instance
+            mock_builder_instance.build.return_value = mock_context
             mock_builder.return_value = mock_builder_instance
-            
+
             mock_strategy = Mock()
-            mock_selector.select_startup_strategy.return_value = mock_strategy
-            
+            mock_strategy_class.return_value = mock_strategy
+
             out = StringIO()
             call_command('startup_manager', stdout=out)
-            
-            mock_selector.select_startup_strategy.assert_called_once_with(
-                db_initialized=True,
-                has_version=False
-            )
+
+            mock_call_command.assert_called_once_with('migrate')
+            mock_strategy_class.assert_called_once_with()
+            mock_strategy.execute.assert_called_once_with(mock_context)
+
+    @patch('management.management.commands.startup_manager.call_command')
+    @patch('management.management.commands.startup_manager.CompletedRuntimeStartupStrategy')
+    @patch('management.management.commands.startup_manager.StartupContextBuilder')
+    def test_startup_manager_runtime_error_becomes_command_error(
+        self,
+        mock_builder: MagicMock,
+        mock_strategy_class: MagicMock,
+        mock_call_command: MagicMock,
+    ) -> None:
+        """Test startup_manager reports operational dependency failures clearly."""
+        with patch('management.management.commands.startup_manager.AppVersion.objects.first') as mock_first:
+            mock_first.return_value = None
+
+            mock_context = Mock()
+            mock_builder_instance = Mock()
+            mock_builder_instance.with_db_version.return_value = mock_builder_instance
+            mock_builder_instance.collect_backend_state.return_value = mock_builder_instance
+            mock_builder_instance.collect_appsecret_state.return_value = mock_builder_instance
+            mock_builder_instance.collect_tls_staging_state.return_value = mock_builder_instance
+            mock_builder_instance.build.return_value = mock_context
+            mock_builder.return_value = mock_builder_instance
+            mock_strategy = Mock()
+            mock_strategy.execute.side_effect = RuntimeError('missing backend')
+            mock_strategy_class.return_value = mock_strategy
+
+            out = StringIO()
+            with self.assertRaises(CommandError):
+                call_command('startup_manager', stdout=out)
+
+            mock_call_command.assert_called_once_with('migrate')
+            mock_strategy_class.assert_called_once_with()
 
     def test_startup_manager_version_parsing(self) -> None:
         """Test startup_manager can parse version from settings."""
@@ -226,13 +251,6 @@ class StartupManagerCommandTest(TestCase):
 
 class TlsCredCommandTest(TestCase):
     """Test suite for tls_cred command."""
-
-    def setUp(self) -> None:
-        """Set up test fixtures."""
-        KeyStorageConfig.objects.create(
-            pk=1,
-            storage_type=KeyStorageConfig.StorageType.SOFTWARE
-        )
 
     @patch('management.management.commands.tls_cred.TlsServerCredentialGenerator')
     @patch('management.management.commands.tls_cred.CredentialModel')
@@ -369,93 +387,6 @@ class TrustpointBackupCommandTest(TestCase):
             call_command('trustpointbackup', stdout=out)
         
         self.assertIn('--filename', str(cm.exception))
-
-
-class TrustpointRestoreCommandTest(TestCase):
-    """Test suite for trustpointrestore command."""
-
-    @patch('management.management.commands.trustpointrestore.subprocess.run')
-    @patch('management.management.commands.trustpointrestore.call_command')
-    @patch('management.management.commands.trustpointrestore.ActiveTrustpointTlsServerCredentialModel')
-    @patch('management.management.commands.trustpointrestore.AppVersion')
-    def test_trustpointrestore_without_filepath(
-        self,
-        mock_app_version: MagicMock,
-        mock_active_tls: MagicMock,
-        mock_call_command: MagicMock,
-        mock_subprocess: MagicMock
-    ) -> None:
-        """Test trustpointrestore command without filepath option."""
-        # Setup mocks
-        mock_version = Mock()
-        mock_version.version = '1.0.0'
-        mock_app_version.objects.first.return_value = mock_version
-        
-        mock_tls = Mock()
-        mock_tls.credential.get_private_key_serializer().as_pkcs8_pem.return_value = b'key'
-        mock_tls.credential.get_certificate_serializer().as_pem.return_value = b'cert'
-        mock_tls.credential.get_certificate_chain_serializer().as_pem.return_value = b'chain'
-        mock_active_tls.objects.get.return_value = mock_tls
-        
-        mock_subprocess.return_value = Mock(returncode=0)
-        
-        out = StringIO()
-        call_command('trustpointrestore', stdout=out)
-        
-        # Should restore and show version mismatch message
-        output = out.getvalue()
-        self.assertIn('restoration', output.lower())
-
-    @patch('management.management.commands.trustpointrestore.Path')
-    def test_trustpointrestore_with_invalid_filepath(self, mock_path_class: MagicMock) -> None:
-        """Test trustpointrestore when filepath doesn't exist."""
-        mock_path = Mock()
-        mock_path.exists.return_value = False
-        mock_path_class.return_value = mock_path
-        
-        with self.assertRaises(CommandError):
-            call_command('trustpointrestore', '--filepath=/nonexistent/file.dump.gz')
-
-
-class UnwrapDekCommandTest(TestCase):
-    """Test suite for unwrap_dek command."""
-
-    def setUp(self) -> None:
-        """Set up test fixtures."""
-        # kek is optional (nullable) - no need to create it for basic tests
-        self.token = PKCS11Token.objects.create(
-            label='test-token',
-            slot=0,
-            module_path='/usr/lib/softhsm/libsofthsm2.so',
-        )
-
-    def test_unwrap_dek_default_token(self) -> None:
-        """Test unwrap_dek command with default token label."""
-        out = StringIO()
-        call_command('unwrap_dek', stdout=out)
-        
-        output = out.getvalue()
-        # Should access the token we created in setUp
-        self.assertIn('test-token', output)
-
-    def test_unwrap_dek_custom_token(self) -> None:
-        """Test unwrap_dek command with custom token label."""
-        out = StringIO()
-        call_command('unwrap_dek', '--token-label=test-token', stdout=out)
-        
-        output = out.getvalue()
-        self.assertIn('test-token', output)
-
-    def test_unwrap_dek_token_not_found(self) -> None:
-        """Test unwrap_dek when token doesn't exist."""
-        PKCS11Token.objects.all().delete()
-        
-        out = StringIO()
-        # Command returns early without error when token not found
-        call_command('unwrap_dek', '--token-label=nonexistent', stdout=out)
-        
-        output = out.getvalue()
-        self.assertIn('not found', output.lower())
 
 
 class UpdateTlsCommandTest(TestCase):
