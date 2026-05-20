@@ -3,7 +3,8 @@
 from unittest.mock import Mock, patch
 
 import pytest
-from django.contrib.auth.models import AnonymousUser, User
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from django.http import HttpRequest, HttpResponse
 
 from setup_wizard.models import SetupWizardCompletedModel, SetupWizardConfigModel
@@ -13,6 +14,7 @@ from trustpoint.middleware import (
     Workflow2InlineDrainMiddleware,
 )
 
+User = get_user_model()
 
 @pytest.fixture
 def middleware():
@@ -70,7 +72,7 @@ class TestTrustpointLoginRequiredMiddleware:
         """Authenticated users should pass through."""
         http_request.path = '/private/resource/'
         http_request.path_info = http_request.path
-        http_request.user = User(username='testuser')
+        http_request.user = User.objects.create_user(username='testuser', password='password')
 
         response = middleware(http_request)
 

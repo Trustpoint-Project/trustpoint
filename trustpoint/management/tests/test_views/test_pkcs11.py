@@ -1,10 +1,11 @@
 from unittest import mock
 
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from management.forms import PKCS11ConfigForm
 
+User = get_user_model()
 
 class PKCS11ConfigFormTestCase(TestCase):
     def setUp(self):
