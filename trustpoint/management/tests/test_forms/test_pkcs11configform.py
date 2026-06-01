@@ -73,7 +73,6 @@ class PKCS11ConfigFormTestCase(TestCase):
         mock_get_or_create.assert_called_once_with(
             label='Trustpoint-SoftHSM',
             defaults={
-                'hsm_type': 'softhsm',
                 'slot': 0,
                 'module_path': '/usr/lib/libpkcs11-proxy.so',
             }
@@ -110,7 +109,6 @@ class PKCS11ConfigFormTestCase(TestCase):
         mock_get_or_create.assert_called_once_with(
             label='Trustpoint-SoftHSM',
             defaults={
-                'hsm_type': 'softhsm',
                 'slot': 0,
                 'module_path': '/usr/lib/libpkcs11-proxy.so',
             }
