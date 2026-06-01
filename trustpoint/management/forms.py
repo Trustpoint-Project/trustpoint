@@ -963,7 +963,6 @@ class PKCS11ConfigForm(forms.Form):
         token, created = PKCS11Token.objects.get_or_create(
             label=data['label'],
             defaults={
-                'hsm_type': data['hsm_type'],
                 'slot': data['slot'],
                 'module_path': data['module_path'],
             }
