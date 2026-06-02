@@ -139,6 +139,37 @@ def test_unspecified_cn_present_reject() -> None:
     with pytest.raises(ProfileValidationError, match="Field 'common_name' is not explicitly allowed in the profile."):
         verifier.apply_profile_to_request(request)
 
+def test_reject_mods_rejects_falsy_disallowed_field() -> None:
+    """Test that reject_mods=True rejects disallowed fields even if their value is falsy."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'allow': ['cn']},
+        'reject_mods': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {
+            'cn': 'example.com',
+            'serial_number': ''
+        }
+    }
+    with pytest.raises(ProfileValidationError, match="Field 'serial_number' is not explicitly allowed in the profile."):
+        verifier.apply_profile_to_request(request)
+
+def test_required_false_does_not_require_field() -> None:
+    """Test that required=False does not trigger a missing-field validation error or insert empty objects."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': {'required': False}},
+        'reject_mods': True,
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    assert 'common_name' not in validated_request['subject']
+
 def test_default_cn_present_in_request() -> None:
     """Test that the request CN takes precedence over the profile's default CN."""
     profile = {

@@ -409,12 +409,12 @@ class JSONProfileVerifier:
         """
         if not isinstance(request, dict):
             return
-        for field, value in list(request.items()):
+        for field, _value in list(request.items()):
             if field in profile or profile_config.allow_implicit or (allow_list and field in allow_list):
                 # Field is explicitly or implicitly allowed, keep it
                 continue
             # Field is not allowed, remove it
-            if profile_config.reject_mods and value:
+            if profile_config.reject_mods:
                 msg = f"Field '{field}' is not explicitly allowed in the profile."
                 raise ProfileValidationError(msg)
             del request[field]
@@ -432,14 +432,18 @@ class JSONProfileVerifier:
                 logger.debug("Setting default for field '%s' to %s", field, profile_value['default'])
                 request[field] = profile_value['default']
                 return
-            if 'required' in profile_value:
+            if profile_value.get('required'):
                 # Required field is missing in the request
                 msg = f"Field '{field}' is required but not present in the request."
                 raise ProfileValidationError(msg)
+            non_keyword_children = {k: v for k, v in profile_value.items() if k not in CERT_PROFILE_KEYWORDS}
+            if not non_keyword_children:
+                # Metadata-only policy object (e.g. {'required': False}) does not materialize output fields.
+                return
             # TODO(Air): 're' case  # noqa: FIX002
             # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
             request[field] = self._apply_profile_rules(
-                request.setdefault(field, {}), profile_value, profile_config)
+                request.get(field, {}), profile_value, profile_config)
         elif JSONProfileVerifier._is_simple_type(profile_value):
             request[field] = profile_value
         else:
@@ -618,14 +622,18 @@ class JSONProfileVerifier:
                     logger.debug("Setting default for field '%s' to %s", field, profile_value['default'])
                     request[field] = profile_value['default']
                     continue
-                if 'required' in profile_value:
+                if profile_value.get('required'):
                     # Required field is missing in the request
                     request[field] = f'CHANGEME_{field}_required'
+                    continue
+                non_keyword_children = {k: v for k, v in profile_value.items() if k not in CERT_PROFILE_KEYWORDS}
+                if not non_keyword_children:
+                    # Metadata-only policy object should not generate a sample payload field.
                     continue
                 # TODO(Air): 're' case  # noqa: FIX002
                 # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
                 request[field] = self._apply_profile_rules_sample(
-                    request.setdefault(field, {}), profile_value, profile_config)
+                    request.get(field, {}), profile_value, profile_config)
             elif JSONProfileVerifier._is_simple_type(profile_value):
                 request[field] = profile_value
             else:
