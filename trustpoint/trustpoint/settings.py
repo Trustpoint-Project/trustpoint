@@ -145,10 +145,6 @@ ALLOWED_HOSTS = ['*']
 WSGI_APPLICATION = 'trustpoint.wsgi.application'
 
 
-# mDNS service discovery advertisement
-ADVERTISED_HOST = '127.0.0.1'
-ADVERTISED_PORT = 443
-
 
 DOCKER_CONTAINER = False
 
@@ -161,6 +157,8 @@ DEBUG = not DOCKER_CONTAINER
 ADMIN_ENABLED = bool(DEBUG)
 DEVELOPMENT_ENV = DEBUG
 
+# Reverse proxy SSL header settings
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 
 # Basic SMTP backend
