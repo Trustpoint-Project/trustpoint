@@ -44,7 +44,7 @@ class EventSource:
     trustpoint: bool = True
     ca_id: int | None = None
     domain_id: int | None = None
-    device_id: str | None = None
+    device_id: int | None = None
 
 
 class WorkflowDispatchService:
