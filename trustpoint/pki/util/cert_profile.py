@@ -69,7 +69,7 @@ class ProfileValuePropertyModel(BaseModel):
     value: Any | None = None
     default: Any | None = None
     required: bool = False
-    mutable: bool = True
+    mutable: bool = False
 
 class SubjectModel(BaseModel):
     """Model for the subject DN of a certificate profile."""
@@ -148,7 +148,7 @@ class BasicConstraintsExtensionModel(BaseExtensionModel):
 
     model_config = ConfigDict(extra='forbid')
 
-class SanExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
+class SanExtensionModel(BaseExtensionModel):
     """Model for the SAN extension of a certificate profile."""
     dns_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='dns')
     ip_addresses: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='ip')
@@ -262,14 +262,13 @@ class ProfileValidityModel(BaseModel):
 
     model_config = ConfigDict(extra='ignore', populate_by_name=True)
 
-class CertProfileBaseModel(BaseModel):
+class CertProfileBaseModel(ProfileValuePropertyModel):
     """Base model for each nesting level of certificate profiles.
 
     This allows for granular control over allowed fields and constraints at each level.
     """
     allow: list[str] | Literal['*'] | None = None
     reject_mods: bool = Field(default=False)
-    mutable: bool = Field(default=False)
 
     @field_validator('allow', mode='before')
     @classmethod
@@ -292,6 +291,12 @@ class ProfileSubjectModel(SubjectModel, CertProfileBaseModel):
 class ProfileBasicConstraintsExtensionModel(BasicConstraintsExtensionModel, CertProfileBaseModel):
     """Model for the Basic Constraints extension of a certificate profile, with profile constraints."""
 
+class ProfileKeyUsageExtensionModel(KeyUsageExtensionModel, CertProfileBaseModel):
+    """Model for the Key Usage extension of a certificate profile, with profile constraints."""
+
+class ProfileExtendedKeyUsageExtensionModel(ExtendedKeyUsageExtensionModel, CertProfileBaseModel):
+    """Model for the Extended Key Usage extension of a certificate profile, with profile constraints."""
+
 class ProfileSanExtensionModel(SanExtensionModel, CertProfileBaseModel):
     """Model for the SAN extension of a certificate profile, with profile constraints."""
 
@@ -304,19 +309,19 @@ class ProfileExtensionsModel(CertProfileBaseModel):
         default=None,
         validation_alias=ALIASES.get('basic_constraints'),
     )
-    key_usage: KeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(
+    key_usage: ProfileKeyUsageExtensionModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('key_usage'),
     )
-    extended_key_usage: ExtendedKeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(
+    extended_key_usage: ProfileExtendedKeyUsageExtensionModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('extended_key_usage'),
     )
-    subject_alternative_name: ProfileSanExtensionModel | ProfileValuePropertyModel | None = Field(
+    subject_alternative_name: ProfileSanExtensionModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('subject_alternative_name'),
     )
-    crl_distribution_points: ProfileCrlDistributionPointsExtensionModel | ProfileValuePropertyModel | None = Field(
+    crl_distribution_points: ProfileCrlDistributionPointsExtensionModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('crl_distribution_points'),
     )
