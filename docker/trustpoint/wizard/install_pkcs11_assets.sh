@@ -17,6 +17,24 @@ log() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - install_pkcs11_assets.sh - ${level} - $*" | tee -a "$LOGFILE"
 }
 
+case "${1:-}" in
+    --clear-module)
+        rm -f "$FINAL_MODULE_PATH" "$MODULE_PATH_FILE"
+        log INFO "PKCS#11 module cleared from protected HSM area."
+        exit 0
+        ;;
+    --clear-pin)
+        rm -f "$PIN_FILE_PATH"
+        log INFO "PKCS#11 user PIN cleared from protected HSM area."
+        exit 0
+        ;;
+    --clear-config)
+        rm -f "$FINAL_CONFIG_PATH"
+        log INFO "PKCS#11 vendor config cleared from protected HSM area."
+        exit 0
+        ;;
+esac
+
 if [ "$#" -ne 1 ] && [ "$#" -ne 2 ] && [ "$#" -ne 3 ]; then
     log ERROR "Expected staged PIN, staged module plus PIN, or staged module plus PIN plus vendor config."
     exit 1

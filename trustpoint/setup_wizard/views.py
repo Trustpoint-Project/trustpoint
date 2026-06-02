@@ -6,9 +6,11 @@ import contextlib
 import enum
 import gzip
 import ipaddress
+import json
 import logging
 import os
 import subprocess
+import sys
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, cast
@@ -46,6 +48,7 @@ from appsecrets.service import (
 )
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
+from crypto.adapters.pkcs11.capability_probe import Pkcs11Capabilities
 from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSelector
 from crypto.adapters.software.backend import SoftwareBackend
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
@@ -105,6 +108,7 @@ from setup_wizard.tls_credential import (
 from trustpoint.logger import LoggerMixin
 
 from .forms import (
+    DEFAULT_PKCS11_CONFIG_ENV_VAR,
     EmptyForm,
     FreshInstallAdminUserModelForm,
     FreshInstallBackendConfigModelForm,
@@ -134,6 +138,7 @@ FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
 FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-vendor.cfg'
 MAX_RESTORE_OUTPUT_LENGTH = 4000
+MAX_PKCS11_PROBE_OUTPUT_LENGTH = 4000
 GPG_EXECUTABLE = '/usr/bin/gpg'
 
 
@@ -367,6 +372,7 @@ def is_clear_restore_backup_submission(request: HttpRequest) -> bool:
 def clear_staged_pkcs11_module(config_model: SetupWizardConfigModel) -> None:
     """Remove the currently staged PKCS#11 library for this wizard session."""
     cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_module_path)
+    execute_shell_script(INSTALL_PKCS11_ASSETS, '--clear-module')
     config_model.fresh_install_pkcs11_module_path = ''
     config_model.save(update_fields=['fresh_install_pkcs11_module_path'])
 
@@ -374,6 +380,7 @@ def clear_staged_pkcs11_module(config_model: SetupWizardConfigModel) -> None:
 def clear_staged_pkcs11_pin(config_model: SetupWizardConfigModel) -> None:
     """Remove the currently staged PKCS#11 user PIN for this wizard session."""
     cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_auth_source_ref)
+    execute_shell_script(INSTALL_PKCS11_ASSETS, '--clear-pin')
     config_model.fresh_install_pkcs11_auth_source_ref = ''
     config_model.save(update_fields=['fresh_install_pkcs11_auth_source_ref'])
 
@@ -381,6 +388,7 @@ def clear_staged_pkcs11_pin(config_model: SetupWizardConfigModel) -> None:
 def clear_staged_pkcs11_config(config_model: SetupWizardConfigModel) -> None:
     """Remove the currently staged PKCS#11 vendor config for this wizard session."""
     cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_config_path)
+    execute_shell_script(INSTALL_PKCS11_ASSETS, '--clear-config')
     config_model.fresh_install_pkcs11_config_path = ''
     config_model.fresh_install_pkcs11_config_env_var = ''
     config_model.save(update_fields=['fresh_install_pkcs11_config_path', 'fresh_install_pkcs11_config_env_var'])
@@ -469,7 +477,15 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
     if uploaded_config is not None:
         cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
         form.instance.fresh_install_pkcs11_config_path = stage_uploaded_pkcs11_config(uploaded_config)
+        if not form.instance.fresh_install_pkcs11_config_env_var:
+            form.instance.fresh_install_pkcs11_config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
         update_fields.append('fresh_install_pkcs11_config_path')
+
+    if (
+        form.instance.fresh_install_pkcs11_config_path
+        and not form.instance.fresh_install_pkcs11_config_env_var
+    ):
+        form.instance.fresh_install_pkcs11_config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
 
     if (
         form.instance.fresh_install_pkcs11_token_label != previous_token_label
@@ -483,7 +499,9 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
     form.refresh_pkcs11_state()
 
 
-def persist_valid_pkcs11_fields_from_invalid_form(form: FreshInstallBackendConfigModelForm) -> None:
+def persist_valid_pkcs11_fields_from_invalid_form(  # noqa: C901
+    form: FreshInstallBackendConfigModelForm,
+) -> None:
     """Preserve valid PKCS#11 inputs even when the submitted form has other errors."""
     if form.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
         return
@@ -501,12 +519,21 @@ def persist_valid_pkcs11_fields_from_invalid_form(form: FreshInstallBackendConfi
     if uploaded_config is not None and 'pkcs11_config_upload' not in form.errors:
         cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
         form.instance.fresh_install_pkcs11_config_path = stage_uploaded_pkcs11_config(uploaded_config)
+        if not form.instance.fresh_install_pkcs11_config_env_var:
+            form.instance.fresh_install_pkcs11_config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
+            update_fields.append('fresh_install_pkcs11_config_env_var')
         form.staged_pkcs11_config_name = Path(form.instance.fresh_install_pkcs11_config_path).name
         update_fields.append('fresh_install_pkcs11_config_path')
 
     config_env_var = form.data.get('pkcs11_config_env_var', '').strip()
     if config_env_var and 'pkcs11_config_env_var' not in form.errors:
         form.instance.fresh_install_pkcs11_config_env_var = config_env_var
+        update_fields.append('fresh_install_pkcs11_config_env_var')
+    elif (
+        form.instance.fresh_install_pkcs11_config_path
+        and not form.instance.fresh_install_pkcs11_config_env_var
+    ):
+        form.instance.fresh_install_pkcs11_config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
         update_fields.append('fresh_install_pkcs11_config_env_var')
 
     user_pin = form.data.get('pkcs11_user_pin', '')
@@ -535,39 +562,6 @@ def persist_valid_pkcs11_fields_from_invalid_form(form: FreshInstallBackendConfi
         form.instance.save(update_fields=update_fields)
 
 
-def build_staged_pkcs11_test_profile(form: FreshInstallBackendConfigModelForm) -> Pkcs11ProviderProfile:
-    """Build a temporary PKCS#11 provider profile from staged wizard inputs."""
-    module_path = (form.instance.fresh_install_pkcs11_module_path or '').strip()
-    pin_file = (form.instance.fresh_install_pkcs11_auth_source_ref or '').strip()
-    config_file = (form.instance.fresh_install_pkcs11_config_path or '').strip()
-    config_env_var = (form.instance.fresh_install_pkcs11_config_env_var or '').strip()
-    if (not module_path or not _path_exists(Path(module_path))) and _path_exists(FINAL_WIZARD_PKCS11_MODULE_PATH):
-        module_path = str(FINAL_WIZARD_PKCS11_MODULE_PATH)
-        form.instance.fresh_install_pkcs11_module_path = module_path
-    if (not pin_file or not _path_exists(Path(pin_file))) and _path_exists(FINAL_WIZARD_PKCS11_PIN_PATH):
-        pin_file = str(FINAL_WIZARD_PKCS11_PIN_PATH)
-        form.instance.fresh_install_pkcs11_auth_source_ref = pin_file
-        form.instance.fresh_install_pkcs11_auth_source = SetupWizardConfigModel.FreshInstallPkcs11AuthSource.FILE
-    if (not config_file or not _path_exists(Path(config_file))) and _path_exists(FINAL_WIZARD_PKCS11_CONFIG_PATH):
-        config_file = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
-        form.instance.fresh_install_pkcs11_config_path = config_file
-    if config_file and config_env_var:
-        os.environ[config_env_var] = config_file
-    slot_id = form.instance.fresh_install_pkcs11_slot_id
-    token_label = (form.instance.fresh_install_pkcs11_token_label or '').strip() or None
-    token_serial = (form.instance.fresh_install_pkcs11_token_serial or '').strip() or None
-
-    return Pkcs11ProviderProfile(
-        name='setup-wizard-pkcs11-test',
-        module_path=module_path,
-        token=Pkcs11TokenSelector(token_label=token_label, token_serial=token_serial, slot_id=slot_id),
-        user_pin_file=pin_file,
-        max_sessions=2,
-        borrow_timeout_seconds=5.0,
-        rw_sessions=True,
-    )
-
-
 def run_staged_pkcs11_connection_test(
     view: Any,
     form: FreshInstallBackendConfigModelForm,
@@ -576,17 +570,20 @@ def run_staged_pkcs11_connection_test(
 ) -> HttpResponse:
     """Probe the staged PKCS#11 configuration and keep the user on this step."""
     try:
-        backend = Pkcs11Backend(profile=build_staged_pkcs11_test_profile(form))
-        backend.verify_authentication()
-        capabilities = backend.probe_capabilities()
+        FreshInstallSummaryView.install_staged_pkcs11_assets(form.instance)
+        form.refresh_pkcs11_state()
+        capabilities = probe_staged_pkcs11_config_isolated(
+            form.instance,
+            profile_name='setup-wizard-pkcs11-test',
+        )
     except Exception as exception:
         view.logger.exception('PKCS#11 setup-wizard connection test failed.')
-        error_detail = str(exception).strip() or type(exception).__name__
+        if isinstance(exception, DjangoValidationError):
+            error_detail = '; '.join(exception.messages)
+        else:
+            error_detail = str(exception).strip() or type(exception).__name__
         form.add_error(None, f'Could not connect to the configured PKCS#11 backend: {error_detail}')
         return cast('HttpResponse', view.render_to_response(view.get_context_data(form=form)))
-    finally:
-        if 'backend' in locals():
-            backend.close()
 
     update_fields: list[str] = []
     if form.instance.fresh_install_pkcs11_module_path == str(FINAL_WIZARD_PKCS11_MODULE_PATH):
@@ -640,6 +637,11 @@ def apply_pkcs11_probe_fallbacks(config_model: SetupWizardConfigModel) -> tuple[
         config_model.fresh_install_pkcs11_config_path = config_file
         fallback_update_fields.append('fresh_install_pkcs11_config_path')
 
+    if config_file and not config_env_var:
+        config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
+        config_model.fresh_install_pkcs11_config_env_var = config_env_var
+        fallback_update_fields.append('fresh_install_pkcs11_config_env_var')
+
     if config_file and config_env_var:
         os.environ[config_env_var] = config_file
 
@@ -687,11 +689,11 @@ def build_pkcs11_probe_profile(
 
 
 def refresh_pkcs11_probe_capabilities(profile: Pkcs11ProviderProfile) -> Any:
-    """Authenticate and refresh PKCS#11 capabilities for the given staged profile."""
+    """Authenticate and probe PKCS#11 capabilities for the given staged profile."""
     backend = Pkcs11Backend(profile=profile)
     try:
         backend.verify_authentication()
-        return backend.refresh_capabilities()
+        return backend.probe_capabilities()
     except Exception as exception:
         error_detail = str(exception).strip() or type(exception).__name__
         err_msg = f'PKCS#11 probe failed: {error_detail}'
@@ -743,6 +745,79 @@ def probe_staged_pkcs11_config(config_model: SetupWizardConfigModel, *, profile_
     )
     capabilities = refresh_pkcs11_probe_capabilities(profile)
     persist_pkcs11_probe_capabilities(config_model, capabilities, update_fields)
+    return capabilities
+
+
+def _format_pkcs11_probe_process_output(completed_process: subprocess.CompletedProcess[str]) -> str:
+    """Return bounded stdout/stderr from an isolated PKCS#11 probe process."""
+    output = '\n'.join(
+        part.strip()
+        for part in (completed_process.stdout, completed_process.stderr)
+        if part and part.strip()
+    )
+    if len(output) > MAX_PKCS11_PROBE_OUTPUT_LENGTH:
+        return output[-MAX_PKCS11_PROBE_OUTPUT_LENGTH:]
+    return output
+
+
+def probe_staged_pkcs11_config_isolated(
+    config_model: SetupWizardConfigModel,
+    *,
+    profile_name: str,
+) -> Pkcs11Capabilities:
+    """Run the staged PKCS#11 probe in a subprocess so native crashes cannot kill the web worker."""
+    completed_process = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            str(settings.BASE_DIR / 'manage.py'),
+            'probe_setup_wizard_pkcs11',
+            '--profile-name',
+            profile_name,
+        ],
+        cwd=str(settings.REPO_ROOT),
+        env=os.environ.copy(),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if completed_process.returncode != 0:
+        failure = (
+            f'signal {-completed_process.returncode}'
+            if completed_process.returncode < 0
+            else f'exit code {completed_process.returncode}'
+        )
+        output = _format_pkcs11_probe_process_output(completed_process)
+        logger.error(
+            'Isolated PKCS#11 setup-wizard probe failed with %s. Captured output: %s',
+            failure,
+            output or 'no process output',
+        )
+        if completed_process.returncode < 0:
+            err_msg = (
+                f'PKCS#11 probe process crashed with {failure}. '
+                'The vendor PKCS#11 library terminated the probe process.'
+            )
+        else:
+            err_msg = f'PKCS#11 probe process failed with {failure}. Check the Trustpoint log for details.'
+        raise DjangoValidationError(err_msg)
+
+    output_lines = [line for line in completed_process.stdout.splitlines() if line.strip()]
+    if not output_lines:
+        err_msg = 'PKCS#11 probe process completed without returning capabilities.'
+        raise DjangoValidationError(err_msg)
+
+    try:
+        capabilities = Pkcs11Capabilities.from_json_dict(json.loads(output_lines[-1]))
+    except (json.JSONDecodeError, TypeError, KeyError, ValueError) as exception:
+        output = _format_pkcs11_probe_process_output(completed_process)
+        logger.exception(
+            'Isolated PKCS#11 setup-wizard probe returned invalid capabilities. Captured output: %s',
+            output or 'no process output',
+        )
+        err_msg = 'PKCS#11 probe process returned invalid capabilities. Check the Trustpoint log for details.'
+        raise DjangoValidationError(err_msg) from exception
+
+    config_model.refresh_from_db()
     return capabilities
 
 
@@ -1156,10 +1231,13 @@ class FreshInstallCryptoStorageView(FreshInstallModelFormBaseView[FreshInstallCr
 
     @staticmethod
     def _reset_staged_pkcs11_backend(form: FreshInstallCryptoStorageModelForm) -> None:
-        """Drop staged PKCS#11 wizard assets when switching away from the PKCS#11 backend."""
+        """Drop PKCS#11 wizard assets when switching away from the PKCS#11 backend."""
         cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_module_path)
         cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_auth_source_ref)
         cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
+        execute_shell_script(INSTALL_PKCS11_ASSETS, '--clear-module')
+        execute_shell_script(INSTALL_PKCS11_ASSETS, '--clear-pin')
+        execute_shell_script(INSTALL_PKCS11_ASSETS, '--clear-config')
         form.instance.fresh_install_pkcs11_module_path = ''
         form.instance.fresh_install_pkcs11_token_label = ''
         form.instance.fresh_install_pkcs11_token_serial = ''
@@ -1228,15 +1306,15 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
         if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             if self._is_clear_module_submission(request):
                 self._clear_staged_pkcs11_module(config_model)
-                messages.success(request, 'The staged PKCS#11 library was removed for this wizard session.')
+                messages.success(request, 'The PKCS#11 library was removed for this wizard session.')
                 return redirect('setup_wizard:fresh_install_backend_config')
             if self._is_clear_pin_submission(request):
                 self._clear_staged_pkcs11_pin(config_model)
-                messages.success(request, 'The staged PKCS#11 user PIN was removed for this wizard session.')
+                messages.success(request, 'The PKCS#11 user PIN was removed for this wizard session.')
                 return redirect('setup_wizard:fresh_install_backend_config')
             if self._is_clear_config_submission(request):
                 self._clear_staged_pkcs11_config(config_model)
-                messages.success(request, 'The staged PKCS#11 vendor config was removed for this wizard session.')
+                messages.success(request, 'The PKCS#11 vendor config was removed for this wizard session.')
                 return redirect('setup_wizard:fresh_install_backend_config')
         return super().post(request, *args, **kwargs)
 
@@ -1259,11 +1337,6 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
         """Persist staged PKCS#11 wizard inputs without advancing the wizard."""
         persist_staged_pkcs11_backend_config(form)
 
-    @staticmethod
-    def _build_pkcs11_test_profile(form: FreshInstallBackendConfigModelForm) -> Pkcs11ProviderProfile:
-        """Build a temporary PKCS#11 provider profile from staged wizard inputs."""
-        return build_staged_pkcs11_test_profile(form)
-
     def _test_pkcs11_connection(self, form: FreshInstallBackendConfigModelForm) -> HttpResponse:
         """Probe the staged PKCS#11 configuration and keep the user on this step."""
         return run_staged_pkcs11_connection_test(
@@ -1283,11 +1356,6 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
             form,
             success_redirect_name='setup_wizard:fresh_install_backend_config',
         )
-
-    @staticmethod
-    def build_pkcs11_test_profile(form: FreshInstallBackendConfigModelForm) -> Pkcs11ProviderProfile:
-        """Build a temporary PKCS#11 provider profile from staged wizard inputs."""
-        return build_staged_pkcs11_test_profile(form)
 
     def form_valid(self, form: FreshInstallBackendConfigModelForm) -> HttpResponse:
         """Persist wizard backend configuration using one-time PKCS#11 staging files."""
@@ -1902,7 +1970,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         cls._install_staged_pkcs11_assets(config_model)
 
     @classmethod
-    def _configure_pkcs11_backend(cls, config_model: SetupWizardConfigModel) -> None:
+    def _configure_pkcs11_backend(cls, config_model: SetupWizardConfigModel) -> None:  # noqa: C901
         """Configure the PKCS#11 backend for the instance from wizard-staged values."""
         cls._install_staged_pkcs11_assets(config_model)
 
@@ -1936,6 +2004,10 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             raise DjangoValidationError(err_msg)
         config_env_var = (config_model.fresh_install_pkcs11_config_env_var or '').strip()
         config_path = (config_model.fresh_install_pkcs11_config_path or '').strip()
+        if config_path and not config_env_var:
+            config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
+            config_model.fresh_install_pkcs11_config_env_var = config_env_var
+            config_model.save(update_fields=['fresh_install_pkcs11_config_env_var'])
         if config_env_var and config_path and _path_exists(Path(config_path)):
             os.environ[config_env_var] = config_path
 
@@ -2049,7 +2121,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             return result, switch_result
 
         if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-            probe_staged_pkcs11_config(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
+            probe_staged_pkcs11_config_isolated(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
 
         result = run_operational_handoff(config_model)
         config_model.mark_step_submitted(self.step_state)
@@ -2094,7 +2166,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         with transaction.atomic():
             config_model = SetupWizardConfigModel.get_singleton()
             if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-                probe_staged_pkcs11_config(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
+                probe_staged_pkcs11_config_isolated(config_model, profile_name='setup-wizard-pkcs11-pre-apply')
             self._configure_instance_crypto_backend(config_model)
             self._configure_app_secret_backend(config_model)
             call_command('create_default_cert_profiles')
@@ -2390,15 +2462,15 @@ class ConnectExistingBackendConfigView(ConnectExistingWizardMixin[FreshInstallBa
         if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             if is_clear_pkcs11_module_submission(request):
                 clear_staged_pkcs11_module(config_model)
-                messages.success(request, 'The staged PKCS#11 library was removed for this wizard session.')
+                messages.success(request, 'The PKCS#11 library was removed for this wizard session.')
                 return self._step_redirect('backend-config')
             if is_clear_pkcs11_pin_submission(request):
                 clear_staged_pkcs11_pin(config_model)
-                messages.success(request, 'The staged PKCS#11 user PIN was removed for this wizard session.')
+                messages.success(request, 'The PKCS#11 user PIN was removed for this wizard session.')
                 return self._step_redirect('backend-config')
             if is_clear_pkcs11_config_submission(request):
                 clear_staged_pkcs11_config(config_model)
-                messages.success(request, 'The staged PKCS#11 vendor config was removed for this wizard session.')
+                messages.success(request, 'The PKCS#11 vendor config was removed for this wizard session.')
                 return self._step_redirect('backend-config')
         return super().post(request, *args, **kwargs)
 
@@ -2503,7 +2575,7 @@ def attach_backend_readiness_checks(config_model: SetupWizardConfigModel) -> tup
         )
 
     try:
-        capabilities = probe_staged_pkcs11_config(
+        capabilities = probe_staged_pkcs11_config_isolated(
             config_model,
             profile_name='setup-wizard-pkcs11-attach-readiness',
         )

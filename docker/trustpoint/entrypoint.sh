@@ -5,6 +5,7 @@ ROLE="${TRUSTPOINT_SERVICE_ROLE:-web}"
 PHASE="${TRUSTPOINT_PHASE:-auto}"
 OPERATIONAL_ENV_FILE="${TRUSTPOINT_OPERATIONAL_ENV_FILE:-/var/lib/trustpoint/bootstrap/operational.env}"
 OPERATIONAL_READY_FILE="${TRUSTPOINT_OPERATIONAL_READY_FILE:-/var/lib/trustpoint/bootstrap/operational.ready}"
+WWW_DATA_HOME="${WWW_DATA_HOME:-/tmp/trustpoint-www-data-home}"
 
 load_operational_env() {
   if [ -f "$OPERATIONAL_ENV_FILE" ]; then
@@ -142,9 +143,12 @@ configure_web_edge() {
 
 start_gunicorn() {
   echo "Starting Gunicorn server..."
+  mkdir -p "$WWW_DATA_HOME"
+  chown www-data:www-data "$WWW_DATA_HOME"
   su -s /bin/bash www-data -c "cd /var/www/html/trustpoint/trustpoint && \
       export TRUSTPOINT_PHASE='${PHASE}' && \
       export DJANGO_SETTINGS_MODULE='${DJANGO_SETTINGS_MODULE}' && \
+      export HOME='${WWW_DATA_HOME}' && \
       /var/www/html/trustpoint/.venv/bin/gunicorn \
       --bind 0.0.0.0:8000 \
       --workers 4 \

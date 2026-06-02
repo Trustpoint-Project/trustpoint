@@ -7,7 +7,11 @@ from unittest.mock import patch
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 
-from setup_wizard.forms import CRYPTO_BACKEND_TYPE_CHOICES, FreshInstallBackendConfigModelForm
+from setup_wizard.forms import (
+    CRYPTO_BACKEND_TYPE_CHOICES,
+    DEFAULT_PKCS11_CONFIG_ENV_VAR,
+    FreshInstallBackendConfigModelForm,
+)
 from setup_wizard.models import SetupWizardConfigModel
 
 
@@ -87,6 +91,26 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
         )
 
         self.assertTrue(form.is_valid(), form.errors)
+
+    def test_pkcs11_form_defaults_vendor_config_env_var_when_config_is_present(self) -> None:
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+
+        form = FreshInstallBackendConfigModelForm(
+            data={
+                'fresh_install_pkcs11_token_label': 'Trustpoint-SoftHSM',
+                'pkcs11_user_pin': '1234',
+                'pkcs11_config_env_var': '',
+            },
+            files={
+                'pkcs11_module_upload': SimpleUploadedFile('libpkcs11-vendor.so', b'\x7fELFpkcs11-bytes'),
+                'pkcs11_config_upload': SimpleUploadedFile('cs_pkcs11_R3.cfg', b'utimaco-config'),
+            },
+            instance=config_model,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['pkcs11_config_env_var'], DEFAULT_PKCS11_CONFIG_ENV_VAR)
 
     def test_pkcs11_form_accepts_local_dev_fallback_without_upload(self) -> None:
         config_model = SetupWizardConfigModel.get_singleton()

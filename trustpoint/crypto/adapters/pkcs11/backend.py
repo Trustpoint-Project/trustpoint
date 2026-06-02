@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import logging
+import os
+import re
 import secrets
+import socket
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from cryptography.hazmat.primitives import serialization
@@ -12,6 +17,7 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding, Pkcs11ManagedKeyVerification
 from crypto.adapters.pkcs11.capability_probe import Pkcs11CapabilityProbe
+from crypto.adapters.pkcs11.config import _normalize_pkcs11_text
 from crypto.adapters.pkcs11.error_map import map_pkcs11_error
 from crypto.adapters.pkcs11.locator import Pkcs11ObjectLocator
 from crypto.adapters.pkcs11.mechanism_policy import resolve_signing_operation
@@ -30,7 +36,7 @@ from crypto.domain.refs import ManagedKeyVerificationStatus
 from crypto.domain.specs import EcKeySpec, KeySpec, RsaKeySpec, algorithm_for_key_spec
 from pkcs11 import Attribute, KeyType, Mechanism, ObjectClass, PKCS11Error
 from pkcs11 import lib as pkcs11_lib
-from pkcs11.exceptions import UserAlreadyLoggedIn
+from pkcs11.exceptions import TokenNotPresent, TokenNotRecognised, UserAlreadyLoggedIn
 from pkcs11.util.ec import encode_ec_public_key, encode_ecdsa_signature
 from pkcs11.util.rsa import encode_rsa_public_key
 from trustpoint.logger import LoggerMixin
@@ -44,6 +50,7 @@ if TYPE_CHECKING:
     from pkcs11 import Session, Slot, Token
 
 type LibraryLoader = Callable[[str], Any]
+type TokenCandidate = tuple['Slot', 'Token']
 
 
 class Pkcs11Backend(LoggerMixin):
@@ -273,37 +280,19 @@ class Pkcs11Backend(LoggerMixin):
 
         if self._library is None:
             try:
+                self._log_runtime_diagnostics()
                 self._library = self._library_loader(self._profile.module_path)
             except OSError as exc:
                 msg = f'Failed to load PKCS#11 module at {self._profile.module_path!r}.'
                 raise ProviderUnavailableError(msg) from exc
 
-        matches: list[tuple[Slot, Token]] = []
+        matches = self._resolve_token_candidates()
 
-        for slot in self._library.get_slots(token_present=True):
-            token = slot.get_token()
-            token_serial = getattr(token, 'serial', None) or getattr(token, 'serial_number', None)
-            token_label = getattr(token, 'label', None)
-
-            if self._profile.token.matches(
-                slot_id=slot.slot_id,
-                token_label=token_label,
-                token_serial=token_serial,
-            ):
-                matches.append((slot, token))
-
-        if not matches:
+        if matches is None:
             msg = f'Unable to resolve a PKCS#11 token for profile {self._profile.name!r}.'
             raise ProviderUnavailableError(msg)
 
-        if len(matches) > 1:
-            msg = (
-                f'PKCS#11 token selector for profile {self._profile.name!r} matched multiple tokens. '
-                'Use a more specific selector, preferably token_serial.'
-            )
-            raise ProviderConfigurationError(msg)
-
-        slot, token = matches[0]
+        slot, token = matches
         self._resolved_slot = slot
         self._resolved_token = token
         self._session_pool = Pkcs11SessionPool(
@@ -313,6 +302,198 @@ class Pkcs11Backend(LoggerMixin):
             borrow_timeout_seconds=self._profile.borrow_timeout_seconds,
             rw=self._profile.rw_sessions,
         )
+
+    def _resolve_token_candidates(self) -> TokenCandidate | None:
+        """Resolve a token using slot first, then serial/label fallback."""
+        candidates = self._discover_present_tokens()
+
+        slot_id = self._profile.token.slot_id
+        token_serial = self._profile.token.token_serial
+        token_label = self._profile.token.token_label
+
+        if slot_id is not None:
+            slot_candidates = [candidate for candidate in candidates if candidate[0].slot_id == slot_id]
+            if len(slot_candidates) > 1:
+                msg = f'PKCS#11 slot id {slot_id} resolved to multiple tokens for profile {self._profile.name!r}.'
+                raise ProviderConfigurationError(msg)
+            if slot_candidates:
+                slot_candidate = slot_candidates[0]
+                if self._candidate_matches_secondary_selector(
+                    slot_candidate,
+                    token_label=token_label,
+                    token_serial=token_serial,
+                ):
+                    return slot_candidate
+                self.logger.warning(
+                    'PKCS#11 slot id %s resolved to a token that does not match the configured label/serial; '
+                    'falling back to token label/serial lookup.',
+                    slot_id,
+                )
+
+        if token_serial is not None:
+            serial_matches = [
+                candidate for candidate in candidates if self._candidate_token_serial(candidate) == token_serial
+            ]
+            return self._single_candidate_or_error(
+                serial_matches,
+                selector_description=f'token serial {token_serial!r}',
+            )
+
+        if token_label is not None:
+            label_matches = [
+                candidate for candidate in candidates if self._candidate_token_label(candidate) == token_label
+            ]
+            return self._single_candidate_or_error(
+                label_matches,
+                selector_description=f'token label {token_label!r}',
+            )
+
+        return None
+
+    def _discover_present_tokens(self) -> list[TokenCandidate]:
+        """Return token candidates, tolerating providers that reject token_present scans."""
+        if self._library is None:
+            msg = 'PKCS#11 library was not loaded before token discovery.'
+            raise ProviderUnavailableError(msg)
+        try:
+            return self._candidates_from_slots(self._library.get_slots(token_present=True))
+        except PKCS11Error as token_present_error:
+            self._log_runtime_diagnostics(logging.WARNING)
+            self.logger.warning(
+                'PKCS#11 library failed to enumerate token-present slots; retrying with a full slot scan: %s',
+                self._pkcs11_error_summary(token_present_error),
+            )
+            try:
+                return self._candidates_from_slots(self._library.get_slots(token_present=False))
+            except PKCS11Error as full_scan_error:
+                msg = (
+                    'PKCS#11 provider failed while enumerating slots. '
+                    f'Initial token-present scan failed with {self._pkcs11_error_summary(token_present_error)}; '
+                    f'fallback full scan failed with {self._pkcs11_error_summary(full_scan_error)}.'
+                )
+                raise ProviderUnavailableError(msg) from full_scan_error
+
+    def _log_runtime_diagnostics(self, level: int = logging.DEBUG) -> None:
+        """Log non-secret runtime facts useful for diagnosing vendor PKCS#11 load failures."""
+        if not self.logger.isEnabledFor(level):
+            return
+
+        module_path = self._profile.module_path
+        module_exists = Path(module_path).is_file()
+        module_readable = os.access(module_path, os.R_OK)
+        config_env = self._known_vendor_config_env()
+        config_path = os.getenv(config_env, '').strip() if config_env is not None else ''
+        config_exists = bool(config_path and Path(config_path).is_file())
+        config_readable = bool(config_path and os.access(config_path, os.R_OK))
+        tcp_targets = self._probe_utimaco_config_targets(config_path) if config_readable else []
+
+        self.logger.log(
+            level,
+            'PKCS#11 runtime diagnostics: module_path=%r module_exists=%s module_readable=%s '
+            'vendor_config_env=%r vendor_config_path=%r vendor_config_exists=%s vendor_config_readable=%s '
+            'tcp_targets=%s uid=%s gid=%s',
+            module_path,
+            module_exists,
+            module_readable,
+            config_env,
+            config_path,
+            config_exists,
+            config_readable,
+            tcp_targets,
+            os.geteuid(),
+            os.getegid(),
+        )
+
+    @staticmethod
+    def _pkcs11_error_summary(error: PKCS11Error) -> str:
+        """Return a compact PKCS#11 error summary for diagnostics."""
+        detail = str(error).strip()
+        if detail:
+            return f'{type(error).__name__}: {detail}'
+        return type(error).__name__
+
+    @staticmethod
+    def _known_vendor_config_env() -> str | None:
+        """Return the configured known vendor PKCS#11 config env var, if any."""
+        for env_name in ('CS_PKCS11_R3_CFG', 'CHRYSTOKI_CONF', 'ET_HSM_NETCLIENT_SERVERLIST'):
+            if os.getenv(env_name, '').strip():
+                return env_name
+        return 'CS_PKCS11_R3_CFG'
+
+    @staticmethod
+    def _probe_utimaco_config_targets(config_path: str) -> list[str]:
+        """Return non-secret TCP reachability diagnostics for Utimaco Device entries."""
+        try:
+            config_text = Path(config_path).read_text(encoding='utf-8', errors='ignore')
+        except OSError:
+            return []
+
+        diagnostics: list[str] = []
+        for match in re.finditer(r'^\s*Device\s*=\s*(?P<port>\d+)@(?P<host>[^\s#;]+)', config_text, re.MULTILINE):
+            host = match.group('host')
+            port = int(match.group('port'))
+            diagnostics.append(Pkcs11Backend._probe_tcp_target(host=host, port=port))
+        return diagnostics
+
+    @staticmethod
+    def _probe_tcp_target(*, host: str, port: int) -> str:
+        """Return a concise TCP reachability result for a configured HSM endpoint."""
+        try:
+            with socket.create_connection((host, port), timeout=2.0):
+                return f'{host}:{port}=reachable'
+        except OSError as exc:
+            return f'{host}:{port}=unreachable({type(exc).__name__})'
+
+    def _candidates_from_slots(self, slots: list[Slot]) -> list[TokenCandidate]:
+        """Return slot/token pairs for slots that currently expose a token."""
+        candidates: list[TokenCandidate] = []
+        for slot in slots:
+            try:
+                token = slot.get_token()
+            except (TokenNotPresent, TokenNotRecognised):
+                continue
+            candidates.append((slot, token))
+        return candidates
+
+    def _candidate_matches_secondary_selector(
+        self,
+        candidate: TokenCandidate,
+        *,
+        token_label: str | None,
+        token_serial: str | None,
+    ) -> bool:
+        """Return whether a slot-selected token satisfies configured label/serial guards."""
+        if token_serial is not None and self._candidate_token_serial(candidate) != token_serial:
+            return False
+        return not (token_label is not None and self._candidate_token_label(candidate) != token_label)
+
+    def _single_candidate_or_error(
+        self,
+        candidates: list[TokenCandidate],
+        *,
+        selector_description: str,
+    ) -> TokenCandidate | None:
+        """Return one matching token candidate or raise on ambiguous selector matches."""
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+        msg = (
+            f'PKCS#11 selector {selector_description} for profile {self._profile.name!r} matched multiple tokens. '
+            'Use a more specific selector, preferably token_serial.'
+        )
+        raise ProviderConfigurationError(msg)
+
+    @staticmethod
+    def _candidate_token_label(candidate: TokenCandidate) -> str | None:
+        """Return the normalized label for a token candidate."""
+        return _normalize_pkcs11_text(getattr(candidate[1], 'label', None))
+
+    @staticmethod
+    def _candidate_token_serial(candidate: TokenCandidate) -> str | None:
+        """Return the normalized serial for a token candidate."""
+        serial = getattr(candidate[1], 'serial', None) or getattr(candidate[1], 'serial_number', None)
+        return _normalize_pkcs11_text(serial)
 
     def _session_pool_for_token(self) -> Pkcs11SessionPool:
         """Get the lazily initialized session pool."""

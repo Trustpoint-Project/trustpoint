@@ -295,15 +295,15 @@
                                 {% endif %}
                                 {% if form.staged_pkcs11_module_name %}
                                     <div class="tp-backend-state-pill">
-                                        <span>Current staged library: {{ form.staged_pkcs11_module_name }}</span>
+                                        <span>Current wizard library: {{ form.staged_pkcs11_module_name }}</span>
                                         <button
                                             type="submit"
                                             name="wizard_action"
                                             value="clear_module"
                                             class="tp-backend-state-pill-dismiss"
                                             formnovalidate
-                                            aria-label="Remove staged library"
-                                            title="Remove staged library"
+                                            aria-label="Remove wizard library"
+                                            title="Remove wizard library"
                                         >×</button>
                                     </div>
                                 {% endif %}
@@ -323,15 +323,15 @@
                                 </div>
                                 {% if form.staged_pkcs11_config_name %}
                                     <div class="tp-backend-state-pill">
-                                        <span>Vendor config staged: {{ form.staged_pkcs11_config_name }}</span>
+                                        <span>Current vendor config: {{ form.staged_pkcs11_config_name }}</span>
                                         <button
                                             type="submit"
                                             name="wizard_action"
                                             value="clear_pkcs11_config"
                                             class="tp-backend-state-pill-dismiss"
                                             formnovalidate
-                                            aria-label="Remove staged vendor config"
-                                            title="Remove staged vendor config"
+                                            aria-label="Remove vendor config"
+                                            title="Remove vendor config"
                                         >×</button>
                                     </div>
                                 {% endif %}
@@ -409,15 +409,15 @@
                                         {{ form.pkcs11_user_pin }}
                                         {% if form.has_staged_pkcs11_pin %}
                                             <div class="tp-backend-state-pill">
-                                                <span>A user PIN is already staged for this wizard session.</span>
+                                                <span>A user PIN is already available for this wizard session.</span>
                                                 <button
                                                     type="submit"
                                                     name="wizard_action"
                                                     value="clear_pin"
                                                     class="tp-backend-state-pill-dismiss"
                                                     formnovalidate
-                                                    aria-label="Remove staged user PIN"
-                                                    title="Remove staged user PIN"
+                                                    aria-label="Remove user PIN"
+                                                    title="Remove user PIN"
                                                 >×</button>
                                             </div>
                                         {% endif %}

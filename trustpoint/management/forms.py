@@ -937,15 +937,28 @@ class LoggingConfigForm(forms.Form):
         choices=LOG_LEVELS,
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
+    crypto_backend_audit_enabled = forms.BooleanField(
+        label=_('Audit crypto backend operations'),
+        required=False,
+        help_text=_(
+            'Write sanitized crypto backend requests to the audit log. '
+            'Secrets, PINs, private keys, payload bytes, and signatures are never logged.'
+        ),
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
+    )
 
     def save(self) -> None:
         """Save the logging configuration."""
         level = self.cleaned_data['loglevel']
+        crypto_backend_audit_enabled = bool(self.cleaned_data.get('crypto_backend_audit_enabled'))
         logger = logging.getLogger()
         logger.setLevel(getattr(logging, level))
         LoggingConfig.objects.update_or_create(
             id=1,
-            defaults={'log_level': level}
+            defaults={
+                'log_level': level,
+                'crypto_backend_audit_enabled': crypto_backend_audit_enabled,
+            },
         )
 
 class InternationalizationConfigForm(forms.Form):

@@ -9,7 +9,7 @@ services:
       - "80:80"
       - "443:443"
     extra_hosts:
-      - "host.docker.internal:10.255.255.254"
+      - "host.docker.internal:host-gateway"
     environment:
       TRUSTPOINT_PHASE: "${TRUSTPOINT_PHASE:-auto}"
       POSTGRES_DB: "trustpoint_db"

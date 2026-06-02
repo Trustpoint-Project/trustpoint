@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import cast
 
 from cryptography.hazmat.primitives.asymmetric import rsa, utils
 from pkcs11 import Attribute, Mechanism, NoSuchKey, ObjectClass
+from pkcs11.exceptions import GeneralError
 
 from crypto.adapters.pkcs11.backend import Pkcs11Backend
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
@@ -13,6 +15,8 @@ from crypto.adapters.pkcs11.config import Pkcs11ProviderProfile, Pkcs11TokenSele
 from crypto.domain.algorithms import EllipticCurveName, KeyAlgorithm
 from crypto.domain.policies import KeyPolicy
 from crypto.domain.specs import EcKeySpec, RsaKeySpec, SignRequest
+
+RSA_2048_KEY_SIZE = 2048
 
 
 class FakePkcs11Object:
@@ -100,13 +104,18 @@ class FakeSession:
             return [self.private_key]
         return []
 
-    def get_key(
+    @staticmethod
+    def _not_found_message(*, label: str | None, object_id: bytes | None, key_type: object | None) -> str:
+        """Build a deterministic fake key lookup failure message."""
+        return f'Key not found for label={label!r} id={object_id!r} type={key_type!r}'
+
+    def get_key(  # noqa: C901 - mirrors the python-pkcs11 keyword API.
         self,
         *,
         object_class: ObjectClass | None = None,
         key_type: object | None = None,
         label: str | None = None,
-        id: bytes | None = None,
+        id: bytes | None = None,  # noqa: A002 - mirrors the python-pkcs11 keyword API.
     ) -> object:
         """Resolve fake keys by id or alias."""
         candidate: object | None = None
@@ -116,32 +125,38 @@ class FakeSession:
             candidate = self.public_key
 
         if candidate is None:
-            raise NoSuchKey(f'Key not found for label={label!r} id={id!r} type={key_type!r}')
+            msg = self._not_found_message(label=label, object_id=id, key_type=key_type)
+            raise NoSuchKey(msg)
+
+        candidate_key = cast('FakePkcs11Object', candidate)
 
         actual_id = None
         actual_label = None
         try:
-            actual_id = candidate[Attribute.ID]
-        except Exception:
+            actual_id = candidate_key[Attribute.ID]
+        except KeyError:
             actual_id = None
         try:
-            actual_label = candidate[Attribute.LABEL]
-        except Exception:
+            actual_label = candidate_key[Attribute.LABEL]
+        except KeyError:
             actual_label = None
 
         if id is not None:
-            if actual_id is not None and bytes(actual_id) == bytes(id):
+            if isinstance(actual_id, bytes) and actual_id == id:
                 return candidate
-            raise NoSuchKey(f'Key not found for label={label!r} id={id!r} type={key_type!r}')
+            msg = self._not_found_message(label=label, object_id=id, key_type=key_type)
+            raise NoSuchKey(msg)
 
         if label is not None:
             if actual_label == label:
                 return candidate
             if label in self.duplicate_aliases and object_class == ObjectClass.PRIVATE_KEY:
                 return candidate
-            raise NoSuchKey(f'Key not found for label={label!r} id={id!r} type={key_type!r}')
+            msg = self._not_found_message(label=label, object_id=id, key_type=key_type)
+            raise NoSuchKey(msg)
 
-        raise NoSuchKey(f'Key not found for label={label!r} id={id!r} type={key_type!r}')
+        msg = self._not_found_message(label=label, object_id=id, key_type=key_type)
+        raise NoSuchKey(msg)
 
     def generate_keypair(self, key_type: object, key_length: object, **kwargs: object) -> tuple[object, object]:
         """Record RSA key generation."""
@@ -167,10 +182,16 @@ class FakeSession:
 class FakeToken:
     """Minimal token fake that yields a single session."""
 
-    def __init__(self, session: FakeSession) -> None:
+    def __init__(
+        self,
+        session: FakeSession,
+        *,
+        label: str = 'Trustpoint-SoftHSM',
+        serial: str = 'soft-serial',
+    ) -> None:
         """Initialize the token fake."""
-        self.label = 'Trustpoint-SoftHSM'
-        self.serial = 'soft-serial'
+        self.label = label
+        self.serial = serial
         self.model = 'SoftHSM v2'
         self.manufacturer = 'SoftHSM project'
         self.manufacturer_id = 'SoftHSM project'
@@ -190,9 +211,9 @@ class FakeToken:
 class FakeSlot:
     """Minimal slot fake for backend tests."""
 
-    def __init__(self, token: FakeToken) -> None:
+    def __init__(self, token: FakeToken, *, slot_id: int = 5) -> None:
         """Initialize the slot fake."""
-        self.slot_id = 5
+        self.slot_id = slot_id
         self._token = token
 
     def get_token(self) -> FakeToken:
@@ -218,14 +239,23 @@ class FakeSlot:
 class FakeLibrary:
     """Library fake that exposes a single slot."""
 
-    def __init__(self, slot: FakeSlot) -> None:
+    def __init__(self, slot: FakeSlot | None = None, *, slots: list[FakeSlot] | None = None) -> None:
         """Initialize the library fake."""
-        self._slot = slot
+        self._slots = slots or ([slot] if slot is not None else [])
+
+    def get_slots(self, *, token_present: bool = False) -> list[FakeSlot]:  # noqa: ARG002
+        """Return the configured slots."""
+        return self._slots
+
+
+class TokenPresentScanFailsLibrary(FakeLibrary):
+    """Library fake where token_present=True scans fail but full scans work."""
 
     def get_slots(self, *, token_present: bool = False) -> list[FakeSlot]:
-        """Return the configured slot."""
-        assert token_present is True
-        return [self._slot]
+        """Raise for token-present scans and return slots for full scans."""
+        if token_present:
+            raise GeneralError
+        return super().get_slots(token_present=token_present)
 
 
 def _build_backend(session: FakeSession) -> Pkcs11Backend:
@@ -233,12 +263,55 @@ def _build_backend(session: FakeSession) -> Pkcs11Backend:
     profile = Pkcs11ProviderProfile(
         name='demo',
         module_path='/usr/lib/libpkcs11-proxy.so',
-        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM'),
+        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM'),  # noqa: S106
         user_pin='1234',
     )
     token = FakeToken(session)
     slot = FakeSlot(token)
     return Pkcs11Backend(profile=profile, library_loader=lambda _path: FakeLibrary(slot))
+
+
+def test_token_resolution_falls_back_to_label_when_slot_id_mismatches_label() -> None:
+    """A stale slot id should not prevent selection by a still-valid token label."""
+    session = FakeSession()
+    wrong_slot = FakeSlot(FakeToken(session, label='Wrong-Token'), slot_id=5)
+    expected_token = FakeToken(session, label='Trustpoint-SoftHSM')
+    expected_slot = FakeSlot(expected_token, slot_id=9)
+    profile = Pkcs11ProviderProfile(
+        name='demo',
+        module_path='/usr/lib/libpkcs11-proxy.so',
+        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM', slot_id=5),  # noqa: S106
+        user_pin='1234',
+    )
+    backend = Pkcs11Backend(
+        profile=profile,
+        library_loader=lambda _path: FakeLibrary(slots=[wrong_slot, expected_slot]),
+    )
+
+    backend.verify_authentication()
+
+    assert expected_token.open_calls == 1
+
+
+def test_token_resolution_retries_full_scan_when_token_present_scan_fails() -> None:
+    """Some vendor modules reject token_present scans; full slot scan should still work."""
+    session = FakeSession()
+    token = FakeToken(session, label='Trustpoint-SoftHSM')
+    slot = FakeSlot(token, slot_id=5)
+    profile = Pkcs11ProviderProfile(
+        name='demo',
+        module_path='/usr/lib/libpkcs11-proxy.so',
+        token=Pkcs11TokenSelector(token_label='Trustpoint-SoftHSM', slot_id=5),  # noqa: S106
+        user_pin='1234',
+    )
+    backend = Pkcs11Backend(
+        profile=profile,
+        library_loader=lambda _path: TokenPresentScanFailsLibrary(slots=[slot]),
+    )
+
+    backend.verify_authentication()
+
+    assert token.open_calls == 1
 
 
 def test_generate_managed_rsa_key_uses_pkcs11_keygen() -> None:
@@ -311,7 +384,7 @@ def test_get_public_key_loads_rsa_public_key() -> None:
     public_key = backend.get_public_key(binding)
 
     assert isinstance(public_key, rsa.RSAPublicKey)
-    assert public_key.key_size == 2048
+    assert public_key.key_size == RSA_2048_KEY_SIZE
 
 
 def test_sign_encodes_ecdsa_signature_as_der() -> None:

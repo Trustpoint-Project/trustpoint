@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, cast
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -25,6 +26,10 @@ from crypto.models import (
     ManagedKeyStatus,
     Pkcs11AuthSource,
 )
+from management.models import AuditLog, LoggingConfig
+
+if TYPE_CHECKING:
+    from crypto.application.backend_factory import BackendAdapterFactory
 
 
 @dataclass
@@ -100,11 +105,11 @@ def _create_pkcs11_profile(*, name: str, active: bool = True) -> CryptoProviderP
     CryptoProviderPkcs11ConfigModel.objects.create(
         profile=profile,
         module_path='/usr/lib/test-pkcs11.so',
-        token_serial='1234',
+        token_serial='1234',  # noqa: S106 - token serial test fixture, not a secret.
         token_label='',
         slot_id=None,
         auth_source=Pkcs11AuthSource.FILE,
-        auth_source_ref='/tmp/user-pin.txt',
+        auth_source_ref='/tmp/user-pin.txt',  # noqa: S108 - test fixture path.
         max_sessions=4,
         borrow_timeout_seconds=2.0,
         rw_sessions=True,
@@ -112,8 +117,14 @@ def _create_pkcs11_profile(*, name: str, active: bool = True) -> CryptoProviderP
     return profile
 
 
+def _backend_with_adapter(adapter: FakeAdapter) -> TrustpointCryptoBackend:
+    """Build a backend service around the test adapter fake."""
+    return TrustpointCryptoBackend(adapter_factory=cast('BackendAdapterFactory', FakeAdapterFactory(adapter=adapter)))
+
+
 @pytest.mark.django_db
 def test_generate_managed_key_persists_opaque_ref_and_signing_mode() -> None:
+    """Managed-key generation persists an opaque backend reference and signing mode."""
     profile = _create_pkcs11_profile(name='provider-1', active=True)
 
     public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
@@ -125,7 +136,7 @@ def test_generate_managed_key_persists_opaque_ref_and_signing_mode() -> None:
             signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
         ),
     )
-    backend = TrustpointCryptoBackend(adapter_factory=FakeAdapterFactory(adapter=adapter))
+    backend = _backend_with_adapter(adapter)
 
     key_ref = backend.generate_managed_key(
         alias='ca/root',
@@ -150,6 +161,7 @@ def test_generate_managed_key_persists_opaque_ref_and_signing_mode() -> None:
 
 @pytest.mark.django_db
 def test_sign_routes_through_persisted_pkcs11_binding() -> None:
+    """Signing resolves the persisted PKCS#11 binding and routes through the adapter."""
     profile = _create_pkcs11_profile(name='provider-1', active=True)
 
     public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
@@ -178,7 +190,7 @@ def test_sign_routes_through_persisted_pkcs11_binding() -> None:
         key_id_hex='aabbccdd',
     )
 
-    backend = TrustpointCryptoBackend(adapter_factory=FakeAdapterFactory(adapter=adapter))
+    backend = _backend_with_adapter(adapter)
 
     signature = backend.sign(
         key=managed_key.to_managed_key_ref(),
@@ -196,7 +208,115 @@ def test_sign_routes_through_persisted_pkcs11_binding() -> None:
 
 
 @pytest.mark.django_db
+def test_crypto_backend_audit_records_sanitized_sign_operation_when_enabled() -> None:
+    """Crypto backend audit stores metadata without payload or signature bytes."""
+    profile = _create_pkcs11_profile(name='provider-1', active=True)
+    LoggingConfig.objects.update_or_create(
+        id=1,
+        defaults={'log_level': 'INFO', 'crypto_backend_audit_enabled': True},
+    )
+
+    public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
+    adapter = FakeAdapter(
+        public_key=public_key,
+        generated_binding=Pkcs11ManagedKeyBinding(
+            key_id=b'\xaa\xbb\xcc\xdd',
+            algorithm=KeyAlgorithm.RSA,
+            signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+        ),
+        signature=b'app-signature',
+    )
+
+    managed_key = CryptoManagedKeyModel.objects.create(
+        alias='signer/rsa',
+        provider_label='signer/rsa',
+        provider_profile=profile,
+        algorithm='rsa',
+        public_key_fingerprint_sha256='b' * 64,
+        signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH.value,
+        policy_snapshot={'extractable': False, 'ephemeral': False, 'usages': ['sign', 'verify']},
+    )
+    CryptoManagedKeyPkcs11BindingModel.objects.create(
+        managed_key=managed_key,
+        provider_profile=profile,
+        key_id_hex='aabbccdd',
+    )
+
+    backend = _backend_with_adapter(adapter)
+
+    backend.sign(
+        key=managed_key.to_managed_key_ref(),
+        data=b'secret payload bytes',
+        request=SignRequest.rsa_pkcs1v15_sha256(),
+    )
+
+    entry = AuditLog.objects.get(operation_type=AuditLog.OperationType.CRYPTO_SIGN)
+    assert entry.target == managed_key
+    assert entry.target_display == 'Managed crypto key: signer/rsa'
+    assert entry.details['status'] == 'success'
+    assert entry.details['backend_kind'] == BackendKind.PKCS11
+    assert entry.details['profile_name'] == 'provider-1'
+    assert entry.details['key_algorithm'] == KeyAlgorithm.RSA
+    assert entry.details['signature_algorithm'] == 'rsa-pkcs1v15'
+    assert entry.details['hash_algorithm'] == 'sha256'
+    assert entry.details['data_length'] == len(b'secret payload bytes')
+    assert 'operation' not in entry.details
+    assert 'data' not in entry.details
+    assert 'payload' not in entry.details
+    assert 'signature' not in entry.details
+    assert 'auth_source_ref' not in entry.details
+    assert 'module_path' not in entry.details
+
+
+@pytest.mark.django_db
+def test_crypto_backend_audit_does_not_persist_when_disabled() -> None:
+    """Crypto backend debug tracing can run without persistent audit rows."""
+    profile = _create_pkcs11_profile(name='provider-1', active=True)
+    LoggingConfig.objects.update_or_create(
+        id=1,
+        defaults={'log_level': 'INFO', 'crypto_backend_audit_enabled': False},
+    )
+
+    public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
+    adapter = FakeAdapter(
+        public_key=public_key,
+        generated_binding=Pkcs11ManagedKeyBinding(
+            key_id=b'\xaa\xbb\xcc\xdd',
+            algorithm=KeyAlgorithm.RSA,
+            signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH,
+        ),
+        signature=b'app-signature',
+    )
+
+    managed_key = CryptoManagedKeyModel.objects.create(
+        alias='signer/rsa',
+        provider_label='signer/rsa',
+        provider_profile=profile,
+        algorithm='rsa',
+        public_key_fingerprint_sha256='b' * 64,
+        signing_execution_mode=SigningExecutionMode.ALLOW_APPLICATION_HASH.value,
+        policy_snapshot={'extractable': False, 'ephemeral': False, 'usages': ['sign', 'verify']},
+    )
+    CryptoManagedKeyPkcs11BindingModel.objects.create(
+        managed_key=managed_key,
+        provider_profile=profile,
+        key_id_hex='aabbccdd',
+    )
+
+    backend = _backend_with_adapter(adapter)
+
+    backend.sign(
+        key=managed_key.to_managed_key_ref(),
+        data=b'secret payload bytes',
+        request=SignRequest.rsa_pkcs1v15_sha256(),
+    )
+
+    assert not AuditLog.objects.filter(operation_type=AuditLog.OperationType.CRYPTO_SIGN).exists()
+
+
+@pytest.mark.django_db
 def test_verify_managed_key_updates_repository_status() -> None:
+    """Managed-key verification updates repository status from backend verification."""
     profile = _create_pkcs11_profile(name='provider-1', active=True)
 
     public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
@@ -227,7 +347,7 @@ def test_verify_managed_key_updates_repository_status() -> None:
         key_id_hex='aabbccdd',
     )
 
-    backend = TrustpointCryptoBackend(adapter_factory=FakeAdapterFactory(adapter=adapter))
+    backend = _backend_with_adapter(adapter)
 
     verification = backend.verify_managed_key(managed_key.to_managed_key_ref())
 

@@ -7,10 +7,13 @@ from django.views.generic import TemplateView
 
 from crypto.models import (
     BackendKind,
+    CryptoProviderCapabilityPkcs11DetailModel,
+    CryptoProviderCapabilitySnapshotModel,
     CryptoProviderPkcs11ConfigModel,
     CryptoProviderProfileModel,
     CryptoProviderSoftwareConfigModel,
     Pkcs11AuthSource,
+    ProbeStatus,
     SoftwareKeyEncryptionSource,
 )
 from management.views.backend_configuration import BackendConfigurationView
@@ -113,6 +116,58 @@ class BackendConfigurationViewTest(TestCase):
         assert context['pkcs11_config'] == pkcs11_config
         assert context['pkcs11_token_serial_display'] == 'serial-1'  # noqa: S105
         assert context['pkcs11_slot_id_display'] == 1
+
+    def test_get_context_data_groups_pkcs11_mechanisms_without_empty_key_size_columns(self) -> None:
+        """Test PKCS#11 mechanism display metadata is grouped and omits empty key-size columns."""
+        profile = CryptoProviderProfileModel.objects.create(
+            name='physical-pkcs11',
+            backend_kind=BackendKind.PKCS11,
+            active=True,
+        )
+        CryptoProviderPkcs11ConfigModel.objects.create(
+            profile=profile,
+            module_path='/opt/vendor/libpkcs11.so',
+            token_label='token',  # noqa: S106
+            auth_source=Pkcs11AuthSource.FILE,
+            auth_source_ref='/var/lib/trustpoint/pin',
+        )
+        snapshot = CryptoProviderCapabilitySnapshotModel.objects.create(
+            profile=profile,
+            status=ProbeStatus.SUCCESS,
+            probe_hash='a' * 64,
+        )
+        profile.current_capability_snapshot = snapshot
+        profile.save(update_fields=['current_capability_snapshot'])
+        CryptoProviderCapabilityPkcs11DetailModel.objects.create(
+            snapshot=snapshot,
+            snapshot_payload={
+                'derived_features': {},
+                'mechanisms': {
+                    'CKM_RSA_PKCS_KEY_PAIR_GEN': {
+                        'name': 'CKM_RSA_PKCS_KEY_PAIR_GEN',
+                        'code': 0,
+                        'flags': ['GENERATE_KEY_PAIR'],
+                        'min_key_size': 2048,
+                        'max_key_size': 4096,
+                    },
+                    'CKM_SHA256': {
+                        'name': 'CKM_SHA256',
+                        'code': 592,
+                        'flags': ['DIGEST'],
+                        'min_key_size': None,
+                        'max_key_size': None,
+                    },
+                },
+            },
+        )
+
+        context = self.view.get_context_data()
+
+        groups = {group['id']: group for group in context['pkcs11_mechanism_groups']}
+        assert groups['rsa']['has_key_size_ranges']
+        assert groups['rsa']['mechanisms'][0]['key_size_range'] == '2048 - 4096'
+        assert not groups['hash']['has_key_size_ranges']
+        assert groups['hash']['mechanisms'][0]['key_size_range'] == ''
 
     def test_get_context_data_with_hsm_but_no_config_reference(self) -> None:
         """Test get_context_data with PKCS#11 profile but missing config relation."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from time import perf_counter
 from typing import TYPE_CHECKING, cast
 
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -10,6 +11,12 @@ from django.db import DatabaseError
 from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 from crypto.adapters.rest.bindings import RestManagedKeyBinding
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding
+from crypto.application.audit import (
+    audit_crypto_backend_operation,
+    key_policy_audit_details,
+    key_spec_audit_details,
+    sign_request_audit_details,
+)
 from crypto.application.backend_factory import BackendAdapterFactory, DefaultBackendAdapterFactory
 from crypto.application.capabilities import BackendCapabilityService
 from crypto.domain.errors import CryptoError, KeyNotFoundError, ProviderConfigurationError, UnsupportedKeySpecError
@@ -50,8 +57,29 @@ class TrustpointCryptoBackend(LoggerMixin):
         """Validate that the configured instance backend can be loaded and used."""
         profile = self._get_configured_profile()
         adapter = self._build_adapter(profile)
+        started_at = perf_counter()
         try:
             adapter.verify_provider()
+        except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
+            audit_crypto_backend_operation(
+                operation='verify_provider',
+                target=profile,
+                target_display=self._profile_target_display(profile),
+                started_at=started_at,
+                status='error',
+                profile=profile,
+                error=exc,
+            )
+            raise
+        else:
+            audit_crypto_backend_operation(
+                operation='verify_provider',
+                target=profile,
+                target_display=self._profile_target_display(profile),
+                started_at=started_at,
+                status='success',
+                profile=profile,
+            )
         finally:
             adapter.close()
 
@@ -69,6 +97,13 @@ class TrustpointCryptoBackend(LoggerMixin):
 
         adapter = self._build_adapter(profile)
         binding: ManagedKeyBinding | None = None
+        managed_key: CryptoManagedKeyModel | None = None
+        started_at = perf_counter()
+        details = {
+            'alias': alias,
+            **key_spec_audit_details(key_spec),
+            **key_policy_audit_details(policy),
+        }
 
         try:
             raw_binding = adapter.generate_managed_key(alias=alias, key_spec=key_spec, policy=policy)
@@ -82,10 +117,39 @@ class TrustpointCryptoBackend(LoggerMixin):
                 public_key=public_key,
                 policy=policy,
             )
-        except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError):
+        except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
             if binding is not None:
                 self._cleanup_orphaned_binding(adapter=adapter, alias=alias, binding=binding)
+            audit_crypto_backend_operation(
+                operation='generate_managed_key',
+                target=managed_key or profile,
+                target_display=(
+                    self._managed_key_target_display(managed_key)
+                    if managed_key is not None
+                    else self._profile_target_display(profile)
+                ),
+                started_at=started_at,
+                status='error',
+                profile=profile,
+                managed_key=managed_key,
+                details=details,
+                error=exc,
+            )
             raise
+        else:
+            if managed_key is None:
+                msg = 'Backend generated a key but no managed-key record was persisted.'
+                raise ProviderConfigurationError(msg)
+            audit_crypto_backend_operation(
+                operation='generate_managed_key',
+                target=managed_key,
+                target_display=self._managed_key_target_display(managed_key),
+                started_at=started_at,
+                status='success',
+                profile=profile,
+                managed_key=managed_key,
+                details=details,
+            )
         finally:
             adapter.close()
 
@@ -96,12 +160,23 @@ class TrustpointCryptoBackend(LoggerMixin):
         managed_key = self._load_managed_key(key)
         app_ref = managed_key.to_managed_key_ref()
         adapter = self._build_adapter(managed_key.provider_profile)
+        started_at = perf_counter()
 
         try:
             binding = self._managed_key_repository.build_backend_binding(managed_key)
             verification = adapter.verify_managed_key(binding)
         except CryptoError as exc:
             self._managed_key_repository.mark_error(managed_key=managed_key, error_summary=str(exc))
+            audit_crypto_backend_operation(
+                operation='verify_managed_key',
+                target=managed_key,
+                target_display=self._managed_key_target_display(managed_key),
+                started_at=started_at,
+                status='error',
+                profile=managed_key.provider_profile,
+                managed_key=managed_key,
+                error=exc,
+            )
             raise
         finally:
             adapter.close()
@@ -119,6 +194,17 @@ class TrustpointCryptoBackend(LoggerMixin):
                 error_summary='Managed key binding resolved to a different public key.',
             )
 
+        audit_crypto_backend_operation(
+            operation='verify_managed_key',
+            target=managed_key,
+            target_display=self._managed_key_target_display(managed_key),
+            started_at=started_at,
+            status='success',
+            profile=managed_key.provider_profile,
+            managed_key=managed_key,
+            details={'verification_status': verification.status.value},
+        )
+
         return ManagedKeyVerification(
             key=app_ref,
             status=verification.status,
@@ -129,8 +215,32 @@ class TrustpointCryptoBackend(LoggerMixin):
         """Load the public key for a managed key."""
         managed_key = self._load_managed_key(key)
         adapter = self._build_adapter(managed_key.provider_profile)
+        started_at = perf_counter()
         try:
-            return adapter.get_public_key(self._managed_key_repository.build_backend_binding(managed_key))
+            public_key = adapter.get_public_key(self._managed_key_repository.build_backend_binding(managed_key))
+        except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
+            audit_crypto_backend_operation(
+                operation='get_public_key',
+                target=managed_key,
+                target_display=self._managed_key_target_display(managed_key),
+                started_at=started_at,
+                status='error',
+                profile=managed_key.provider_profile,
+                managed_key=managed_key,
+                error=exc,
+            )
+            raise
+        else:
+            audit_crypto_backend_operation(
+                operation='get_public_key',
+                target=managed_key,
+                target_display=self._managed_key_target_display(managed_key),
+                started_at=started_at,
+                status='success',
+                profile=managed_key.provider_profile,
+                managed_key=managed_key,
+            )
+            return public_key
         finally:
             adapter.close()
 
@@ -138,21 +248,73 @@ class TrustpointCryptoBackend(LoggerMixin):
         """Sign bytes with a managed key."""
         managed_key = self._load_managed_key(key)
         adapter = self._build_adapter(managed_key.provider_profile)
+        started_at = perf_counter()
+        details = sign_request_audit_details(request, data_length=len(data))
         try:
-            return adapter.sign(
+            signature = adapter.sign(
                 key=self._managed_key_repository.build_backend_binding(managed_key),
                 data=data,
                 request=request,
             )
+        except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
+            audit_crypto_backend_operation(
+                operation='sign',
+                target=managed_key,
+                target_display=self._managed_key_target_display(managed_key),
+                started_at=started_at,
+                status='error',
+                profile=managed_key.provider_profile,
+                managed_key=managed_key,
+                details=details,
+                error=exc,
+            )
+            raise
+        else:
+            audit_crypto_backend_operation(
+                operation='sign',
+                target=managed_key,
+                target_display=self._managed_key_target_display(managed_key),
+                started_at=started_at,
+                status='success',
+                profile=managed_key.provider_profile,
+                managed_key=managed_key,
+                details=details,
+            )
+            return signature
         finally:
             adapter.close()
 
     def destroy_managed_key(self, key: ManagedKeyRef) -> None:
         """Destroy an unreferenced managed key in the backend and remove its binding record."""
         managed_key = self._load_managed_key(key)
+        profile = managed_key.provider_profile
+        target_display = self._managed_key_target_display(managed_key)
         adapter = self._build_adapter(managed_key.provider_profile)
+        started_at = perf_counter()
         try:
             adapter.destroy_managed_key(self._managed_key_repository.build_backend_binding(managed_key))
+        except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
+            audit_crypto_backend_operation(
+                operation='destroy_managed_key',
+                target=managed_key,
+                target_display=target_display,
+                started_at=started_at,
+                status='error',
+                profile=profile,
+                managed_key=managed_key,
+                error=exc,
+            )
+            raise
+        else:
+            audit_crypto_backend_operation(
+                operation='destroy_managed_key',
+                target=managed_key,
+                target_display=target_display,
+                started_at=started_at,
+                status='success',
+                profile=profile,
+                managed_key=managed_key,
+            )
         finally:
             adapter.close()
 
@@ -177,6 +339,16 @@ class TrustpointCryptoBackend(LoggerMixin):
     def _build_adapter(self, profile_model: CryptoProviderProfileModel) -> ManagedKeyBackendAdapter:
         """Build a backend-kind-specific adapter for a persisted provider profile."""
         return cast('ManagedKeyBackendAdapter', self._adapter_factory.build(profile_model))
+
+    @staticmethod
+    def _profile_target_display(profile: CryptoProviderProfileModel) -> str:
+        """Return a stable audit display label for a provider profile."""
+        return f'Crypto backend profile: {profile.name}'
+
+    @staticmethod
+    def _managed_key_target_display(managed_key: CryptoManagedKeyModel) -> str:
+        """Return a stable audit display label for a managed key."""
+        return f'Managed crypto key: {managed_key.alias}'
 
     @staticmethod
     def _managed_key_binding_or_error(binding: object) -> ManagedKeyBinding:

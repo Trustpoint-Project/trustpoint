@@ -264,46 +264,53 @@
                             {% endif %}
                         </div>
 
-                        {% if pkcs11_mechanisms %}
+                        {% if pkcs11_mechanism_groups %}
                             <div class="accordion accordion-flush border rounded overflow-hidden">
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header">
-                                        <button
-                                            type="button"
-                                            class="accordion-button py-2 px-3 bg-body-tertiary text-body"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#pkcs11-mechanisms-rsa"
-                                            aria-expanded="true"
-                                            aria-controls="pkcs11-mechanisms-rsa"
-                                        >
-                                            <span class="fw-semibold">{% trans 'RSA' %}</span>
-                                        </button>
-                                    </h3>
+                                {% for group in pkcs11_mechanism_groups %}
+                                    <div class="accordion-item">
+                                        <h3 class="accordion-header">
+                                            <button
+                                                type="button"
+                                                class="accordion-button py-2 px-3 bg-body-tertiary text-body {% if not group.expanded %}collapsed{% endif %}"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#pkcs11-mechanisms-{{ group.id }}"
+                                                aria-expanded="{% if group.expanded %}true{% else %}false{% endif %}"
+                                                aria-controls="pkcs11-mechanisms-{{ group.id }}"
+                                            >
+                                                <span class="fw-semibold">{{ group.title }}</span>
+                                                <span class="badge text-bg-secondary ms-3">{{ group.mechanisms|length }}</span>
+                                            </button>
+                                        </h3>
 
-                                    <div id="pkcs11-mechanisms-rsa" class="accordion-collapse collapse show">
-                                        <div class="table-responsive border-top">
-                                            <table class="table table-sm table-hover align-middle mb-0 tp-mechanism-table">
-                                                <colgroup>
-                                                    <col class="tp-mechanism-col-name">
-                                                    <col class="tp-mechanism-col-code">
-                                                    <col class="tp-mechanism-col-size">
-                                                    <col class="tp-mechanism-col-flags">
-                                                </colgroup>
-                                                <thead>
-                                                    <tr>
-                                                        <th>{% trans 'Name' %}</th>
-                                                        <th class="text-end">{% trans 'Code' %}</th>
-                                                        <th>{% trans 'Key Size' %}</th>
-                                                        <th>{% trans 'Flags' %}</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {% for mechanism in pkcs11_mechanisms %}
-                                                        {% if "RSA" in mechanism.name %}
+                                        <div id="pkcs11-mechanisms-{{ group.id }}" class="accordion-collapse collapse{% if group.expanded %} show{% endif %}">
+                                            <div class="table-responsive border-top">
+                                                <table class="table table-sm table-hover align-middle mb-0 tp-mechanism-table">
+                                                    <colgroup>
+                                                        <col class="tp-mechanism-col-name">
+                                                        <col class="tp-mechanism-col-code">
+                                                        {% if group.has_key_size_ranges %}
+                                                            <col class="tp-mechanism-col-size">
+                                                        {% endif %}
+                                                        <col class="tp-mechanism-col-flags">
+                                                    </colgroup>
+                                                    <thead>
+                                                        <tr>
+                                                            <th>{% trans 'Name' %}</th>
+                                                            <th class="text-end">{% trans 'Code' %}</th>
+                                                            {% if group.has_key_size_ranges %}
+                                                                <th>{% trans 'Key Size' %}</th>
+                                                            {% endif %}
+                                                            <th>{% trans 'Flags' %}</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {% for mechanism in group.mechanisms %}
                                                             <tr>
                                                                 <td><code class="p-0">{{ mechanism.name }}</code></td>
                                                                 <td class="text-end text-nowrap">{{ mechanism.code|default:"-" }}</td>
-                                                                <td class="text-nowrap">{{ mechanism.min_key_size|default:"-" }} - {{ mechanism.max_key_size|default:"-" }}</td>
+                                                                {% if group.has_key_size_ranges %}
+                                                                    <td class="text-nowrap">{{ mechanism.key_size_range|default:"-" }}</td>
+                                                                {% endif %}
                                                                 <td>
                                                                     {% if mechanism.flags %}
                                                                         <div class="d-flex flex-wrap gap-1">
@@ -316,245 +323,13 @@
                                                                     {% endif %}
                                                                 </td>
                                                             </tr>
-                                                        {% endif %}
-                                                    {% endfor %}
-                                                </tbody>
-                                            </table>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header">
-                                        <button
-                                            type="button"
-                                            class="accordion-button collapsed py-2 px-3 bg-body-tertiary text-body"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#pkcs11-mechanisms-ec"
-                                            aria-expanded="false"
-                                            aria-controls="pkcs11-mechanisms-ec"
-                                        >
-                                            <span class="fw-semibold">{% trans 'Elliptic Curve' %}</span>
-                                        </button>
-                                    </h3>
-
-                                    <div id="pkcs11-mechanisms-ec" class="accordion-collapse collapse">
-                                        <div class="table-responsive border-top">
-                                            <table class="table table-sm table-hover align-middle mb-0 tp-mechanism-table">
-                                                <colgroup>
-                                                    <col class="tp-mechanism-col-name">
-                                                    <col class="tp-mechanism-col-code">
-                                                    <col class="tp-mechanism-col-size">
-                                                    <col class="tp-mechanism-col-flags">
-                                                </colgroup>
-                                                <thead>
-                                                    <tr>
-                                                        <th>{% trans 'Name' %}</th>
-                                                        <th class="text-end">{% trans 'Code' %}</th>
-                                                        <th>{% trans 'Key Size' %}</th>
-                                                        <th>{% trans 'Flags' %}</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {% for mechanism in pkcs11_mechanisms %}
-                                                        {% if "ECDSA" in mechanism.name or "ECDH" in mechanism.name or "EC_" in mechanism.name %}
-                                                            <tr>
-                                                                <td><code class="p-0">{{ mechanism.name }}</code></td>
-                                                                <td class="text-end text-nowrap">{{ mechanism.code|default:"-" }}</td>
-                                                                <td class="text-nowrap">{{ mechanism.min_key_size|default:"-" }} - {{ mechanism.max_key_size|default:"-" }}</td>
-                                                                <td>
-                                                                    {% if mechanism.flags %}
-                                                                        <div class="d-flex flex-wrap gap-1">
-                                                                            {% for flag in mechanism.flags %}
-                                                                                <span class="badge rounded-pill text-bg-light border text-body">{{ flag }}</span>
-                                                                            {% endfor %}
-                                                                        </div>
-                                                                    {% else %}
-                                                                        <span class="text-muted">-</span>
-                                                                    {% endif %}
-                                                                </td>
-                                                            </tr>
-                                                        {% endif %}
-                                                    {% endfor %}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header">
-                                        <button
-                                            type="button"
-                                            class="accordion-button collapsed py-2 px-3 bg-body-tertiary text-body"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#pkcs11-mechanisms-aes"
-                                            aria-expanded="false"
-                                            aria-controls="pkcs11-mechanisms-aes"
-                                        >
-                                            <span class="fw-semibold">{% trans 'AES / Symmetric' %}</span>
-                                        </button>
-                                    </h3>
-
-                                    <div id="pkcs11-mechanisms-aes" class="accordion-collapse collapse">
-                                        <div class="table-responsive border-top">
-                                            <table class="table table-sm table-hover align-middle mb-0 tp-mechanism-table">
-                                                <colgroup>
-                                                    <col class="tp-mechanism-col-name">
-                                                    <col class="tp-mechanism-col-code">
-                                                    <col class="tp-mechanism-col-size">
-                                                    <col class="tp-mechanism-col-flags">
-                                                </colgroup>
-                                                <thead>
-                                                    <tr>
-                                                        <th>{% trans 'Name' %}</th>
-                                                        <th class="text-end">{% trans 'Code' %}</th>
-                                                        <th>{% trans 'Key Size' %}</th>
-                                                        <th>{% trans 'Flags' %}</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {% for mechanism in pkcs11_mechanisms %}
-                                                        {% if "AES" in mechanism.name %}
-                                                            <tr>
-                                                                <td><code class="p-0">{{ mechanism.name }}</code></td>
-                                                                <td class="text-end text-nowrap">{{ mechanism.code|default:"-" }}</td>
-                                                                <td class="text-nowrap">{{ mechanism.min_key_size|default:"-" }} - {{ mechanism.max_key_size|default:"-" }}</td>
-                                                                <td>
-                                                                    {% if mechanism.flags %}
-                                                                        <div class="d-flex flex-wrap gap-1">
-                                                                            {% for flag in mechanism.flags %}
-                                                                                <span class="badge rounded-pill text-bg-light border text-body">{{ flag }}</span>
-                                                                            {% endfor %}
-                                                                        </div>
-                                                                    {% else %}
-                                                                        <span class="text-muted">-</span>
-                                                                    {% endif %}
-                                                                </td>
-                                                            </tr>
-                                                        {% endif %}
-                                                    {% endfor %}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header">
-                                        <button
-                                            type="button"
-                                            class="accordion-button collapsed py-2 px-3 bg-body-tertiary text-body"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#pkcs11-mechanisms-hash"
-                                            aria-expanded="false"
-                                            aria-controls="pkcs11-mechanisms-hash"
-                                        >
-                                            <span class="fw-semibold">{% trans 'Hash / MAC' %}</span>
-                                        </button>
-                                    </h3>
-
-                                    <div id="pkcs11-mechanisms-hash" class="accordion-collapse collapse">
-                                        <div class="table-responsive border-top">
-                                            <table class="table table-sm table-hover align-middle mb-0 tp-mechanism-table">
-                                                <colgroup>
-                                                    <col class="tp-mechanism-col-name">
-                                                    <col class="tp-mechanism-col-code">
-                                                    <col class="tp-mechanism-col-size">
-                                                    <col class="tp-mechanism-col-flags">
-                                                </colgroup>
-                                                <thead>
-                                                    <tr>
-                                                        <th>{% trans 'Name' %}</th>
-                                                        <th class="text-end">{% trans 'Code' %}</th>
-                                                        <th>{% trans 'Key Size' %}</th>
-                                                        <th>{% trans 'Flags' %}</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {% for mechanism in pkcs11_mechanisms %}
-                                                        {% if "RSA" not in mechanism.name and "ECDSA" not in mechanism.name and "ECDH" not in mechanism.name and "EC_" not in mechanism.name and "AES" not in mechanism.name and "SHA" in mechanism.name or "HMAC" in mechanism.name or "MD5" in mechanism.name %}
-                                                            <tr>
-                                                                <td><code class="p-0">{{ mechanism.name }}</code></td>
-                                                                <td class="text-end text-nowrap">{{ mechanism.code|default:"-" }}</td>
-                                                                <td class="text-nowrap">{{ mechanism.min_key_size|default:"-" }} - {{ mechanism.max_key_size|default:"-" }}</td>
-                                                                <td>
-                                                                    {% if mechanism.flags %}
-                                                                        <div class="d-flex flex-wrap gap-1">
-                                                                            {% for flag in mechanism.flags %}
-                                                                                <span class="badge rounded-pill text-bg-light border text-body">{{ flag }}</span>
-                                                                            {% endfor %}
-                                                                        </div>
-                                                                    {% else %}
-                                                                        <span class="text-muted">-</span>
-                                                                    {% endif %}
-                                                                </td>
-                                                            </tr>
-                                                        {% endif %}
-                                                    {% endfor %}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="accordion-item">
-                                    <h3 class="accordion-header">
-                                        <button
-                                            type="button"
-                                            class="accordion-button collapsed py-2 px-3 bg-body-tertiary text-body"
-                                            data-bs-toggle="collapse"
-                                            data-bs-target="#pkcs11-mechanisms-other"
-                                            aria-expanded="false"
-                                            aria-controls="pkcs11-mechanisms-other"
-                                        >
-                                            <span class="fw-semibold">{% trans 'Other' %}</span>
-                                        </button>
-                                    </h3>
-
-                                    <div id="pkcs11-mechanisms-other" class="accordion-collapse collapse">
-                                        <div class="table-responsive border-top">
-                                            <table class="table table-sm table-hover align-middle mb-0 tp-mechanism-table">
-                                                <colgroup>
-                                                    <col class="tp-mechanism-col-name">
-                                                    <col class="tp-mechanism-col-code">
-                                                    <col class="tp-mechanism-col-size">
-                                                    <col class="tp-mechanism-col-flags">
-                                                </colgroup>
-                                                <thead>
-                                                    <tr>
-                                                        <th>{% trans 'Name' %}</th>
-                                                        <th class="text-end">{% trans 'Code' %}</th>
-                                                        <th>{% trans 'Key Size' %}</th>
-                                                        <th>{% trans 'Flags' %}</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {% for mechanism in pkcs11_mechanisms %}
-                                                        {% if "RSA" not in mechanism.name and "ECDSA" not in mechanism.name and "ECDH" not in mechanism.name and "EC_" not in mechanism.name and "AES" not in mechanism.name and "SHA" not in mechanism.name and "HMAC" not in mechanism.name and "MD5" not in mechanism.name %}
-                                                            <tr>
-                                                                <td><code class="p-0">{{ mechanism.name }}</code></td>
-                                                                <td class="text-end text-nowrap">{{ mechanism.code|default:"-" }}</td>
-                                                                <td class="text-nowrap">{{ mechanism.min_key_size|default:"-" }} - {{ mechanism.max_key_size|default:"-" }}</td>
-                                                                <td>
-                                                                    {% if mechanism.flags %}
-                                                                        <div class="d-flex flex-wrap gap-1">
-                                                                            {% for flag in mechanism.flags %}
-                                                                                <span class="badge rounded-pill text-bg-light border text-body">{{ flag }}</span>
-                                                                            {% endfor %}
-                                                                        </div>
-                                                                    {% else %}
-                                                                        <span class="text-muted">-</span>
-                                                                    {% endif %}
-                                                                </td>
-                                                            </tr>
-                                                        {% endif %}
-                                                    {% endfor %}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
+                                {% endfor %}
                             </div>
                         {% else %}
                             <div class="alert alert-warning mb-0">

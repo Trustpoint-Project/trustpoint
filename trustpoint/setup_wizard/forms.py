@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
 FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-vendor.cfg'
+DEFAULT_PKCS11_CONFIG_ENV_VAR = 'CS_PKCS11_R3_CFG'
 
 MIN_TCP_PORT = 1
 MAX_TCP_PORT = 65535
@@ -469,8 +470,8 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             self.instance.fresh_install_pkcs11_token_label or getattr(settings, 'HSM_DEFAULT_TOKEN_LABEL', '')
         )
         self.initial['fresh_install_pkcs11_slot_id'] = self.instance.fresh_install_pkcs11_slot_id
-        self.initial['pkcs11_config_env_var'] = (
-            self.instance.fresh_install_pkcs11_config_env_var or ''
+        self.initial['pkcs11_config_env_var'] = self.instance.fresh_install_pkcs11_config_env_var or (
+            DEFAULT_PKCS11_CONFIG_ENV_VAR if self._existing_pkcs11_config_file() is not None else ''
         )
         self.staged_pkcs11_module_name = self._staged_pkcs11_module_name()
         self.has_staged_pkcs11_pin = self._existing_pkcs11_pin_file() is not None
@@ -532,14 +533,14 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         return _safe_existing_file(FINAL_WIZARD_PKCS11_CONFIG_PATH)
 
     def _staged_pkcs11_module_name(self) -> str | None:
-        """Return the staged PKCS#11 module filename when the wizard already has one."""
-        staged_module = existing_wizard_pkcs11_staged_file(self.instance.fresh_install_pkcs11_module_path)
-        if staged_module is None:
+        """Return the current wizard PKCS#11 module filename when one is available."""
+        module_file = self._existing_pkcs11_module_file()
+        if module_file is None:
             return None
-        return staged_module.name
+        return module_file.name
 
     def _staged_pkcs11_config_name(self) -> str | None:
-        """Return the staged PKCS#11 vendor config filename when the wizard already has one."""
+        """Return the current wizard PKCS#11 vendor config filename when one is available."""
         config_file = self._existing_pkcs11_config_file()
         if config_file is None:
             return None
@@ -619,9 +620,11 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
 
         module_upload = cleaned_data.get('pkcs11_module_upload')
         config_upload = cleaned_data.get('pkcs11_config_upload')
+        config_env_var = str(cleaned_data.get('pkcs11_config_env_var') or '').strip()
         user_pin = cleaned_data.get('pkcs11_user_pin') or ''
         existing_module = self._existing_pkcs11_module_file()
         existing_pin = self._existing_pkcs11_pin_file()
+        existing_config = self._existing_pkcs11_config_file()
         token_label = cleaned_data.get('fresh_install_pkcs11_token_label') or ''
         slot_id = cleaned_data.get('fresh_install_pkcs11_slot_id')
 
@@ -633,6 +636,9 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             self._validate_pkcs11_config_upload(config_upload)
         except forms.ValidationError as exception:
             self.add_error('pkcs11_config_upload', exception)
+
+        if (config_upload is not None or existing_config is not None) and not config_env_var:
+            cleaned_data['pkcs11_config_env_var'] = DEFAULT_PKCS11_CONFIG_ENV_VAR
 
         if (
             module_upload is None

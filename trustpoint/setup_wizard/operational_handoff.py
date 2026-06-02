@@ -46,6 +46,7 @@ PASSTHROUGH_OPERATIONAL_ENV_KEYS = (
     'DEFAULT_FROM_EMAIL',
 )
 FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-vendor.cfg'
+DEFAULT_PKCS11_CONFIG_ENV_VAR = 'CS_PKCS11_R3_CFG'
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +113,10 @@ def build_operational_environment(config_model: SetupWizardConfigModel) -> dict[
         if value is not None:
             env_values[key] = value
     pkcs11_config_env_var = (config_model.fresh_install_pkcs11_config_env_var or '').strip()
-    if pkcs11_config_env_var and (config_model.fresh_install_pkcs11_config_path or '').strip():
+    pkcs11_config_path = (config_model.fresh_install_pkcs11_config_path or '').strip()
+    if pkcs11_config_path and not pkcs11_config_env_var:
+        pkcs11_config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
+    if pkcs11_config_env_var and pkcs11_config_path:
         env_values[pkcs11_config_env_var] = str(FINAL_WIZARD_PKCS11_CONFIG_PATH)
     return env_values
 

@@ -147,6 +147,27 @@ start_operational_gunicorn() {
     log INFO "Operational Gunicorn started with PID $gunicorn_pid"
 }
 
+wait_for_operational_http() {
+    local attempt=1
+    local max_attempts=30
+    local health_url="http://127.0.0.1:${OPERATIONAL_PORT}/"
+
+    log INFO "Checking operational HTTP availability at $health_url"
+    until curl -fsS --max-time 2 "$health_url" >/dev/null 2>&1; do
+        if [ "$attempt" -ge "$max_attempts" ]; then
+            log ERROR "Operational Gunicorn did not answer HTTP after $max_attempts attempts."
+            if [ -f "$LOG_DIR/gunicorn-operational.log" ]; then
+                log ERROR "Last operational Gunicorn log lines:"
+                tail -n 80 "$LOG_DIR/gunicorn-operational.log" | tee -a "$TRUSTPOINT_LOG"
+            fi
+            exit 10
+        fi
+        attempt=$((attempt + 1))
+        sleep 1
+    done
+    log INFO "Operational HTTP endpoint is reachable"
+}
+
 switch_nginx_proxy() {
     if [ ! -f "$NGINX_SITE" ]; then
         log ERROR "Nginx site config not found: $NGINX_SITE"
@@ -186,6 +207,7 @@ run_startup_manager
 apply_operational_tls_files
 start_qcluster
 start_operational_gunicorn
+wait_for_operational_http
 switch_nginx_proxy
 schedule_bootstrap_gunicorn_shutdown
 

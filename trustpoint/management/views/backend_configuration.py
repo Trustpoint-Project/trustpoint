@@ -59,6 +59,77 @@ def _supported_key_capabilities(report: BackendCapabilityReport | None) -> list[
     return rows
 
 
+def _mechanism_key_size_range(mechanism: dict[str, Any]) -> str:
+    """Return a compact key-size range for mechanism metadata."""
+    min_key_size = mechanism.get('min_key_size')
+    max_key_size = mechanism.get('max_key_size')
+
+    if min_key_size is None and max_key_size is None:
+        return ''
+    if min_key_size is None:
+        return f'<= {max_key_size}'
+    if max_key_size is None:
+        return f'>= {min_key_size}'
+    if min_key_size == max_key_size:
+        return str(min_key_size)
+    return f'{min_key_size} - {max_key_size}'
+
+
+def _mechanism_group_id(mechanism_name: str) -> str:
+    """Classify a PKCS#11 mechanism name for display."""
+    if 'RSA' in mechanism_name:
+        return 'rsa'
+    if 'ECDSA' in mechanism_name or 'ECDH' in mechanism_name or 'EC_' in mechanism_name:
+        return 'ec'
+    if 'AES' in mechanism_name:
+        return 'aes'
+    if 'SHA' in mechanism_name or 'HMAC' in mechanism_name or 'MD5' in mechanism_name:
+        return 'hash'
+    return 'other'
+
+
+def _pkcs11_mechanism_groups(
+    mechanisms: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Group PKCS#11 mechanisms and pre-format optional metadata for the template."""
+    group_titles = {
+        'rsa': _('RSA'),
+        'ec': _('Elliptic Curve'),
+        'aes': _('AES / Symmetric'),
+        'hash': _('Hash / MAC'),
+        'other': _('Other'),
+    }
+    grouped_mechanisms: dict[str, list[dict[str, Any]]] = {group_id: [] for group_id in group_titles}
+
+    for mechanism in mechanisms:
+        mechanism_name = str(mechanism.get('name') or '')
+        if not mechanism_name:
+            continue
+        display_mechanism = {
+            'name': mechanism_name,
+            'code': mechanism.get('code'),
+            'flags': mechanism.get('flags') or (),
+            'key_size_range': _mechanism_key_size_range(mechanism),
+        }
+        grouped_mechanisms[_mechanism_group_id(mechanism_name)].append(display_mechanism)
+
+    groups: list[dict[str, Any]] = []
+    for group_id, title in group_titles.items():
+        group_mechanisms = grouped_mechanisms[group_id]
+        if not group_mechanisms:
+            continue
+        groups.append(
+            {
+                'id': group_id,
+                'title': title,
+                'mechanisms': group_mechanisms,
+                'has_key_size_ranges': any(mechanism['key_size_range'] for mechanism in group_mechanisms),
+                'expanded': not groups,
+            }
+        )
+    return groups
+
+
 class BackendConfigurationView(TemplateView):
     """Display the configured managed-crypto and application-secret backends."""
 
@@ -139,11 +210,13 @@ class BackendConfigurationView(TemplateView):
             if pkcs11_capability_payload
             else []
         )
-        context['pkcs11_mechanisms'] = (
+        pkcs11_mechanisms = (
             sorted((pkcs11_capability_payload.get('mechanisms') or {}).values(), key=lambda item: item.get('name', ''))
             if pkcs11_capability_payload
             else []
         )
+        context['pkcs11_mechanisms'] = pkcs11_mechanisms
+        context['pkcs11_mechanism_groups'] = _pkcs11_mechanism_groups(pkcs11_mechanisms)
         context['is_pkcs11_backend'] = bool(crypto_profile and crypto_profile.backend_kind == BackendKind.PKCS11)
         context['is_software_backend'] = bool(crypto_profile and crypto_profile.backend_kind == BackendKind.SOFTWARE)
         context['is_rest_backend'] = bool(crypto_profile and crypto_profile.backend_kind == BackendKind.REST)
