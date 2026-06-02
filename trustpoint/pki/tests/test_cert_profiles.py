@@ -438,6 +438,88 @@ def test_allowed_ext_allow_any_explicit_profile() -> None:
     print('Validated Request: ', validated_request)
     assert validated_request['extensions']['subject_alternative_name']['dns_names'] == ['any.allowed.example.com']
 
+def test_implicit_ca_disallowed() -> None:
+    """Test that a request for a CA certificate fails if Basic Constraints is not explicitly specified in the profile, even if allow='*'."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {
+            'allow': '*',
+        },
+        'reject_mods': False,
+        'mutable': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'basic_constraints': {'ca': True, 'path_length': None}}
+    }
+    with pytest.raises(ProfileValidationError, match="Field 'basic_constraints' is not explicitly allowed in the profile."):
+        validated_request = verifier.apply_profile_to_request(request)
+        print('Validated Request: ', validated_request)
+
+def test_explicit_ca_disallowed() -> None:
+    """Test that a request for a CA certificate fails if Basic Constraints is ca=False, even if allow='*'."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {
+            'allow': '*',
+            'basic_constraints': {'ca': False}
+        },
+        'reject_mods': False,
+        'mutable': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'basic_constraints': {'ca': True, 'path_length': None}}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    assert validated_request['extensions']['basic_constraints']['ca'] is False
+
+def test_explicit_ca_disallowed_reject_mods() -> None:
+    """Test that a request for a CA certificate fails if Basic Constraints is ca=False, even if allow='*'."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {
+            'allow': '*',
+            'basic_constraints': {'ca': False}
+        },
+        'reject_mods': True,
+        'mutable': True
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'basic_constraints': {'ca': True, 'path_length': None}}
+    }
+    with pytest.raises(ProfileValidationError, match="Field 'ca' is not mutable in the profile."):
+        validated_request = verifier.apply_profile_to_request(request)
+        print('Validated Request: ', validated_request)
+
+def test_explicit_ca_allowed() -> None:
+    """Test that a request for a CA certificate passes if Basic Constraints is explicitly set as mutable."""
+    profile = {
+        'type': 'cert_profile',
+        'subj': {'cn': 'example.com'},
+        'ext': {
+            'allow': '*',
+            'basic_constraints': {'ca': False, 'mutable': True}
+        },
+        'reject_mods': False,
+    }
+    verifier = JSONProfileVerifier(profile)
+    request = {
+        'subj': {'cn': 'example.com'},
+        'ext': {'basic_constraints': {'ca': True, 'path_length': None}}
+    }
+    validated_request = verifier.apply_profile_to_request(request)
+    print('Validated Request: ', validated_request)
+    assert validated_request['extensions']['basic_constraints']['ca'] is True
+
+
 def test_sample_request_contains_ext_defaults() -> None:
     """Test that a sample request generated from a profile includes default extension values."""
     profile = {

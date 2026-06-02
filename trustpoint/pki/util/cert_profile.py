@@ -288,6 +288,9 @@ class ProfileSubjectModel(SubjectModel, CertProfileBaseModel):
     """Model for the subject DN of a certificate profile, with profile constraints."""
 
 # Profile-specific extension models are required for extensions that allow lists of strings/nested structures
+class ProfileBasicConstraintsExtensionModel(BasicConstraintsExtensionModel, CertProfileBaseModel):
+    """Model for the Basic Constraints extension of a certificate profile, with profile constraints."""
+
 class ProfileSanExtensionModel(SanExtensionModel, CertProfileBaseModel):
     """Model for the SAN extension of a certificate profile, with profile constraints."""
 
@@ -296,7 +299,7 @@ class ProfileCrlDistributionPointsExtensionModel(CRLDistributionPointsExtensionM
 
 class ProfileExtensionsModel(CertProfileBaseModel):
     """Model for the extensions of a certificate profile, with profile constraints."""
-    basic_constraints: BasicConstraintsExtensionModel | ProfileValuePropertyModel | None = Field(
+    basic_constraints: ProfileBasicConstraintsExtensionModel | ProfileValuePropertyModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('basic_constraints'),
     )
