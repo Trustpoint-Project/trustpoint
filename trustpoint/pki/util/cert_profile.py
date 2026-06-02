@@ -269,6 +269,7 @@ class CertProfileBaseModel(BaseModel):
     """
     allow: list[str] | Literal['*'] | None = None
     reject_mods: bool = Field(default=False)
+    mutable: bool = Field(default=False)
 
     @field_validator('allow', mode='before')
     @classmethod
@@ -299,7 +300,7 @@ class ProfileCrlDistributionPointsExtensionModel(CRLDistributionPointsExtensionM
 
 class ProfileExtensionsModel(CertProfileBaseModel):
     """Model for the extensions of a certificate profile, with profile constraints."""
-    basic_constraints: ProfileBasicConstraintsExtensionModel | ProfileValuePropertyModel | None = Field(
+    basic_constraints: ProfileBasicConstraintsExtensionModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('basic_constraints'),
     )
@@ -513,9 +514,64 @@ class JSONProfileVerifier:
 
         return request
 
+    def _ensure_ca_true_explicit_profile(self, request: dict[str, Any]) -> None:
+        """Reject CA=true requests unless Basic Constraints is explicitly present in the profile.
+
+        This prevents implicit allow='*' from introducing CA issuance capability.
+        """
+        request_extensions = request.get('extensions')
+        if not isinstance(request_extensions, dict):
+            return
+
+        request_basic_constraints = request_extensions.get('basic_constraints')
+        if not isinstance(request_basic_constraints, dict):
+            return
+
+        if request_basic_constraints.get('ca') is not True:
+            return
+
+        profile_extensions = self.profile_dict.get('extensions')
+        if not isinstance(profile_extensions, dict):
+            msg = "Field 'basic_constraints' is not explicitly allowed in the profile."
+            raise ProfileValidationError(msg)
+
+        profile_basic_constraints = profile_extensions.get('basic_constraints')
+        if not isinstance(profile_basic_constraints, dict):
+            msg = "Field 'basic_constraints' is not explicitly allowed in the profile."
+            raise ProfileValidationError(msg)
+
+        # Explicitly allow CA issuance only if either:
+        # 1) profile basic_constraints.ca is True, or
+        # 2) profile basic_constraints.mutable is True, or
+        # 3) profile basic_constraints.ca is a value-property dict with mutable=True.
+        profile_ca = profile_basic_constraints.get('ca')
+        basic_constraints_mutable = bool(profile_basic_constraints.get('mutable', False))
+
+        ca_is_explicitly_true = profile_ca is True
+        ca_is_explicitly_mutable = (
+            isinstance(profile_ca, dict) and bool(profile_ca.get('mutable', False))
+        )
+        if ca_is_explicitly_true or basic_constraints_mutable or ca_is_explicitly_mutable:
+            return
+
+        # CA=true requested but not permitted by profile.
+        effective_reject_mods = bool(
+            profile_basic_constraints.get(
+                'reject_mods',
+                profile_extensions.get('reject_mods', self.profile_dict.get('reject_mods', False)),
+            )
+        )
+        if effective_reject_mods:
+            msg = "Field 'ca' is not mutable in the profile."
+            raise ProfileValidationError(msg)
+
+        # In non-reject mode, force the profile value (default deny) for CA.
+        request_basic_constraints['ca'] = bool(profile_ca) if profile_ca is not None else False
+
     def apply_profile_to_request(self, request: dict[str, Any]) -> dict[str, Any]:
         """Apply the profile to a certificate request and return the modified request."""
         validated_request = self.validate_request(request=request)
+        self._ensure_ca_true_explicit_profile(validated_request)
         logger.debug('Validated Request before profile rules: %s', validated_request)
         return self._apply_profile_rules(validated_request, self.profile_dict)
 
