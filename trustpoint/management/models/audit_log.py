@@ -40,6 +40,7 @@ class AuditLog(models.Model):
         SIGNER_DELETED = 'SIGNER_DELETED', _('Signer Deleted')
         SIGNER_ADDED = 'SIGNER_ADDED', _('Signer Added')
         HASH_SIGNED = 'HASH_SIGNED', _('Hash Signed')
+        ORGANIZATION_CHANGED = 'ORGANIZATION_CHANGED', _('Organization Changed')
 
     timestamp = models.DateTimeField(
         verbose_name=_('Timestamp'),
