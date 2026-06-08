@@ -79,7 +79,15 @@ Step-by-Step Setup (Build container)
       The database connection between the containers uses default credentials for testing. THIS IS INSECURE.
       It is highly encouraged to change the default credentials in the `docker-compose.yml` file before building the containers.
 
-2. **Build the Trustpoint and Postgres Docker Images**
+2. **Edit the .env file to specify allowed URLs**
+
+   Open the `.env` file in the project root and set the `TP_URLS` variable to include the URLs you will use to access Trustpoint. For example:
+
+   .. code-block:: bash
+
+       TP_URLS=trustpoint.myfactory.local,localhost:8443
+
+3. **Build the Trustpoint and Postgres Docker Images**
 
    Use docker compose to build the Trustpoint and Postgres images from the source:
 
@@ -87,7 +95,7 @@ Step-by-Step Setup (Build container)
 
        docker compose build
 
-3. **Run the Trustpoint and Postgres Containers** 
+4. **Run the Trustpoint and Postgres Containers** 
 
    Start the Trustpoint and Postgres containers using the images you just built:
 
