@@ -7,7 +7,7 @@ services:
     container_name: trustpoint
     ports:
       - "80:80"
-      - "443:443"
+      - "8443:443"
     depends_on:
       - postgres
     environment:
@@ -16,6 +16,7 @@ services:
       DATABASE_PASSWORD: "testing321"
       DATABASE_HOST: "postgres"
       DATABASE_PORT: "5432"
+      TP_URLS: ${TP_URLS}
     
   trustpoint-worker:
     build:

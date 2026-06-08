@@ -27,6 +27,49 @@ def test_debug_setting():
     assert settings.DEBUG is (not settings.DOCKER_CONTAINER), 'DEBUG should be the inverse of DOCKER_CONTAINER.'
 
 
+def test_tp_urls_not_set_keeps_default_hosts_and_origins(monkeypatch):
+    """Ensure defaults remain unchanged when TP_URLS is not set."""
+    monkeypatch.delenv('TP_URLS', raising=False)
+
+    importlib.reload(settings)
+
+    assert 'localhost' in settings.ALLOWED_HOSTS
+    assert '127.0.0.1' in settings.ALLOWED_HOSTS
+    assert '[::1]' in settings.ALLOWED_HOSTS
+    assert 'http://localhost:8000' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'http://127.0.0.1:8000' in settings.CSRF_TRUSTED_ORIGINS
+
+
+def test_tp_urls_derives_allowed_hosts_and_csrf_origins(monkeypatch):
+    """Ensure TP_URLS entries are parsed into ALLOWED_HOSTS and CSRF_TRUSTED_ORIGINS."""
+    monkeypatch.setenv('TP_URLS', 'trustpoint.local:8443, http://10.10.0.2, https://example.org')
+
+    importlib.reload(settings)
+
+    assert 'trustpoint.local' in settings.ALLOWED_HOSTS
+    assert '.trustpoint.local' in settings.ALLOWED_HOSTS
+    assert '10.10.0.2' in settings.ALLOWED_HOSTS
+    assert 'example.org' in settings.ALLOWED_HOSTS
+
+    assert 'https://trustpoint.local:8443' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'http://10.10.0.2' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://example.org' in settings.CSRF_TRUSTED_ORIGINS
+
+
+def test_tp_urls_deduplicates_hosts_and_origins(monkeypatch):
+    """Ensure repeated TP_URLS values do not create duplicate entries."""
+    monkeypatch.setenv(
+        'TP_URLS',
+        ' https://dup.local:9443,https://dup.local:9443 , dup.local:9443 ',
+    )
+
+    importlib.reload(settings)
+
+    assert settings.ALLOWED_HOSTS.count('dup.local') == 1
+    assert settings.ALLOWED_HOSTS.count('.dup.local') == 1
+    assert settings.CSRF_TRUSTED_ORIGINS.count('https://dup.local:9443') == 1
+
+
 def test_database_settings(monkeypatch):
     """Ensure database settings are set correctly."""
     with mock.patch('socket.create_connection') as mock_socket_conn:
