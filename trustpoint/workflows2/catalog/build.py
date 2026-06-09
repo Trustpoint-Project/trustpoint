@@ -159,7 +159,7 @@ def build_context_catalog() -> dict[str, Any]:
             },
         },
         'meta': {
-            'version': 7,
+            'version': 8,
             'common_step_fields': [
                 {
                     'key': f.key,

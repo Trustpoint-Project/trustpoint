@@ -15,6 +15,7 @@ class StepTypes:
     COMPUTE: ClassVar[str] = 'compute'
     LOGIC: ClassVar[str] = 'logic'
     EMAIL: ClassVar[str] = 'email'
+    NOTIFICATION: ClassVar[str] = 'notification'
     WEBHOOK: ClassVar[str] = 'webhook'
 
     # gated step
@@ -28,6 +29,7 @@ class StepTypes:
             cls.COMPUTE,
             cls.LOGIC,
             cls.EMAIL,
+            cls.NOTIFICATION,
             cls.WEBHOOK,
             cls.APPROVAL,
         }

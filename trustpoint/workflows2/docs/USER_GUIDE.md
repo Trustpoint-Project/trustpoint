@@ -134,6 +134,47 @@ notify:
     Status: ${vars.status}
 ```
 
+### `notification`
+
+Creates a Trustpoint notification with templated custom text.
+
+```yaml
+create_notification:
+  type: notification
+  severity: warning
+  source: device
+  short: Device ${event.device.common_name} needs review
+  long: |
+    Device ID: ${event.device.id}
+    Result: ${vars.result}
+  initial_status: new
+  event: workflow.device.review
+  related:
+    device_id: ${event.device.id}
+```
+
+Supported severities:
+
+- `setup`
+- `info`
+- `warning`
+- `critical`
+
+Supported sources:
+
+- `system`
+- `device`
+- `domain`
+- `certificate`
+- `issuing_ca`
+
+Optional `related` keys:
+
+- `device_id`
+- `domain_id`
+- `certificate_id`
+- `issuing_ca_id`
+
 ### `set`
 
 Writes literal or templated values into workflow vars.

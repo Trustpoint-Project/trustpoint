@@ -2,7 +2,6 @@ import { escapeHtml } from '../shared/dom.js';
 import { renderStructuredStepFields } from './graph_step_structured_fields_renderer.js';
 import { fitPanelToViewport, placePanelNearNode } from './graph_overlay_position.js';
 import { renderInlineVariablePicker } from '../variables/inline_variable_picker.js';
-import { getStepFieldSuggestions } from '../document/step_field_suggestions.js';
 import { APPROVAL_OUTCOME_PRESETS } from '../document/approval_outcome_presets.js';
 import {
   getCompareOps,
@@ -83,7 +82,7 @@ function formatFieldValue(value, fieldKind) {
 }
 
 function supportsInlineVariablePicker(fieldKind) {
-  return ['string', 'template', 'text', 'mapping', 'list'].includes(fieldKind);
+  return ['template', 'text'].includes(fieldKind);
 }
 
 function renderCloseButton() {
@@ -252,7 +251,6 @@ function renderFieldRow(stepId, field, currentValue, removable, runtimeContext) 
         availableVarNames: runtimeContext.availableVarNames,
       })
     : '';
-  const suggestions = getStepFieldSuggestions(runtimeContext.stepType, field.key);
 
   return `
     <div class="border rounded p-2 mb-2" data-step-field-row="${escapeHtml(field.key)}">
@@ -269,33 +267,6 @@ function renderFieldRow(stepId, field, currentValue, removable, runtimeContext) 
         })}
         ${pickerHtml}
       </div>
-
-      ${
-        suggestions.length
-          ? `
-            <div class="wf2-structured-hint-card">
-              <div class="wf2-structured-hint-title">Suggested snippets</div>
-              <div class="wf2-structured-hint-chip-row">
-                ${suggestions
-                  .map(
-                    (item) => `
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-outline-secondary"
-                        data-graph-overlay-action="apply-step-field-suggestion"
-                        data-suggestion-value="${escapeHtml(encodeURIComponent(item.value))}"
-                        title="${escapeHtml(item.description)}"
-                      >
-                        ${escapeHtml(item.label)}
-                      </button>
-                    `,
-                  )
-                  .join('')}
-              </div>
-            </div>
-          `
-          : ''
-      }
 
       ${
         removable

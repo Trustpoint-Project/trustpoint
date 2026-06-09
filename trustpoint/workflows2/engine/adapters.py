@@ -36,6 +36,24 @@ class EmailAdapter(Protocol):
         ...
 
 
+class NotificationAdapter(Protocol):
+    """Protocol for Trustpoint notification backends."""
+
+    def create(
+        self,
+        *,
+        severity: str,
+        source: str,
+        short: str,
+        long: str,
+        initial_status: str,
+        event: str,
+        related: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Create one Trustpoint notification and return adapter output."""
+        ...
+
+
 class WebhookAdapter(Protocol):
     """Protocol for webhook HTTP backends."""
 
@@ -82,6 +100,105 @@ class DjangoEmailAdapter:
             bcc=bcc,
         )
         email_message.send(fail_silently=False)
+
+
+class DjangoNotificationAdapter:
+    """Create notifications through Trustpoint's management notification models."""
+
+    SEVERITY_MAP = {
+        'setup': 'SET',
+        'info': 'INF',
+        'warning': 'WAR',
+        'critical': 'CRI',
+    }
+    SOURCE_MAP = {
+        'system': 'S',
+        'domain': 'D',
+        'device': 'E',
+        'issuing_ca': 'I',
+        'certificate': 'C',
+    }
+    STATUS_MAP = {
+        'new': 'NEW',
+        'confirmed': 'CONF',
+        'in_progress': 'PROG',
+        'solved': 'SOLV',
+        'not_solved': 'NOSOL',
+        'escalated': 'ESC',
+        'suspended': 'SUS',
+        'rejected': 'REJ',
+        'deleted': 'DEL',
+        'closed': 'CLO',
+        'acknowledged': 'ACK',
+        'failed': 'FAIL',
+        'expired': 'EXP',
+        'pending': 'PEND',
+    }
+
+    @staticmethod
+    def _optional_int(value: Any, *, field: str) -> int | None:
+        if value in (None, ''):
+            return None
+        if isinstance(value, bool):
+            error_msg = f'notification.related.{field} must be an integer id'
+            raise ValueError(error_msg)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and value.strip().isdigit():
+            return int(value.strip())
+        error_msg = f'notification.related.{field} must be an integer id'
+        raise ValueError(error_msg)
+
+    def create(
+        self,
+        *,
+        severity: str,
+        source: str,
+        short: str,
+        long: str,
+        initial_status: str,
+        event: str,
+        related: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Create one custom Trustpoint notification."""
+        from management.models import NotificationMessageModel, NotificationModel, NotificationStatus
+
+        notification_type = self.SEVERITY_MAP.get(severity)
+        notification_source = self.SOURCE_MAP.get(source)
+        status_code = self.STATUS_MAP.get(initial_status)
+        if not notification_type:
+            error_msg = f'Unsupported notification severity: {severity}'
+            raise ValueError(error_msg)
+        if not notification_source:
+            error_msg = f'Unsupported notification source: {source}'
+            raise ValueError(error_msg)
+        if not status_code:
+            error_msg = f'Unsupported notification status: {initial_status}'
+            raise ValueError(error_msg)
+
+        message = NotificationMessageModel.objects.create(
+            short_description=short,
+            long_description=long or 'No description provided',
+        )
+        notification = NotificationModel.objects.create(
+            notification_type=notification_type,
+            notification_source=notification_source,
+            message_type=NotificationModel.NotificationMessageType.CUSTOM,
+            message=message,
+            event=event,
+            device_id=self._optional_int(related.get('device_id'), field='device_id'),
+            domain_id=self._optional_int(related.get('domain_id'), field='domain_id'),
+            certificate_id=self._optional_int(related.get('certificate_id'), field='certificate_id'),
+            issuing_ca_id=self._optional_int(related.get('issuing_ca_id'), field='issuing_ca_id'),
+        )
+        status, _ = NotificationStatus.objects.get_or_create(status=status_code)
+        notification.statuses.add(status)
+
+        return {
+            'notification_id': str(notification.id),
+            'message_id': str(message.id),
+            'status': status_code,
+        }
 
 
 class RequestsWebhookAdapter:

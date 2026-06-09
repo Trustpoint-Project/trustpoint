@@ -226,27 +226,6 @@ export async function executeGuideDocumentAction(action, bag) {
       return true;
     }
 
-    if (action === 'apply-current-field-suggestion') {
-      const encodedValue = button.getAttribute('data-suggestion-value');
-      const rawValue = encodedValue == null ? null : decodeURIComponent(encodedValue);
-      if (rawValue == null || !context?.stepId || !context?.fieldKey) {
-        fail('No current step field selected for this suggestion.', 'warning');
-        return true;
-      }
-
-      applyYamlMutation(
-        setStepFieldValue({
-          yamlText,
-          catalog,
-          stepId: context.stepId,
-          fieldKey: context.fieldKey,
-          rawValue,
-        }).yamlText,
-        `Applied suggestion for "${context.fieldKey}".`,
-      );
-      return true;
-    }
-
     if (action === 'apply-approval-outcome-preset') {
       if (!catalog || !context?.stepId) {
         fail('No approval step selected.', 'warning');

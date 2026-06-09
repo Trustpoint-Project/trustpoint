@@ -35,6 +35,30 @@ _END_TARGETS: set[str] = {'$end', '$reject'}
 
 VARS_PATH_MIN_PARTS = 2
 MIN_CAPTURE_TARGET_PARTS = 2
+NOTIFICATION_SEVERITIES: tuple[str, ...] = ('setup', 'info', 'warning', 'critical')
+NOTIFICATION_SOURCES: tuple[str, ...] = ('system', 'device', 'domain', 'certificate', 'issuing_ca')
+NOTIFICATION_INITIAL_STATUSES: tuple[str, ...] = (
+    'new',
+    'confirmed',
+    'in_progress',
+    'solved',
+    'not_solved',
+    'escalated',
+    'suspended',
+    'rejected',
+    'deleted',
+    'closed',
+    'acknowledged',
+    'failed',
+    'expired',
+    'pending',
+)
+NOTIFICATION_RELATED_KEYS: frozenset[str] = frozenset({
+    'device_id',
+    'domain_id',
+    'certificate_id',
+    'issuing_ca_id',
+})
 
 
 @dataclass(frozen=True)
@@ -300,6 +324,8 @@ class WorkflowCompiler:
         base = f'workflow.steps.{step_id}'
         if typ == StepTypes.EMAIL:
             return self._compile_email_params(step, base)
+        if typ == StepTypes.NOTIFICATION:
+            return self._compile_notification_params(step, base)
         if typ == StepTypes.WEBHOOK:
             return self._compile_webhook_params(step, base)
         if typ == StepTypes.LOGIC:
@@ -345,6 +371,80 @@ class WorkflowCompiler:
             'bcc': bcc,
             'subject': compile_template(subject_raw, path=f'{base}.subject'),
             'body': compile_template(body_raw, path=f'{base}.body'),
+        }
+
+    @staticmethod
+    def _require_choice(value: Any, *, path: str, label: str, choices: tuple[str, ...]) -> str:
+        if not isinstance(value, str) or value.strip() not in choices:
+            allowed = ', '.join(choices)
+            msg = f'{label} must be one of: {allowed}'
+            raise CompileError(msg, path=path)
+        return value.strip()
+
+    @staticmethod
+    def _compile_notification_related(related: Any, *, path: str) -> dict[str, Any]:
+        if related is None:
+            return {}
+        if not isinstance(related, dict):
+            msg = '"notification.related" must be a mapping'
+            raise CompileError(msg, path=path)
+
+        out: dict[str, Any] = {}
+        for key, value in related.items():
+            if key not in NOTIFICATION_RELATED_KEYS:
+                allowed = ', '.join(sorted(NOTIFICATION_RELATED_KEYS))
+                msg = f'Unknown notification related key "{key}". Allowed: {allowed}'
+                raise CompileError(msg, path=f'{path}.{key}')
+            out[str(key)] = compile_templates_deep(value, path=f'{path}.{key}')
+        return out
+
+    @staticmethod
+    def _compile_notification_params(step: dict[str, Any], base: str) -> dict[str, Any]:
+        severity = WorkflowCompiler._require_choice(
+            step.get('severity', 'info'),
+            path=f'{base}.severity',
+            label='"notification.severity"',
+            choices=NOTIFICATION_SEVERITIES,
+        )
+        source = WorkflowCompiler._require_choice(
+            step.get('source', 'system'),
+            path=f'{base}.source',
+            label='"notification.source"',
+            choices=NOTIFICATION_SOURCES,
+        )
+        initial_status = WorkflowCompiler._require_choice(
+            step.get('initial_status', 'new'),
+            path=f'{base}.initial_status',
+            label='"notification.initial_status"',
+            choices=NOTIFICATION_INITIAL_STATUSES,
+        )
+
+        short_raw = step.get('short')
+        if not isinstance(short_raw, str) or not short_raw.strip():
+            msg = '"notification.short" must be a non-empty string'
+            raise CompileError(msg, path=f'{base}.short')
+
+        long_raw = step.get('long', 'No description provided')
+        if not isinstance(long_raw, str):
+            msg = '"notification.long" must be a string'
+            raise CompileError(msg, path=f'{base}.long')
+
+        event_raw = step.get('event', 'workflow.notification')
+        if not isinstance(event_raw, str) or not event_raw.strip():
+            msg = '"notification.event" must be a non-empty string'
+            raise CompileError(msg, path=f'{base}.event')
+
+        return {
+            'severity': severity,
+            'source': source,
+            'short': compile_template(short_raw, path=f'{base}.short'),
+            'long': compile_template(long_raw, path=f'{base}.long'),
+            'initial_status': initial_status,
+            'event': compile_template(event_raw, path=f'{base}.event'),
+            'related': WorkflowCompiler._compile_notification_related(
+                step.get('related', {}) or {},
+                path=f'{base}.related',
+            ),
         }
 
     @staticmethod
@@ -1251,6 +1351,22 @@ class WorkflowCompiler:
             path=f'{base}.body',
         )
 
+    def _validate_notification_step_refs(
+        self,
+        params: dict[str, Any],
+        *,
+        available_vars: set[str],
+        step_id: str,
+        base: str,
+    ) -> None:
+        for field in ('short', 'long', 'event', 'related'):
+            self._validate_compiled_value_refs(
+                params.get(field),
+                available_vars=available_vars,
+                step_id=step_id,
+                path=f'{base}.{field}',
+            )
+
     def _validate_webhook_step_refs(
         self,
         params: dict[str, Any],
@@ -1355,6 +1471,15 @@ class WorkflowCompiler:
 
             if step_type == StepTypes.EMAIL:
                 self._validate_email_step_refs(
+                    params,
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    base=base,
+                )
+                continue
+
+            if step_type == StepTypes.NOTIFICATION:
+                self._validate_notification_step_refs(
                     params,
                     available_vars=available_vars,
                     step_id=step_id,

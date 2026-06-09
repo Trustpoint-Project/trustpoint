@@ -294,7 +294,7 @@ export function renderStepGuide(context, catalog, yamlText = '') {
       : renderNonLogicStepSpecificSection(context, catalog, presentFieldKeys, yamlText);
 
   const variableSection =
-    contextSupportsVariableInsertion(context) && context.stepType !== 'logic'
+    contextSupportsVariableInsertion(context, catalog) && context.stepType !== 'logic'
       ? renderGuideSection({
           title: 'Insert values',
           description: 'Insert event values or workflow vars at the current YAML cursor position.',

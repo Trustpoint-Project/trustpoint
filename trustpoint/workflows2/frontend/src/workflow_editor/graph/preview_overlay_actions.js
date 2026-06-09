@@ -79,15 +79,6 @@ export async function handleGraphAction({
     return;
   }
 
-  if (action === 'apply-step-field-suggestion') {
-    const row = actionEl.closest('[data-step-field-row]');
-    const input = row?.querySelector('[data-step-field-input="true"]');
-    if (input) {
-      input.value = decodeURIComponent(actionEl.getAttribute('data-suggestion-value') || '');
-    }
-    return;
-  }
-
   if (action === 'apply-approval-outcome-preset') {
     const approvedRow = scope.querySelector('[data-step-field-row="approved_outcome"]');
     const rejectedRow = scope.querySelector('[data-step-field-row="rejected_outcome"]');

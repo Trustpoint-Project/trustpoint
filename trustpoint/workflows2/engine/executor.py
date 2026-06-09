@@ -7,7 +7,9 @@ from typing import Any
 
 from .adapters import (
     DjangoEmailAdapter,
+    DjangoNotificationAdapter,
     EmailAdapter,
+    NotificationAdapter,
     RequestsWebhookAdapter,
     WebhookAdapter,
     WebhookResponse,
@@ -38,12 +40,14 @@ class WorkflowExecutor:
         self,
         *,
         email: EmailAdapter | None = None,
+        notification: NotificationAdapter | None = None,
         webhook: WebhookAdapter | None = None,
         on_step_run: OnStepRun | None = None,
         max_steps: int = 200,
     ) -> None:
         """Initialize the executor with adapters and an optional hook."""
         self.email = email or DjangoEmailAdapter()
+        self.notification = notification or DjangoNotificationAdapter()
         self.webhook = webhook or RequestsWebhookAdapter()
         self.on_step_run = on_step_run
         self.max_steps = max_steps
@@ -193,6 +197,8 @@ class WorkflowExecutor:
             outcome = self._step_logic(step_id, params, ctx)
         elif step_type == 'email':
             output = self._step_email(step_id, params, ctx)
+        elif step_type == 'notification':
+            output = self._step_notification(step_id, params, ctx)
         elif step_type == 'webhook':
             output = self._step_webhook(step_id, params, ctx)
         elif step_type == 'approval':
@@ -309,6 +315,46 @@ class WorkflowExecutor:
 
         self.email.send(to=to, cc=cc, bcc=bcc, subject=subject, body=body)
         return {'sent': True, 'to': to}
+
+    @staticmethod
+    def _render_notification_related(params: dict[str, Any], ctx: RuntimeContext) -> dict[str, Any]:
+        related = params.get('related') or {}
+        if not isinstance(related, dict):
+            return {}
+        rendered = render_template(related, ctx)
+        return rendered if isinstance(rendered, dict) else {}
+
+    def _step_notification(self, step_id: str, params: dict[str, Any], ctx: RuntimeContext) -> dict[str, Any]:
+        short = render_template(params.get('short'), ctx)
+        long = render_template(params.get('long'), ctx)
+        event = render_template(params.get('event'), ctx)
+        severity = params.get('severity')
+        source = params.get('source')
+        initial_status = params.get('initial_status')
+        related = self._render_notification_related(params, ctx)
+
+        if not isinstance(short, str) or not short.strip():
+            raise StepExecutionError(step_id, 'Invalid notification.short')
+        if not isinstance(long, str):
+            raise StepExecutionError(step_id, 'Invalid notification.long')
+        if not isinstance(event, str) or not event.strip():
+            raise StepExecutionError(step_id, 'Invalid notification.event')
+        if not isinstance(severity, str) or not severity:
+            raise StepExecutionError(step_id, 'Invalid notification.severity')
+        if not isinstance(source, str) or not source:
+            raise StepExecutionError(step_id, 'Invalid notification.source')
+        if not isinstance(initial_status, str) or not initial_status:
+            raise StepExecutionError(step_id, 'Invalid notification.initial_status')
+
+        return self.notification.create(
+            severity=severity,
+            source=source,
+            short=short.strip(),
+            long=long,
+            initial_status=initial_status,
+            event=event.strip(),
+            related=related,
+        )
 
     @staticmethod
     def _validate_webhook_inputs(

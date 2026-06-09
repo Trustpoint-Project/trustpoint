@@ -14,6 +14,7 @@ BASE_AUTOMATION: set[str] = {
 BASE_ADAPTERS: set[str] = {
     StepTypes.WEBHOOK,
     StepTypes.EMAIL,
+    StepTypes.NOTIFICATION,
 }
 
 # Terminal step TYPES were removed from the language.

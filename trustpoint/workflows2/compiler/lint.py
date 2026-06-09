@@ -54,6 +54,19 @@ class SchemaLinter:
                 'capture',
             })
         ),
+        'notification': _StepSpec(
+            allowed_keys=frozenset({
+                'type',
+                'title',
+                'severity',
+                'source',
+                'short',
+                'long',
+                'initial_status',
+                'event',
+                'related',
+            })
+        ),
         'logic': _StepSpec(
             allowed_keys=frozenset({
                 'type',

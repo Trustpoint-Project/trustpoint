@@ -449,7 +449,7 @@ function buildStepModel(context, catalog) {
     );
   }
 
-  if (contextSupportsVariableInsertion(context)) {
+  if (contextSupportsVariableInsertion(context, catalog)) {
     actionParts.push(
       renderMiniBlock('Insert event value', renderGuideButtonRow(renderVariableButtons(eventButtons))),
     );
