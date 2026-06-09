@@ -1,54 +1,58 @@
 {% extends 'trustpoint/base.html' %}
-{% load i18n %}
+{% load i18n static %}
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'css/workflows2_editor.css' %}">
+{% endblock head %}
 {% block content %}
 
-<div class="container-fluid py-3">
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+<div class="container-fluid py-3 wf2-list-page">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 wf2-list-header">
     <div>
-      <h1 class="h4 mb-0">{% trans "Approvals" %}</h1>
-      <div class="text-muted small">{% trans "Review and resolve approval steps that are blocking workflow execution." %}</div>
+      <h1 class="h4 mb-0 wf2-list-title">{% trans "Approvals" %}</h1>
+      <div class="small wf2-list-subtitle">{% trans "Review and resolve approval steps that are blocking workflow execution." %}</div>
     </div>
   </div>
 
   <div class="row g-3 mb-3">
     <div class="col-6 col-xl-3">
-      <div class="card h-100">
+      <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Visible approvals" %}</div>
-          <div class="fs-4 fw-semibold">{{ summary_total }}</div>
+          <div class="wf2-metric-label">{% trans "Visible approvals" %}</div>
+          <div class="wf2-metric-value">{{ summary_total }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-xl-3">
-      <div class="card h-100">
+      <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Pending" %}</div>
-          <div class="fs-4 fw-semibold">{{ summary_pending }}</div>
+          <div class="wf2-metric-label">{% trans "Pending" %}</div>
+          <div class="wf2-metric-value">{{ summary_pending }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-xl-3">
-      <div class="card h-100">
+      <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Resolved" %}</div>
-          <div class="fs-4 fw-semibold">{{ summary_resolved }}</div>
+          <div class="wf2-metric-label">{% trans "Resolved" %}</div>
+          <div class="wf2-metric-value">{{ summary_resolved }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-xl-3">
-      <div class="card h-100">
+      <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Expired" %}</div>
-          <div class="fs-4 fw-semibold">{{ summary_expired }}</div>
+          <div class="wf2-metric-label">{% trans "Expired" %}</div>
+          <div class="wf2-metric-value">{{ summary_expired }}</div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="card mb-3">
+  <div class="card mb-3 wf2-filter-card">
     <div class="card-body">
       <form method="get" class="row g-3 align-items-end">
-        <div class="col-12 col-md-6 col-xl-4">
+        <div class="col-12 col-lg-3">
           <label class="form-label">{% trans "Status" %}</label>
           <select name="status" class="form-select">
             <option value="">{% trans "All" %}</option>
@@ -57,7 +61,7 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-12 col-md-6 col-xl-3">
+        <div class="col-12 col-lg-6">
           <label class="form-label">{% trans "Sort" %}</label>
           <select name="sort" class="form-select">
             <option value="created" {% if sort == 'created' %}selected{% endif %}>{% trans "Newest first" %}</option>
@@ -68,14 +72,18 @@
             <option value="status_desc" {% if sort == 'status_desc' %}selected{% endif %}>{% trans "Status Z-A" %}</option>
           </select>
         </div>
-        <div class="col-12 col-md-4 col-xl-2">
+        <div class="col-12 col-lg-3">
           <button class="btn btn-primary w-100" type="submit">{% trans "Apply filters" %}</button>
         </div>
       </form>
     </div>
   </div>
 
-  <div class="card">
+  <div class="card wf2-table-card">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div class="wf2-table-title">{% trans "Approvals" %}</div>
+      <div class="small text-muted">{{ summary_total }} {% trans "visible" %}</div>
+    </div>
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
         <thead>
@@ -140,7 +148,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="7" class="text-center text-muted py-4">{% trans "No approvals found." %}</td>
+              <td colspan="7" class="wf2-empty-row">{% trans "No approvals found." %}</td>
             </tr>
           {% endfor %}
         </tbody>

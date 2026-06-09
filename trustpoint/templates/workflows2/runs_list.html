@@ -7,50 +7,50 @@
 {% endblock head %}
 {% block content %}
 
-<div class="container-fluid py-3">
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+<div class="container-fluid py-3 wf2-list-page">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 wf2-list-header">
     <div>
-      <h1 class="h4 mb-0">{% trans "Workflow Runs" %}</h1>
-      <div class="text-muted small">{% trans "Trigger executions and their resulting workflow instances." %}</div>
+      <h1 class="h4 mb-0 wf2-list-title">{% trans "Workflow Runs" %}</h1>
+      <div class="small wf2-list-subtitle">{% trans "Trigger executions and their resulting workflow instances." %}</div>
     </div>
   </div>
 
   <div class="row g-3 mb-3">
     <div class="col-6 col-xl-3">
-      <div class="card h-100">
+      <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Visible runs" %}</div>
-          <div class="fs-4 fw-semibold">{{ summary_total }}</div>
+          <div class="wf2-metric-label">{% trans "Visible runs" %}</div>
+          <div class="wf2-metric-value">{{ summary_total }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-xl-3">
-      <div class="card h-100">
+      <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Active" %}</div>
-          <div class="fs-4 fw-semibold">{{ summary_active }}</div>
+          <div class="wf2-metric-label">{% trans "Active" %}</div>
+          <div class="wf2-metric-value">{{ summary_active }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-xl-3">
-      <div class="card h-100">
+      <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Awaiting" %}</div>
-          <div class="fs-4 fw-semibold">{{ summary_awaiting }}</div>
+          <div class="wf2-metric-label">{% trans "Awaiting" %}</div>
+          <div class="wf2-metric-value">{{ summary_awaiting }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-xl-3">
-      <div class="card h-100">
+      <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Completed" %}</div>
-          <div class="fs-4 fw-semibold">{{ summary_completed }}</div>
+          <div class="wf2-metric-label">{% trans "Completed" %}</div>
+          <div class="wf2-metric-value">{{ summary_completed }}</div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="card mb-3">
+  <div class="card mb-3 wf2-filter-card">
     <div class="card-body">
       <form method="get" class="row g-3 align-items-end">
         <div class="col-12 col-lg-3">
@@ -100,7 +100,11 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card wf2-table-card">
+    <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div class="wf2-table-title">{% trans "Runs" %}</div>
+      <div class="small text-muted">{{ summary_total }} {% trans "visible" %}</div>
+    </div>
     <div class="table-responsive">
       <table class="table table-hover align-middle mb-0">
         <thead>
@@ -158,7 +162,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="8" class="text-center text-muted py-4">{% trans "No runs found." %}</td>
+              <td colspan="8" class="wf2-empty-row">{% trans "No runs found." %}</td>
             </tr>
           {% endfor %}
         </tbody>

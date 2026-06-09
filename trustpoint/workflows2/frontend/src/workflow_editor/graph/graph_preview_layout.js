@@ -30,14 +30,29 @@ export function buildGraphLayout(graph, manualPositions = {}) {
   }
 
   const levels = new Map();
+  const triggerNodeId =
+    graph?.trigger_node_id && nodeIds.has(graph.trigger_node_id)
+      ? graph.trigger_node_id
+      : null;
+  const applyNodeId =
+    graph?.apply_node_id && nodeIds.has(graph.apply_node_id)
+      ? graph.apply_node_id
+      : null;
   const startId =
     graph?.start && nodeIds.has(graph.start)
       ? graph.start
-      : autoNodes[0]?.id || null;
+      : autoNodes.find((node) => node.id !== triggerNodeId && node.id !== applyNodeId)?.id || null;
 
   if (startId) {
+    if (triggerNodeId) {
+      levels.set(triggerNodeId, 0);
+    }
+    if (applyNodeId) {
+      levels.set(applyNodeId, triggerNodeId ? 1 : 0);
+    }
+
     const queue = [startId];
-    levels.set(startId, 0);
+    levels.set(startId, applyNodeId ? (triggerNodeId ? 2 : 1) : (triggerNodeId ? 1 : 0));
 
     while (queue.length) {
       const current = queue.shift();
@@ -50,6 +65,13 @@ export function buildGraphLayout(graph, manualPositions = {}) {
         }
       }
     }
+  } else if (triggerNodeId) {
+    levels.set(triggerNodeId, 0);
+    if (applyNodeId) {
+      levels.set(applyNodeId, 1);
+    }
+  } else if (applyNodeId) {
+    levels.set(applyNodeId, 0);
   }
 
   let maxAssignedLevel = levels.size ? Math.max(...levels.values()) : 0;
