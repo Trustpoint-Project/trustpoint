@@ -8,7 +8,7 @@ from zoneinfo import available_timezones
 
 from crispy_bootstrap5.bootstrap5 import Field
 from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Fieldset, Layout
+from crispy_forms.layout import HTML, Fieldset, Layout
 from cryptography.x509 import Certificate
 from django import forms
 from django.conf import settings
@@ -31,6 +31,7 @@ from management.models import (
     PKCS11Token,
     SecurityConfig,
 )
+from management.models.organization import OrganizationModel
 from management.models.workflows2 import WorkflowExecutionConfig
 from management.security import manager
 from management.security.features import AutoGenPkiFeature, SecurityFeature
@@ -1069,3 +1070,69 @@ class InternationalizationConfigForm(forms.Form):
                 'timezone': self.cleaned_data['timezone'],
             }
         )
+
+class OrganizationForm(forms.Form):
+    """Form for organization."""
+
+    name = forms.CharField(max_length=100, required=False)
+    organization = forms.CharField(max_length=255, label='Organization (O)')
+    organization_unit = forms.CharField(max_length=255, label='Organization Unit (OU)', required=False)
+    country = forms.CharField(max_length=2, label='Country (C)', required=False)
+    state = forms.CharField(max_length=255, label='State/Province (ST)', required=False)
+    locality = forms.CharField(max_length=255, label='Locality/City (L)', required=False)
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initializes the CreateDeviceForm."""
+        super().__init__(*args, **kwargs)
+
+        self.helper = FormHelper()
+        self.helper.form_tag = False
+
+        self.helper.layout = Layout(
+            HTML('<h2>General</h2><hr>'),
+            Field('name'),
+            HTML('<h2 class="mt-5">Certificate Attribute</h2><hr>'),
+            Field('organization'),
+            Field('organization_unit'),
+            Field('country'),
+            Field('state'),
+            Field('locality'),
+        )
+
+        # Prefill with first organization if one exists
+        organization, _ = OrganizationModel.objects.get_or_create(pk=1)
+
+        if organization:
+            self.fields['name'].initial = organization.name
+            self.fields['organization'].initial = organization.organization
+            self.fields['organization_unit'].initial = organization.organization_unit
+            self.fields['country'].initial = organization.country
+            self.fields['state'].initial = organization.state
+            self.fields['locality'].initial = organization.locality
+
+    def save(self) -> OrganizationModel:
+        """Stores the form as organization model object in the db.
+
+        Returns:
+            _description_
+        """
+        name = self.cleaned_data['name']
+        org = self.cleaned_data['organization']
+        org_unit = self.cleaned_data['organization_unit']
+        country = self.cleaned_data['country']
+        state = self.cleaned_data['state']
+        locality = self.cleaned_data['locality']
+
+        org_model = OrganizationModel.objects.get(pk=1)
+
+        org_model.name = name or org
+        org_model.organization = org
+        org_model.organization_unit = org_unit
+        org_model.country = country
+        org_model.state = state
+        org_model.locality = locality
+
+        org_model.full_clean()
+        org_model.save()
+
+        return org_model

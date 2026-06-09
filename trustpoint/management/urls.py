@@ -2,6 +2,8 @@
 
 from django.urls import path, re_path
 
+from management.views import organization
+
 from .views import (
     IndexView,
     audit_log,
@@ -97,4 +99,6 @@ urlpatterns = [
         notifications.NotificationToggleReadView.as_view(), name='notification_toggle_read'),
     # Audit log
     path('audit-log/', audit_log.AuditLogListView.as_view(), name='audit-log'),
+    # Organization
+    path('organization/', organization.OrganizationView.as_view(), name='organization')
 ]
