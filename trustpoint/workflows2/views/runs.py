@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views import View
 
+from management.models.workflows2 import WorkflowExecutionConfig
 from request.cmp_transaction_state import CmpTransactionState
 from trustpoint.page_context import PageContextMixin
 from workflows2.engine.executor import WorkflowExecutor
@@ -160,7 +161,11 @@ class Workflow2RunDetailView(PageContextMixin, LoginRequiredMixin, View):
         inline_skipped_statuses = terminal_instance_statuses | {
             Workflow2Instance.STATUS_AWAITING,
         }
-        can_run_inline = any(inst.status not in inline_skipped_statuses for inst in instances)
+        cfg = WorkflowExecutionConfig.load()
+        can_run_inline = (
+            str(cfg.mode).lower() != WorkflowExecutionConfig.Mode.INLINE
+            and any(inst.status not in inline_skipped_statuses for inst in instances)
+        )
         can_cancel = run.status in {
             Workflow2Run.STATUS_QUEUED,
             Workflow2Run.STATUS_RUNNING,
@@ -199,6 +204,10 @@ class Workflow2RunRunInlineView(LoginRequiredMixin, View):
     def post(self, request: HttpRequest, run_id: int) -> HttpResponse:
         """Run all non-terminal instances in the selected run inline."""
         run = get_object_or_404(Workflow2Run, id=run_id)
+        cfg = WorkflowExecutionConfig.load()
+        if str(cfg.mode).lower() == WorkflowExecutionConfig.Mode.INLINE:
+            messages.info(request, _('Inline execution is already handled by the workflow execution mode.'))
+            return redirect('workflows2:runs-detail', run_id=run.id)
 
         executor = WorkflowExecutor()
         runtime = WorkflowRuntimeService(executor=executor)
@@ -259,7 +268,9 @@ class Workflow2RunCancelView(LoginRequiredMixin, View):
                 }:
                     inst.status = Workflow2Instance.STATUS_CANCELLED
                     inst.current_step = ''
-                    inst.save(update_fields=['status', 'current_step', 'updated_at'])
+                    inst.status_reason = 'cancelled'
+                    inst.status_message = ''
+                    inst.save(update_fields=['status', 'current_step', 'status_reason', 'status_message', 'updated_at'])
 
             run.status = Workflow2Run.STATUS_CANCELLED
             run.finalized = True

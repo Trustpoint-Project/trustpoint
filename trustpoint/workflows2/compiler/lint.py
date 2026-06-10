@@ -82,6 +82,15 @@ class SchemaLinter:
                 'vars',
             })
         ),
+        'set_status': _StepSpec(
+            allowed_keys=frozenset({
+                'type',
+                'title',
+                'status',
+                'reason',
+                'message',
+            })
+        ),
         'compute': _StepSpec(
             allowed_keys=frozenset({
                 'type',

@@ -6,6 +6,7 @@ from workflows2.views.approvals import (
     Workflow2ApprovalDetailView,
     Workflow2ApprovalListView,
     Workflow2ApprovalResolveView,
+    Workflow2WaitingListView,
 )
 from workflows2.views.context_catalog import ContextCatalogView
 from workflows2.views.definitions import (
@@ -64,7 +65,8 @@ urlpatterns = [
     ),
     path('instances/<uuid:instance_id>/cancel/', Workflow2InstanceCancelView.as_view(), name='instances-cancel'),
 
-    # Approvals
+    # Waiting / approvals
+    path('waiting/', Workflow2WaitingListView.as_view(), name='waiting-list'),
     path('approvals/', Workflow2ApprovalListView.as_view(), name='approvals-list'),
     path('approvals/<uuid:approval_id>/', Workflow2ApprovalDetailView.as_view(), name='approvals-detail'),
     path('approvals/<uuid:approval_id>/resolve/', Workflow2ApprovalResolveView.as_view(), name='approvals-resolve'),

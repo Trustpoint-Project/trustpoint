@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING, Any, Literal
 if TYPE_CHECKING:
     from datetime import datetime
 
-StepStatus = Literal['ok', 'failed', 'stopped', 'awaiting', 'succeeded', 'rejected']
-RunStatus = Literal['ok', 'failed', 'stopped', 'awaiting', 'succeeded', 'rejected']
+StepStatus = Literal['ok', 'failed', 'stopped', 'awaiting', 'succeeded', 'rejected', 'paused']
+RunStatus = Literal['ok', 'failed', 'stopped', 'awaiting', 'succeeded', 'rejected', 'paused']
 
 
 @dataclass

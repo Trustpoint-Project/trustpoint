@@ -40,6 +40,14 @@ class WorkflowRuntimeService:
       - Always persist a Workflow2StepRun row even on exception
     """
 
+    _SET_STATUS_TO_INSTANCE_STATUS = {
+        'succeeded': Workflow2Instance.STATUS_SUCCEEDED,
+        'failed': Workflow2Instance.STATUS_FAILED,
+        'rejected': Workflow2Instance.STATUS_REJECTED,
+        'stopped': Workflow2Instance.STATUS_STOPPED,
+        'paused': Workflow2Instance.STATUS_PAUSED,
+    }
+
     def __init__(self, *, executor: WorkflowExecutor, max_steps_per_run: int = 200) -> None:
         """Initialize the runtime service with an executor and safety limit."""
         self.executor = executor
@@ -90,6 +98,7 @@ class WorkflowRuntimeService:
             if instance.status in {
                 Workflow2Instance.STATUS_SUCCEEDED,
                 Workflow2Instance.STATUS_REJECTED,
+                Workflow2Instance.STATUS_STOPPED,
                 Workflow2Instance.STATUS_FAILED,
                 Workflow2Instance.STATUS_CANCELLED,
                 Workflow2Instance.STATUS_AWAITING,
@@ -99,13 +108,17 @@ class WorkflowRuntimeService:
 
             if not instance.current_step:
                 instance.status = Workflow2Instance.STATUS_SUCCEEDED
-                instance.save(update_fields=['status', 'updated_at'])
+                instance.status_reason = ''
+                instance.status_message = ''
+                instance.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
                 self._recompute_run_if_present(instance)
                 return instance
 
             if steps >= self.max_steps_per_run:
                 instance.status = Workflow2Instance.STATUS_FAILED
-                instance.save(update_fields=['status', 'updated_at'])
+                instance.status_reason = 'max_steps_exceeded'
+                instance.status_message = f'Workflow exceeded the maximum of {self.max_steps_per_run} steps.'
+                instance.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
                 self._recompute_run_if_present(instance)
                 return instance
 
@@ -158,7 +171,9 @@ class WorkflowRuntimeService:
 
             instance.run_count = run_index
             instance.status = Workflow2Instance.STATUS_FAILED
-            instance.save(update_fields=['run_count', 'status', 'updated_at'])
+            instance.status_reason = 'runtime_error'
+            instance.status_message = err
+            instance.save(update_fields=['run_count', 'status', 'status_reason', 'status_message', 'updated_at'])
 
             self._recompute_run_if_present(instance)
 
@@ -308,6 +323,8 @@ class WorkflowRuntimeService:
             next_step_id=next_step_id,
             terminal_reject=terminal_reject,
             terminal_end=terminal_end,
+            status_reason='approval_rejected' if terminal_reject else '',
+            status_message=(comment or 'Approval rejected.') if terminal_reject else '',
         )
 
     @staticmethod
@@ -345,6 +362,8 @@ class WorkflowRuntimeService:
         next_step_id: str | None,
         terminal_reject: bool,
         terminal_end: bool,
+        status_reason: str = '',
+        status_message: str = '',
     ) -> None:
         inst.run_count = run_index
         if terminal_reject:
@@ -356,9 +375,40 @@ class WorkflowRuntimeService:
         else:
             inst.status = Workflow2Instance.STATUS_RUNNING
             inst.current_step = next_step_id or ''
+        inst.status_reason = status_reason
+        inst.status_message = status_message
 
-        inst.save(update_fields=['run_count', 'status', 'current_step', 'updated_at'])
+        inst.save(
+            update_fields=[
+                'run_count',
+                'status',
+                'current_step',
+                'status_reason',
+                'status_message',
+                'updated_at',
+            ]
+        )
         self._recompute_run_if_present(inst)
+
+    def _apply_set_status_step(self, *, instance: Workflow2Instance, run: StepRun) -> None:
+        instance_status = self._SET_STATUS_TO_INSTANCE_STATUS.get(run.status)
+        if instance_status is None:
+            msg = f'Unsupported set_status result: {run.status}'
+            raise ValueError(msg)
+
+        output = run.output if isinstance(run.output, dict) else {}
+        reason = str(output.get('reason') or '')
+        message = str(output.get('message') or '')
+
+        instance.status = instance_status
+        instance.status_reason = reason[:100]
+        instance.status_message = message
+        if run.status == 'paused':
+            instance.current_step = run.next_step or ''
+        elif run.status == 'failed':
+            instance.current_step = run.step_id
+        else:
+            instance.current_step = ''
 
     def run_one_step(self, instance: Workflow2Instance) -> StepResult:
         """Execute exactly one workflow step and persist the checkpoint."""
@@ -373,6 +423,7 @@ class WorkflowRuntimeService:
                 if instance.status in {
                     Workflow2Instance.STATUS_SUCCEEDED,
                     Workflow2Instance.STATUS_REJECTED,
+                    Workflow2Instance.STATUS_STOPPED,
                     Workflow2Instance.STATUS_CANCELLED,
                     Workflow2Instance.STATUS_AWAITING,
                     Workflow2Instance.STATUS_PAUSED,
@@ -382,7 +433,9 @@ class WorkflowRuntimeService:
 
                 if not instance.current_step:
                     instance.status = Workflow2Instance.STATUS_SUCCEEDED
-                    instance.save(update_fields=['status', 'updated_at'])
+                    instance.status_reason = ''
+                    instance.status_message = ''
+                    instance.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
                     self._recompute_run_if_present(instance)
                     return StepResult(
                         run=StepRun(
@@ -443,20 +496,72 @@ class WorkflowRuntimeService:
                     self._ensure_approval(instance=instance, step_id=step_id)
                     instance.status = Workflow2Instance.STATUS_AWAITING
                     instance.current_step = step_id
-                    instance.save(update_fields=['vars_json', 'run_count', 'status', 'current_step', 'updated_at'])
+                    instance.status_reason = ''
+                    instance.status_message = ''
+                    instance.save(
+                        update_fields=[
+                            'vars_json',
+                            'run_count',
+                            'status',
+                            'current_step',
+                            'status_reason',
+                            'status_message',
+                            'updated_at',
+                        ]
+                    )
+                    self._recompute_run_if_present(instance)
+                    return StepResult(run=run, terminal=True)
+
+                if run.status in self._SET_STATUS_TO_INSTANCE_STATUS:
+                    self._apply_set_status_step(instance=instance, run=run)
+                    instance.save(
+                        update_fields=[
+                            'vars_json',
+                            'run_count',
+                            'status',
+                            'current_step',
+                            'status_reason',
+                            'status_message',
+                            'updated_at',
+                        ]
+                    )
                     self._recompute_run_if_present(instance)
                     return StepResult(run=run, terminal=True)
 
                 if run.next_step is None:
                     instance.status = Workflow2Instance.STATUS_SUCCEEDED
                     instance.current_step = ''
-                    instance.save(update_fields=['vars_json', 'run_count', 'status', 'current_step', 'updated_at'])
+                    instance.status_reason = ''
+                    instance.status_message = ''
+                    instance.save(
+                        update_fields=[
+                            'vars_json',
+                            'run_count',
+                            'status',
+                            'current_step',
+                            'status_reason',
+                            'status_message',
+                            'updated_at',
+                        ]
+                    )
                     self._recompute_run_if_present(instance)
                     return StepResult(run=run, terminal=True)
 
                 instance.status = Workflow2Instance.STATUS_RUNNING
                 instance.current_step = run.next_step or ''
-                instance.save(update_fields=['vars_json', 'run_count', 'status', 'current_step', 'updated_at'])
+                instance.status_reason = ''
+                instance.status_message = ''
+                instance.save(
+                    update_fields=[
+                        'vars_json',
+                        'run_count',
+                        'status',
+                        'current_step',
+                        'status_reason',
+                        'status_message',
+                        'updated_at',
+                    ]
+                )
                 self._recompute_run_if_present(instance)
                 return StepResult(run=run, terminal=False)
 
@@ -556,6 +661,7 @@ class WorkflowRuntimeService:
             (Workflow2Instance.STATUS_AWAITING, Workflow2Run.STATUS_AWAITING),
             (Workflow2Instance.STATUS_RUNNING, Workflow2Run.STATUS_RUNNING),
             (Workflow2Instance.STATUS_QUEUED, Workflow2Run.STATUS_QUEUED),
+            (Workflow2Instance.STATUS_STOPPED, Workflow2Run.STATUS_STOPPED),
         )
 
         # IMPORTANT: include PAUSED, and do NOT finalize FAILED/PAUSED/AWAITING
@@ -564,6 +670,4 @@ class WorkflowRuntimeService:
                 return run_status
         if all(status == Workflow2Instance.STATUS_CANCELLED for status in statuses):
             return Workflow2Run.STATUS_CANCELLED
-        if all(status == Workflow2Instance.STATUS_STOPPED for status in statuses):
-            return Workflow2Run.STATUS_STOPPED
         return Workflow2Run.STATUS_SUCCEEDED

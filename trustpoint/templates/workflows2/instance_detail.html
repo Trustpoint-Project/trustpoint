@@ -26,18 +26,20 @@
       </div>
 
       <div class="d-flex gap-2 flex-wrap">
-        <form method="post" action="{% url 'workflows2:instances-run-inline' inst.id %}">
-          {% csrf_token %}
-          <button class="btn btn-warning" type="submit">
-            <i class="bi bi-play-fill me-1"></i>{% trans "Run inline" %}
-          </button>
-        </form>
+        {% if can_run_inline %}
+          <form method="post" action="{% url 'workflows2:instances-run-inline' inst.id %}">
+            {% csrf_token %}
+            <button class="btn btn-warning" type="submit">
+              <i class="bi bi-play-fill me-1"></i>{% trans "Run inline" %}
+            </button>
+          </form>
+        {% endif %}
 
         {% if inst.status == "failed" or inst.status == "paused" %}
           <form method="post" action="{% url 'workflows2:instances-resume' inst.id %}">
             {% csrf_token %}
             <button class="btn btn-primary" type="submit">
-              <i class="bi bi-arrow-repeat me-1"></i>{% trans "Retry" %}
+              <i class="bi bi-play-circle me-1"></i>{% trans "Resume" %}
             </button>
           </form>
         {% endif %}
@@ -77,7 +79,12 @@
     <div class="alert alert-danger shadow-sm mb-3">
       <div class="fw-semibold">{% trans "Instance failed" %}</div>
       <div class="small mt-1">
-        {% if latest_failed_step_run and latest_failed_step_run.error %}
+        {% if inst.status_reason %}
+          <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
+        {% endif %}
+        {% if inst.status_message %}
+          <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+        {% elif latest_failed_step_run and latest_failed_step_run.error %}
           <div class="wf2-pre-wrap">{{ latest_failed_step_run.error }}</div>
         {% elif latest_failed_job and latest_failed_job.last_error %}
           <div class="wf2-pre-wrap">{{ latest_failed_job.last_error }}</div>
@@ -89,16 +96,58 @@
   {% elif inst.status == "rejected" %}
     <div class="alert alert-danger shadow-sm mb-3">
       <div class="fw-semibold">{% trans "Instance rejected" %}</div>
-      <div class="small mt-1">{% trans "This workflow instance reached a rejected terminal state." %}</div>
+      <div class="small mt-1">
+        {% if inst.status_reason %}
+          <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
+        {% endif %}
+        {% if inst.status_message %}
+          <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+        {% else %}
+          {% trans "This workflow instance reached a rejected terminal state." %}
+        {% endif %}
+      </div>
     </div>
   {% elif inst.status == "paused" %}
     <div class="alert alert-warning shadow-sm mb-3">
       <div class="fw-semibold">{% trans "Instance paused" %}</div>
-      <div class="small mt-1">{% trans "Execution stopped before completion and can be resumed." %}</div>
+      <div class="small mt-1">
+        {% if inst.status_reason %}
+          <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
+        {% endif %}
+        {% if inst.status_message %}
+          <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+        {% else %}
+          {% trans "Execution stopped before completion and can be resumed." %}
+        {% endif %}
+      </div>
+    </div>
+  {% elif inst.status == "stopped" %}
+    <div class="alert alert-secondary shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Instance stopped" %}</div>
+      <div class="small mt-1">
+        {% if inst.status_reason %}
+          <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
+        {% endif %}
+        {% if inst.status_message %}
+          <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+        {% else %}
+          {% trans "This workflow instance was stopped intentionally." %}
+        {% endif %}
+      </div>
     </div>
   {% elif inst.status == "succeeded" %}
     <div class="alert alert-success shadow-sm mb-3">
       <div class="fw-semibold">{% trans "Instance completed successfully" %}</div>
+      {% if inst.status_reason or inst.status_message %}
+        <div class="small mt-1">
+          {% if inst.status_reason %}
+            <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
+          {% endif %}
+          {% if inst.status_message %}
+            <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+          {% endif %}
+        </div>
+      {% endif %}
     </div>
   {% endif %}
 

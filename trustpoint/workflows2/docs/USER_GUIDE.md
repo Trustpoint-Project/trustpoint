@@ -192,6 +192,34 @@ Important:
 - Prefer `set.vars` keys in `vars.<name>` form for consistency with webhook capture, compute, and references.
 - Legacy plain keys are still accepted by the compiler, but the editor now writes `vars.<name>`.
 
+### `set_status`
+
+Sets the workflow instance status intentionally. Use this when the workflow itself has reached a business decision such as rejected, stopped, paused, or failed.
+
+```yaml
+reject_device:
+  type: set_status
+  status: rejected
+  reason: policy_rejected
+  message: Device ${event.device.common_name} did not pass policy review.
+```
+
+Supported statuses:
+
+- `succeeded`
+- `failed`
+- `rejected`
+- `stopped`
+- `paused`
+
+Important:
+
+- `reason` is a short static value stored on the workflow instance.
+- `message` is templated and shown on the instance detail page.
+- `paused` must have one outgoing linear flow entry; that target becomes the next step after retry/resume.
+- Other `set_status` statuses are terminal and cannot have outgoing flow entries.
+- Runtime errors are not represented with a separate `error` status. They use `failed` with `status_reason: runtime_error`.
+
 ### `compute`
 
 Writes workflow vars using safe expressions.
@@ -346,9 +374,8 @@ Open the guide with `Ctrl+K`.
 
 Use it to:
 
-- insert documented snippets
 - inspect field requirements
-- edit structured content for logic, webhook, compute, and set steps
+- edit structured content for logic, webhook, compute, set, and set_status steps
 - insert scoped variables and expression helpers
 
 ### Graph Editor

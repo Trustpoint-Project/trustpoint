@@ -27,8 +27,8 @@
       </div>
 
       <div class="d-flex gap-2 flex-wrap">
-        <a href="{% url 'workflows2:approvals-list' %}" class="btn btn-outline-secondary">
-          <i class="bi bi-arrow-left me-1"></i>{% trans "Back to approvals" %}
+        <a href="{% url 'workflows2:waiting-list' %}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left me-1"></i>{% trans "Back to waiting" %}
         </a>
         <a href="{% url 'workflows2:instances-detail' inst.id %}" class="btn btn-outline-primary">
           {% trans "Open instance" %}

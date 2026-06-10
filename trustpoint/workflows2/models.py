@@ -163,6 +163,8 @@ class Workflow2Instance(models.Model):
     vars_json = models.JSONField(default=dict)
 
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_QUEUED)
+    status_reason = models.CharField(max_length=100, blank=True, default='')
+    status_message = models.TextField(blank=True, default='')
 
     # current_step points to NEXT step to execute.
     # For approval awaiting, we keep current_step = approval step id.

@@ -12,6 +12,7 @@ class StepTypes:
 
     # core steps
     SET: ClassVar[str] = 'set'
+    SET_STATUS: ClassVar[str] = 'set_status'
     COMPUTE: ClassVar[str] = 'compute'
     LOGIC: ClassVar[str] = 'logic'
     EMAIL: ClassVar[str] = 'email'
@@ -26,6 +27,7 @@ class StepTypes:
         """Return the full set of supported step type identifiers."""
         return {
             cls.SET,
+            cls.SET_STATUS,
             cls.COMPUTE,
             cls.LOGIC,
             cls.EMAIL,

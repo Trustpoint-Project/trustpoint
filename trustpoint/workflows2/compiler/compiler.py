@@ -59,6 +59,7 @@ NOTIFICATION_RELATED_KEYS: frozenset[str] = frozenset({
     'certificate_id',
     'issuing_ca_id',
 })
+SET_STATUS_ALLOWED_STATUSES: tuple[str, ...] = ('succeeded', 'failed', 'rejected', 'stopped', 'paused')
 
 
 @dataclass(frozen=True)
@@ -332,6 +333,8 @@ class WorkflowCompiler:
             return self._compile_logic_params(step, base)
         if typ == StepTypes.SET:
             return self._compile_set_params(step, base)
+        if typ == StepTypes.SET_STATUS:
+            return self._compile_set_status_params(step, base)
         if typ == StepTypes.COMPUTE:
             return self._compile_compute_params(step, base)
         if typ == StepTypes.APPROVAL:
@@ -656,6 +659,31 @@ class WorkflowCompiler:
         return {'vars': normalized}
 
     @staticmethod
+    def _compile_set_status_params(step: dict[str, Any], base: str) -> dict[str, Any]:
+        status = WorkflowCompiler._require_choice(
+            step.get('status'),
+            path=f'{base}.status',
+            label='"set_status.status"',
+            choices=SET_STATUS_ALLOWED_STATUSES,
+        )
+
+        reason_raw = step.get('reason', f'workflow_set_{status}')
+        if not isinstance(reason_raw, str) or not reason_raw.strip():
+            msg = '"set_status.reason" must be a non-empty string'
+            raise CompileError(msg, path=f'{base}.reason')
+
+        message_raw = step.get('message', '')
+        if not isinstance(message_raw, str):
+            msg = '"set_status.message" must be a string'
+            raise CompileError(msg, path=f'{base}.message')
+
+        return {
+            'status': status,
+            'reason': reason_raw.strip(),
+            'message': compile_template(message_raw, path=f'{base}.message'),
+        }
+
+    @staticmethod
     def _compile_compute_params(step: dict[str, Any], base: str) -> dict[str, Any]:
         set_map = step.get('set')
         if not isinstance(set_map, dict) or not set_map:
@@ -869,8 +897,22 @@ class WorkflowCompiler:
         for step_id, s in steps_ir.items():
             produces = bool(s['produces_outcome'])
             outs: list[str] = list(s['outcomes'])
+            step_type = s.get('type')
 
             tr = transitions.get(step_id)
+
+            if step_type == StepTypes.SET_STATUS:
+                status = ((s.get('params') or {}).get('status') or '').strip()
+                if status == 'paused':
+                    if tr is None or tr.get('kind') != 'linear':
+                        msg = 'set_status with status "paused" requires one linear resume transition'
+                        raise CompileError(msg, path=f'workflow.flow({step_id})')
+                    continue
+
+                if tr is not None:
+                    msg = 'set_status terminal statuses cannot have outgoing transitions'
+                    raise CompileError(msg, path=f'workflow.flow({step_id})')
+                continue
 
             if produces:
                 if tr is None or tr.get('kind') != 'by_outcome':
@@ -1427,6 +1469,21 @@ class WorkflowCompiler:
             path=f'{base}.vars',
         )
 
+    def _validate_set_status_step_refs(
+        self,
+        params: dict[str, Any],
+        *,
+        available_vars: set[str],
+        step_id: str,
+        base: str,
+    ) -> None:
+        self._validate_compiled_value_refs(
+            params.get('message'),
+            available_vars=available_vars,
+            step_id=step_id,
+            path=f'{base}.message',
+        )
+
     def _validate_compute_step_refs(
         self,
         params: dict[str, Any],
@@ -1507,6 +1564,15 @@ class WorkflowCompiler:
 
             if step_type == StepTypes.SET:
                 self._validate_set_step_refs(
+                    params,
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    base=base,
+                )
+                continue
+
+            if step_type == StepTypes.SET_STATUS:
+                self._validate_set_status_step_refs(
                     params,
                     available_vars=available_vars,
                     step_id=step_id,

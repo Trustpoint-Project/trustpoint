@@ -148,11 +148,14 @@ class Workflow2DbWorker:
             if inst.status not in {
                 Workflow2Instance.STATUS_SUCCEEDED,
                 Workflow2Instance.STATUS_REJECTED,
+                Workflow2Instance.STATUS_STOPPED,
                 Workflow2Instance.STATUS_CANCELLED,
                 Workflow2Instance.STATUS_AWAITING,
             }:
                 inst.status = Workflow2Instance.STATUS_PAUSED
-                inst.save(update_fields=['status', 'updated_at'])
+                inst.status_reason = 'lease_expired'
+                inst.status_message = err
+                inst.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
 
             if inst.run_id:
                 run = Workflow2Run.objects.select_for_update().get(id=inst.run_id)
@@ -172,7 +175,9 @@ class Workflow2DbWorker:
             raise ValueError(msg)
 
         instance.status = Workflow2Instance.STATUS_QUEUED
-        instance.save(update_fields=['status', 'updated_at'])
+        instance.status_reason = ''
+        instance.status_message = ''
+        instance.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
 
         job, _created = Workflow2Job.get_or_create_active(
             instance=instance,
@@ -229,6 +234,7 @@ class Workflow2DbWorker:
                 if inst.status in {
                     Workflow2Instance.STATUS_SUCCEEDED,
                     Workflow2Instance.STATUS_REJECTED,
+                    Workflow2Instance.STATUS_STOPPED,
                     Workflow2Instance.STATUS_CANCELLED,
                 }:
                     skipped = True
@@ -237,7 +243,9 @@ class Workflow2DbWorker:
 
                 if inst.status != Workflow2Instance.STATUS_RUNNING:
                     inst.status = Workflow2Instance.STATUS_RUNNING
-                    inst.save(update_fields=['status', 'updated_at'])
+                    inst.status_reason = ''
+                    inst.status_message = ''
+                    inst.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
 
                 if inst.run_id:
                     Workflow2Run.objects.filter(id=inst.run_id).update(
@@ -302,11 +310,14 @@ class Workflow2DbWorker:
             if inst.status not in {
                 Workflow2Instance.STATUS_SUCCEEDED,
                 Workflow2Instance.STATUS_REJECTED,
+                Workflow2Instance.STATUS_STOPPED,
                 Workflow2Instance.STATUS_CANCELLED,
                 Workflow2Instance.STATUS_AWAITING,
             }:
                 inst.status = Workflow2Instance.STATUS_QUEUED
-                inst.save(update_fields=['status', 'updated_at'])
+                inst.status_reason = ''
+                inst.status_message = ''
+                inst.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
 
             if inst.run_id:
                 run = Workflow2Run.objects.select_for_update().get(id=inst.run_id)
@@ -323,11 +334,14 @@ class Workflow2DbWorker:
         if inst.status not in {
             Workflow2Instance.STATUS_SUCCEEDED,
             Workflow2Instance.STATUS_REJECTED,
+            Workflow2Instance.STATUS_STOPPED,
             Workflow2Instance.STATUS_CANCELLED,
             Workflow2Instance.STATUS_AWAITING,
         }:
             inst.status = Workflow2Instance.STATUS_FAILED
-            inst.save(update_fields=['status', 'updated_at'])
+            inst.status_reason = 'runtime_error'
+            inst.status_message = err
+            inst.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
 
         if inst.run_id:
             run = Workflow2Run.objects.select_for_update().get(id=inst.run_id)

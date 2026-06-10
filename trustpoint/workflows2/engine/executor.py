@@ -21,7 +21,8 @@ from .types import ExecutionResult, RunStatus, StepRun
 
 OnStepRun = Callable[[StepRun], None]
 
-_TERMINAL_RUN_STATUSES = {'failed', 'awaiting', 'rejected'}
+_TERMINAL_RUN_STATUSES = {'failed', 'awaiting', 'rejected', 'stopped', 'succeeded', 'paused'}
+_SET_STATUS_STATUSES = {'succeeded', 'failed', 'rejected', 'stopped', 'paused'}
 _END_TARGETS = {'$end', '$reject'}
 
 CAPTURE_TARGET_PARTS = 2
@@ -191,6 +192,22 @@ class WorkflowExecutor:
 
         if step_type == 'set':
             self._step_set(step_id, params, ctx)
+        elif step_type == 'set_status':
+            output = self._step_set_status(step_id, params, ctx)
+            status = output['status']
+            next_step = self._choose_next(step_id, None, transitions) if status == 'paused' else None
+            return StepRun(
+                run_index=run_index,
+                step_id=step_id,
+                step_type=step_type,
+                status=status,
+                outcome=None,
+                next_step=next_step,
+                vars_delta=_delta(vars_before, ctx.vars),
+                output=output,
+                error=None,
+                created_at=_now(),
+            )
         elif step_type == 'compute':
             self._step_compute(step_id, params, ctx)
         elif step_type == 'logic':
@@ -260,6 +277,24 @@ class WorkflowExecutor:
             raise StepExecutionError(step_id, 'Invalid set.vars render')
         for k, v in rendered.items():
             ctx.vars[str(k)] = v
+
+    def _step_set_status(self, step_id: str, params: dict[str, Any], ctx: RuntimeContext) -> dict[str, Any]:
+        status = params.get('status')
+        reason = params.get('reason')
+        message = render_template(params.get('message'), ctx)
+
+        if status not in _SET_STATUS_STATUSES:
+            raise StepExecutionError(step_id, 'Invalid set_status.status')
+        if not isinstance(reason, str) or not reason.strip():
+            raise StepExecutionError(step_id, 'Invalid set_status.reason')
+        if not isinstance(message, str):
+            raise StepExecutionError(step_id, 'Invalid set_status.message')
+
+        return {
+            'status': status,
+            'reason': reason.strip(),
+            'message': message,
+        }
 
     def _step_compute(self, step_id: str, params: dict[str, Any], ctx: RuntimeContext) -> None:
         set_map = params.get('set')

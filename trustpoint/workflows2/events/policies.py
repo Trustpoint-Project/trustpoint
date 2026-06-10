@@ -7,6 +7,7 @@ from workflows2.compiler.step_types import StepTypes
 # A sane baseline for most events
 BASE_AUTOMATION: set[str] = {
     StepTypes.SET,
+    StepTypes.SET_STATUS,
     StepTypes.COMPUTE,
     StepTypes.LOGIC,
 }
@@ -17,11 +18,7 @@ BASE_ADAPTERS: set[str] = {
     StepTypes.NOTIFICATION,
 }
 
-# Terminal step TYPES were removed from the language.
-# End states are now handled via:
-# - implicit end / $end  => succeeded
-# - $reject              => rejected
-# - unexpected errors    => paused (retryable)
+# Status control is handled by the explicit set_status step.
 BASE_TERMINALS: set[str] = set()
 
 # Common presets

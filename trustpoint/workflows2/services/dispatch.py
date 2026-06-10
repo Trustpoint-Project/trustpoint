@@ -440,7 +440,9 @@ class WorkflowDispatchService:
         """Create a queued job for a workflow instance."""
         if instance.status != Workflow2Instance.STATUS_QUEUED:
             instance.status = Workflow2Instance.STATUS_QUEUED
-            instance.save(update_fields=['status', 'updated_at'])
+            instance.status_reason = ''
+            instance.status_message = ''
+            instance.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
 
         job, _created = Workflow2Job.get_or_create_active(
             instance=instance,
