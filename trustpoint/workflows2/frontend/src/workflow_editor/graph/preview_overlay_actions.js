@@ -79,21 +79,6 @@ export async function handleGraphAction({
     return;
   }
 
-  if (action === 'apply-approval-outcome-preset') {
-    const approvedRow = scope.querySelector('[data-step-field-row="approved_outcome"]');
-    const rejectedRow = scope.querySelector('[data-step-field-row="rejected_outcome"]');
-    const approvedInput = approvedRow?.querySelector('[data-step-field-input="true"]');
-    const rejectedInput = rejectedRow?.querySelector('[data-step-field-input="true"]');
-
-    if (approvedInput) {
-      approvedInput.value = actionEl.getAttribute('data-approved-outcome') || '';
-    }
-    if (rejectedInput) {
-      rejectedInput.value = actionEl.getAttribute('data-rejected-outcome') || '';
-    }
-    return;
-  }
-
   if (action === 'apply-webhook-capture-source') {
     const row = actionEl.closest('[data-capture-row]');
     const sourceInput = row?.querySelector('[data-capture-source-input="true"]');

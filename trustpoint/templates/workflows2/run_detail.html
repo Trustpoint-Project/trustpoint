@@ -60,14 +60,25 @@
         {% endblocktrans %}
       </div>
     </div>
-  {% elif failed_instance_count %}
+  {% elif error_instance_count %}
     <div class="alert alert-danger shadow-sm mb-3">
       <div class="fw-semibold">{% trans "Run needs attention" %}</div>
       <div class="small mt-1">
-        {% blocktrans count count=failed_instance_count %}
-          {{ count }} workflow instance failed in this run.
+        {% blocktrans count count=error_instance_count %}
+          {{ count }} workflow instance errored in this run.
         {% plural %}
-          {{ count }} workflow instances failed in this run.
+          {{ count }} workflow instances errored in this run.
+        {% endblocktrans %}
+      </div>
+    </div>
+  {% elif timed_out_instance_count %}
+    <div class="alert alert-danger shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Run timed out" %}</div>
+      <div class="small mt-1">
+        {% blocktrans count count=timed_out_instance_count %}
+          {{ count }} workflow instance timed out.
+        {% plural %}
+          {{ count }} workflow instances timed out.
         {% endblocktrans %}
       </div>
     </div>
@@ -82,10 +93,15 @@
         {% endblocktrans %}
       </div>
     </div>
-  {% elif succeeded_instance_count and succeeded_instance_count == instance_total %}
+  {% elif approved_instance_count and approved_instance_count == instance_total %}
     <div class="alert alert-success shadow-sm mb-3">
-      <div class="fw-semibold">{% trans "Run finished successfully" %}</div>
-      <div class="small mt-1">{% trans "All workflow instances in this run reached a successful terminal state." %}</div>
+      <div class="fw-semibold">{% trans "Run approved" %}</div>
+      <div class="small mt-1">{% trans "All workflow instances in this run approved the request." %}</div>
+    </div>
+  {% elif finished_instance_count and finished_instance_count == instance_total %}
+    <div class="alert alert-success shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Run finished" %}</div>
+      <div class="small mt-1">{% trans "All workflow instances in this run reached the end of their workflow branch." %}</div>
     </div>
   {% endif %}
 
@@ -118,8 +134,8 @@
     <div class="col-6 col-xl-3">
       <div class="card h-100 shadow-sm">
         <div class="card-body">
-          <div class="text-muted small text-uppercase">{% trans "Failed / rejected" %}</div>
-          <div class="fs-4 fw-semibold">{{ failed_instance_count|add:rejected_instance_count }}</div>
+          <div class="text-muted small text-uppercase">{% trans "Problem results" %}</div>
+          <div class="fs-4 fw-semibold">{{ error_instance_count|add:timed_out_instance_count|add:rejected_instance_count }}</div>
         </div>
       </div>
     </div>

@@ -19,6 +19,11 @@ from trustpoint.page_context import PageContextMixin
 from workflows2.engine.executor import WorkflowExecutor
 from workflows2.models import Workflow2Approval, Workflow2Instance, Workflow2Job, Workflow2Run
 from workflows2.services.runtime import WorkflowRuntimeService
+from workflows2.services.transitions import (
+    WorkflowInstanceTransitionService,
+    WorkflowRunTransitionService,
+    save_instance_status,
+)
 from workflows2.views.presentation import (
     build_step_meta_from_ir,
     describe_event_context,
@@ -85,18 +90,10 @@ class Workflow2RunListView(PageContextMixin, LoginRequiredMixin, View):
             for run in page_obj.object_list
         ]
         active_statuses = [
-            Workflow2Run.STATUS_QUEUED,
-            Workflow2Run.STATUS_RUNNING,
-            Workflow2Run.STATUS_AWAITING,
-            Workflow2Run.STATUS_PAUSED,
+            *WorkflowRunTransitionService.ACTIVE_STATUSES,
+            *WorkflowRunTransitionService.BLOCKED_STATUSES,
         ]
-        completed_statuses = [
-            Workflow2Run.STATUS_SUCCEEDED,
-            Workflow2Run.STATUS_REJECTED,
-            Workflow2Run.STATUS_FAILED,
-            Workflow2Run.STATUS_CANCELLED,
-            Workflow2Run.STATUS_STOPPED,
-        ]
+        completed_statuses = list(WorkflowRunTransitionService.TERMINAL_STATUSES)
 
         return render(
             request,
@@ -152,14 +149,12 @@ class Workflow2RunDetailView(PageContextMixin, LoginRequiredMixin, View):
             status=Workflow2Approval.STATUS_PENDING,
         ).count()
         terminal_instance_statuses = {
-            Workflow2Instance.STATUS_SUCCEEDED,
-            Workflow2Instance.STATUS_REJECTED,
-            Workflow2Instance.STATUS_FAILED,
-            Workflow2Instance.STATUS_STOPPED,
-            Workflow2Instance.STATUS_CANCELLED,
+            *WorkflowInstanceTransitionService.TERMINAL_STATUSES,
         }
         inline_skipped_statuses = terminal_instance_statuses | {
             Workflow2Instance.STATUS_AWAITING,
+            Workflow2Instance.STATUS_PAUSED,
+            Workflow2Instance.STATUS_ERROR,
         }
         cfg = WorkflowExecutionConfig.load()
         can_run_inline = (
@@ -171,6 +166,7 @@ class Workflow2RunDetailView(PageContextMixin, LoginRequiredMixin, View):
             Workflow2Run.STATUS_RUNNING,
             Workflow2Run.STATUS_AWAITING,
             Workflow2Run.STATUS_PAUSED,
+            Workflow2Run.STATUS_ERROR,
         }
 
         return render(
@@ -188,9 +184,11 @@ class Workflow2RunDetailView(PageContextMixin, LoginRequiredMixin, View):
                 'event_context': event_context,
                 'instance_total': len(instance_rows),
                 'awaiting_instance_count': status_counts.get(Workflow2Instance.STATUS_AWAITING, 0),
-                'failed_instance_count': status_counts.get(Workflow2Instance.STATUS_FAILED, 0),
+                'error_instance_count': status_counts.get(Workflow2Instance.STATUS_ERROR, 0),
+                'timed_out_instance_count': status_counts.get(Workflow2Instance.STATUS_TIMED_OUT, 0),
                 'rejected_instance_count': status_counts.get(Workflow2Instance.STATUS_REJECTED, 0),
-                'succeeded_instance_count': status_counts.get(Workflow2Instance.STATUS_SUCCEEDED, 0),
+                'approved_instance_count': status_counts.get(Workflow2Instance.STATUS_APPROVED, 0),
+                'finished_instance_count': status_counts.get(Workflow2Instance.STATUS_FINISHED, 0),
                 'pending_approval_count': pending_approval_count,
                 'can_run_inline': can_run_inline,
                 'can_cancel': can_cancel,
@@ -217,12 +215,10 @@ class Workflow2RunRunInlineView(LoginRequiredMixin, View):
         try:
             for inst in insts:
                 if inst.status in {
-                    Workflow2Instance.STATUS_SUCCEEDED,
-                    Workflow2Instance.STATUS_REJECTED,
-                    Workflow2Instance.STATUS_FAILED,
-                    Workflow2Instance.STATUS_STOPPED,
-                    Workflow2Instance.STATUS_CANCELLED,
+                    *WorkflowInstanceTransitionService.TERMINAL_STATUSES,
                     Workflow2Instance.STATUS_AWAITING,
+                    Workflow2Instance.STATUS_PAUSED,
+                    Workflow2Instance.STATUS_ERROR,
                 }:
                     continue
                 runtime.run_instance(inst)
@@ -261,16 +257,10 @@ class Workflow2RunCancelView(LoginRequiredMixin, View):
 
             for inst in insts:
                 if inst.status not in {
-                    Workflow2Instance.STATUS_SUCCEEDED,
-                    Workflow2Instance.STATUS_REJECTED,
-                    Workflow2Instance.STATUS_FAILED,
-                    Workflow2Instance.STATUS_STOPPED,
+                    *WorkflowInstanceTransitionService.TERMINAL_STATUSES,
                 }:
-                    inst.status = Workflow2Instance.STATUS_CANCELLED
-                    inst.current_step = ''
-                    inst.status_reason = 'cancelled'
-                    inst.status_message = ''
-                    inst.save(update_fields=['status', 'current_step', 'status_reason', 'status_message', 'updated_at'])
+                    WorkflowInstanceTransitionService.mark_cancelled(inst)
+                    save_instance_status(inst)
 
             run.status = Workflow2Run.STATUS_CANCELLED
             run.finalized = True

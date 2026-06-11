@@ -23,6 +23,7 @@ from workflows2.models import (
     Workflow2WorkerHeartbeat,
 )
 from workflows2.services.runtime import WorkflowRuntimeService
+from workflows2.services.transitions import WorkflowRunTransitionService
 from workflows2.services.worker import Workflow2DbWorker
 
 DispatchStatus = Literal['completed', 'blocked', 'running']
@@ -263,15 +264,10 @@ class WorkflowDispatchService:
             raise RuntimeError(msg)
         run.refresh_from_db(fields=['status', 'finalized', 'updated_at'])
 
-        if run.status in {Workflow2Run.STATUS_AWAITING, Workflow2Run.STATUS_PAUSED}:
+        if run.status in WorkflowRunTransitionService.BLOCKED_STATUSES:
             return DispatchOutcome(status='blocked', run=run, instances=instances)
 
-        if run.status in {
-            Workflow2Run.STATUS_SUCCEEDED,
-            Workflow2Run.STATUS_REJECTED,
-            Workflow2Run.STATUS_FAILED,
-            Workflow2Run.STATUS_CANCELLED,
-        }:
+        if run.status in WorkflowRunTransitionService.TERMINAL_STATUSES:
             return DispatchOutcome(status='completed', run=run, instances=instances)
 
         return DispatchOutcome(status='running', run=run, instances=instances)
@@ -352,11 +348,7 @@ class WorkflowDispatchService:
         if run is None or not run.idempotency_key:
             return
         if run.status not in {
-            Workflow2Run.STATUS_SUCCEEDED,
-            Workflow2Run.STATUS_REJECTED,
-            Workflow2Run.STATUS_FAILED,
-            Workflow2Run.STATUS_CANCELLED,
-            Workflow2Run.STATUS_STOPPED,
+            *WorkflowRunTransitionService.TERMINAL_STATUSES,
         }:
             return
         run.idempotency_key = ''

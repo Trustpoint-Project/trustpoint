@@ -1,5 +1,4 @@
 import { escapeHtml, renderChips } from '../shared/dom.js';
-import { APPROVAL_OUTCOME_PRESETS } from '../document/approval_outcome_presets.js';
 import { parseApplyItems } from './guide_apply_shared.js';
 import {
   renderComputeDsl,
@@ -414,41 +413,6 @@ function buildStepModel(context, catalog) {
     );
   }
 
-  if (context.stepType === 'approval') {
-    actionParts.push(
-      renderMiniBlock(
-        'Approval outcomes',
-        renderGuideButtonRow(
-          APPROVAL_OUTCOME_PRESETS
-            .map((preset) =>
-              renderActionButton(
-                'apply-approval-outcome-preset',
-                preset.label,
-                ` data-approved-outcome="${escapeHtml(preset.approved)}" data-rejected-outcome="${escapeHtml(preset.rejected)}"`,
-              ),
-            )
-            .join(''),
-        ),
-      ),
-    );
-    actionParts.push(
-      renderMiniBlock(
-        'Approval routing',
-        renderGuideButtonRow(
-          APPROVAL_OUTCOME_PRESETS
-            .map((preset) =>
-              renderActionButton(
-                'apply-approval-terminal-routing-preset',
-                `${preset.label} -> $end / $reject`,
-                ` data-approved-outcome="${escapeHtml(preset.approved)}" data-rejected-outcome="${escapeHtml(preset.rejected)}" data-approved-target="${escapeHtml(preset.approvedTarget || '$end')}" data-rejected-target="${escapeHtml(preset.rejectedTarget || '$reject')}"`,
-              ),
-            )
-            .join(''),
-        ),
-      ),
-    );
-  }
-
   if (contextSupportsVariableInsertion(context, catalog)) {
     actionParts.push(
       renderMiniBlock('Insert event value', renderGuideButtonRow(renderVariableButtons(eventButtons))),
@@ -494,7 +458,6 @@ function buildStepModel(context, catalog) {
 
 function buildFlowModel(context, catalog) {
   const stepIds = Array.isArray(context?.stepIds) ? context.stepIds : [];
-  const toOptions = [...stepIds, ...(catalog?.meta?.end_targets || [])];
   const currentFlowFrom = context?.currentFlowItem?.from || null;
   const currentFlowTo = context?.currentFlowItem?.to || null;
   const currentFlowOn = context?.currentFlowItem?.on || null;
@@ -503,7 +466,7 @@ function buildFlowModel(context, catalog) {
   if (context.flowFieldKey === 'from') {
     fieldOptions = renderMiniBlock('Set from', renderGuideButtonRow(renderScalarSetterButtons(stepIds)));
   } else if (context.flowFieldKey === 'to') {
-    fieldOptions = renderMiniBlock('Set target', renderGuideButtonRow(renderScalarSetterButtons(toOptions)));
+    fieldOptions = renderMiniBlock('Set target', renderGuideButtonRow(renderScalarSetterButtons(stepIds)));
   } else if (context.flowFieldKey === 'on') {
     fieldOptions = renderMiniBlock(
       'Set outcome',
@@ -535,7 +498,6 @@ function buildFlowModel(context, catalog) {
     reference: `
       ${renderMiniBlock('Step ids', renderChipList(stepIds, { emptyLabel: 'No steps yet.' }))}
       ${renderMiniBlock('Known outcomes', renderChipList(context.currentFlowOutcomeOptions || [], { emptyLabel: 'No outcomes available here.' }))}
-      ${renderMiniBlock('End targets', renderChipList(catalog?.meta?.end_targets || [], { emptyLabel: 'No end targets documented.' }))}
     `,
   };
 }

@@ -92,4 +92,4 @@ class WorkerHeartbeatTests(TransactionTestCase):
         inst.refresh_from_db()
 
         self.assertEqual(job.status, Workflow2Job.STATUS_DONE)
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)

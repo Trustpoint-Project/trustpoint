@@ -17,7 +17,6 @@ import {
 import { renderGuideButtonRow, renderGuideMeta, renderGuideSection } from './guide_layout.js';
 import { renderLogicStepGuide } from './guide_logic_step_renderer.js';
 import { renderStructuredStepEditor } from '../steps/structured_step_editor_renderer.js';
-import { APPROVAL_OUTCOME_PRESETS } from '../document/approval_outcome_presets.js';
 import { getStep, parseRoot } from '../document/yaml_document.js';
 
 function readCurrentStepData(yamlText, stepId) {
@@ -185,41 +184,6 @@ function renderNonLogicStepSpecificSection(context, catalog, presentFieldKeys, y
       description: 'Insert documented functions and runtime references.',
       body: renderExpressionDsl(catalog, { insertableFunctions: true }),
     });
-  }
-
-  if (context.stepType === 'approval') {
-    return `
-      ${renderGuideSection({
-        title: 'Approval outcome presets',
-        description: 'Apply a common approved/rejected naming pair to the current approval step.',
-        body: renderGuideButtonRow(
-          APPROVAL_OUTCOME_PRESETS
-            .map((preset) =>
-              renderActionButton(
-                'apply-approval-outcome-preset',
-                preset.label,
-                ` data-approved-outcome="${escapeHtml(preset.approved)}" data-rejected-outcome="${escapeHtml(preset.rejected)}" title="${escapeHtml(preset.description)}"`,
-              ),
-            )
-            .join(''),
-        ),
-      })}
-      ${renderGuideSection({
-        title: 'Common terminal routing',
-        description: 'Set approval outcomes and wire the usual success/reject targets in one step.',
-        body: renderGuideButtonRow(
-          APPROVAL_OUTCOME_PRESETS
-            .map((preset) =>
-              renderActionButton(
-                'apply-approval-terminal-routing-preset',
-                `${preset.label} → $end / $reject`,
-                ` data-approved-outcome="${escapeHtml(preset.approved)}" data-rejected-outcome="${escapeHtml(preset.rejected)}" data-approved-target="${escapeHtml(preset.approvedTarget || '$end')}" data-rejected-target="${escapeHtml(preset.rejectedTarget || '$reject')}" title="${escapeHtml(`${preset.description} Routes approved to $end and rejected to $reject.`)}"`,
-              ),
-            )
-            .join(''),
-        ),
-      })}
-    `;
   }
 
   return '';

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.db import transaction
 from django.utils import timezone
@@ -17,6 +17,11 @@ from workflows2.models import (
     Workflow2Instance,
     Workflow2Run,
     Workflow2StepRun,
+)
+from workflows2.services.transitions import (
+    WorkflowInstanceTransitionService,
+    WorkflowRunTransitionService,
+    save_instance_status,
 )
 
 if TYPE_CHECKING:
@@ -35,15 +40,17 @@ class WorkflowRuntimeService:
     """Crash-resumable runtime (DB checkpointing).
 
     Policy (Modified B):
-      - Step exceptions => instance.status = FAILED (retryable), keep current_step
-      - Failed is NOT treated as finalized in run aggregation (manual retry allowed)
+      - Step exceptions => instance.status = ERROR (retryable), keep current_step
+      - Error is NOT treated as finalized in run aggregation (manual resume allowed)
       - Always persist a Workflow2StepRun row even on exception
     """
 
-    _SET_STATUS_TO_INSTANCE_STATUS = {
-        'succeeded': Workflow2Instance.STATUS_SUCCEEDED,
-        'failed': Workflow2Instance.STATUS_FAILED,
+    _SET_STATUS_TO_INSTANCE_STATUS: ClassVar[dict[str, str]] = {
+        'finished': Workflow2Instance.STATUS_FINISHED,
+        'approved': Workflow2Instance.STATUS_APPROVED,
         'rejected': Workflow2Instance.STATUS_REJECTED,
+        'error': Workflow2Instance.STATUS_ERROR,
+        'timed_out': Workflow2Instance.STATUS_TIMED_OUT,
         'stopped': Workflow2Instance.STATUS_STOPPED,
         'paused': Workflow2Instance.STATUS_PAUSED,
     }
@@ -95,30 +102,25 @@ class WorkflowRuntimeService:
         while True:
             instance.refresh_from_db()
 
-            if instance.status in {
-                Workflow2Instance.STATUS_SUCCEEDED,
-                Workflow2Instance.STATUS_REJECTED,
-                Workflow2Instance.STATUS_STOPPED,
-                Workflow2Instance.STATUS_FAILED,
-                Workflow2Instance.STATUS_CANCELLED,
-                Workflow2Instance.STATUS_AWAITING,
-                Workflow2Instance.STATUS_PAUSED,
-            }:
+            if (
+                WorkflowInstanceTransitionService.is_terminal(instance.status)
+                or instance.status in WorkflowInstanceTransitionService.WAITING_STATUSES
+            ):
                 return instance
 
             if not instance.current_step:
-                instance.status = Workflow2Instance.STATUS_SUCCEEDED
-                instance.status_reason = ''
-                instance.status_message = ''
-                instance.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
+                WorkflowInstanceTransitionService.mark_finished(instance)
+                save_instance_status(instance)
                 self._recompute_run_if_present(instance)
                 return instance
 
             if steps >= self.max_steps_per_run:
-                instance.status = Workflow2Instance.STATUS_FAILED
-                instance.status_reason = 'max_steps_exceeded'
-                instance.status_message = f'Workflow exceeded the maximum of {self.max_steps_per_run} steps.'
-                instance.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
+                WorkflowInstanceTransitionService.mark_error(
+                    instance,
+                    reason='max_steps_exceeded',
+                    message=f'Workflow exceeded the maximum of {self.max_steps_per_run} steps.',
+                )
+                save_instance_status(instance)
                 self._recompute_run_if_present(instance)
                 return instance
 
@@ -160,7 +162,7 @@ class WorkflowRuntimeService:
                 run_index=run_index,
                 step_id=step_id,
                 step_type=step_type,
-                status='failed',
+                status='error',
                 outcome='',
                 next_step='',
                 vars_delta={},
@@ -170,10 +172,8 @@ class WorkflowRuntimeService:
             )
 
             instance.run_count = run_index
-            instance.status = Workflow2Instance.STATUS_FAILED
-            instance.status_reason = 'runtime_error'
-            instance.status_message = err
-            instance.save(update_fields=['run_count', 'status', 'status_reason', 'status_message', 'updated_at'])
+            WorkflowInstanceTransitionService.mark_error(instance, reason='runtime_error', message=err)
+            save_instance_status(instance, extra_fields=['run_count'])
 
             self._recompute_run_if_present(instance)
 
@@ -231,14 +231,11 @@ class WorkflowRuntimeService:
         inst: Workflow2Instance,
         approval: Workflow2Approval,
         decision: str,
-    ) -> tuple[str, dict[str, Any]]:
+    ) -> tuple[str | None, dict[str, Any]]:
         ir = inst.definition.ir_json
         wf = (ir or {}).get('workflow') or {}
         steps_map = wf.get('steps') or {}
         transitions = (wf.get('transitions') or {}).get(approval.step_id)
-        if not isinstance(transitions, dict) or transitions.get('kind') != 'by_outcome':
-            msg = 'Approval step missing by_outcome transitions in IR'
-            raise ValueError(msg)
 
         step = steps_map.get(approval.step_id)
         params = (step.get('params') or {}) if isinstance(step, dict) else {}
@@ -251,14 +248,29 @@ class WorkflowRuntimeService:
             msg = f"Approval step missing configured outcome for decision '{decision}'"
             raise ValueError(msg)
 
+        if transitions is None:
+            return None, {
+                'selected_outcome': selected_outcome,
+                'decision': decision,
+            }
+
+        if not isinstance(transitions, dict) or transitions.get('kind') != 'by_outcome':
+            msg = 'Approval step transitions must be by_outcome'
+            raise ValueError(msg)
+
         outcome_map = transitions.get('map') or {}
         if not isinstance(outcome_map, dict):
             msg = 'Invalid outcome map'
             raise TypeError(msg)
 
         next_step = outcome_map.get(selected_outcome)
+        if next_step is None:
+            return None, {
+                'selected_outcome': selected_outcome,
+                'decision': decision,
+            }
         if not isinstance(next_step, str) or not next_step:
-            msg = f"No route for approval outcome '{selected_outcome}'"
+            msg = f"Invalid route for approval outcome '{selected_outcome}'"
             raise ValueError(msg)
 
         return next_step, {
@@ -292,15 +304,14 @@ class WorkflowRuntimeService:
         approval.save(update_fields=['status', 'decided_at', 'decided_by', 'comment'])
 
         run_index = int(inst.run_count) + 1
-        terminal_reject = next_step == '$reject'
-        terminal_end = next_step == '$end'
-        next_step_id = None if terminal_end or terminal_reject else next_step
+        terminal_decision = next_step is None
+        next_step_id = next_step
 
         step_run_status = (
             'rejected'
-            if terminal_reject
-            else 'succeeded'
-            if terminal_end
+            if terminal_decision and decision == 'rejected'
+            else 'approved'
+            if terminal_decision
             else 'continued'
         )
         payload.update(
@@ -321,11 +332,39 @@ class WorkflowRuntimeService:
             inst=inst,
             run_index=run_index,
             next_step_id=next_step_id,
-            terminal_reject=terminal_reject,
-            terminal_end=terminal_end,
-            status_reason='approval_rejected' if terminal_reject else '',
-            status_message=(comment or 'Approval rejected.') if terminal_reject else '',
+            terminal_decision=terminal_decision,
+            decision=decision,
+            status_reason=f'approval_{decision}' if terminal_decision else '',
+            status_message=(comment or f'Approval {decision}.') if terminal_decision else '',
         )
+
+    def record_approval_timeout_locked(self, *, inst: Workflow2Instance, approval: Workflow2Approval) -> None:
+        """Record a timed-out approval decision on an already-locked instance."""
+        self._apply_approval_timeout_locked(inst=inst, approval=approval)
+
+    def _apply_approval_timeout_locked(self, *, inst: Workflow2Instance, approval: Workflow2Approval) -> None:
+        run_index = int(inst.run_count) + 1
+        Workflow2StepRun.objects.create(
+            instance=inst,
+            run_index=run_index,
+            step_id=approval.step_id,
+            step_type='approval',
+            status='timed_out',
+            outcome='timed_out',
+            next_step='',
+            vars_delta={},
+            output={'decision': 'timed_out', 'selected_outcome': 'timed_out'},
+            error='',
+            created_at=timezone.now(),
+        )
+        inst.run_count = run_index
+        WorkflowInstanceTransitionService.mark_timed_out(
+            inst,
+            reason='approval_timed_out',
+            message='Approval timed out.',
+        )
+        save_instance_status(inst, extra_fields=['run_count'])
+        self._recompute_run_if_present(inst)
 
     @staticmethod
     def _create_approval_step_run(
@@ -354,40 +393,35 @@ class WorkflowRuntimeService:
             created_at=timezone.now(),
         )
 
-    def _apply_approval_result(
+    def _apply_approval_result(  # noqa: PLR0913
         self,
         *,
         inst: Workflow2Instance,
         run_index: int,
         next_step_id: str | None,
-        terminal_reject: bool,
-        terminal_end: bool,
+        terminal_decision: bool,
+        decision: str,
         status_reason: str = '',
         status_message: str = '',
     ) -> None:
         inst.run_count = run_index
-        if terminal_reject:
-            inst.status = Workflow2Instance.STATUS_REJECTED
-            inst.current_step = ''
-        elif terminal_end:
-            inst.status = Workflow2Instance.STATUS_SUCCEEDED
-            inst.current_step = ''
+        if terminal_decision and decision == 'rejected':
+            WorkflowInstanceTransitionService.mark_rejected(
+                inst,
+                reason=status_reason,
+                message=status_message,
+            )
+        elif terminal_decision:
+            WorkflowInstanceTransitionService.mark_approved(
+                inst,
+                reason=status_reason,
+                message=status_message,
+            )
         else:
-            inst.status = Workflow2Instance.STATUS_RUNNING
+            WorkflowInstanceTransitionService.mark_running(inst)
             inst.current_step = next_step_id or ''
-        inst.status_reason = status_reason
-        inst.status_message = status_message
 
-        inst.save(
-            update_fields=[
-                'run_count',
-                'status',
-                'current_step',
-                'status_reason',
-                'status_message',
-                'updated_at',
-            ]
-        )
+        save_instance_status(inst, extra_fields=['run_count'])
         self._recompute_run_if_present(inst)
 
     def _apply_set_status_step(self, *, instance: Workflow2Instance, run: StepRun) -> None:
@@ -405,7 +439,7 @@ class WorkflowRuntimeService:
         instance.status_message = message
         if run.status == 'paused':
             instance.current_step = run.next_step or ''
-        elif run.status == 'failed':
+        elif run.status == 'error':
             instance.current_step = run.step_id
         else:
             instance.current_step = ''
@@ -420,29 +454,23 @@ class WorkflowRuntimeService:
                     .get(id=instance.id)
                 )
 
-                if instance.status in {
-                    Workflow2Instance.STATUS_SUCCEEDED,
-                    Workflow2Instance.STATUS_REJECTED,
-                    Workflow2Instance.STATUS_STOPPED,
-                    Workflow2Instance.STATUS_CANCELLED,
-                    Workflow2Instance.STATUS_AWAITING,
-                    Workflow2Instance.STATUS_PAUSED,
-                }:
+                if (
+                    WorkflowInstanceTransitionService.is_terminal(instance.status)
+                    or instance.status in WorkflowInstanceTransitionService.WAITING_STATUSES
+                ):
                     msg = 'Instance is terminal/blocked; cannot run'
                     self._raise_runtime_state_error(msg)
 
                 if not instance.current_step:
-                    instance.status = Workflow2Instance.STATUS_SUCCEEDED
-                    instance.status_reason = ''
-                    instance.status_message = ''
-                    instance.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
+                    WorkflowInstanceTransitionService.mark_finished(instance)
+                    save_instance_status(instance)
                     self._recompute_run_if_present(instance)
                     return StepResult(
                         run=StepRun(
                             run_index=int(instance.run_count) + 1,
                             step_id='(end)',
                             step_type='end',
-                            status='succeeded',
+                            status='finished',
                             outcome=None,
                             next_step=None,
                             vars_delta={},
@@ -494,74 +522,26 @@ class WorkflowRuntimeService:
 
                 if run.status == 'awaiting':
                     self._ensure_approval(instance=instance, step_id=step_id)
-                    instance.status = Workflow2Instance.STATUS_AWAITING
-                    instance.current_step = step_id
-                    instance.status_reason = ''
-                    instance.status_message = ''
-                    instance.save(
-                        update_fields=[
-                            'vars_json',
-                            'run_count',
-                            'status',
-                            'current_step',
-                            'status_reason',
-                            'status_message',
-                            'updated_at',
-                        ]
-                    )
+                    WorkflowInstanceTransitionService.mark_waiting_for_approval(instance, step_id=step_id)
+                    save_instance_status(instance, extra_fields=['vars_json', 'run_count'])
                     self._recompute_run_if_present(instance)
                     return StepResult(run=run, terminal=True)
 
                 if run.status in self._SET_STATUS_TO_INSTANCE_STATUS:
                     self._apply_set_status_step(instance=instance, run=run)
-                    instance.save(
-                        update_fields=[
-                            'vars_json',
-                            'run_count',
-                            'status',
-                            'current_step',
-                            'status_reason',
-                            'status_message',
-                            'updated_at',
-                        ]
-                    )
+                    save_instance_status(instance, extra_fields=['vars_json', 'run_count'])
                     self._recompute_run_if_present(instance)
                     return StepResult(run=run, terminal=True)
 
                 if run.next_step is None:
-                    instance.status = Workflow2Instance.STATUS_SUCCEEDED
-                    instance.current_step = ''
-                    instance.status_reason = ''
-                    instance.status_message = ''
-                    instance.save(
-                        update_fields=[
-                            'vars_json',
-                            'run_count',
-                            'status',
-                            'current_step',
-                            'status_reason',
-                            'status_message',
-                            'updated_at',
-                        ]
-                    )
+                    WorkflowInstanceTransitionService.mark_finished(instance)
+                    save_instance_status(instance, extra_fields=['vars_json', 'run_count'])
                     self._recompute_run_if_present(instance)
                     return StepResult(run=run, terminal=True)
 
-                instance.status = Workflow2Instance.STATUS_RUNNING
+                WorkflowInstanceTransitionService.mark_running(instance)
                 instance.current_step = run.next_step or ''
-                instance.status_reason = ''
-                instance.status_message = ''
-                instance.save(
-                    update_fields=[
-                        'vars_json',
-                        'run_count',
-                        'status',
-                        'current_step',
-                        'status_reason',
-                        'status_message',
-                        'updated_at',
-                    ]
-                )
+                save_instance_status(instance, extra_fields=['vars_json', 'run_count'])
                 self._recompute_run_if_present(instance)
                 return StepResult(run=run, terminal=False)
 
@@ -594,6 +574,7 @@ class WorkflowRuntimeService:
                 raise ValueError(msg)
 
             if self._expire_pending_approval_if_needed(approval):
+                self.record_approval_timeout_locked(inst=inst, approval=approval)
                 expired = True
             elif approval.status != Workflow2Approval.STATUS_PENDING:
                 msg = 'Approval is already resolved'
@@ -645,29 +626,11 @@ class WorkflowRuntimeService:
         if not statuses:
             return
 
-        run.status = WorkflowRuntimeService._derive_run_status(statuses)
-        terminal_statuses = {'succeeded', 'rejected', 'cancelled', 'stopped'}
-        run.finalized = run.status in terminal_statuses
+        run.status = WorkflowRunTransitionService.derive_status(statuses)
+        run.finalized = WorkflowRunTransitionService.is_finalized(run.status)
         run.save(update_fields=['status', 'finalized', 'updated_at'])
         CmpTransactionState.sync_from_workflow2_run(run=run)
 
     @staticmethod
     def _derive_run_status(statuses: list[str]) -> str:
-        status_set = set(statuses)
-        priority = (
-            (Workflow2Instance.STATUS_REJECTED, Workflow2Run.STATUS_REJECTED),
-            (Workflow2Instance.STATUS_PAUSED, Workflow2Run.STATUS_PAUSED),
-            (Workflow2Instance.STATUS_FAILED, Workflow2Run.STATUS_FAILED),
-            (Workflow2Instance.STATUS_AWAITING, Workflow2Run.STATUS_AWAITING),
-            (Workflow2Instance.STATUS_RUNNING, Workflow2Run.STATUS_RUNNING),
-            (Workflow2Instance.STATUS_QUEUED, Workflow2Run.STATUS_QUEUED),
-            (Workflow2Instance.STATUS_STOPPED, Workflow2Run.STATUS_STOPPED),
-        )
-
-        # IMPORTANT: include PAUSED, and do NOT finalize FAILED/PAUSED/AWAITING
-        for instance_status, run_status in priority:
-            if instance_status in status_set:
-                return run_status
-        if all(status == Workflow2Instance.STATUS_CANCELLED for status in statuses):
-            return Workflow2Run.STATUS_CANCELLED
-        return Workflow2Run.STATUS_SUCCEEDED
+        return WorkflowRunTransitionService.derive_status(statuses)

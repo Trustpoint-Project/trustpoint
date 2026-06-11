@@ -42,14 +42,6 @@ workflow:
       approved_outcome: approved
       rejected_outcome: rejected
       timeout_seconds: 3600
-
-  flow:
-    - from: approve
-      on: approved
-      to: $end
-    - from: approve
-      on: rejected
-      to: $reject
 """
 
 
@@ -100,13 +92,8 @@ workflow:
 
   flow:
     - from: approve
-      on: continue_ok
-      to: $end
-    - from: approve
       on: needs_review
       to: mark_review
-    - from: mark_review
-      to: $end
 """
 
 
@@ -211,7 +198,7 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         )
         run = Workflow2Run.objects.get(id=first[0].run_id)
         run.finalized = True
-        run.status = Workflow2Run.STATUS_SUCCEEDED
+        run.status = Workflow2Run.STATUS_FINISHED
         run.save(update_fields=["finalized", "status", "updated_at"])
 
         second = svc.emit_event(
@@ -308,12 +295,12 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         approval.refresh_from_db()
 
         self.assertEqual(approval.status, Workflow2Approval.STATUS_APPROVED)
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_APPROVED)
         self.assertEqual(inst.current_step, '')
 
         continued = Workflow2StepRun.objects.get(instance=inst, run_index=2)
         self.assertEqual(continued.step_id, "approve")
-        self.assertEqual(continued.status, "succeeded")
+        self.assertEqual(continued.status, "approved")
         self.assertEqual(continued.outcome, "continue_ok")
         self.assertEqual(continued.next_step, '')
 
@@ -356,6 +343,13 @@ class Workflow2BundleApprovalRejectTests(TestCase):
 
         approval.refresh_from_db()
         self.assertEqual(approval.status, Workflow2Approval.STATUS_EXPIRED)
+
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_TIMED_OUT)
+
+        step_run = Workflow2StepRun.objects.get(instance=inst, run_index=2)
+        self.assertEqual(step_run.status, "timed_out")
+        self.assertEqual(step_run.outcome, "timed_out")
 
     def test_recompute_run_status_marks_single_cancelled_instance_run_cancelled(self) -> None:
         d = self._store_def(YAML_TWO_WORKFLOWS, name="cancel-agg")

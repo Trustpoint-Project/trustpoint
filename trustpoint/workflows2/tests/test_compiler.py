@@ -101,14 +101,6 @@ workflow:
       type: approval
       approved_outcome: approved
       rejected_outcome: rejected
-
-  flow:
-    - from: approve
-      on: approved
-      to: $end
-    - from: approve
-      on: rejected
-      to: $reject
 """
 
     def test_compile_valid(self) -> None:

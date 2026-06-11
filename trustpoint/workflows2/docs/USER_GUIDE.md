@@ -36,6 +36,30 @@ At runtime you can read:
 
 `vars` is mutable workflow state written by steps such as `set`, `compute`, and `webhook.capture`.
 
+## Lifecycle States
+
+Workflow instance and run states use the same vocabulary where possible.
+
+| State | Meaning | Operator action | Request decision |
+| --- | --- | --- | --- |
+| `queued` | Work is waiting for a worker or inline drain. | Wait. | Wait. |
+| `running` | Work is currently executing. | Wait. | Wait. |
+| `awaiting` | An approval step is waiting for a decision. | Approve or reject. | Wait. |
+| `paused` | Execution stopped safely and can resume from the stored next step. | Resume or stop. | Wait. |
+| `error` | Execution hit a retryable runtime error. | Resume or stop. | Wait. |
+| `finished` | The workflow reached the end of a branch without an explicit business result. | None. | Continue. |
+| `approved` | The workflow ended with an approved business result. | None. | Continue. |
+| `rejected` | The workflow ended with a rejected business result. | None. | Reject. |
+| `timed_out` | An approval or workflow timeout ended the workflow. | None. | Fail. |
+| `stopped` | An operator or workflow intentionally stopped execution. | None. | Fail. |
+| `cancelled` | An operator cancelled the run or instance. | None. | Fail. |
+
+Important:
+
+- `error` is not final. It stays visible in Waiting until an operator resumes or stops it.
+- `stopped` is final, but keeps `status_reason` and `status_message` so a stopped-after-error workflow still shows the error context.
+- `finished` only means there is no more workflow work to do. Use `approved`, `rejected`, `timed_out`, or `stopped` when the end state itself is the business result.
+
 ## Minimal Example
 
 ```yaml
@@ -194,7 +218,7 @@ Important:
 
 ### `set_status`
 
-Sets the workflow instance status intentionally. Use this when the workflow itself has reached a business decision such as rejected, stopped, paused, or failed.
+Sets the workflow instance status intentionally. Use this when the workflow itself has reached a business decision such as approved, rejected, stopped, paused, error, or timed out.
 
 ```yaml
 reject_device:
@@ -206,9 +230,11 @@ reject_device:
 
 Supported statuses:
 
-- `succeeded`
-- `failed`
+- `finished`
+- `approved`
 - `rejected`
+- `error`
+- `timed_out`
 - `stopped`
 - `paused`
 
@@ -216,9 +242,9 @@ Important:
 
 - `reason` is a short static value stored on the workflow instance.
 - `message` is templated and shown on the instance detail page.
-- `paused` must have one outgoing linear flow entry; that target becomes the next step after retry/resume.
+- `paused` must have one outgoing linear flow entry; that target becomes the next step after resume.
 - Other `set_status` statuses are terminal and cannot have outgoing flow entries.
-- Runtime errors are not represented with a separate `error` status. They use `failed` with `status_reason: runtime_error`.
+- Runtime errors use `error` with `status_reason: runtime_error`.
 
 ### `compute`
 
@@ -255,15 +281,16 @@ Pauses execution until an external approval decision is resolved.
 ```yaml
 approval_gate:
   type: approval
-  approved_outcome: approved
-  rejected_outcome: rejected
   timeout_seconds: 3600
 ```
 
 Notes:
 
-- Approval steps are outcome-producing.
-- Both approval outcomes must be routed in `workflow.flow`.
+- Approval outcomes default to `approved`, `rejected`, and `timed_out`.
+- Approval outcomes can be routed in `workflow.flow`, but they do not have to be.
+- If an approved approval has no route, the workflow instance ends as `approved`.
+- If a rejected approval has no route, the workflow instance ends as `rejected`.
+- Timed-out approvals end as `timed_out`.
 
 ## Flow Rules
 
@@ -282,17 +309,14 @@ Outcome-based transition:
   to: mark_ok
 ```
 
-Special targets:
-
-- `$end`
-- `$reject`
-
-Example:
+To end a branch, omit the outgoing transition. To end a branch with a non-finished result, use `set_status`.
 
 ```yaml
-- from: route_status
-  on: fail
-  to: $reject
+reject_device:
+  type: set_status
+  status: rejected
+  reason: policy_rejected
+  message: Device did not pass policy review.
 ```
 
 ## Conditions

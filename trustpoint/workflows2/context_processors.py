@@ -20,9 +20,11 @@ def waiting_counts(request: HttpRequest) -> dict[str, Any]:
         instance__status=Workflow2Instance.STATUS_AWAITING,
     ).count()
     paused_instances = Workflow2Instance.objects.filter(status=Workflow2Instance.STATUS_PAUSED).count()
+    error_instances = Workflow2Instance.objects.filter(status=Workflow2Instance.STATUS_ERROR).count()
 
     return {
         'workflow_waiting_approval_count': pending_approvals,
         'workflow_waiting_paused_count': paused_instances,
-        'workflow_waiting_total': pending_approvals + paused_instances,
+        'workflow_waiting_error_count': error_instances,
+        'workflow_waiting_total': pending_approvals + paused_instances + error_instances,
     }

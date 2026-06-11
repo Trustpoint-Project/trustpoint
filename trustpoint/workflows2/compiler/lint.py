@@ -104,6 +104,7 @@ class SchemaLinter:
                 'title',
                 'approved_outcome',
                 'rejected_outcome',
+                'timeout_outcome',
                 'timeout_seconds',
             })
         ),

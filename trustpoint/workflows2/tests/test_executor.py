@@ -58,6 +58,12 @@ workflow:
       set:
         vars.score: ${add(vars.http_status, 1)}
 
+    mark_rejected:
+      type: set_status
+      status: rejected
+      reason: webhook_rejected
+      message: "Webhook status was not accepted."
+
   flow:
     - from: notify
       to: call_status
@@ -68,7 +74,7 @@ workflow:
       to: compute_ok
     - from: route_by_status
       on: reject
-      to: $reject
+      to: mark_rejected
 """
 
 
@@ -95,7 +101,7 @@ class ExecutorTests(SimpleTestCase):
         ex = WorkflowExecutor(email=email, webhook=FakeWebhook(200))
 
         res = ex.run(ir, event={"device": {"common_name": "dev1"}}, vars={})
-        self.assertEqual(res.status, "succeeded")
+        self.assertEqual(res.status, "finished")
         self.assertEqual(res.vars["http_status"], 200)
         self.assertEqual(res.vars["score"], 201)
 

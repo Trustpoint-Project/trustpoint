@@ -14,7 +14,6 @@ from workflows2.views.definitions import (
     Workflow2DefinitionEditView,
     Workflow2DefinitionListView,
 )
-from workflows2.views.dev import Workflow2DevView
 from workflows2.views.graph_api import (
     Workflow2DefinitionGraphView,
 )
@@ -24,6 +23,7 @@ from workflows2.views.instances import (
     Workflow2InstanceDetailView,
     Workflow2InstanceResumeView,
     Workflow2InstanceRunInlineView,
+    Workflow2InstanceStopView,
 )
 from workflows2.views.runs import (
     Workflow2RunCancelView,
@@ -46,9 +46,6 @@ urlpatterns = [
     path('api/definitions/<uuid:pk>/graph/', Workflow2DefinitionGraphView.as_view(), name='api_definition_graph'),
     path('api/graph-from-yaml/', Workflow2GraphFromYamlView.as_view(), name='api_graph_from_yaml'),
 
-    # Dev
-    path('dev/', Workflow2DevView.as_view(), name='dev'),
-
     # Runs
     path('runs/', Workflow2RunListView.as_view(), name='runs-list'),
     path('runs/<uuid:run_id>/', Workflow2RunDetailView.as_view(), name='runs-detail'),
@@ -58,6 +55,7 @@ urlpatterns = [
     # Instances
     path('instances/<uuid:instance_id>/', Workflow2InstanceDetailView.as_view(), name='instances-detail'),
     path('instances/<uuid:instance_id>/resume/', Workflow2InstanceResumeView.as_view(), name='instances-resume'),
+    path('instances/<uuid:instance_id>/stop/', Workflow2InstanceStopView.as_view(), name='instances-stop'),
     path(
         'instances/<uuid:instance_id>/run-inline/',
         Workflow2InstanceRunInlineView.as_view(),

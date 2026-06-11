@@ -35,11 +35,17 @@
           </form>
         {% endif %}
 
-        {% if inst.status == "failed" or inst.status == "paused" %}
+        {% if inst.status == "error" or inst.status == "paused" %}
           <form method="post" action="{% url 'workflows2:instances-resume' inst.id %}">
             {% csrf_token %}
             <button class="btn btn-primary" type="submit">
               <i class="bi bi-play-circle me-1"></i>{% trans "Resume" %}
+            </button>
+          </form>
+          <form method="post" action="{% url 'workflows2:instances-stop' inst.id %}">
+            {% csrf_token %}
+            <button class="btn btn-outline-danger" type="submit">
+              <i class="bi bi-stop-circle me-1"></i>{% trans "Stop" %}
             </button>
           </form>
         {% endif %}
@@ -75,9 +81,9 @@
         {% endblocktrans %}
       </div>
     </div>
-  {% elif inst.status == "failed" %}
+  {% elif inst.status == "error" %}
     <div class="alert alert-danger shadow-sm mb-3">
-      <div class="fw-semibold">{% trans "Instance failed" %}</div>
+      <div class="fw-semibold">{% trans "Instance error" %}</div>
       <div class="small mt-1">
         {% if inst.status_reason %}
           <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
@@ -89,7 +95,7 @@
         {% elif latest_failed_job and latest_failed_job.last_error %}
           <div class="wf2-pre-wrap">{{ latest_failed_job.last_error }}</div>
         {% else %}
-          {% trans "The last workflow step failed. Review the execution timeline below for details." %}
+          {% trans "The last workflow step errored. Review the execution timeline below for details." %}
         {% endif %}
       </div>
     </div>
@@ -135,9 +141,37 @@
         {% endif %}
       </div>
     </div>
-  {% elif inst.status == "succeeded" %}
+  {% elif inst.status == "timed_out" %}
+    <div class="alert alert-danger shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Instance timed out" %}</div>
+      {% if inst.status_reason or inst.status_message %}
+        <div class="small mt-1">
+          {% if inst.status_reason %}
+            <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
+          {% endif %}
+          {% if inst.status_message %}
+            <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  {% elif inst.status == "approved" %}
     <div class="alert alert-success shadow-sm mb-3">
-      <div class="fw-semibold">{% trans "Instance completed successfully" %}</div>
+      <div class="fw-semibold">{% trans "Instance approved" %}</div>
+      {% if inst.status_reason or inst.status_message %}
+        <div class="small mt-1">
+          {% if inst.status_reason %}
+            <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
+          {% endif %}
+          {% if inst.status_message %}
+            <div class="wf2-pre-wrap">{{ inst.status_message }}</div>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  {% elif inst.status == "finished" %}
+    <div class="alert alert-success shadow-sm mb-3">
+      <div class="fw-semibold">{% trans "Instance finished" %}</div>
       {% if inst.status_reason or inst.status_message %}
         <div class="small mt-1">
           {% if inst.status_reason %}
@@ -217,7 +251,7 @@
           {% if latest_step_run %}
             <div class="fw-semibold">{{ latest_step_run.step_id }}</div>
             <div class="small">
-              <span class="badge {% if latest_step_run.status == 'failed' %}text-bg-danger{% elif latest_step_run.status == 'awaiting' %}text-bg-warning{% elif latest_step_run.status == 'rejected' %}text-bg-danger{% else %}text-bg-success{% endif %}">
+              <span class="badge {% if latest_step_run.status == 'error' or latest_step_run.status == 'timed_out' %}text-bg-danger{% elif latest_step_run.status == 'awaiting' %}text-bg-warning{% elif latest_step_run.status == 'rejected' %}text-bg-danger{% else %}text-bg-success{% endif %}">
                 {{ latest_step_run.status }}
               </span>
             </div>

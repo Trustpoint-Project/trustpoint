@@ -137,7 +137,7 @@ class Workflow2DefinitionCreateView(PageContextMixin, LoginRequiredMixin, View):
                     **self.get_context_data(),
                     'form': form,
                     'definition': None,
-                    'compile_error': 'Workflow save succeeded without returning a definition.',
+                    'compile_error': 'Workflow save completed without returning a definition.',
                     'ir_json': None,
                 },
             )
@@ -226,7 +226,7 @@ class Workflow2DefinitionEditView(PageContextMixin, LoginRequiredMixin, View):
                     **self.get_context_data(),
                     'form': form,
                     'definition': obj,
-                    'compile_error': 'Workflow update succeeded without returning a definition.',
+                    'compile_error': 'Workflow update completed without returning a definition.',
                     'ir_json': obj.ir_json,
                 },
             )

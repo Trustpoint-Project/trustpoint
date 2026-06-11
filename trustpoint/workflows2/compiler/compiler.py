@@ -31,8 +31,6 @@ COMPUTE_OPERATORS: tuple[str, ...] = (
 
 _ALLOWED_COMPUTE_OPS: set[str] = set(COMPUTE_OPERATORS)
 
-_END_TARGETS: set[str] = {'$end', '$reject'}
-
 VARS_PATH_MIN_PARTS = 2
 MIN_CAPTURE_TARGET_PARTS = 2
 NOTIFICATION_SEVERITIES: tuple[str, ...] = ('setup', 'info', 'warning', 'critical')
@@ -59,7 +57,15 @@ NOTIFICATION_RELATED_KEYS: frozenset[str] = frozenset({
     'certificate_id',
     'issuing_ca_id',
 })
-SET_STATUS_ALLOWED_STATUSES: tuple[str, ...] = ('succeeded', 'failed', 'rejected', 'stopped', 'paused')
+SET_STATUS_ALLOWED_STATUSES: tuple[str, ...] = (
+    'finished',
+    'approved',
+    'rejected',
+    'error',
+    'timed_out',
+    'stopped',
+    'paused',
+)
 
 
 @dataclass(frozen=True)
@@ -321,7 +327,7 @@ class WorkflowCompiler:
 
         return out
 
-    def _compile_step_params(self, step_id: str, typ: str, step: dict[str, Any]) -> dict[str, Any]:
+    def _compile_step_params(self, step_id: str, typ: str, step: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0911
         base = f'workflow.steps.{step_id}'
         if typ == StepTypes.EMAIL:
             return self._compile_email_params(step, base)
@@ -774,14 +780,18 @@ class WorkflowCompiler:
 
     @staticmethod
     def _compile_approval_params(step: dict[str, Any], base: str) -> dict[str, Any]:
-        a = step.get('approved_outcome')
-        r = step.get('rejected_outcome')
+        a = step.get('approved_outcome', 'approved')
+        r = step.get('rejected_outcome', 'rejected')
+        t = step.get('timeout_outcome', 'timed_out')
         if not isinstance(a, str) or not a.strip():
             msg = '"approval.approved_outcome" must be a non-empty string'
             raise CompileError(msg, path=f'{base}.approved_outcome')
         if not isinstance(r, str) or not r.strip():
             msg = '"approval.rejected_outcome" must be a non-empty string'
             raise CompileError(msg, path=f'{base}.rejected_outcome')
+        if not isinstance(t, str) or not t.strip():
+            msg = '"approval.timeout_outcome" must be a non-empty string'
+            raise CompileError(msg, path=f'{base}.timeout_outcome')
 
         timeout_seconds = step.get('timeout_seconds')
         if timeout_seconds is not None and (not isinstance(timeout_seconds, int) or timeout_seconds <= 0):
@@ -791,6 +801,7 @@ class WorkflowCompiler:
         out: dict[str, Any] = {
             'approved_outcome': a.strip(),
             'rejected_outcome': r.strip(),
+            'timeout_outcome': t.strip(),
         }
         if timeout_seconds is not None:
             out['timeout_seconds'] = timeout_seconds
@@ -809,7 +820,7 @@ class WorkflowCompiler:
             return True, uniq
 
         if typ == StepTypes.APPROVAL:
-            return True, [params['approved_outcome'], params['rejected_outcome']]
+            return True, [params['approved_outcome'], params['rejected_outcome'], params['timeout_outcome']]
 
         return False, []
 
@@ -832,8 +843,8 @@ class WorkflowCompiler:
             raise CompileError(msg, path=f'workflow.flow[{index}].to')
         to = to.strip()
 
-        if to not in steps_ir and to not in _END_TARGETS:
-            msg = '"to" must reference an existing step id or be $end/$reject'
+        if to not in steps_ir:
+            msg = '"to" must reference an existing step id'
             raise CompileError(msg, path=f'workflow.flow[{index}].to')
 
         if on is None:
@@ -893,7 +904,11 @@ class WorkflowCompiler:
 
         return transitions
 
-    def _validate_flow_completeness(self, steps_ir: dict[str, Any], transitions: dict[str, Any]) -> None:
+    def _validate_flow_completeness(  # noqa: C901, PLR0912
+        self,
+        steps_ir: dict[str, Any],
+        transitions: dict[str, Any],
+    ) -> None:
         for step_id, s in steps_ir.items():
             produces = bool(s['produces_outcome'])
             outs: list[str] = list(s['outcomes'])
@@ -915,10 +930,22 @@ class WorkflowCompiler:
                 continue
 
             if produces:
+                if step_type == StepTypes.APPROVAL and tr is None:
+                    continue
                 if tr is None or tr.get('kind') != 'by_outcome':
                     msg = 'Outcome-producing step requires outcome transitions'
                     raise CompileError(msg, path=f'workflow.flow({step_id})')
                 mapped = set(tr['map'].keys())
+                if step_type == StepTypes.APPROVAL:
+                    unknown = [outcome for outcome in mapped if outcome not in outs]
+                    if unknown:
+                        msg = f'Unknown approval outcome mappings: {unknown}'
+                        raise CompileError(msg, path=f'workflow.flow({step_id})')
+                    timeout_outcome = (s.get('params') or {}).get('timeout_outcome')
+                    if timeout_outcome in mapped:
+                        msg = 'Approval timeout outcome is terminal and cannot have an outgoing transition'
+                        raise CompileError(msg, path=f'workflow.flow({step_id})')
+                    continue
                 missing = [o for o in outs if o not in mapped]
                 if missing:
                     msg = f'Missing flow mappings for outcomes: {missing}'

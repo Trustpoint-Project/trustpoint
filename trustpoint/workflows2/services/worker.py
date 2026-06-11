@@ -13,6 +13,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from workflows2.models import Workflow2Instance, Workflow2Job, Workflow2Run
+from workflows2.services.transitions import WorkflowInstanceTransitionService, save_instance_status
 
 if TYPE_CHECKING:
     from workflows2.services.runtime import WorkflowRuntimeService
@@ -146,16 +147,11 @@ class Workflow2DbWorker:
             job.save(update_fields=['status', 'last_error', 'locked_until', 'locked_by', 'updated_at'])
 
             if inst.status not in {
-                Workflow2Instance.STATUS_SUCCEEDED,
-                Workflow2Instance.STATUS_REJECTED,
-                Workflow2Instance.STATUS_STOPPED,
-                Workflow2Instance.STATUS_CANCELLED,
+                *WorkflowInstanceTransitionService.TERMINAL_STATUSES,
                 Workflow2Instance.STATUS_AWAITING,
             }:
-                inst.status = Workflow2Instance.STATUS_PAUSED
-                inst.status_reason = 'lease_expired'
-                inst.status_message = err
-                inst.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
+                WorkflowInstanceTransitionService.mark_paused(inst, reason='lease_expired', message=err)
+                save_instance_status(inst)
 
             if inst.run_id:
                 run = Workflow2Run.objects.select_for_update().get(id=inst.run_id)
@@ -167,17 +163,15 @@ class Workflow2DbWorker:
 
     @transaction.atomic
     def retry_instance(self, *, instance: Workflow2Instance) -> Workflow2Job:
-        """Queue a retry job for a failed or paused instance."""
+        """Queue a retry job for an errored or paused instance."""
         instance = Workflow2Instance.objects.select_for_update().get(id=instance.id)
 
-        if instance.status not in {Workflow2Instance.STATUS_FAILED, Workflow2Instance.STATUS_PAUSED}:
-            msg = 'Can only retry instances in FAILED/PAUSED state'
+        if not WorkflowInstanceTransitionService.is_resumable(instance.status):
+            msg = 'Can only resume instances in ERROR/PAUSED state'
             raise ValueError(msg)
 
-        instance.status = Workflow2Instance.STATUS_QUEUED
-        instance.status_reason = ''
-        instance.status_message = ''
-        instance.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
+        WorkflowInstanceTransitionService.mark_queued(instance)
+        save_instance_status(instance)
 
         job, _created = Workflow2Job.get_or_create_active(
             instance=instance,
@@ -232,20 +226,15 @@ class Workflow2DbWorker:
                     return True, False, skipped
 
                 if inst.status in {
-                    Workflow2Instance.STATUS_SUCCEEDED,
-                    Workflow2Instance.STATUS_REJECTED,
-                    Workflow2Instance.STATUS_STOPPED,
-                    Workflow2Instance.STATUS_CANCELLED,
+                    *WorkflowInstanceTransitionService.TERMINAL_STATUSES,
                 }:
                     skipped = True
                     self._mark_done(job)
                     return True, False, skipped
 
                 if inst.status != Workflow2Instance.STATUS_RUNNING:
-                    inst.status = Workflow2Instance.STATUS_RUNNING
-                    inst.status_reason = ''
-                    inst.status_message = ''
-                    inst.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
+                    WorkflowInstanceTransitionService.mark_running(inst)
+                    save_instance_status(inst)
 
                 if inst.run_id:
                     Workflow2Run.objects.filter(id=inst.run_id).update(
@@ -308,16 +297,11 @@ class Workflow2DbWorker:
             )
 
             if inst.status not in {
-                Workflow2Instance.STATUS_SUCCEEDED,
-                Workflow2Instance.STATUS_REJECTED,
-                Workflow2Instance.STATUS_STOPPED,
-                Workflow2Instance.STATUS_CANCELLED,
+                *WorkflowInstanceTransitionService.TERMINAL_STATUSES,
                 Workflow2Instance.STATUS_AWAITING,
             }:
-                inst.status = Workflow2Instance.STATUS_QUEUED
-                inst.status_reason = ''
-                inst.status_message = ''
-                inst.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
+                WorkflowInstanceTransitionService.mark_queued(inst)
+                save_instance_status(inst)
 
             if inst.run_id:
                 run = Workflow2Run.objects.select_for_update().get(id=inst.run_id)
@@ -332,16 +316,11 @@ class Workflow2DbWorker:
         job.save(update_fields=['status', 'last_error', 'locked_until', 'locked_by', 'updated_at'])
 
         if inst.status not in {
-            Workflow2Instance.STATUS_SUCCEEDED,
-            Workflow2Instance.STATUS_REJECTED,
-            Workflow2Instance.STATUS_STOPPED,
-            Workflow2Instance.STATUS_CANCELLED,
+            *WorkflowInstanceTransitionService.TERMINAL_STATUSES,
             Workflow2Instance.STATUS_AWAITING,
         }:
-            inst.status = Workflow2Instance.STATUS_FAILED
-            inst.status_reason = 'runtime_error'
-            inst.status_message = err
-            inst.save(update_fields=['status', 'status_reason', 'status_message', 'updated_at'])
+            WorkflowInstanceTransitionService.mark_error(inst, reason='runtime_error', message=err)
+            save_instance_status(inst)
 
         if inst.run_id:
             run = Workflow2Run.objects.select_for_update().get(id=inst.run_id)

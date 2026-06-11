@@ -91,7 +91,7 @@ class CrashRecoveryTests(TestCase):
         self.assertGreaterEqual(stats.claimed, 1)
 
         inst.refresh_from_db()
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
 
     def test_manual_resume_reuses_existing_active_job(self) -> None:
         d = self._mk_definition()

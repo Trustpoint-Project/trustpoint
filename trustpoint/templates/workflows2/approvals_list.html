@@ -42,8 +42,8 @@
     <div class="col-6 col-xl-3">
       <div class="card h-100 wf2-metric-card">
         <div class="card-body">
-          <div class="wf2-metric-label">{% trans "Actionable" %}</div>
-          <div class="wf2-metric-value">{{ summary_total }}</div>
+          <div class="wf2-metric-label">{% trans "Errored workflows" %}</div>
+          <div class="wf2-metric-value">{{ summary_error_instances }}</div>
         </div>
       </div>
     </div>
@@ -58,6 +58,7 @@
             <option value="">{% trans "All" %}</option>
             <option value="approval" {% if kind == 'approval' %}selected{% endif %}>{% trans "Pending approvals" %}</option>
             <option value="paused" {% if kind == 'paused' %}selected{% endif %}>{% trans "Paused workflows" %}</option>
+            <option value="error" {% if kind == 'error' %}selected{% endif %}>{% trans "Errored workflows" %}</option>
           </select>
         </div>
         <div class="col-12 col-lg-6">
@@ -93,7 +94,7 @@
               </a>
             </th>
             <th>{% trans "Details" %}</th>
-            <th class="text-end">{% trans "Open" %}</th>
+            <th class="text-end">{% trans "Actions" %}</th>
           </tr>
         </thead>
         <tbody>
@@ -139,9 +140,23 @@
                 {% endif %}
               </td>
               <td class="text-end">
-                <a class="btn btn-sm btn-outline-primary" href="{% url row.open_url_name row.open_url_arg %}">
-                  {{ row.open_label }}
-                </a>
+                <div class="d-inline-flex flex-wrap justify-content-end gap-1">
+                  {% if row.can_resume and row.instance %}
+                    <form method="post" action="{% url 'workflows2:instances-resume' row.instance.id %}">
+                      {% csrf_token %}
+                      <button class="btn btn-sm btn-primary" type="submit">{% trans "Resume" %}</button>
+                    </form>
+                  {% endif %}
+                  {% if row.can_stop and row.instance %}
+                    <form method="post" action="{% url 'workflows2:instances-stop' row.instance.id %}">
+                      {% csrf_token %}
+                      <button class="btn btn-sm btn-outline-danger" type="submit">{% trans "Stop" %}</button>
+                    </form>
+                  {% endif %}
+                  <a class="btn btn-sm btn-outline-primary" href="{% url row.open_url_name row.open_url_arg %}">
+                    {{ row.open_label }}
+                  </a>
+                </div>
               </td>
             </tr>
           {% empty %}

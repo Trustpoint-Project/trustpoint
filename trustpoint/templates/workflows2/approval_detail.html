@@ -93,6 +93,12 @@
                 <div class="fw-semibold"><code>{{ step_meta.rejected_outcome|default:"—" }}</code></div>
               </div>
             </div>
+            <div class="col-12 col-md-6">
+              <div class="border rounded-3 p-3 h-100">
+                <div class="text-muted small text-uppercase">{% trans "Timeout outcome" %}</div>
+                <div class="fw-semibold"><code>{{ step_meta.timeout_outcome|default:"—" }}</code></div>
+              </div>
+            </div>
             <div class="col-12">
               <div class="border rounded-3 p-3 h-100">
                 <div class="text-muted small text-uppercase">{% trans "Timeout" %}</div>

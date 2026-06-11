@@ -118,13 +118,13 @@ def test_cmp_transaction_state_syncs_cancelled_workflow_runs() -> None:
 
 
 @pytest.mark.django_db
-def test_cmp_transaction_state_syncs_rejected_approval_even_when_run_status_is_succeeded() -> None:
-    """A rejected approval must reject the CMP transaction even if the run itself ended succeeded."""
+def test_cmp_transaction_state_syncs_rejected_approval_even_when_run_status_is_finished() -> None:
+    """A rejected approval must reject the CMP transaction even if the run itself ended finished."""
     run = Workflow2Run.objects.create(
         trigger_on='cmp.certification',
         event_json={'x': 1},
         source_json={'trustpoint': True},
-        status=Workflow2Run.STATUS_SUCCEEDED,
+        status=Workflow2Run.STATUS_FINISHED,
         finalized=True,
     )
     definition = Workflow2Definition.objects.create(
@@ -140,7 +140,7 @@ def test_cmp_transaction_state_syncs_rejected_approval_even_when_run_status_is_s
         definition=definition,
         event_json={'x': 1},
         vars_json={},
-        status=Workflow2Instance.STATUS_SUCCEEDED,
+        status=Workflow2Instance.STATUS_FINISHED,
     )
     Workflow2Approval.objects.create(
         instance=instance,

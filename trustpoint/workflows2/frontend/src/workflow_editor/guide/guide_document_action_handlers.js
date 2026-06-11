@@ -22,8 +22,6 @@ import {
   setTriggerOn,
   setTriggerTrustpoint,
 } from '../document/operations/trigger_sources.js';
-import { addOutcomeFlowEdge } from '../document/operations/graph.js';
-import { setStepFieldValue } from '../document/operations/step_fields.js';
 import { setWorkflowStart } from '../document/operations/workflow.js';
 import { readValue } from './guide_action_helpers.js';
 
@@ -222,83 +220,6 @@ export async function executeGuideDocumentAction(action, bag) {
           rawValue,
         }),
         `Set value to ${rawValue}.`,
-      );
-      return true;
-    }
-
-    if (action === 'apply-approval-outcome-preset') {
-      if (!catalog || !context?.stepId) {
-        fail('No approval step selected.', 'warning');
-        return true;
-      }
-
-      const approvedOutcome = button.getAttribute('data-approved-outcome') || 'approved';
-      const rejectedOutcome = button.getAttribute('data-rejected-outcome') || 'rejected';
-
-      let nextYaml = setStepFieldValue({
-        yamlText,
-        catalog,
-        stepId: context.stepId,
-        fieldKey: 'approved_outcome',
-        rawValue: approvedOutcome,
-      }).yamlText;
-
-      nextYaml = setStepFieldValue({
-        yamlText: nextYaml,
-        catalog,
-        stepId: context.stepId,
-        fieldKey: 'rejected_outcome',
-        rawValue: rejectedOutcome,
-      }).yamlText;
-
-      applyYamlMutation(nextYaml, `Applied approval outcome preset to "${context.stepId}".`);
-      return true;
-    }
-
-    if (action === 'apply-approval-terminal-routing-preset') {
-      if (!catalog || !context?.stepId) {
-        fail('No approval step selected.', 'warning');
-        return true;
-      }
-
-      const approvedOutcome = button.getAttribute('data-approved-outcome') || 'approved';
-      const rejectedOutcome = button.getAttribute('data-rejected-outcome') || 'rejected';
-      const approvedTarget = button.getAttribute('data-approved-target') || '$end';
-      const rejectedTarget = button.getAttribute('data-rejected-target') || '$reject';
-
-      let nextYaml = setStepFieldValue({
-        yamlText,
-        catalog,
-        stepId: context.stepId,
-        fieldKey: 'approved_outcome',
-        rawValue: approvedOutcome,
-      }).yamlText;
-
-      nextYaml = setStepFieldValue({
-        yamlText: nextYaml,
-        catalog,
-        stepId: context.stepId,
-        fieldKey: 'rejected_outcome',
-        rawValue: rejectedOutcome,
-      }).yamlText;
-
-      nextYaml = addOutcomeFlowEdge({
-        yamlText: nextYaml,
-        fromStep: context.stepId,
-        toStep: approvedTarget,
-        outcome: approvedOutcome,
-      }).yamlText;
-
-      nextYaml = addOutcomeFlowEdge({
-        yamlText: nextYaml,
-        fromStep: context.stepId,
-        toStep: rejectedTarget,
-        outcome: rejectedOutcome,
-      }).yamlText;
-
-      applyYamlMutation(
-        nextYaml,
-        `Applied approval routing preset to "${context.stepId}" (${approvedOutcome} -> ${approvedTarget}, ${rejectedOutcome} -> ${rejectedTarget}).`,
       );
       return true;
     }

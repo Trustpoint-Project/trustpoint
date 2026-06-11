@@ -1,8 +1,6 @@
 import { parseDocument } from 'yaml';
 import { analyzeWorkflowVariableAvailability } from '../document/variable_availability.js';
 
-const END_TARGETS = new Set(['$end', '$reject']);
-const TERMINAL_TYPES = new Set(['stop', 'succeed', 'fail', 'reject']);
 export const TRIGGER_NODE_ID = '__trigger__';
 export const APPLY_NODE_ID = '__apply__';
 
@@ -104,6 +102,7 @@ function extractStepOutcomes(stepObj) {
     return uniqStrings([
       stepObj.approved_outcome,
       stepObj.rejected_outcome,
+      stepObj.timeout_outcome,
     ]);
   }
 
@@ -129,7 +128,7 @@ function buildNodes(stepsObj, edges) {
       title,
       produces_outcome: producesOutcome,
       outcomes,
-      is_terminal: TERMINAL_TYPES.has(type) || !hasOutgoing.has(stepId),
+      is_terminal: !hasOutgoing.has(stepId),
       is_unreachable: false,
       is_virtual: false,
       step_data: deepClone(stepObj),
@@ -346,7 +345,7 @@ export function parseDraftWorkflowGraph(yamlText) {
       pushIssue(issues, 'warning', `Flow source "${edge.from}" does not exist.`);
     }
 
-    if (!Object.prototype.hasOwnProperty.call(stepsObj, edge.to) && !END_TARGETS.has(edge.to)) {
+    if (!Object.prototype.hasOwnProperty.call(stepsObj, edge.to)) {
       pushIssue(issues, 'warning', `Flow target "${edge.to}" does not exist.`);
     }
 

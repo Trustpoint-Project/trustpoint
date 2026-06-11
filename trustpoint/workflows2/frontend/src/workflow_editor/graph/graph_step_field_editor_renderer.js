@@ -2,7 +2,6 @@ import { escapeHtml } from '../shared/dom.js';
 import { renderStructuredStepFields } from './graph_step_structured_fields_renderer.js';
 import { fitPanelToViewport, placePanelNearNode } from './graph_overlay_position.js';
 import { renderInlineVariablePicker } from '../variables/inline_variable_picker.js';
-import { APPROVAL_OUTCOME_PRESETS } from '../document/approval_outcome_presets.js';
 import {
   getCompareOps,
   getConditionOperator,
@@ -316,29 +315,6 @@ function renderMissingOptionalFieldButtons(stepId, fields) {
               data-field-key="${escapeHtml(field.key)}"
             >
               Add ${escapeHtml(field.title || field.key)}
-            </button>
-          `,
-        )
-        .join('')}
-    </div>
-  `;
-}
-
-function renderApprovalOutcomePresetButtons() {
-  return `
-    <div class="d-flex flex-wrap gap-2">
-      ${APPROVAL_OUTCOME_PRESETS
-        .map(
-          (preset) => `
-            <button
-              type="button"
-              class="btn btn-sm btn-outline-secondary"
-              data-graph-overlay-action="apply-approval-outcome-preset"
-              data-approved-outcome="${escapeHtml(preset.approved)}"
-              data-rejected-outcome="${escapeHtml(preset.rejected)}"
-              title="${escapeHtml(preset.description)}"
-            >
-              ${escapeHtml(preset.label)}
             </button>
           `,
         )
@@ -910,7 +886,7 @@ function renderVirtualNodeOverlay({ layout, viewport, node }) {
       <div class="wf2-graph-floating-body">
         ${renderSection(
           'Meaning',
-          '<div class="small text-muted">This is a virtual end target derived from the flow.</div>',
+          '<div class="small text-muted">This target is referenced by YAML but is not a defined workflow step.</div>',
         )}
       </div>
     </div>
@@ -1080,14 +1056,6 @@ export function renderGraphStepEditorOverlay({
               'Managed content',
               structuredHtml,
               'These step-specific structures are easier to edit here than in raw YAML.',
-            )
-          : ''}
-
-        ${stepType === 'approval'
-          ? renderSection(
-              'Approval outcome presets',
-              renderApprovalOutcomePresetButtons(),
-              'Apply a common approved/rejected naming pair before saving the step.',
             )
           : ''}
 

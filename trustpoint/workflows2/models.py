@@ -57,10 +57,12 @@ class Workflow2Run(models.Model):
     STATUS_AWAITING = 'awaiting'
     STATUS_PAUSED = 'paused'
 
-    STATUS_SUCCEEDED = 'succeeded'
+    STATUS_FINISHED = 'finished'
+    STATUS_APPROVED = 'approved'
+    STATUS_ERROR = 'error'
+    STATUS_TIMED_OUT = 'timed_out'
     STATUS_STOPPED = 'stopped'
     STATUS_REJECTED = 'rejected'
-    STATUS_FAILED = 'failed'
     STATUS_CANCELLED = 'cancelled'
 
     STATUS_CHOICES: ClassVar[tuple[tuple[str, str], ...]] = (
@@ -68,10 +70,12 @@ class Workflow2Run(models.Model):
         (STATUS_RUNNING, 'Running'),
         (STATUS_AWAITING, 'Awaiting'),
         (STATUS_PAUSED, 'Paused'),
-        (STATUS_SUCCEEDED, 'Succeeded'),
+        (STATUS_FINISHED, 'Finished'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_ERROR, 'Error'),
+        (STATUS_TIMED_OUT, 'Timed out'),
         (STATUS_STOPPED, 'Stopped'),
         (STATUS_REJECTED, 'Rejected'),
-        (STATUS_FAILED, 'Failed'),
         (STATUS_CANCELLED, 'Cancelled'),
     )
 
@@ -125,10 +129,12 @@ class Workflow2Instance(models.Model):
     STATUS_PAUSED = 'paused'  # requires manual resume after crash/lease expiry
 
     # Terminal states
-    STATUS_SUCCEEDED = 'succeeded'
+    STATUS_FINISHED = 'finished'
+    STATUS_APPROVED = 'approved'
+    STATUS_ERROR = 'error'
+    STATUS_TIMED_OUT = 'timed_out'
     STATUS_STOPPED = 'stopped'
     STATUS_REJECTED = 'rejected'
-    STATUS_FAILED = 'failed'
     STATUS_CANCELLED = 'cancelled'
 
     STATUS_CHOICES: ClassVar[tuple[tuple[str, str], ...]] = (
@@ -136,10 +142,12 @@ class Workflow2Instance(models.Model):
         (STATUS_RUNNING, 'Running'),
         (STATUS_AWAITING, 'Awaiting'),
         (STATUS_PAUSED, 'Paused'),
-        (STATUS_SUCCEEDED, 'Succeeded'),
+        (STATUS_FINISHED, 'Finished'),
+        (STATUS_APPROVED, 'Approved'),
+        (STATUS_ERROR, 'Error'),
+        (STATUS_TIMED_OUT, 'Timed out'),
         (STATUS_STOPPED, 'Stopped'),
         (STATUS_REJECTED, 'Rejected'),
-        (STATUS_FAILED, 'Failed'),
         (STATUS_CANCELLED, 'Cancelled'),
     )
 

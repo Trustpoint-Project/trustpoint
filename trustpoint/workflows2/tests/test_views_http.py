@@ -16,6 +16,7 @@ from workflows2.models import (
     Workflow2Instance,
     Workflow2Job,
     Workflow2Run,
+    Workflow2StepRun,
     Workflow2WorkerHeartbeat,
 )
 from workflows2.services.dispatch import EventSource, WorkflowDispatchService
@@ -43,13 +44,22 @@ workflow:
           outcome: ok
       default: reject
 
+    stop_ok:
+      type: set
+      vars: {}
+
+    mark_rejected:
+      type: set_status
+      status: rejected
+      reason: graph_rejected
+
   flow:
     - from: decide
       on: ok
-      to: $end
+      to: stop_ok
     - from: decide
       on: reject
-      to: $reject
+      to: mark_rejected
 """
 
 
@@ -80,13 +90,8 @@ workflow:
 
   flow:
     - from: approve
-      on: approved
-      to: $end
-    - from: approve
       on: needs_review
       to: mark_review
-    - from: mark_review
-      to: $end
 """
 
 
@@ -251,8 +256,9 @@ workflow:
         payload = response.json()
         node_ids = {node["id"] for node in payload["nodes"]}
 
-        self.assertIn("$end", node_ids)
-        self.assertIn("$reject", node_ids)
+        self.assertFalse(any(node_id.startswith("$") for node_id in node_ids))
+        self.assertIn("stop_ok", node_ids)
+        self.assertIn("mark_rejected", node_ids)
         self.assertEqual(payload["definition_id"], str(definition.id))
         self.assertEqual(payload["ir_hash"], definition.ir_hash)
 
@@ -264,7 +270,7 @@ workflow:
         )
         self.assertEqual(response.status_code, 302)
 
-    def test_graph_from_yaml_endpoint_returns_virtual_end_nodes(self) -> None:
+    def test_graph_from_yaml_endpoint_returns_real_terminal_nodes(self) -> None:
         self.client.force_login(self.user)
 
         response = self.client.post(
@@ -277,8 +283,9 @@ workflow:
         payload = response.json()
         node_ids = {node["id"] for node in payload["nodes"]}
 
-        self.assertIn("$end", node_ids)
-        self.assertIn("$reject", node_ids)
+        self.assertFalse(any(node_id.startswith("$") for node_id in node_ids))
+        self.assertIn("stop_ok", node_ids)
+        self.assertIn("mark_rejected", node_ids)
 
     def test_approval_resolve_continues_inline_when_no_worker_is_present(self) -> None:
         self.client.force_login(self.user)
@@ -311,7 +318,7 @@ workflow:
         self.assertEqual(response.status_code, 302)
 
         inst.refresh_from_db()
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
         self.assertEqual(inst.vars_json.get("result"), "reviewed")
         self.assertEqual(
             Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(),
@@ -353,7 +360,7 @@ workflow:
         self.assertEqual(response.status_code, 302)
 
         inst.refresh_from_db()
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
         self.assertEqual(inst.vars_json.get("result"), "reviewed")
         self.assertEqual(
             Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(),
@@ -387,7 +394,7 @@ workflow:
 
         self.assertEqual(response.status_code, 200)
         inst.refresh_from_db()
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
         self.assertEqual(Workflow2Job.objects.filter(status=Workflow2Job.STATUS_QUEUED).count(), 0)
 
     def test_detail_pages_render_for_run_instance_and_approval(self) -> None:
@@ -420,3 +427,60 @@ workflow:
         approval_response = self.client.get(reverse("workflows2:approvals-detail", args=[approval.id]))
         self.assertEqual(approval_response.status_code, 200)
         self.assertContains(approval_response, "Approval review")
+
+    def test_stop_error_instance_preserves_error_context(self) -> None:
+        self.client.force_login(self.user)
+
+        definition = self._store_definition()
+        run = Workflow2Run.objects.create(
+            trigger_on="workflows2.test",
+            event_json={"device": {"id": "dev-1"}},
+            source_json={"trustpoint": True},
+            status=Workflow2Run.STATUS_ERROR,
+            finalized=False,
+        )
+        inst = Workflow2Instance.objects.create(
+            run=run,
+            definition=definition,
+            event_json={"device": {"id": "dev-1"}},
+            vars_json={},
+            status=Workflow2Instance.STATUS_ERROR,
+            current_step="decide",
+            status_reason="runtime_error",
+            status_message="ValueError: bad route",
+            run_count=1,
+        )
+        Workflow2StepRun.objects.create(
+            instance=inst,
+            run_index=1,
+            step_id="decide",
+            step_type="logic",
+            status="error",
+            error="ValueError: bad route",
+            vars_delta={},
+            output=None,
+            created_at=timezone.now(),
+        )
+        Workflow2Job.objects.create(
+            instance=inst,
+            kind=Workflow2Job.KIND_RUN,
+            status=Workflow2Job.STATUS_QUEUED,
+        )
+
+        response = self.client.post(reverse("workflows2:instances-stop", args=[inst.id]))
+
+        self.assertEqual(response.status_code, 302)
+
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_STOPPED)
+        self.assertEqual(inst.status_reason, "stopped_after_error")
+        self.assertEqual(inst.status_message, "ValueError: bad route")
+        self.assertEqual(inst.current_step, "")
+        self.assertEqual(
+            Workflow2Job.objects.get(instance=inst).status,
+            Workflow2Job.STATUS_CANCELLED,
+        )
+
+        run.refresh_from_db()
+        self.assertEqual(run.status, Workflow2Run.STATUS_STOPPED)
+        self.assertTrue(run.finalized)

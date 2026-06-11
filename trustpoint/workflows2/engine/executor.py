@@ -21,10 +21,17 @@ from .types import ExecutionResult, RunStatus, StepRun
 
 OnStepRun = Callable[[StepRun], None]
 
-_TERMINAL_RUN_STATUSES = {'failed', 'awaiting', 'rejected', 'stopped', 'succeeded', 'paused'}
-_SET_STATUS_STATUSES = {'succeeded', 'failed', 'rejected', 'stopped', 'paused'}
-_END_TARGETS = {'$end', '$reject'}
-
+_TERMINAL_RUN_STATUSES = {
+    'awaiting',
+    'finished',
+    'approved',
+    'rejected',
+    'error',
+    'timed_out',
+    'stopped',
+    'paused',
+}
+_SET_STATUS_STATUSES = {'finished', 'approved', 'rejected', 'error', 'timed_out', 'stopped', 'paused'}
 CAPTURE_TARGET_PARTS = 2
 CAPTURE_SOURCE_MIN_PARTS = 1
 
@@ -133,7 +140,7 @@ class WorkflowExecutor:
                     run_index=run_index,
                     step_id=step_id,
                     step_type=str((steps.get(step_id) or {}).get('type') or ''),
-                    status='failed',
+                    status='error',
                     outcome=None,
                     next_step=None,
                     vars_delta={},
@@ -143,7 +150,7 @@ class WorkflowExecutor:
                 )
                 runs.append(run)
                 self._emit(run)
-                status = 'failed'
+                status = 'error'
                 end_step = step_id
                 break
 
@@ -156,14 +163,14 @@ class WorkflowExecutor:
                 break
 
             if run.next_step is None:
-                status = 'succeeded'
+                status = 'finished'
                 end_step = step_id
                 break
 
             step_id = run.next_step
 
         else:
-            status = 'failed'
+            status = 'error'
             end_step = step_id
 
         return ExecutionResult(
@@ -230,6 +237,7 @@ class WorkflowExecutor:
                 output={
                     'approved_outcome': params.get('approved_outcome'),
                     'rejected_outcome': params.get('rejected_outcome'),
+                    'timeout_outcome': params.get('timeout_outcome'),
                     'timeout_seconds': params.get('timeout_seconds'),
                 },
                 error=None,
@@ -239,21 +247,6 @@ class WorkflowExecutor:
             raise StepExecutionError(step_id, f'Unknown step type "{step_type}"')
 
         next_step = self._choose_next(step_id, outcome, transitions)
-
-        # $reject means "end rejected" without a step
-        if next_step == '$reject':
-            return StepRun(
-                run_index=run_index,
-                step_id=step_id,
-                step_type=step_type,
-                status='rejected',
-                outcome=outcome,
-                next_step=None,
-                vars_delta=_delta(vars_before, ctx.vars),
-                output=output,
-                error=None,
-                created_at=_now(),
-            )
 
         return StepRun(
             run_index=run_index,
@@ -519,10 +512,6 @@ class WorkflowExecutor:
 
     @staticmethod
     def _normalize_transition_target(to: str) -> str | None:
-        if to == '$end':
-            return None
-        if to == '$reject':
-            return '$reject'
         return to
 
     def _choose_next(self, step_id: str, outcome: str | None, transitions: Any) -> str | None:
