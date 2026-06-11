@@ -148,7 +148,7 @@ class Workflow2DbWorker:
 
             if inst.status not in {
                 *WorkflowInstanceTransitionService.TERMINAL_STATUSES,
-                Workflow2Instance.STATUS_AWAITING,
+                *WorkflowInstanceTransitionService.WAITING_STATUSES,
             }:
                 WorkflowInstanceTransitionService.mark_paused(inst, reason='lease_expired', message=err)
                 save_instance_status(inst)
@@ -220,7 +220,7 @@ class Workflow2DbWorker:
             with transaction.atomic():
                 inst = Workflow2Instance.objects.select_for_update().get(id=job.instance_id)
 
-                if inst.status in {Workflow2Instance.STATUS_PAUSED, Workflow2Instance.STATUS_AWAITING}:
+                if inst.status in WorkflowInstanceTransitionService.WAITING_STATUSES:
                     skipped = True
                     self._mark_done(job)
                     return True, False, skipped
@@ -298,7 +298,7 @@ class Workflow2DbWorker:
 
             if inst.status not in {
                 *WorkflowInstanceTransitionService.TERMINAL_STATUSES,
-                Workflow2Instance.STATUS_AWAITING,
+                *WorkflowInstanceTransitionService.WAITING_STATUSES,
             }:
                 WorkflowInstanceTransitionService.mark_queued(inst)
                 save_instance_status(inst)
@@ -317,7 +317,7 @@ class Workflow2DbWorker:
 
         if inst.status not in {
             *WorkflowInstanceTransitionService.TERMINAL_STATUSES,
-            Workflow2Instance.STATUS_AWAITING,
+            *WorkflowInstanceTransitionService.WAITING_STATUSES,
         }:
             WorkflowInstanceTransitionService.mark_error(inst, reason='runtime_error', message=err)
             save_instance_status(inst)

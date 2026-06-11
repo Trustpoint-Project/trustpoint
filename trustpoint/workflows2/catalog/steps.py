@@ -372,7 +372,7 @@ def step_specs() -> list[StepSpec]:
                     required=True,
                     field_kind='string',
                     default='finished',
-                    enum=('finished', 'approved', 'rejected', 'error', 'timed_out', 'stopped', 'paused'),
+                    enum=('finished', 'approved', 'rejected', 'timed_out', 'stopped', 'paused'),
                 ),
                 StepField(
                     key='reason',

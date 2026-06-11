@@ -61,7 +61,6 @@ SET_STATUS_ALLOWED_STATUSES: tuple[str, ...] = (
     'finished',
     'approved',
     'rejected',
-    'error',
     'timed_out',
     'stopped',
     'paused',

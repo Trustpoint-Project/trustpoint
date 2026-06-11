@@ -144,7 +144,13 @@
                   {% if row.can_resume and row.instance %}
                     <form method="post" action="{% url 'workflows2:instances-resume' row.instance.id %}">
                       {% csrf_token %}
-                      <button class="btn btn-sm btn-primary" type="submit">{% trans "Resume" %}</button>
+                      <button
+                        class="btn btn-sm btn-primary"
+                        type="submit"
+                        title="{% trans 'Continues from the current step.' %}"
+                      >
+                        {% trans "Resume" %}
+                      </button>
                     </form>
                   {% endif %}
                   {% if row.can_stop and row.instance %}

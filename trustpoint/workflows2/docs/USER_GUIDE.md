@@ -12,6 +12,9 @@ You author a workflow definition in YAML, and the editor gives you three coordin
 
 YAML stays the source of truth. The graph and guide never replace it.
 
+The saved workflow display name is derived from the top-level YAML `name:` field.
+Edit the YAML name when you want to rename a workflow.
+
 ## The Mental Model
 
 A workflow has five main parts:
@@ -218,7 +221,7 @@ Important:
 
 ### `set_status`
 
-Sets the workflow instance status intentionally. Use this when the workflow itself has reached a business decision such as approved, rejected, stopped, paused, error, or timed out.
+Sets the workflow instance status intentionally. Use this when the workflow itself has reached a business decision such as approved, rejected, stopped, paused, or timed out.
 
 ```yaml
 reject_device:
@@ -233,7 +236,6 @@ Supported statuses:
 - `finished`
 - `approved`
 - `rejected`
-- `error`
 - `timed_out`
 - `stopped`
 - `paused`
@@ -244,7 +246,7 @@ Important:
 - `message` is templated and shown on the instance detail page.
 - `paused` must have one outgoing linear flow entry; that target becomes the next step after resume.
 - Other `set_status` statuses are terminal and cannot have outgoing flow entries.
-- Runtime errors use `error` with `status_reason: runtime_error`.
+- `error` is reserved for retryable runtime failures with `status_reason: runtime_error`.
 
 ### `compute`
 

@@ -87,6 +87,11 @@ class Workflow2Run(models.Model):
 
     # Optional idempotency key (for EST polling use-cases etc.)
     idempotency_key = models.CharField(max_length=128, blank=True, default='', db_index=True)
+    idempotency_released_key = models.CharField(max_length=128, blank=True, default='', db_index=True)
+    idempotency_released_at = models.DateTimeField(null=True, blank=True)
+    idempotency_released_by = models.CharField(max_length=150, blank=True, default='')
+    idempotency_release_reason = models.TextField(blank=True, default='')
+    idempotency_release_mode = models.CharField(max_length=16, blank=True, default='')
 
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default=STATUS_QUEUED)
     finalized = models.BooleanField(default=False)
@@ -102,6 +107,8 @@ class Workflow2Run(models.Model):
             models.Index(fields=['status']),
             models.Index(fields=['finalized']),
             models.Index(fields=['idempotency_key']),
+            models.Index(fields=['idempotency_released_key']),
+            models.Index(fields=['idempotency_release_mode']),
         )
         constraints = (
             models.UniqueConstraint(

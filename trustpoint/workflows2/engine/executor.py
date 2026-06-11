@@ -31,7 +31,7 @@ _TERMINAL_RUN_STATUSES = {
     'stopped',
     'paused',
 }
-_SET_STATUS_STATUSES = {'finished', 'approved', 'rejected', 'error', 'timed_out', 'stopped', 'paused'}
+_SET_STATUS_STATUSES = {'finished', 'approved', 'rejected', 'timed_out', 'stopped', 'paused'}
 CAPTURE_TARGET_PARTS = 2
 CAPTURE_SOURCE_MIN_PARTS = 1
 

@@ -36,12 +36,15 @@
         {% endif %}
 
         {% if inst.status == "error" or inst.status == "paused" %}
-          <form method="post" action="{% url 'workflows2:instances-resume' inst.id %}">
-            {% csrf_token %}
-            <button class="btn btn-primary" type="submit">
-              <i class="bi bi-play-circle me-1"></i>{% trans "Resume" %}
-            </button>
-          </form>
+          <div>
+            <form method="post" action="{% url 'workflows2:instances-resume' inst.id %}">
+              {% csrf_token %}
+              <button class="btn btn-primary" type="submit">
+                <i class="bi bi-play-circle me-1"></i>{% trans "Resume" %}
+              </button>
+            </form>
+            <div class="form-text mt-1">{% trans "Continues from the current step." %}</div>
+          </div>
           <form method="post" action="{% url 'workflows2:instances-stop' inst.id %}">
             {% csrf_token %}
             <button class="btn btn-outline-danger" type="submit">
@@ -85,6 +88,7 @@
     <div class="alert alert-danger shadow-sm mb-3">
       <div class="fw-semibold">{% trans "Instance error" %}</div>
       <div class="small mt-1">
+        <div class="text-muted mb-1">{% trans "Resume continues from the current step; it does not restart from the beginning." %}</div>
         {% if inst.status_reason %}
           <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
         {% endif %}
@@ -117,6 +121,7 @@
     <div class="alert alert-warning shadow-sm mb-3">
       <div class="fw-semibold">{% trans "Instance paused" %}</div>
       <div class="small mt-1">
+        <div class="text-muted mb-1">{% trans "Resume continues from the current step; it does not restart from the beginning." %}</div>
         {% if inst.status_reason %}
           <div><strong>{% trans "Reason" %}:</strong> <code>{{ inst.status_reason }}</code></div>
         {% endif %}

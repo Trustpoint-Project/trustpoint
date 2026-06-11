@@ -342,17 +342,50 @@ class WorkflowDispatchService:
 
     @staticmethod
     @transaction.atomic
-    def release_run_idempotency(*, run_id: Any) -> None:
-        """Release the idempotency key after the final requester response was delivered."""
+    def release_run_idempotency(
+        *,
+        run_id: Any,
+        actor: Any | None = None,
+        reason: str = '',
+        mode: str = 'automatic',
+    ) -> bool:
+        """Release the idempotency key so the same request can create a new run."""
         run = Workflow2Run.objects.select_for_update().filter(id=run_id).first()
         if run is None or not run.idempotency_key:
-            return
+            return False
         if run.status not in {
             *WorkflowRunTransitionService.TERMINAL_STATUSES,
         }:
-            return
+            return False
+
+        released_key = run.idempotency_key
         run.idempotency_key = ''
-        run.save(update_fields=['idempotency_key', 'updated_at'])
+        run.idempotency_released_key = released_key
+        run.idempotency_released_at = timezone.now()
+        run.idempotency_released_by = WorkflowDispatchService._release_actor_label(actor)
+        run.idempotency_release_reason = reason or 'Idempotency key released.'
+        run.idempotency_release_mode = mode[:16]
+        run.save(
+            update_fields=[
+                'idempotency_key',
+                'idempotency_released_key',
+                'idempotency_released_at',
+                'idempotency_released_by',
+                'idempotency_release_reason',
+                'idempotency_release_mode',
+                'updated_at',
+            ]
+        )
+        return True
+
+    @staticmethod
+    def _release_actor_label(actor: Any | None) -> str:
+        if actor is None:
+            return ''
+        get_username = getattr(actor, 'get_username', None)
+        if callable(get_username):
+            return str(get_username() or '')[:150]
+        return str(actor)[:150]
 
     def _select_definitions(
         self,

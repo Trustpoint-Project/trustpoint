@@ -36,6 +36,10 @@ class StepResult:
     terminal: bool
 
 
+class _NonRunnableInstanceError(ValueError):
+    """Raised when a caller asks to execute an instance that must not run."""
+
+
 class WorkflowRuntimeService:
     """Crash-resumable runtime (DB checkpointing).
 
@@ -49,7 +53,6 @@ class WorkflowRuntimeService:
         'finished': Workflow2Instance.STATUS_FINISHED,
         'approved': Workflow2Instance.STATUS_APPROVED,
         'rejected': Workflow2Instance.STATUS_REJECTED,
-        'error': Workflow2Instance.STATUS_ERROR,
         'timed_out': Workflow2Instance.STATUS_TIMED_OUT,
         'stopped': Workflow2Instance.STATUS_STOPPED,
         'paused': Workflow2Instance.STATUS_PAUSED,
@@ -129,7 +132,7 @@ class WorkflowRuntimeService:
 
     @staticmethod
     def _raise_runtime_state_error(message: str) -> None:
-        raise ValueError(message)
+        raise _NonRunnableInstanceError(message)
 
     @staticmethod
     def _raise_runtime_type_error(message: str) -> None:
@@ -344,16 +347,17 @@ class WorkflowRuntimeService:
 
     def _apply_approval_timeout_locked(self, *, inst: Workflow2Instance, approval: Workflow2Approval) -> None:
         run_index = int(inst.run_count) + 1
+        timeout_outcome = self._approval_timeout_outcome(inst=inst, approval=approval)
         Workflow2StepRun.objects.create(
             instance=inst,
             run_index=run_index,
             step_id=approval.step_id,
             step_type='approval',
             status='timed_out',
-            outcome='timed_out',
+            outcome=timeout_outcome,
             next_step='',
             vars_delta={},
-            output={'decision': 'timed_out', 'selected_outcome': 'timed_out'},
+            output={'decision': 'timed_out', 'selected_outcome': timeout_outcome},
             error='',
             created_at=timezone.now(),
         )
@@ -365,6 +369,18 @@ class WorkflowRuntimeService:
         )
         save_instance_status(inst, extra_fields=['run_count'])
         self._recompute_run_if_present(inst)
+
+    @staticmethod
+    def _approval_timeout_outcome(*, inst: Workflow2Instance, approval: Workflow2Approval) -> str:
+        ir = inst.definition.ir_json
+        wf = (ir or {}).get('workflow') or {}
+        steps_map = wf.get('steps') or {}
+        step = steps_map.get(approval.step_id)
+        params = (step.get('params') or {}) if isinstance(step, dict) else {}
+        timeout_outcome = params.get('timeout_outcome')
+        if isinstance(timeout_outcome, str) and timeout_outcome.strip():
+            return timeout_outcome.strip()
+        return 'timed_out'
 
     @staticmethod
     def _create_approval_step_run(
@@ -439,8 +455,6 @@ class WorkflowRuntimeService:
         instance.status_message = message
         if run.status == 'paused':
             instance.current_step = run.next_step or ''
-        elif run.status == 'error':
-            instance.current_step = run.step_id
         else:
             instance.current_step = ''
 
@@ -545,6 +559,8 @@ class WorkflowRuntimeService:
                 self._recompute_run_if_present(instance)
                 return StepResult(run=run, terminal=False)
 
+        except _NonRunnableInstanceError:
+            raise
         except Exception as e:
             self._persist_run_one_step_failure(instance, e)
             raise

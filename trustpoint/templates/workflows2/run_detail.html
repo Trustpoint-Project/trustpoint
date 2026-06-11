@@ -42,6 +42,15 @@
           </form>
         {% endif %}
 
+        {% if can_release_idempotency %}
+          <form method="post" action="{% url 'workflows2:runs-release-idempotency' run.id %}">
+            {% csrf_token %}
+            <button class="btn btn-outline-primary" type="submit">
+              <i class="bi bi-unlock me-1"></i>{% trans "Allow same request again" %}
+            </button>
+          </form>
+        {% endif %}
+
         <a href="{% url 'workflows2:runs-list' %}" class="btn btn-outline-secondary">
           <i class="bi bi-arrow-left me-1"></i>{% trans "Back to runs" %}
         </a>
@@ -104,6 +113,45 @@
       <div class="small mt-1">{% trans "All workflow instances in this run reached the end of their workflow branch." %}</div>
     </div>
   {% endif %}
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-header bg-body fw-semibold">{% trans "Request lock" %}</div>
+    <div class="card-body">
+      {% if run.idempotency_key %}
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <span class="badge text-bg-warning">{% trans "Locked" %}</span>
+          <code>{{ run.idempotency_key }}</code>
+        </div>
+        <div class="text-muted small">
+          {% trans "The same request details will reuse this run until the key is released." %}
+        </div>
+      {% elif run.idempotency_released_at %}
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <span class="badge {% if run.idempotency_release_mode == 'manual' %}text-bg-info{% else %}text-bg-secondary{% endif %}">
+            {% if run.idempotency_release_mode == "manual" %}
+              {% trans "Released manually" %}
+            {% else %}
+              {% trans "Released" %}
+            {% endif %}
+          </span>
+          {% if run.idempotency_released_key %}
+            <code>{{ run.idempotency_released_key }}</code>
+          {% endif %}
+        </div>
+        <div class="text-muted small">
+          <div>{% trans "Released" %}: {{ run.idempotency_released_at|date:"Y-m-d H:i:s" }}</div>
+          {% if run.idempotency_released_by %}
+            <div>{% trans "By" %}: {{ run.idempotency_released_by }}</div>
+          {% endif %}
+          {% if run.idempotency_release_reason %}
+            <div>{{ run.idempotency_release_reason }}</div>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="text-muted">{% trans "This run does not hold a duplicate-request lock." %}</div>
+      {% endif %}
+    </div>
+  </div>
 
   <div class="row g-3 mb-3">
     <div class="col-6 col-xl-3">

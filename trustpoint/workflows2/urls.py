@@ -29,6 +29,7 @@ from workflows2.views.runs import (
     Workflow2RunCancelView,
     Workflow2RunDetailView,
     Workflow2RunListView,
+    Workflow2RunReleaseIdempotencyView,
     Workflow2RunRunInlineView,
 )
 from workflows2.views.triggers import Workflow2TriggerCatalogView
@@ -51,6 +52,11 @@ urlpatterns = [
     path('runs/<uuid:run_id>/', Workflow2RunDetailView.as_view(), name='runs-detail'),
     path('runs/<uuid:run_id>/run-inline/', Workflow2RunRunInlineView.as_view(), name='runs-run-inline'),
     path('runs/<uuid:run_id>/cancel/', Workflow2RunCancelView.as_view(), name='runs-cancel'),
+    path(
+        'runs/<uuid:run_id>/release-idempotency/',
+        Workflow2RunReleaseIdempotencyView.as_view(),
+        name='runs-release-idempotency',
+    ),
 
     # Instances
     path('instances/<uuid:instance_id>/', Workflow2InstanceDetailView.as_view(), name='instances-detail'),

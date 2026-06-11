@@ -82,7 +82,7 @@ class Workflow2DefinitionViewSet(viewsets.ModelViewSet[Workflow2Definition]):
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         svc = WorkflowDefinitionService()
-        obj, res = svc.create_definition(name=None, enabled=None, yaml_text=yaml_text)
+        obj, res = svc.create_definition(enabled=None, yaml_text=yaml_text)
 
         if not res.ok:
             return Response({'detail': res.error or 'Workflow compilation failed.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -108,7 +108,6 @@ class Workflow2DefinitionViewSet(viewsets.ModelViewSet[Workflow2Definition]):
         svc = WorkflowDefinitionService()
         updated, res = svc.update_definition(
             definition=definition,
-            name=None,
             enabled=None,
             yaml_text=yaml_text,
         )

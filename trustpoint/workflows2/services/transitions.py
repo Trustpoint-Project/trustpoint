@@ -53,11 +53,18 @@ class WorkflowInstanceTransitionService:
         cls._set(instance, status=Workflow2Instance.STATUS_AWAITING, current_step=step_id)
 
     @classmethod
-    def mark_paused(cls, instance: Workflow2Instance, *, reason: str, message: str, next_step: str = '') -> None:
+    def mark_paused(
+        cls,
+        instance: Workflow2Instance,
+        *,
+        reason: str,
+        message: str,
+        next_step: str | None = None,
+    ) -> None:
         cls._set(
             instance,
             status=Workflow2Instance.STATUS_PAUSED,
-            current_step=next_step,
+            current_step=instance.current_step if next_step is None else next_step,
             reason=reason,
             message=message,
         )

@@ -53,7 +53,18 @@
   <div class="card mb-3 wf2-filter-card">
     <div class="card-body">
       <form method="get" class="row g-3 align-items-end">
-        <div class="col-12 col-lg-3">
+        <div class="col-12 col-xl-5">
+          <label class="form-label">{% trans "Search" %}</label>
+          <input
+            class="form-control"
+            type="search"
+            name="q"
+            value="{{ query }}"
+            placeholder="{% trans 'Device, workflow, event, CA, domain, run ID...' %}"
+          >
+        </div>
+
+        <div class="col-6 col-xl-3">
           <label class="form-label">{% trans "Status" %}</label>
           <select name="status" class="form-select">
             <option value="">{% trans "All" %}</option>
@@ -63,7 +74,17 @@
           </select>
         </div>
 
-        <div class="col-12 col-lg-6">
+        <div class="col-6 col-xl-3">
+          <label class="form-label">{% trans "Request lock" %}</label>
+          <select name="idempotency" class="form-select">
+            <option value="" {% if not idempotency %}selected{% endif %}>{% trans "All" %}</option>
+            <option value="locked" {% if idempotency == "locked" %}selected{% endif %}>{% trans "Locked" %}</option>
+            <option value="released" {% if idempotency == "released" %}selected{% endif %}>{% trans "Released" %}</option>
+            <option value="manual" {% if idempotency == "manual" %}selected{% endif %}>{% trans "Released manually" %}</option>
+          </select>
+        </div>
+
+        <div class="col-12 col-xl-8">
           <label class="form-label">{% trans "Trigger" %}</label>
           <details class="border rounded p-2">
             <summary class="d-flex align-items-center justify-content-between gap-2 wf2-details-summary">
@@ -93,7 +114,7 @@
           </details>
         </div>
 
-        <div class="col-12 col-lg-3">
+        <div class="col-12 col-xl-2">
           <button class="btn btn-primary w-100" type="submit">{% trans "Apply filters" %}</button>
         </div>
       </form>
@@ -112,19 +133,20 @@
             <th>{% trans "State" %}</th>
             <th>{% trans "Run ID" %}</th>
             <th>
-              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}{% for trigger in selected_triggers %}trigger_on={{ trigger|urlencode }}&{% endfor %}sort={% if sort == 'trigger' %}trigger_desc{% else %}trigger{% endif %}">
+              <a class="link-body-emphasis text-decoration-none" href="?{% if query_without_sort %}{{ query_without_sort }}&{% endif %}sort={% if sort == 'trigger' %}trigger_desc{% else %}trigger{% endif %}">
                 {% trans "Trigger" %}
               </a>
             </th>
             <th>{% trans "Source" %}</th>
             <th>{% trans "Instances" %}</th>
+            <th>{% trans "Request lock" %}</th>
             <th>
-              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}{% for trigger in selected_triggers %}trigger_on={{ trigger|urlencode }}&{% endfor %}sort={% if sort == 'updated' %}updated_asc{% else %}updated{% endif %}">
+              <a class="link-body-emphasis text-decoration-none" href="?{% if query_without_sort %}{{ query_without_sort }}&{% endif %}sort={% if sort == 'updated' %}updated_asc{% else %}updated{% endif %}">
                 {% trans "Updated" %}
               </a>
             </th>
             <th>
-              <a class="link-body-emphasis text-decoration-none" href="?{% if status %}status={{ status|urlencode }}&{% endif %}{% for trigger in selected_triggers %}trigger_on={{ trigger|urlencode }}&{% endfor %}sort={% if sort == 'created' %}created_asc{% else %}created{% endif %}">
+              <a class="link-body-emphasis text-decoration-none" href="?{% if query_without_sort %}{{ query_without_sort }}&{% endif %}sort={% if sort == 'created' %}created_asc{% else %}created{% endif %}">
                 {% trans "Created" %}
               </a>
             </th>
@@ -152,6 +174,9 @@
                   <div class="text-muted small">{% trans "No instances were created." %}</div>
                 {% endif %}
               </td>
+              <td>
+                <span class="badge {{ row.idempotency_badge }}">{{ row.idempotency_label }}</span>
+              </td>
               <td>{{ row.run.updated_at|date:"Y-m-d H:i" }}</td>
               <td>{{ row.run.created_at|date:"Y-m-d H:i" }}</td>
               <td class="text-end">
@@ -162,7 +187,7 @@
             </tr>
           {% empty %}
             <tr>
-              <td colspan="8" class="wf2-empty-row">{% trans "No runs found." %}</td>
+              <td colspan="9" class="wf2-empty-row">{% trans "No runs found." %}</td>
             </tr>
           {% endfor %}
         </tbody>

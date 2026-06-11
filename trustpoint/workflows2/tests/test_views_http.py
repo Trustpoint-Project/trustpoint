@@ -187,7 +187,7 @@ class Workflow2HttpViewTests(TestCase):
         response = self.client.get(reverse("workflows2:runs-list"))
         self.assertEqual(response.status_code, 302)
 
-    def test_definition_create_syncs_form_metadata_into_saved_yaml_and_ir(self) -> None:
+    def test_definition_create_uses_yaml_name_and_form_enabled_flag(self) -> None:
         self.client.force_login(self.user)
 
         yaml_text = """\
@@ -212,7 +212,7 @@ workflow:
         response = self.client.post(
             reverse("workflows2:definitions_new"),
             {
-                "name": "Form Name",
+                "enabled": "",
                 "yaml_text": yaml_text,
             },
         )
@@ -220,11 +220,11 @@ workflow:
         self.assertEqual(response.status_code, 302)
 
         definition = Workflow2Definition.objects.latest("created_at")
-        self.assertEqual(definition.name, "Form Name")
+        self.assertEqual(definition.name, "YAML Name")
         self.assertFalse(definition.enabled)
-        self.assertIn("name: Form Name", definition.yaml_text)
+        self.assertIn("name: YAML Name", definition.yaml_text)
         self.assertIn("enabled: false", definition.yaml_text)
-        self.assertEqual(definition.ir_json["name"], "Form Name")
+        self.assertEqual(definition.ir_json["name"], "YAML Name")
         self.assertFalse(definition.ir_json["enabled"])
 
     def test_runs_list_hides_unsupported_legacy_run_status(self) -> None:
@@ -484,3 +484,65 @@ workflow:
         run.refresh_from_db()
         self.assertEqual(run.status, Workflow2Run.STATUS_STOPPED)
         self.assertTrue(run.finalized)
+
+    def test_release_run_idempotency_view_allows_same_request_again(self) -> None:
+        self.client.force_login(self.user)
+
+        run = Workflow2Run.objects.create(
+            trigger_on="workflows2.test",
+            event_json={"device": {"common_name": "device-a"}},
+            source_json={"trustpoint": True},
+            idempotency_key="same-request",
+            status=Workflow2Run.STATUS_REJECTED,
+            finalized=True,
+        )
+
+        response = self.client.post(reverse("workflows2:runs-release-idempotency", args=[run.id]))
+
+        self.assertEqual(response.status_code, 302)
+
+        run.refresh_from_db()
+        self.assertEqual(run.idempotency_key, "")
+        self.assertEqual(run.idempotency_released_key, "same-request")
+        self.assertEqual(run.idempotency_release_mode, "manual")
+        self.assertEqual(run.idempotency_released_by, self.user.get_username())
+        self.assertIsNotNone(run.idempotency_released_at)
+
+    def test_runs_list_searches_workflow_definition_and_event_payload(self) -> None:
+        self.client.force_login(self.user)
+
+        definition = self._store_definition()
+        matching_run = Workflow2Run.objects.create(
+            trigger_on="workflows2.test",
+            event_json={"device": {"common_name": "alpha-device"}},
+            source_json={"trustpoint": True},
+            status=Workflow2Run.STATUS_REJECTED,
+            finalized=True,
+            idempotency_released_key="manual-key",
+            idempotency_release_mode="manual",
+            idempotency_released_at=timezone.now(),
+        )
+        Workflow2Instance.objects.create(
+            run=matching_run,
+            definition=definition,
+            event_json={},
+            vars_json={},
+            status=Workflow2Instance.STATUS_REJECTED,
+        )
+        Workflow2Run.objects.create(
+            trigger_on="workflows2.test",
+            event_json={"device": {"common_name": "other-device"}},
+            source_json={"trustpoint": True},
+            status=Workflow2Run.STATUS_FINISHED,
+            finalized=True,
+        )
+
+        response = self.client.get(
+            reverse("workflows2:runs-list"),
+            {"q": "alpha-device", "idempotency": "manual"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, str(matching_run.id))
+        self.assertContains(response, "Released manually")
+        self.assertNotContains(response, "other-device")
