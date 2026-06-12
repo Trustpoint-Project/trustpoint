@@ -438,7 +438,8 @@ def step_create_superuser(context: runner.Context, username: str, password: str)
     current_url = context.response.url
     form_data = {
         'csrfmiddlewaretoken': csrf_token,
-        'username': username,
+        'operational_admin_username': username,
+        'operational_admin_email': '',
         'password1': password,
         'password2': password,
     }
@@ -447,6 +448,7 @@ def step_create_superuser(context: runner.Context, username: str, password: str)
     context.admin_password = password
     assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
         f'Superuser creation failed: {context.response.status_code}'
+    check_for_errors(context.response.text, context.response.url)
 
 
 @then('the setup should be complete')

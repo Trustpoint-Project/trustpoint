@@ -18,6 +18,7 @@ jobs:
       DATABASE_PASSWORD: testing321
       DATABASE_HOST: localhost
       DATABASE_PORT: "5432"
+      TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND: "true"
 
     steps:
       - name: Install gettext tools

@@ -12,7 +12,7 @@ Feature: Docker Setup Wizard
     Then the wizard should be at the setup mode step
     When the user clicks "Setup Trustpoint from Scratch"
     Then the wizard should be at the superuser creation step
-    When the user creates a superuser with username "admin" and password "testing321"
+    When the user creates a superuser with username "admin" and password "R200SetupPass47!Copper"
     Then the wizard should be at the database setup step
     When the user submits the database form with default values
     Then the wizard should be at the crypto storage setup step
@@ -30,7 +30,7 @@ Feature: Docker Setup Wizard
     When the user clicks "Apply and Continue"
     And the user waits for the server to restart
     Then the user should be redirected to the login page
-    When the user logs in with username "admin" and password "testing321"
+    When the user logs in with username "admin" and password "R200SetupPass47!Copper"
     Then the setup should be complete
     And the user should successfully access the dashboard
 
