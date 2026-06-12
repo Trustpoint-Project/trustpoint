@@ -21,8 +21,18 @@ jobs:
       TRUSTPOINT_AUTO_CONFIGURE_LOCAL_SOFTWARE_BACKEND: "true"
 
     steps:
-      - name: Install gettext tools
-        run: sudo apt-get update && sudo apt-get install -y gettext
+      - name: Install system tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ca-certificates curl gettext gnupg
+          curl -fSsL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg
+          . /etc/os-release
+          echo "deb [signed-by=/usr/share/keyrings/postgresql-archive-keyring.gpg] http://apt.postgresql.org/pub/repos/apt/ ${VERSION_CODENAME}-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-18
+          /usr/lib/postgresql/18/bin/pg_restore --version
       
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -83,7 +93,9 @@ jobs:
         run: uv run trustpoint/manage.py trustpointbackup_manifest --filename from_outside.dump.gz --verify
 
       - name: Restore database from host
-        run: uv run trustpoint/manage.py dbrestore -z --noinput -I trustpoint/media/backups/from_outside.dump.gz
+        run: |
+          export PATH="/usr/lib/postgresql/18/bin:$PATH"
+          uv run trustpoint/manage.py dbrestore -z --noinput -I trustpoint/media/backups/from_outside.dump.gz
 
       - name: Start restored Trustpoint container
         run: |
