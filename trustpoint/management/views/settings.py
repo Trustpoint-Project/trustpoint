@@ -248,7 +248,7 @@ def get_workflow_execution_form(request: HttpRequest) -> WorkflowExecutionConfig
 def get_smtp_email_form(request: HttpRequest) -> SmtpEmailConfigForm:
     """Return the singleton SMTP email settings form."""
     smtp_config = SmtpEmailConfig.load()
-    if request.method == 'POST' and request.POST.get('form_name') == 'smtp_email':
+    if request.method == 'POST' and request.POST.get('form_name') in {'smtp_email', 'smtp_email_test'}:
         return SmtpEmailConfigForm(request.POST, instance=smtp_config)
     return SmtpEmailConfigForm(instance=smtp_config)
 
@@ -353,6 +353,14 @@ class SettingsTabView(TemplateView):
 
     template_name = 'management/settings.html'
 
+    @staticmethod
+    def _get_unbound_settings_form(view: FormView[Any]) -> Any:
+        """Return a form from a child settings view without binding the current POST data."""
+        form_kwargs = view.get_form_kwargs()
+        form_kwargs.pop('data', None)
+        form_kwargs.pop('files', None)
+        return view.get_form_class()(**form_kwargs)
+
     def get_context_data(self, **kwargs: Any) -> dict[str, Any]:
         """Build the context for the settings page."""
         context = super().get_context_data(**kwargs)
@@ -363,18 +371,18 @@ class SettingsTabView(TemplateView):
         internationalization_view = InternationalizationSettingsView()
         internationalization_view.request = self.request
         internationalization_view.setup(self.request)
-        context['internationalization_form'] = internationalization_view.get_form()
+        context['internationalization_form'] = self._get_unbound_settings_form(internationalization_view)
 
         security_view = SecuritySettingsView()
         security_view.request = self.request
         security_view.setup(self.request)
-        context['security_form'] = security_view.get_form()
+        context['security_form'] = self._get_unbound_settings_form(security_view)
         context['notification_configurations_json'] = SecurityConfig.get_settings_preview_json()
 
         logging_view = LoggingSettingsView()
         logging_view.request = self.request
         logging_view.setup(self.request)
-        context['logging_form'] = logging_view.get_form()
+        context['logging_form'] = self._get_unbound_settings_form(logging_view)
         context['loglevels'] = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
         current_level_num = logging.getLogger().getEffectiveLevel()
         context['current_loglevel'] = logging.getLevelName(current_level_num)
@@ -382,7 +390,7 @@ class SettingsTabView(TemplateView):
         notification_view = NotificationSettingsView()
         notification_view.request = self.request
         notification_view.setup(self.request)
-        context['notification_form'] = notification_view.get_form()
+        context['notification_form'] = self._get_unbound_settings_form(notification_view)
         context['notification_config'] = NotificationConfig.get()
 
         metrics_view = MetricsSettingsView()
@@ -438,17 +446,34 @@ class SettingsTabView(TemplateView):
         return self.render_to_response(context)
 
     def _post_smtp_email_test(self, request: HttpRequest) -> HttpResponse:
-        """Send a test email using the saved SMTP settings."""
-        smtp_config = SmtpEmailConfig.load()
-        smtp_email_test_form = get_smtp_email_test_form(request, smtp_config)
+        """Send a test email using the SMTP settings currently shown in the form."""
+        smtp_email_form = get_smtp_email_form(request)
+        smtp_email_test_form = get_smtp_email_test_form(request)
+
+        if not smtp_email_form.is_valid():
+            messages.error(request, _('Please correct the SMTP email settings before sending a test email.'))
+            context = self.get_context_data(
+                smtp_email_form=smtp_email_form,
+                smtp_email_test_form=smtp_email_test_form,
+                active_tab='smtp-email',
+            )
+            return self.render_to_response(context)
+
+        smtp_config = smtp_email_form.save(commit=False)
 
         if not smtp_config.enabled:
-            messages.error(request, _('Enable and save SMTP email delivery before sending a test email.'))
-            return redirect(f"{reverse_lazy('management:settings')}?tab=smtp-email")
+            messages.error(request, _('Enable SMTP email delivery before sending a test email.'))
+            context = self.get_context_data(
+                smtp_email_form=smtp_email_form,
+                smtp_email_test_form=smtp_email_test_form,
+                active_tab='smtp-email',
+            )
+            return self.render_to_response(context)
 
         if not smtp_email_test_form.is_valid():
             messages.error(request, _('Please enter a valid test recipient email address.'))
             context = self.get_context_data(
+                smtp_email_form=smtp_email_form,
                 smtp_email_test_form=smtp_email_test_form,
                 active_tab='smtp-email',
             )
@@ -457,6 +482,24 @@ class SettingsTabView(TemplateView):
         recipient = smtp_email_test_form.cleaned_data['recipient']
         try:
             sent_count = smtp_config.send_test_email(recipient)
+        except smtplib.SMTPNotSupportedError:
+            cleared_post_data = request.POST.copy()
+            cleared_post_data['username'] = ''
+            cleared_post_data['password'] = ''
+            smtp_email_form = SmtpEmailConfigForm(cleared_post_data, instance=SmtpEmailConfig.load())
+            messages.error(
+                request,
+                _(
+                    'SMTP test email failed: the server does not support SMTP AUTH. '
+                    'Username and password were cleared in the form. Test again, then save if it works.'
+                ),
+            )
+            context = self.get_context_data(
+                smtp_email_form=smtp_email_form,
+                smtp_email_test_form=smtp_email_test_form,
+                active_tab='smtp-email',
+            )
+            return self.render_to_response(context)
         except (OSError, smtplib.SMTPException, ValueError) as exception:
             messages.error(
                 request,

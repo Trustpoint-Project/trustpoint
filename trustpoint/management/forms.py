@@ -1015,17 +1015,23 @@ class SmtpEmailConfigForm(forms.ModelForm[SmtpEmailConfig]):
             'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
             'host': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'smtp.example.com'}),
             'port': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'max': 65535}),
-            'use_tls': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
-            'use_ssl': forms.CheckboxInput(attrs={'class': 'form-check-input', 'role': 'switch'}),
-            'username': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'username'}),
+            'use_tls': forms.CheckboxInput(
+                attrs={'class': 'form-check-input', 'role': 'switch', 'data-smtp-security': 'starttls'}
+            ),
+            'use_ssl': forms.CheckboxInput(
+                attrs={'class': 'form-check-input', 'role': 'switch', 'data-smtp-security': 'ssl'}
+            ),
+            'username': forms.TextInput(
+                attrs={'class': 'form-control', 'autocomplete': 'off', 'data-smtp-auth': 'username'}
+            ),
             'password': forms.PasswordInput(
-                attrs={'class': 'form-control', 'autocomplete': 'current-password'},
+                attrs={'class': 'form-control', 'autocomplete': 'new-password', 'data-smtp-auth': 'password'},
                 render_value=True,
             ),
             'timeout_seconds': forms.NumberInput(attrs={'class': 'form-control', 'min': 1}),
             'default_from_email': forms.EmailInput(attrs={'class': 'form-control'}),
         }
-        labels: ClassVar[dict[str, str]] = {
+        labels: ClassVar[dict[str, Any]] = {
             'enabled': _('Use SMTP server for outgoing email'),
             'host': _('SMTP host'),
             'port': _('SMTP port'),
@@ -1036,7 +1042,7 @@ class SmtpEmailConfigForm(forms.ModelForm[SmtpEmailConfig]):
             'timeout_seconds': _('Timeout'),
             'default_from_email': _('Default sender address'),
         }
-        help_texts: ClassVar[dict[str, str]] = {
+        help_texts: ClassVar[dict[str, Any]] = {
             'enabled': _(
                 'When enabled, Trustpoint sends workflow and system email through this SMTP server. '
                 "When disabled, email is written to Django's console backend."
@@ -1045,8 +1051,8 @@ class SmtpEmailConfigForm(forms.ModelForm[SmtpEmailConfig]):
             'port': _('Common ports are 587 for STARTTLS, 465 for SSL/TLS, and 25 for plain SMTP.'),
             'use_tls': _('Connect first, then upgrade the connection with STARTTLS. Usually used with port 587.'),
             'use_ssl': _('Start with an encrypted TLS connection immediately. Usually used with port 465.'),
-            'username': _('Leave empty when the SMTP server does not require authentication.'),
-            'password': _('Leave empty when the SMTP server does not require authentication.'),
+            'username': _('Leave empty when the SMTP server does not require authentication or does not support AUTH.'),
+            'password': _('Leave empty when the SMTP server does not require authentication or does not support AUTH.'),
             'timeout_seconds': _('Connection timeout in seconds.'),
             'default_from_email': _('Sender address used when a workflow or notification does not specify one.'),
         }

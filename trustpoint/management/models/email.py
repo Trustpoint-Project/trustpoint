@@ -6,7 +6,7 @@ from contextlib import suppress
 from typing import Any, ClassVar
 
 from django.conf import settings
-from django.core.mail import EmailMessage
+from django.core.mail import EmailMessage, get_connection
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -112,8 +112,17 @@ class SmtpEmailConfig(models.Model):
         settings.EMAIL_HOST_PASSWORD = ''
 
     def send_test_email(self, recipient: str) -> int:
-        """Send a small test email through the saved SMTP configuration."""
-        self.apply_to_django_settings()
+        """Send a small test email through this SMTP configuration."""
+        connection = get_connection(
+            backend=self.SMTP_BACKEND if self.enabled else self.CONSOLE_BACKEND,
+            host=self.host,
+            port=self.port,
+            username=self.username or None,
+            password=self.password or None,
+            use_tls=self.use_tls,
+            use_ssl=self.use_ssl,
+            timeout=self.timeout_seconds,
+        )
         message = EmailMessage(
             subject=_('Trustpoint SMTP test email'),
             body=_(
@@ -123,6 +132,7 @@ class SmtpEmailConfig(models.Model):
             ) % {'timestamp': timezone.now().isoformat()},
             from_email=self.default_from_email,
             to=[recipient],
+            connection=connection,
         )
         return int(message.send(fail_silently=False))
 
