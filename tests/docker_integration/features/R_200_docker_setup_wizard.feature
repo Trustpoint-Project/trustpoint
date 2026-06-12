@@ -6,18 +6,20 @@ Feature: Docker Setup Wizard
   I want to complete the initial setup wizard
   So that I can configure the system and start using Trustpoint
 
-  Scenario: Complete initial setup wizard with file system storage
+  Scenario: Complete initial setup wizard with software storage
     Given a fresh Trustpoint Docker container is running
     When the user accesses the setup wizard
     Then the wizard should be at the setup mode step
     When the user clicks "Setup Trustpoint from Scratch"
     Then the wizard should be at the superuser creation step
-    When the user creates a superuser with username "admin" and password "AdminPass123!"
-    Then the user should be redirected to the login page
-    When the user logs in with username "admin" and password "AdminPass123!"
+    When the user creates a superuser with username "admin" and password "testing321"
+    Then the wizard should be at the database setup step
+    When the user submits the database form with default values
     Then the wizard should be at the crypto storage setup step
     When the user selects "Software Storage" as crypto storage
     And the user submits the form
+    Then the wizard should be at the backend config step
+    When the user submits the form
     Then the wizard should be at the demo data step
     When the user selects "Yes" for demo data
     And the user submits the form
@@ -27,6 +29,8 @@ Feature: Docker Setup Wizard
     Then the wizard should be at the summary step
     When the user clicks "Apply and Continue"
     And the user waits for the server to restart
+    Then the user should be redirected to the login page
+    When the user logs in with username "admin" and password "testing321"
     Then the setup should be complete
     And the user should successfully access the dashboard
 

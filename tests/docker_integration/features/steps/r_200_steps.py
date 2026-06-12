@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import subprocess
 import time
 from typing import Any
 
@@ -23,6 +24,8 @@ requests.packages.urllib3.disable_warnings(  # type: ignore[attr-defined]
 HTTP_OK = 200
 HTTP_REDIRECT = 302
 DOCKER_URL = 'https://localhost'
+BOOTSTRAP_USERNAME_PATTERN = re.compile(r'Trustpoint bootstrap username:\s*(\S+)')
+BOOTSTRAP_PASSWORD_PATTERN = re.compile(r'Trustpoint bootstrap password:\s*(\S+)')
 
 
 def extract_csrf_token(html_content: str) -> str:
@@ -48,6 +51,52 @@ def find_link_url(html_content: str, link_text: str) -> str | None:
     if match:
         return match.group(1)
     return None
+
+
+def _extract_bootstrap_credentials() -> tuple[str, str]:
+    """Read the generated bootstrap login from the Docker container logs."""
+    result = subprocess.run(  # noqa: S603
+        ['docker', 'logs', 'trustpoint'],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    logs = f'{result.stdout}\n{result.stderr}'
+    usernames = BOOTSTRAP_USERNAME_PATTERN.findall(logs)
+    passwords = BOOTSTRAP_PASSWORD_PATTERN.findall(logs)
+    if not usernames or not passwords:
+        msg = 'Could not find bootstrap credentials in trustpoint container logs.'
+        raise AssertionError(msg)
+    return usernames[-1], passwords[-1]
+
+
+def _is_login_page(response: requests.Response) -> bool:
+    """Return whether a response is the login page."""
+    url = response.url.lower()
+    content = response.text.lower()
+    return 'login' in url or 'name="username"' in content and 'name="password"' in content
+
+
+def _login(context: runner.Context, username: str, password: str) -> None:
+    """Log into Trustpoint with an existing session."""
+    login_url = f'{context.base_url}/users/login/'
+    context.response = context.session.get(login_url, allow_redirects=True)
+    csrf_token = extract_csrf_token(context.response.text)
+    login_data = {
+        'csrfmiddlewaretoken': csrf_token,
+        'username': username,
+        'password': password,
+    }
+    context.response = context.session.post(login_url, data=login_data, allow_redirects=True)
+    assert context.response.status_code == HTTP_OK, f'Login failed: {context.response.status_code}'
+
+
+def _ensure_bootstrap_login(context: runner.Context) -> None:
+    """Authenticate with the generated bootstrap user when the wizard requires it."""
+    if not _is_login_page(context.response):
+        return
+    username, password = _extract_bootstrap_credentials()
+    _login(context, username, password)
 
 
 def _is_visible_element(element: Any) -> bool:
@@ -142,7 +191,9 @@ def step_docker_container_running(context: runner.Context) -> None:
 @when('the user accesses the setup wizard')
 def step_access_setup_wizard(context: runner.Context) -> None:
     """Access the setup wizard landing page."""
-    context.response = context.session.get(f'{context.base_url}/', allow_redirects=True)
+    context.response = context.session.get(f'{context.base_url}/setup-wizard/', allow_redirects=True)
+    _ensure_bootstrap_login(context)
+    context.response = context.session.get(f'{context.base_url}/setup-wizard/', allow_redirects=True)
     assert context.response.status_code == HTTP_OK, \
         f'Failed to access setup wizard: {context.response.status_code}'
 
@@ -211,7 +262,7 @@ def step_click_button(context: runner.Context, button_text: str) -> None:
     # First, try to find a link with this text
     link_url = find_link_url(html, button_text)
     if not link_url and button_text.lower() == 'setup trustpoint from scratch':
-        link_url = '/setup-wizard/create-super-user/'
+        link_url = '/setup-wizard/fresh-install/admin-user/'
     if link_url:
         if not link_url.startswith('http'):
             link_url = f'{context.base_url}{link_url}'
@@ -253,6 +304,42 @@ def step_verify_tls_selection_step(context: runner.Context) -> None:
     assert 'tls' in content, f'Not at TLS selection step. URL: {context.response.url}'
     assert 'generate' in content or 'upload' in content, \
         f'Missing generate/import options. URL: {context.response.url}'
+
+
+@then('the wizard should be at the database setup step')
+def step_verify_database_step(context: runner.Context) -> None:
+    """Verify the wizard is at the database configuration step."""
+    check_for_errors(context.response.text, context.response.url)
+    content = context.response.text.lower()
+    assert 'database' in content or 'postgresql' in content, \
+        f'Not at database setup step. URL: {context.response.url}'
+
+
+@when('the user submits the database form with default values')
+def step_submit_database_form(context: runner.Context) -> None:
+    """Submit the database form with the Docker integration defaults."""
+    csrf_token = extract_csrf_token(context.response.text)
+    current_url = context.response.url
+    form_data = {
+        'csrfmiddlewaretoken': csrf_token,
+        'operational_db_host': 'postgres',
+        'operational_db_port': '5432',
+        'operational_db_name': 'trustpoint_db',
+        'operational_db_user': 'admin',
+        'operational_db_password': 'testing321',
+    }
+    context.response = context.session.post(current_url, data=form_data, allow_redirects=True)
+    assert context.response.status_code in [HTTP_OK, HTTP_REDIRECT], \
+        f'Database form submission failed: {context.response.status_code}'
+
+
+@then('the wizard should be at the backend config step')
+def step_verify_backend_config_step(context: runner.Context) -> None:
+    """Verify the wizard is at the backend configuration step."""
+    check_for_errors(context.response.text, context.response.url)
+    content = context.response.text.lower()
+    assert 'backend' in content or 'software demo' in content, \
+        f'Not at backend config step. URL: {context.response.url}'
 
 
 @then('the wizard should be at the TLS certificate generation step')
@@ -298,17 +385,17 @@ def step_verify_tls_apply_step(context: runner.Context) -> None:
 
 @when('the user waits for the server to restart')
 def step_wait_for_server_restart(context: runner.Context) -> None:
-    """Wait for the server to restart after TLS configuration."""
+    """Wait for the server to restart after applying the bootstrap summary."""
     time.sleep(5)
     max_retries = 30
     for attempt in range(max_retries):
         try:
             context.response = context.session.get(
-                f'{context.base_url}/setup-wizard/demo-data/',
+                f'{context.base_url}/users/login/',
                 timeout=10,
                 allow_redirects=True
             )
-            if context.response.status_code == HTTP_OK:
+            if context.response.status_code == HTTP_OK and _is_login_page(context.response):
                 return
         except Exception:  # noqa: BLE001
             if attempt < max_retries - 1:
@@ -383,17 +470,7 @@ def step_verify_login_redirect(context: runner.Context) -> None:
 @when('the user logs in with username "{username}" and password "{password}"')
 def step_login_user(context: runner.Context, username: str, password: str) -> None:
     """Log in with the given credentials."""
-    login_url = f'{context.base_url}/users/login/'
-    context.response = context.session.get(login_url, allow_redirects=True)
-    csrf_token = extract_csrf_token(context.response.text)
-    login_data = {
-        'csrfmiddlewaretoken': csrf_token,
-        'username': username,
-        'password': password,
-    }
-    context.response = context.session.post(login_url, data=login_data, allow_redirects=True)
-    assert context.response.status_code == HTTP_OK, \
-        f'Login failed: {context.response.status_code}'
+    _login(context, username, password)
 
 
 @then('the user should successfully access the dashboard')
