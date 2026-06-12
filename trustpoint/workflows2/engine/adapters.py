@@ -56,7 +56,6 @@ class NotificationAdapter(Protocol):
 
     def create(self, request: NotificationCreateRequest) -> dict[str, Any]:
         """Create one Trustpoint notification and return adapter output."""
-        pass
 
 
 class WebhookAdapter(Protocol):
