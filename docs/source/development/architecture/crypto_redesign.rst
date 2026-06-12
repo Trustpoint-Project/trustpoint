@@ -134,6 +134,18 @@ Properties:
 This separation is critical. It avoids forcing one-time delivery credentials into the same lifecycle as
 persistent CA and signer keys.
 
+Signing Authority Policy
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Trustpoint signing-authority keys must be backend-managed and non-exportable. This includes local root
+CA keys, local issuing CA keys, signer keys, and other long-lived server-held keys that Trustpoint uses
+to issue or sign credentials.
+
+Endpoint and delivery credentials have a different lifecycle. Bootstrap TLS credentials, imported TLS
+server credentials, device or endpoint credentials, and owner/enrollment credentials may remain local,
+imported, or delivery-oriented workflow material unless a feature explicitly requires managed-key
+custody. Those keys are not treated as Trustpoint signing-authority keys.
+
 
 Top-Level Architecture
 ----------------------
@@ -636,4 +648,3 @@ The target architecture is:
 - managed keys separated from one-time export bundles
 - no PKCS#11 leakage into Trustpoint business code
 - no DB-stored long-lived private keys
-
