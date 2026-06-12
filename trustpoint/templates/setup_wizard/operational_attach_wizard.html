@@ -1,0 +1,430 @@
+{% extends 'users/base.html' %}
+{% load static %}
+{% load i18n %}
+{% load crispy_forms_filters %}
+
+{% block head %}
+    {{ block.super }}
+    <link rel="stylesheet" href="{% static 'css/setup_wizard.css' %}">
+{% endblock head %}
+
+{% block header_actions %}
+    <form method="POST" action="{% url 'users:logout' %}" class="tp-setup-header-logout-form">
+        {% csrf_token %}
+        <button class="tp-menu-head tp-setup-header-logout" type="submit">
+            <svg class="bi" fill="currentColor" role="img" aria-hidden="true">
+                <use href="{% static 'img/icons.svg' %}#icon-door"></use>
+            </svg>
+            {% trans "Logout" %}
+        </button>
+    </form>
+    <div class="theme-toggle theme-toggle-icon">
+        <svg class="bi theme-icon dark-only" width="20" height="20" fill="#ffffff" role="img" aria-label="Change theme">
+            <use href="{% static 'img/icons.svg' %}#icon-sun-fill"></use></svg>
+        <svg class="bi theme-icon light-only" width="20" height="20" fill="#000000" role="img" aria-label="Change theme">
+            <use href="{% static 'img/icons.svg' %}#icon-night"></use></svg>
+    </div>
+{% endblock header_actions %}
+
+{% block content %}
+    {% if messages %}
+        <section class="tp-setup-form-shell tp-fresh-install-shell">
+            <div class="messages tp-messages text-center tp-setup-form-messages">
+                {% for message in messages %}
+                    <div class="tp-message alert
+                        {% if message.tags %}
+                            {% if message.tags == "error" %}
+                                alert-danger
+                            {% else %}
+                                alert-{{ message.tags }}
+                            {% endif %}
+                        {% endif %} d-flex" role="alert">
+                        <svg class="bi flex-shrink-0 tp-msg-icon-margin" width="20" height="20" fill="currentColor" role="img" aria-label="{{ message.tags }}:">
+                            <use href="{% static 'img/icons.svg' %}#icon-{{ message.tags }}"></use>
+                        </svg>
+                        <div>{{ message }}</div>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
+
+    <section class="tp-setup-form-shell tp-fresh-install-shell">
+        <div class="tp-setup-form-header">
+            <h1 class="tp-setup-form-heading">{{ page_title }}</h1>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" class="text-start"{% if is_attach_summary %} data-summary-submit-form{% endif %}>
+            {% csrf_token %}
+            <div class="card tp-card-setup-wizard tp-card-setup-steps text-center">
+                <div class="card-header">
+                    <div class="px-1 py-2">
+                        <div class="tp-wizard-stepper" role="list" aria-label="{% trans 'Setup progress' %}">
+                        {% for step in steps %}
+                            <div class="tp-wizard-step">
+                                {% if step.state == "done" %}
+                                    <a href="{{ step.url }}" class="tp-wizard-step-link" role="listitem">
+                                        <span class="tp-wizard-step-indicator">&#10003;</span>
+                                        <span class="tp-wizard-step-label">{{ step.label }}</span>
+                                        <span class="tp-wizard-step-trailing is-done" aria-hidden="true">&#10003;</span>
+                                    </a>
+                                {% elif step.state == "active" %}
+                                    <a href="{{ step.url }}" class="tp-wizard-step-current" role="listitem" aria-current="step">
+                                        <span class="tp-wizard-step-indicator">{{ forloop.counter }}</span>
+                                        <span class="tp-wizard-step-label">{{ step.label }}</span>
+                                        <span class="tp-wizard-step-trailing{% if step.submitted %} is-done{% endif %}" aria-hidden="true">{% if step.submitted %}&#10003;{% endif %}</span>
+                                    </a>
+                                {% elif step.state == "available" %}
+                                    <a href="{{ step.url }}" class="tp-wizard-step-available" role="listitem">
+                                        <span class="tp-wizard-step-indicator">{{ forloop.counter }}</span>
+                                        <span class="tp-wizard-step-label">{{ step.label }}</span>
+                                        <span class="tp-wizard-step-trailing" aria-hidden="true"></span>
+                                    </a>
+                                {% else %}
+                                    <span class="tp-wizard-step-disabled" role="listitem" aria-disabled="true">
+                                        <span class="tp-wizard-step-indicator">{{ forloop.counter }}</span>
+                                        <span class="tp-wizard-step-label">{{ step.label }}</span>
+                                        <span class="tp-wizard-step-trailing" aria-hidden="true"></span>
+                                    </span>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card tp-card-setup-wizard tp-card-setup-content text-center"{% if is_attach_summary %} data-summary-submit-card{% endif %}>
+                <div class="card-body tp-wizard-body">
+                    <h2 class="tp-wizard-heading">{{ body_heading }}</h2>
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger text-start" role="alert">
+                            {{ form.non_field_errors }}
+                        </div>
+                    {% endif %}
+
+                    <fieldset class="form-group tp-form-group">
+                        {% if is_attach_summary %}
+                            {% if compatibility_report.snapshot %}
+                                <div class="tp-summary-list">
+                                    <div class="tp-summary-item">
+                                        <div class="tp-summary-label">{% trans "Application Version" %}</div>
+                                        <div class="tp-summary-value">{{ compatibility_report.snapshot.app_version|default:"-" }}</div>
+                                    </div>
+                                    <div class="tp-summary-item">
+                                        <div class="tp-summary-label">{% trans "Crypto Backend" %}</div>
+                                        <div class="tp-summary-value">{{ compatibility_report.snapshot.crypto_backend_kind|default:"-" }}</div>
+                                    </div>
+                                    <div class="tp-summary-item">
+                                        <div class="tp-summary-label">{% trans "Application Secrets" %}</div>
+                                        <div class="tp-summary-value">{{ compatibility_report.snapshot.app_secret_backend_kind|default:"-" }}</div>
+                                    </div>
+                                    <div class="tp-summary-item">
+                                        <div class="tp-summary-label">{% trans "Managed Keys" %}</div>
+                                        <div class="tp-summary-value">
+                                            {{ compatibility_report.snapshot.managed_key_count }}
+                                            {% trans "keys" %},
+                                            {{ compatibility_report.snapshot.managed_key_binding_count }}
+                                            {% trans "bindings" %}
+                                        </div>
+                                    </div>
+                                    <div class="tp-summary-item">
+                                        <div class="tp-summary-label">{% trans "App-Secret Material" %}</div>
+                                        <div class="tp-summary-value">
+                                            {% if compatibility_report.snapshot.app_secret_material_present %}
+                                                {% trans "Present" %}
+                                            {% else %}
+                                                {% trans "Missing" %}
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            {% if compatibility_report %}
+                                <div class="tp-backend-setup text-start">
+                                    {% for check in compatibility_report.checks %}
+                                        <div class="alert
+                                            {% if check.severity == 'error' %}
+                                                alert-danger
+                                            {% elif check.severity == 'info' %}
+                                                alert-success
+                                            {% elif check.severity == 'warning' %}
+                                                alert-warning
+                                            {% else %}
+                                                alert-secondary
+                                            {% endif %}" role="status">
+                                            <strong>{{ check.label }}:</strong> {{ check.message }}
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        {% elif form.is_pkcs11_backend_config %}
+                            <div class="tp-backend-setup">
+                                <section class="tp-backend-section">
+                                    <div class="tp-backend-section-kicker">Required</div>
+                                    <h3 class="tp-backend-section-title">PKCS#11 Library</h3>
+                                    {% if form.local_dev_pkcs11_handoff_available %}
+                                        <p class="tp-backend-section-copy">
+                                            A local SoftHSM proxy handoff is available. You may leave the library upload empty to use the built-in PKCS#11 proxy client.
+                                        </p>
+                                    {% else %}
+                                        <p class="tp-backend-section-copy">
+                                            Upload the exact PKCS#11 shared library Trustpoint should install for this instance.
+                                        </p>
+                                    {% endif %}
+                                    {% if form.staged_pkcs11_module_name %}
+                                        <div class="tp-backend-state-pill">
+                                            <span>Current wizard library: {{ form.staged_pkcs11_module_name }}</span>
+                                            <button type="submit" name="wizard_action" value="clear_module" class="tp-backend-state-pill-dismiss" formnovalidate aria-label="Remove wizard library" title="Remove wizard library">×</button>
+                                        </div>
+                                    {% endif %}
+                                    <div class="tp-backend-field">
+                                        <label class="tp-backend-field-label" for="{{ form.pkcs11_module_upload.id_for_label }}">
+                                            {{ form.pkcs11_module_upload.label }}
+                                        </label>
+                                        {{ form.pkcs11_module_upload }}
+                                        {% if form.pkcs11_module_upload.help_text %}
+                                            <div class="form-text">{{ form.pkcs11_module_upload.help_text }}</div>
+                                        {% endif %}
+                                        {% if form.pkcs11_module_upload.errors %}
+                                            <div class="text-danger mt-2">
+                                                {{ form.pkcs11_module_upload.errors }}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+
+                                    {% if form.staged_pkcs11_config_name %}
+                                        <div class="tp-backend-state-pill">
+                                            <span>Current vendor config: {{ form.staged_pkcs11_config_name }}</span>
+                                            <button type="submit" name="wizard_action" value="clear_pkcs11_config" class="tp-backend-state-pill-dismiss" formnovalidate aria-label="Remove vendor config" title="Remove vendor config">×</button>
+                                        </div>
+                                    {% endif %}
+                                    <div class="tp-backend-grid">
+                                        <div class="tp-backend-field">
+                                            <label class="tp-backend-field-label" for="{{ form.pkcs11_config_upload.id_for_label }}">
+                                                {{ form.pkcs11_config_upload.label }}
+                                            </label>
+                                            {{ form.pkcs11_config_upload }}
+                                            {% if form.pkcs11_config_upload.help_text %}
+                                                <div class="form-text">{{ form.pkcs11_config_upload.help_text }}</div>
+                                            {% endif %}
+                                            {% if form.pkcs11_config_upload.errors %}
+                                                <div class="text-danger mt-2">
+                                                    {{ form.pkcs11_config_upload.errors }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="tp-backend-field">
+                                            <label class="tp-backend-field-label" for="{{ form.pkcs11_config_env_var.id_for_label }}">
+                                                {{ form.pkcs11_config_env_var.label }}
+                                            </label>
+                                            {{ form.pkcs11_config_env_var }}
+                                            {% if form.pkcs11_config_env_var.help_text %}
+                                                <div class="form-text">{{ form.pkcs11_config_env_var.help_text }}</div>
+                                            {% endif %}
+                                            {% if form.pkcs11_config_env_var.errors %}
+                                                <div class="text-danger mt-2">
+                                                    {{ form.pkcs11_config_env_var.errors }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </section>
+
+                                <section class="tp-backend-section">
+                                    <div class="tp-backend-section-kicker">Required</div>
+                                    <h3 class="tp-backend-section-title">Token Access</h3>
+                                    <p class="tp-backend-section-copy">
+                                        Trustpoint will use the token label or slot ID to find the token and will create the PIN file for the configured backend automatically.
+                                    </p>
+                                    <div class="tp-backend-grid">
+                                        <div class="tp-backend-field">
+                                            <label class="tp-backend-field-label" for="{{ form.fresh_install_pkcs11_token_label.id_for_label }}">
+                                                {{ form.fresh_install_pkcs11_token_label.label }}
+                                            </label>
+                                            {{ form.fresh_install_pkcs11_token_label }}
+                                            {% if form.fresh_install_pkcs11_token_label.help_text %}
+                                                <div class="form-text">{{ form.fresh_install_pkcs11_token_label.help_text }}</div>
+                                            {% endif %}
+                                            {% if form.fresh_install_pkcs11_token_label.errors %}
+                                                <div class="text-danger mt-2">
+                                                    {{ form.fresh_install_pkcs11_token_label.errors }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="tp-backend-field">
+                                            <label class="tp-backend-field-label" for="{{ form.fresh_install_pkcs11_slot_id.id_for_label }}">
+                                                {{ form.fresh_install_pkcs11_slot_id.label }}
+                                            </label>
+                                            {{ form.fresh_install_pkcs11_slot_id }}
+                                            {% if form.fresh_install_pkcs11_slot_id.help_text %}
+                                                <div class="form-text">{{ form.fresh_install_pkcs11_slot_id.help_text }}</div>
+                                            {% endif %}
+                                            {% if form.fresh_install_pkcs11_slot_id.errors %}
+                                                <div class="text-danger mt-2">
+                                                    {{ form.fresh_install_pkcs11_slot_id.errors }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="tp-backend-field">
+                                            <label class="tp-backend-field-label" for="{{ form.pkcs11_user_pin.id_for_label }}">
+                                                {{ form.pkcs11_user_pin.label }}
+                                            </label>
+                                            {{ form.pkcs11_user_pin }}
+                                            {% if form.has_staged_pkcs11_pin %}
+                                                <div class="tp-backend-state-pill">
+                                                    <span>A user PIN is already available for this wizard session.</span>
+                                                    <button type="submit" name="wizard_action" value="clear_pin" class="tp-backend-state-pill-dismiss" formnovalidate aria-label="Remove user PIN" title="Remove user PIN">×</button>
+                                                </div>
+                                            {% endif %}
+                                            {% if form.pkcs11_user_pin.help_text %}
+                                                <div class="form-text">{{ form.pkcs11_user_pin.help_text }}</div>
+                                            {% endif %}
+                                            {% if form.pkcs11_user_pin.errors %}
+                                                <div class="text-danger mt-2">
+                                                    {{ form.pkcs11_user_pin.errors }}
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </section>
+                            </div>
+                        {% elif form.is_software_backend_config %}
+                            <div class="tp-backend-setup">
+                                <section class="tp-backend-section">
+                                    <div class="tp-backend-section-kicker">Software Backend</div>
+                                    <h3 class="tp-backend-section-title">No Additional Backend Configuration Needed</h3>
+                                    <p class="tp-backend-section-copy">
+                                        The built-in software backend is ready to use as-is.
+                                    </p>
+                                    <div class="alert alert-warning mb-0 text-start">
+                                        <strong>{% trans "Demo backend." %}</strong>
+                                        {% trans "Use this backend for demos, development, and automated tests only. It is not intended for production Trustpoint deployments." %}
+                                    </div>
+                                </section>
+                            </div>
+                        {% else %}
+                            {% if form.staged_backup_name %}
+                                <div class="tp-backend-state-pill">
+                                    <span>Current staged backup: {{ form.staged_backup_name }}</span>
+                                    <button type="submit" name="wizard_action" value="clear_restore_backup" class="tp-backend-state-pill-dismiss" formnovalidate aria-label="Remove staged backup" title="Remove staged backup">×</button>
+                                </div>
+                            {% endif %}
+                            {% for field in form %}
+                                {% if field.is_hidden %}
+                                    {{ field }}
+                                {% else %}
+                                    <div class="mb-3 text-start">
+                                        {% if field.field.widget.input_type == 'radio' %}
+                                            <div class="tp-choice-group">
+                                                {% for option in field %}
+                                                    <label for="{{ option.id_for_label }}" class="tp-choice-option{% if option.data.disabled %} is-disabled{% endif %}">
+                                                        {{ option.tag }}
+                                                        <span class="tp-choice-card">
+                                                            <span class="tp-choice-title-row">
+                                                                <span class="tp-choice-title">{{ option.choice_label }}</span>
+                                                                {% if option.data.disabled %}
+                                                                    <span class="tp-choice-badge">Coming Soon</span>
+                                                                {% endif %}
+                                                            </span>
+                                                            {% if option.data.description %}
+                                                                <span class="tp-choice-description">{{ option.data.description }}</span>
+                                                            {% endif %}
+                                                        </span>
+                                                    </label>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            {% if field.label %}
+                                                <label class="tp-backend-field-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                                            {% endif %}
+                                            {{ field }}
+                                        {% endif %}
+                                        {% if field.help_text %}
+                                            <div class="form-text">{{ field.help_text }}</div>
+                                        {% endif %}
+                                        {% if field.errors %}
+                                            <div class="text-danger mt-2">{{ field.errors }}</div>
+                                        {% endif %}
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                    </fieldset>
+
+                    <hr class="tp-form-divider">
+
+                    <div class="tp-setup-form-actions">
+                        {% if back_url %}
+                            <a href="{{ back_url }}" class="btn tp-setup-form-back">{% trans "Back" %}</a>
+                        {% endif %}
+                        {% if form.is_pkcs11_backend_config %}
+                            <button class="btn tp-setup-form-secondary" type="submit" name="wizard_action" value="test_connection">
+                                {% trans "Test HSM Connection" %}
+                            </button>
+                        {% endif %}
+                        {% if form.is_database_config %}
+                            <button class="btn tp-setup-form-secondary" type="submit" name="wizard_action" value="test_database">
+                                {% trans "Test Database Connection" %}
+                            </button>
+                        {% endif %}
+                        {% if is_attach_summary %}
+                            <button class="btn tp-setup-form-submit" type="submit">
+                                {% if summary_submit_label %}
+                                    {{ summary_submit_label }}
+                                {% else %}
+                                    {% trans "Apply Attach" %}
+                                {% endif %}
+                            </button>
+                        {% else %}
+                            <button class="btn tp-setup-form-submit" type="submit">
+                                {% trans "Apply and Continue" %}
+                            </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% if is_attach_summary %}
+                <div class="tp-summary-loading-state" data-summary-loading-state hidden aria-live="polite" aria-busy="true">
+                    <div class="card tp-card-setup-wizard tp-summary-loading-card">
+                        <div class="card-body">
+                            <div class="tp-summary-loading-visual" aria-hidden="true">
+                                <div class="spinner-border tp-summary-loading-spinner" aria-hidden="true"></div>
+                            </div>
+                            <h2 class="tp-summary-loading-title">{% trans 'Just a Moment!' %}</h2>
+                            <p class="tp-summary-loading-copy">
+                                {% if summary_submit_label == 'Apply Restore' %}
+                                    {% trans 'We are restoring the instance for you!' %}
+                                {% else %}
+                                    {% trans 'We are connecting the instance for you!' %}
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            {% endif %}
+        </form>
+    </section>
+
+    {% if is_attach_summary %}
+        <script>
+            (() => {
+                const form = document.querySelector('[data-summary-submit-form]');
+                const card = document.querySelector('[data-summary-submit-card]');
+                const loadingState = document.querySelector('[data-summary-loading-state]');
+
+                if (!form || !card || !loadingState) {
+                    return;
+                }
+
+                form.addEventListener('submit', () => {
+                    card.hidden = true;
+                    loadingState.hidden = false;
+                });
+            })();
+        </script>
+    {% endif %}
+
+{% endblock content %}

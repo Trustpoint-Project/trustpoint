@@ -19,6 +19,7 @@ from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters, viewsets
 from rest_framework.permissions import IsAuthenticated
 
+from management.backup_artifacts import backup_manifest_path
 from management.forms import BackupOptionsForm
 from management.models import BackupOptions
 from management.serializer.backup import BackupSerializer
@@ -147,6 +148,15 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # ty
 
         return redirect(self.success_url)
 
+    @staticmethod
+    def _remote_backup_path(remote_directory: str, filename: str) -> str:
+        """Build the remote path for a backup artifact."""
+        if remote_directory.endswith('/'):
+            return f'{remote_directory}{filename}'
+        if remote_directory:
+            return f'{remote_directory}/{filename}'
+        return filename
+
     def _handle_create_local_backup(self, request: Any) -> HttpResponse:
         """Create a new backup file locally only."""
         try:
@@ -202,15 +212,13 @@ class BackupManageView(SortableTableFromListMixin, LoggerMixin, ListView):  # ty
 
         local_file = settings.BACKUP_FILE_PATH / filename
         rd = client.remote_directory or ''
-        if rd.endswith('/'):
-            remote_path = f'{rd}{filename}'
-        elif rd:
-            remote_path = f'{rd}/{filename}'
-        else:
-            remote_path = filename
+        remote_path = self._remote_backup_path(rd, filename)
 
         try:
             client.upload_file(local_file, remote_path)
+            manifest_file = backup_manifest_path(local_file)
+            if manifest_file.is_file():
+                client.upload_file(manifest_file, self._remote_backup_path(rd, manifest_file.name))
             msg = f'Uploaded {filename} via SFTP to {remote_path}.'
             self.logger.info(msg)
             messages.success(request, msg)
@@ -345,8 +353,17 @@ class BackupFilesDownloadMultipleView(View):
             return redirect('management:backups')
 
         backup_dir: Path = settings.BACKUP_FILE_PATH
-        valid: list[str] = [f for f in filenames if (backup_dir / f).is_file()]
-        if not valid:
+        valid_paths: list[tuple[str, Path]] = []
+        for filename in filenames:
+            path = backup_dir / filename
+            if not path.is_file():
+                continue
+            valid_paths.append((filename, path))
+            manifest_path = backup_manifest_path(path)
+            if manifest_path.is_file():
+                valid_paths.append((manifest_path.name, manifest_path))
+
+        if not valid_paths:
             messages.error(request, 'No valid files to download.')
             return redirect('management:backups')
 
@@ -355,13 +372,12 @@ class BackupFilesDownloadMultipleView(View):
 
         if ext == 'zip':
             with zipfile.ZipFile(buffer, 'w') as zip_archive:
-                for fname in valid:
-                    data = (backup_dir / fname).read_bytes()
+                for fname, path in valid_paths:
+                    data = path.read_bytes()
                     zip_archive.writestr(fname, data)
         else:
             with tarfile.open(fileobj=buffer, mode='w:gz') as tar_archive:
-                for fname in valid:
-                    path = backup_dir / fname
+                for fname, path in valid_paths:
                     data = path.read_bytes()
                     info = tarfile.TarInfo(name=fname)
                     info.size = len(data)
@@ -406,6 +422,9 @@ class BackupFilesDeleteMultipleView(View, LoggerMixin):
                 continue
             try:
                 path.unlink()
+                manifest_path = backup_manifest_path(path)
+                if manifest_path.is_file():
+                    manifest_path.unlink()
                 info = f'Deleted backup file: {fname}'
                 self.logger.info(info)
                 deleted.append(fname)

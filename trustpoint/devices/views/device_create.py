@@ -3,10 +3,7 @@
 from typing import Any
 
 from django import forms
-from django.contrib import messages
-from django.http import HttpResponse, HttpResponseBase
-from django.http.request import HttpRequest
-from django.shortcuts import redirect
+from django.http import HttpResponse
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy
 from django.views.generic.base import RedirectView, TemplateView
@@ -22,7 +19,6 @@ from devices.forms import (
 from devices.models import (
     DeviceModel,
 )
-from management.models import KeyStorageConfig
 from management.models.audit_log import AuditLog
 from trustpoint.page_context import (
     DEVICES_PAGE_CATEGORY,
@@ -294,35 +290,6 @@ class DeviceCreateOpcUaGdsPushView(AbstractCreateOnboardingView):
 
     form_class = OpcUaGdsPushCreateForm
     page_name = DEVICES_PAGE_DEVICES_SUBCATEGORY
-
-    def dispatch(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponseBase:
-        """Check if SOFTWARE storage is configured before allowing GDS Push creation.
-
-        Args:
-            request: The HTTP request object.
-            *args: Variable length argument list.
-            **kwargs: Arbitrary keyword arguments.
-
-        Returns:
-            HttpResponseBase: The response object.
-        """
-        try:
-            config = KeyStorageConfig.get_config()
-            if config.storage_type != KeyStorageConfig.StorageType.SOFTWARE:
-                messages.error(
-                    request,
-                    f'OPC UA GDS Push is only available with SOFTWARE key storage. '
-                    f'Current storage type: {config.get_storage_type_display()}'
-                )
-                return redirect('devices:devices')
-        except KeyStorageConfig.DoesNotExist:
-            messages.error(
-                request,
-                'Key storage configuration not found. Please configure key storage first.'
-            )
-            return redirect('devices:devices')
-
-        return super().dispatch(request, *args, **kwargs)
 
     def form_valid(self, form: forms.Form) -> HttpResponse:
         """Saves the form / creates the device model object as OPC UA GDS Push type.

@@ -31,6 +31,19 @@ class Migration(migrations.Migration):
                 ('last_updated', models.DateTimeField(auto_now=True)),
             ],
         ),
+        migrations.RemoveField(
+            model_name='pkcs11token',
+            name='kek',
+        ),
+        migrations.RemoveField(
+            model_name='securityconfig',
+            name='require_physical_hsm',
+        ),
+        migrations.AddField(
+            model_name='loggingconfig',
+            name='crypto_backend_audit_enabled',
+            field=models.BooleanField(default=False, help_text='Record sanitized crypto backend operations in the audit log. Secrets, PINs, key material, payload bytes, and signatures are never stored.', verbose_name='Audit crypto backend operations'),
+        ),
         migrations.AddField(
             model_name='notificationconfig',
             name='crl_expiry_warning_days',
@@ -61,9 +74,10 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('timestamp', models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='Timestamp')),
-                ('operation_type', models.CharField(choices=[('CREDENTIAL_ISSUED', 'Credential Issued'), ('CREDENTIAL_RENEWED', 'Credential Renewed'), ('CREDENTIAL_REVOKED', 'Credential Revoked'), ('CREDENTIAL_DELETED', 'Credential Deleted'), ('MODEL_CREATED', 'Model Created'), ('MODEL_UPDATED', 'Model Updated'), ('MODEL_DELETED', 'Model Deleted'), ('SECURITY_CONFIG_CHANGED', 'Security Config Changed'), ('DEVICE_ADDED', 'Device Added'), ('DEVICE_DELETED', 'Device Deleted'), ('CA_CREATED', 'CA Created'), ('CA_DELETED', 'CA Deleted'), ('DOMAIN_CREATED', 'Domain Created'), ('DOMAIN_DELETED', 'Domain Deleted'), ('TLS_CERTIFICATE_CHANGED', 'TLS Certificate Changed'), ('TLS_CERTIFICATE_DELETED', 'TLS Certificate Deleted'), ('USER_CREATED', 'User Created'), ('SIGNER_DELETED', 'Signer Deleted'), ('SIGNER_ADDED', 'Signer Added'), ('HASH_SIGNED', 'Hash Signed')], db_index=True, max_length=32, verbose_name='Operation Type')),
+                ('operation_type', models.CharField(choices=[('CREDENTIAL_ISSUED', 'Credential Issued'), ('CREDENTIAL_RENEWED', 'Credential Renewed'), ('CREDENTIAL_REVOKED', 'Credential Revoked'), ('CREDENTIAL_DELETED', 'Credential Deleted'), ('MODEL_CREATED', 'Model Created'), ('MODEL_UPDATED', 'Model Updated'), ('MODEL_DELETED', 'Model Deleted'), ('SECURITY_CONFIG_CHANGED', 'Security Config Changed'), ('DEVICE_ADDED', 'Device Added'), ('DEVICE_DELETED', 'Device Deleted'), ('CA_CREATED', 'CA Created'), ('CA_DELETED', 'CA Deleted'), ('DOMAIN_CREATED', 'Domain Created'), ('DOMAIN_DELETED', 'Domain Deleted'), ('TLS_CERTIFICATE_CHANGED', 'TLS Certificate Changed'), ('TLS_CERTIFICATE_DELETED', 'TLS Certificate Deleted'), ('USER_CREATED', 'User Created'), ('SIGNER_DELETED', 'Signer Deleted'), ('SIGNER_ADDED', 'Signer Added'), ('HASH_SIGNED', 'Hash Signed'), ('CRYPTO_VERIFY_PROVIDER', 'Crypto: Verify Provider'), ('CRYPTO_GENERATE_MANAGED_KEY', 'Crypto: Generate Managed Key'), ('CRYPTO_VERIFY_MANAGED_KEY', 'Crypto: Verify Managed Key'), ('CRYPTO_GET_PUBLIC_KEY', 'Crypto: Get Public Key'), ('CRYPTO_SIGN', 'Crypto: Sign'), ('CRYPTO_DESTROY_MANAGED_KEY', 'Crypto: Destroy Managed Key')], db_index=True, max_length=32, verbose_name='Operation Type')),
                 ('target_object_id', models.CharField(db_index=True, max_length=255, verbose_name='Target Object ID')),
                 ('target_display', models.CharField(help_text='Human-readable label of the affected object at the time of the action, e.g. "DevOwnerID: my-device". Preserved even if the target is later deleted.', max_length=255, verbose_name='Target Display')),
+                ('details', models.JSONField(blank=True, default=dict, help_text='Structured non-secret metadata captured for this audit entry.', verbose_name='Details')),
                 ('actor', models.ForeignKey(blank=True, help_text='The user who triggered the action. Null for system-triggered actions.', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='audit_log_entries', to=settings.AUTH_USER_MODEL, verbose_name='Actor')),
                 ('target_content_type', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='contenttypes.contenttype', verbose_name='Target Content Type')),
             ],
@@ -71,7 +85,16 @@ class Migration(migrations.Migration):
                 'verbose_name': 'Audit Log Entry',
                 'verbose_name_plural': 'Audit Log Entries',
                 'ordering': ['-timestamp'],
-                'indexes': [models.Index(fields=['target_content_type', 'target_object_id'], name='audit_log_target_idx')],
             },
+        ),
+        migrations.DeleteModel(
+            name='KeyStorageConfig',
+        ),
+        migrations.DeleteModel(
+            name='PKCS11Token',
+        ),
+        migrations.AddIndex(
+            model_name='auditlog',
+            index=models.Index(fields=['target_content_type', 'target_object_id'], name='audit_log_target_idx'),
         ),
     ]

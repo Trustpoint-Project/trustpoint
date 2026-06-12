@@ -131,7 +131,7 @@
         } catch (e) { console.error(e); }
 
         try {
-            ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca', 'require_physical_hsm']
+            ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca']
                 .forEach(field => {
                     const checkbox = document.querySelector(`input[name="${field}"]`);
                     if (!checkbox) return;
@@ -201,7 +201,7 @@
         } catch (e) { console.error(e); }
 
         try {
-            ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca', 'require_physical_hsm']
+            ['allow_ca_issuance', 'allow_auto_gen_pki', 'allow_self_signed_ca']
                 .forEach(field => {
                     const checkbox = document.querySelector(`input[name="${field}"]`);
                     if (!checkbox) return;
