@@ -7,7 +7,10 @@ from typing import Any
 
 from .adapters import (
     DjangoEmailAdapter,
+    DjangoNotificationAdapter,
     EmailAdapter,
+    NotificationAdapter,
+    NotificationCreateRequest,
     RequestsWebhookAdapter,
     WebhookAdapter,
     WebhookResponse,
@@ -19,9 +22,17 @@ from .types import ExecutionResult, RunStatus, StepRun
 
 OnStepRun = Callable[[StepRun], None]
 
-_TERMINAL_RUN_STATUSES = {'failed', 'awaiting', 'rejected'}
-_END_TARGETS = {'$end', '$reject'}
-
+_TERMINAL_RUN_STATUSES = {
+    'awaiting',
+    'finished',
+    'approved',
+    'rejected',
+    'error',
+    'timed_out',
+    'stopped',
+    'paused',
+}
+_SET_STATUS_STATUSES = {'finished', 'approved', 'rejected', 'timed_out', 'stopped', 'paused'}
 CAPTURE_TARGET_PARTS = 2
 CAPTURE_SOURCE_MIN_PARTS = 1
 
@@ -38,12 +49,14 @@ class WorkflowExecutor:
         self,
         *,
         email: EmailAdapter | None = None,
+        notification: NotificationAdapter | None = None,
         webhook: WebhookAdapter | None = None,
         on_step_run: OnStepRun | None = None,
         max_steps: int = 200,
     ) -> None:
         """Initialize the executor with adapters and an optional hook."""
         self.email = email or DjangoEmailAdapter()
+        self.notification = notification or DjangoNotificationAdapter()
         self.webhook = webhook or RequestsWebhookAdapter()
         self.on_step_run = on_step_run
         self.max_steps = max_steps
@@ -128,7 +141,7 @@ class WorkflowExecutor:
                     run_index=run_index,
                     step_id=step_id,
                     step_type=str((steps.get(step_id) or {}).get('type') or ''),
-                    status='failed',
+                    status='error',
                     outcome=None,
                     next_step=None,
                     vars_delta={},
@@ -138,7 +151,7 @@ class WorkflowExecutor:
                 )
                 runs.append(run)
                 self._emit(run)
-                status = 'failed'
+                status = 'error'
                 end_step = step_id
                 break
 
@@ -151,14 +164,14 @@ class WorkflowExecutor:
                 break
 
             if run.next_step is None:
-                status = 'succeeded'
+                status = 'finished'
                 end_step = step_id
                 break
 
             step_id = run.next_step
 
         else:
-            status = 'failed'
+            status = 'error'
             end_step = step_id
 
         return ExecutionResult(
@@ -187,12 +200,30 @@ class WorkflowExecutor:
 
         if step_type == 'set':
             self._step_set(step_id, params, ctx)
+        elif step_type == 'set_status':
+            output = self._step_set_status(step_id, params, ctx)
+            status = output['status']
+            next_step = self._choose_next(step_id, None, transitions) if status == 'paused' else None
+            return StepRun(
+                run_index=run_index,
+                step_id=step_id,
+                step_type=step_type,
+                status=status,
+                outcome=None,
+                next_step=next_step,
+                vars_delta=_delta(vars_before, ctx.vars),
+                output=output,
+                error=None,
+                created_at=_now(),
+            )
         elif step_type == 'compute':
             self._step_compute(step_id, params, ctx)
         elif step_type == 'logic':
             outcome = self._step_logic(step_id, params, ctx)
         elif step_type == 'email':
             output = self._step_email(step_id, params, ctx)
+        elif step_type == 'notification':
+            output = self._step_notification(step_id, params, ctx)
         elif step_type == 'webhook':
             output = self._step_webhook(step_id, params, ctx)
         elif step_type == 'approval':
@@ -207,6 +238,7 @@ class WorkflowExecutor:
                 output={
                     'approved_outcome': params.get('approved_outcome'),
                     'rejected_outcome': params.get('rejected_outcome'),
+                    'timeout_outcome': params.get('timeout_outcome'),
                     'timeout_seconds': params.get('timeout_seconds'),
                 },
                 error=None,
@@ -216,21 +248,6 @@ class WorkflowExecutor:
             raise StepExecutionError(step_id, f'Unknown step type "{step_type}"')
 
         next_step = self._choose_next(step_id, outcome, transitions)
-
-        # $reject means "end rejected" without a step
-        if next_step == '$reject':
-            return StepRun(
-                run_index=run_index,
-                step_id=step_id,
-                step_type=step_type,
-                status='rejected',
-                outcome=outcome,
-                next_step=None,
-                vars_delta=_delta(vars_before, ctx.vars),
-                output=output,
-                error=None,
-                created_at=_now(),
-            )
 
         return StepRun(
             run_index=run_index,
@@ -254,6 +271,24 @@ class WorkflowExecutor:
             raise StepExecutionError(step_id, 'Invalid set.vars render')
         for k, v in rendered.items():
             ctx.vars[str(k)] = v
+
+    def _step_set_status(self, step_id: str, params: dict[str, Any], ctx: RuntimeContext) -> dict[str, Any]:
+        status = params.get('status')
+        reason = params.get('reason')
+        message = render_template(params.get('message'), ctx)
+
+        if status not in _SET_STATUS_STATUSES:
+            raise StepExecutionError(step_id, 'Invalid set_status.status')
+        if not isinstance(reason, str) or not reason.strip():
+            raise StepExecutionError(step_id, 'Invalid set_status.reason')
+        if not isinstance(message, str):
+            raise StepExecutionError(step_id, 'Invalid set_status.message')
+
+        return {
+            'status': status,
+            'reason': reason.strip(),
+            'message': message,
+        }
 
     def _step_compute(self, step_id: str, params: dict[str, Any], ctx: RuntimeContext) -> None:
         set_map = params.get('set')
@@ -309,6 +344,48 @@ class WorkflowExecutor:
 
         self.email.send(to=to, cc=cc, bcc=bcc, subject=subject, body=body)
         return {'sent': True, 'to': to}
+
+    @staticmethod
+    def _render_notification_related(params: dict[str, Any], ctx: RuntimeContext) -> dict[str, Any]:
+        related = params.get('related') or {}
+        if not isinstance(related, dict):
+            return {}
+        rendered = render_template(related, ctx)
+        return rendered if isinstance(rendered, dict) else {}
+
+    def _step_notification(self, step_id: str, params: dict[str, Any], ctx: RuntimeContext) -> dict[str, Any]:
+        short = render_template(params.get('short'), ctx)
+        long = render_template(params.get('long'), ctx)
+        event = render_template(params.get('event'), ctx)
+        severity = params.get('severity')
+        source = params.get('source')
+        initial_status = params.get('initial_status')
+        related = self._render_notification_related(params, ctx)
+
+        if not isinstance(short, str) or not short.strip():
+            raise StepExecutionError(step_id, 'Invalid notification.short')
+        if not isinstance(long, str):
+            raise StepExecutionError(step_id, 'Invalid notification.long')
+        if not isinstance(event, str) or not event.strip():
+            raise StepExecutionError(step_id, 'Invalid notification.event')
+        if not isinstance(severity, str) or not severity:
+            raise StepExecutionError(step_id, 'Invalid notification.severity')
+        if not isinstance(source, str) or not source:
+            raise StepExecutionError(step_id, 'Invalid notification.source')
+        if not isinstance(initial_status, str) or not initial_status:
+            raise StepExecutionError(step_id, 'Invalid notification.initial_status')
+
+        return self.notification.create(
+            NotificationCreateRequest(
+                severity=severity,
+                source=source,
+                short=short.strip(),
+                long=long,
+                initial_status=initial_status,
+                event=event.strip(),
+                related=related,
+            )
+        )
 
     @staticmethod
     def _validate_webhook_inputs(
@@ -438,10 +515,6 @@ class WorkflowExecutor:
 
     @staticmethod
     def _normalize_transition_target(to: str) -> str | None:
-        if to == '$end':
-            return None
-        if to == '$reject':
-            return '$reject'
         return to
 
     def _choose_next(self, step_id: str, outcome: str | None, transitions: Any) -> str | None:

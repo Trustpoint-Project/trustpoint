@@ -101,14 +101,6 @@ workflow:
       type: approval
       approved_outcome: approved
       rejected_outcome: rejected
-
-  flow:
-    - from: approve
-      on: approved
-      to: $end
-    - from: approve
-      on: rejected
-      to: $reject
 """
 
     def test_compile_valid(self) -> None:
@@ -342,6 +334,33 @@ workflow:
         vars_map = ir["workflow"]["steps"]["stop_ok"]["params"]["vars"]
         self.assertEqual(vars_map["result"], "ok")
         self.assertEqual(vars_map["message"]["kind"], "template")
+
+    def test_set_status_disallows_runtime_error_status(self) -> None:
+        yaml_text = """\
+schema: trustpoint.workflow.v2
+name: Set status error
+enabled: true
+
+trigger:
+  on: device.created
+  sources:
+    trustpoint: true
+
+workflow:
+  start: mark_error
+  steps:
+    mark_error:
+      type: set_status
+      status: error
+      reason: workflow_error
+  flow: []
+"""
+
+        with self.assertRaises(CompileError) as ctx:
+            compile_workflow_yaml(yaml_text, compiler_version="test")
+
+        self.assertIn('"set_status.status" must be one of', str(ctx.exception))
+        self.assertIn('stopped', str(ctx.exception))
 
     def test_expr_disallows_unknown_function(self) -> None:
         yaml_text = VALID_YAML.replace(

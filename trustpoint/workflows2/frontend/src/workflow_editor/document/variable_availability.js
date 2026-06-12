@@ -1,7 +1,5 @@
 import { uniqStrings } from './value_utils.js';
 
-const END_TARGETS = new Set(['$end', '$reject']);
-
 function normalizeWorkflowVarName(rawName) {
   if (typeof rawName !== 'string') {
     return null;
@@ -50,7 +48,7 @@ function normalizeFlowEdges(rootObj, stepsObj) {
         return null;
       }
 
-      if (!Object.prototype.hasOwnProperty.call(stepsObj, to) && !END_TARGETS.has(to)) {
+      if (!Object.prototype.hasOwnProperty.call(stepsObj, to)) {
         return null;
       }
 

@@ -138,26 +138,4 @@ PRESETS: list[Preset] = [
         },
         areas={'workflow.flow'},
     ),
-    Preset(
-        id='flow_to_end',
-        title=_('Flow: end workflow'),
-        description=_('Append a flow edge that ends the workflow via "$end".'),
-        operation='append_list_item',
-        payload={
-            'from': 'step_a',
-            'to': '$end',
-        },
-        areas={'workflow.flow'},
-    ),
-    Preset(
-        id='flow_to_reject',
-        title=_('Flow: reject workflow'),
-        description=_('Append a flow edge that rejects the workflow via "$reject".'),
-        operation='append_list_item',
-        payload={
-            'from': 'step_a',
-            'to': '$reject',
-        },
-        areas={'workflow.flow'},
-    ),
 ]

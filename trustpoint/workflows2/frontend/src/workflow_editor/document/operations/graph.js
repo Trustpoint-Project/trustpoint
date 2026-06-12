@@ -6,7 +6,6 @@ import {
 } from '../catalog_metadata.js';
 import {
   cleanupFlowForDeletedStep,
-  END_TARGETS,
   normalizeFlow,
   pickReplacementStartStep,
 } from '../flow_document.js';
@@ -28,10 +27,6 @@ function validateExistingStep(steps, stepId, label = 'Step') {
 function validateTarget(steps, toStep) {
   if (!toStep) {
     throw new Error('Target step is required.');
-  }
-
-  if (END_TARGETS.has(toStep)) {
-    return;
   }
 
   if (!Object.prototype.hasOwnProperty.call(steps, toStep)) {

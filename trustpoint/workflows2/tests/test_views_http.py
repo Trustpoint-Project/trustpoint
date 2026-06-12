@@ -16,6 +16,7 @@ from workflows2.models import (
     Workflow2Instance,
     Workflow2Job,
     Workflow2Run,
+    Workflow2StepRun,
     Workflow2WorkerHeartbeat,
 )
 from workflows2.services.dispatch import EventSource, WorkflowDispatchService
@@ -43,13 +44,22 @@ workflow:
           outcome: ok
       default: reject
 
+    stop_ok:
+      type: set
+      vars: {}
+
+    mark_rejected:
+      type: set_status
+      status: rejected
+      reason: graph_rejected
+
   flow:
     - from: decide
       on: ok
-      to: $end
+      to: stop_ok
     - from: decide
       on: reject
-      to: $reject
+      to: mark_rejected
 """
 
 
@@ -80,13 +90,8 @@ workflow:
 
   flow:
     - from: approve
-      on: approved
-      to: $end
-    - from: approve
       on: needs_review
       to: mark_review
-    - from: mark_review
-      to: $end
 """
 
 
@@ -182,7 +187,7 @@ class Workflow2HttpViewTests(TestCase):
         response = self.client.get(reverse("workflows2:runs-list"))
         self.assertEqual(response.status_code, 302)
 
-    def test_definition_create_syncs_form_metadata_into_saved_yaml_and_ir(self) -> None:
+    def test_definition_create_uses_yaml_name_and_form_enabled_flag(self) -> None:
         self.client.force_login(self.user)
 
         yaml_text = """\
@@ -207,7 +212,7 @@ workflow:
         response = self.client.post(
             reverse("workflows2:definitions_new"),
             {
-                "name": "Form Name",
+                "enabled": "",
                 "yaml_text": yaml_text,
             },
         )
@@ -215,11 +220,11 @@ workflow:
         self.assertEqual(response.status_code, 302)
 
         definition = Workflow2Definition.objects.latest("created_at")
-        self.assertEqual(definition.name, "Form Name")
+        self.assertEqual(definition.name, "YAML Name")
         self.assertFalse(definition.enabled)
-        self.assertIn("name: Form Name", definition.yaml_text)
+        self.assertIn("name: YAML Name", definition.yaml_text)
         self.assertIn("enabled: false", definition.yaml_text)
-        self.assertEqual(definition.ir_json["name"], "Form Name")
+        self.assertEqual(definition.ir_json["name"], "YAML Name")
         self.assertFalse(definition.ir_json["enabled"])
 
     def test_runs_list_hides_unsupported_legacy_run_status(self) -> None:
@@ -251,8 +256,9 @@ workflow:
         payload = response.json()
         node_ids = {node["id"] for node in payload["nodes"]}
 
-        self.assertIn("$end", node_ids)
-        self.assertIn("$reject", node_ids)
+        self.assertFalse(any(node_id.startswith("$") for node_id in node_ids))
+        self.assertIn("stop_ok", node_ids)
+        self.assertIn("mark_rejected", node_ids)
         self.assertEqual(payload["definition_id"], str(definition.id))
         self.assertEqual(payload["ir_hash"], definition.ir_hash)
 
@@ -264,7 +270,7 @@ workflow:
         )
         self.assertEqual(response.status_code, 302)
 
-    def test_graph_from_yaml_endpoint_returns_virtual_end_nodes(self) -> None:
+    def test_graph_from_yaml_endpoint_returns_real_terminal_nodes(self) -> None:
         self.client.force_login(self.user)
 
         response = self.client.post(
@@ -277,8 +283,9 @@ workflow:
         payload = response.json()
         node_ids = {node["id"] for node in payload["nodes"]}
 
-        self.assertIn("$end", node_ids)
-        self.assertIn("$reject", node_ids)
+        self.assertFalse(any(node_id.startswith("$") for node_id in node_ids))
+        self.assertIn("stop_ok", node_ids)
+        self.assertIn("mark_rejected", node_ids)
 
     def test_approval_resolve_continues_inline_when_no_worker_is_present(self) -> None:
         self.client.force_login(self.user)
@@ -311,7 +318,7 @@ workflow:
         self.assertEqual(response.status_code, 302)
 
         inst.refresh_from_db()
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
         self.assertEqual(inst.vars_json.get("result"), "reviewed")
         self.assertEqual(
             Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(),
@@ -353,7 +360,7 @@ workflow:
         self.assertEqual(response.status_code, 302)
 
         inst.refresh_from_db()
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
         self.assertEqual(inst.vars_json.get("result"), "reviewed")
         self.assertEqual(
             Workflow2Job.objects.filter(instance=inst, status=Workflow2Job.STATUS_QUEUED).count(),
@@ -387,7 +394,7 @@ workflow:
 
         self.assertEqual(response.status_code, 200)
         inst.refresh_from_db()
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_FINISHED)
         self.assertEqual(Workflow2Job.objects.filter(status=Workflow2Job.STATUS_QUEUED).count(), 0)
 
     def test_detail_pages_render_for_run_instance_and_approval(self) -> None:
@@ -420,3 +427,122 @@ workflow:
         approval_response = self.client.get(reverse("workflows2:approvals-detail", args=[approval.id]))
         self.assertEqual(approval_response.status_code, 200)
         self.assertContains(approval_response, "Approval review")
+
+    def test_stop_error_instance_preserves_error_context(self) -> None:
+        self.client.force_login(self.user)
+
+        definition = self._store_definition()
+        run = Workflow2Run.objects.create(
+            trigger_on="workflows2.test",
+            event_json={"device": {"id": "dev-1"}},
+            source_json={"trustpoint": True},
+            status=Workflow2Run.STATUS_ERROR,
+            finalized=False,
+        )
+        inst = Workflow2Instance.objects.create(
+            run=run,
+            definition=definition,
+            event_json={"device": {"id": "dev-1"}},
+            vars_json={},
+            status=Workflow2Instance.STATUS_ERROR,
+            current_step="decide",
+            status_reason="runtime_error",
+            status_message="ValueError: bad route",
+            run_count=1,
+        )
+        Workflow2StepRun.objects.create(
+            instance=inst,
+            run_index=1,
+            step_id="decide",
+            step_type="logic",
+            status="error",
+            error="ValueError: bad route",
+            vars_delta={},
+            output=None,
+            created_at=timezone.now(),
+        )
+        Workflow2Job.objects.create(
+            instance=inst,
+            kind=Workflow2Job.KIND_RUN,
+            status=Workflow2Job.STATUS_QUEUED,
+        )
+
+        response = self.client.post(reverse("workflows2:instances-stop", args=[inst.id]))
+
+        self.assertEqual(response.status_code, 302)
+
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_STOPPED)
+        self.assertEqual(inst.status_reason, "stopped_after_error")
+        self.assertEqual(inst.status_message, "ValueError: bad route")
+        self.assertEqual(inst.current_step, "")
+        self.assertEqual(
+            Workflow2Job.objects.get(instance=inst).status,
+            Workflow2Job.STATUS_CANCELLED,
+        )
+
+        run.refresh_from_db()
+        self.assertEqual(run.status, Workflow2Run.STATUS_STOPPED)
+        self.assertTrue(run.finalized)
+
+    def test_release_run_idempotency_view_allows_same_request_again(self) -> None:
+        self.client.force_login(self.user)
+
+        run = Workflow2Run.objects.create(
+            trigger_on="workflows2.test",
+            event_json={"device": {"common_name": "device-a"}},
+            source_json={"trustpoint": True},
+            idempotency_key="same-request",
+            status=Workflow2Run.STATUS_REJECTED,
+            finalized=True,
+        )
+
+        response = self.client.post(reverse("workflows2:runs-release-idempotency", args=[run.id]))
+
+        self.assertEqual(response.status_code, 302)
+
+        run.refresh_from_db()
+        self.assertEqual(run.idempotency_key, "")
+        self.assertEqual(run.idempotency_released_key, "same-request")
+        self.assertEqual(run.idempotency_release_mode, "manual")
+        self.assertEqual(run.idempotency_released_by, self.user.get_username())
+        self.assertIsNotNone(run.idempotency_released_at)
+
+    def test_runs_list_searches_workflow_definition_and_event_payload(self) -> None:
+        self.client.force_login(self.user)
+
+        definition = self._store_definition()
+        matching_run = Workflow2Run.objects.create(
+            trigger_on="workflows2.test",
+            event_json={"device": {"common_name": "alpha-device"}},
+            source_json={"trustpoint": True},
+            status=Workflow2Run.STATUS_REJECTED,
+            finalized=True,
+            idempotency_released_key="manual-key",
+            idempotency_release_mode="manual",
+            idempotency_released_at=timezone.now(),
+        )
+        Workflow2Instance.objects.create(
+            run=matching_run,
+            definition=definition,
+            event_json={},
+            vars_json={},
+            status=Workflow2Instance.STATUS_REJECTED,
+        )
+        Workflow2Run.objects.create(
+            trigger_on="workflows2.test",
+            event_json={"device": {"common_name": "other-device"}},
+            source_json={"trustpoint": True},
+            status=Workflow2Run.STATUS_FINISHED,
+            finalized=True,
+        )
+
+        response = self.client.get(
+            reverse("workflows2:runs-list"),
+            {"q": "alpha-device", "idempotency": "manual"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, str(matching_run.id))
+        self.assertContains(response, "Released manually")
+        self.assertNotContains(response, "other-device")

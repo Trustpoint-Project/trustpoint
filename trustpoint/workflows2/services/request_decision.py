@@ -6,6 +6,7 @@ from enum import Enum
 from typing import Any
 
 from workflows2.models import Workflow2Approval, Workflow2Run
+from workflows2.services.transitions import WorkflowRunTransitionService
 
 
 class Workflow2RequestDecision(Enum):
@@ -20,9 +21,8 @@ class Workflow2RequestDecision(Enum):
 def resolve_request_decision(run: Workflow2Run | Any) -> Workflow2RequestDecision:
     """Return the request-facing decision represented by one workflow run.
 
-    Request workflows can branch after an approval decision and still end with an
-    aggregate run status of ``succeeded``. In that case the approval decision is
-    authoritative for request gating, not the final execution status alone.
+    Approved requests may finish as ``approved`` or ``finished`` depending on
+    whether an explicit approval decision was the terminal business result.
     """
     run_status = str(getattr(run, 'status', '') or '')
     approval_statuses = _approval_statuses_for_run(run)
@@ -37,20 +37,21 @@ def resolve_request_decision(run: Workflow2Run | Any) -> Workflow2RequestDecisio
     elif (
         Workflow2Approval.STATUS_PENDING in approval_statuses
         or run_status in {
-        Workflow2Run.STATUS_QUEUED,
-        Workflow2Run.STATUS_RUNNING,
-        Workflow2Run.STATUS_AWAITING,
-        Workflow2Run.STATUS_PAUSED,
+            *WorkflowRunTransitionService.ACTIVE_STATUSES,
+            *WorkflowRunTransitionService.BLOCKED_STATUSES,
         }
     ):
         decision = Workflow2RequestDecision.WAIT
     elif run_status in {
-        Workflow2Run.STATUS_FAILED,
+        Workflow2Run.STATUS_TIMED_OUT,
         Workflow2Run.STATUS_CANCELLED,
         Workflow2Run.STATUS_STOPPED,
     }:
         decision = Workflow2RequestDecision.FAIL
-    elif run_status == Workflow2Run.STATUS_SUCCEEDED:
+    elif run_status in {
+        Workflow2Run.STATUS_APPROVED,
+        Workflow2Run.STATUS_FINISHED,
+    }:
         decision = Workflow2RequestDecision.CONTINUE
     return decision
 

@@ -42,14 +42,6 @@ workflow:
       approved_outcome: approved
       rejected_outcome: rejected
       timeout_seconds: 3600
-
-  flow:
-    - from: approve
-      on: approved
-      to: $end
-    - from: approve
-      on: rejected
-      to: $reject
 """
 
 
@@ -100,13 +92,31 @@ workflow:
 
   flow:
     - from: approve
-      on: continue_ok
-      to: $end
-    - from: approve
       on: needs_review
       to: mark_review
-    - from: mark_review
-      to: $end
+"""
+
+
+YAML_APPROVAL_CUSTOM_TIMEOUT_OUTCOME = """
+schema: trustpoint.workflow.v2
+name: Approval Custom Timeout Outcome
+enabled: true
+
+trigger:
+  on: workflows2.test
+  sources:
+    trustpoint: true
+
+workflow:
+  start: approve
+
+  steps:
+    approve:
+      type: approval
+      approved_outcome: approved
+      rejected_outcome: rejected
+      timeout_outcome: deadline_missed
+      timeout_seconds: 1
 """
 
 
@@ -137,6 +147,21 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         runtime.resolve_approval(approval=approval, decision="rejected")
         inst.refresh_from_db()
         self.assertEqual(inst.status, Workflow2Instance.STATUS_REJECTED)
+
+    def test_run_one_step_does_not_convert_awaiting_instance_to_error(self) -> None:
+        d = self._store_def(YAML_APPROVAL_REJECT, name="non-runnable")
+        runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
+
+        inst = runtime.create_instance(definition=d, event={"device": {"id": "x"}})
+        runtime.run_one_step(inst)
+
+        with self.assertRaisesMessage(ValueError, "Instance is terminal/blocked; cannot run"):
+            runtime.run_one_step(inst)
+
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_AWAITING)
+        self.assertEqual(inst.current_step, "approve")
+        self.assertEqual(Workflow2StepRun.objects.filter(instance=inst, status="error").count(), 0)
 
     def test_dispatch_creates_run_and_instances_and_awaits(self) -> None:
         cfg = WorkflowExecutionConfig.load()
@@ -211,7 +236,7 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         )
         run = Workflow2Run.objects.get(id=first[0].run_id)
         run.finalized = True
-        run.status = Workflow2Run.STATUS_SUCCEEDED
+        run.status = Workflow2Run.STATUS_FINISHED
         run.save(update_fields=["finalized", "status", "updated_at"])
 
         second = svc.emit_event(
@@ -308,12 +333,12 @@ class Workflow2BundleApprovalRejectTests(TestCase):
         approval.refresh_from_db()
 
         self.assertEqual(approval.status, Workflow2Approval.STATUS_APPROVED)
-        self.assertEqual(inst.status, Workflow2Instance.STATUS_SUCCEEDED)
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_APPROVED)
         self.assertEqual(inst.current_step, '')
 
         continued = Workflow2StepRun.objects.get(instance=inst, run_index=2)
         self.assertEqual(continued.step_id, "approve")
-        self.assertEqual(continued.status, "succeeded")
+        self.assertEqual(continued.status, "approved")
         self.assertEqual(continued.outcome, "continue_ok")
         self.assertEqual(continued.next_step, '')
 
@@ -356,6 +381,35 @@ class Workflow2BundleApprovalRejectTests(TestCase):
 
         approval.refresh_from_db()
         self.assertEqual(approval.status, Workflow2Approval.STATUS_EXPIRED)
+
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_TIMED_OUT)
+
+        step_run = Workflow2StepRun.objects.get(instance=inst, run_index=2)
+        self.assertEqual(step_run.status, "timed_out")
+        self.assertEqual(step_run.outcome, "timed_out")
+
+    def test_approval_timeout_records_configured_timeout_outcome(self) -> None:
+        d = self._store_def(YAML_APPROVAL_CUSTOM_TIMEOUT_OUTCOME, name="approval-custom-timeout")
+        runtime = WorkflowRuntimeService(executor=WorkflowExecutor())
+
+        inst = runtime.create_instance(definition=d, event={"device": {"id": "x"}})
+        runtime.run_one_step(inst)
+
+        approval = Workflow2Approval.objects.get(instance=inst, step_id="approve")
+        approval.expires_at = timezone.now() - timedelta(seconds=1)
+        approval.save(update_fields=["expires_at"])
+
+        with self.assertRaisesMessage(ValueError, "Approval has expired"):
+            runtime.resolve_approval(approval=approval, decision="approved")
+
+        inst.refresh_from_db()
+        self.assertEqual(inst.status, Workflow2Instance.STATUS_TIMED_OUT)
+
+        step_run = Workflow2StepRun.objects.get(instance=inst, run_index=2)
+        self.assertEqual(step_run.status, "timed_out")
+        self.assertEqual(step_run.outcome, "deadline_missed")
+        self.assertEqual(step_run.output["selected_outcome"], "deadline_missed")
 
     def test_recompute_run_status_marks_single_cancelled_instance_run_cancelled(self) -> None:
         d = self._store_def(YAML_TWO_WORKFLOWS, name="cancel-agg")

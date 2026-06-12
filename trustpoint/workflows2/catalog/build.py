@@ -159,7 +159,7 @@ def build_context_catalog() -> dict[str, Any]:
             },
         },
         'meta': {
-            'version': 7,
+            'version': 8,
             'common_step_fields': [
                 {
                     'key': f.key,
@@ -174,7 +174,6 @@ def build_context_catalog() -> dict[str, Any]:
                 }
                 for f in COMMON_STEP_FIELDS
             ],
-            'end_targets': ['$end', '$reject'],
             'i18n': {
                 'guide_trigger_browse_description': _(
                     'Search documented triggers by name, key, or group.'

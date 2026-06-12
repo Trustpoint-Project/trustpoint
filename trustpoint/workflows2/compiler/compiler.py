@@ -31,10 +31,40 @@ COMPUTE_OPERATORS: tuple[str, ...] = (
 
 _ALLOWED_COMPUTE_OPS: set[str] = set(COMPUTE_OPERATORS)
 
-_END_TARGETS: set[str] = {'$end', '$reject'}
-
 VARS_PATH_MIN_PARTS = 2
 MIN_CAPTURE_TARGET_PARTS = 2
+NOTIFICATION_SEVERITIES: tuple[str, ...] = ('setup', 'info', 'warning', 'critical')
+NOTIFICATION_SOURCES: tuple[str, ...] = ('system', 'device', 'domain', 'certificate', 'issuing_ca')
+NOTIFICATION_INITIAL_STATUSES: tuple[str, ...] = (
+    'new',
+    'confirmed',
+    'in_progress',
+    'solved',
+    'not_solved',
+    'escalated',
+    'suspended',
+    'rejected',
+    'deleted',
+    'closed',
+    'acknowledged',
+    'failed',
+    'expired',
+    'pending',
+)
+NOTIFICATION_RELATED_KEYS: frozenset[str] = frozenset({
+    'device_id',
+    'domain_id',
+    'certificate_id',
+    'issuing_ca_id',
+})
+SET_STATUS_ALLOWED_STATUSES: tuple[str, ...] = (
+    'finished',
+    'approved',
+    'rejected',
+    'timed_out',
+    'stopped',
+    'paused',
+)
 
 
 @dataclass(frozen=True)
@@ -296,16 +326,20 @@ class WorkflowCompiler:
 
         return out
 
-    def _compile_step_params(self, step_id: str, typ: str, step: dict[str, Any]) -> dict[str, Any]:
+    def _compile_step_params(self, step_id: str, typ: str, step: dict[str, Any]) -> dict[str, Any]:  # noqa: PLR0911
         base = f'workflow.steps.{step_id}'
         if typ == StepTypes.EMAIL:
             return self._compile_email_params(step, base)
+        if typ == StepTypes.NOTIFICATION:
+            return self._compile_notification_params(step, base)
         if typ == StepTypes.WEBHOOK:
             return self._compile_webhook_params(step, base)
         if typ == StepTypes.LOGIC:
             return self._compile_logic_params(step, base)
         if typ == StepTypes.SET:
             return self._compile_set_params(step, base)
+        if typ == StepTypes.SET_STATUS:
+            return self._compile_set_status_params(step, base)
         if typ == StepTypes.COMPUTE:
             return self._compile_compute_params(step, base)
         if typ == StepTypes.APPROVAL:
@@ -345,6 +379,80 @@ class WorkflowCompiler:
             'bcc': bcc,
             'subject': compile_template(subject_raw, path=f'{base}.subject'),
             'body': compile_template(body_raw, path=f'{base}.body'),
+        }
+
+    @staticmethod
+    def _require_choice(value: Any, *, path: str, label: str, choices: tuple[str, ...]) -> str:
+        if not isinstance(value, str) or value.strip() not in choices:
+            allowed = ', '.join(choices)
+            msg = f'{label} must be one of: {allowed}'
+            raise CompileError(msg, path=path)
+        return value.strip()
+
+    @staticmethod
+    def _compile_notification_related(related: Any, *, path: str) -> dict[str, Any]:
+        if related is None:
+            return {}
+        if not isinstance(related, dict):
+            msg = '"notification.related" must be a mapping'
+            raise CompileError(msg, path=path)
+
+        out: dict[str, Any] = {}
+        for key, value in related.items():
+            if key not in NOTIFICATION_RELATED_KEYS:
+                allowed = ', '.join(sorted(NOTIFICATION_RELATED_KEYS))
+                msg = f'Unknown notification related key "{key}". Allowed: {allowed}'
+                raise CompileError(msg, path=f'{path}.{key}')
+            out[str(key)] = compile_templates_deep(value, path=f'{path}.{key}')
+        return out
+
+    @staticmethod
+    def _compile_notification_params(step: dict[str, Any], base: str) -> dict[str, Any]:
+        severity = WorkflowCompiler._require_choice(
+            step.get('severity', 'info'),
+            path=f'{base}.severity',
+            label='"notification.severity"',
+            choices=NOTIFICATION_SEVERITIES,
+        )
+        source = WorkflowCompiler._require_choice(
+            step.get('source', 'system'),
+            path=f'{base}.source',
+            label='"notification.source"',
+            choices=NOTIFICATION_SOURCES,
+        )
+        initial_status = WorkflowCompiler._require_choice(
+            step.get('initial_status', 'new'),
+            path=f'{base}.initial_status',
+            label='"notification.initial_status"',
+            choices=NOTIFICATION_INITIAL_STATUSES,
+        )
+
+        short_raw = step.get('short')
+        if not isinstance(short_raw, str) or not short_raw.strip():
+            msg = '"notification.short" must be a non-empty string'
+            raise CompileError(msg, path=f'{base}.short')
+
+        long_raw = step.get('long', 'No description provided')
+        if not isinstance(long_raw, str):
+            msg = '"notification.long" must be a string'
+            raise CompileError(msg, path=f'{base}.long')
+
+        event_raw = step.get('event', 'workflow.notification')
+        if not isinstance(event_raw, str) or not event_raw.strip():
+            msg = '"notification.event" must be a non-empty string'
+            raise CompileError(msg, path=f'{base}.event')
+
+        return {
+            'severity': severity,
+            'source': source,
+            'short': compile_template(short_raw, path=f'{base}.short'),
+            'long': compile_template(long_raw, path=f'{base}.long'),
+            'initial_status': initial_status,
+            'event': compile_template(event_raw, path=f'{base}.event'),
+            'related': WorkflowCompiler._compile_notification_related(
+                step.get('related', {}) or {},
+                path=f'{base}.related',
+            ),
         }
 
     @staticmethod
@@ -556,6 +664,31 @@ class WorkflowCompiler:
         return {'vars': normalized}
 
     @staticmethod
+    def _compile_set_status_params(step: dict[str, Any], base: str) -> dict[str, Any]:
+        status = WorkflowCompiler._require_choice(
+            step.get('status'),
+            path=f'{base}.status',
+            label='"set_status.status"',
+            choices=SET_STATUS_ALLOWED_STATUSES,
+        )
+
+        reason_raw = step.get('reason', f'workflow_set_{status}')
+        if not isinstance(reason_raw, str) or not reason_raw.strip():
+            msg = '"set_status.reason" must be a non-empty string'
+            raise CompileError(msg, path=f'{base}.reason')
+
+        message_raw = step.get('message', '')
+        if not isinstance(message_raw, str):
+            msg = '"set_status.message" must be a string'
+            raise CompileError(msg, path=f'{base}.message')
+
+        return {
+            'status': status,
+            'reason': reason_raw.strip(),
+            'message': compile_template(message_raw, path=f'{base}.message'),
+        }
+
+    @staticmethod
     def _compile_compute_params(step: dict[str, Any], base: str) -> dict[str, Any]:
         set_map = step.get('set')
         if not isinstance(set_map, dict) or not set_map:
@@ -646,14 +779,18 @@ class WorkflowCompiler:
 
     @staticmethod
     def _compile_approval_params(step: dict[str, Any], base: str) -> dict[str, Any]:
-        a = step.get('approved_outcome')
-        r = step.get('rejected_outcome')
+        a = step.get('approved_outcome', 'approved')
+        r = step.get('rejected_outcome', 'rejected')
+        t = step.get('timeout_outcome', 'timed_out')
         if not isinstance(a, str) or not a.strip():
             msg = '"approval.approved_outcome" must be a non-empty string'
             raise CompileError(msg, path=f'{base}.approved_outcome')
         if not isinstance(r, str) or not r.strip():
             msg = '"approval.rejected_outcome" must be a non-empty string'
             raise CompileError(msg, path=f'{base}.rejected_outcome')
+        if not isinstance(t, str) or not t.strip():
+            msg = '"approval.timeout_outcome" must be a non-empty string'
+            raise CompileError(msg, path=f'{base}.timeout_outcome')
 
         timeout_seconds = step.get('timeout_seconds')
         if timeout_seconds is not None and (not isinstance(timeout_seconds, int) or timeout_seconds <= 0):
@@ -663,6 +800,7 @@ class WorkflowCompiler:
         out: dict[str, Any] = {
             'approved_outcome': a.strip(),
             'rejected_outcome': r.strip(),
+            'timeout_outcome': t.strip(),
         }
         if timeout_seconds is not None:
             out['timeout_seconds'] = timeout_seconds
@@ -681,7 +819,7 @@ class WorkflowCompiler:
             return True, uniq
 
         if typ == StepTypes.APPROVAL:
-            return True, [params['approved_outcome'], params['rejected_outcome']]
+            return True, [params['approved_outcome'], params['rejected_outcome'], params['timeout_outcome']]
 
         return False, []
 
@@ -704,8 +842,8 @@ class WorkflowCompiler:
             raise CompileError(msg, path=f'workflow.flow[{index}].to')
         to = to.strip()
 
-        if to not in steps_ir and to not in _END_TARGETS:
-            msg = '"to" must reference an existing step id or be $end/$reject'
+        if to not in steps_ir:
+            msg = '"to" must reference an existing step id'
             raise CompileError(msg, path=f'workflow.flow[{index}].to')
 
         if on is None:
@@ -765,18 +903,48 @@ class WorkflowCompiler:
 
         return transitions
 
-    def _validate_flow_completeness(self, steps_ir: dict[str, Any], transitions: dict[str, Any]) -> None:
+    def _validate_flow_completeness(  # noqa: C901, PLR0912
+        self,
+        steps_ir: dict[str, Any],
+        transitions: dict[str, Any],
+    ) -> None:
         for step_id, s in steps_ir.items():
             produces = bool(s['produces_outcome'])
             outs: list[str] = list(s['outcomes'])
+            step_type = s.get('type')
 
             tr = transitions.get(step_id)
 
+            if step_type == StepTypes.SET_STATUS:
+                status = ((s.get('params') or {}).get('status') or '').strip()
+                if status == 'paused':
+                    if tr is None or tr.get('kind') != 'linear':
+                        msg = 'set_status with status "paused" requires one linear resume transition'
+                        raise CompileError(msg, path=f'workflow.flow({step_id})')
+                    continue
+
+                if tr is not None:
+                    msg = 'set_status terminal statuses cannot have outgoing transitions'
+                    raise CompileError(msg, path=f'workflow.flow({step_id})')
+                continue
+
             if produces:
+                if step_type == StepTypes.APPROVAL and tr is None:
+                    continue
                 if tr is None or tr.get('kind') != 'by_outcome':
                     msg = 'Outcome-producing step requires outcome transitions'
                     raise CompileError(msg, path=f'workflow.flow({step_id})')
                 mapped = set(tr['map'].keys())
+                if step_type == StepTypes.APPROVAL:
+                    unknown = [outcome for outcome in mapped if outcome not in outs]
+                    if unknown:
+                        msg = f'Unknown approval outcome mappings: {unknown}'
+                        raise CompileError(msg, path=f'workflow.flow({step_id})')
+                    timeout_outcome = (s.get('params') or {}).get('timeout_outcome')
+                    if timeout_outcome in mapped:
+                        msg = 'Approval timeout outcome is terminal and cannot have an outgoing transition'
+                        raise CompileError(msg, path=f'workflow.flow({step_id})')
+                    continue
                 missing = [o for o in outs if o not in mapped]
                 if missing:
                     msg = f'Missing flow mappings for outcomes: {missing}'
@@ -1251,6 +1419,22 @@ class WorkflowCompiler:
             path=f'{base}.body',
         )
 
+    def _validate_notification_step_refs(
+        self,
+        params: dict[str, Any],
+        *,
+        available_vars: set[str],
+        step_id: str,
+        base: str,
+    ) -> None:
+        for field in ('short', 'long', 'event', 'related'):
+            self._validate_compiled_value_refs(
+                params.get(field),
+                available_vars=available_vars,
+                step_id=step_id,
+                path=f'{base}.{field}',
+            )
+
     def _validate_webhook_step_refs(
         self,
         params: dict[str, Any],
@@ -1311,6 +1495,21 @@ class WorkflowCompiler:
             path=f'{base}.vars',
         )
 
+    def _validate_set_status_step_refs(
+        self,
+        params: dict[str, Any],
+        *,
+        available_vars: set[str],
+        step_id: str,
+        base: str,
+    ) -> None:
+        self._validate_compiled_value_refs(
+            params.get('message'),
+            available_vars=available_vars,
+            step_id=step_id,
+            path=f'{base}.message',
+        )
+
     def _validate_compute_step_refs(
         self,
         params: dict[str, Any],
@@ -1362,6 +1561,15 @@ class WorkflowCompiler:
                 )
                 continue
 
+            if step_type == StepTypes.NOTIFICATION:
+                self._validate_notification_step_refs(
+                    params,
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    base=base,
+                )
+                continue
+
             if step_type == StepTypes.WEBHOOK:
                 self._validate_webhook_step_refs(
                     params,
@@ -1382,6 +1590,15 @@ class WorkflowCompiler:
 
             if step_type == StepTypes.SET:
                 self._validate_set_step_refs(
+                    params,
+                    available_vars=available_vars,
+                    step_id=step_id,
+                    base=base,
+                )
+                continue
+
+            if step_type == StepTypes.SET_STATUS:
+                self._validate_set_status_step_refs(
                     params,
                     available_vars=available_vars,
                     step_id=step_id,
