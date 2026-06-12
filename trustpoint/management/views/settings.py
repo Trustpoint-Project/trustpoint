@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import smtplib
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -24,9 +25,17 @@ from management.forms import (
     LoggingConfigForm,
     NotificationConfigForm,
     SecurityConfigForm,
+    SmtpEmailConfigForm,
+    SmtpEmailTestForm,
     WorkflowExecutionConfigForm,
 )
-from management.models import InternationalizationConfig, LoggingConfig, NotificationConfig, SecurityConfig
+from management.models import (
+    InternationalizationConfig,
+    LoggingConfig,
+    NotificationConfig,
+    SecurityConfig,
+    SmtpEmailConfig,
+)
 from management.models.audit_log import AuditLog
 from management.models.workflows2 import WorkflowExecutionConfig
 from management.security.features import AutoGenPkiFeature
@@ -236,6 +245,30 @@ def get_workflow_execution_form(request: HttpRequest) -> WorkflowExecutionConfig
     return WorkflowExecutionConfigForm(instance=workflow_config)
 
 
+def get_smtp_email_form(request: HttpRequest) -> SmtpEmailConfigForm:
+    """Return the singleton SMTP email settings form."""
+    smtp_config = SmtpEmailConfig.load()
+    if request.method == 'POST' and request.POST.get('form_name') == 'smtp_email':
+        return SmtpEmailConfigForm(request.POST, instance=smtp_config)
+    return SmtpEmailConfigForm(instance=smtp_config)
+
+
+def get_smtp_email_test_form(
+    request: HttpRequest,
+    smtp_config: SmtpEmailConfig | None = None,
+) -> SmtpEmailTestForm:
+    """Return the SMTP test email form."""
+    smtp_config = smtp_config or SmtpEmailConfig.load()
+    if request.method == 'POST' and request.POST.get('form_name') == 'smtp_email_test':
+        return SmtpEmailTestForm(request.POST)
+
+    recipient = ''
+    request_user = getattr(request, 'user', None)
+    if request_user is not None and getattr(request_user, 'is_authenticated', False):
+        recipient = getattr(request_user, 'email', '') or ''
+    return SmtpEmailTestForm(initial={'recipient': recipient or smtp_config.default_from_email})
+
+
 def build_workflow_execution_context(
     request: HttpRequest,
     workflow_execution_form: WorkflowExecutionConfigForm | None = None,
@@ -258,6 +291,22 @@ def build_workflow_execution_context(
             WorkflowExecutionConfig.Mode.AUTO,
             WorkflowExecutionConfig.Mode.INLINE,
         },
+    }
+
+
+def build_smtp_email_context(
+    request: HttpRequest,
+    smtp_email_form: SmtpEmailConfigForm | None = None,
+    smtp_email_test_form: SmtpEmailTestForm | None = None,
+) -> dict[str, Any]:
+    """Build the SMTP email settings context for the tabbed settings page."""
+    smtp_email_form = smtp_email_form or get_smtp_email_form(request)
+    smtp_config = smtp_email_form.instance
+    return {
+        'smtp_email_form': smtp_email_form,
+        'smtp_email_test_form': smtp_email_test_form or get_smtp_email_test_form(request, smtp_config),
+        'smtp_email_config': smtp_config,
+        'smtp_email_backend': SmtpEmailConfig.SMTP_BACKEND if smtp_config.enabled else SmtpEmailConfig.CONSOLE_BACKEND,
     }
 
 
@@ -350,16 +399,81 @@ class SettingsTabView(TemplateView):
         context.update(get_disk_metrics())
         context.update(get_network_metrics())
 
-        return context
         workflow_execution_form = kwargs.get('workflow_execution_form')
         context.update(build_workflow_execution_context(self.request, workflow_execution_form))
+        smtp_email_form = kwargs.get('smtp_email_form')
+        smtp_email_test_form = kwargs.get('smtp_email_test_form')
+        context.update(build_smtp_email_context(self.request, smtp_email_form, smtp_email_test_form))
         return context
 
     def post(self, request: HttpRequest, *_args: Any, **_kwargs: Any) -> HttpResponse:
-        """Handle inline Workflow 2 execution settings updates from the settings tab page."""
-        if request.POST.get('form_name') != 'workflow_execution':
+        """Handle inline settings updates from the settings tab page."""
+        form_name = request.POST.get('form_name')
+
+        if form_name == 'smtp_email':
+            return self._post_smtp_email(request)
+
+        if form_name == 'smtp_email_test':
+            return self._post_smtp_email_test(request)
+
+        if form_name != 'workflow_execution':
             return redirect(reverse_lazy('management:settings'))
 
+        return self._post_workflow_execution(request)
+
+    def _post_smtp_email(self, request: HttpRequest) -> HttpResponse:
+        """Handle SMTP settings updates."""
+        smtp_email_form = get_smtp_email_form(request)
+        if smtp_email_form.is_valid():
+            smtp_config = smtp_email_form.save()
+            smtp_config.apply_to_django_settings()
+            messages.success(request, _('SMTP email settings saved.'))
+            return redirect(f"{reverse_lazy('management:settings')}?tab=smtp-email")
+
+        messages.error(request, _('Please correct the SMTP email settings errors.'))
+        context = self.get_context_data(
+            smtp_email_form=smtp_email_form,
+            active_tab='smtp-email',
+        )
+        return self.render_to_response(context)
+
+    def _post_smtp_email_test(self, request: HttpRequest) -> HttpResponse:
+        """Send a test email using the saved SMTP settings."""
+        smtp_config = SmtpEmailConfig.load()
+        smtp_email_test_form = get_smtp_email_test_form(request, smtp_config)
+
+        if not smtp_config.enabled:
+            messages.error(request, _('Enable and save SMTP email delivery before sending a test email.'))
+            return redirect(f"{reverse_lazy('management:settings')}?tab=smtp-email")
+
+        if not smtp_email_test_form.is_valid():
+            messages.error(request, _('Please enter a valid test recipient email address.'))
+            context = self.get_context_data(
+                smtp_email_test_form=smtp_email_test_form,
+                active_tab='smtp-email',
+            )
+            return self.render_to_response(context)
+
+        recipient = smtp_email_test_form.cleaned_data['recipient']
+        try:
+            sent_count = smtp_config.send_test_email(recipient)
+        except (OSError, smtplib.SMTPException, ValueError) as exception:
+            messages.error(
+                request,
+                _('SMTP test email failed: %(error)s') % {'error': str(exception)},
+            )
+        else:
+            if sent_count:
+                messages.success(
+                    request,
+                    _('SMTP test email sent to %(recipient)s.') % {'recipient': recipient},
+                )
+            else:
+                messages.error(request, _('SMTP test email was not accepted by the email backend.'))
+        return redirect(f"{reverse_lazy('management:settings')}?tab=smtp-email")
+
+    def _post_workflow_execution(self, request: HttpRequest) -> HttpResponse:
+        """Handle inline Workflow 2 execution settings updates from the settings tab page."""
         workflow_execution_form = get_workflow_execution_form(request)
         if workflow_execution_form.is_valid():
             workflow_execution_form.save()
@@ -384,12 +498,17 @@ class InternationalizationSettingsView(SettingsFormViewMixin[Internationalizatio
     def get_initial(self) -> dict[str, Any]:
         """Get initial form data with current internationalization settings."""
         initial = super().get_initial()
+        current_language = translation.get_language() or InternationalizationConfig.LanguageChoices.EN
+        supported_languages = {choice.value for choice in InternationalizationConfig.LanguageChoices}
+        normalized_language = current_language.split('-', 1)[0].lower()
+        if normalized_language not in supported_languages:
+            normalized_language = InternationalizationConfig.LanguageChoices.EN
 
         config, _ = InternationalizationConfig.objects.get_or_create(
             id=1,
             defaults={
                 'date_format': InternationalizationConfig.DateFormatChoices.YYYY_MM_DD_24_SEC,
-                'language': translation.get_language() or InternationalizationConfig.LanguageChoices.EN,
+                'language': normalized_language,
                 'timezone': 'UTC',
             },
         )
