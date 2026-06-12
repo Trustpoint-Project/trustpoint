@@ -10,6 +10,7 @@ from .adapters import (
     DjangoNotificationAdapter,
     EmailAdapter,
     NotificationAdapter,
+    NotificationCreateRequest,
     RequestsWebhookAdapter,
     WebhookAdapter,
     WebhookResponse,
@@ -375,13 +376,15 @@ class WorkflowExecutor:
             raise StepExecutionError(step_id, 'Invalid notification.initial_status')
 
         return self.notification.create(
-            severity=severity,
-            source=source,
-            short=short.strip(),
-            long=long,
-            initial_status=initial_status,
-            event=event.strip(),
-            related=related,
+            NotificationCreateRequest(
+                severity=severity,
+                source=source,
+                short=short.strip(),
+                long=long,
+                initial_status=initial_status,
+                event=event.strip(),
+                related=related,
+            )
         )
 
     @staticmethod
