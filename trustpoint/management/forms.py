@@ -907,6 +907,7 @@ class PKCS11ConfigForm(forms.Form):
         msg = _('PKCS#11 backend configuration is managed by the setup wizard and cannot be changed here.')
         raise ValidationError(msg)
 
+
 class WorkflowExecutionConfigForm(forms.ModelForm[WorkflowExecutionConfig]):
     """Form for managing Workflow 2 execution settings."""
 

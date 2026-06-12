@@ -69,7 +69,7 @@ class ProfileValuePropertyModel(BaseModel):
     value: Any | None = None
     default: Any | None = None
     required: bool = False
-    mutable: bool = True
+    mutable: bool = False
 
 class SubjectModel(BaseModel):
     """Model for the subject DN of a certificate profile."""
@@ -148,7 +148,7 @@ class BasicConstraintsExtensionModel(BaseExtensionModel):
 
     model_config = ConfigDict(extra='forbid')
 
-class SanExtensionModel(BaseExtensionModel, ProfileValuePropertyModel):
+class SanExtensionModel(BaseExtensionModel):
     """Model for the SAN extension of a certificate profile."""
     dns_names: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='dns')
     ip_addresses: list[str] | ProfileValuePropertyModel | None = Field(default=None, validation_alias='ip')
@@ -262,7 +262,7 @@ class ProfileValidityModel(BaseModel):
 
     model_config = ConfigDict(extra='ignore', populate_by_name=True)
 
-class CertProfileBaseModel(BaseModel):
+class CertProfileBaseModel(ProfileValuePropertyModel):
     """Base model for each nesting level of certificate profiles.
 
     This allows for granular control over allowed fields and constraints at each level.
@@ -288,6 +288,15 @@ class ProfileSubjectModel(SubjectModel, CertProfileBaseModel):
     """Model for the subject DN of a certificate profile, with profile constraints."""
 
 # Profile-specific extension models are required for extensions that allow lists of strings/nested structures
+class ProfileBasicConstraintsExtensionModel(BasicConstraintsExtensionModel, CertProfileBaseModel):
+    """Model for the Basic Constraints extension of a certificate profile, with profile constraints."""
+
+class ProfileKeyUsageExtensionModel(KeyUsageExtensionModel, CertProfileBaseModel):
+    """Model for the Key Usage extension of a certificate profile, with profile constraints."""
+
+class ProfileExtendedKeyUsageExtensionModel(ExtendedKeyUsageExtensionModel, CertProfileBaseModel):
+    """Model for the Extended Key Usage extension of a certificate profile, with profile constraints."""
+
 class ProfileSanExtensionModel(SanExtensionModel, CertProfileBaseModel):
     """Model for the SAN extension of a certificate profile, with profile constraints."""
 
@@ -296,23 +305,23 @@ class ProfileCrlDistributionPointsExtensionModel(CRLDistributionPointsExtensionM
 
 class ProfileExtensionsModel(CertProfileBaseModel):
     """Model for the extensions of a certificate profile, with profile constraints."""
-    basic_constraints: BasicConstraintsExtensionModel | ProfileValuePropertyModel | None = Field(
+    basic_constraints: ProfileBasicConstraintsExtensionModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('basic_constraints'),
     )
-    key_usage: KeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(
+    key_usage: ProfileKeyUsageExtensionModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('key_usage'),
     )
-    extended_key_usage: ExtendedKeyUsageExtensionModel | ProfileValuePropertyModel | None = Field(
+    extended_key_usage: ProfileExtendedKeyUsageExtensionModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('extended_key_usage'),
     )
-    subject_alternative_name: ProfileSanExtensionModel | ProfileValuePropertyModel | None = Field(
+    subject_alternative_name: ProfileSanExtensionModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('subject_alternative_name'),
     )
-    crl_distribution_points: ProfileCrlDistributionPointsExtensionModel | ProfileValuePropertyModel | None = Field(
+    crl_distribution_points: ProfileCrlDistributionPointsExtensionModel | None = Field(
         default=None,
         validation_alias=ALIASES.get('crl_distribution_points'),
     )
@@ -400,12 +409,12 @@ class JSONProfileVerifier:
         """
         if not isinstance(request, dict):
             return
-        for field, value in list(request.items()):
+        for field, _value in list(request.items()):
             if field in profile or profile_config.allow_implicit or (allow_list and field in allow_list):
                 # Field is explicitly or implicitly allowed, keep it
                 continue
             # Field is not allowed, remove it
-            if profile_config.reject_mods and value:
+            if profile_config.reject_mods:
                 msg = f"Field '{field}' is not explicitly allowed in the profile."
                 raise ProfileValidationError(msg)
             del request[field]
@@ -423,14 +432,18 @@ class JSONProfileVerifier:
                 logger.debug("Setting default for field '%s' to %s", field, profile_value['default'])
                 request[field] = profile_value['default']
                 return
-            if 'required' in profile_value:
+            if profile_value.get('required'):
                 # Required field is missing in the request
                 msg = f"Field '{field}' is required but not present in the request."
                 raise ProfileValidationError(msg)
+            non_keyword_children = {k: v for k, v in profile_value.items() if k not in CERT_PROFILE_KEYWORDS}
+            if not non_keyword_children:
+                # Metadata-only policy object (e.g. {'required': False}) does not materialize output fields.
+                return
             # TODO(Air): 're' case  # noqa: FIX002
             # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
             request[field] = self._apply_profile_rules(
-                request.setdefault(field, {}), profile_value, profile_config)
+                request.get(field, {}), profile_value, profile_config)
         elif JSONProfileVerifier._is_simple_type(profile_value):
             request[field] = profile_value
         else:
@@ -510,9 +523,64 @@ class JSONProfileVerifier:
 
         return request
 
+    def _ensure_ca_true_explicit_profile(self, request: dict[str, Any]) -> None:
+        """Reject CA=true requests unless Basic Constraints is explicitly present in the profile.
+
+        This prevents implicit allow='*' from introducing CA issuance capability.
+        """
+        request_extensions = request.get('extensions')
+        if not isinstance(request_extensions, dict):
+            return
+
+        request_basic_constraints = request_extensions.get('basic_constraints')
+        if not isinstance(request_basic_constraints, dict):
+            return
+
+        if request_basic_constraints.get('ca') is not True:
+            return
+
+        profile_extensions = self.profile_dict.get('extensions')
+        if not isinstance(profile_extensions, dict):
+            msg = "Field 'basic_constraints' is not explicitly allowed in the profile."
+            raise ProfileValidationError(msg)
+
+        profile_basic_constraints = profile_extensions.get('basic_constraints')
+        if not isinstance(profile_basic_constraints, dict):
+            msg = "Field 'basic_constraints' is not explicitly allowed in the profile."
+            raise ProfileValidationError(msg)
+
+        # Explicitly allow CA issuance only if either:
+        # 1) profile basic_constraints.ca is True, or
+        # 2) profile basic_constraints.mutable is True, or
+        # 3) profile basic_constraints.ca is a value-property dict with mutable=True.
+        profile_ca = profile_basic_constraints.get('ca')
+        basic_constraints_mutable = bool(profile_basic_constraints.get('mutable', False))
+
+        ca_is_explicitly_true = profile_ca is True
+        ca_is_explicitly_mutable = (
+            isinstance(profile_ca, dict) and bool(profile_ca.get('mutable', False))
+        )
+        if ca_is_explicitly_true or basic_constraints_mutable or ca_is_explicitly_mutable:
+            return
+
+        # CA=true requested but not permitted by profile.
+        effective_reject_mods = bool(
+            profile_basic_constraints.get(
+                'reject_mods',
+                profile_extensions.get('reject_mods', self.profile_dict.get('reject_mods', False)),
+            )
+        )
+        if effective_reject_mods:
+            msg = "Field 'ca' is not mutable in the profile."
+            raise ProfileValidationError(msg)
+
+        # In non-reject mode, force the profile value (default deny) for CA.
+        request_basic_constraints['ca'] = bool(profile_ca) if profile_ca is not None else False
+
     def apply_profile_to_request(self, request: dict[str, Any]) -> dict[str, Any]:
         """Apply the profile to a certificate request and return the modified request."""
         validated_request = self.validate_request(request=request)
+        self._ensure_ca_true_explicit_profile(validated_request)
         logger.debug('Validated Request before profile rules: %s', validated_request)
         return self._apply_profile_rules(validated_request, self.profile_dict)
 
@@ -554,14 +622,18 @@ class JSONProfileVerifier:
                     logger.debug("Setting default for field '%s' to %s", field, profile_value['default'])
                     request[field] = profile_value['default']
                     continue
-                if 'required' in profile_value:
+                if profile_value.get('required'):
                     # Required field is missing in the request
                     request[field] = f'CHANGEME_{field}_required'
+                    continue
+                non_keyword_children = {k: v for k, v in profile_value.items() if k not in CERT_PROFILE_KEYWORDS}
+                if not non_keyword_children:
+                    # Metadata-only policy object should not generate a sample payload field.
                     continue
                 # TODO(Air): 're' case  # noqa: FIX002
                 # should be fine to always call as "value" and stuff will get filtered and we end up with a no-op
                 request[field] = self._apply_profile_rules_sample(
-                    request.setdefault(field, {}), profile_value, profile_config)
+                    request.get(field, {}), profile_value, profile_config)
             elif JSONProfileVerifier._is_simple_type(profile_value):
                 request[field] = profile_value
             else:
