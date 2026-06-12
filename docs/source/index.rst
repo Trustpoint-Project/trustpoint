@@ -73,6 +73,7 @@ Welcome to Trustpoint's documentation!
 
    development/development
    development/architecture/credentials
+   development/architecture/backup_restore
    development/architecture/crypto_redesign
    development/architecture/crypto_implementation_plan
    development/auto_restore

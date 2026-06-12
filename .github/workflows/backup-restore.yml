@@ -63,7 +63,9 @@ jobs:
         run: docker exec trustpoint sh -c "uv run trustpoint/manage.py trustpointbackup --filename from_outside.dump.gz"
 
       - name: Download backup artifact
-        run: docker cp trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/from_outside.dump.gz .
+        run: |
+          docker cp trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/from_outside.dump.gz .
+          docker cp trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/from_outside.dump.gz.manifest.json .
 
       - name: Remove Trustpoint container
         run: docker rm -f trustpoint
@@ -71,7 +73,19 @@ jobs:
       - name: Reset database
         run: uv run trustpoint/manage.py reset_db --force --no-user --keep-all-migrations
 
-      - name: Start fresh Trustpoint container
+      - name: Stage backup for host-side restore
+        run: |
+          mkdir -p trustpoint/media/backups
+          cp from_outside.dump.gz trustpoint/media/backups/
+          cp from_outside.dump.gz.manifest.json trustpoint/media/backups/
+
+      - name: Verify backup manifest
+        run: uv run trustpoint/manage.py trustpointbackup_manifest --filename from_outside.dump.gz --verify
+
+      - name: Restore database from host
+        run: uv run trustpoint/manage.py dbrestore -z --noinput -I trustpoint/media/backups/from_outside.dump.gz
+
+      - name: Start restored Trustpoint container
         run: |
           docker run -d --name trustpoint --link postgres -p80:80 -p443:443 \
             -e TRUSTPOINT_PHASE=operational \
@@ -82,17 +96,6 @@ jobs:
             -e DATABASE_HOST=postgres \
             -e DATABASE_PORT=5432 \
             trustpointproject/trustpoint:latest
-
-      - name: Upload backup to container
-        run: docker cp from_outside.dump.gz trustpoint:/var/www/html/trustpoint/trustpoint/media/backups/
-
-      - name: Restore database in container
-        run: docker exec trustpoint sh -c "uv run trustpoint/manage.py dbrestore  -z --noinput -I trustpoint/media/backups/from_outside.dump.gz"
-
-      - name: Restore Trustpoint in container
-        run: |
-          docker exec trustpoint sh -c \
-          "uv run trustpoint/manage.py shell -c \"from setup_wizard.views import BackupPasswordRecoveryMixin; BackupPasswordRecoveryMixin().handle_backup_password_recovery('')\""
 
       - name: Validate post-restore deployment
         run: ./tests/scripts/test_successfull_restoration.sh

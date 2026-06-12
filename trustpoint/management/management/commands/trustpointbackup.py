@@ -2,8 +2,11 @@
 
 from typing import Any
 
+from django.conf import settings
 from django.core.management import call_command
-from django.core.management.base import BaseCommand, CommandParser
+from django.core.management.base import BaseCommand, CommandError, CommandParser
+
+from management.backup_artifacts import write_backup_manifest
 
 
 class Command(BaseCommand):
@@ -20,9 +23,12 @@ class Command(BaseCommand):
         filename: str = options.get('filename', '')
         if not filename:
             self.stdout.write('ERROR: No filename provided.')
-            raise ValueError
+            msg = 'No filename provided.'
+            raise CommandError(msg)
         self.backup_trustpoint(filename)
 
     def backup_trustpoint(self, filename: str) -> None:
         """Checks current state of trustpoint and acts accordingly."""
         call_command('dbbackup', '-o', filename, '-z')
+        manifest_path = write_backup_manifest(settings.BACKUP_FILE_PATH / filename)
+        self.stdout.write(f'Backup manifest written: {manifest_path.name}')

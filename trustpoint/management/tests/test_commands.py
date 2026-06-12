@@ -1,5 +1,7 @@
 """Test suite for Django management commands."""
+import tempfile
 from io import StringIO
+from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 from django.conf import settings
@@ -8,6 +10,7 @@ from django.core.management.base import CommandError
 from django.test import TestCase
 from packaging.version import Version
 
+from management.backup_artifacts import backup_manifest_path
 from management.models import AppVersion
 
 
@@ -370,23 +373,67 @@ class TlsCredCommandTest(TestCase):
 class TrustpointBackupCommandTest(TestCase):
     """Test suite for trustpointbackup command."""
 
+    @patch('management.management.commands.trustpointbackup.write_backup_manifest')
     @patch('management.management.commands.trustpointbackup.call_command')
-    def test_trustpointbackup_with_filename(self, mock_call_command: MagicMock) -> None:
+    def test_trustpointbackup_with_filename(
+        self,
+        mock_call_command: MagicMock,
+        mock_write_manifest: MagicMock,
+    ) -> None:
         """Test trustpointbackup command with filename option."""
         out = StringIO()
         call_command('trustpointbackup', '--filename=test_backup.dump.gz', stdout=out)
-        
+
         # Should call dbbackup with the filename
         mock_call_command.assert_called_once_with('dbbackup', '-o', 'test_backup.dump.gz', '-z')
+        mock_write_manifest.assert_called_once_with(settings.BACKUP_FILE_PATH / 'test_backup.dump.gz')
 
     def test_trustpointbackup_requires_filename(self) -> None:
         """Test trustpointbackup command requires filename."""
         out = StringIO()
-        
+
         with self.assertRaises(CommandError) as cm:
             call_command('trustpointbackup', stdout=out)
-        
+
         self.assertIn('--filename', str(cm.exception))
+
+
+class TrustpointBackupManifestCommandTest(TestCase):
+    """Test suite for trustpointbackup_manifest command."""
+
+    def setUp(self) -> None:
+        """Create a temporary backup directory."""
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.backup_dir = Path(self.temp_dir.name)
+        self.backup_file = self.backup_dir / 'sample.dump.gz'
+        self.backup_file.write_bytes(b'trustpoint backup payload')
+
+    def tearDown(self) -> None:
+        """Clean up temporary backup directory."""
+        self.temp_dir.cleanup()
+
+    def test_write_and_verify_manifest(self) -> None:
+        """The manifest command writes and verifies the payload digest."""
+        out = StringIO()
+        with self.settings(BACKUP_FILE_PATH=self.backup_dir):
+            call_command('trustpointbackup_manifest', '--filename=sample.dump.gz', stdout=out)
+            call_command('trustpointbackup_manifest', '--filename=sample.dump.gz', '--verify', stdout=out)
+
+        assert backup_manifest_path(self.backup_file).is_file()
+        output = out.getvalue()
+        assert 'Backup manifest written' in output
+        assert 'Backup manifest verified' in output
+
+    def test_verify_rejects_modified_payload(self) -> None:
+        """Manifest verification fails if the backup payload changes."""
+        with self.settings(BACKUP_FILE_PATH=self.backup_dir):
+            call_command('trustpointbackup_manifest', '--filename=sample.dump.gz')
+            self.backup_file.write_bytes(b'tampered payload')
+
+            with self.assertRaises(CommandError) as ctx:
+                call_command('trustpointbackup_manifest', '--filename=sample.dump.gz', '--verify')
+
+        assert 'SHA-256 does not match' in str(ctx.exception)
 
 
 class UpdateTlsCommandTest(TestCase):
