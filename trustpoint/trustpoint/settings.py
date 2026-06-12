@@ -15,7 +15,7 @@ import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import Any, ClassVar
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 import django_stubs_ext
 from django.utils.translation import gettext_lazy as _
@@ -169,18 +169,43 @@ CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
 
 raw_urls = os.getenv('TP_URLS', '')
 
+
+def _parse_tp_url(raw_url: str) -> ParseResult:
+    """Parse TP_URLS entries while accepting bracketless IPv6 literals without ports."""
+    if raw_url.startswith(('http://', 'https://')):
+        parsed = urlparse(raw_url)
+        if parsed.netloc.count(':') > 1 and not parsed.netloc.startswith('['):
+            return parsed._replace(netloc=f'[{parsed.netloc}]')
+        return parsed
+    if raw_url.count(':') > 1 and not raw_url.startswith('['):
+        return urlparse(f'https://[{raw_url}]')
+    return urlparse(f'https://{raw_url}')
+
+
+def _allowed_host_from_parsed_url(parsed: ParseResult) -> str | None:
+    """Return the ALLOWED_HOSTS entry for a parsed TP_URLS value."""
+    hostname = parsed.hostname
+    if hostname is None:
+        return None
+    if ':' in hostname and not hostname.startswith('['):
+        return f'[{hostname}]'
+    return hostname
+
+
 if raw_urls:
     # Split by comma and clean up whitespace
     url_list = [url.strip() for url in raw_urls.split(',') if url.strip()]
 
     for url in url_list:
         # Ensure scheme is present (fallback to https)
-        parsed = urlparse(url) if url.startswith(('http://', 'https://')) else urlparse(f'https://{url}')
+        parsed = _parse_tp_url(url)
 
         host_with_port = parsed.netloc
 
         # 1. Extract just host/IP for ALLOWED_HOSTS (strip port)
-        host_only = host_with_port.split(':')[0]
+        host_only = _allowed_host_from_parsed_url(parsed)
+        if host_only is None:
+            continue
         if host_only not in ALLOWED_HOSTS:
             ALLOWED_HOSTS.append(host_only)
 

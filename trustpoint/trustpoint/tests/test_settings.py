@@ -61,6 +61,20 @@ def test_tp_urls_derives_allowed_hosts_and_csrf_origins(monkeypatch):
     assert 'https://example.org' in settings.CSRF_TRUSTED_ORIGINS
 
 
+def test_tp_urls_supports_ipv6_hosts(monkeypatch):
+    """Ensure IPv6 TP_URLS entries are parsed without treating address segments as ports."""
+    monkeypatch.setenv('TP_URLS', '[2001:db8::1]:8443, 2001:db8::2, https://2001:db8::3')
+
+    importlib.reload(settings)
+
+    assert '[2001:db8::1]' in settings.ALLOWED_HOSTS
+    assert '[2001:db8::2]' in settings.ALLOWED_HOSTS
+    assert '[2001:db8::3]' in settings.ALLOWED_HOSTS
+    assert 'https://[2001:db8::1]:8443' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://[2001:db8::2]' in settings.CSRF_TRUSTED_ORIGINS
+    assert 'https://[2001:db8::3]' in settings.CSRF_TRUSTED_ORIGINS
+
+
 def test_tp_urls_deduplicates_hosts_and_origins(monkeypatch):
     """Ensure repeated TP_URLS values do not create duplicate entries."""
     monkeypatch.setenv(

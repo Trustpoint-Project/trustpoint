@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -27,9 +27,6 @@ from crypto.models import (
     Pkcs11AuthSource,
 )
 from management.models import AuditLog, LoggingConfig
-
-if TYPE_CHECKING:
-    from crypto.application.backend_factory import BackendAdapterFactory
 
 
 @dataclass

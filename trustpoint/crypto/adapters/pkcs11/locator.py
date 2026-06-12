@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from crypto.adapters.pkcs11.mechanisms import key_type_for_algorithm
 from crypto.domain.errors import KeyNotFoundError
 from pkcs11 import Attribute, NoSuchKey, ObjectClass, PKCS11Error, Session
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from crypto.adapters.pkcs11.bindings import Pkcs11ManagedKeyBinding
 
 
@@ -56,7 +58,7 @@ class Pkcs11ObjectLocator:
     def _assert_id_match(self, obj: object, *, key: Pkcs11ManagedKeyBinding) -> None:
         """Verify that the resolved PKCS#11 object still exposes the expected CKA_ID."""
         try:
-            actual_id = cast('Any', obj)[Attribute.ID]
+            actual_id = cast('Mapping[Attribute, bytes | bytearray | memoryview]', obj)[Attribute.ID]
         except (AttributeError, KeyError, TypeError, PKCS11Error):
             return
 

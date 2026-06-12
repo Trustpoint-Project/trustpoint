@@ -33,10 +33,21 @@ __all__ = [
 ]
 
 
+class _TrustpointCryptoBackendProxy:
+    """Callable proxy that lazily instantiates the service-level backend."""
+
+    def __call__(self, *args: object, **kwargs: object) -> object:
+        backend_module = import_module('crypto.application.service')
+        return backend_module.TrustpointCryptoBackend(*args, **kwargs)
+
+
+TrustpointCryptoBackend = _TrustpointCryptoBackendProxy()
+
+
 def __getattr__(name: str) -> object:
     """Lazily expose service-level crypto APIs without importing Django models at package import time."""
     if name == 'TrustpointCryptoBackend':
-        return getattr(import_module('crypto.application.service'), name)
+        return TrustpointCryptoBackend
 
     msg = f'module {__name__!r} has no attribute {name!r}'
     raise AttributeError(msg)
