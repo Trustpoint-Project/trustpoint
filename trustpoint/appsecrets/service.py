@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Final, Protocol, cast
 
 import pkcs11
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from django.conf import settings
 
 from appsecrets.models import (
     AppSecretBackendKind,
@@ -28,6 +27,27 @@ AES_GCM_NONCE_BYTES: Final[int] = 12
 AES_GCM_TAG_BYTES: Final[int] = 16
 CIPHERTEXT_PREFIX: Final[str] = 'tpsec:v1:'
 AAD_CONTEXT: Final[bytes] = b'trustpoint-app-secrets-v1'
+APP_SECRET_KEK_CAPABILITIES: Final[pkcs11.MechanismFlag] = (
+    pkcs11.MechanismFlag.ENCRYPT
+    | pkcs11.MechanismFlag.DECRYPT
+    | pkcs11.MechanismFlag.WRAP
+    | pkcs11.MechanismFlag.UNWRAP
+)
+APP_SECRET_KEK_TEMPLATE: Final[dict[pkcs11.Attribute, object]] = {
+    pkcs11.Attribute.TOKEN: True,
+    pkcs11.Attribute.PRIVATE: True,
+    pkcs11.Attribute.SENSITIVE: True,
+    pkcs11.Attribute.EXTRACTABLE: False,
+    pkcs11.Attribute.ENCRYPT: True,
+    pkcs11.Attribute.DECRYPT: True,
+    pkcs11.Attribute.WRAP: True,
+    pkcs11.Attribute.UNWRAP: True,
+}
+APP_SECRET_DEK_WRAP_MECHANISMS: Final[tuple[pkcs11.Mechanism, ...]] = (
+    pkcs11.Mechanism.AES_KEY_WRAP,
+    pkcs11.Mechanism.AES_KEY_WRAP_PAD,
+    pkcs11.Mechanism.AES_KEY_WRAP_KWP,
+)
 
 
 class AppSecretError(RuntimeError):
@@ -39,6 +59,10 @@ class AppSecretConfigurationError(AppSecretError):
 
 
 class _Pkcs11Kek(Protocol):
+    def __getitem__(self, attribute: pkcs11.Attribute) -> object:
+        """Return a PKCS#11 object attribute value."""
+        raise NotImplementedError
+
     def encrypt(self, plaintext: bytes, *, mechanism: object) -> bytes | bytearray | memoryview:
         """Wrap plaintext with the PKCS#11 key."""
         raise NotImplementedError
@@ -145,12 +169,6 @@ class SoftwareAppSecretService(BaseAppSecretService):
         """Generate a development DEK when one is missing."""
         if self._config.raw_dek:
             return
-        if not (getattr(settings, 'DEVELOPMENT_ENV', False) or getattr(settings, 'DOCKER_CONTAINER', False)):
-            msg = (
-                'The software app-secret backend is only allowed for development, testing, or demo-style '
-                'container setups.'
-            )
-            raise AppSecretConfigurationError(msg)
 
         self._config.raw_dek = os.urandom(DEK_LENGTH_BYTES)
         self._config.full_clean()
@@ -205,7 +223,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
         with self._open_session() as session:
             kek = self._load_or_create_kek(session)
             dek = os.urandom(DEK_LENGTH_BYTES)
-            wrapped_dek = bytes(kek.encrypt(dek, mechanism=pkcs11.Mechanism.AES_ECB))
+            wrapped_dek = self._wrap_dek(kek=kek, dek=dek)
 
         self._config.wrapped_dek = wrapped_dek
         self._config.full_clean()
@@ -228,7 +246,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
 
             with self._open_session() as session:
                 kek = self._load_or_create_kek(session)
-                dek = bytes(kek.decrypt(wrapped_dek, mechanism=pkcs11.Mechanism.AES_ECB))
+                dek = self._unwrap_dek(kek=kek, wrapped_dek=wrapped_dek)
 
             if len(dek) != DEK_LENGTH_BYTES:
                 msg = f'Invalid unwrapped DEK length: {len(dek)} bytes.'
@@ -247,7 +265,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
 
         with self._open_session(rw=False) as session:
             kek = self._load_existing_kek(session)
-            dek = bytes(kek.decrypt(wrapped_dek, mechanism=pkcs11.Mechanism.AES_ECB))
+            dek = self._unwrap_dek(kek=kek, wrapped_dek=wrapped_dek)
 
         if len(dek) != DEK_LENGTH_BYTES:
             msg = f'Invalid unwrapped DEK length: {len(dek)} bytes.'
@@ -257,33 +275,91 @@ class Pkcs11AppSecretService(BaseAppSecretService):
     def _load_or_create_kek(self, session: pkcs11.Session) -> _Pkcs11Kek:
         """Load the persistent HSM KEK or create it once."""
         try:
-            return cast('_Pkcs11Kek', session.get_key(label=self._config.kek_label, key_type=pkcs11.KeyType.AES))
+            kek = cast('_Pkcs11Kek', session.get_key(label=self._config.kek_label, key_type=pkcs11.KeyType.AES))
         except pkcs11.NoSuchKey:
-            return cast(
+            kek = cast(
                 '_Pkcs11Kek',
                 session.generate_key(
                     pkcs11.KeyType.AES,
                     key_length=256,
                     label=self._config.kek_label,
                     store=True,
+                    capabilities=APP_SECRET_KEK_CAPABILITIES,
+                    template=APP_SECRET_KEK_TEMPLATE,
                 ),
             )
+            self._validate_kek_policy(kek)
+            return kek
+        else:
+            self._validate_kek_policy(kek)
+            return kek
 
     def _load_existing_kek(self, session: pkcs11.Session) -> _Pkcs11Kek:
         """Load the persistent HSM KEK without creating missing material."""
         try:
-            return cast('_Pkcs11Kek', session.get_key(label=self._config.kek_label, key_type=pkcs11.KeyType.AES))
+            kek = cast('_Pkcs11Kek', session.get_key(label=self._config.kek_label, key_type=pkcs11.KeyType.AES))
         except pkcs11.NoSuchKey as exception:
             msg = f'PKCS#11 app-secret KEK {self._config.kek_label!r} was not found on the configured token.'
             raise AppSecretConfigurationError(msg) from exception
+        self._validate_kek_policy(kek)
+        return kek
+
+    def _wrap_dek(self, *, kek: _Pkcs11Kek, dek: bytes) -> bytes:
+        """Wrap a DEK with an AES key-wrap mechanism."""
+        last_error: pkcs11.PKCS11Error | None = None
+        for mechanism in APP_SECRET_DEK_WRAP_MECHANISMS:
+            try:
+                return bytes(kek.encrypt(dek, mechanism=mechanism))
+            except pkcs11.PKCS11Error as exception:
+                last_error = exception
+
+        msg = 'PKCS#11 app-secret KEK could not wrap the DEK with an AES key-wrap mechanism.'
+        raise AppSecretConfigurationError(msg) from last_error
+
+    def _unwrap_dek(self, *, kek: _Pkcs11Kek, wrapped_dek: bytes) -> bytes:
+        """Unwrap a DEK with an AES key-wrap mechanism."""
+        last_error: pkcs11.PKCS11Error | None = None
+        for mechanism in APP_SECRET_DEK_WRAP_MECHANISMS:
+            try:
+                return bytes(kek.decrypt(wrapped_dek, mechanism=mechanism))
+            except pkcs11.PKCS11Error as exception:
+                last_error = exception
+
+        msg = 'PKCS#11 app-secret KEK could not unwrap the DEK with a supported AES key-wrap mechanism.'
+        raise AppSecretConfigurationError(msg) from last_error
+
+    def _validate_kek_policy(self, kek: _Pkcs11Kek) -> None:
+        """Reject KEKs whose visible PKCS#11 attributes are unsafe for app-secret wrapping."""
+        expected_attributes = {
+            pkcs11.Attribute.EXTRACTABLE: False,
+            pkcs11.Attribute.SENSITIVE: True,
+            pkcs11.Attribute.PRIVATE: True,
+        }
+        for attribute, expected_value in expected_attributes.items():
+            actual_value = self._optional_bool_attribute(kek, attribute)
+            if actual_value is None or actual_value is expected_value:
+                continue
+            msg = (
+                f'PKCS#11 app-secret KEK {self._config.kek_label!r} has unsafe attribute '
+                f'{attribute.name}={actual_value!r}.'
+            )
+            raise AppSecretConfigurationError(msg)
+
+    @staticmethod
+    def _optional_bool_attribute(kek: _Pkcs11Kek, attribute: pkcs11.Attribute) -> bool | None:
+        """Return a readable boolean PKCS#11 attribute, or None when the provider hides it."""
+        try:
+            value = kek[attribute]
+        except (KeyError, TypeError, pkcs11.PKCS11Error):
+            return None
+        return bool(value)
 
     def _resolve_token(self, library: _Pkcs11Library) -> pkcs11.Token:
         """Resolve the configured token from the PKCS#11 library."""
         profile = self._config.build_provider_profile()
         matches: list[pkcs11.Token] = []
 
-        for slot in library.get_slots(token_present=True):
-            token = slot.get_token()
+        for slot, token in self._discover_token_candidates(library):
             token_serial = getattr(token, 'serial', None) or getattr(token, 'serial_number', None)
             token_label = getattr(token, 'label', None)
             if profile.token.matches(
@@ -300,6 +376,33 @@ class Pkcs11AppSecretService(BaseAppSecretService):
             msg = 'The configured PKCS#11 token selector matched multiple tokens for application secrets.'
             raise AppSecretConfigurationError(msg)
         return matches[0]
+
+    def _discover_token_candidates(self, library: _Pkcs11Library) -> list[tuple[_Pkcs11Slot, pkcs11.Token]]:
+        """Return present token candidates, tolerating providers that reject token-present scans."""
+        try:
+            return self._token_candidates_from_slots(library.get_slots(token_present=True))
+        except pkcs11.PKCS11Error as token_present_error:
+            try:
+                return self._token_candidates_from_slots(library.get_slots(token_present=False))
+            except pkcs11.PKCS11Error as full_scan_error:
+                msg = (
+                    'PKCS#11 app-secret backend failed while enumerating slots. '
+                    f'Initial token-present scan failed with {type(token_present_error).__name__}; '
+                    f'fallback full scan failed with {type(full_scan_error).__name__}.'
+                )
+                raise AppSecretConfigurationError(msg) from full_scan_error
+
+    @staticmethod
+    def _token_candidates_from_slots(slots: Iterable[_Pkcs11Slot]) -> list[tuple[_Pkcs11Slot, pkcs11.Token]]:
+        """Return slot/token pairs for slots with present, recognized tokens."""
+        candidates: list[tuple[_Pkcs11Slot, pkcs11.Token]] = []
+        for slot in slots:
+            try:
+                token = slot.get_token()
+            except (pkcs11.exceptions.TokenNotPresent, pkcs11.exceptions.TokenNotRecognised):
+                continue
+            candidates.append((slot, token))
+        return candidates
 
     def _open_session(self, *, rw: bool = True) -> pkcs11.Session:
         """Open a read-write authenticated PKCS#11 session."""

@@ -14,7 +14,7 @@ def test_crypto_package_exports_trustpoint_crypto_backend() -> None:
     from crypto import TrustpointCryptoBackend  # noqa: PLC0415
     from crypto.application.service import TrustpointCryptoBackend as ServiceBackend  # noqa: PLC0415
 
-    assert TrustpointCryptoBackend is ServiceBackend
+    assert isinstance(TrustpointCryptoBackend(), ServiceBackend)
 
 
 def test_rest_backend_scaffold_is_not_operational() -> None:

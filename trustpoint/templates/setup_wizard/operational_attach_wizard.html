@@ -294,12 +294,15 @@
                         {% elif form.is_software_backend_config %}
                             <div class="tp-backend-setup">
                                 <section class="tp-backend-section">
-                                    <div class="tp-backend-section-kicker">Software Demo / Testing Backend</div>
+                                    <div class="tp-backend-section-kicker">Software Backend</div>
                                     <h3 class="tp-backend-section-title">No Additional Backend Configuration Needed</h3>
                                     <p class="tp-backend-section-copy">
-                                        The built-in software backend is ready to use as-is for local development, tests,
-                                        demos, and non-production container setups.
+                                        The built-in software backend is ready to use as-is.
                                     </p>
+                                    <div class="alert alert-warning mb-0 text-start">
+                                        <strong>{% trans "Demo backend." %}</strong>
+                                        {% trans "Use this backend for demos, development, and automated tests only. It is not intended for production Trustpoint deployments." %}
+                                    </div>
                                 </section>
                             </div>
                         {% else %}

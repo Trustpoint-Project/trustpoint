@@ -1641,14 +1641,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
     @classmethod
     def _configure_software_backend(cls) -> None:
-        """Configure the software demo/testing backend for the instance."""
-        if not (getattr(settings, 'DEVELOPMENT_ENV', False) or getattr(settings, 'DOCKER_CONTAINER', False)):
-            err_msg = (
-                'The software demo/testing backend can only be configured for development, testing, or '
-                'demo-style container setups.'
-            )
-            raise DjangoValidationError(err_msg)
-
+        """Configure the software backend for the instance."""
         profile = cls._activate_profile(
             backend_kind=BackendKind.SOFTWARE,
             default_name='trustpoint-software-demo-testing-backend',
@@ -1670,14 +1663,7 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
 
     @staticmethod
     def _configure_software_app_secret_backend() -> None:
-        """Configure the software app-secret backend for demo/testing use."""
-        if not (getattr(settings, 'DEVELOPMENT_ENV', False) or getattr(settings, 'DOCKER_CONTAINER', False)):
-            err_msg = (
-                'The software app-secret backend is only allowed for development, testing, or demo-style '
-                'container setups.'
-            )
-            raise DjangoValidationError(err_msg)
-
+        """Configure the software app-secret backend."""
         backend = AppSecretBackendModel.get_singleton()
         backend.backend_kind = AppSecretBackendKind.SOFTWARE
         _save_untyped_model(backend)

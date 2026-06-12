@@ -42,12 +42,12 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
 
         self.assertTrue(form.is_valid(), form.errors)
 
-    def test_software_backend_choice_uses_demo_testing_label(self) -> None:
+    def test_software_backend_choice_uses_neutral_label(self) -> None:
         choices = dict(CRYPTO_BACKEND_TYPE_CHOICES)
 
         self.assertEqual(
             str(choices[SetupWizardConfigModel.CryptoStorageType.SoftwareStorage]),
-            'Software Demo / Testing Backend',
+            'Software Backend',
         )
 
     def test_pkcs11_form_prefills_token_label(self) -> None:

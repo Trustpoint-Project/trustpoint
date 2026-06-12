@@ -52,6 +52,26 @@ def test_token_selector_rejects_mismatched_serial() -> None:
     )
 
 
+def test_token_selector_does_not_accept_slot_with_mismatched_secondary_selector() -> None:
+    selector = Pkcs11TokenSelector(slot_id=7, token_label='expected-token')
+
+    assert not selector.matches(
+        slot_id=7,
+        token_label='other-token',
+        token_serial='87de2f12e07ee8a5',
+    )
+
+
+def test_token_selector_falls_back_to_label_when_slot_is_stale() -> None:
+    selector = Pkcs11TokenSelector(slot_id=7, token_label='expected-token')
+
+    assert selector.matches(
+        slot_id=8,
+        token_label='expected-token',
+        token_serial='87de2f12e07ee8a5',
+    )
+
+
 def test_provider_profile_requires_exactly_one_pin_source(tmp_path: Path) -> None:
     pin_file = tmp_path / 'user-pin.txt'
     pin_file.write_text('secret-pin', encoding='utf-8')

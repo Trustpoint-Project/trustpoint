@@ -36,8 +36,7 @@ ELF_MAGIC = b'\x7fELF'
 
 CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
     str(SetupWizardConfigModel.CryptoStorageType.SoftwareStorage): gettext_lazy(
-        'Use the built-in software backend. Suitable for local development, automated testing, demos, and '
-        'non-production container setups.'
+        'Use the built-in software backend.'
     ),
     str(SetupWizardConfigModel.CryptoStorageType.HsmStorage): gettext_lazy(
         'Use the PKCS#11 backend with a configured HSM, SoftHSM, or PKCS#11 proxy/module.'
@@ -49,7 +48,7 @@ CRYPTO_STORAGE_OPTION_DESCRIPTIONS = {
 }
 
 CRYPTO_BACKEND_TYPE_CHOICES = (
-    (SetupWizardConfigModel.CryptoStorageType.SoftwareStorage, gettext_lazy('Software Demo / Testing Backend')),
+    (SetupWizardConfigModel.CryptoStorageType.SoftwareStorage, gettext_lazy('Software Backend')),
     (SetupWizardConfigModel.CryptoStorageType.HsmStorage, gettext_lazy('PKCS#11 Backend')),
     (SetupWizardConfigModel.CryptoStorageType.RestBackend, gettext_lazy('REST Backend')),
 )
@@ -172,7 +171,7 @@ class FreshInstallModelBaseForm(forms.ModelForm[SetupWizardConfigModel]):
 
 
 def _software_backend_available_in_wizard() -> bool:
-    """Return whether the software demo/testing backend may be configured."""
+    """Return whether the software backend may be configured."""
     return True
 
 
@@ -342,7 +341,7 @@ class FreshInstallCryptoStorageModelForm(FreshInstallModelBaseForm):
         crypto_storage = cast('SetupWizardConfigModel.CryptoStorageType', self.cleaned_data['crypto_storage'])
         if int(crypto_storage) == SetupWizardConfigModel.CryptoStorageType.SoftwareStorage:
             if not _software_backend_available_in_wizard():
-                err_msg = gettext_lazy('The software demo/testing backend is not available in this environment.')
+                err_msg = gettext_lazy('The software backend is not available in this environment.')
                 raise forms.ValidationError(err_msg)
             return crypto_storage
         if int(crypto_storage) == SetupWizardConfigModel.CryptoStorageType.HsmStorage:

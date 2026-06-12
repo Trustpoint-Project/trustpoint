@@ -8,13 +8,11 @@ from typing import TYPE_CHECKING, Any
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa, utils
-from django.conf import settings
 
 from crypto.adapters.software.bindings import SoftwareManagedKeyBinding, SoftwareManagedKeyVerification
 from crypto.adapters.software.capabilities import SoftwareCapabilities
 from crypto.domain.algorithms import HashAlgorithmName, KeyAlgorithm, SignatureAlgorithm
 from crypto.domain.errors import (
-    DevelopmentOnlyBackendError,
     KeyNotFoundError,
     MechanismUnsupportedError,
     ProviderUnavailableError,
@@ -62,7 +60,6 @@ class SoftwareBackend:
 
     def probe_capabilities(self) -> SoftwareCapabilities:
         """Resolve secret material and return the software backend capabilities."""
-        self._assert_development_environment()
         self._profile.require_encryption_material()
         if self._capabilities is None:
             self._capabilities = SoftwareCapabilities(
@@ -77,7 +74,6 @@ class SoftwareBackend:
 
     def generate_managed_key(self, *, alias: str, key_spec: KeySpec, policy: KeyPolicy) -> SoftwareManagedKeyBinding:
         """Generate a durable software-managed key and return its binding."""
-        self._assert_development_environment()
         private_key = self._generate_private_key(key_spec)
         public_key = private_key.public_key()
         der = private_key.private_bytes(
@@ -179,7 +175,6 @@ class SoftwareBackend:
 
     def _load_private_key(self, key: SoftwareManagedKeyBinding) -> SupportedPrivateKey:
         """Load and decrypt a software-managed private key."""
-        self._assert_development_environment()
         try:
             private_key = serialization.load_der_private_key(
                 key.encrypted_private_key_pkcs8_der,
@@ -228,14 +223,3 @@ class SoftwareBackend:
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
         return hashlib.sha256(der).hexdigest()
-
-    @staticmethod
-    def _assert_development_environment() -> None:
-        """Reject the software backend outside explicit dev or demo-style environments."""
-        if getattr(settings, 'DEVELOPMENT_ENV', False) or getattr(settings, 'DOCKER_CONTAINER', False):
-            return
-        msg = (
-            'The software crypto backend is for development, testing, and demo-style container setups only '
-            'and must not be used in hardened production deployments.'
-        )
-        raise DevelopmentOnlyBackendError(msg)
