@@ -5,12 +5,13 @@ services:
       dockerfile: docker/trustpoint/Dockerfile
     image: trustpointproject/trustpoint:latest
     container_name: trustpoint
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     depends_on:
       postgres:
-        condition: service_started
+        condition: service_healthy
       softhsm:
         condition: service_healthy
     volumes:
@@ -28,6 +29,12 @@ services:
       - db_password
       - hsm_pin
       - hsm_so_pin
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsk --max-time 5 https://localhost/ > /dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
 
   postgres:
     build:
@@ -35,8 +42,10 @@ services:
       dockerfile: docker/db/Dockerfile
     image: trustpointproject/postgres:latest
     container_name: postgres
+    restart: unless-stopped
     ports:
-      - "5432:5432"
+      # Bind to loopback only – PostgreSQL must not be reachable from the network.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
     environment:
@@ -46,12 +55,19 @@ services:
     secrets:
       - db_user
       - db_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   softhsm:
     build:
       context: .
       dockerfile: docker/softhsm/Dockerfile
     container_name: softhsm
+    restart: unless-stopped
     ports:
       - "5657:5657"
     healthcheck:
