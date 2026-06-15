@@ -23,6 +23,10 @@ services:
       DATABASE_PORT: "5432"
       HSM_PIN_FILE: /run/secrets/hsm_pin
       HSM_SO_PIN_FILE: /run/secrets/hsm_so_pin
+      TRUSTPOINT_LOCAL_HSM_ENABLED: "1"
+      TRUSTPOINT_LOCAL_HSM_MODULE_PATH: /usr/lib/libpkcs11-proxy.so
+      TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL: Trustpoint-SoftHSM
+      PKCS11_PROXY_SOCKET: tcp://softhsm:5657
     secrets:
       - db_user
       - db_password
@@ -54,6 +58,14 @@ services:
     container_name: softhsm
     ports:
       - "5657:5657"
+    environment:
+      TRUSTPOINT_LOCAL_HSM_USER_PIN_FILE: /run/secrets/hsm_pin
+      TRUSTPOINT_LOCAL_HSM_SO_PIN_FILE: /run/secrets/hsm_so_pin
+      TRUSTPOINT_LOCAL_HSM_TOKEN_LABEL: Trustpoint-SoftHSM
+      PKCS11_PROXY_SOCKET: tcp://softhsm:5657
+    secrets:
+      - hsm_pin
+      - hsm_so_pin
     healthcheck:
       test: ["CMD", "nc", "-z", "localhost", "5657"]
       interval: 10s

@@ -1,0 +1,135 @@
+name: R_210 - Docker Setup Wizard SoftHSM
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  docker-setup-wizard-softhsm-test:
+    runs-on: ubuntu-latest
+    env:
+      COMPOSE_FILE: ./docker-compose.softhsm.yml
+      TRUSTPOINT_TEST_SOFTHSM_PIN: R210UserPin47
+      TRUSTPOINT_TEST_SOFTHSM_SO_PIN: R210SoPin47
+      TRUSTPOINT_TEST_SOFTHSM_TOKEN_LABEL: Trustpoint-SoftHSM
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Create CI Docker secret files
+        run: |
+          printf '%s\n' 'admin' > db_user.txt
+          printf '%s\n' 'testing321' > db_password.txt
+          printf '%s\n' "${TRUSTPOINT_TEST_SOFTHSM_PIN}" > hsm_pin.txt
+          printf '%s\n' "${TRUSTPOINT_TEST_SOFTHSM_SO_PIN}" > hsm_so_pin.txt
+          chmod 600 db_user.txt db_password.txt hsm_pin.txt hsm_so_pin.txt
+
+      - name: Build and start Docker containers
+        uses: hoverkraft-tech/compose-action@v3.0.0
+        with:
+          compose-file: "./docker-compose.softhsm.yml"
+          up-flags: "--build --wait"
+
+      - name: Wait for Trustpoint to be ready
+        run: |
+          echo "Waiting for Trustpoint to be ready..."
+          echo "Initial startup delay for database and SoftHSM initialization..."
+          sleep 30
+
+          echo "Checking container status..."
+          docker compose ps
+
+          echo "Waiting for HTTP response..."
+          for i in {1..40}; do
+            http_code=$(curl -k -s -o /dev/null -w "%{http_code}" https://127.0.0.1/ || echo "000")
+
+            if [ "$http_code" = "200" ] || [ "$http_code" = "302" ]; then
+              echo "✓ Trustpoint is ready (HTTP $http_code)"
+              docker compose logs trustpoint | tail -20
+              break
+            fi
+
+            echo "Waiting... (attempt $i/40, HTTP code: $http_code)"
+
+            if [ $i -eq 40 ]; then
+              echo "ERROR: Trustpoint did not become ready in time"
+              echo "=== Container Status ==="
+              docker compose ps
+              echo "=== Trustpoint Logs ==="
+              docker compose logs trustpoint
+              echo "=== PostgreSQL Logs ==="
+              docker compose logs postgres
+              echo "=== SoftHSM Logs ==="
+              docker compose logs softhsm
+              exit 1
+            fi
+
+            sleep 5
+          done
+
+      - name: Verify Setup Wizard Accessibility
+        run: |
+          echo "Verifying setup wizard is accessible..."
+          http_code=$(curl -k -s -L -o /tmp/setup-wizard-page.html -w "%{http_code}" https://127.0.0.1/ || echo "000")
+
+          if [ "$http_code" = "200" ] && grep -q -i "setup\|wizard\|crypto\|storage" /tmp/setup-wizard-page.html; then
+            echo "✓ Setup wizard is accessible"
+          else
+            echo "✗ Setup wizard not accessible"
+            exit 1
+          fi
+
+      - name: Install and setup uv
+        uses: astral-sh/setup-uv@v8.2.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: "pyproject.toml"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run SoftHSM Setup Wizard Feature Test
+        run: |
+          cd ${{ github.workspace }}/tests/docker_integration
+
+          uv run python -m behave \
+            --no-capture \
+            --verbose \
+            --format behave_html_pretty_formatter:PrettyHTMLFormatter \
+            --outfile ${{ github.workspace }}/behave-report.html \
+            features/R_210_docker_setup_wizard_softhsm.feature
+
+      - name: Upload Behave Test Report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: r_210-softhsm-behave-report
+          path: behave-report.html
+
+      - name: Show container logs
+        if: always()
+        run: |
+          echo "=== Trustpoint Container Logs (last 100 lines) ==="
+          docker compose logs --tail=100 trustpoint
+          echo ""
+          echo "=== PostgreSQL Container Logs (last 50 lines) ==="
+          docker compose logs --tail=50 postgres
+          echo ""
+          echo "=== SoftHSM Container Logs (last 100 lines) ==="
+          docker compose logs --tail=100 softhsm
+
+      - name: Cleanup containers
+        if: always()
+        run: docker compose down -v
