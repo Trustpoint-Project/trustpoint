@@ -9,7 +9,6 @@ from django.test import TestCase
 
 from setup_wizard.forms import (
     CRYPTO_BACKEND_TYPE_CHOICES,
-    DEFAULT_PKCS11_CONFIG_ENV_VAR,
     FreshInstallBackendConfigModelForm,
 )
 from setup_wizard.models import SetupWizardConfigModel
@@ -59,6 +58,14 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
 
         self.assertEqual(form.initial['fresh_install_pkcs11_token_label'], 'Trustpoint-SoftHSM')
 
+    def test_pkcs11_app_secret_protection_is_enabled_by_default(self) -> None:
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+
+        form = FreshInstallBackendConfigModelForm(instance=config_model)
+
+        self.assertTrue(form['fresh_install_pkcs11_enforce_app_secret_protection'].value())
+
     def test_pkcs11_form_requires_module_upload_and_user_pin(self) -> None:
         config_model = SetupWizardConfigModel.get_singleton()
         config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
@@ -85,14 +92,33 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
                 'pkcs11_user_pin': '1234',
             },
             files={
-                'pkcs11_module_upload': SimpleUploadedFile('libpkcs11-vendor.so', b'\x7fELFpkcs11-bytes'),
+                'pkcs11_module_upload': SimpleUploadedFile('libpkcs11-provider.so', b'\x7fELFpkcs11-bytes'),
             },
             instance=config_model,
         )
 
         self.assertTrue(form.is_valid(), form.errors)
 
-    def test_pkcs11_form_defaults_vendor_config_env_var_when_config_is_present(self) -> None:
+    def test_pkcs11_form_accepts_enforced_app_secret_policy(self) -> None:
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+
+        form = FreshInstallBackendConfigModelForm(
+            data={
+                'fresh_install_pkcs11_token_label': 'Trustpoint-SoftHSM',
+                'fresh_install_pkcs11_enforce_app_secret_protection': 'on',
+                'pkcs11_user_pin': '1234',
+            },
+            files={
+                'pkcs11_module_upload': SimpleUploadedFile('libpkcs11-provider.so', b'\x7fELFpkcs11-bytes'),
+            },
+            instance=config_model,
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertTrue(form.cleaned_data['fresh_install_pkcs11_enforce_app_secret_protection'])
+
+    def test_pkcs11_form_requires_provider_config_env_var_when_config_is_present(self) -> None:
         config_model = SetupWizardConfigModel.get_singleton()
         config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
 
@@ -103,14 +129,34 @@ class FreshInstallBackendConfigModelFormTests(TestCase):
                 'pkcs11_config_env_var': '',
             },
             files={
-                'pkcs11_module_upload': SimpleUploadedFile('libpkcs11-vendor.so', b'\x7fELFpkcs11-bytes'),
-                'pkcs11_config_upload': SimpleUploadedFile('cs_pkcs11_R3.cfg', b'utimaco-config'),
+                'pkcs11_module_upload': SimpleUploadedFile('libpkcs11-provider.so', b'\x7fELFpkcs11-bytes'),
+                'pkcs11_config_upload': SimpleUploadedFile('pkcs11-provider.cfg', b'provider-config'),
+            },
+            instance=config_model,
+        )
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('pkcs11_config_env_var', form.errors)
+
+    def test_pkcs11_form_accepts_provider_config_env_var_when_config_is_present(self) -> None:
+        config_model = SetupWizardConfigModel.get_singleton()
+        config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+
+        form = FreshInstallBackendConfigModelForm(
+            data={
+                'fresh_install_pkcs11_token_label': 'Trustpoint-SoftHSM',
+                'pkcs11_user_pin': '1234',
+                'pkcs11_config_env_var': 'PKCS11_PROVIDER_CONFIG',
+            },
+            files={
+                'pkcs11_module_upload': SimpleUploadedFile('libpkcs11-provider.so', b'\x7fELFpkcs11-bytes'),
+                'pkcs11_config_upload': SimpleUploadedFile('pkcs11-provider.cfg', b'provider-config'),
             },
             instance=config_model,
         )
 
         self.assertTrue(form.is_valid(), form.errors)
-        self.assertEqual(form.cleaned_data['pkcs11_config_env_var'], DEFAULT_PKCS11_CONFIG_ENV_VAR)
+        self.assertEqual(form.cleaned_data['pkcs11_config_env_var'], 'PKCS11_PROVIDER_CONFIG')
 
     def test_pkcs11_form_accepts_local_dev_fallback_without_upload(self) -> None:
         config_model = SetupWizardConfigModel.get_singleton()

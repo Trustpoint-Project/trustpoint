@@ -50,7 +50,7 @@ UPDATE_TLS_NGINX = STATE_FILE_DIR / 'update_tls_nginx.sh'
 INSTALL_PKCS11_ASSETS = STATE_FILE_DIR / 'install_pkcs11_assets.sh'
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
-FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-vendor.cfg'
+FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-provider.cfg'
 
 
 class OperationalBootstrapApplier:
@@ -213,13 +213,13 @@ class OperationalBootstrapApplier:
             4: 'Failed to install the PKCS#11 library into the protected HSM area.',
             5: 'Failed to create the protected PKCS#11 user PIN file.',
             6: 'Failed to persist the installed PKCS#11 module path for the instance.',
-            7: 'The staged PKCS#11 vendor config is missing or no longer belongs to this wizard session.',
-            8: 'Failed to install the PKCS#11 vendor config into the protected HSM area.',
+            7: 'The staged PKCS#11 provider config is missing or no longer belongs to this wizard session.',
+            8: 'Failed to install the PKCS#11 provider config into the protected HSM area.',
         }
         return error_messages.get(return_code, 'An unknown error occurred while installing PKCS#11 assets.')
 
     def _install_staged_pkcs11_assets(self) -> tuple[str, str, str]:
-        """Install staged PKCS#11 assets and return final module, PIN-file, and vendor-config paths."""
+        """Install staged PKCS#11 assets and return final module, PIN-file, and provider-config paths."""
         staged_module = existing_wizard_pkcs11_staged_file(self.fresh_install['pkcs11_module_path'])
         staged_pin = existing_wizard_pkcs11_staged_file(self.fresh_install['pkcs11_auth_source_ref'])
         staged_config = existing_wizard_pkcs11_staged_file(self.fresh_install.get('pkcs11_config_path'))
@@ -311,6 +311,11 @@ class OperationalBootstrapApplier:
             raise DjangoValidationError(f'The PKCS#11 user PIN file does not exist: {auth_source_ref}')
 
         config_env_var = (self.fresh_install.get('pkcs11_config_env_var') or '').strip()
+        config_path_value = (config_path_value or '').strip()
+        if config_path_value and not config_env_var:
+            raise DjangoValidationError(
+                'A PKCS#11 provider config file is configured, but no provider config environment variable is set.'
+            )
         if config_env_var and config_path_value:
             config_path = Path(config_path_value)
             if config_path.exists():
@@ -367,7 +372,10 @@ class OperationalBootstrapApplier:
             self._configure_software_app_secret_backend()
             return
         if crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-            self._configure_pkcs11_app_secret_backend()
+            if bool(self.fresh_install.get('pkcs11_enforce_app_secret_protection')):
+                self._configure_pkcs11_app_secret_backend()
+                return
+            self._configure_software_app_secret_backend()
             return
         raise DjangoValidationError(f'Unsupported crypto storage selection {crypto_storage!r}.')
 

@@ -111,7 +111,6 @@ from setup_wizard.tls_credential import (
 from trustpoint.logger import LoggerMixin
 
 from .forms import (
-    DEFAULT_PKCS11_CONFIG_ENV_VAR,
     EmptyForm,
     FreshInstallAdminUserModelForm,
     FreshInstallBackendConfigModelForm,
@@ -139,7 +138,7 @@ UPDATE_TLS_NGINX = STATE_FILE_DIR / Path('update_tls_nginx.sh')
 INSTALL_PKCS11_ASSETS = STATE_FILE_DIR / Path('install_pkcs11_assets.sh')
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
-FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-vendor.cfg'
+FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-provider.cfg'
 MAX_RESTORE_OUTPUT_LENGTH = 4000
 MAX_PKCS11_PROBE_OUTPUT_LENGTH = 4000
 GPG_EXECUTABLE = '/usr/bin/gpg'
@@ -538,7 +537,7 @@ def is_clear_pkcs11_pin_submission(request: HttpRequest) -> bool:
 
 
 def is_clear_pkcs11_config_submission(request: HttpRequest) -> bool:
-    """Return whether the current POST requests staged vendor config removal."""
+    """Return whether the current POST requests staged provider config removal."""
     return request.POST.get('wizard_action') == 'clear_pkcs11_config'
 
 
@@ -564,7 +563,7 @@ def clear_staged_pkcs11_pin(config_model: SetupWizardConfigModel) -> None:
 
 
 def clear_staged_pkcs11_config(config_model: SetupWizardConfigModel) -> None:
-    """Remove the currently staged PKCS#11 vendor config for this wizard session."""
+    """Remove the currently staged PKCS#11 provider config for this wizard session."""
     cleanup_wizard_pkcs11_staged_path(config_model.fresh_install_pkcs11_config_path)
     execute_shell_script(INSTALL_PKCS11_ASSETS, '--clear-config')
     config_model.fresh_install_pkcs11_config_path = ''
@@ -598,12 +597,12 @@ def stage_pkcs11_user_pin(user_pin: str) -> str:
 
 
 def stage_uploaded_pkcs11_config(uploaded_config: Any) -> str:
-    """Write an optional vendor PKCS#11 config to private one-time wizard staging."""
+    """Write an optional provider PKCS#11 config to private one-time wizard staging."""
     staging_root = wizard_pkcs11_staging_root()
     staging_root.mkdir(mode=0o700, parents=True, exist_ok=True)
     staging_root.chmod(0o700)
-    suffix = Path(str(getattr(uploaded_config, 'name', 'vendor.cfg'))).suffix or '.cfg'
-    staged_path = staging_root / f'pkcs11-vendor-config-{uuid.uuid4().hex}{suffix}'
+    suffix = Path(str(getattr(uploaded_config, 'name', 'provider.cfg'))).suffix or '.cfg'
+    staged_path = staging_root / f'pkcs11-provider-config-{uuid.uuid4().hex}{suffix}'
     with staged_path.open('wb') as destination_file:
         for chunk in uploaded_config.chunks():
             destination_file.write(chunk)
@@ -622,6 +621,7 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
         'fresh_install_pkcs11_slot_id',
         'fresh_install_pkcs11_auth_source',
         'fresh_install_pkcs11_config_env_var',
+        'fresh_install_pkcs11_enforce_app_secret_protection',
     ]
 
     previous_token_label = form.instance.fresh_install_pkcs11_token_label
@@ -629,6 +629,9 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
     form.instance.fresh_install_pkcs11_token_label = form.cleaned_data['fresh_install_pkcs11_token_label']
     form.instance.fresh_install_pkcs11_slot_id = form.cleaned_data.get('fresh_install_pkcs11_slot_id')
     form.instance.fresh_install_pkcs11_config_env_var = form.cleaned_data.get('pkcs11_config_env_var') or ''
+    form.instance.fresh_install_pkcs11_enforce_app_secret_protection = form.cleaned_data[
+        'fresh_install_pkcs11_enforce_app_secret_protection'
+    ]
 
     uploaded_module = form.cleaned_data.get('pkcs11_module_upload')
     current_staged_module = existing_wizard_pkcs11_staged_file(form.instance.fresh_install_pkcs11_module_path)
@@ -655,15 +658,7 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
     if uploaded_config is not None:
         cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
         form.instance.fresh_install_pkcs11_config_path = stage_uploaded_pkcs11_config(uploaded_config)
-        if not form.instance.fresh_install_pkcs11_config_env_var:
-            form.instance.fresh_install_pkcs11_config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
         update_fields.append('fresh_install_pkcs11_config_path')
-
-    if (
-        form.instance.fresh_install_pkcs11_config_path
-        and not form.instance.fresh_install_pkcs11_config_env_var
-    ):
-        form.instance.fresh_install_pkcs11_config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
 
     if (
         form.instance.fresh_install_pkcs11_token_label != previous_token_label
@@ -677,7 +672,7 @@ def persist_staged_pkcs11_backend_config(form: FreshInstallBackendConfigModelFor
     form.refresh_pkcs11_state()
 
 
-def persist_valid_pkcs11_fields_from_invalid_form(  # noqa: C901
+def persist_valid_pkcs11_fields_from_invalid_form(
     form: FreshInstallBackendConfigModelForm,
 ) -> None:
     """Preserve valid PKCS#11 inputs even when the submitted form has other errors."""
@@ -697,9 +692,6 @@ def persist_valid_pkcs11_fields_from_invalid_form(  # noqa: C901
     if uploaded_config is not None and 'pkcs11_config_upload' not in form.errors:
         cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_config_path)
         form.instance.fresh_install_pkcs11_config_path = stage_uploaded_pkcs11_config(uploaded_config)
-        if not form.instance.fresh_install_pkcs11_config_env_var:
-            form.instance.fresh_install_pkcs11_config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
-            update_fields.append('fresh_install_pkcs11_config_env_var')
         form.staged_pkcs11_config_name = Path(form.instance.fresh_install_pkcs11_config_path).name
         update_fields.append('fresh_install_pkcs11_config_path')
 
@@ -707,13 +699,6 @@ def persist_valid_pkcs11_fields_from_invalid_form(  # noqa: C901
     if config_env_var and 'pkcs11_config_env_var' not in form.errors:
         form.instance.fresh_install_pkcs11_config_env_var = config_env_var
         update_fields.append('fresh_install_pkcs11_config_env_var')
-    elif (
-        form.instance.fresh_install_pkcs11_config_path
-        and not form.instance.fresh_install_pkcs11_config_env_var
-    ):
-        form.instance.fresh_install_pkcs11_config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
-        update_fields.append('fresh_install_pkcs11_config_env_var')
-
     user_pin = form.data.get('pkcs11_user_pin', '')
     if user_pin and 'pkcs11_user_pin' not in form.errors:
         cleanup_wizard_pkcs11_staged_path(form.instance.fresh_install_pkcs11_auth_source_ref)
@@ -735,6 +720,11 @@ def persist_valid_pkcs11_fields_from_invalid_form(  # noqa: C901
     if raw_slot_id and 'fresh_install_pkcs11_slot_id' not in form.errors:
         form.instance.fresh_install_pkcs11_slot_id = int(raw_slot_id)
         update_fields.append('fresh_install_pkcs11_slot_id')
+    if 'fresh_install_pkcs11_enforce_app_secret_protection' not in form.errors:
+        form.instance.fresh_install_pkcs11_enforce_app_secret_protection = (
+            form.data.get('fresh_install_pkcs11_enforce_app_secret_protection') in {'on', 'true', 'True', '1'}
+        )
+        update_fields.append('fresh_install_pkcs11_enforce_app_secret_protection')
 
     if update_fields:
         form.instance.save(update_fields=update_fields)
@@ -815,11 +805,6 @@ def apply_pkcs11_probe_fallbacks(config_model: SetupWizardConfigModel) -> tuple[
         config_model.fresh_install_pkcs11_config_path = config_file
         fallback_update_fields.append('fresh_install_pkcs11_config_path')
 
-    if config_file and not config_env_var:
-        config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
-        config_model.fresh_install_pkcs11_config_env_var = config_env_var
-        fallback_update_fields.append('fresh_install_pkcs11_config_env_var')
-
     if config_file and config_env_var:
         os.environ[config_env_var] = config_file
 
@@ -866,13 +851,18 @@ def build_pkcs11_probe_profile(
     )
 
 
-def refresh_pkcs11_probe_capabilities(profile: Pkcs11ProviderProfile) -> Any:
+def refresh_pkcs11_probe_capabilities(
+    profile: Pkcs11ProviderProfile,
+    *,
+    require_app_secret_protection: bool,
+) -> Any:
     """Authenticate and probe PKCS#11 capabilities for the given staged profile."""
     backend = Pkcs11Backend(profile=profile)
     try:
         backend.verify_authentication()
         capabilities = backend.probe_capabilities()
-        validate_pkcs11_app_secret_protection_support(profile)
+        if require_app_secret_protection:
+            validate_pkcs11_app_secret_protection_support(profile)
     except Exception as exception:
         error_detail = str(exception).strip() or type(exception).__name__
         err_msg = f'PKCS#11 probe failed: {error_detail}'
@@ -949,7 +939,10 @@ def probe_staged_pkcs11_config(config_model: SetupWizardConfigModel, *, profile_
         pin_file=pin_file,
         token_selector=Pkcs11TokenSelector(token_label=token_label, token_serial=token_serial, slot_id=slot_id),
     )
-    capabilities = refresh_pkcs11_probe_capabilities(profile)
+    capabilities = refresh_pkcs11_probe_capabilities(
+        profile,
+        require_app_secret_protection=config_model.fresh_install_pkcs11_enforce_app_secret_protection,
+    )
     persist_pkcs11_probe_capabilities(config_model, capabilities, update_fields)
     return capabilities
 
@@ -1001,7 +994,7 @@ def probe_staged_pkcs11_config_isolated(
         if completed_process.returncode < 0:
             err_msg = (
                 f'PKCS#11 probe process crashed with {failure}. '
-                'The vendor PKCS#11 library terminated the probe process.'
+                'The PKCS#11 provider library terminated the probe process.'
             )
         elif output:
             err_msg = f'PKCS#11 probe process failed with {failure}: {output}'
@@ -1454,11 +1447,21 @@ class FreshInstallCryptoStorageView(FreshInstallModelFormBaseView[FreshInstallCr
         form.instance.fresh_install_pkcs11_auth_source_ref = ''
         form.instance.fresh_install_pkcs11_config_path = ''
         form.instance.fresh_install_pkcs11_config_env_var = ''
+        form.instance.fresh_install_pkcs11_enforce_app_secret_protection = False
 
     def form_valid(self, form: FreshInstallCryptoStorageModelForm) -> HttpResponse:
         """Persist the chosen backend and clear stale PKCS#11 wizard staging when not needed."""
-        if form.cleaned_data['crypto_storage'] != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+        selected_storage = form.cleaned_data['crypto_storage']
+        if selected_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
             self._reset_staged_pkcs11_backend(form)
+        else:
+            previous_storage = (
+                SetupWizardConfigModel.objects.filter(pk=form.instance.pk)
+                .values_list('crypto_storage', flat=True)
+                .first()
+            )
+            if previous_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+                form.instance.fresh_install_pkcs11_enforce_app_secret_protection = True
         return super().form_valid(form)
 
 
@@ -1490,7 +1493,7 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
 
     @staticmethod
     def _is_clear_config_submission(request: HttpRequest) -> bool:
-        """Return whether the current POST requests staged vendor config removal."""
+        """Return whether the current POST requests staged provider config removal."""
         return is_clear_pkcs11_config_submission(request)
 
     @staticmethod
@@ -1505,7 +1508,7 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
 
     @staticmethod
     def _clear_staged_pkcs11_config(config_model: SetupWizardConfigModel) -> None:
-        """Remove the currently staged PKCS#11 vendor config for this wizard session."""
+        """Remove the currently staged PKCS#11 provider config for this wizard session."""
         clear_staged_pkcs11_config(config_model)
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -1522,7 +1525,7 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
                 return redirect('setup_wizard:fresh_install_backend_config')
             if self._is_clear_config_submission(request):
                 self._clear_staged_pkcs11_config(config_model)
-                messages.success(request, 'The PKCS#11 vendor config was removed for this wizard session.')
+                messages.success(request, 'The PKCS#11 provider config was removed for this wizard session.')
                 return redirect('setup_wizard:fresh_install_backend_config')
         return super().post(request, *args, **kwargs)
 
@@ -1538,7 +1541,7 @@ class FreshInstallBackendConfigView(FreshInstallModelFormBaseView[FreshInstallBa
 
     @staticmethod
     def _stage_uploaded_pkcs11_config(uploaded_config: Any) -> str:
-        """Write an optional vendor PKCS#11 config to private one-time wizard staging."""
+        """Write an optional provider PKCS#11 config to private one-time wizard staging."""
         return stage_uploaded_pkcs11_config(uploaded_config)
 
     def _persist_pkcs11_backend_config(self, form: FreshInstallBackendConfigModelForm) -> None:
@@ -1941,8 +1944,8 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             4: 'Failed to install the PKCS#11 library into the protected HSM area.',
             5: 'Failed to create the protected PKCS#11 user PIN file.',
             6: 'Failed to persist the installed PKCS#11 module path for the instance.',
-            7: 'The staged PKCS#11 vendor config is missing or no longer belongs to this wizard session.',
-            8: 'Failed to install the PKCS#11 vendor config into the protected HSM area.',
+            7: 'The staged PKCS#11 provider config is missing or no longer belongs to this wizard session.',
+            8: 'Failed to install the PKCS#11 provider config into the protected HSM area.',
         }
         return error_messages.get(return_code, 'An unknown error occurred while installing PKCS#11 assets.')
 
@@ -2199,9 +2202,10 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
         config_env_var = (config_model.fresh_install_pkcs11_config_env_var or '').strip()
         config_path = (config_model.fresh_install_pkcs11_config_path or '').strip()
         if config_path and not config_env_var:
-            config_env_var = DEFAULT_PKCS11_CONFIG_ENV_VAR
-            config_model.fresh_install_pkcs11_config_env_var = config_env_var
-            config_model.save(update_fields=['fresh_install_pkcs11_config_env_var'])
+            err_msg = (
+                'A PKCS#11 provider config file is configured, but no provider config environment variable is set.'
+            )
+            raise DjangoValidationError(err_msg)
         if config_env_var and config_path and _path_exists(Path(config_path)):
             os.environ[config_env_var] = config_path
 
@@ -2253,7 +2257,10 @@ class FreshInstallSummaryView(FreshInstallModelFormBaseView[FreshInstallSummaryM
             cls._configure_software_app_secret_backend()
             return
         if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.HsmStorage:
-            cls._configure_pkcs11_app_secret_backend()
+            if config_model.fresh_install_pkcs11_enforce_app_secret_protection:
+                cls._configure_pkcs11_app_secret_backend()
+                return
+            cls._configure_software_app_secret_backend()
             return
         if config_model.crypto_storage == SetupWizardConfigModel.CryptoStorageType.RestBackend:
             err_msg = 'The REST backend does not yet support application-secret encryption.'
@@ -2647,7 +2654,7 @@ class ConnectExistingBackendConfigView(ConnectExistingWizardMixin[FreshInstallBa
 
     @staticmethod
     def _stage_uploaded_pkcs11_config(uploaded_config: Any) -> str:
-        """Write an optional vendor PKCS#11 config to private one-time wizard staging."""
+        """Write an optional provider PKCS#11 config to private one-time wizard staging."""
         return stage_uploaded_pkcs11_config(uploaded_config)
 
     def post(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
@@ -2664,7 +2671,7 @@ class ConnectExistingBackendConfigView(ConnectExistingWizardMixin[FreshInstallBa
                 return self._step_redirect('backend-config')
             if is_clear_pkcs11_config_submission(request):
                 clear_staged_pkcs11_config(config_model)
-                messages.success(request, 'The PKCS#11 vendor config was removed for this wizard session.')
+                messages.success(request, 'The PKCS#11 provider config was removed for this wizard session.')
                 return self._step_redirect('backend-config')
         return super().post(request, *args, **kwargs)
 

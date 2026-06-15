@@ -6,7 +6,6 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
 from setup_wizard.forms import (
-    DEFAULT_PKCS11_CONFIG_ENV_VAR,
     FreshInstallBackendConfigModelForm,
     FreshInstallTlsConfigForm,
     RestoreBackupImportForm,
@@ -343,22 +342,40 @@ class TestFreshInstallBackendConfigModelForm:
         assert form.is_valid(), form.errors
         assert form.cleaned_data['fresh_install_pkcs11_slot_id'] == SLOT_ID
 
-    def test_vendor_config_upload_defaults_env_var(self) -> None:
-        """Uploading a vendor config without an env var uses the Utimaco default."""
+    def test_provider_config_upload_requires_env_var(self) -> None:
+        """Uploading a provider config requires the provider-specific env var name."""
         module_file = SimpleUploadedFile(
             'libpkcs11.so',
             b'\x7fELFdummy',
             content_type='application/octet-stream',
         )
-        config_file = SimpleUploadedFile('cs_pkcs11_R3.cfg', b'[Global]\n')
+        config_file = SimpleUploadedFile('pkcs11-provider.cfg', b'[Global]\n')
         form = self._form(
             files={
                 'pkcs11_module_upload': module_file,
                 'pkcs11_config_upload': config_file,
             }
         )
+        assert not form.is_valid()
+        assert 'pkcs11_config_env_var' in form.errors
+
+    def test_provider_config_upload_accepts_env_var(self) -> None:
+        """Uploading a provider config accepts an explicit provider-specific env var name."""
+        module_file = SimpleUploadedFile(
+            'libpkcs11.so',
+            b'\x7fELFdummy',
+            content_type='application/octet-stream',
+        )
+        config_file = SimpleUploadedFile('pkcs11-provider.cfg', b'[Global]\n')
+        form = self._form(
+            {'pkcs11_config_env_var': 'PKCS11_PROVIDER_CONFIG'},
+            files={
+                'pkcs11_module_upload': module_file,
+                'pkcs11_config_upload': config_file,
+            },
+        )
         assert form.is_valid(), form.errors
-        assert form.cleaned_data['pkcs11_config_env_var'] == DEFAULT_PKCS11_CONFIG_ENV_VAR
+        assert form.cleaned_data['pkcs11_config_env_var'] == 'PKCS11_PROVIDER_CONFIG'
 
 
 # ---------------------------------------------------------------------------

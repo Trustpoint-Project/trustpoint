@@ -155,7 +155,7 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
         self.assertEqual(pkcs11_config.token_label, '')
         self.assertEqual(pkcs11_config.slot_id, 1)
 
-    def test_configure_app_secret_backend_creates_pkcs11_backend(self) -> None:
+    def test_configure_app_secret_backend_uses_software_backend_for_pkcs11_crypto(self) -> None:
         with TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
             module_path = temp_root / 'libpkcs11.so'
@@ -180,6 +180,42 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
 
             config_model = SetupWizardConfigModel.get_singleton()
             config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+            config_model.save()
+
+            with patch('setup_wizard.views.get_app_secret_service') as mock_get_service:
+                mock_get_service.return_value.ensure_backend_ready.return_value = None
+                FreshInstallSummaryView._configure_app_secret_backend(config_model)
+
+        backend = AppSecretBackendModel.objects.get(pk=AppSecretBackendModel.SINGLETON_ID)
+        AppSecretSoftwareConfigModel.objects.get(backend=backend)
+        self.assertEqual(backend.backend_kind, AppSecretBackendKind.SOFTWARE)
+
+    def test_configure_app_secret_backend_uses_pkcs11_when_enforced(self) -> None:
+        with TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            module_path = temp_root / 'libpkcs11.so'
+            pin_file = temp_root / 'user-pin.txt'
+            module_path.write_text('', encoding='utf-8')
+            pin_file.write_text('1234', encoding='utf-8')
+
+            profile = CryptoProviderProfileModel.objects.create(
+                name='trustpoint-pkcs11-backend',
+                backend_kind=BackendKind.PKCS11,
+                active=True,
+            )
+            CryptoProviderPkcs11ConfigModel.objects.create(
+                profile=profile,
+                module_path=str(module_path),
+                token_label='Trustpoint-SoftHSM',
+                token_serial='',
+                slot_id=None,
+                auth_source='file',
+                auth_source_ref=str(pin_file),
+            )
+
+            config_model = SetupWizardConfigModel.get_singleton()
+            config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+            config_model.fresh_install_pkcs11_enforce_app_secret_protection = True
             config_model.save()
 
             with patch('setup_wizard.views.get_app_secret_service') as mock_get_service:

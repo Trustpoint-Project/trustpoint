@@ -294,7 +294,7 @@ def test_token_resolution_falls_back_to_label_when_slot_id_mismatches_label() ->
 
 
 def test_token_resolution_retries_full_scan_when_token_present_scan_fails() -> None:
-    """Some vendor modules reject token_present scans; full slot scan should still work."""
+    """Some PKCS#11 modules reject token_present scans; full slot scan should still work."""
     session = FakeSession()
     token = FakeToken(session, label='Trustpoint-SoftHSM')
     slot = FakeSlot(token, slot_id=5)

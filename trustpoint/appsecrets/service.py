@@ -32,27 +32,49 @@ AAD_CONTEXT: Final[bytes] = b'trustpoint-app-secrets-v1'
 PKCS11_CWRAP_DEK_PREFIX: Final[bytes] = b'tpsec:pkcs11:cwrap:v1:'
 PKCS11_ENCRYPTED_DEK_CBC_PAD_PREFIX: Final[bytes] = b'tpsec:pkcs11:enc-cbc-pad:v1:'
 PKCS11_ENCRYPTED_DEK_CBC_PREFIX: Final[bytes] = b'tpsec:pkcs11:enc-cbc:v1:'
-PKCS11_ENCRYPTED_DEK_ECB_PREFIX: Final[bytes] = b'tpsec:pkcs11:enc-ecb:v1:'
-APP_SECRET_KEK_CAPABILITIES: Final[pkcs11.MechanismFlag] = (
-    pkcs11.MechanismFlag.ENCRYPT
-    | pkcs11.MechanismFlag.DECRYPT
-    | pkcs11.MechanismFlag.WRAP
-    | pkcs11.MechanismFlag.UNWRAP
-)
-APP_SECRET_KEK_TEMPLATE: Final[dict[pkcs11.Attribute, object]] = {
+PKCS11_ENCRYPTED_DEK_ECB_PREFIX: Final[bytes] = b'tpsec:pkcs11:enc-ecb:v2:'
+APP_SECRET_KEK_BASE_TEMPLATE: Final[dict[pkcs11.Attribute, object]] = {
     pkcs11.Attribute.TOKEN: True,
     pkcs11.Attribute.PRIVATE: True,
     pkcs11.Attribute.SENSITIVE: True,
     pkcs11.Attribute.EXTRACTABLE: False,
-    pkcs11.Attribute.ENCRYPT: True,
-    pkcs11.Attribute.DECRYPT: True,
-    pkcs11.Attribute.WRAP: True,
-    pkcs11.Attribute.UNWRAP: True,
 }
-APP_SECRET_TEMPORARY_KEK_TEMPLATE: Final[dict[pkcs11.Attribute, object]] = {
-    **APP_SECRET_KEK_TEMPLATE,
-    pkcs11.Attribute.TOKEN: False,
-}
+APP_SECRET_KEK_PROFILES: Final[tuple[tuple[str, pkcs11.MechanismFlag, dict[pkcs11.Attribute, object]], ...]] = (
+    (
+        'wrap-unwrap',
+        pkcs11.MechanismFlag.WRAP | pkcs11.MechanismFlag.UNWRAP,
+        {
+            **APP_SECRET_KEK_BASE_TEMPLATE,
+            pkcs11.Attribute.WRAP: True,
+            pkcs11.Attribute.UNWRAP: True,
+        },
+    ),
+    (
+        'encrypt-decrypt',
+        pkcs11.MechanismFlag.ENCRYPT | pkcs11.MechanismFlag.DECRYPT,
+        {
+            **APP_SECRET_KEK_BASE_TEMPLATE,
+            pkcs11.Attribute.ENCRYPT: True,
+            pkcs11.Attribute.DECRYPT: True,
+        },
+    ),
+    (
+        'combined',
+        (
+            pkcs11.MechanismFlag.ENCRYPT
+            | pkcs11.MechanismFlag.DECRYPT
+            | pkcs11.MechanismFlag.WRAP
+            | pkcs11.MechanismFlag.UNWRAP
+        ),
+        {
+            **APP_SECRET_KEK_BASE_TEMPLATE,
+            pkcs11.Attribute.ENCRYPT: True,
+            pkcs11.Attribute.DECRYPT: True,
+            pkcs11.Attribute.WRAP: True,
+            pkcs11.Attribute.UNWRAP: True,
+        },
+    ),
+)
 APP_SECRET_DEK_WRAP_MECHANISMS: Final[tuple[pkcs11.Mechanism, ...]] = (
     pkcs11.Mechanism.AES_KEY_WRAP,
     pkcs11.Mechanism.AES_KEY_WRAP_PAD,
@@ -332,8 +354,12 @@ class Pkcs11AppSecretService(BaseAppSecretService):
             return
 
         with self._open_session() as session:
-            kek = self._load_or_create_kek(session)
-            _dek, protected_dek = self._generate_protected_dek(session=session, kek=kek)
+            kek = self._find_existing_kek(session)
+            if kek is None:
+                _kek, _dek, protected_dek = self._create_kek_with_protected_dek(session)
+            else:
+                self._validate_kek_policy(kek)
+                _dek, protected_dek = self._generate_protected_dek(session=session, kek=kek)
 
         self._config.wrapped_dek = protected_dek
         self._config.full_clean()
@@ -355,7 +381,7 @@ class Pkcs11AppSecretService(BaseAppSecretService):
                 raise AppSecretConfigurationError(msg)
 
             with self._open_session() as session:
-                kek = self._load_or_create_kek(session)
+                kek = self._load_existing_kek(session)
                 dek = self._recover_dek(kek=kek, protected_dek=protected_dek)
 
             if len(dek) != DEK_LENGTH_BYTES:
@@ -382,27 +408,43 @@ class Pkcs11AppSecretService(BaseAppSecretService):
             raise AppSecretConfigurationError(msg)
         return dek
 
-    def _load_or_create_kek(self, session: pkcs11.Session) -> _Pkcs11Kek:
-        """Load the persistent HSM KEK or create it once."""
+    def _find_existing_kek(self, session: pkcs11.Session) -> _Pkcs11Kek | None:
+        """Return the persistent HSM KEK when it already exists."""
         try:
-            kek = cast('_Pkcs11Kek', session.get_key(label=self._config.kek_label, key_type=pkcs11.KeyType.AES))
+            return cast('_Pkcs11Kek', session.get_key(label=self._config.kek_label, key_type=pkcs11.KeyType.AES))
         except pkcs11.NoSuchKey:
-            kek = cast(
-                '_Pkcs11Kek',
-                session.generate_key(
-                    pkcs11.KeyType.AES,
-                    key_length=256,
-                    label=self._config.kek_label,
-                    store=True,
-                    capabilities=APP_SECRET_KEK_CAPABILITIES,
-                    template=APP_SECRET_KEK_TEMPLATE,
-                ),
-            )
-            self._validate_kek_policy(kek)
-            return kek
-        else:
-            self._validate_kek_policy(kek)
-            return kek
+            return None
+
+    def _create_kek_with_protected_dek(self, session: pkcs11.Session) -> tuple[_Pkcs11Kek, bytes, bytes]:
+        """Create a persistent KEK using the least broad standard profile that can protect a DEK."""
+        attempt_errors: list[str] = []
+        for profile_name, capabilities, template in APP_SECRET_KEK_PROFILES:
+            kek: _Pkcs11Kek | None = None
+            try:
+                kek = cast(
+                    '_Pkcs11Kek',
+                    session.generate_key(
+                        pkcs11.KeyType.AES,
+                        key_length=DEK_LENGTH_BYTES * 8,
+                        label=self._config.kek_label,
+                        store=True,
+                        capabilities=capabilities,
+                        template=dict(template),
+                    ),
+                )
+                self._validate_kek_policy(kek)
+                dek, protected_dek = self._generate_protected_dek(session=session, kek=kek)
+            except (AppSecretConfigurationError, AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
+                attempt_errors.append(f'kek/{profile_name}: {self._format_pkcs11_attempt_error(exception)}')
+                self._destroy_kek_best_effort(kek)
+            else:
+                return kek, dek, protected_dek
+
+        msg = (
+            'PKCS#11 app-secret backend could not create a persistent KEK that can protect a DEK.'
+            f'{self._format_pkcs11_attempts(attempt_errors)}'
+        )
+        raise AppSecretConfigurationError(msg)
 
     def _load_existing_kek(self, session: pkcs11.Session) -> _Pkcs11Kek:
         """Load the persistent HSM KEK without creating missing material."""
@@ -418,28 +460,33 @@ class Pkcs11AppSecretService(BaseAppSecretService):
         """Verify the token supports app-secret DEK protection without storing key material."""
         attempt_errors: list[str] = []
         with self._open_session() as session:
-            kek: _Pkcs11Kek | None = None
-            try:
-                kek = cast(
-                    '_Pkcs11Kek',
-                    session.generate_key(
-                        pkcs11.KeyType.AES,
-                        key_length=DEK_LENGTH_BYTES * 8,
-                        store=False,
-                        capabilities=APP_SECRET_KEK_CAPABILITIES,
-                        template=dict(APP_SECRET_TEMPORARY_KEK_TEMPLATE),
-                    ),
-                )
-                dek, protected_dek = self._generate_protected_dek(session=session, kek=kek)
-                recovered_dek = self._recover_dek(kek=kek, protected_dek=protected_dek)
-            except (AppSecretConfigurationError, AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
-                attempt_errors.append(f'temporary-kek: {self._format_pkcs11_attempt_error(exception)}')
-            else:
-                if recovered_dek == dek:
-                    return
-                attempt_errors.append('temporary-kek: protected-DEK recovery returned a different DEK')
-            finally:
-                self._destroy_temporary_kek(kek)
+            for profile_name, capabilities, template in APP_SECRET_KEK_PROFILES:
+                kek: _Pkcs11Kek | None = None
+                try:
+                    kek = cast(
+                        '_Pkcs11Kek',
+                        session.generate_key(
+                            pkcs11.KeyType.AES,
+                            key_length=DEK_LENGTH_BYTES * 8,
+                            store=False,
+                            capabilities=capabilities,
+                            template={**template, pkcs11.Attribute.TOKEN: False},
+                        ),
+                    )
+                    dek, protected_dek = self._generate_protected_dek(session=session, kek=kek)
+                    recovered_dek = self._recover_dek(kek=kek, protected_dek=protected_dek)
+                except (AppSecretConfigurationError, AttributeError, TypeError, pkcs11.PKCS11Error) as exception:
+                    attempt_errors.append(
+                        f'temporary-kek/{profile_name}: {self._format_pkcs11_attempt_error(exception)}'
+                    )
+                else:
+                    if recovered_dek == dek:
+                        return
+                    attempt_errors.append(
+                        f'temporary-kek/{profile_name}: protected-DEK recovery returned a different DEK'
+                    )
+                finally:
+                    self._destroy_kek_best_effort(kek)
 
         msg = (
             'PKCS#11 app-secret protection self-test failed. The token must support temporary AES KEK generation '
@@ -449,8 +496,8 @@ class Pkcs11AppSecretService(BaseAppSecretService):
         raise AppSecretConfigurationError(msg)
 
     @staticmethod
-    def _destroy_temporary_kek(kek: _Pkcs11Kek | None) -> None:
-        """Best-effort destroy for temporary app-secret KEK test keys."""
+    def _destroy_kek_best_effort(kek: _Pkcs11Kek | None) -> None:
+        """Best-effort destroy for app-secret KEK objects."""
         if kek is not None:
             with contextlib.suppress(pkcs11.PKCS11Error, AttributeError):
                 kek.destroy()

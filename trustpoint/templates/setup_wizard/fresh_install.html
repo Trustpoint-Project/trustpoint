@@ -126,6 +126,10 @@
                                 <div class="tp-summary-value">{{ form.storage_selection.value|default:"-" }}</div>
                             </div>
                             <div class="tp-summary-item">
+                                <div class="tp-summary-label">{{ form.app_secret_protection.label }}</div>
+                                <div class="tp-summary-value">{{ form.app_secret_protection.value|default:"-" }}</div>
+                            </div>
+                            <div class="tp-summary-item">
                                 <div class="tp-summary-label">{{ form.inject_demo_data_selection.label }}</div>
                                 <div class="tp-summary-value">{{ form.inject_demo_data_selection.value|default:"-" }}</div>
                             </div>
@@ -323,15 +327,15 @@
                                 </div>
                                 {% if form.staged_pkcs11_config_name %}
                                     <div class="tp-backend-state-pill">
-                                        <span>Current vendor config: {{ form.staged_pkcs11_config_name }}</span>
+                                        <span>Current provider config: {{ form.staged_pkcs11_config_name }}</span>
                                         <button
                                             type="submit"
                                             name="wizard_action"
                                             value="clear_pkcs11_config"
                                             class="tp-backend-state-pill-dismiss"
                                             formnovalidate
-                                            aria-label="Remove vendor config"
-                                            title="Remove vendor config"
+                                            aria-label="Remove provider config"
+                                            title="Remove provider config"
                                         >×</button>
                                     </div>
                                 {% endif %}
@@ -430,6 +434,27 @@
                                             </div>
                                         {% endif %}
                                     </div>
+                                </div>
+                            </section>
+                            <section class="tp-backend-section">
+                                <div class="tp-backend-section-kicker">Policy</div>
+                                <h3 class="tp-backend-section-title">Application Secret Protection</h3>
+                                <p class="tp-backend-section-copy">
+                                    Enable only when policy requires the HSM to protect Trustpoint's application-secret DEK.
+                                </p>
+                                <div class="form-check text-start">
+                                    {{ form.fresh_install_pkcs11_enforce_app_secret_protection }}
+                                    <label class="form-check-label" for="{{ form.fresh_install_pkcs11_enforce_app_secret_protection.id_for_label }}">
+                                        {{ form.fresh_install_pkcs11_enforce_app_secret_protection.label }}
+                                    </label>
+                                    {% if form.fresh_install_pkcs11_enforce_app_secret_protection.help_text %}
+                                        <div class="form-text">{{ form.fresh_install_pkcs11_enforce_app_secret_protection.help_text }}</div>
+                                    {% endif %}
+                                    {% if form.fresh_install_pkcs11_enforce_app_secret_protection.errors %}
+                                        <div class="text-danger mt-2">
+                                            {{ form.fresh_install_pkcs11_enforce_app_secret_protection.errors }}
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </section>
                         </div>

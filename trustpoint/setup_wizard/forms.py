@@ -27,8 +27,7 @@ if TYPE_CHECKING:
 
 FINAL_WIZARD_PKCS11_MODULE_PATH = Path(settings.HSM_LIB_DIR) / 'uploaded-pkcs11-module.so'
 FINAL_WIZARD_PKCS11_PIN_PATH = Path(settings.HSM_DEFAULT_USER_PIN_FILE)
-FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-vendor.cfg'
-DEFAULT_PKCS11_CONFIG_ENV_VAR = 'CS_PKCS11_R3_CFG'
+FINAL_WIZARD_PKCS11_CONFIG_PATH = Path(settings.HSM_CONFIG_DIR) / 'uploaded-pkcs11-provider.cfg'
 
 MIN_TCP_PORT = 1
 MAX_TCP_PORT = 65535
@@ -380,17 +379,18 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
     )
     pkcs11_config_upload = forms.FileField(
         required=False,
-        label=gettext_lazy('Vendor config file'),
+        label=gettext_lazy('Provider config file'),
         help_text=gettext_lazy(
-            'Optional. Upload the vendor PKCS#11 config file when the library requires one, for example '
-            'cs_pkcs11_R3.cfg for Utimaco.'
+            'Optional. Upload the PKCS#11 provider configuration file when the selected module requires one.'
         ),
     )
     pkcs11_config_env_var = forms.CharField(
         required=False,
-        label=gettext_lazy('Vendor config env var'),
+        label=gettext_lazy('Provider config env var'),
         initial='',
-        help_text=gettext_lazy('Environment variable used by the PKCS#11 library to find the vendor config file.'),
+        help_text=gettext_lazy(
+            'Environment variable used by this PKCS#11 module to find the uploaded provider config file.'
+        ),
     )
     MAX_PKCS11_LIBRARY_UPLOAD_BYTES = 32 * 1024 * 1024
     MAX_PKCS11_CONFIG_UPLOAD_BYTES = 256 * 1024
@@ -402,10 +402,14 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         fields = (
             'fresh_install_pkcs11_token_label',
             'fresh_install_pkcs11_slot_id',
+            'fresh_install_pkcs11_enforce_app_secret_protection',
         )
         labels: ClassVar[dict[str, str | Promise]] = {
             'fresh_install_pkcs11_token_label': gettext_lazy('Token label'),
             'fresh_install_pkcs11_slot_id': gettext_lazy('Slot ID (optional)'),
+            'fresh_install_pkcs11_enforce_app_secret_protection': gettext_lazy(
+                'Require HSM protection for application secrets'
+            ),
         }
         help_texts: ClassVar[dict[str, str | Promise]] = {
             'fresh_install_pkcs11_token_label': gettext_lazy(
@@ -415,6 +419,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             'fresh_install_pkcs11_slot_id': gettext_lazy(
                 'Optional PKCS#11 slot ID. Use this when the provider token label cannot be resolved reliably.'
             ),
+            'fresh_install_pkcs11_enforce_app_secret_protection': '',
         }
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -435,6 +440,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
                 'fresh_install_pkcs11_token_label',
                 'fresh_install_pkcs11_slot_id',
                 'pkcs11_user_pin',
+                'fresh_install_pkcs11_enforce_app_secret_protection',
             ):
                 self.fields[field_name].widget = forms.HiddenInput()
                 self.fields[field_name].required = False
@@ -445,7 +451,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         self.fields['pkcs11_config_env_var'].widget.attrs.update(
             {
                 'class': 'form-control',
-                'placeholder': 'CS_PKCS11_R3_CFG',
+                'placeholder': 'PKCS11_CONFIG',
             }
         )
         self.fields['fresh_install_pkcs11_token_label'].widget.attrs.update(
@@ -460,6 +466,9 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
                 'placeholder': '1',
             }
         )
+        self.fields['fresh_install_pkcs11_enforce_app_secret_protection'].widget.attrs.update(
+            {'class': 'form-check-input'}
+        )
         self.fields['pkcs11_user_pin'].widget.attrs.update({'class': 'form-control'})
         self._apply_pkcs11_defaults()
 
@@ -469,9 +478,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             self.instance.fresh_install_pkcs11_token_label or getattr(settings, 'HSM_DEFAULT_TOKEN_LABEL', '')
         )
         self.initial['fresh_install_pkcs11_slot_id'] = self.instance.fresh_install_pkcs11_slot_id
-        self.initial['pkcs11_config_env_var'] = self.instance.fresh_install_pkcs11_config_env_var or (
-            DEFAULT_PKCS11_CONFIG_ENV_VAR if self._existing_pkcs11_config_file() is not None else ''
-        )
+        self.initial['pkcs11_config_env_var'] = self.instance.fresh_install_pkcs11_config_env_var
         self.staged_pkcs11_module_name = self._staged_pkcs11_module_name()
         self.has_staged_pkcs11_pin = self._existing_pkcs11_pin_file() is not None
         self.staged_pkcs11_config_name = self._staged_pkcs11_config_name()
@@ -520,7 +527,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         return _safe_existing_file(FINAL_WIZARD_PKCS11_PIN_PATH)
 
     def _existing_pkcs11_config_file(self) -> Path | None:
-        """Return the currently staged or installed PKCS#11 vendor config file for this wizard state."""
+        """Return the currently staged or installed PKCS#11 provider config file for this wizard state."""
         staged_config = existing_wizard_pkcs11_staged_file(self.instance.fresh_install_pkcs11_config_path)
         if staged_config is not None:
             return staged_config
@@ -539,7 +546,7 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
         return module_file.name
 
     def _staged_pkcs11_config_name(self) -> str | None:
-        """Return the current wizard PKCS#11 vendor config filename when one is available."""
+        """Return the current wizard PKCS#11 provider config filename when one is available."""
         config_file = self._existing_pkcs11_config_file()
         if config_file is None:
             return None
@@ -562,6 +569,12 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             err_msg = gettext_lazy('Enter a non-negative PKCS#11 slot ID.')
             raise forms.ValidationError(err_msg)
         return int(slot_id)
+
+    def clean_fresh_install_pkcs11_enforce_app_secret_protection(self) -> bool:
+        """Return whether setup must enforce HSM-backed application-secret protection."""
+        if self.instance.crypto_storage != SetupWizardConfigModel.CryptoStorageType.HsmStorage:
+            return False
+        return bool(self.cleaned_data.get('fresh_install_pkcs11_enforce_app_secret_protection'))
 
     def _validate_pkcs11_module_upload(self, uploaded_module: Any) -> None:
         """Validate the uploaded PKCS#11 shared library."""
@@ -594,15 +607,15 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             raise forms.ValidationError(err_msg)
 
     def _validate_pkcs11_config_upload(self, uploaded_config: Any) -> None:
-        """Validate an optional vendor PKCS#11 config upload."""
+        """Validate an optional provider PKCS#11 config upload."""
         if uploaded_config is None:
             return
         if getattr(uploaded_config, 'size', 0) > self.MAX_PKCS11_CONFIG_UPLOAD_BYTES:
-            err_msg = gettext_lazy('The uploaded vendor config file is too large.')
+            err_msg = gettext_lazy('The uploaded provider config file is too large.')
             raise forms.ValidationError(err_msg)
 
     def clean_pkcs11_config_env_var(self) -> str:
-        """Normalize the optional vendor config env-var name."""
+        """Normalize the optional provider config env-var name."""
         value = str(self.cleaned_data.get('pkcs11_config_env_var') or '').strip()
         if not value:
             return ''
@@ -637,7 +650,10 @@ class FreshInstallBackendConfigModelForm(FreshInstallModelBaseForm):
             self.add_error('pkcs11_config_upload', exception)
 
         if (config_upload is not None or existing_config is not None) and not config_env_var:
-            cleaned_data['pkcs11_config_env_var'] = DEFAULT_PKCS11_CONFIG_ENV_VAR
+            self.add_error(
+                'pkcs11_config_env_var',
+                gettext_lazy('Enter the environment variable expected by this PKCS#11 provider config file.'),
+            )
 
         if (
             module_upload is None
@@ -747,6 +763,11 @@ class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
         required=False,
         disabled=True,
     )
+    app_secret_protection = forms.CharField(
+        label=gettext_lazy('Application Secret Protection'),
+        required=False,
+        disabled=True,
+    )
     inject_demo_data_selection = forms.CharField(
         label=gettext_lazy('Inject Demo Data'),
         required=False,
@@ -801,6 +822,13 @@ class FreshInstallSummaryModelForm(FreshInstallModelBaseForm):
             storage_choice,
             instance.get_crypto_storage_display(),
         )
+        if (
+            storage_choice == SetupWizardConfigModel.CryptoStorageType.HsmStorage
+            and instance.fresh_install_pkcs11_enforce_app_secret_protection
+        ):
+            self.fields['app_secret_protection'].initial = gettext_lazy('PKCS#11 HSM enforced')
+        else:
+            self.fields['app_secret_protection'].initial = gettext_lazy('Software app-secret backend')
         self.fields['inject_demo_data_selection'].initial = (
             gettext_lazy('Yes') if instance.inject_demo_data else gettext_lazy('No')
         )

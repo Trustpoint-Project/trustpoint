@@ -8,7 +8,7 @@ HSM_CONFIG_DIR="${TRUSTPOINT_HSM_CONFIG_DIR:-${HSM_ROOT}/config}"
 HSM_LIB_DIR="${TRUSTPOINT_HSM_LIB_DIR:-${HSM_ROOT}/lib}"
 FINAL_MODULE_PATH="${HSM_LIB_DIR}/uploaded-pkcs11-module.so"
 PIN_FILE_PATH="${HSM_CONFIG_DIR}/user-pin.txt"
-FINAL_CONFIG_PATH="${HSM_CONFIG_DIR}/uploaded-pkcs11-vendor.cfg"
+FINAL_CONFIG_PATH="${HSM_CONFIG_DIR}/uploaded-pkcs11-provider.cfg"
 MODULE_PATH_FILE="${HSM_CONFIG_DIR}/pkcs11-module-path.txt"
 
 log() {
@@ -30,13 +30,13 @@ case "${1:-}" in
         ;;
     --clear-config)
         rm -f "$FINAL_CONFIG_PATH"
-        log INFO "PKCS#11 vendor config cleared from protected HSM area."
+        log INFO "PKCS#11 provider config cleared from protected HSM area."
         exit 0
         ;;
 esac
 
 if [ "$#" -ne 1 ] && [ "$#" -ne 2 ] && [ "$#" -ne 3 ]; then
-    log ERROR "Expected staged PIN, staged module plus PIN, or staged module plus PIN plus vendor config."
+    log ERROR "Expected staged PIN, staged module plus PIN, or staged module plus PIN plus provider config."
     exit 1
 fi
 
@@ -78,13 +78,13 @@ if [ "$install_config" -eq 1 ]; then
     case "$staged_config" in
         "${STAGING_ROOT}"/*) ;;
         *)
-            log ERROR "Refusing to install non-staged PKCS#11 vendor config path."
+            log ERROR "Refusing to install non-staged PKCS#11 provider config path."
             exit 7
             ;;
     esac
 
     if [ ! -f "$staged_config" ]; then
-        log ERROR "Staged PKCS#11 vendor config file is missing: $staged_config"
+        log ERROR "Staged PKCS#11 provider config file is missing: $staged_config"
         exit 7
     fi
 fi
@@ -120,7 +120,7 @@ fi
 
 if [ "$install_config" -eq 1 ]; then
     if ! install -o root -g www-data -m 0640 "$staged_config" "$FINAL_CONFIG_PATH"; then
-        log ERROR "Failed to install PKCS#11 vendor config into $FINAL_CONFIG_PATH"
+        log ERROR "Failed to install PKCS#11 provider config into $FINAL_CONFIG_PATH"
         exit 8
     fi
 fi
