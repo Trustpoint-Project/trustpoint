@@ -155,7 +155,7 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
         self.assertEqual(pkcs11_config.token_label, '')
         self.assertEqual(pkcs11_config.slot_id, 1)
 
-    def test_configure_app_secret_backend_uses_software_backend_for_pkcs11_crypto(self) -> None:
+    def test_configure_app_secret_backend_uses_software_backend_for_pkcs11_crypto_when_policy_disabled(self) -> None:
         with TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
             module_path = temp_root / 'libpkcs11.so'
@@ -180,6 +180,7 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
 
             config_model = SetupWizardConfigModel.get_singleton()
             config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
+            config_model.fresh_install_pkcs11_enforce_app_secret_protection = False
             config_model.save()
 
             with patch('setup_wizard.views.get_app_secret_service') as mock_get_service:
@@ -190,7 +191,7 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
         AppSecretSoftwareConfigModel.objects.get(backend=backend)
         self.assertEqual(backend.backend_kind, AppSecretBackendKind.SOFTWARE)
 
-    def test_configure_app_secret_backend_uses_pkcs11_when_enforced(self) -> None:
+    def test_configure_app_secret_backend_uses_pkcs11_by_default_for_hsm_crypto(self) -> None:
         with TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
             module_path = temp_root / 'libpkcs11.so'
@@ -215,7 +216,6 @@ class FreshInstallSummaryBackendConfigurationTests(TestCase):
 
             config_model = SetupWizardConfigModel.get_singleton()
             config_model.crypto_storage = SetupWizardConfigModel.CryptoStorageType.HsmStorage
-            config_model.fresh_install_pkcs11_enforce_app_secret_protection = True
             config_model.save()
 
             with patch('setup_wizard.views.get_app_secret_service') as mock_get_service:
