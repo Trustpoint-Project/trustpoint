@@ -28,6 +28,17 @@ from trustpoint.views.base import SortableTableFromListMixin
 from util.sftp import SftpClient, SftpError
 
 
+def _safe_backup_file_path(backup_dir: Path, filename: str) -> Path | None:
+    """Return a backup file path only for plain filenames inside the backup directory."""
+    if Path(filename).name != filename:
+        return None
+
+    path = backup_dir / filename
+    if not path.is_file():
+        return None
+    return path
+
+
 def get_backup_file_data(filename: str) -> dict[str, Any]:
     """Retrieve metadata for a single backup file.
 
@@ -44,8 +55,8 @@ def get_backup_file_data(filename: str) -> dict[str, Any]:
         Returns an empty dict if the file does not exist or is not a regular file.
     """
     backup_dir: Path = settings.BACKUP_FILE_PATH
-    file_path = backup_dir / filename
-    if not file_path.exists() or not file_path.is_file():
+    file_path = _safe_backup_file_path(backup_dir, filename)
+    if file_path is None:
         return {}
     stat = file_path.stat()
     created_dt = datetime.datetime.fromtimestamp(stat.st_ctime, datetime.UTC)
@@ -330,8 +341,8 @@ class BackupFileDownloadView(View):
             Http404: If the requested file does not exist.
         """
         backup_dir: Path = settings.BACKUP_FILE_PATH
-        file_path = backup_dir / filename
-        if not file_path.exists() or not file_path.is_file():
+        file_path = _safe_backup_file_path(backup_dir, filename)
+        if file_path is None:
             msg = f'Backup file not found: {filename}'
             raise Http404(msg)
 
@@ -367,11 +378,8 @@ def _backup_artifact_filename(filename: str, archive_format: str) -> str:
 
 def _backup_payload_paths(backup_dir: Path, filename: str) -> tuple[Path, Path | None] | None:
     """Return the selected backup payload path and optional manifest sidecar."""
-    if Path(filename).name != filename:
-        return None
-
-    path = backup_dir / filename
-    if not path.is_file():
+    path = _safe_backup_file_path(backup_dir, filename)
+    if path is None:
         return None
 
     manifest_path = backup_manifest_path(path)
@@ -480,8 +488,8 @@ class BackupFilesDeleteMultipleView(View, LoggerMixin):
         errors: list[str] = []
 
         for fname in filenames:
-            path = backup_dir / fname
-            if not path.is_file():
+            path = _safe_backup_file_path(backup_dir, fname)
+            if path is None:
                 warn_msg = f'File not found for deletion: {fname}'
                 self.logger.warning(warn_msg)
                 errors.append(fname)

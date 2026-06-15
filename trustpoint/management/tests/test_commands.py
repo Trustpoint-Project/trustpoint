@@ -397,6 +397,13 @@ class TrustpointBackupCommandTest(TestCase):
 
         self.assertIn('--filename', str(cm.exception))
 
+    def test_trustpointbackup_rejects_path_like_filename(self) -> None:
+        """The backup command only accepts plain filenames."""
+        with self.assertRaises(CommandError) as ctx:
+            call_command('trustpointbackup', '--filename=../outside.dump.gz')
+
+        assert 'path separators' in str(ctx.exception)
+
 
 class TrustpointBackupManifestCommandTest(TestCase):
     """Test suite for trustpointbackup_manifest command."""
@@ -434,6 +441,13 @@ class TrustpointBackupManifestCommandTest(TestCase):
                 call_command('trustpointbackup_manifest', '--filename=sample.dump.gz', '--verify')
 
         assert 'SHA-256 does not match' in str(ctx.exception)
+
+    def test_rejects_path_like_filename(self) -> None:
+        """The manifest command only accepts plain filenames."""
+        with self.assertRaises(CommandError) as ctx:
+            call_command('trustpointbackup_manifest', '--filename=../outside.dump.gz')
+
+        assert 'path separators' in str(ctx.exception)
 
 
 class UpdateTlsCommandTest(TestCase):

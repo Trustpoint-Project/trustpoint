@@ -1,5 +1,6 @@
 """Management command to create a new local backup."""
 
+from pathlib import Path
 from typing import Any
 
 from django.conf import settings
@@ -29,6 +30,9 @@ class Command(BaseCommand):
 
     def backup_trustpoint(self, filename: str) -> None:
         """Checks current state of trustpoint and acts accordingly."""
+        if Path(filename).name != filename:
+            msg = 'Backup filename must not include path separators.'
+            raise CommandError(msg)
         call_command('dbbackup', '-o', filename, '-z')
         manifest_path = write_backup_manifest(settings.BACKUP_FILE_PATH / filename)
         self.stdout.write(f'Backup manifest written: {manifest_path.name}')

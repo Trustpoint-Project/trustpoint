@@ -10,11 +10,12 @@ from unittest.mock import MagicMock, Mock, patch
 from django.contrib.auth.models import User
 from django.contrib.messages import get_messages
 from django.core.management.base import CommandError
+from django.http import Http404
 from django.test import Client, TestCase
 from django.urls import reverse
 
 from management.models import BackupOptions
-from management.views.backup import create_db_backup, get_backup_file_data
+from management.views.backup import BackupFileDownloadView, create_db_backup, get_backup_file_data
 from util.sftp import SftpError
 
 
@@ -57,6 +58,18 @@ class GetBackupFileDataTest(TestCase):
         with patch('management.views.backup.settings') as mock_settings:
             mock_settings.BACKUP_FILE_PATH = self.backup_dir
             data = get_backup_file_data('subdir')
+
+        self.assertEqual(data, {})
+
+    def test_get_backup_file_data_rejects_path_traversal(self) -> None:
+        """Path-like filenames are not resolved outside the backup directory."""
+        outside_file = self.backup_dir.parent / f'{self.backup_dir.name}-outside.dump.gz'
+        outside_file.write_text('outside')
+        self.addCleanup(lambda: outside_file.exists() and outside_file.unlink())
+
+        with patch('management.views.backup.settings') as mock_settings:
+            mock_settings.BACKUP_FILE_PATH = self.backup_dir
+            data = get_backup_file_data(f'../{outside_file.name}')
 
         self.assertEqual(data, {})
 
@@ -548,6 +561,17 @@ class BackupFileDownloadViewTest(TestCase):
         # Django test client returns 404 status code instead of raising Http404
         self.assertEqual(response.status_code, 404)
 
+    @patch('management.views.backup.settings')
+    def test_download_rejects_path_traversal(self, mock_settings: MagicMock) -> None:
+        """Path-like filenames are rejected before resolving the requested file."""
+        mock_settings.BACKUP_FILE_PATH = self.backup_dir
+        outside_file = self.backup_dir.parent / f'{self.backup_dir.name}-outside.dump.gz'
+        outside_file.write_bytes(b'outside')
+        self.addCleanup(lambda: outside_file.exists() and outside_file.unlink())
+
+        with self.assertRaises(Http404):
+            BackupFileDownloadView().get(None, f'../{outside_file.name}')
+
     def tearDown(self) -> None:
         """Clean up temporary directory."""
         self.temp_dir.cleanup()
@@ -702,6 +726,22 @@ class BackupFilesDeleteMultipleViewTest(TestCase):
         response = self.client.post(url, {'selected': ['nonexistent.dump.gz']})
         
         self.assertEqual(response.status_code, 302)
+        messages = list(get_messages(response.wsgi_request))
+        self.assertTrue(any('Errors deleting' in str(message) for message in messages))
+
+    @patch('management.views.backup.settings')
+    def test_delete_multiple_rejects_path_traversal(self, mock_settings: MagicMock) -> None:
+        """Path-like selected filenames cannot delete files outside the backup directory."""
+        mock_settings.BACKUP_FILE_PATH = self.backup_dir
+        outside_file = self.backup_dir.parent / f'{self.backup_dir.name}-outside.dump.gz'
+        outside_file.write_bytes(b'outside')
+        self.addCleanup(lambda: outside_file.exists() and outside_file.unlink())
+
+        url = reverse('management:backup-delete-multiple')
+        response = self.client.post(url, {'selected': [f'../{outside_file.name}']})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(outside_file.exists())
         messages = list(get_messages(response.wsgi_request))
         self.assertTrue(any('Errors deleting' in str(message) for message in messages))
 

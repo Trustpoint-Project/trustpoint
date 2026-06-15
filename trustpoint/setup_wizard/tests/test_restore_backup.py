@@ -81,6 +81,25 @@ def test_restore_dump_gz_uses_pg_restore_custom_format(monkeypatch: Any, tmp_pat
     assert calls[0]['env']['PGPASSWORD'] == 'testing321'
 
 
+def test_restore_plain_sql_uses_transactional_psql(monkeypatch: Any, tmp_path: Path) -> None:
+    """Plain SQL restore payloads are applied through psql in a single transaction."""
+    backup_path = tmp_path / 'backup.dump'
+    backup_path.write_bytes(b'CREATE TABLE restored(id integer);\n')
+    calls: list[dict[str, Any]] = []
+
+    monkeypatch.setattr(views, 'restore_backup_staging_root', lambda: tmp_path)
+    monkeypatch.setattr(views.subprocess, 'run', _successful_restore_recorder(calls))
+
+    views.restore_operational_database_from_backup(_restore_config(backup_path))
+
+    assert len(calls) == 1
+    assert calls[0]['command'][0] == 'psql'
+    assert '--set' in calls[0]['command']
+    assert 'ON_ERROR_STOP=1' in calls[0]['command']
+    assert '--single-transaction' in calls[0]['command']
+    assert calls[0]['payload'] == b'CREATE TABLE restored(id integer);\n'
+
+
 def test_restore_custom_dump_retries_without_transaction_timeout(monkeypatch: Any, tmp_path: Path) -> None:
     """Custom dumps from newer PostgreSQL versions are retried without transaction_timeout setup."""
     backup_path = tmp_path / 'backup.dump.gz'

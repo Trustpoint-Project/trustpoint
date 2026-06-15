@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from django.conf import settings
@@ -26,7 +27,12 @@ class Command(BaseCommand):
 
     def handle(self, *_args: Any, **options: Any) -> None:
         """Write or verify a backup manifest sidecar."""
-        backup_path = settings.BACKUP_FILE_PATH / str(options['filename'])
+        filename = str(options['filename'])
+        if Path(filename).name != filename:
+            msg = 'Backup filename must not include path separators.'
+            raise CommandError(msg)
+
+        backup_path = settings.BACKUP_FILE_PATH / filename
         try:
             if options.get('verify'):
                 manifest = verify_backup_manifest(backup_path)

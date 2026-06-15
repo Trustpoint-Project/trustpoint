@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import cast
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -42,6 +41,7 @@ class FakeAdapter:
             resolved_public_key_fingerprint_sha256=None,
         )
     )
+    verification_exception: Exception | None = None
     generate_calls: list[tuple[str, object, object]] = field(default_factory=list)
     get_public_key_calls: list[Pkcs11ManagedKeyBinding] = field(default_factory=list)
     sign_calls: list[tuple[Pkcs11ManagedKeyBinding, bytes, SignRequest]] = field(default_factory=list)
@@ -70,6 +70,8 @@ class FakeAdapter:
     def verify_managed_key(self, key: Pkcs11ManagedKeyBinding) -> Pkcs11ManagedKeyVerification:
         """Return the configured verification result."""
         self.verify_calls.append(key)
+        if self.verification_exception is not None:
+            raise self.verification_exception
         return self.verification
 
     def destroy_managed_key(self, key: Pkcs11ManagedKeyBinding) -> None:
@@ -116,7 +118,7 @@ def _create_pkcs11_profile(*, name: str, active: bool = True) -> CryptoProviderP
 
 def _backend_with_adapter(adapter: FakeAdapter) -> TrustpointCryptoBackend:
     """Build a backend service around the test adapter fake."""
-    return TrustpointCryptoBackend(adapter_factory=cast('BackendAdapterFactory', FakeAdapterFactory(adapter=adapter)))
+    return TrustpointCryptoBackend(adapter_factory=FakeAdapterFactory(adapter=adapter))  # type: ignore[arg-type]
 
 
 @pytest.mark.django_db
@@ -353,3 +355,52 @@ def test_verify_managed_key_updates_repository_status() -> None:
     assert verification.key.id == managed_key.id
     assert managed_key.status == ManagedKeyStatus.MISMATCH
     assert managed_key.last_verification_error == 'Managed key binding resolved to a different public key.'
+
+
+@pytest.mark.django_db
+def test_verify_managed_key_audits_runtime_failures() -> None:
+    """Managed-key verification records non-domain provider failures before reraising."""
+    profile = _create_pkcs11_profile(name='provider-1', active=True)
+    LoggingConfig.objects.update_or_create(
+        id=1,
+        defaults={'log_level': 'INFO', 'crypto_backend_audit_enabled': True},
+    )
+
+    public_key = rsa.generate_private_key(public_exponent=65537, key_size=2048).public_key()
+    adapter = FakeAdapter(
+        public_key=public_key,
+        generated_binding=Pkcs11ManagedKeyBinding(
+            key_id=b'\xaa\xbb\xcc\xdd',
+            algorithm=KeyAlgorithm.RSA,
+        ),
+        verification_exception=RuntimeError('provider crashed'),
+    )
+
+    managed_key = CryptoManagedKeyModel.objects.create(
+        alias='verify/runtime-error',
+        provider_label='verify/runtime-error',
+        provider_profile=profile,
+        algorithm='rsa',
+        public_key_fingerprint_sha256='b' * 64,
+        signing_execution_mode=SigningExecutionMode.COMPLETE_BACKEND.value,
+        policy_snapshot={'extractable': False, 'ephemeral': False, 'usages': ['sign', 'verify']},
+    )
+    CryptoManagedKeyPkcs11BindingModel.objects.create(
+        managed_key=managed_key,
+        provider_profile=profile,
+        key_id_hex='aabbccdd',
+    )
+
+    backend = _backend_with_adapter(adapter)
+
+    with pytest.raises(RuntimeError, match='provider crashed'):
+        backend.verify_managed_key(managed_key.to_managed_key_ref())
+
+    managed_key.refresh_from_db()
+    assert managed_key.status == ManagedKeyStatus.ERROR
+    assert managed_key.last_verification_error == 'provider crashed'
+
+    entry = AuditLog.objects.get(operation_type=AuditLog.OperationType.CRYPTO_VERIFY_MANAGED_KEY)
+    assert entry.target == managed_key
+    assert entry.details['status'] == 'error'
+    assert entry.details['error_type'] == 'RuntimeError'

@@ -165,7 +165,7 @@ class TrustpointCryptoBackend(LoggerMixin):
         try:
             binding = self._managed_key_repository.build_backend_binding(managed_key)
             verification = adapter.verify_managed_key(binding)
-        except CryptoError as exc:
+        except (CryptoError, DatabaseError, DjangoValidationError, RuntimeError, TypeError, ValueError) as exc:
             self._managed_key_repository.mark_error(managed_key=managed_key, error_summary=str(exc))
             audit_crypto_backend_operation(
                 operation='verify_managed_key',
@@ -369,7 +369,7 @@ class TrustpointCryptoBackend(LoggerMixin):
         """Best-effort cleanup of a generated key if DB persistence fails."""
         try:
             adapter.destroy_managed_key(binding)
-        except CryptoError as exc:
+        except (CryptoError, RuntimeError, TypeError, ValueError) as exc:
             self.logger.warning(
                 'Failed to clean up orphaned managed key for alias %r after persistence failure: %s',
                 alias,

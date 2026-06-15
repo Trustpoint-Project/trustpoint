@@ -476,7 +476,7 @@ def restore_operational_database_from_backup(
                     env=env,
                 )
         else:
-            command = ['psql', '--set', 'ON_ERROR_STOP=1', *common_args]
+            command = ['psql', '--set', 'ON_ERROR_STOP=1', '--single-transaction', *common_args]
             with _open_restore_archive(restore_source_path) as archive_file:
                 completed_process = subprocess.run(  # noqa: S603
                     command,
