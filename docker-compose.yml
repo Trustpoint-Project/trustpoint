@@ -9,16 +9,15 @@ services:
     ports:
       - "80:80"
       - "443:443"
-    depends_on:
-      postgres:
-        condition: service_healthy
+    env_file:
+      - .env
     environment:
       POSTGRES_DB: "${POSTGRES_DB:-trustpoint_db}"
-      DATABASE_USER: "${DATABASE_USER:?DATABASE_USER env var must be set}"
-      DATABASE_PASSWORD: "${DATABASE_PASSWORD:?DATABASE_PASSWORD env var must be set}"
-      DATABASE_HOST: "postgres"
-      DATABASE_PORT: "5432"
-      TP_URLS: ${TP_URLS}
+      DATABASE_USER: "${DATABASE_USER:-admin}"
+      DATABASE_PASSWORD: "${DATABASE_PASSWORD:-testing321}"
+      DATABASE_HOST: "${DATABASE_HOST:-postgres}"
+      DATABASE_PORT: "${DATABASE_PORT:-5432}"
+      TP_URLS: "${TP_URLS:-trustpoint.local}"
     healthcheck:
       test: ["CMD-SHELL", "curl -fsk --max-time 5 https://localhost/ > /dev/null"]
       interval: 30s
@@ -33,16 +32,17 @@ services:
     image: trustpointproject/trustpoint:latest
     restart: on-failure
     depends_on:
-      postgres:
-        condition: service_healthy
       trustpoint:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       POSTGRES_DB: "${POSTGRES_DB:-trustpoint_db}"
-      DATABASE_USER: "${DATABASE_USER:?DATABASE_USER env var must be set}"
-      DATABASE_PASSWORD: "${DATABASE_PASSWORD:?DATABASE_PASSWORD env var must be set}"
-      DATABASE_HOST: "postgres"
-      DATABASE_PORT: "5432"
+      DATABASE_USER: "${DATABASE_USER:-admin}"
+      DATABASE_PASSWORD: "${DATABASE_PASSWORD:-testing321}"
+      DATABASE_HOST: "${DATABASE_HOST:-postgres}"
+      DATABASE_PORT: "${DATABASE_PORT:-5432}"
+      TP_URLS: "${TP_URLS:-trustpoint.local}"
       TRUSTPOINT_SERVICE_ROLE: "worker"
 
   postgres:
@@ -58,8 +58,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql
     environment:
-      POSTGRES_USER: "${DATABASE_USER:?DATABASE_USER env var must be set}"
-      POSTGRES_PASSWORD: "${DATABASE_PASSWORD:?DATABASE_PASSWORD env var must be set}"
+      POSTGRES_USER: "${DATABASE_USER:-admin}"
+      POSTGRES_PASSWORD: "${DATABASE_PASSWORD:-testing321}"
       POSTGRES_DB: "${POSTGRES_DB:-trustpoint_db}"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 5432"]

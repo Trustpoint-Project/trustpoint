@@ -37,8 +37,9 @@ Getting started with Docker Compose
 The .env file
 ^^^^^^^^^^^^^
 
-All deployments require a ``.env`` file in the project root.
-Copy the provided template and fill in the required values:
+Docker Compose and ``tp_wizard.sh`` read the ``.env`` file in the project root.
+The repository contains development defaults. For production-like deployments,
+copy the example and replace at least the database password:
 
 .. code-block:: bash
 
@@ -54,24 +55,39 @@ The following variables are supported:
      - Required
      - Description
    * - ``DATABASE_USER``
-     - Yes
-     - PostgreSQL username. Avoid generic defaults such as ``admin``.
+     - No
+     - PostgreSQL username. Defaults to ``admin`` for local testing.
    * - ``DATABASE_PASSWORD``
-     - Yes
-     - PostgreSQL password. Generate a strong value: ``openssl rand -base64 32``
+     - No
+     - PostgreSQL password. Defaults to ``testing321`` for local testing. Generate a strong value for production-like deployments: ``openssl rand -base64 32``
    * - ``POSTGRES_DB``
      - No
      - Database name. Defaults to ``trustpoint_db``.
+   * - ``DATABASE_HOST``
+     - No
+     - Database host used by the Trustpoint containers. Defaults to ``postgres``.
+   * - ``DATABASE_PORT``
+     - No
+     - Database port used by the Trustpoint containers. Defaults to ``5432``.
    * - ``TP_URLS``
      - No
-     - Comma-separated hostnames or IPs at which Trustpoint is reachable (no protocol prefix). Defaults to ``localhost``.
+     - Comma-separated hostnames or IPs at which Trustpoint is reachable (no protocol prefix). Defaults to ``trustpoint.local``.
+   * - ``DEFAULT_FROM_EMAIL``
+     - No
+     - Sender address for Trustpoint emails. Defaults to ``no-reply@trustpoint.de``.
+   * - ``EMAIL_HOST``
+     - No
+     - SMTP host. Leave empty to use Django's console backend.
 
 Minimal ``.env`` example:
 
 .. code-block:: bash
 
-    DATABASE_USER=trustpoint
+    POSTGRES_DB=trustpoint_db
+    DATABASE_USER=admin
     DATABASE_PASSWORD=correct-horse-battery-staple
+    DATABASE_HOST=postgres
+    DATABASE_PORT=5432
     TP_URLS=trustpoint.myfactory.local,10.0.0.5
 
 Setup (Load from Docker Hub)

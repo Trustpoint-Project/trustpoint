@@ -6,6 +6,14 @@ set -euo pipefail
 PROJECT="trustpoint"
 NET="${PROJECT}-net"
 VOL_DB="${PROJECT}_postgres_data"
+ENV_FILE="${ENV_FILE:-${PWD}/.env}"
+
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$ENV_FILE"
+  set +a
+fi
 
 # trustpoint image handling
 TP_DOCKERFILE="docker/trustpoint/Dockerfile"
@@ -24,11 +32,13 @@ APP_HTTP_HOST=80
 APP_HTTPS_HOST=443
 
 # PostgreSQL defaults
-DEF_DB_NAME="trustpoint_db"
-DEF_DB_USER="admin"
-DEF_DB_PASS="testing321"
-DEF_DB_PORT=5432
+DEF_DB_NAME="${POSTGRES_DB:-trustpoint_db}"
+DEF_DB_USER="${DATABASE_USER:-admin}"
+DEF_DB_PASS="${DATABASE_PASSWORD:-testing321}"
+DEF_DB_PORT="${DATABASE_PORT:-5432}"
+DEF_DB_HOST="${DATABASE_HOST:-postgres}"
 DEF_DB_HOST_INTERNAL="postgres"   # container name/hostname
+DEF_TP_URLS="${TP_URLS:-trustpoint.local}"
 
 # Mailpit defaults
 DEF_MAILPIT_SMTP_PORT=1025
@@ -121,11 +131,62 @@ ask_dbname(){ local prompt="$1" def="$2" d; while true; do ask "$prompt" "$def";
 ask_password(){ local prompt="$1" def="$2" pw; while true; do ask "$prompt" "$def"; pw="$REPLY"; (( ${#pw} >= 6 )) && { echo "$pw"; return; } ; warn "Password too short (min 6)."; done; }
 mask(){ local s="$1" n=${#1}; (( n<=2 )) && { printf '%s' '**'; return; }; printf '%*s' $((n-2)) '' | tr ' ' '*'; printf '%s' "${s: -2}"; }
 
+# -------------------------- .env helpers -------------------------------------
+upsert_env_var(){
+  local key="$1" value="$2" tmp
+  touch "$ENV_FILE"
+  tmp="$(mktemp)"
+  awk -v key="$key" -v value="$value" '
+    BEGIN { done = 0 }
+    $0 ~ "^[[:space:]]*" key "=" {
+      if (!done) {
+        print key "=" value
+        done = 1
+      }
+      next
+    }
+    { print }
+    END {
+      if (!done) {
+        print key "=" value
+      }
+    }
+  ' "$ENV_FILE" > "$tmp"
+  mv "$tmp" "$ENV_FILE"
+}
+
+sync_env_file(){
+  local env_db_host env_db_port env_db_name env_db_user env_db_pass
+
+  if $EN_APP || $EN_WF2_WORKER || $ONLY_APP || $ONLY_WF2_WORKER; then
+    env_db_host="$APP_DB_HOST"
+    env_db_port="$APP_DB_PORT"
+    env_db_name="$APP_DB_NAME"
+    env_db_user="$APP_DB_USER"
+    env_db_pass="$APP_DB_PASS"
+  else
+    env_db_host="$DB_HOST"
+    env_db_port="$DB_PORT"
+    env_db_name="$DB_NAME"
+    env_db_user="$DB_USER"
+    env_db_pass="$DB_PASS"
+  fi
+
+  upsert_env_var "POSTGRES_DB" "$env_db_name"
+  upsert_env_var "DATABASE_USER" "$env_db_user"
+  upsert_env_var "DATABASE_PASSWORD" "$env_db_pass"
+  upsert_env_var "DATABASE_HOST" "$env_db_host"
+  upsert_env_var "DATABASE_PORT" "$env_db_port"
+  upsert_env_var "TP_URLS" "$TP_URLS_VALUE"
+  chmod 600 "$ENV_FILE" 2>/dev/null || true
+  ok "Updated ${ENV_FILE}"
+}
+
 # -------------------------- Wizard state -------------------------------------
 EN_APP=false; EN_PG=false; EN_MAILPIT=false; EN_SFTPGO=false; EN_WF2_WORKER=false
 
 DB_INTERNAL=true
-DB_HOST="$DEF_DB_HOST_INTERNAL"   # default host when internal
+DB_HOST="$DEF_DB_HOST"
 DB_PORT="$DEF_DB_PORT"            # host-mapped port for convenience access
 DB_NAME="$DEF_DB_NAME"
 DB_USER="$DEF_DB_USER"
@@ -136,6 +197,7 @@ APP_DB_PORT="$DB_PORT"
 APP_DB_NAME="$DB_NAME"
 APP_DB_USER="$DB_USER"
 APP_DB_PASS="$DEF_DB_PASS"
+TP_URLS_VALUE="$DEF_TP_URLS"
 
 MAILPIT_SMTP_PORT="$DEF_MAILPIT_SMTP_PORT"
 MAILPIT_UI_PORT="$DEF_MAILPIT_UI_PORT"
@@ -186,7 +248,7 @@ step_postgres_config(){
     # Immediate check: host port must be free to publish
     DB_PORT="$(ask_free_port 'PostgreSQL host port (mapped)' "$DB_PORT")"
   else
-    DB_HOST="$(ask 'External DB host/IP' '127.0.0.1'; echo "$REPLY")"
+    DB_HOST="$(ask 'External DB host/IP' "$DB_HOST"; echo "$REPLY")"
     DB_PORT="$(ask_port 'External DB port' "$DB_PORT")"
     DB_NAME="$(ask_dbname 'External DB database name' "$DB_NAME")"
     DB_USER="$(ask_user 'External DB username' "$DB_USER")"
@@ -224,6 +286,12 @@ step_app_db_binding(){
   fi
 }
 
+step_trustpoint_urls(){
+  $EN_APP || return 0
+  ask "Trustpoint reachable hostnames/IPs (comma-separated, no protocol)" "$TP_URLS_VALUE"
+  TP_URLS_VALUE="$REPLY"
+}
+
 step_helpers(){
   EN_MAILPIT=$(ask_yes_no "Enable Mailpit (demo SMTP inbox)?" "n" && echo true || echo false)
   if $EN_MAILPIT; then
@@ -258,6 +326,7 @@ show_plan(){
   echo "==================== Configuration Summary (Planned) ===================="
   printf "%-22s %s\n" "Network:" "$NET"
   printf "%-22s %s\n" "DB Volume:" "$VOL_DB"
+  printf "%-22s %s\n" ".env file:" "$ENV_FILE"
   echo
   printf "%-22s %s\n" "trustpoint enabled:" "$EN_APP"
   if $EN_APP; then
@@ -282,6 +351,7 @@ show_plan(){
     printf "%-22s %s\n" "trustpoint DB name:" "$APP_DB_NAME"
     printf "%-22s %s\n" "trustpoint DB user:" "$APP_DB_USER"
     printf "%-22s %s\n" "trustpoint DB pass:" "$(mask "$APP_DB_PASS")"
+    printf "%-22s %s\n" "trustpoint URLs:" "$TP_URLS_VALUE"
   fi
   echo
   printf "%-22s %s\n" "Mailpit enabled:" "$EN_MAILPIT"
@@ -441,6 +511,7 @@ DATABASE_USER=${APP_DB_USER}
 DATABASE_PASSWORD=${APP_DB_PASS}
 DATABASE_HOST=${APP_DB_HOST}
 DATABASE_PORT=${APP_DB_PORT}
+TP_URLS=${TP_URLS_VALUE}
 TRUSTPOINT_SERVICE_ROLE=worker
 WORKFLOWS2_WORKER_ID=${WF2_WORKER_NAME}
 WORKFLOWS2_WORKER_LEASE=${WF2_WORKER_LEASE}
@@ -481,6 +552,7 @@ start_app(){
     -e "DATABASE_PASSWORD=$APP_DB_PASS" \
     -e "DATABASE_HOST=$APP_DB_HOST" \
     -e "DATABASE_PORT=$APP_DB_PORT" \
+    -e "TP_URLS=$TP_URLS_VALUE" \
     ${smtp_env[@]+"${smtp_env[@]}"} \
     "$APP_IMAGE" >/dev/null
 }
@@ -719,7 +791,7 @@ show_runtime_status(){
   echo
 
   if exists trustpoint; then
-    local http_port https_port db_host db_port db_name db_user db_pass
+    local http_port https_port db_host db_port db_name db_user db_pass tp_urls
     http_port="$(container_host_port trustpoint 80/tcp)"
     https_port="$(container_host_port trustpoint 443/tcp)"
     db_host="$(container_env trustpoint DATABASE_HOST)"
@@ -727,9 +799,11 @@ show_runtime_status(){
     db_name="$(container_env trustpoint POSTGRES_DB)"
     db_user="$(container_env trustpoint DATABASE_USER)"
     db_pass="$(container_env trustpoint DATABASE_PASSWORD)"
+    tp_urls="$(container_env trustpoint TP_URLS)"
 
     [[ -n "$http_port" ]] && printf "%-22s %s\n" "trustpoint HTTP:" "http://localhost:${http_port}"
     [[ -n "$https_port" ]] && printf "%-22s %s\n" "trustpoint HTTPS:" "https://localhost:${https_port}"
+    [[ -n "$tp_urls" ]] && printf "%-22s %s\n" "trustpoint URLs:" "${tp_urls}"
     printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings"
     if [[ -n "$db_host" || -n "$db_port" || -n "$db_name" || -n "$db_user" ]]; then
       printf "%-22s %s\n" "DB connect:" "host=${db_host:-?} port=${db_port:-?} db=${db_name:-?} user=${db_user:-?} pass=$(mask "${db_pass:-}")"
@@ -781,10 +855,12 @@ final_summary(){
   echo
   echo "========================= Runtime Summary (Actual) ======================="
   printf "%-22s %s\n" "Network:" "$NET"
+  printf "%-22s %s\n" ".env file:" "$ENV_FILE"
   printf "%-22s %s\n" "Containers:" "$(docker ps --format '{{.Names}}' | grep -E '^(trustpoint|postgres|mailpit|sftpgo|trustpoint-worker)$' || true)"
   echo
   if $EN_APP; then
     printf "%-22s %s\n" "trustpoint:" "http://localhost:80  |  https://localhost:443"
+    printf "%-22s %s\n" "trustpoint URLs:" "$TP_URLS_VALUE"
     printf "%-22s %s\n" "workflows2 mode:" "managed in Trustpoint settings (default: auto)"
   fi
   if $DB_INTERNAL; then
@@ -831,10 +907,12 @@ wizard(){
   step_enable_postgres
   step_postgres_config
   step_app_db_binding
+  step_trustpoint_urls
   step_helpers
   step_workflows2_worker
   show_plan
   ask_yes_no "Proceed with these settings?" "y" || { warn "Aborted by user."; exit 1; }
+  sync_env_file
   resolve_app_image
   $DB_INTERNAL && ensure_volumes
   start_postgres
@@ -894,6 +972,7 @@ set_targets_from_args(){
 start_selected(){
   configure_selected
   ensure_network
+  sync_env_file
   resolve_app_image
   $ONLY_DB   && { EN_PG=true; ensure_volumes; start_postgres; }
   $ONLY_MAIL && { EN_MAILPIT=true; start_mailpit; }

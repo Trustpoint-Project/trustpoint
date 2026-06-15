@@ -92,6 +92,31 @@ PUBLIC_PATHS = [
 # ------------- Functions --------------
 
 
+def _env_bool(name: str, *, default: bool) -> bool:
+    """Return a boolean setting from an environment variable."""
+    raw_value = os.getenv(name)
+    if raw_value is None or raw_value.strip() == '':
+        return default
+    return raw_value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def _env_value(name: str, default: str, *, file_var: str | None = None) -> str:
+    """Return a setting from an environment variable or Docker secret file."""
+    value = os.getenv(name)
+    if value is not None:
+        return value
+
+    if file_var:
+        file_path = os.getenv(file_var)
+        if file_path is not None:
+            try:
+                return Path(file_path).read_text().strip()
+            except OSError:
+                return default
+
+    return default
+
+
 def is_postgre_available() -> bool:
     """Checks whether PostgreSQL is available and issues differentiated error messages.
 
@@ -105,11 +130,11 @@ def is_postgre_available() -> bool:
         print('PostgreSQL is disabled. Set POSTGRESQL=True in settings.')
         return False
 
-    host = os.environ.get('DATABASE_HOST', DATABASE_HOST)
-    port = int(os.environ.get('DATABASE_PORT', DATABASE_PORT))
-    user = os.environ.get('DATABASE_USER', DATABASE_USER)
-    password = os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD)
-    db_name = os.environ.get('POSTGRES_DB', POSTGRES_DB)
+    host = DATABASE_HOST
+    port = int(DATABASE_PORT)
+    user = DATABASE_USER
+    password = DATABASE_PASSWORD
+    db_name = POSTGRES_DB
 
     try:
         print(f'Trying to connect to {host}:{port}...')
@@ -163,7 +188,8 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
 CSRF_TRUSTED_ORIGINS = ['http://localhost:8000', 'http://127.0.0.1:8000']
 
-raw_urls = os.getenv('TP_URLS', '')
+TP_URLS = _env_value('TP_URLS', '')
+raw_urls = TP_URLS
 
 if raw_urls:
     # Split by comma and clean up whitespace
@@ -191,48 +217,38 @@ if raw_urls:
             CSRF_TRUSTED_ORIGINS.append(exact_origin)
 
 
-# Basic SMTP backend
-if DEBUG:
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-else:
-    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-    DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', default='no-reply@trustpoint.ai')
+# Settings for PostgreSQL database
+POSTGRESQL = _env_bool('POSTGRESQL', default=True)
+DATABASE_ENGINE = _env_value('DATABASE_ENGINE', 'django.db.backends.postgresql')
+DATABASE_HOST = _env_value('DATABASE_HOST', 'localhost')
+DATABASE_PORT = _env_value('DATABASE_PORT', '5432')
+POSTGRES_DB = _env_value('POSTGRES_DB', 'trustpoint_db')
+DATABASE_USER = _env_value('DATABASE_USER', 'admin', file_var='DATABASE_USER_FILE')
+DATABASE_PASSWORD = _env_value('DATABASE_PASSWORD', 'testing321', file_var='DATABASE_PASSWORD_FILE')
 
 
-# Settings for postgreql database
-POSTGRESQL = True
-DATABASE_ENGINE = 'django.db.backends.postgresql'
-DATABASE_HOST = 'localhost'
-DATABASE_PORT = '5432'
-POSTGRES_DB = 'trustpoint_db'
-DATABASE_USER = 'admin'
-DATABASE_PASSWORD = 'testing321'  # noqa: S105
-
-
-# Settomg for email backend
-DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'no-reply@trustpoint.de')
+# Setting for email backend
+DEFAULT_FROM_EMAIL = _env_value('DEFAULT_FROM_EMAIL', 'no-reply@trustpoint.de')
 
 # Default: console (safe for dev/showcases)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # If EMAIL_HOST is present, switch to SMTP
-_email_host = os.getenv('EMAIL_HOST')  # e.g. "smtp.customer.tld" or "mailpit"
+_email_host = _env_value('EMAIL_HOST', '')  # e.g. "smtp.customer.tld" or "mailpit"
 if _email_host:
     EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
     EMAIL_HOST = _email_host
-    EMAIL_PORT = int(os.getenv('EMAIL_PORT', '587'))
+    EMAIL_PORT = int(_env_value('EMAIL_PORT', '587'))
 
     # Sensible defaults based on port; env can override
     _SMTP_TLS_PORT = 587
     _SMTP_SSL_PORT = 465
-    _use_tls_env = os.getenv('EMAIL_USE_TLS')
-    _use_ssl_env = os.getenv('EMAIL_USE_SSL')
-    EMAIL_USE_TLS = (_use_tls_env.lower() in ('1', 'true', 'yes')) if _use_tls_env else (EMAIL_PORT == _SMTP_TLS_PORT)
-    EMAIL_USE_SSL = (_use_ssl_env.lower() in ('1', 'true', 'yes')) if _use_ssl_env else (EMAIL_PORT == _SMTP_SSL_PORT)
+    EMAIL_USE_TLS = _env_bool('EMAIL_USE_TLS', default=EMAIL_PORT == _SMTP_TLS_PORT)
+    EMAIL_USE_SSL = _env_bool('EMAIL_USE_SSL', default=EMAIL_PORT == _SMTP_SSL_PORT)
 
-    EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')  # auth only if both non-empty
-    EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
-    EMAIL_TIMEOUT = int(os.getenv('EMAIL_TIMEOUT', '10'))
+    EMAIL_HOST_USER = _env_value('EMAIL_HOST_USER', '')  # auth only if both non-empty
+    EMAIL_HOST_PASSWORD = _env_value('EMAIL_HOST_PASSWORD', '')
+    EMAIL_TIMEOUT = int(_env_value('EMAIL_TIMEOUT', '10'))
 
 
 STORAGES = {
@@ -380,11 +396,11 @@ if is_postgre_available():
     DATABASES = {
         'default': {
             'ENGINE': DATABASE_ENGINE,
-            'NAME': os.environ.get('POSTGRES_DB', POSTGRES_DB),
-            'USER': os.environ.get('DATABASE_USER', DATABASE_USER),
-            'PASSWORD': os.environ.get('DATABASE_PASSWORD', DATABASE_PASSWORD),
-            'HOST': os.environ.get('DATABASE_HOST', DATABASE_HOST),
-            'PORT': os.environ.get('DATABASE_PORT', DATABASE_PORT),
+            'NAME': POSTGRES_DB,
+            'USER': DATABASE_USER,
+            'PASSWORD': DATABASE_PASSWORD,
+            'HOST': DATABASE_HOST,
+            'PORT': DATABASE_PORT,
         }
     }
 else:
